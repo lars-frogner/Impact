@@ -4,7 +4,7 @@ use crate::{
     gpu::{buffer::GPUBuffer, indirect::DrawIndexedIndirectArgs, storage, GraphicsDevice},
     mesh::buffer::{create_vertex_buffer_layout_for_vertex, VertexBufferable},
     voxel::{
-        mesh::{ChunkedVoxelObjectMesh, VoxelMeshVertex},
+        mesh::{ChunkSubmesh, ChunkedVoxelObjectMesh, VoxelMeshVertex},
         ChunkedVoxelObject, VoxelObjectID,
     },
 };
@@ -13,6 +13,7 @@ use std::{borrow::Cow, sync::OnceLock};
 /// Owner and manager of GPU buffers for a [`ChunkedVoxelObject`].
 #[derive(Debug)]
 pub struct VoxelObjectGPUBufferManager {
+    chunk_extent: f64,
     vertex_buffer: GPUBuffer,
     index_buffer: GPUBuffer,
     n_indices: usize,
@@ -20,6 +21,7 @@ pub struct VoxelObjectGPUBufferManager {
     n_chunks: usize,
     indirect_argument_buffer: GPUBuffer,
     chunk_submesh_and_argument_buffer_bind_group: wgpu::BindGroup,
+    pub chunk_submeshes: Vec<ChunkSubmesh>,
 }
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
@@ -80,6 +82,7 @@ impl VoxelObjectGPUBufferManager {
             );
 
         Self {
+            chunk_extent: voxel_object.chunk_extent(),
             vertex_buffer,
             index_buffer,
             n_indices: mesh.indices().len(),
@@ -87,7 +90,13 @@ impl VoxelObjectGPUBufferManager {
             n_chunks: mesh.n_chunks(),
             indirect_argument_buffer,
             chunk_submesh_and_argument_buffer_bind_group,
+            chunk_submeshes: mesh.chunk_submeshes().to_vec(),
         }
+    }
+
+    /// Returns the extent of a single voxel chunk in the object.
+    pub fn chunk_extent(&self) -> f64 {
+        self.chunk_extent
     }
 
     /// Return a reference to the [`GPUBuffer`] holding all the vertices in the

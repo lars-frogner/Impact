@@ -35,7 +35,7 @@ impl<F: Float> Frustum<F> {
         let planes = Self::planes_from_transform_matrix(transform.matrix());
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes.clone());
 
         Self {
             planes,
@@ -54,7 +54,7 @@ impl<F: Float> Frustum<F> {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes.clone());
 
         Self {
             planes,
@@ -306,7 +306,9 @@ impl<F: Float> Frustum<F> {
         ];
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&rotated_planes);
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(
+                rotated_planes.clone(),
+            );
 
         let rotated_inverse_transform_matrix =
             rotation.to_homogeneous() * self.inverse_transform_matrix;
@@ -325,18 +327,11 @@ impl<F: Float> Frustum<F> {
     /// Computes the frustum resulting from transforming this frustum with the
     /// given similarity transform.
     pub fn transformed(&self, transformation: &Similarity3<F>) -> Self {
-        let transformed_planes = [
-            self.planes[0].transformed(transformation),
-            self.planes[1].transformed(transformation),
-            self.planes[2].transformed(transformation),
-            self.planes[3].transformed(transformation),
-            self.planes[4].transformed(transformation),
-            self.planes[5].transformed(transformation),
-        ];
+        let transformed_planes = self.transformed_planes(transformation);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
             Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(
-                &transformed_planes,
+                transformed_planes.clone(),
             );
 
         let transformed_inverse_transform_matrix =
@@ -351,6 +346,19 @@ impl<F: Float> Frustum<F> {
             transform_matrix: inverse_of_transformed_inverse_transform_matrix,
             inverse_transform_matrix: transformed_inverse_transform_matrix,
         }
+    }
+
+    /// Computes the planes of the frustum resulting from transforming this
+    /// frustum with the given similarity transform.
+    pub fn transformed_planes(&self, transformation: &Similarity3<F>) -> [Plane<F>; 6] {
+        [
+            self.planes[0].transformed(transformation),
+            self.planes[1].transformed(transformation),
+            self.planes[2].transformed(transformation),
+            self.planes[3].transformed(transformation),
+            self.planes[4].transformed(transformation),
+            self.planes[5].transformed(transformation),
+        ]
     }
 
     fn planes_from_transform_matrix(transform_matrix: &Matrix4<F>) -> [Plane<F>; 6] {
@@ -410,7 +418,7 @@ impl<F: Float> Frustum<F> {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes.clone());
 
         Self {
             planes,
@@ -420,7 +428,11 @@ impl<F: Float> Frustum<F> {
         }
     }
 
-    fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane<F>) -> usize {
+    /// Determines the corner of any axis-aligned bounding box that will have
+    /// the largest signed distance in the space of the given plane. The corner
+    /// is represented by an index following the convention of
+    /// [`AxisAlignedBox::corner`].
+    pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane<F>) -> usize {
         let normal = plane.unit_normal();
         match (
             normal.x.is_sign_negative(),
@@ -439,14 +451,9 @@ impl<F: Float> Frustum<F> {
     }
 
     fn determine_largest_signed_dist_aab_corner_indices_for_all_planes(
-        planes: &[Plane<F>; 6],
+        planes: [Plane<F>; 6],
     ) -> [usize; 6] {
-        planes
-            .iter()
-            .map(Self::determine_largest_signed_dist_aab_corner_index_for_plane)
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
+        planes.map(|plane| Self::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
     }
 }
 
@@ -655,6 +662,51 @@ mod tests {
             );
             assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
         }
+    }
+
+    #[test]
+    fn corners_of_transformed_frustum_equal_transformed_corners_of_original_frustum() {
+        let frustum = Frustum::<f64>::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
+                .as_projective(),
+        );
+
+        let transformation = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 180.0).into(),
+            7.0,
+        );
+
+        let transformed_frustum = frustum.transformed(&transformation);
+
+        for (corner, corner_of_transformed) in frustum
+            .compute_corners()
+            .iter()
+            .zip(transformed_frustum.compute_corners())
+        {
+            let transformed_corner = transformation.transform_point(corner);
+            assert_abs_diff_eq!(transformed_corner, corner_of_transformed, epsilon = 1e-6);
+        }
+    }
+
+    #[test]
+    fn transforming_frustum_and_then_transforming_with_inverse_gives_original_frustum() {
+        let frustum = Frustum::<f64>::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
+                .as_projective(),
+        );
+
+        let transformation = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 180.0).into(),
+            7.0,
+        );
+
+        let transformed_frustum = frustum.transformed(&transformation);
+
+        let untransformed_frustum = transformed_frustum.transformed(&transformation.inverse());
+
+        assert_abs_diff_eq!(frustum, untransformed_frustum, epsilon = 1e-6);
     }
 
     #[test]

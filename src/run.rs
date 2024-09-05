@@ -212,7 +212,8 @@ fn init_app(window: Window) -> Result<Application> {
             UpperExclusiveBounds::new(0.01, 500.0),
         ),
         &ReferenceFrameComp::unscaled(
-            Point3::new(0.0, 7.0, -10.0),
+            // Point3::new(0.0, 7.0, -10.0),
+            Point3::new(0.0, 0.0, 0.0),
             Orientation::from_axis_angle(&Vector3::y_axis(), PI),
         ),
         &VelocityComp::stationary(),
@@ -244,8 +245,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &app.load_mesh_from_obj_file("assets/abstract_object.obj")?,
-    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(7.0, 7.7, 5.0), 0.02),
-    //     &ConstantRotationComp::new(
+    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(7.0, 7.7,
+    // 5.0), 0.02),     &ConstantRotationComp::new(
     //         0.0,
     //         Orientation::from_axis_angle(&Vector3::y_axis(), 0.0),
     //         AngularVelocity::new(Vector3::y_axis(), Degrees(50.0)),
@@ -258,8 +259,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &app.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
-    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-1.0, 9.0, 9.0), 0.035),
-    //     &ConstantRotationComp::new(
+    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-1.0, 9.0,
+    // 9.0), 0.035),     &ConstantRotationComp::new(
     //         0.0,
     //         Orientation::from_axis_angle(&Vector3::x_axis(), 0.4),
     //         AngularVelocity::new(Vector3::y_axis(), Degrees(-60.0)),
@@ -270,8 +271,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &BoxMeshComp::UNIT_CUBE,
-    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0), 2.0),
-    //     &UniformColorComp(vector![0.1, 0.7, 0.3]),
+    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0),
+    // 2.0),     &UniformColorComp(vector![0.1, 0.7, 0.3]),
     //     &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 0.0),
     //     &UniformRoughnessComp(0.55),
     // ))?;
@@ -286,8 +287,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &app.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
-    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8, 5.0), 0.016),
-    //     &ConstantRotationComp::new(
+    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8,
+    // 5.0), 0.016),     &ConstantRotationComp::new(
     //         0.0,
     //         Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
     //         AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
@@ -300,8 +301,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
-    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-    //     &ReferenceFrameComp::new(
+    //     &PlanarTextureProjectionComp::for_rectangle(&
+    // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
     //         Point3::new(0.0, -2.0, 0.0),
     //         Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
     //         50.0,
@@ -317,8 +318,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
-    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-    //     &ReferenceFrameComp::new(
+    //     &PlanarTextureProjectionComp::for_rectangle(&
+    // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
     //         Point3::new(25.0, 5.0, 0.0),
     //         Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
     //             * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
@@ -336,8 +337,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
-    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-    //     &ReferenceFrameComp::new(
+    //     &PlanarTextureProjectionComp::for_rectangle(&
+    // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
     //         Point3::new(-25.0, 5.0, 0.0),
     //         Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
     //             * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
@@ -355,8 +356,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     // app.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
-    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-    //     &ReferenceFrameComp::new(
+    //     &PlanarTextureProjectionComp::for_rectangle(&
+    // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
     //         Point3::new(0.0, 5.0, 25.0),
     //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
     //         50.0,
@@ -389,9 +390,11 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.create_entity((
         // &VoxelSphereComp::new(32),
+        // &VoxelBoxComp::new(16, 16, 15),
+        // &VoxelBoxComp::new(16, 16, 16), // TODO!!!!!: Check why this gives no exposed chunks
         &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 1),
         &VoxelTypeComp::new(VoxelType::Default, 0.25),
-        // &ReferenceFrameComp::unoriented(point![-4.0, -4.0, -24.0]),
+        // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 10.0]),
         &ReferenceFrameComp::unoriented(point![25.0, -25.0, 45.0]),
     ))?;
 

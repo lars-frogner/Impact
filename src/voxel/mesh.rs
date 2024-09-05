@@ -1,12 +1,13 @@
 //! Mesh representation of chunked voxel objects.
 
 use crate::{
-    gpu::{indirect::DrawIndexedIndirectArgs, rendering::fre},
+    geometry::{Frustum, Plane},
+    gpu::rendering::fre,
     mesh::{FrontFaceSide, TriangleMesh},
     voxel::ChunkedVoxelObject,
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{vector, Point3, UnitVector3};
+use nalgebra::{vector, Point3, Similarity3, UnitVector3};
 
 /// A mesh representation of a [`ChunkedVoxelObject`]. All the vertices
 /// ([`VoxelMeshVertex`]) and indices for the full object are stored together,
@@ -37,10 +38,26 @@ pub struct VoxelMeshVertex {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct ChunkSubmesh {
-    chunk_indices: [u32; 3],
+    pub chunk_indices: [u32; 3],
     base_vertex_index: u32,
     index_offset: u32,
     index_count: u32,
+}
+
+/// A set of planes defining a frustum together with a small lookup table for
+/// fast culling, gathered in a representation suitable for passing to the GPU.
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct FrustumPlanes {
+    pub planes: [FrustumPlane; 6],
+    pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct FrustumPlane {
+    pub unit_normal: UnitVector3<fre>,
+    pub displacement: fre,
 }
 
 impl ChunkedVoxelObjectMesh {
@@ -156,5 +173,35 @@ impl ChunkSubmesh {
             index_offset,
             index_count,
         }
+    }
+}
+
+impl FrustumPlanes {
+    /// Gathers the given frustum planes into a `FrustumPlanes`.
+    pub fn from_planes(planes: [Plane<fre>; 6]) -> Self {
+        let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
+            u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
+                .unwrap()
+        });
+        let planes = planes.map(|plane| {
+            let (unit_normal, displacement) = plane.into_normal_and_displacement();
+            FrustumPlane {
+                unit_normal,
+                displacement,
+            }
+        });
+        Self {
+            planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
+        }
+    }
+
+    /// Transforms the given frustum with the given similarity transform and
+    /// gathers the resulting frustum planes into a `FrustumPlanes`.
+    pub fn for_transformed_frustum(
+        frustum: &Frustum<fre>,
+        transformation: &Similarity3<fre>,
+    ) -> Self {
+        Self::from_planes(frustum.transformed_planes(transformation))
     }
 }

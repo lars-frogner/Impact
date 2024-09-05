@@ -374,6 +374,7 @@ impl RenderCommandManager {
         )?;
 
         self.voxel_pre_render_commands.record(
+            scene.scene_camera().read().unwrap().as_ref(),
             &scene.instance_feature_manager().read().unwrap(),
             render_resources,
             timestamp_recorder,

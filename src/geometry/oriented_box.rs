@@ -122,6 +122,23 @@ impl<F: Float> OrientedBox<F> {
             transform.scaling() * self.half_depth,
         )
     }
+
+    /// Computes the eight corners of the oriented box.
+    pub fn compute_corners(&self) -> [Point3<F>; 8] {
+        let half_width_vector = self.compute_width_axis().scale(self.half_width);
+        let half_height_vector = self.compute_height_axis().scale(self.half_height);
+        let half_depth_vector = self.compute_depth_axis().scale(self.half_depth);
+        [
+            self.center - half_width_vector - half_height_vector - half_depth_vector,
+            self.center - half_width_vector - half_height_vector + half_depth_vector,
+            self.center - half_width_vector + half_height_vector - half_depth_vector,
+            self.center - half_width_vector + half_height_vector + half_depth_vector,
+            self.center + half_width_vector - half_height_vector - half_depth_vector,
+            self.center + half_width_vector - half_height_vector + half_depth_vector,
+            self.center + half_width_vector + half_height_vector - half_depth_vector,
+            self.center + half_width_vector + half_height_vector + half_depth_vector,
+        ]
+    }
 }
 
 #[cfg(test)]

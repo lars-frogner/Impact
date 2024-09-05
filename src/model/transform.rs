@@ -71,6 +71,17 @@ impl InstanceModelViewTransform {
     }
 }
 
+impl From<InstanceModelViewTransform> for Similarity3<fre> {
+    fn from(transform: InstanceModelViewTransform) -> Self {
+        let InstanceModelViewTransform {
+            rotation,
+            translation,
+            scaling,
+        } = transform;
+        Similarity3::from_parts(translation.into(), rotation, scaling)
+    }
+}
+
 impl Default for InstanceModelViewTransform {
     fn default() -> Self {
         Self::identity()
