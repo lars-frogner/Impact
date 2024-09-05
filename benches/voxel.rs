@@ -9,14 +9,14 @@ pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
     c.bench_function("chunked_voxel_object_construction", |b| {
         b.iter(|| {
             let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25, 200, 200, 200);
-            ChunkedVoxelObject::generate(&generator).unwrap();
+            ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         })
     });
 }
 
 pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
-    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
     let ranges = object.occupied_voxel_ranges();
     c.bench_function("chunked_voxel_object_get_each_voxel", |b| {
         b.iter(|| {
@@ -33,7 +33,7 @@ pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
 
 pub fn bench_chunked_voxel_object_initialize_adjacencies(c: &mut Criterion) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
-    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
     c.bench_function("chunked_voxel_object_initialize_adjacencies", |b| {
         b.iter(|| {
             let mut object = object.clone();
