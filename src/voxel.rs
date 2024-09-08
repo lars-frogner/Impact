@@ -1,19 +1,20 @@
 //! Voxels.
 
 pub mod buffer;
-mod chunks;
+pub mod chunks;
 pub mod components;
 pub mod entity;
 pub mod generation;
 pub mod mesh;
 pub mod render_commands;
+pub mod utils;
 
-pub use chunks::ChunkedVoxelObject;
 pub use entity::register_voxel_feature_types;
 
 use crate::{gpu::rendering::fre, model::transform::InstanceModelViewTransform, num::Float};
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
+use chunks::ChunkedVoxelObject;
 use nalgebra::{vector, Similarity3, UnitVector3, Vector3};
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
