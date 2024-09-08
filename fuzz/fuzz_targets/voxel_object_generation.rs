@@ -1,6 +1,6 @@
 #![no_main]
 
-use impact::voxel::{generation::fuzzing::ArbitraryVoxelGenerator, ChunkedVoxelObject};
+use impact::voxel::{chunks::ChunkedVoxelObject, generation::fuzzing::ArbitraryVoxelGenerator};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|generator: ArbitraryVoxelGenerator| {
@@ -14,9 +14,9 @@ fuzz_target!(|generator: ArbitraryVoxelGenerator| {
         }
     };
     if let Some(mut object) = object {
-        object.initialize_adjacencies();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
         object.validate_superchunk_obscuredness();
+        object.validate_sdf();
     }
 });

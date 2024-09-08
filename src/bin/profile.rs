@@ -1,6 +1,7 @@
 use impact::voxel::{
+    chunks::ChunkedVoxelObject,
     generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
-    ChunkedVoxelObject, VoxelType,
+    VoxelType,
 };
 use std::{
     fmt::Display,

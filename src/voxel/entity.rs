@@ -18,6 +18,7 @@ use crate::{
         SceneGraph,
     },
     voxel::{
+        chunks::ChunkedVoxelObject,
         components::{
             VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelObjectComp, VoxelSphereComp,
             VoxelTypeComp,
@@ -25,7 +26,7 @@ use crate::{
         generation::{
             GradientNoiseVoxelGenerator, UniformBoxVoxelGenerator, UniformSphereVoxelGenerator,
         },
-        ChunkedVoxelObject, VoxelManager, VoxelObjectID,
+        VoxelManager, VoxelObjectID,
     },
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

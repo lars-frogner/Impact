@@ -13,7 +13,7 @@ use crate::{
     mesh::{buffer::MeshGPUBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureGPUBufferManager, InstanceFeatureManager, ModelID},
     skybox::{resource::SkyboxGPUResourceManager, Skybox},
-    voxel::{buffer::VoxelObjectGPUBufferManager, ChunkedVoxelObject, VoxelObjectID},
+    voxel::{buffer::VoxelObjectGPUBufferManager, chunks::ChunkedVoxelObject, VoxelObjectID},
 };
 use anyhow::Result;
 use std::{

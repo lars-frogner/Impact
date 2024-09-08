@@ -4,7 +4,7 @@ use crate::{
     geometry::{Frustum, Plane},
     gpu::rendering::fre,
     mesh::{FrontFaceSide, TriangleMesh},
-    voxel::ChunkedVoxelObject,
+    voxel::chunks::ChunkedVoxelObject,
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{vector, Point3, Similarity3, UnitVector3};
@@ -70,7 +70,7 @@ impl ChunkedVoxelObjectMesh {
 
         let mut index_offset = 0;
 
-        voxel_object.for_each_exposed_chunk(&mut |chunk| {
+        voxel_object.for_each_exposed_chunk_with_sdf(&mut |chunk, _| {
             let chunk_indices = chunk.chunk_indices();
             let chunk_center = vector![
                 chunk_indices[0] as fre * chunk_extent + 0.5 * chunk_extent,

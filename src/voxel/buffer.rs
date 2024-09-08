@@ -4,8 +4,9 @@ use crate::{
     gpu::{buffer::GPUBuffer, indirect::DrawIndexedIndirectArgs, storage, GraphicsDevice},
     mesh::buffer::{create_vertex_buffer_layout_for_vertex, VertexBufferable},
     voxel::{
+        chunks::ChunkedVoxelObject,
         mesh::{ChunkSubmesh, ChunkedVoxelObjectMesh, VoxelMeshVertex},
-        ChunkedVoxelObject, VoxelObjectID,
+        VoxelObjectID,
     },
 };
 use std::{borrow::Cow, sync::OnceLock};

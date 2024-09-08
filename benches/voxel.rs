@@ -1,7 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use impact::voxel::{
+    chunks::ChunkedVoxelObject,
     generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
-    ChunkedVoxelObject, VoxelType,
+    VoxelType,
 };
 use pprof::criterion::{Output, PProfProfiler};
 
@@ -49,8 +50,9 @@ pub fn bench_chunked_voxel_object_count_exposed_chunks(c: &mut Criterion) {
     c.bench_function("bench_chunked_voxel_object_count_exposed_chunks", |b| {
         b.iter(|| {
             let mut count = 0;
-            object.for_each_exposed_chunk(&mut |chunk| {
+            object.for_each_exposed_chunk_with_sdf(&mut |chunk, sdf| {
                 black_box(chunk);
+                black_box(sdf);
                 count += 1;
             });
             black_box(count);
