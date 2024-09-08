@@ -78,7 +78,8 @@
 #![allow(
     clippy::too_many_arguments,
     clippy::let_and_return,
-    clippy::multiple_bound_locations
+    clippy::multiple_bound_locations,
+    clippy::too_long_first_doc_paragraph
 )]
 
 #[macro_use]

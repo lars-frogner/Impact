@@ -720,7 +720,7 @@ impl RenderAttachmentTextureManager {
         &'a mut self,
         graphics_device: &GraphicsDevice,
         input_descriptions: &'b RenderAttachmentInputDescriptionSet,
-    ) -> impl Iterator<Item = &wgpu::BindGroupLayout> + 'b
+    ) -> impl Iterator<Item = &'a wgpu::BindGroupLayout> + 'b
     where
         'a: 'b,
     {
