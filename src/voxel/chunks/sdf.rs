@@ -22,6 +22,7 @@ pub struct VoxelChunkSignedDistanceField {
     /// every time more than eats up the performance gain from the smaller
     /// element size.
     values: [f32; SDF_GRID_CELL_COUNT],
+    adjacent_is_non_uniform: [[bool; 2]; 3],
 }
 
 /// The number of grid cells holding a signed distance in the SDF grid for a
@@ -70,9 +71,10 @@ impl VoxelChunkSignedDistanceField {
             + indices[2]
     }
 
-    const fn zeroed() -> Self {
+    const fn default() -> Self {
         Self {
             values: [0.0; SDF_GRID_CELL_COUNT],
+            adjacent_is_non_uniform: [[false; 2]; 3],
         }
     }
 
@@ -90,6 +92,14 @@ impl VoxelChunkSignedDistanceField {
     ) -> LoopForChunkSDFDataMut<'a, 'b> {
         LoopForChunkSDFDataMut::new(lp, &mut self.values)
     }
+
+    fn set_adjacent_is_non_uniform(&mut self, dim: Dimension, side: Side, is_non_uniform: bool) {
+        self.adjacent_is_non_uniform[dim.idx()][side.idx()] = is_non_uniform;
+    }
+
+    fn adjacent_is_non_uniform(&self, dim: Dimension, side: Side) -> bool {
+        self.adjacent_is_non_uniform[dim.idx()][side.idx()]
+    }
 }
 
 impl ChunkedVoxelObject {
@@ -105,7 +115,7 @@ impl ChunkedVoxelObject {
         &self,
         f: &mut impl FnMut(ExposedVoxelChunk, &VoxelChunkSignedDistanceField),
     ) {
-        let mut sdf = VoxelChunkSignedDistanceField::zeroed();
+        let mut sdf = VoxelChunkSignedDistanceField::default();
 
         let mut superchunks = self.superchunks.iter();
         for superchunk_i in 0..self.n_superchunks_per_axis {
@@ -385,28 +395,12 @@ impl ChunkedVoxelObject {
         side: Side,
         adjacent_chunk: &VoxelChunk,
     ) {
-        const SDF_LOOPS: [LoopForChunkSDF; 6] = [
-            LoopForChunkSDF::over_face_interior(Dimension::X, Side::Lower),
-            LoopForChunkSDF::over_face_interior(Dimension::X, Side::Upper),
-            LoopForChunkSDF::over_face_interior(Dimension::Y, Side::Lower),
-            LoopForChunkSDF::over_face_interior(Dimension::Y, Side::Upper),
-            LoopForChunkSDF::over_face_interior(Dimension::Z, Side::Lower),
-            LoopForChunkSDF::over_face_interior(Dimension::Z, Side::Upper),
-        ];
-        const VOXEL_LOOPS: [LoopForChunkVoxels; 6] = [
-            LoopForChunkVoxels::over_face(Dimension::X, Side::Lower),
-            LoopForChunkVoxels::over_face(Dimension::X, Side::Upper),
-            LoopForChunkVoxels::over_face(Dimension::Y, Side::Lower),
-            LoopForChunkVoxels::over_face(Dimension::Y, Side::Upper),
-            LoopForChunkVoxels::over_face(Dimension::Z, Side::Lower),
-            LoopForChunkVoxels::over_face(Dimension::Z, Side::Upper),
-        ];
-
-        self.fill_sdf_for_adjacent_chunk_using_loops(
+        let adjacent_is_non_uniform = self.fill_sdf_for_adjacent_chunk_using_loops(
             adjacent_chunk,
-            sdf.loop_over_data_mut(&SDF_LOOPS[2 * dim.idx() + side.idx()]),
-            &VOXEL_LOOPS[2 * dim.idx() + side.opposite().idx()],
+            sdf.loop_over_data_mut(&LoopForChunkSDF::over_face_interior(dim, side)),
+            &LoopForChunkVoxels::over_face(dim, side.opposite()),
         );
+        sdf.set_adjacent_is_non_uniform(dim, side, adjacent_is_non_uniform);
     }
 
     fn fill_sdf_edge_padding_for_adjacent_chunk(
@@ -456,13 +450,15 @@ impl ChunkedVoxelObject {
         adjacent_chunk: &VoxelChunk,
         sdf_data_loop: LoopForChunkSDFDataMut<'_, '_>,
         non_uniform_chunk_loop: &LoopForChunkVoxels,
-    ) {
+    ) -> bool {
         match adjacent_chunk {
             VoxelChunk::Empty => {
                 sdf_data_loop.fill_data_with_value(VoxelSignedDistance::fully_outside().to_f32());
+                false
             }
             VoxelChunk::Uniform(_) => {
                 sdf_data_loop.fill_data_with_value(VoxelSignedDistance::fully_inside().to_f32());
+                false
             }
             VoxelChunk::NonUniform(chunk) => {
                 let voxels = self.non_uniform_chunk_voxels(chunk);
@@ -470,6 +466,7 @@ impl ChunkedVoxelObject {
                     DataLoop3::new(non_uniform_chunk_loop, voxels),
                     &|voxel| voxel.signed_distance().to_f32(),
                 );
+                true
             }
         }
     }
