@@ -2,7 +2,10 @@
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
 use super::VoxelChunkSignedDistanceField;
-use crate::voxel::mesh::VoxelMeshVertex;
+use crate::voxel::{
+    mesh::VoxelMeshVertex,
+    utils::{Dimension, Side},
+};
 use glam::{Vec3A, Vec3Swizzles};
 
 /// The output buffers used by
@@ -170,6 +173,17 @@ impl VoxelChunkSignedDistanceField {
     // are facing the right way. See the comments on `maybe_make_quad` to help
     // with understanding the indexing.
     fn make_all_surface_nets_quads(&self, buffer: &mut SurfaceNetsBuffer) {
+        let mut upper_indices = [Self::grid_size_u32() as u8 - 1; 3];
+
+        // To avoid z-fighting due to triangles duplicated between adjacent chunks,
+        // we avoid generating triangles from the upper voxels for every dimension where
+        // we have an adjacent chunk that will be rendered
+        for dim in Dimension::all() {
+            if self.adjacent_is_non_uniform(dim, Side::Upper) {
+                upper_indices[dim.idx()] -= 1;
+            }
+        }
+
         for (&[i, j, k], &p_linear_idx) in buffer
             .surface_points
             .iter()
@@ -178,7 +192,7 @@ impl VoxelChunkSignedDistanceField {
             let p_linear_idx = p_linear_idx as usize;
 
             // Do edges parallel with the X axis
-            if j != 0 && k != 0 && i != Self::grid_size_u32() as u8 - 2 {
+            if j != 0 && k != 0 && i < upper_indices[0] {
                 self.maybe_make_surface_nets_quad(
                     &buffer.voxel_linear_idx_to_vertex_index,
                     &buffer.vertices,
@@ -190,7 +204,7 @@ impl VoxelChunkSignedDistanceField {
                 );
             }
             // Do edges parallel with the Y axis
-            if i != 0 && k != 0 && j != Self::grid_size_u32() as u8 - 2 {
+            if i != 0 && k != 0 && j < upper_indices[1] {
                 self.maybe_make_surface_nets_quad(
                     &buffer.voxel_linear_idx_to_vertex_index,
                     &buffer.vertices,
@@ -202,7 +216,7 @@ impl VoxelChunkSignedDistanceField {
                 );
             }
             // Do edges parallel with the Z axis
-            if i != 0 && j != 0 && k != Self::grid_size_u32() as u8 - 2 {
+            if i != 0 && j != 0 && k < upper_indices[2] {
                 self.maybe_make_surface_nets_quad(
                     &buffer.voxel_linear_idx_to_vertex_index,
                     &buffer.vertices,

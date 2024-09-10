@@ -47,6 +47,11 @@ pub struct MutDataLoop3<'a, 'b, T, const N: usize> {
 }
 
 impl Dimension {
+    /// Returns the array \[`X`, `Y`, `Z`\].
+    pub const fn all() -> [Self; 3] {
+        [Self::X, Self::Y, Self::Z]
+    }
+
     /// Returns the index of the dimension (`0` for `X`, `1` for `Y` and `2` for
     /// `Z`).
     pub const fn idx(self) -> usize {
