@@ -127,7 +127,8 @@ impl SpecificShaderTemplate for UnidirectionalLightShaderTemplate {
     }
 }
 
-#[cfg(test)]
+// Too slow for `miri`
+#[cfg(all(test, not(miri)))]
 mod tests {
     use super::super::tests::validate_template;
     use super::*;

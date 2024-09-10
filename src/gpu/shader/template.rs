@@ -481,6 +481,11 @@ mod tests {
 
     pub fn validate_template(template: &impl SpecificShaderTemplate) {
         let source = template.resolve();
+
+        // Skip validation when using `miri` since `wgsl::parse_str` is too slow
+        #[cfg(miri)]
+        return;
+
         println!("{}\n", &source);
         let module = wgsl::parse_str(&source).expect("Parsing resolved template failed");
         validate_module(&module);

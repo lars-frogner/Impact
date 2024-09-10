@@ -2882,6 +2882,8 @@ mod tests {
         assert_eq!(object.stored_voxel_count(), 1);
     }
 
+    // Too slow for `miri`
+    #[cfg(not(miri))]
     #[test]
     fn should_generate_object_with_single_uniform_superchunk_plus_one_voxel() {
         let generator = BoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS + 1; 3]);
