@@ -12,6 +12,7 @@ use crate::{
             render_command::{self, STANDARD_FRONT_FACE},
             resource::SynchronizedRenderResources,
             surface::RenderingSurface,
+            RenderingConfig,
         },
         shader::{
             template::{
@@ -273,6 +274,7 @@ impl VoxelGeometryPipeline {
         shader_manager: &mut ShaderManager,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
+        config: &RenderingConfig,
     ) -> Self {
         let push_constants = VoxelGeometryShaderTemplate::push_constants();
 
@@ -304,7 +306,11 @@ impl VoxelGeometryPipeline {
             color_target_states,
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
-            wgpu::PolygonMode::Fill,
+            if config.wireframe_mode_on {
+                wgpu::PolygonMode::Line
+            } else {
+                wgpu::PolygonMode::Fill
+            },
             depth_stencil_state,
             "Voxel geometry pass render pipeline",
         );

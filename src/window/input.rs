@@ -45,6 +45,7 @@ pub enum KeyboardInputAction {
     MoveUp,
     MoveDown,
     ToggleInteractionMode,
+    ToggleWireframeMode,
     ToggleShadowMapping,
     ToggleAmbientOcclusion,
     ToggleTemporalAntiAliasing,
@@ -161,6 +162,12 @@ impl KeyInputHandler {
                     KeyboardInputAction::ToggleInteractionMode => {
                         if state == &ElementState::Released {
                             app.toggle_interaction_mode();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::ToggleWireframeMode => {
+                        if state == &ElementState::Released {
+                            app.toggle_wireframe_mode();
                         }
                         Ok(HandlingResult::Handled)
                     }
@@ -336,6 +343,7 @@ impl Default for KeyActionMap {
             MoveUp => KeyQ,
             MoveDown => KeyE,
             ToggleInteractionMode => Tab,
+            ToggleWireframeMode => KeyF,
             ToggleShadowMapping => KeyI,
             ToggleAmbientOcclusion => KeyO,
             ToggleTemporalAntiAliasing => KeyY,
