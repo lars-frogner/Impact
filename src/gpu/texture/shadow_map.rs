@@ -503,9 +503,10 @@ fn create_shadow_map_texture(
 
 fn create_shadow_map_sampler(device: &wgpu::Device) -> wgpu::Sampler {
     device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        address_mode_u: wgpu::AddressMode::ClampToBorder,
+        address_mode_v: wgpu::AddressMode::ClampToBorder,
+        address_mode_w: wgpu::AddressMode::ClampToBorder,
+        border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
         compare: None,
         ..Default::default()
     })
@@ -513,9 +514,10 @@ fn create_shadow_map_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 
 fn create_shadow_map_comparison_sampler(device: &wgpu::Device) -> wgpu::Sampler {
     device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        address_mode_u: wgpu::AddressMode::ClampToBorder,
+        address_mode_v: wgpu::AddressMode::ClampToBorder,
+        address_mode_w: wgpu::AddressMode::ClampToBorder,
+        border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
         // The result of the comparison sampling will be 1.0 if the
         // reference depth is less than or equal to the sampled depth
         // (meaning that the fragment is not occluded), and 0.0 otherwise.
