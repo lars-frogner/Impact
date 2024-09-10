@@ -136,7 +136,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
 
     output.linearDepth = projectionUniform.inverseFarPlaneZ.x * fragment.cameraSpacePosition.z;
 
-    let cameraSpaceNormalVector = fragment.cameraSpaceNormalVector;
+    let cameraSpaceNormalVector = normalize(fragment.cameraSpaceNormalVector);
 
     output.normalVector = vec4f(convertNormalVectorToNormalColor(cameraSpaceNormalVector), 1.0);
 

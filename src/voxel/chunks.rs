@@ -6,16 +6,14 @@ use crate::{
     geometry::{AxisAlignedBox, Sphere},
     num::Float,
     voxel::{
-        utils::{DataLoop3, Dimension, Loop3},
-        VoxelGenerator, VoxelType,
+        utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
+        Voxel, VoxelFlags, VoxelGenerator,
     },
 };
 use bitflags::bitflags;
 use nalgebra::point;
 use num_traits::{NumCast, PrimInt};
 use std::{iter, ops::Range};
-
-use super::utils::{MutDataLoop3, Side};
 
 /// An object represented by a grid of voxels.
 ///
@@ -40,49 +38,10 @@ pub struct ChunkedVoxelObject {
     voxels: Vec<Voxel>,
 }
 
-/// A voxel, which may either be be empty or filled with a material with
-/// specific properties.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Voxel {
-    property_id: PropertyID,
-    flags: VoxelFlags,
-}
-
 /// A voxel chunk that is not fully obscured by adjacent voxels.
 #[derive(Clone, Debug)]
 pub struct ExposedVoxelChunk {
     chunk_indices: [usize; 3],
-}
-
-/// Identifier for predefined set of voxel properties.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PropertyID(u8);
-
-bitflags! {
-    /// Bitflags encoding a set of potential binary states for a voxel.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub struct VoxelFlags: u8 {
-        /// The voxel is empty.
-        const IS_EMPTY          = 1 << 0;
-        /// The voxel has an adjacent non-empty voxel in the negative
-        /// x-direction.
-        const HAS_ADJACENT_X_DN = 1 << 2;
-        /// The voxel has an adjacent non-empty voxel in the negative
-        /// y-direction.
-        const HAS_ADJACENT_Y_DN = 1 << 3;
-        /// The voxel has an adjacent non-empty voxel in the negative
-        /// z-direction.
-        const HAS_ADJACENT_Z_DN = 1 << 4;
-        /// The voxel has an adjacent non-empty voxel in the positive
-        /// x-direction.
-        const HAS_ADJACENT_X_UP = 1 << 5;
-        /// The voxel has an adjacent non-empty voxel in the positive
-        /// y-direction.
-        const HAS_ADJACENT_Y_UP = 1 << 6;
-        /// The voxel has an adjacent non-empty voxel in the positive
-        /// z-direction.
-        const HAS_ADJACENT_Z_UP = 1 << 7;
-    }
 }
 
 /// A superchunk representing a cubic grid of voxel chunks. It has three
@@ -209,7 +168,7 @@ struct FaceEmptyCounts([[usize; 2]; 3]);
 
 /// A generalized index referring to a chunk or superchunk that may not be
 /// stored explicitly in the parent [`ChunkedVoxelObject`]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum ChunkIndex {
     /// The chunk or superchunk is not stored anywhere, but it is empty.
     AbsentEmpty,
@@ -237,6 +196,9 @@ pub const CHUNK_SIZE: usize = 1 << LOG2_CHUNK_SIZE;
 const CHUNK_SIZE_SQUARED: usize = CHUNK_SIZE.pow(2);
 /// The total number of voxels comprising each chunk.
 const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
+
+// We assume that a linear voxel index within a chunk fits into a `u16`
+const _: () = assert!(CHUNK_VOXEL_COUNT <= u16::MAX as usize);
 
 /// The number of chunks across a cubic superchunk. It is always a power of two.
 pub const SUPERCHUNK_SIZE: usize = 1 << LOG2_SUPERCHUNK_SIZE;
@@ -447,7 +409,6 @@ impl ChunkedVoxelObject {
     /// # Panics
     /// May panic of the chunk's handle to its segment of the object's voxel
     /// buffer is invalid.
-    #[inline(always)]
     pub fn non_uniform_chunk_voxels(&self, chunk: &NonUniformVoxelChunk) -> &[Voxel] {
         &self.voxels[chunk.start_voxel_idx..chunk.start_voxel_idx + CHUNK_VOXEL_COUNT]
     }
@@ -600,20 +561,23 @@ impl ChunkedVoxelObject {
                         }
                     };
 
-                    let voxel = self.get_voxel(i, j, k).copied().unwrap_or(Voxel::empty());
+                    let voxel = self
+                        .get_voxel(i, j, k)
+                        .copied()
+                        .unwrap_or(Voxel::fully_outside());
 
                     let adjacent_voxel_x_up = self
                         .get_voxel(i + 1, j, k)
                         .copied()
-                        .unwrap_or(Voxel::empty());
+                        .unwrap_or(Voxel::fully_outside());
                     let adjacent_voxel_y_up = self
                         .get_voxel(i, j + 1, k)
                         .copied()
-                        .unwrap_or(Voxel::empty());
+                        .unwrap_or(Voxel::fully_outside());
                     let adjacent_voxel_z_up = self
                         .get_voxel(i, j, k + 1)
                         .copied()
-                        .unwrap_or(Voxel::empty());
+                        .unwrap_or(Voxel::fully_outside());
 
                     if voxel.is_empty() {
                         assert_missing_flag(&adjacent_voxel_x_up, VoxelFlags::HAS_ADJACENT_X_DN);
@@ -1178,7 +1142,7 @@ impl VoxelSuperchunk {
                                 is_uniform = false;
                             }
                             (None, VoxelChunk::Empty) => {
-                                first_voxel = Some(Voxel::empty());
+                                first_voxel = Some(Voxel::fully_outside());
                             }
                             (None, VoxelChunk::Uniform(voxel)) => {
                                 first_voxel = Some(*voxel);
@@ -1701,9 +1665,7 @@ impl VoxelChunk {
             return (Self::Empty, FaceEmptyCounts::same(CHUNK_SIZE_SQUARED));
         }
 
-        let mut first_voxel = generator
-            .voxel_at_indices(origin[0], origin[1], origin[2])
-            .map_or_else(Voxel::empty, Voxel::new_from_type_without_flags);
+        let mut first_voxel = generator.voxel_at_indices(origin[0], origin[1], origin[2]);
         let mut is_uniform = true;
 
         let start_voxel_idx = voxels.len();
@@ -1718,9 +1680,7 @@ impl VoxelChunk {
         for i in range_i.clone() {
             for j in range_j.clone() {
                 for k in range_k.clone() {
-                    let voxel = generator
-                        .voxel_at_indices(i, j, k)
-                        .map_or_else(Voxel::empty, Voxel::new_from_type_without_flags);
+                    let voxel = generator.voxel_at_indices(i, j, k);
 
                     if is_uniform && voxel != first_voxel {
                         is_uniform = false;
@@ -2237,7 +2197,6 @@ impl VoxelChunk {
         }
     }
 
-    #[inline(always)]
     fn add_all_outward_adjacencies_for_face(
         voxels: &mut [Voxel],
         start_voxel_idx: usize,
@@ -2253,7 +2212,6 @@ impl VoxelChunk {
         );
     }
 
-    #[inline(always)]
     fn remove_all_outward_adjacencies_for_face(
         voxels: &mut [Voxel],
         start_voxel_idx: usize,
@@ -2269,7 +2227,6 @@ impl VoxelChunk {
         );
     }
 
-    #[inline(always)]
     fn update_all_outward_adjacencies_for_face(
         voxels: &mut [Voxel],
         start_voxel_idx: usize,
@@ -2420,52 +2377,6 @@ impl VoxelChunkFlags {
     }
 }
 
-impl Voxel {
-    /// Creates a new voxel with the given property ID and state flags.
-    const fn new(property_id: PropertyID, flags: VoxelFlags) -> Self {
-        Self { property_id, flags }
-    }
-
-    /// Creates a new voxel with the given property ID and no set state flags.
-    const fn new_without_flags(property_id: PropertyID) -> Self {
-        Self::new(property_id, VoxelFlags::empty())
-    }
-
-    /// Creates a new voxel with the given `VoxelType` and no set state flags.
-    const fn new_from_type_without_flags(voxel_type: VoxelType) -> Self {
-        Self::new_without_flags(PropertyID::from_voxel_type(voxel_type))
-    }
-
-    /// Creates a new empty voxel.
-    const fn empty() -> Self {
-        Self {
-            property_id: PropertyID::dummy(),
-            flags: VoxelFlags::IS_EMPTY,
-        }
-    }
-
-    /// Whether the voxel is empty.
-    pub fn is_empty(&self) -> bool {
-        self.flags.contains(VoxelFlags::IS_EMPTY)
-    }
-
-    /// Returns the flags encoding the state of the voxel.
-    pub fn flags(&self) -> VoxelFlags {
-        self.flags
-    }
-
-    /// Sets the given state flags for the voxel (this will not clear any
-    /// existing flags).
-    fn add_flags(&mut self, flags: VoxelFlags) {
-        self.flags.insert(flags);
-    }
-
-    /// Unsets the given state flags for the voxel.
-    fn remove_flags(&mut self, flags: VoxelFlags) {
-        self.flags.remove(flags);
-    }
-}
-
 impl ExposedVoxelChunk {
     fn new(chunk_indices: [usize; 3]) -> Self {
         Self { chunk_indices }
@@ -2490,40 +2401,6 @@ impl ExposedVoxelChunk {
             self.chunk_indices[1] * CHUNK_SIZE + CHUNK_SIZE - 1,
             self.chunk_indices[2] * CHUNK_SIZE + CHUNK_SIZE - 1,
         ]
-    }
-}
-
-impl PropertyID {
-    /// Creates a new property ID for the given `VoxelType`.
-    pub const fn from_voxel_type(voxel_type: VoxelType) -> Self {
-        Self(voxel_type as u8)
-    }
-
-    const fn dummy() -> Self {
-        Self(u8::MAX)
-    }
-}
-
-impl VoxelFlags {
-    const fn full_adjacency() -> Self {
-        Self::HAS_ADJACENT_X_DN
-            .union(Self::HAS_ADJACENT_X_UP)
-            .union(Self::HAS_ADJACENT_Y_DN)
-            .union(Self::HAS_ADJACENT_Y_UP)
-            .union(Self::HAS_ADJACENT_Z_DN)
-            .union(Self::HAS_ADJACENT_Z_UP)
-    }
-
-    const fn adjacency_for_face(face_dim: Dimension, face_side: Side) -> Self {
-        const FLAGS: [VoxelFlags; 6] = [
-            VoxelFlags::HAS_ADJACENT_X_DN,
-            VoxelFlags::HAS_ADJACENT_X_UP,
-            VoxelFlags::HAS_ADJACENT_Y_DN,
-            VoxelFlags::HAS_ADJACENT_Y_UP,
-            VoxelFlags::HAS_ADJACENT_Z_DN,
-            VoxelFlags::HAS_ADJACENT_Z_UP,
-        ];
-        FLAGS[2 * face_dim.idx() + face_side.idx()]
     }
 }
 
@@ -2721,13 +2598,13 @@ fn extract_slice_segments_mut<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::generation::UniformBoxVoxelGenerator;
+    use crate::voxel::{generation::UniformBoxVoxelGenerator, VoxelPropertyID, VoxelType};
     use approx::assert_abs_diff_eq;
 
     pub struct BoxVoxelGenerator {
         shape: [usize; 3],
         offset: [usize; 3],
-        voxel_type: Option<VoxelType>,
+        voxel: Voxel,
     }
 
     struct ManualVoxelGenerator<const N: usize> {
@@ -2736,24 +2613,28 @@ mod tests {
     }
 
     impl BoxVoxelGenerator {
-        pub fn new(shape: [usize; 3], offset: [usize; 3], voxel_type: Option<VoxelType>) -> Self {
+        pub fn new(shape: [usize; 3], offset: [usize; 3], voxel: Voxel) -> Self {
             Self {
                 shape,
                 offset,
-                voxel_type,
+                voxel,
             }
         }
 
         pub fn empty(shape: [usize; 3]) -> Self {
-            Self::new(shape, [0; 3], None)
+            Self::new(shape, [0; 3], Voxel::fully_outside())
         }
 
-        pub fn single(voxel_type: Option<VoxelType>) -> Self {
-            Self::new([1, 1, 1], [0; 3], voxel_type)
+        pub fn single(voxel: Voxel) -> Self {
+            Self::new([1, 1, 1], [0; 3], voxel)
         }
 
         pub fn single_default() -> Self {
-            Self::single(Some(VoxelType::Default))
+            Self::single(Voxel::fully_inside(VoxelType::Default.into()))
+        }
+
+        pub fn single_empty() -> Self {
+            Self::single(Voxel::fully_outside())
         }
 
         pub fn with_default(shape: [usize; 3]) -> Self {
@@ -2761,7 +2642,11 @@ mod tests {
         }
 
         pub fn offset_with_default(shape: [usize; 3], offset: [usize; 3]) -> Self {
-            Self::new(shape, offset, Some(VoxelType::Default))
+            Self::new(
+                shape,
+                offset,
+                Voxel::fully_inside(VoxelType::Default.into()),
+            )
         }
     }
 
@@ -2788,7 +2673,7 @@ mod tests {
             ]
         }
 
-        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
             if i >= self.offset[0]
                 && i < self.offset[0] + self.shape[0]
                 && j >= self.offset[1]
@@ -2796,9 +2681,9 @@ mod tests {
                 && k >= self.offset[2]
                 && k < self.offset[2] + self.shape[2]
             {
-                self.voxel_type
+                self.voxel
             } else {
-                None
+                Voxel::fully_outside()
             }
         }
     }
@@ -2812,7 +2697,7 @@ mod tests {
             [self.offset[0] + N, self.offset[1] + N, self.offset[2] + N]
         }
 
-        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
             if i >= self.offset[0]
                 && i < self.offset[0] + N
                 && j >= self.offset[1]
@@ -2821,9 +2706,9 @@ mod tests {
                 && k < self.offset[2] + N
                 && self.voxels[i - self.offset[0]][j - self.offset[1]][k - self.offset[2]] != 0
             {
-                Some(VoxelType::Default)
+                Voxel::fully_inside(VoxelPropertyID::from_voxel_type(VoxelType::Default))
             } else {
-                None
+                Voxel::fully_outside()
             }
         }
     }
@@ -2838,10 +2723,10 @@ mod tests {
 
     #[test]
     fn should_yield_none_when_generating_object_of_empty_voxels() {
-        assert!(
-            ChunkedVoxelObject::generate_without_adjacencies(&BoxVoxelGenerator::single(None))
-                .is_none()
-        );
+        assert!(ChunkedVoxelObject::generate_without_adjacencies(
+            &BoxVoxelGenerator::single_empty()
+        )
+        .is_none());
         assert!(
             ChunkedVoxelObject::generate_without_adjacencies(&BoxVoxelGenerator::empty([2, 3, 4]))
                 .is_none()

@@ -1,13 +1,13 @@
 //! Generation of spatial voxel distributions.
 
-use super::{VoxelGenerator, VoxelType};
+use crate::voxel::{Voxel, VoxelGenerator, VoxelType};
 use nalgebra::{point, Point3};
 use noise::{NoiseFn, Simplex};
 
 /// Generator for a box configuration of identical voxels.
 #[derive(Clone, Debug)]
 pub struct UniformBoxVoxelGenerator {
-    voxel_type: VoxelType,
+    voxel: Voxel,
     voxel_extent: f64,
     size_x: usize,
     size_y: usize,
@@ -17,7 +17,7 @@ pub struct UniformBoxVoxelGenerator {
 /// Generator for a spherical configuration of identical voxels.
 #[derive(Clone, Debug)]
 pub struct UniformSphereVoxelGenerator {
-    voxel_type: VoxelType,
+    voxel: Voxel,
     voxel_extent: f64,
     n_voxels_across: usize,
     center: f64,
@@ -28,7 +28,7 @@ pub struct UniformSphereVoxelGenerator {
 /// noise pattern.
 #[derive(Clone, Debug)]
 pub struct GradientNoiseVoxelGenerator {
-    voxel_type: VoxelType,
+    voxel: Voxel,
     voxel_extent: f64,
     size_x: usize,
     size_y: usize,
@@ -50,8 +50,9 @@ impl UniformBoxVoxelGenerator {
         size_y: usize,
         size_z: usize,
     ) -> Self {
+        let voxel = Voxel::fully_inside(voxel_type.into());
         Self {
-            voxel_type,
+            voxel,
             voxel_extent,
             size_x,
             size_y,
@@ -69,11 +70,11 @@ impl VoxelGenerator for UniformBoxVoxelGenerator {
         [self.size_x, self.size_y, self.size_z]
     }
 
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
         if i < self.size_x && j < self.size_y && k < self.size_z {
-            Some(self.voxel_type)
+            self.voxel
         } else {
-            None
+            Voxel::fully_outside()
         }
     }
 }
@@ -91,8 +92,10 @@ impl UniformSphereVoxelGenerator {
         let radius = center + 0.5;
         let squared_radius = radius.powi(2);
 
+        let voxel = Voxel::fully_inside(voxel_type.into());
+
         Self {
-            voxel_type,
+            voxel,
             voxel_extent,
             n_voxels_across,
             center,
@@ -122,15 +125,15 @@ impl VoxelGenerator for UniformSphereVoxelGenerator {
         [self.n_voxels_across; 3]
     }
 
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
         let squared_dist_from_center = (i as f64 - self.center).powi(2)
             + (j as f64 - self.center).powi(2)
             + (k as f64 - self.center).powi(2);
 
         if squared_dist_from_center <= self.squared_radius {
-            Some(self.voxel_type)
+            self.voxel
         } else {
-            None
+            Voxel::fully_outside()
         }
     }
 }
@@ -157,8 +160,10 @@ impl GradientNoiseVoxelGenerator {
 
         let noise = Simplex::new(seed);
 
+        let voxel = Voxel::fully_inside(voxel_type.into());
+
         Self {
-            voxel_type,
+            voxel,
             voxel_extent,
             size_x,
             size_y,
@@ -181,7 +186,7 @@ impl VoxelGenerator for GradientNoiseVoxelGenerator {
         [self.size_x, self.size_y, self.size_z]
     }
 
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
         if i < self.size_x && j < self.size_y && k < self.size_z {
             let x = i as f64 * self.noise_distance_scale_x;
             let y = j as f64 * self.noise_distance_scale_y;
@@ -190,12 +195,12 @@ impl VoxelGenerator for GradientNoiseVoxelGenerator {
             let noise_value = self.noise.get([x, y, z]);
 
             if noise_value >= self.noise_threshold {
-                Some(self.voxel_type)
+                self.voxel
             } else {
-                None
+                Voxel::fully_outside()
             }
         } else {
-            None
+            Voxel::fully_outside()
         }
     }
 }
