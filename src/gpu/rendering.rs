@@ -79,6 +79,7 @@ pub struct RenderingConfig {
     pub ambient_occlusion: AmbientOcclusionConfig,
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     pub capturing_camera: CapturingCameraConfig,
+    pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
 }
 
@@ -112,6 +113,7 @@ impl RenderingSystem {
             &graphics_device,
             &mut shader_manager,
             &mut render_attachment_texture_manager,
+            &config,
         );
 
         let mut gpu_resource_group_manager = GPUResourceGroupManager::new();
@@ -252,6 +254,16 @@ impl RenderingSystem {
             .write()
             .unwrap()
             .declare_desynchronized();
+    }
+
+    pub fn toggle_wireframe_mode(&mut self) {
+        self.config.wireframe_mode_on = !self.config.wireframe_mode_on;
+        *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
+            &self.graphics_device,
+            &mut self.shader_manager.write().unwrap(),
+            &mut self.render_attachment_texture_manager.write().unwrap(),
+            &self.config,
+        );
     }
 
     /// Toggles shadow mapping.
@@ -406,6 +418,7 @@ impl Default for RenderingConfig {
             ambient_occlusion: AmbientOcclusionConfig::default(),
             temporal_anti_aliasing: TemporalAntiAliasingConfig::default(),
             capturing_camera: CapturingCameraConfig::default(),
+            wireframe_mode_on: false,
             timings_enabled: false,
         }
     }

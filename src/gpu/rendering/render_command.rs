@@ -110,6 +110,7 @@ struct GeometryPass {
     push_constant_ranges: Vec<wgpu::PushConstantRange>,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     depth_stencil_state: wgpu::DepthStencilState,
+    polygon_mode: wgpu::PolygonMode,
     model_pipelines: HashMap<ModelGeometryShaderInput, GeometryPassPipeline>,
     voxel_pipeline: VoxelGeometryPipeline,
 }
@@ -235,6 +236,7 @@ impl RenderCommandManager {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        config: &RenderingConfig,
     ) -> Self {
         let attachment_clearing_pass = AttachmentClearingPass::new(
             (RenderAttachmentQuantitySet::DEPTH_STENCIL
@@ -250,9 +252,10 @@ impl RenderCommandManager {
             graphics_device,
             shader_manager,
             StencilValue::NonPhysicalModel,
+            config,
         );
 
-        let geometry_pass = GeometryPass::new(graphics_device, shader_manager);
+        let geometry_pass = GeometryPass::new(graphics_device, shader_manager, config);
 
         let omnidirectional_light_shadow_map_update_passes =
             OmnidirectionalLightShadowMapUpdatePasses::new(graphics_device, shader_manager);
@@ -587,6 +590,7 @@ impl DepthPrepass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         write_stencil_value: StencilValue,
+        config: &RenderingConfig,
     ) -> Self {
         let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
             graphics_device,
@@ -615,7 +619,11 @@ impl DepthPrepass {
             &[],
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
-            wgpu::PolygonMode::Fill,
+            if config.wireframe_mode_on {
+                wgpu::PolygonMode::Line
+            } else {
+                wgpu::PolygonMode::Fill
+            },
             Some(depth_stencil_state_for_depth_stencil_write()),
             "Depth prepass render pipeline",
         );
@@ -782,7 +790,11 @@ impl DepthPrepass {
 }
 
 impl GeometryPass {
-    fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
+    fn new(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        config: &RenderingConfig,
+    ) -> Self {
         let push_constants = ModelGeometryShaderTemplate::push_constants();
         let output_render_attachments = ModelGeometryShaderTemplate::output_render_attachments();
 
@@ -792,11 +804,18 @@ impl GeometryPass {
 
         let depth_stencil_state = depth_stencil_state_for_depth_stencil_write();
 
+        let polygon_mode = if config.wireframe_mode_on {
+            wgpu::PolygonMode::Line
+        } else {
+            wgpu::PolygonMode::Fill
+        };
+
         let voxel_pipeline = VoxelGeometryPipeline::new(
             graphics_device,
             shader_manager,
             &color_target_states,
             Some(depth_stencil_state.clone()),
+            config,
         );
 
         Self {
@@ -805,6 +824,7 @@ impl GeometryPass {
             push_constant_ranges,
             color_target_states,
             depth_stencil_state,
+            polygon_mode,
             model_pipelines: HashMap::new(),
             voxel_pipeline,
         }
@@ -929,7 +949,7 @@ impl GeometryPass {
                                 &self.color_target_states,
                                 STANDARD_FRONT_FACE,
                                 Some(wgpu::Face::Back),
-                                wgpu::PolygonMode::Fill,
+                                self.polygon_mode,
                                 Some(self.depth_stencil_state.clone()),
                                 &format!(
                                     "Geometry pass render pipeline for shader: {:?}",

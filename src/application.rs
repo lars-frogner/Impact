@@ -421,6 +421,11 @@ impl Application {
         }
     }
 
+    pub fn toggle_wireframe_mode(&self) {
+        let mut renderer = self.renderer().write().unwrap();
+        renderer.toggle_wireframe_mode();
+    }
+
     /// Toggles temporal anti-aliasing.
     pub fn toggle_temporal_anti_aliasing(&self) {
         let renderer = self.renderer().read().unwrap();
