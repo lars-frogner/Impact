@@ -1,55 +1,94 @@
 //! Signed distance field for chunked voxel objects.
 
-use crate::{
-    gpu::rendering::fre,
-    voxel::{
-        chunks::{
-            linear_chunk_idx_within_superchunk, ChunkedVoxelObject, ExposedVoxelChunk,
-            LoopForChunkVoxels, LoopForSuperchunkChunks, NonUniformVoxelChunk,
-            NonUniformVoxelSuperchunk, Voxel, VoxelChunk, VoxelSuperchunk, SUPERCHUNK_CHUNK_COUNT,
-            SUPERCHUNK_SIZE, SUPERCHUNK_SIZE_SQUARED,
-        },
-        utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
+pub mod surface_nets;
+
+use crate::voxel::{
+    chunks::{
+        linear_chunk_idx_within_superchunk, ChunkedVoxelObject, ExposedVoxelChunk,
+        LoopForChunkVoxels, LoopForSuperchunkChunks, NonUniformVoxelChunk,
+        NonUniformVoxelSuperchunk, VoxelChunk, VoxelSuperchunk, SUPERCHUNK_CHUNK_COUNT,
+        SUPERCHUNK_SIZE, SUPERCHUNK_SIZE_SQUARED,
     },
+    utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
+    VoxelSignedDistance,
 };
 
 /// A signed distance field for a voxel chunk in a [`ChunkedVoxelObject`].
 #[derive(Clone, Debug)]
 pub struct VoxelChunkSignedDistanceField {
-    sdf: [fre; SDF_VOXEL_COUNT],
+    /// The reason we store the values as `f32` instead of the more compact
+    /// [`VoxelSignedDistance`] is that mesh generation using surface nets needs
+    /// to load each value many times, and the having to decode to an `f32`
+    /// every time more than eats up the performance gain from the smaller
+    /// element size.
+    values: [f32; SDF_GRID_CELL_COUNT],
 }
 
-/// The number of voxels across a cubic voxel chunk plus a padding of one
-/// voxel on each side (used when storing the signed distance field for
-/// a chunk).
-pub const SDF_PADDED_SIZE: usize = ChunkedVoxelObject::chunk_size() + 2;
+/// The number of grid cells holding a signed distance in the SDF grid for a
+/// single voxel chunk (equals the number of voxels in the chunk plus one
+/// cell of padding on each side).
+const SDF_GRID_SIZE: usize = ChunkedVoxelObject::chunk_size() + 2;
 
-/// The total number of voxels comprising a chunk with a one-voxel padding
-/// on the outside (used when storing the signed distance field for a chunk).
-pub const SDF_VOXEL_COUNT: usize = SDF_PADDED_SIZE.pow(3);
+/// The number of grid cells holding a signed distance in the SDF grid for a
+/// single voxel chunk (equals the number of voxels in the chunk plus one
+/// cell of padding on each side).
+pub const SDF_GRID_CELL_COUNT: usize = SDF_GRID_SIZE.pow(3);
 
-type LoopForChunkSDF = Loop3<SDF_PADDED_SIZE>;
-type LoopForChunkSDFData<'a, 'b> = DataLoop3<'a, 'b, fre, SDF_PADDED_SIZE>;
-type LoopForChunkSDFDataMut<'a, 'b> = MutDataLoop3<'a, 'b, fre, SDF_PADDED_SIZE>;
+type LoopForChunkSDF = Loop3<SDF_GRID_SIZE>;
+type LoopForChunkSDFData<'a, 'b> = DataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
+type LoopForChunkSDFDataMut<'a, 'b> = MutDataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
 
 impl VoxelChunkSignedDistanceField {
+    /// The number of grid cells holding a signed distance in the SDF grid for a
+    /// single voxel chunk (equals the number of voxels in the chunk plus one
+    /// cell of padding on each side).
+    pub const fn grid_size() -> usize {
+        SDF_GRID_SIZE
+    }
+
+    /// The total number of grid cells holding a signed distance in the SDF grid
+    /// for a single voxel chunk, including the padding cells on the boundary.
+    pub const fn grid_cell_count() -> usize {
+        SDF_GRID_CELL_COUNT
+    }
+
+    const fn grid_size_u32() -> u32 {
+        Self::grid_size() as u32
+    }
+
+    const fn squared_grid_size() -> usize {
+        Self::grid_size() * Self::grid_size()
+    }
+
+    const fn linear_idx(indices: &[usize; 3]) -> usize {
+        indices[0] * Self::squared_grid_size() + indices[1] * Self::grid_size() + indices[2]
+    }
+
+    const fn linear_idx_u32(indices: &[u32; 3]) -> u32 {
+        indices[0] * Self::squared_grid_size() as u32
+            + indices[1] * Self::grid_size_u32()
+            + indices[2]
+    }
+
     const fn zeroed() -> Self {
         Self {
-            sdf: [0.0; SDF_VOXEL_COUNT],
+            values: [0.0; SDF_GRID_CELL_COUNT],
         }
     }
 
-    #[inline(always)]
-    fn loop_over_data<'a, 'b>(&'b self, lp: &'a LoopForChunkSDF) -> LoopForChunkSDFData<'a, 'b> {
-        LoopForChunkSDFData::new(lp, &self.sdf)
+    pub fn get_value(&self, i: usize, j: usize, k: usize) -> Option<f32> {
+        self.values.get(Self::linear_idx(&[i, j, k])).copied()
     }
 
-    #[inline(always)]
+    fn loop_over_data<'a, 'b>(&'b self, lp: &'a LoopForChunkSDF) -> LoopForChunkSDFData<'a, 'b> {
+        LoopForChunkSDFData::new(lp, &self.values)
+    }
+
     fn loop_over_data_mut<'a, 'b>(
         &'b mut self,
         lp: &'a LoopForChunkSDF,
     ) -> LoopForChunkSDFDataMut<'a, 'b> {
-        LoopForChunkSDFDataMut::new(lp, &mut self.sdf)
+        LoopForChunkSDFDataMut::new(lp, &mut self.values)
     }
 }
 
@@ -336,7 +375,7 @@ impl ChunkedVoxelObject {
     ) {
         let voxels = self.non_uniform_chunk_voxels(chunk);
         sdf.loop_over_data_mut(&LoopForChunkSDF::over_interior())
-            .map_slice_values_into_data(voxels, &Voxel::signed_distance_value);
+            .map_slice_values_into_data(voxels, &|voxel| voxel.signed_distance().to_f32());
     }
 
     fn fill_sdf_face_padding_for_adjacent_chunk(
@@ -412,7 +451,6 @@ impl ChunkedVoxelObject {
         );
     }
 
-    #[inline(always)]
     fn fill_sdf_for_adjacent_chunk_using_loops(
         &self,
         adjacent_chunk: &VoxelChunk,
@@ -421,16 +459,16 @@ impl ChunkedVoxelObject {
     ) {
         match adjacent_chunk {
             VoxelChunk::Empty => {
-                sdf_data_loop.fill_data_with_value(Voxel::signed_distance_value_if_empty());
+                sdf_data_loop.fill_data_with_value(VoxelSignedDistance::fully_outside().to_f32());
             }
-            VoxelChunk::Uniform(voxel) => {
-                sdf_data_loop.fill_data_with_value(voxel.signed_distance_value());
+            VoxelChunk::Uniform(_) => {
+                sdf_data_loop.fill_data_with_value(VoxelSignedDistance::fully_inside().to_f32());
             }
             VoxelChunk::NonUniform(chunk) => {
                 let voxels = self.non_uniform_chunk_voxels(chunk);
                 sdf_data_loop.map_other_data_into_data(
                     DataLoop3::new(non_uniform_chunk_loop, voxels),
-                    &Voxel::signed_distance_value,
+                    &|voxel| voxel.signed_distance().to_f32(),
                 );
             }
         }
@@ -446,7 +484,7 @@ impl ChunkedVoxelObject {
                 .map(|voxel_index| isize::try_from(voxel_index).unwrap() - 1);
 
             sdf.loop_over_data(&LoopForChunkSDF::over_all()).execute(
-                &mut |sdf_indices, &sdf_value| {
+                &mut |sdf_indices, &signed_dist| {
                     let voxel_indices = [
                         lower_chunk_sdf_voxel_indices[0] + isize::try_from(sdf_indices[0]).unwrap(),
                         lower_chunk_sdf_voxel_indices[1] + isize::try_from(sdf_indices[1]).unwrap(),
@@ -456,57 +494,20 @@ impl ChunkedVoxelObject {
                     let voxel =
                         self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
 
-                    match sdf_value.partial_cmp(&0.0) {
-                        Some(std::cmp::Ordering::Less)
-                            if voxel.map_or(true, |voxel| voxel.is_empty()) =>
-                        {
-                            eprintln!(
-                                "SDF value ({}) is negative for empty voxel at indices {:?} (chunk starts at {:?})",
-                                sdf_value, voxel_indices, lower_chunk_voxel_indices
-                            );
-                        }
-                        Some(std::cmp::Ordering::Greater)
-                            if voxel.map_or(false, |voxel| !voxel.is_empty()) =>
-                        {
-                            eprintln!(
-                                "SDF value ({}) is positive for non-empty voxel at indices {:?} (chunk starts at {:?})",
-                                sdf_value, voxel_indices, lower_chunk_voxel_indices
-                            );
-                        }
-                        Some(std::cmp::Ordering::Equal) => {
-                            eprintln!(
-                                "SDF value is zero for voxel at indices {:?} (chunk starts at {:?})",
-                                voxel_indices, lower_chunk_voxel_indices
-                            );
-                        }
-                        None => {
-                            eprintln!(
-                                "SDF value is NaN for voxel at indices {:?} (chunk starts at {:?})",
-                                voxel_indices, lower_chunk_voxel_indices
-                            );
-                        }
-                        _ => {}
+                    if signed_dist.is_sign_negative() && voxel.map_or(true, |voxel| voxel.is_empty()) {
+                        eprintln!(
+                            "SDF value ({}) is negative for empty voxel at indices {:?} (chunk starts at {:?})",
+                            signed_dist, voxel_indices, lower_chunk_voxel_indices
+                        );
+                    } else if signed_dist.is_sign_positive() && voxel.map_or(false, |voxel| !voxel.is_empty()) {
+                        eprintln!(
+                            "SDF value ({}) is non-negative for non-empty voxel at indices {:?} (chunk starts at {:?})",
+                            signed_dist, voxel_indices, lower_chunk_voxel_indices
+                        );
                     }
                 },
             );
         });
-    }
-}
-
-impl Voxel {
-    const fn signed_distance_value_if_present() -> fre {
-        -0.5
-    }
-    const fn signed_distance_value_if_empty() -> fre {
-        0.5
-    }
-
-    fn signed_distance_value(&self) -> fre {
-        if self.is_empty() {
-            Self::signed_distance_value_if_empty()
-        } else {
-            Self::signed_distance_value_if_present()
-        }
     }
 }
 
@@ -516,21 +517,21 @@ mod tests {
     use crate::voxel::chunks::tests::BoxVoxelGenerator;
 
     #[test]
-    fn should_calculate_correct_sdf_for_object_with_single_voxel() {
+    fn should_calculate_valid_sdf_for_object_with_single_voxel() {
         let generator = BoxVoxelGenerator::single_default();
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_sdf();
     }
 
     #[test]
-    fn should_calculate_correct_sdf_for_object_with_full_chunk() {
+    fn should_calculate_valid_sdf_for_object_with_full_chunk() {
         let generator = BoxVoxelGenerator::with_default([ChunkedVoxelObject::chunk_size(); 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_sdf();
     }
 
     #[test]
-    fn should_calculate_correct_sdf_for_object_with_two_adjacent_full_chunks() {
+    fn should_calculate_valid_sdf_for_object_with_two_adjacent_full_chunks() {
         let generator = BoxVoxelGenerator::with_default([
             2 * ChunkedVoxelObject::chunk_size(),
             ChunkedVoxelObject::chunk_size(),
@@ -541,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    fn should_calculate_correct_sdf_for_object_with_fully_enclosed_chunk() {
+    fn should_calculate_valid_sdf_for_object_with_fully_enclosed_chunk() {
         let generator = BoxVoxelGenerator::with_default([3 * ChunkedVoxelObject::chunk_size(); 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_sdf();

@@ -11,15 +11,77 @@ pub mod utils;
 
 pub use entity::register_voxel_feature_types;
 
-use crate::{gpu::rendering::fre, model::transform::InstanceModelViewTransform, num::Float};
-use approx::AbsDiffEq;
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::ChunkedVoxelObject;
-use nalgebra::{vector, Similarity3, UnitVector3, Vector3};
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
-use simba::scalar::{SubsetOf, SupersetOf};
+use std::fmt;
 use std::{array, collections::HashMap};
+use utils::{Dimension, Side};
+
+/// A type identifier that determines all the properties of a voxel.
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, DeriveToPrimitive, DeriveFromPrimitive)]
+pub enum VoxelType {
+    Default = 0,
+}
+
+/// The total number of separate [`VoxelType`]s.
+const N_VOXEL_TYPES: usize = 1;
+
+/// Identifier for predefined set of voxel properties.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VoxelPropertyID(u8);
+
+/// A compact encoding of a signed distance for a voxel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VoxelSignedDistance {
+    encoded: i8,
+}
+
+bitflags! {
+    /// Bitflags encoding a set of potential binary states for a voxel.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct VoxelFlags: u8 {
+        /// The voxel is empty.
+        const IS_EMPTY          = 1 << 0;
+        /// The voxel has an adjacent non-empty voxel in the negative
+        /// x-direction.
+        const HAS_ADJACENT_X_DN = 1 << 2;
+        /// The voxel has an adjacent non-empty voxel in the negative
+        /// y-direction.
+        const HAS_ADJACENT_Y_DN = 1 << 3;
+        /// The voxel has an adjacent non-empty voxel in the negative
+        /// z-direction.
+        const HAS_ADJACENT_Z_DN = 1 << 4;
+        /// The voxel has an adjacent non-empty voxel in the positive
+        /// x-direction.
+        const HAS_ADJACENT_X_UP = 1 << 5;
+        /// The voxel has an adjacent non-empty voxel in the positive
+        /// y-direction.
+        const HAS_ADJACENT_Y_UP = 1 << 6;
+        /// The voxel has an adjacent non-empty voxel in the positive
+        /// z-direction.
+        const HAS_ADJACENT_Z_UP = 1 << 7;
+    }
+}
+
+/// A voxel, which may either be be empty or filled with a material with
+/// specific properties.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Voxel {
+    property_id: VoxelPropertyID,
+    signed_distance: VoxelSignedDistance,
+    flags: VoxelFlags,
+}
+
+/// A mapping from voxel types to the corresponding values of a specific voxel
+/// property.
+#[derive(Debug)]
+pub struct VoxelPropertyMap<P> {
+    property_values: [P; N_VOXEL_TYPES],
+}
 
 /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
 #[repr(transparent)]
@@ -33,23 +95,6 @@ pub struct VoxelManager {
     voxel_object_id_counter: u32,
 }
 
-/// The total number of separate [`VoxelType`]s.
-const N_VOXEL_TYPES: usize = 1;
-
-/// A type identifier that determines all the properties of a voxel.
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, DeriveToPrimitive, DeriveFromPrimitive)]
-pub enum VoxelType {
-    Default = 0,
-}
-
-/// A mapping from voxel types to the corresponding values of a specific voxel
-/// property.
-#[derive(Debug)]
-pub struct VoxelPropertyMap<P> {
-    property_values: [P; N_VOXEL_TYPES],
-}
-
 /// Represents a voxel generator that provides a voxel type given the voxel
 /// indices.
 pub trait VoxelGenerator {
@@ -60,30 +105,223 @@ pub trait VoxelGenerator {
     /// respectively.
     fn grid_shape(&self) -> [usize; 3];
 
-    /// Returns the voxel type at the given indices in a voxel grid, or [`None`]
-    /// if the voxel is absent or the indices are outside the bounds of the
-    /// grid.
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType>;
+    /// Returns the voxel at the given indices in a voxel grid. If the indices
+    /// are outside the bounds of the grid, this should return
+    /// [`Voxel::fully_outside`].
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
 }
 
-/// One of the six faces of a voxel.
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum VoxelFace {
-    LowerX = 0,
-    UpperX = 1,
-    LowerY = 2,
-    UpperY = 3,
-    LowerZ = 4,
-    UpperZ = 5,
+impl VoxelType {
+    /// Returns an array with each voxel type in the order of their index.
+    pub fn all() -> [Self; N_VOXEL_TYPES] {
+        array::from_fn(|idx| Self::from_usize(idx).unwrap())
+    }
 }
 
-/// A transform from the space of a voxel in a multi-voxel model to the space of
-/// the whole model.
-#[derive(Clone, Debug, PartialEq)]
-struct VoxelTransform<F: Float> {
-    translation: Vector3<F>,
-    scaling: F,
+impl VoxelPropertyID {
+    /// Creates a new property ID for the given `VoxelType`.
+    pub const fn from_voxel_type(voxel_type: VoxelType) -> Self {
+        Self(voxel_type as u8)
+    }
+
+    const fn dummy() -> Self {
+        Self(u8::MAX)
+    }
+}
+
+impl From<VoxelType> for VoxelPropertyID {
+    fn from(voxel_type: VoxelType) -> Self {
+        Self::from_voxel_type(voxel_type)
+    }
+}
+
+impl VoxelSignedDistance {
+    const QUANTIZATION_STEP_SIZE: f32 = 0.02;
+    const INVERSE_QUANTIZATION_STEP_SIZE: f32 = 1.0 / Self::QUANTIZATION_STEP_SIZE;
+
+    const MAX_F32: f32 = Self::QUANTIZATION_STEP_SIZE * i8::MAX as f32;
+    const MIN_F32: f32 = Self::QUANTIZATION_STEP_SIZE * i8::MIN as f32;
+
+    /// The maximum signed distance that can be represented by a
+    /// [`VoxelSignedDistance`].
+    pub const fn max_f32() -> f32 {
+        Self::MAX_F32
+    }
+
+    /// The minimum (most negative) signed distance that can be represented by a
+    /// [`VoxelSignedDistance`].
+    pub const fn min_f32() -> f32 {
+        Self::MIN_F32
+    }
+
+    /// A `SignedDistance` for a voxel that is fully outside the object.
+    pub const fn fully_outside() -> Self {
+        Self::from_encoded(i8::MAX)
+    }
+
+    /// A `SignedDistance` for a voxel that is fully inside the object.
+    pub const fn fully_inside() -> Self {
+        Self::from_encoded(i8::MIN)
+    }
+
+    const fn from_encoded(encoded: i8) -> Self {
+        Self { encoded }
+    }
+
+    /// Encodes the given `f32` signed distance as a `VoxelSignedDistance`.
+    /// The value will be clamped to [`Self::min_f32`] and [`Self::max_f32`].
+    pub fn from_f32(value: f32) -> Self {
+        // We don't need to clamp the value before casting to `i8` since
+        // `as` will do that for us (for Rust 1.45+). `NaN` will result in `0`.
+        Self::from_encoded((value * Self::INVERSE_QUANTIZATION_STEP_SIZE) as i8)
+    }
+
+    /// Decodes the `VoxelSignedDistance` to an `f32` signed distance.
+    pub fn to_f32(self) -> f32 {
+        f32::from(self.encoded) * Self::QUANTIZATION_STEP_SIZE
+    }
+
+    /// Whether the signed distance is strictly negative.
+    pub fn is_negative(self) -> bool {
+        self.encoded < 0
+    }
+}
+
+impl From<f32> for VoxelSignedDistance {
+    fn from(value: f32) -> Self {
+        Self::from_f32(value)
+    }
+}
+
+impl From<VoxelSignedDistance> for f32 {
+    fn from(value: VoxelSignedDistance) -> Self {
+        value.to_f32()
+    }
+}
+
+impl fmt::Display for VoxelSignedDistance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.to_f32().fmt(f)
+    }
+}
+
+impl VoxelFlags {
+    const fn new() -> Self {
+        Self::empty()
+    }
+
+    const fn full_adjacency() -> Self {
+        Self::HAS_ADJACENT_X_DN
+            .union(Self::HAS_ADJACENT_X_UP)
+            .union(Self::HAS_ADJACENT_Y_DN)
+            .union(Self::HAS_ADJACENT_Y_UP)
+            .union(Self::HAS_ADJACENT_Z_DN)
+            .union(Self::HAS_ADJACENT_Z_UP)
+    }
+
+    const fn adjacency_for_face(face_dim: Dimension, face_side: Side) -> Self {
+        const FLAGS: [VoxelFlags; 6] = [
+            VoxelFlags::HAS_ADJACENT_X_DN,
+            VoxelFlags::HAS_ADJACENT_X_UP,
+            VoxelFlags::HAS_ADJACENT_Y_DN,
+            VoxelFlags::HAS_ADJACENT_Y_UP,
+            VoxelFlags::HAS_ADJACENT_Z_DN,
+            VoxelFlags::HAS_ADJACENT_Z_UP,
+        ];
+        FLAGS[2 * face_dim.idx() + face_side.idx()]
+    }
+}
+
+impl Voxel {
+    /// Creates a new voxel with the given property ID, state flags and signed
+    /// distance.
+    const fn new(
+        property_id: VoxelPropertyID,
+        flags: VoxelFlags,
+        signed_distance: VoxelSignedDistance,
+    ) -> Self {
+        Self {
+            property_id,
+            flags,
+            signed_distance,
+        }
+    }
+
+    /// Creates a new voxel with the given property ID and signed distance that
+    /// is near the surface of the object (it is adjacent to a voxel with an
+    /// opposite signed distance).
+    pub const fn near_surface(
+        property_id: VoxelPropertyID,
+        signed_distance: VoxelSignedDistance,
+    ) -> Self {
+        Self {
+            property_id,
+            flags: VoxelFlags::new(),
+            signed_distance,
+        }
+    }
+
+    /// Creates a new voxel with the given property ID that is fully inside the
+    /// object (not adjacent to a voxel whose center is outside the object's
+    /// surface).
+    pub const fn fully_inside(property_id: VoxelPropertyID) -> Self {
+        Self::new(
+            property_id,
+            VoxelFlags::new(),
+            VoxelSignedDistance::fully_inside(),
+        )
+    }
+
+    /// Creates a new empty voxel that is fully outside the object (not adjacent
+    /// to a voxel whose center is inside the object's surface).
+    pub const fn fully_outside() -> Self {
+        Self::new(
+            VoxelPropertyID::dummy(),
+            VoxelFlags::IS_EMPTY,
+            VoxelSignedDistance::fully_outside(),
+        )
+    }
+
+    /// Whether the voxel is empty.
+    pub fn is_empty(&self) -> bool {
+        self.flags.contains(VoxelFlags::IS_EMPTY)
+    }
+
+    /// Returns the flags encoding the state of the voxel.
+    pub fn flags(&self) -> VoxelFlags {
+        self.flags
+    }
+
+    /// Returns the signed distance from the center of the voxel to the
+    /// nearest surface of the object.
+    pub fn signed_distance(&self) -> VoxelSignedDistance {
+        self.signed_distance
+    }
+
+    /// Sets the given state flags for the voxel (this will not clear any
+    /// existing flags).
+    fn add_flags(&mut self, flags: VoxelFlags) {
+        self.flags.insert(flags);
+    }
+
+    /// Unsets the given state flags for the voxel.
+    fn remove_flags(&mut self, flags: VoxelFlags) {
+        self.flags.remove(flags);
+    }
+}
+
+impl<P> VoxelPropertyMap<P> {
+    /// Creates a new voxel property map using the given property values, with
+    /// the value for a given voxel type residing at the numerical value of the
+    /// corresponding [`VoxelType`] enum variant.
+    pub fn new(property_values: [P; N_VOXEL_TYPES]) -> Self {
+        Self { property_values }
+    }
+
+    /// Returns a reference to the property value for the given voxel type.
+    pub fn value(&self, voxel_type: VoxelType) -> &P {
+        &self.property_values[voxel_type as usize]
+    }
 }
 
 #[cfg(test)]
@@ -159,137 +397,5 @@ impl VoxelManager {
 impl Default for VoxelManager {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl VoxelType {
-    /// Returns an array with each voxel type in the order of their index.
-    pub fn all() -> [Self; N_VOXEL_TYPES] {
-        array::from_fn(|idx| Self::from_usize(idx).unwrap())
-    }
-}
-
-impl<P> VoxelPropertyMap<P> {
-    /// Creates a new voxel property map using the given property values, with
-    /// the value for a given voxel type residing at the numerical value of the
-    /// corresponding [`VoxelType`] enum variant.
-    pub fn new(property_values: [P; N_VOXEL_TYPES]) -> Self {
-        Self { property_values }
-    }
-
-    /// Returns a reference to the property value for the given voxel type.
-    pub fn value(&self, voxel_type: VoxelType) -> &P {
-        &self.property_values[voxel_type as usize]
-    }
-}
-
-impl VoxelFace {
-    const X_FACES: [Self; 2] = [Self::LowerX, Self::UpperX];
-    const Y_FACES: [Self; 2] = [Self::LowerY, Self::UpperY];
-    const Z_FACES: [Self; 2] = [Self::LowerZ, Self::UpperZ];
-
-    fn opposite_face(&self) -> Self {
-        match *self {
-            Self::LowerX => Self::UpperX,
-            Self::UpperX => Self::LowerX,
-            Self::LowerY => Self::UpperY,
-            Self::UpperY => Self::LowerY,
-            Self::LowerZ => Self::UpperZ,
-            Self::UpperZ => Self::LowerZ,
-        }
-    }
-}
-
-impl<F: Float> VoxelTransform<F> {
-    /// Creates a new voxel transform with the given translation and scaling.
-    fn new(translation: Vector3<F>, scaling: F) -> Self {
-        Self {
-            translation,
-            scaling,
-        }
-    }
-
-    /// Creates a new identity voxel transform.
-    fn identity() -> Self {
-        Self {
-            translation: Vector3::zeros(),
-            scaling: F::ONE,
-        }
-    }
-
-    /// Returns a reference to the translational part of the voxel transform.
-    #[cfg(test)]
-    fn translation(&self) -> &Vector3<F> {
-        &self.translation
-    }
-
-    /// Returns the scaling part of the voxel transform.
-    #[cfg(test)]
-    fn scaling(&self) -> F {
-        self.scaling
-    }
-
-    /// Applies the given transform from the space of the multi-voxel model to
-    /// camera space, yielding the model view transform of the voxel.
-    fn transform_into_model_view_transform(
-        &self,
-        view_transform: &Similarity3<F>,
-        camera_space_axes_in_model_space: &(UnitVector3<F>, UnitVector3<F>, UnitVector3<F>),
-    ) -> InstanceModelViewTransform
-    where
-        F: SubsetOf<fre>,
-    {
-        let scaling_from_model_to_camera_space = view_transform.scaling();
-        let rotation_from_model_to_camera_space = view_transform.isometry.rotation;
-        let translation_from_model_to_camera_space = view_transform.isometry.translation.vector;
-
-        let new_scaling = scaling_from_model_to_camera_space * self.scaling;
-
-        let new_translation = translation_from_model_to_camera_space
-            + vector![
-                camera_space_axes_in_model_space.0.dot(&self.translation),
-                camera_space_axes_in_model_space.1.dot(&self.translation),
-                camera_space_axes_in_model_space.2.dot(&self.translation)
-            ] * scaling_from_model_to_camera_space;
-
-        InstanceModelViewTransform {
-            rotation: rotation_from_model_to_camera_space.cast::<fre>(),
-            translation: new_translation.cast::<fre>(),
-            scaling: fre::from_subset(&new_scaling),
-        }
-    }
-
-    fn compute_camera_space_axes_in_model_space(
-        transform_from_model_to_camera_space: &Similarity3<F>,
-    ) -> (UnitVector3<F>, UnitVector3<F>, UnitVector3<F>) {
-        let rotation = &transform_from_model_to_camera_space.isometry.rotation;
-        (
-            rotation.inverse_transform_unit_vector(&Vector3::x_axis()),
-            rotation.inverse_transform_unit_vector(&Vector3::y_axis()),
-            rotation.inverse_transform_unit_vector(&Vector3::z_axis()),
-        )
-    }
-}
-
-impl<F: Float> Default for VoxelTransform<F> {
-    fn default() -> Self {
-        Self::identity()
-    }
-}
-
-impl<F> AbsDiffEq for VoxelTransform<F>
-where
-    F: Float + AbsDiffEq,
-    <F as AbsDiffEq>::Epsilon: Clone,
-{
-    type Epsilon = <F as AbsDiffEq>::Epsilon;
-
-    fn default_epsilon() -> Self::Epsilon {
-        <F as AbsDiffEq>::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Vector3::abs_diff_eq(&self.translation, &other.translation, epsilon)
-            && F::abs_diff_eq(&self.scaling, &other.scaling, epsilon)
     }
 }

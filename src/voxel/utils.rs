@@ -262,28 +262,47 @@ impl<const N: usize> Loop3<N> {
     }
 
     /// Returns the range of indices for the x-dimension.
-    #[inline(always)]
     pub const fn i_range(&self) -> Range<usize> {
         self.i_range.start..self.i_range.end
     }
 
     /// Returns the range of indices for the y-dimension.
-    #[inline(always)]
     pub const fn j_range(&self) -> Range<usize> {
         self.j_range.start..self.j_range.end
     }
 
     /// Returns the range of indices for the z-dimension.
-    #[inline(always)]
     pub const fn k_range(&self) -> Range<usize> {
         self.k_range.start..self.k_range.end
     }
 
+    /// Returns the number of indices iterated over in the x-dimension.
+    pub const fn n_iterations_i(&self) -> usize {
+        self.i_range.end - self.i_range.start
+    }
+
+    /// Returns the number of indices iterated over in the y-dimension.
+    pub const fn n_iterations_j(&self) -> usize {
+        self.j_range.end - self.j_range.start
+    }
+
+    /// Returns the number of indices iterated over in the z-dimension.
+    pub const fn n_iterations_k(&self) -> usize {
+        self.k_range.end - self.k_range.start
+    }
+
+    /// Returns the number of indices iterated over in each dimension.
+    pub const fn n_iterations_over_each_dimension(&self) -> [usize; 3] {
+        [
+            self.n_iterations_i(),
+            self.n_iterations_j(),
+            self.n_iterations_k(),
+        ]
+    }
+
     /// Returns the total number of iterations in the loop.
     pub const fn n_iterations(&self) -> usize {
-        (self.i_range.end - self.i_range.start)
-            * (self.j_range.end - self.j_range.start)
-            * (self.k_range.end - self.k_range.start)
+        self.n_iterations_i() * self.n_iterations_j() * self.n_iterations_k()
     }
 
     /// Returns the maximum linear index for any loop iteration.
@@ -302,7 +321,7 @@ impl<const N: usize> Loop3<N> {
 
     /// Executes the given closure for each iteration in the loop, passing in
     /// the 3D indices of the iteration.
-    #[inline(always)]
+    #[inline]
     pub fn execute(&self, f: &mut impl FnMut(usize, usize, usize)) {
         match (self.move_j_loop_out, self.move_k_loop_out) {
             (false, false) => {
@@ -346,7 +365,7 @@ impl<const N: usize> Loop3<N> {
 
     /// Executes the given closure for each iteration in the loop, passing in
     /// the 3D indices and the linear index of the iteration.
-    #[inline(always)]
+    #[inline]
     pub fn execute_with_linear_idx(&self, f: &mut impl FnMut(&[usize; 3], usize)) {
         match (self.move_j_loop_out, self.move_k_loop_out) {
             (false, false) => {
@@ -392,14 +411,18 @@ impl<const N: usize> Loop3<N> {
     /// the given closure with the 3D indices in each loop for each iteration.
     ///
     /// # Panics
-    /// If the number of iterations in the two loops is not equal.
-    #[inline(always)]
+    /// If the number of iterations over each dimension in the two loops are not
+    /// equal.
+    #[inline]
     pub fn zip_execute<const M: usize>(
         &self,
         other: &Loop3<M>,
         f: &mut impl FnMut(&[usize; 3], &[usize; 3]),
     ) {
-        assert_eq!(self.n_iterations(), other.n_iterations());
+        assert_eq!(
+            self.n_iterations_over_each_dimension(),
+            other.n_iterations_over_each_dimension()
+        );
         match (self.move_j_loop_out, self.move_k_loop_out) {
             (false, false) => {
                 for (i0, i1) in self.i_range().zip(other.i_range()) {
@@ -445,8 +468,9 @@ impl<const N: usize> Loop3<N> {
     /// for each iteration.
     ///
     /// # Panics
-    /// If the number of iterations in the two loops is not equal.
-    #[inline(always)]
+    /// If the number of iterations over each dimension in the two loops are not
+    /// equal.
+    #[inline]
     pub fn zip_execute_with_linear_indices<const M: usize>(
         &self,
         other: &Loop3<M>,
@@ -456,7 +480,10 @@ impl<const N: usize> Loop3<N> {
         // than using the standard order when the method is run cold, but seems to be
         // faster after warming up (could be that the branch predictor needs some time
         // to learn the patterns)
-        assert_eq!(self.n_iterations(), other.n_iterations());
+        assert_eq!(
+            self.n_iterations_over_each_dimension(),
+            other.n_iterations_over_each_dimension()
+        );
         match (self.move_j_loop_out, self.move_k_loop_out) {
             (false, false) => {
                 for (i0, i1) in self.i_range().zip(other.i_range()) {
@@ -512,7 +539,6 @@ impl<const N: usize> Loop3<N> {
 
 impl<'a, 'b, T, const N: usize> DataLoop3<'a, 'b, T, N> {
     /// Creates a new loop over (part of) the given data slice.
-    #[inline(always)]
     pub fn new(lp: &'a Loop3<N>, data: &'b [T]) -> Self {
         Self { lp, data }
     }
@@ -523,7 +549,6 @@ impl<'a, 'b, T, const N: usize> DataLoop3<'a, 'b, T, N> {
     /// # Panics
     /// If the length of the data slice is smaller than the maximum linear
     /// index in the loop.
-    #[inline(always)]
     pub fn execute(self, f: &mut impl FnMut(&[usize; 3], &T)) {
         assert!(self.data.len() >= self.lp.max_linear_idx());
         self.lp.execute_with_linear_idx(&mut |indices, data_idx| {
@@ -537,7 +562,6 @@ impl<'a, 'b, T, const N: usize> DataLoop3<'a, 'b, T, N> {
 
 impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// Creates a new loop over (part of) the given mutable data slice.
-    #[inline(always)]
     pub fn new(lp: &'a Loop3<N>, data: &'b mut [T]) -> Self {
         Self { lp, data }
     }
@@ -548,7 +572,6 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// # Panics
     /// If the length of the data slice is smaller than the maximum linear
     /// index in the loop.
-    #[inline(always)]
     pub fn execute(self, f: &mut impl FnMut(&[usize; 3], &mut T)) {
         assert!(self.data.len() >= self.lp.max_linear_idx());
         self.lp.execute_with_linear_idx(&mut |indices, data_idx| {
@@ -565,7 +588,6 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// # Panics
     /// If the length of the data slice is smaller than the maximum linear
     /// index in the loop.
-    #[inline(always)]
     pub fn fill_data_with_value(self, value: T)
     where
         T: Copy,
@@ -589,7 +611,6 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     ///   iterations in the loop.
     /// - If the length of the data slice is smaller than the maximum linear
     ///   index in the loop.
-    #[inline(always)]
     pub fn map_slice_values_into_data<U>(self, slice: &[U], map: &impl Fn(&U) -> T) {
         assert_eq!(slice.len(), self.lp.n_iterations());
         assert!(self.data.len() >= self.lp.max_linear_idx());
@@ -616,12 +637,12 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// associated location in this loop's data slice.
     ///
     /// # Panics
-    /// - If the number of iterations in the two loops is not equal.
+    /// - If the number of iterations over each dimension in the two loops are
+    ///   not equal.
     /// - If the length of the data slice for this loop is smaller than the
     ///   maximum linear index in the loop.
     /// - If the length of the data slice for the other loop is smaller than the
     ///   maximum linear index in that loop.
-    #[inline(always)]
     pub fn map_other_data_into_data<U, const M: usize>(
         self,
         other: DataLoop3<'_, '_, U, M>,

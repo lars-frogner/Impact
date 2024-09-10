@@ -3,11 +3,11 @@
 use crate::{
     geometry::{Frustum, Plane},
     gpu::rendering::fre,
-    mesh::{FrontFaceSide, TriangleMesh},
-    voxel::chunks::ChunkedVoxelObject,
+    voxel::chunks::{sdf::surface_nets::SurfaceNetsBuffer, ChunkedVoxelObject},
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{vector, Point3, Similarity3, UnitVector3};
+use glam::Vec3A;
+use nalgebra::{Similarity3, UnitVector3};
 
 /// A mesh representation of a [`ChunkedVoxelObject`]. All the vertices
 /// ([`VoxelMeshVertex`]) and indices for the full object are stored together,
@@ -28,8 +28,8 @@ pub struct ChunkedVoxelObjectMesh {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct VoxelMeshVertex {
-    pub position: Point3<fre>,
-    pub normal_vector: UnitVector3<fre>,
+    pub position: [f32; 3],
+    pub normal_vector: [f32; 3],
 }
 
 /// Metadata associating a chunk in a [`ChunkedVoxelObject`] with the segment of
@@ -66,27 +66,30 @@ impl ChunkedVoxelObjectMesh {
         let mut indices = Vec::new();
         let mut chunk_submeshes = Vec::new();
 
+        let mut buffer = SurfaceNetsBuffer::default();
+
+        let voxel_extent = voxel_object.voxel_extent() as fre;
         let chunk_extent = voxel_object.chunk_extent() as fre;
 
         let mut index_offset = 0;
 
-        voxel_object.for_each_exposed_chunk_with_sdf(&mut |chunk, _| {
+        voxel_object.for_each_exposed_chunk_with_sdf(&mut |chunk, sdf| {
             let chunk_indices = chunk.chunk_indices();
-            let chunk_center = vector![
-                chunk_indices[0] as fre * chunk_extent + 0.5 * chunk_extent,
-                chunk_indices[1] as fre * chunk_extent + 0.5 * chunk_extent,
-                chunk_indices[2] as fre * chunk_extent + 0.5 * chunk_extent,
-            ];
 
-            let mesh = TriangleMesh::create_box(
-                chunk_extent,
-                chunk_extent,
-                chunk_extent,
-                FrontFaceSide::Outside,
+            // Since the `VoxelChunkSignedDistanceField` has a 1-voxel padding
+            // around the chunk boundary, we need to subtract the voxel extent
+            // from the position of the chunk's lower corner to get the offset
+            // of the vertices for the surface nets mesh.
+            let vertex_position_offset = Vec3A::new(
+                chunk_indices[0] as fre * chunk_extent - voxel_extent,
+                chunk_indices[1] as fre * chunk_extent - voxel_extent,
+                chunk_indices[2] as fre * chunk_extent - voxel_extent,
             );
 
+            sdf.compute_surface_nets_mesh(voxel_extent, &vertex_position_offset, &mut buffer);
+
             let base_vertex_index = vertices.len();
-            let index_count = mesh.n_indices();
+            let index_count = buffer.indices.len();
 
             chunk_submeshes.push(ChunkSubmesh::new(
                 chunk_indices[0],
@@ -97,23 +100,8 @@ impl ChunkedVoxelObjectMesh {
                 index_count,
             ));
 
-            vertices.reserve(mesh.n_vertices());
-            vertices.extend(
-                mesh.positions()
-                    .iter()
-                    .zip(mesh.normal_vectors().iter())
-                    .map(|(position, normal_vector)| VoxelMeshVertex {
-                        position: position.0 + chunk_center,
-                        normal_vector: normal_vector.0,
-                    }),
-            );
-
-            indices.reserve(index_count);
-            indices.extend(
-                mesh.indices()
-                    .iter()
-                    .map(|index| u16::try_from(*index).unwrap()),
-            );
+            vertices.extend_from_slice(&buffer.vertices);
+            indices.extend_from_slice(&buffer.indices);
 
             index_offset += index_count;
         });
