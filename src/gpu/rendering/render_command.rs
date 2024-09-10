@@ -1490,9 +1490,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                         )),
                     });
 
-                if !shadow_mapping_enabled {
-                    // If shadow mapping is disabled, we don't do anything in the render pass,
-                    // which means the shadow map textures will just be cleared
+                if !shadow_mapping_enabled || self.models.is_empty() {
+                    // If shadow mapping is disabled or there are no models, we don't do anything in
+                    // the render pass, which means the shadow map textures will just be cleared
                     continue;
                 }
 
@@ -1806,9 +1806,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                         )),
                     });
 
-                if !shadow_mapping_enabled {
-                    // If shadow mapping is disabled, we don't do anything in the render pass,
-                    // which means the shadow map textures will just be cleared
+                if !shadow_mapping_enabled || self.models.is_empty() {
+                    // If shadow mapping is disabled or there are no models, we don't do anything in
+                    // the render pass, which means the shadow map textures will just be cleared
                     continue;
                 }
 
