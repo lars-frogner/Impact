@@ -126,7 +126,7 @@ struct GeometryPassPipeline {
 #[derive(Debug)]
 struct OmnidirectionalLightShadowMapUpdatePasses {
     push_constants: PushConstantGroup,
-    depth_stencil_state: wgpu::DepthStencilState,
+    color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     max_light_count: usize,
@@ -137,7 +137,7 @@ struct OmnidirectionalLightShadowMapUpdatePasses {
 #[derive(Debug)]
 struct UnidirectionalLightShadowMapUpdatePasses {
     push_constants: PushConstantGroup,
-    depth_stencil_state: wgpu::DepthStencilState,
+    color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     max_light_count: usize,
@@ -1276,7 +1276,7 @@ impl GeometryPass {
 }
 
 impl OmnidirectionalLightShadowMapUpdatePasses {
-    const CLEAR_DEPTH: f32 = 1.0;
+    const CLEAR_COLOR: wgpu::Color = wgpu::Color::WHITE;
 
     fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
         let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
@@ -1298,7 +1298,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             "Omnidirectional light shadow map update render pipeline layout",
         );
 
-        let depth_stencil_state = depth_stencil_state_for_shadow_map_update();
+        let color_target_states = Self::color_target_states();
 
         let pipeline = create_render_pipeline(
             graphics_device.device(),
@@ -1308,19 +1308,19 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
                 VertexPosition::BUFFER_LAYOUT,
             ],
-            &[],
+            &color_target_states,
             // The cubemap projection does not flip the z-axis, so the front
             // faces will have the opposite winding order compared to normal
             INVERTED_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
-            Some(depth_stencil_state.clone()),
+            None,
             "Omnidirectional light shadow map update render pipeline",
         );
 
         Self {
             push_constants,
-            depth_stencil_state,
+            color_target_states,
             pipeline_layout,
             pipeline,
             max_light_count,
@@ -1396,11 +1396,11 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                     InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
                     VertexPosition::BUFFER_LAYOUT,
                 ],
-                &[],
+                &self.color_target_states,
                 INVERTED_FRONT_FACE,
                 Some(wgpu::Face::Back),
                 wgpu::PolygonMode::Fill,
-                Some(self.depth_stencil_state.clone()),
+                None,
                 "Omnidirectional light shadow map update render pipeline",
             );
             self.max_light_count = max_light_count;
@@ -1409,17 +1409,32 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         Ok(())
     }
 
-    fn depth_stencil_attachment(
-        shadow_cubemap_face_texture_view: &wgpu::TextureView,
-    ) -> wgpu::RenderPassDepthStencilAttachment<'_> {
-        wgpu::RenderPassDepthStencilAttachment {
-            view: shadow_cubemap_face_texture_view,
-            depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
-                store: wgpu::StoreOp::Store,
+    fn color_target_states() -> Vec<Option<wgpu::ColorTargetState>> {
+        vec![Some(wgpu::ColorTargetState {
+            format: SHADOW_MAP_FORMAT,
+            blend: Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Min,
+                },
+                alpha: wgpu::BlendComponent::default(),
             }),
-            stencil_ops: None,
-        }
+            write_mask: wgpu::ColorWrites::ALL,
+        })]
+    }
+
+    fn color_attachments(
+        shadow_cubemap_face_texture_view: &wgpu::TextureView,
+    ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
+        vec![Some(wgpu::RenderPassColorAttachment {
+            view: shadow_cubemap_face_texture_view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(Self::CLEAR_COLOR),
+                store: wgpu::StoreOp::Store,
+            },
+        })]
     }
 
     fn set_light_idx_push_constant(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
@@ -1466,8 +1481,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             for cubemap_face in CubemapFace::all() {
                 let shadow_cubemap_face_texture_view = shadow_map_texture.face_view(cubemap_face);
 
-                let depth_stencil_attachment =
-                    Self::depth_stencil_attachment(shadow_cubemap_face_texture_view);
+                let color_attachments = Self::color_attachments(shadow_cubemap_face_texture_view);
 
                 let timestamp_writes = if pass_idx == 0 {
                     first_timestamp_writes.clone()
@@ -1480,8 +1494,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                 let mut render_pass =
                     command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments: &[],
-                        depth_stencil_attachment: Some(depth_stencil_attachment),
+                        color_attachments: &color_attachments,
+                        depth_stencil_attachment: None,
                         timestamp_writes,
                         occlusion_query_set: None,
                         label: Some(&format!(
@@ -1582,7 +1596,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 }
 
 impl UnidirectionalLightShadowMapUpdatePasses {
-    const CLEAR_DEPTH: f32 = 1.0;
+    const CLEAR_COLOR: wgpu::Color = wgpu::Color::WHITE;
 
     fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
         let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
@@ -1604,7 +1618,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             "Unidirectional light shadow map update render pipeline layout",
         );
 
-        let depth_stencil_state = depth_stencil_state_for_shadow_map_update();
+        let color_target_states = Self::color_target_states();
 
         let pipeline = create_render_pipeline(
             graphics_device.device(),
@@ -1614,17 +1628,17 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
                 VertexPosition::BUFFER_LAYOUT,
             ],
-            &[],
+            &color_target_states,
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
-            Some(depth_stencil_state.clone()),
+            None,
             "Unidirectional light shadow map update render pipeline",
         );
 
         Self {
             push_constants,
-            depth_stencil_state,
+            color_target_states,
             pipeline_layout,
             pipeline,
             max_light_count,
@@ -1700,11 +1714,11 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                     InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
                     VertexPosition::BUFFER_LAYOUT,
                 ],
-                &[],
+                &self.color_target_states,
                 STANDARD_FRONT_FACE,
                 Some(wgpu::Face::Back),
                 wgpu::PolygonMode::Fill,
-                Some(self.depth_stencil_state.clone()),
+                None,
                 "Unidirectional light shadow map update render pipeline",
             );
             self.max_light_count = max_light_count;
@@ -1713,17 +1727,32 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         Ok(())
     }
 
-    fn depth_stencil_attachment(
-        shadow_map_cascade_texture_view: &wgpu::TextureView,
-    ) -> wgpu::RenderPassDepthStencilAttachment<'_> {
-        wgpu::RenderPassDepthStencilAttachment {
-            view: shadow_map_cascade_texture_view,
-            depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
-                store: wgpu::StoreOp::Store,
+    fn color_target_states() -> Vec<Option<wgpu::ColorTargetState>> {
+        vec![Some(wgpu::ColorTargetState {
+            format: SHADOW_MAP_FORMAT,
+            blend: Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Min,
+                },
+                alpha: wgpu::BlendComponent::default(),
             }),
-            stencil_ops: None,
-        }
+            write_mask: wgpu::ColorWrites::ALL,
+        })]
+    }
+
+    fn color_attachments(
+        shadow_map_cascade_texture_view: &wgpu::TextureView,
+    ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
+        vec![Some(wgpu::RenderPassColorAttachment {
+            view: shadow_map_cascade_texture_view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(Self::CLEAR_COLOR),
+                store: wgpu::StoreOp::Store,
+            },
+        })]
     }
 
     fn set_light_and_cascade_idx_push_constants(
@@ -1782,8 +1811,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
                 let shadow_map_cascade_texture_view = shadow_map_texture.cascade_view(cascade_idx);
 
-                let depth_stencil_attachment =
-                    Self::depth_stencil_attachment(shadow_map_cascade_texture_view);
+                let color_attachments = Self::color_attachments(shadow_map_cascade_texture_view);
 
                 let timestamp_writes = if pass_idx == 0 {
                     first_timestamp_writes.clone()
@@ -1796,8 +1824,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                 let mut render_pass =
                     command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments: &[],
-                        depth_stencil_attachment: Some(depth_stencil_attachment),
+                        color_attachments: &color_attachments,
+                        depth_stencil_attachment: None,
                         timestamp_writes,
                         occlusion_query_set: None,
                         label: Some(&format!(

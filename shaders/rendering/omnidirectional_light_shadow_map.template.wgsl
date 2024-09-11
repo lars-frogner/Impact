@@ -30,7 +30,7 @@ struct VertexOutput {
 }
 
 struct FragmentOutput {
-    @builtin(frag_depth) fragmentDepth: f32,
+    @location(0) fragmentDepth: f32,
 }
 
 var<push_constant> pushConstants: PushConstants;
