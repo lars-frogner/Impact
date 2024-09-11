@@ -115,7 +115,6 @@ impl SpecificShaderTemplate for OmnidirectionalLightShaderTemplate {
                     "shadow_map_texture_group" => 6,
                     "shadow_map_texture_binding" => ShadowCubemapTexture::texture_binding(),
                     "shadow_map_sampler_binding" => ShadowCubemapTexture::sampler_binding(),
-                    "shadow_map_comparison_sampler_binding" => ShadowCubemapTexture::comparison_sampler_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )

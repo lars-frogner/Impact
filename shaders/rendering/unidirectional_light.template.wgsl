@@ -84,8 +84,6 @@ var<uniform> unidirectionalLights: UnidirectionalLights;
 var cascadedShadowMapTexture: texture_depth_2d_array;
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_sampler_binding}})
 var cascadedShadowMapSampler: sampler;
-@group({{shadow_map_texture_group}}) @binding({{shadow_map_comparison_sampler_binding}})
-var cascadedShadowMapComparisonSampler: sampler_comparison;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
     return framebufferPosition.xy * vec2f(pushConstants.inverseWindowWidth, pushConstants.inverseWindowHeight);
@@ -413,16 +411,16 @@ fn computeVogelDiskComparisonSampleAverage(
             sampleIdx,
         ) * diskRadius + centerTextureCoords;
 
-        sampleAverage += textureSampleCompare(
+        let sampledDepth = textureSample(
             cascadedShadowMapTexture,
-            cascadedShadowMapComparisonSampler,
+            cascadedShadowMapSampler,
             sampleTextureCoords,
             array_index,
-            referenceDepth,
         );
+        if (sampledDepth >= referenceDepth) {
+            sampleAverage += invSampleCount;
+        }
     }
-
-    sampleAverage *= invSampleCount;
 
     return sampleAverage;
 }

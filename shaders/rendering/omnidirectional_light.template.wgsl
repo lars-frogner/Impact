@@ -85,8 +85,6 @@ var<uniform> omnidirectionalLights: OmnidirectionalLights;
 var shadowMapTexture: texture_depth_cube;
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_sampler_binding}})
 var shadowMapSampler: sampler;
-@group({{shadow_map_texture_group}}) @binding({{shadow_map_comparison_sampler_binding}})
-var shadowMapComparisonSampler: sampler_comparison;
 
 fn transformPosition(
     rotationQuaternion: vec4f,
@@ -378,10 +376,11 @@ fn computeVogelDiskComparisonSampleAverage(
         let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
         let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
 
-        sampleAverage += textureSampleCompare(shadowMapTexture, shadowMapComparisonSampler, sampleDisplacement, referenceDepth);
+        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement);
+        if (sampledDepth >= referenceDepth) {
+            sampleAverage += invSampleCount;
+        }
     }
-
-    sampleAverage *= invSampleCount;
 
     return sampleAverage;
 }
