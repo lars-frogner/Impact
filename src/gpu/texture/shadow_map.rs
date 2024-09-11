@@ -20,7 +20,6 @@ pub struct ShadowCubemapTexture {
     view: wgpu::TextureView,
     face_views: [wgpu::TextureView; 6],
     sampler: wgpu::Sampler,
-    comparison_sampler: wgpu::Sampler,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
@@ -35,7 +34,6 @@ pub struct CascadedShadowMapTexture {
     view: wgpu::TextureView,
     cascade_views: Vec<wgpu::TextureView>,
     sampler: wgpu::Sampler,
-    comparison_sampler: wgpu::Sampler,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
@@ -48,10 +46,6 @@ impl ShadowCubemapTexture {
     /// The binding location of the shadow cubemap sampler.
     pub const fn sampler_binding() -> u32 {
         1
-    }
-    /// The binding location of the shadow cubemap comparison sampler.
-    pub const fn comparison_sampler_binding() -> u32 {
-        2
     }
 
     /// Creates a new shadow cubemap texture array using the given resolution as
@@ -79,23 +73,15 @@ impl ShadowCubemapTexture {
         ];
 
         let sampler = create_shadow_map_sampler(device);
-        let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
         let bind_group_layout = Self::create_bind_group_layout(device);
-        let bind_group = Self::create_bind_group(
-            device,
-            &bind_group_layout,
-            &view,
-            &sampler,
-            &comparison_sampler,
-        );
+        let bind_group = Self::create_bind_group(device, &bind_group_layout, &view, &sampler);
 
         Self {
             texture,
             view,
             face_views,
             sampler,
-            comparison_sampler,
             bind_group_layout,
             bind_group,
         }
@@ -114,11 +100,6 @@ impl ShadowCubemapTexture {
     /// Returns a sampler for the shadow map texture.
     pub fn sampler(&self) -> &wgpu::Sampler {
         &self.sampler
-    }
-
-    /// Returns a comparison sampler for the shadow map texture.
-    pub fn comparison_sampler(&self) -> &wgpu::Sampler {
-        &self.comparison_sampler
     }
 
     /// Returns a reference to the bind group layout for the shadow map texture
@@ -158,9 +139,6 @@ impl ShadowCubemapTexture {
             entries: &[
                 Self::create_texture_bind_group_layout_entry(Self::texture_binding()),
                 Self::create_sampler_bind_group_layout_entry(Self::sampler_binding()),
-                Self::create_comparison_sampler_bind_group_layout_entry(
-                    Self::comparison_sampler_binding(),
-                ),
             ],
             label: Some("Shadow cubemap bind group layout"),
         })
@@ -171,17 +149,12 @@ impl ShadowCubemapTexture {
         layout: &wgpu::BindGroupLayout,
         texture_view: &wgpu::TextureView,
         sampler: &wgpu::Sampler,
-        comparison_sampler: &wgpu::Sampler,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 Self::create_texture_bind_group_entry(Self::texture_binding(), texture_view),
                 Self::create_sampler_bind_group_entry(Self::sampler_binding(), sampler),
-                Self::create_sampler_bind_group_entry(
-                    Self::comparison_sampler_binding(),
-                    comparison_sampler,
-                ),
             ],
             label: Some("Shadow cubemap bind group"),
         })
@@ -205,17 +178,6 @@ impl ShadowCubemapTexture {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-            count: None,
-        }
-    }
-
-    const fn create_comparison_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
             count: None,
         }
     }
@@ -266,10 +228,6 @@ impl CascadedShadowMapTexture {
     pub const fn sampler_binding() -> u32 {
         1
     }
-    /// The binding location of the shadow map comparison sampler.
-    pub const fn comparison_sampler_binding() -> u32 {
-        2
-    }
 
     /// Creates a new cascaded shadow map texture array using the given
     /// resolution as the width and height in texels of each of the `n_cascades`
@@ -299,23 +257,15 @@ impl CascadedShadowMapTexture {
             .collect();
 
         let sampler = create_shadow_map_sampler(device);
-        let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
         let bind_group_layout = Self::create_bind_group_layout(device);
-        let bind_group = Self::create_bind_group(
-            device,
-            &bind_group_layout,
-            &view,
-            &sampler,
-            &comparison_sampler,
-        );
+        let bind_group = Self::create_bind_group(device, &bind_group_layout, &view, &sampler);
 
         Self {
             texture,
             view,
             cascade_views,
             sampler,
-            comparison_sampler,
             bind_group_layout,
             bind_group,
         }
@@ -339,11 +289,6 @@ impl CascadedShadowMapTexture {
     /// Returns a sampler for the shadow map texture.
     pub fn sampler(&self) -> &wgpu::Sampler {
         &self.sampler
-    }
-
-    /// Returns a comparison sampler for the shadow map texture.
-    pub fn comparison_sampler(&self) -> &wgpu::Sampler {
-        &self.comparison_sampler
     }
 
     /// Returns a reference to the bind group layout for the shadow map texture
@@ -383,9 +328,6 @@ impl CascadedShadowMapTexture {
             entries: &[
                 Self::create_texture_bind_group_layout_entry(Self::texture_binding()),
                 Self::create_sampler_bind_group_layout_entry(Self::sampler_binding()),
-                Self::create_comparison_sampler_bind_group_layout_entry(
-                    Self::comparison_sampler_binding(),
-                ),
             ],
             label: Some("Cascaded shadow map bind group layout"),
         })
@@ -396,17 +338,12 @@ impl CascadedShadowMapTexture {
         layout: &wgpu::BindGroupLayout,
         texture_view: &wgpu::TextureView,
         sampler: &wgpu::Sampler,
-        comparison_sampler: &wgpu::Sampler,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 Self::create_texture_bind_group_entry(Self::texture_binding(), texture_view),
                 Self::create_sampler_bind_group_entry(Self::sampler_binding(), sampler),
-                Self::create_sampler_bind_group_entry(
-                    Self::comparison_sampler_binding(),
-                    comparison_sampler,
-                ),
             ],
             label: Some("Cascaded shadow map bind group"),
         })
@@ -430,17 +367,6 @@ impl CascadedShadowMapTexture {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-            count: None,
-        }
-    }
-
-    const fn create_comparison_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
             count: None,
         }
     }
@@ -507,21 +433,6 @@ fn create_shadow_map_sampler(device: &wgpu::Device) -> wgpu::Sampler {
         address_mode_v: wgpu::AddressMode::ClampToBorder,
         address_mode_w: wgpu::AddressMode::ClampToBorder,
         border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
-        compare: None,
-        ..Default::default()
-    })
-}
-
-fn create_shadow_map_comparison_sampler(device: &wgpu::Device) -> wgpu::Sampler {
-    device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToBorder,
-        address_mode_v: wgpu::AddressMode::ClampToBorder,
-        address_mode_w: wgpu::AddressMode::ClampToBorder,
-        border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
-        // The result of the comparison sampling will be 1.0 if the
-        // reference depth is less than or equal to the sampled depth
-        // (meaning that the fragment is not occluded), and 0.0 otherwise.
-        compare: Some(wgpu::CompareFunction::LessEqual),
         ..Default::default()
     })
 }
