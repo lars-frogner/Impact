@@ -81,7 +81,7 @@ var materialPropertiesSampler: sampler;
 var<uniform> unidirectionalLights: UnidirectionalLights;
 
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_texture_binding}})
-var cascadedShadowMapTexture: texture_depth_2d_array;
+var cascadedShadowMapTexture: texture_2d_array<f32>;
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_sampler_binding}})
 var cascadedShadowMapSampler: sampler;
 
@@ -367,7 +367,7 @@ fn computeShadowPenumbraExtent(
             cascadedShadowMapSampler,
             sampleTextureCoords,
             array_index,
-        );
+        ).r;
 
         if sampledDepth < referenceDepth {
             averageOccludingDepth += sampledDepth;
@@ -416,7 +416,7 @@ fn computeVogelDiskComparisonSampleAverage(
             cascadedShadowMapSampler,
             sampleTextureCoords,
             array_index,
-        );
+        ).r;
         if (sampledDepth >= referenceDepth) {
             sampleAverage += invSampleCount;
         }

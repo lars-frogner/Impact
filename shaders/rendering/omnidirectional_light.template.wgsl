@@ -82,7 +82,7 @@ var materialPropertiesSampler: sampler;
 var<uniform> omnidirectionalLights: OmnidirectionalLights;
 
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_texture_binding}})
-var shadowMapTexture: texture_depth_cube;
+var shadowMapTexture: texture_cube<f32>;
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_sampler_binding}})
 var shadowMapSampler: sampler;
 
@@ -328,7 +328,7 @@ fn computeShadowPenumbraExtent(
         let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
         let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
 
-        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement);
+        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement).r;
 
         if sampledDepth < referenceDepth {
             averageOccludingDepth += sampledDepth;
@@ -376,7 +376,7 @@ fn computeVogelDiskComparisonSampleAverage(
         let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
         let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
 
-        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement);
+        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement).r;
         if (sampledDepth >= referenceDepth) {
             sampleAverage += invSampleCount;
         }

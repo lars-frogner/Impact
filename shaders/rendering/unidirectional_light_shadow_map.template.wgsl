@@ -27,7 +27,11 @@ struct OrthographicTransform {
 }
 
 struct VertexOutput {
-    @builtin(position) lightClipSpacePosition: vec4f,
+    @builtin(position) projectedPosition: vec4f,
+}
+
+struct FragmentOutput {
+    @location(0) fragmentDepth: f32,
 }
 
 var<push_constant> pushConstants: PushConstants;
@@ -82,7 +86,14 @@ fn mainVS(
         lightSpacePosition,
     );
 
-    output.lightClipSpacePosition = vec4f(lightClipSpacePosition, 1.0);
+    output.projectedPosition = vec4f(lightClipSpacePosition, 1.0);
 
+    return output;
+}
+
+@fragment
+fn mainFS(input: VertexOutput) -> FragmentOutput {
+    var output: FragmentOutput;
+    output.fragmentDepth = input.projectedPosition.z;
     return output;
 }

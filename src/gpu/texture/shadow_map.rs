@@ -7,7 +7,7 @@ use std::path::Path;
 /// Index representing a cascade in a cascaded shadow map.
 pub type CascadeIdx = u32;
 
-pub const SHADOW_MAP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub const SHADOW_MAP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Float;
 
 /// Texture array for storing the depths of the closest vertices to an
 /// omnidirectional light source, used for shadow mapping. Each of the six
@@ -165,7 +165,7 @@ impl ShadowCubemapTexture {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Depth,
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 view_dimension: wgpu::TextureViewDimension::Cube,
                 multisampled: false,
             },
@@ -354,7 +354,7 @@ impl CascadedShadowMapTexture {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Depth,
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 view_dimension: wgpu::TextureViewDimension::D2Array,
                 multisampled: false,
             },
