@@ -248,9 +248,10 @@ impl BloomRenderCommands {
         }
 
         let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
-            .register_timestamp_writes_for_first_and_last_of_render_passes(Cow::Borrowed(
-                "Bloom passes",
-            ));
+            .register_timestamp_writes_for_first_and_last_of_render_passes(
+                self.n_downsamplings + self.n_upsamplings + 1,
+                Cow::Borrowed("Bloom passes"),
+            );
 
         let blurred_luminance_texture =
             render_attachment_texture_manager.render_attachment_texture(LuminanceAux);

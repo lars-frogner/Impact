@@ -230,26 +230,37 @@ impl TimestampQueryRegistry<'_> {
         })
     }
 
-    /// Registers a pair of timestamp writes for a sequence of render passes,
-    /// one at the beginning of the first pass and one at the end of the
-    /// last pass. Returns the two `timestamp_writes` parameters to use in the
-    /// [`wgpu::RenderPassDescriptor`]s for the first and last passes.
+    /// Registers a pair of timestamp writes for a sequence of the given number
+    /// of render passes, one at the beginning of the first pass and one at
+    /// the end of the last pass. Returns the two `timestamp_writes`
+    /// parameters to use in the [`wgpu::RenderPassDescriptor`]s for the
+    /// first and last passes.
+    ///
+    /// # Panics
+    /// If `n_passes` is zero.
     pub fn register_timestamp_writes_for_first_and_last_of_render_passes(
         &mut self,
+        n_passes: usize,
         tag: Cow<'static, str>,
     ) -> [Option<wgpu::RenderPassTimestampWrites<'_>>; 2] {
+        assert!(n_passes > 0);
         if let Some((start_idx, end_idx)) = self.manager.register_writes_and_get_query_indices(tag)
         {
+            let (end_of_first_pass_write_index, end_of_last_pass_write_index) = if n_passes == 1 {
+                (Some(end_idx), None)
+            } else {
+                (None, Some(end_idx))
+            };
             [
                 Some(wgpu::RenderPassTimestampWrites {
                     query_set: &self.manager.query_set,
                     beginning_of_pass_write_index: Some(start_idx),
-                    end_of_pass_write_index: None,
+                    end_of_pass_write_index: end_of_first_pass_write_index,
                 }),
                 Some(wgpu::RenderPassTimestampWrites {
                     query_set: &self.manager.query_set,
                     beginning_of_pass_write_index: None,
-                    end_of_pass_write_index: Some(end_idx),
+                    end_of_pass_write_index: end_of_last_pass_write_index,
                 }),
             ]
         } else {
@@ -272,26 +283,36 @@ impl TimestampQueryRegistry<'_> {
         })
     }
 
-    /// Registers a pair of timestamp writes for a sequence of compute passes,
-    /// one at the beginning of the first pass and one at the end of the
-    /// last pass. Returns the two `timestamp_writes` parameters to use in the
-    /// [`wgpu::ComputePassDescriptor`]s for the first and last passes.
+    /// Registers a pair of timestamp writes for a sequence of the given number
+    /// of compute passes, one at the beginning of the first pass and one at
+    /// the end of the last pass. Returns the two `timestamp_writes`
+    /// parameters to use in the [`wgpu::ComputePassDescriptor`]s for the
+    /// first and last passes.
+    ///
+    /// # Panics
+    /// If `n_passes` is zero.
     pub fn register_timestamp_writes_for_first_and_last_of_compute_passes(
         &mut self,
+        n_passes: usize,
         tag: Cow<'static, str>,
     ) -> [Option<wgpu::ComputePassTimestampWrites<'_>>; 2] {
         if let Some((start_idx, end_idx)) = self.manager.register_writes_and_get_query_indices(tag)
         {
+            let (end_of_first_pass_write_index, end_of_last_pass_write_index) = if n_passes == 1 {
+                (Some(end_idx), None)
+            } else {
+                (None, Some(end_idx))
+            };
             [
                 Some(wgpu::ComputePassTimestampWrites {
                     query_set: &self.manager.query_set,
                     beginning_of_pass_write_index: Some(start_idx),
-                    end_of_pass_write_index: None,
+                    end_of_pass_write_index: end_of_first_pass_write_index,
                 }),
                 Some(wgpu::ComputePassTimestampWrites {
                     query_set: &self.manager.query_set,
                     beginning_of_pass_write_index: None,
-                    end_of_pass_write_index: Some(end_idx),
+                    end_of_pass_write_index: end_of_last_pass_write_index,
                 }),
             ]
         } else {
