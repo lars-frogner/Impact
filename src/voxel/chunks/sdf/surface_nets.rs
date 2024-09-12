@@ -22,11 +22,9 @@ pub struct SurfaceNetsBuffer {
     pub indices: Vec<u16>,
 
     /// Local 3D array coordinates of every voxel that intersects the
-    /// isosurface.
-    pub surface_points: Vec<[u8; 3]>,
-    /// Linear index in the SDF array of every voxel that intersects the
-    /// isosurface. Can be used for efficient post-processing.
-    pub surface_linear_indices: Vec<u16>,
+    /// isosurface, together with the corresponding linear indices in the SDF
+    /// array.
+    pub surface_points_and_linear_indices: Vec<([u8; 3], u16)>,
     /// Used to map back from voxel linear index to vertex index.
     pub voxel_linear_idx_to_vertex_index: Vec<u16>,
 }
@@ -36,8 +34,7 @@ impl SurfaceNetsBuffer {
     fn reset(&mut self, array_size: usize) {
         self.vertices.clear();
         self.indices.clear();
-        self.surface_points.clear();
-        self.surface_linear_indices.clear();
+        self.surface_points_and_linear_indices.clear();
 
         // Just make sure this buffer is big enough, whether or not we've used it
         // before.
@@ -120,8 +117,9 @@ impl VoxelChunkSignedDistanceField {
                         // to produce a significant slowdown
                         buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
                             buffer.vertices.len() as u16 - 1; // Mind dependency on `vertices`
-                        buffer.surface_points.push([i as u8, j as u8, k as u8]);
-                        buffer.surface_linear_indices.push(linear_idx as u16);
+                        buffer
+                            .surface_points_and_linear_indices
+                            .push(([i as u8, j as u8, k as u8], linear_idx as u16));
                     } else {
                         buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] = NULL_VERTEX;
                     }
@@ -184,11 +182,7 @@ impl VoxelChunkSignedDistanceField {
             }
         }
 
-        for (&[i, j, k], &p_linear_idx) in buffer
-            .surface_points
-            .iter()
-            .zip(buffer.surface_linear_indices.iter())
-        {
+        for &([i, j, k], p_linear_idx) in &buffer.surface_points_and_linear_indices {
             let p_linear_idx = p_linear_idx as usize;
 
             // Do edges parallel with the X axis
@@ -272,8 +266,6 @@ impl VoxelChunkSignedDistanceField {
         axis_c_linear_idx: usize,
         indices: &mut Vec<u16>,
     ) {
-        // let d1 = *unsafe { self.values.get_unchecked(p1) };
-        // let d2 = *unsafe { self.values.get_unchecked(p2) };
         let d1 = self.values[p1];
         let d2 = self.values[p2];
         let negative_face = match (d1.is_sign_negative(), d2.is_sign_negative()) {
@@ -317,13 +309,17 @@ fn centroid_of_edge_intersections(dists: &[f32; 8]) -> Vec3A {
     for &[corner1, corner2] in &CUBE_EDGES {
         let d1 = dists[corner1 as usize];
         let d2 = dists[corner2 as usize];
-        if (d1 < 0.0) != (d2 < 0.0) {
+        if opposite_signs(d1, d2) {
             count += 1;
             sum += estimate_surface_edge_intersection(corner1, corner2, d1, d2);
         }
     }
 
     sum / count as f32
+}
+
+fn opposite_signs(a: f32, b: f32) -> bool {
+    (a.to_bits() ^ b.to_bits()) & 0x8000_0000 != 0
 }
 
 // Given two cube corners, finds the point between them where the SDF is zero.
