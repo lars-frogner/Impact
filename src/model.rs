@@ -1001,6 +1001,25 @@ impl DynamicInstanceFeatureBuffer {
         }
     }
 
+    /// Returns a slice with the features in the range with the given ID. Ranges
+    /// are defined by calling [`begin_range`]. The range spans from and
+    /// including the first feature added after the `begin_range` call to
+    /// and including the last feature added before the next `begin_range`
+    /// call, or to the last valid feature if the `begin_range` call was the
+    /// last one. Calling [`clear`] removes all range information.
+    ///
+    /// # Panics
+    /// - If no range with the given ID exists.
+    /// - If `Fe` is not the feature type the buffer was initialized with.
+    /// - If `Fe` is a zero-sized type.
+    pub fn valid_features_in_range<Fe: InstanceFeature>(
+        &self,
+        range_id: InstanceFeatureBufferRangeID,
+    ) -> &[Fe] {
+        let range = self.valid_feature_range(range_id);
+        &self.valid_features()[range.start as usize..range.end as usize]
+    }
+
     /// Returns a slice with the currently valid features added before defining
     /// any explicit ranges with [`begin_range`]
     ///
@@ -1008,8 +1027,7 @@ impl DynamicInstanceFeatureBuffer {
     /// - If `Fe` is not the feature type the buffer was initialized with.
     /// - If `Fe` is a zero-sized type.
     pub fn valid_features_in_initial_range<Fe: InstanceFeature>(&self) -> &[Fe] {
-        let range = self.initial_valid_feature_range();
-        &self.valid_features()[range.start as usize..range.end as usize]
+        self.valid_features_in_range(InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID)
     }
 
     /// Returns a slice with the currently valid bytes in the buffer.
