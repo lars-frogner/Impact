@@ -1460,14 +1460,17 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let shadow_map_manager = light_buffer_manager.omnidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
 
-        if shadow_map_textures.is_empty() {
+        let n_passes = 6 * shadow_map_textures.len();
+
+        if n_passes == 0 {
             return Ok(());
         }
 
         let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
-            .register_timestamp_writes_for_first_and_last_of_render_passes(Cow::Borrowed(
-                "Omnidirectional light shadow map update passes",
-            ));
+            .register_timestamp_writes_for_first_and_last_of_render_passes(
+                n_passes,
+                Cow::Borrowed("Omnidirectional light shadow map update passes"),
+            );
 
         let last_pass_idx = 6 * shadow_map_textures.len() - 1;
         let mut pass_idx = 0;
@@ -1790,14 +1793,17 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let shadow_map_manager = light_buffer_manager.unidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
 
-        if shadow_map_textures.is_empty() {
+        let n_passes = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len();
+
+        if n_passes == 0 {
             return Ok(());
         }
 
         let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
-            .register_timestamp_writes_for_first_and_last_of_render_passes(Cow::Borrowed(
-                "Unidirectional light shadow map update passes",
-            ));
+            .register_timestamp_writes_for_first_and_last_of_render_passes(
+                n_passes,
+                Cow::Borrowed("Unidirectional light shadow map update passes"),
+            );
 
         let last_pass_idx = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len() - 1;
         let mut pass_idx = 0;
