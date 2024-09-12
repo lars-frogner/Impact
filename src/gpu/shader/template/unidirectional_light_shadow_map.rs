@@ -39,7 +39,7 @@ impl UnidirectionalLightShadowMapShaderTemplate {
     pub fn push_constants() -> PushConstantGroup {
         PushConstantGroup::for_vertex([
             PushConstantVariant::LightIdx,
-            PushConstantVariant::CascadeIdx,
+            PushConstantVariant::ShadowMapArrayIdx,
         ])
     }
 }

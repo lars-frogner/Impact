@@ -15,7 +15,7 @@ pub enum PushConstantVariant {
     InverseWindowDimensions,
     PixelCount,
     LightIdx,
-    CascadeIdx,
+    ShadowMapArrayIdx,
     Exposure,
     InverseExposure,
     FrameCounter,
@@ -56,7 +56,7 @@ impl PushConstantVariant {
         match self {
             Self::FrameCounter
             | Self::LightIdx
-            | Self::CascadeIdx
+            | Self::ShadowMapArrayIdx
             | Self::PixelCount
             | Self::InstanceIdx
             | Self::ChunkCount => mem::size_of::<u32>() as u32,
@@ -433,7 +433,7 @@ mod tests {
     fn adding_two_vertex_push_constants_to_group_works() {
         let mut group = PushConstantGroup::new();
         let push_constant_1 = PushConstant::new(LightIdx, wgpu::ShaderStages::VERTEX);
-        let push_constant_2 = PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX);
+        let push_constant_2 = PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX);
         group.add_push_constant(push_constant_1.clone());
         group.add_push_constant(push_constant_2.clone());
         assert_eq!(group.push_constants(), &[push_constant_1, push_constant_2]);
@@ -443,7 +443,7 @@ mod tests {
     fn adding_fragment_then_vertex_push_constant_to_group_gives_correct_order() {
         let mut group = PushConstantGroup::new();
         let push_constant_1 = PushConstant::new(LightIdx, wgpu::ShaderStages::FRAGMENT);
-        let push_constant_2 = PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX);
+        let push_constant_2 = PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX);
         group.add_push_constant(push_constant_1.clone());
         group.add_push_constant(push_constant_2.clone());
         assert_eq!(group.push_constants(), &[push_constant_2, push_constant_1]);
@@ -453,7 +453,7 @@ mod tests {
     fn adding_fragment_then_vertex_then_fragment_push_constant_to_group_gives_correct_order() {
         let mut group = PushConstantGroup::new();
         let push_constant_1 = PushConstant::new(LightIdx, wgpu::ShaderStages::FRAGMENT);
-        let push_constant_2 = PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX);
+        let push_constant_2 = PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX);
         let push_constant_3 =
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::FRAGMENT);
         group.add_push_constant(push_constant_1.clone());
@@ -471,7 +471,7 @@ mod tests {
         let push_constant_1 =
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT);
         let push_constant_2 = PushConstant::new(LightIdx, wgpu::ShaderStages::COMPUTE);
-        let push_constant_3 = PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX);
+        let push_constant_3 = PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX);
         let push_constant_4 = PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT);
         group.add_push_constant(push_constant_1.clone());
         group.add_push_constant(push_constant_2.clone());
@@ -493,7 +493,7 @@ mod tests {
         let push_constant_1 =
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT);
         let push_constant_2 = PushConstant::new(LightIdx, wgpu::ShaderStages::COMPUTE);
-        let push_constant_3 = PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX);
+        let push_constant_3 = PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX);
         let push_constant_4 = PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT);
 
         let group: PushConstantGroup = [
@@ -546,7 +546,7 @@ mod tests {
         let group: PushConstantGroup =
             PushConstant::new(LightIdx, wgpu::ShaderStages::VERTEX).into();
         assert!(group
-            .find_idx_for_stage(CascadeIdx, PushConstantGroupStage::Vertex)
+            .find_idx_for_stage(ShadowMapArrayIdx, PushConstantGroupStage::Vertex)
             .is_none());
     }
 
@@ -564,7 +564,7 @@ mod tests {
     fn finding_index_in_two_vertex_element_group_works() {
         let group: PushConstantGroup = [
             PushConstant::new(LightIdx, wgpu::ShaderStages::VERTEX),
-            PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX),
         ]
         .into_iter()
         .collect();
@@ -574,7 +574,7 @@ mod tests {
             Some(0)
         );
         assert_eq!(
-            group.find_idx_for_stage(CascadeIdx, PushConstantGroupStage::Vertex),
+            group.find_idx_for_stage(ShadowMapArrayIdx, PushConstantGroupStage::Vertex),
             Some(1)
         );
     }
@@ -583,7 +583,7 @@ mod tests {
     fn finding_index_in_one_vertex_and_one_vertex_fragment_element_group_works() {
         let group: PushConstantGroup = [
             PushConstant::new(LightIdx, wgpu::ShaderStages::VERTEX_FRAGMENT),
-            PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX),
         ]
         .into_iter()
         .collect();
@@ -597,7 +597,7 @@ mod tests {
             Some(0)
         );
         assert_eq!(
-            group.find_idx_for_stage(CascadeIdx, PushConstantGroupStage::Vertex),
+            group.find_idx_for_stage(ShadowMapArrayIdx, PushConstantGroupStage::Vertex),
             Some(0)
         );
     }
@@ -607,7 +607,7 @@ mod tests {
         let group: PushConstantGroup = [
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT),
             PushConstant::new(LightIdx, wgpu::ShaderStages::COMPUTE),
-            PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX),
             PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
         ]
         .into_iter()
@@ -626,7 +626,7 @@ mod tests {
             Some(0)
         );
         assert_eq!(
-            group.find_idx_for_stage(CascadeIdx, PushConstantGroupStage::Vertex),
+            group.find_idx_for_stage(ShadowMapArrayIdx, PushConstantGroupStage::Vertex),
             Some(0)
         );
         assert_eq!(
@@ -640,7 +640,7 @@ mod tests {
         let push_constant_1 =
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT);
         let push_constant_2 = PushConstant::new(LightIdx, wgpu::ShaderStages::COMPUTE);
-        let push_constant_3 = PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX);
+        let push_constant_3 = PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX);
         let push_constant_4 = PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT);
 
         let group: PushConstantGroup = [
@@ -694,7 +694,7 @@ mod tests {
     fn creating_ranges_for_two_fragment_element_group_works() {
         let group: PushConstantGroup = [
             PushConstant::new(LightIdx, wgpu::ShaderStages::FRAGMENT),
-            PushConstant::new(CascadeIdx, wgpu::ShaderStages::FRAGMENT),
+            PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::FRAGMENT),
         ]
         .into_iter()
         .collect();
@@ -702,7 +702,10 @@ mod tests {
         let ranges = group.create_ranges();
 
         assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].range, 0..(LightIdx.size() + CascadeIdx.size()));
+        assert_eq!(
+            ranges[0].range,
+            0..(LightIdx.size() + ShadowMapArrayIdx.size())
+        );
         assert_eq!(ranges[0].stages, wgpu::ShaderStages::FRAGMENT);
     }
 
@@ -732,7 +735,7 @@ mod tests {
         let group: PushConstantGroup = [
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT),
             PushConstant::new(LightIdx, wgpu::ShaderStages::COMPUTE),
-            PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX),
             PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
         ]
         .into_iter()
@@ -743,9 +746,9 @@ mod tests {
         assert_eq!(ranges.len(), 4);
 
         let mut offset = 0;
-        assert_eq!(ranges[0].range, offset..offset + CascadeIdx.size());
+        assert_eq!(ranges[0].range, offset..offset + ShadowMapArrayIdx.size());
         assert_eq!(ranges[0].stages, wgpu::ShaderStages::VERTEX);
-        offset += CascadeIdx.size();
+        offset += ShadowMapArrayIdx.size();
 
         assert_eq!(
             ranges[1].range,
@@ -812,7 +815,7 @@ mod tests {
             |_, _, _| {
                 called = true;
             },
-            CascadeIdx,
+            ShadowMapArrayIdx,
             || 0_u32,
         );
         assert!(!called);
@@ -823,7 +826,7 @@ mod tests {
         let group: PushConstantGroup = [
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT),
             PushConstant::new(LightIdx, wgpu::ShaderStages::COMPUTE),
-            PushConstant::new(CascadeIdx, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(ShadowMapArrayIdx, wgpu::ShaderStages::VERTEX),
             PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
         ]
         .into_iter()
@@ -838,7 +841,7 @@ mod tests {
                 set_offset = Some(offset);
                 set_data = Some(data.to_vec());
             },
-            CascadeIdx,
+            ShadowMapArrayIdx,
             || 1_u32,
         );
         assert_eq!(set_stages, Some(wgpu::ShaderStages::VERTEX));
@@ -858,7 +861,7 @@ mod tests {
             || [1_u32, 2],
         );
         assert_eq!(set_stages, Some(wgpu::ShaderStages::VERTEX_FRAGMENT));
-        assert_eq!(set_offset, Some(CascadeIdx.size()));
+        assert_eq!(set_offset, Some(ShadowMapArrayIdx.size()));
         assert_eq!(set_data, Some(bytemuck::bytes_of(&[1_u32, 2]).to_vec()));
 
         let mut set_stages = None;
@@ -876,7 +879,7 @@ mod tests {
         assert_eq!(set_stages, Some(wgpu::ShaderStages::FRAGMENT));
         assert_eq!(
             set_offset,
-            Some(CascadeIdx.size() + InverseWindowDimensions.size())
+            Some(ShadowMapArrayIdx.size() + InverseWindowDimensions.size())
         );
         assert_eq!(set_data, Some(bytemuck::bytes_of(&5.0_f32).to_vec()));
 
@@ -895,7 +898,7 @@ mod tests {
         assert_eq!(set_stages, Some(wgpu::ShaderStages::COMPUTE));
         assert_eq!(
             set_offset,
-            Some(CascadeIdx.size() + InverseWindowDimensions.size() + Exposure.size())
+            Some(ShadowMapArrayIdx.size() + InverseWindowDimensions.size() + Exposure.size())
         );
         assert_eq!(set_data, Some(bytemuck::bytes_of(&3_u32).to_vec()));
     }

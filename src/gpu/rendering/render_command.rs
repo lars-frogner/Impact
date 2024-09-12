@@ -1771,7 +1771,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::CascadeIdx,
+                PushConstantVariant::ShadowMapArrayIdx,
                 || cascade_idx,
             );
     }
