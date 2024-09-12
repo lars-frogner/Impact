@@ -54,7 +54,7 @@ use crate::{
     },
     scene::Scene,
     skybox::Skybox,
-    voxel::render_commands::{VoxelGeometryPipeline, VoxelPreRenderCommands},
+    voxel::render_commands::{VoxelGeometryPipeline, VoxelRenderCommands},
 };
 use anyhow::{anyhow, Result};
 use std::{
@@ -75,6 +75,7 @@ pub struct RenderCommandManager {
     ambient_light_pass: AmbientLightPass,
     directional_light_pass: DirectionalLightPass,
     skybox_pass: SkyboxPass,
+    voxel_render_commands: VoxelRenderCommands,
 }
 
 /// The meaning of a specific value in the stencil buffer.
@@ -245,9 +246,6 @@ impl RenderCommandManager {
             false,
         );
 
-        let voxel_pre_render_commands =
-            VoxelPreRenderCommands::new(graphics_device, shader_manager);
-
         let non_physical_model_depth_prepass = DepthPrepass::new(
             graphics_device,
             shader_manager,
@@ -277,9 +275,11 @@ impl RenderCommandManager {
 
         let skybox_pass = SkyboxPass::new(graphics_device, shader_manager);
 
+        let voxel_render_commands = VoxelRenderCommands::new(graphics_device, shader_manager);
+
         Self {
             attachment_clearing_pass,
-            voxel_pre_render_commands,
+            voxel_render_commands,
             non_physical_model_depth_prepass,
             geometry_pass,
             omnidirectional_light_shadow_map_update_passes,
@@ -369,6 +369,8 @@ impl RenderCommandManager {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        let instance_feature_manager = scene.instance_feature_manager().read().unwrap();
+
         self.attachment_clearing_pass.record(
             surface_texture_view,
             render_attachment_texture_manager,
@@ -376,9 +378,9 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        self.voxel_pre_render_commands.record(
+        self.voxel_render_commands.record_before_geometry_pass(
             scene.scene_camera().read().unwrap().as_ref(),
-            &scene.instance_feature_manager().read().unwrap(),
+            &instance_feature_manager,
             render_resources,
             timestamp_recorder,
             command_encoder,
@@ -396,7 +398,7 @@ impl RenderCommandManager {
         self.geometry_pass.record(
             rendering_surface,
             &scene.material_library().read().unwrap(),
-            &scene.instance_feature_manager().read().unwrap(),
+            &instance_feature_manager,
             render_resources,
             render_attachment_texture_manager,
             postprocessor,

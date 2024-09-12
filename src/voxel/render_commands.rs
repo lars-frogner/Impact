@@ -2,6 +2,7 @@
 
 use crate::{
     camera::{buffer::CameraGPUBufferManager, SceneCamera},
+    geometry::Frustum,
     gpu::{
         compute,
         push_constant::{PushConstantGroup, PushConstantVariant},
@@ -26,7 +27,8 @@ use crate::{
     mesh::buffer::VertexBufferable,
     model::{
         transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
-        InstanceFeature, InstanceFeatureManager,
+        InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
+        InstanceFeatureManager,
     },
     voxel::{
         buffer::VoxelObjectGPUBufferManager,
@@ -41,7 +43,7 @@ use std::borrow::Cow;
 
 /// GPU commands that should be executed prior to rendering voxel objects.
 #[derive(Debug)]
-pub struct VoxelPreRenderCommands {
+pub struct VoxelRenderCommands {
     chunk_culling_pass: VoxelChunkCullingPass,
 }
 
@@ -62,13 +64,13 @@ pub struct VoxelGeometryPipeline {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl VoxelPreRenderCommands {
+impl VoxelRenderCommands {
     pub fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
         let chunk_culling_pass = VoxelChunkCullingPass::new(graphics_device, shader_manager);
         Self { chunk_culling_pass }
     }
 
-    pub fn record(
+    pub fn record_before_geometry_pass(
         &self,
         scene_camera: Option<&SceneCamera<fre>>,
         instance_feature_manager: &InstanceFeatureManager,
@@ -76,7 +78,7 @@ impl VoxelPreRenderCommands {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        self.chunk_culling_pass.record(
+        self.chunk_culling_pass.record_for_camera(
             scene_camera,
             instance_feature_manager,
             render_resources,
@@ -149,13 +151,37 @@ impl VoxelChunkCullingPass {
             );
     }
 
-    fn record(
+    fn record_for_camera(
         &self,
         scene_camera: Option<&SceneCamera<fre>>,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        let scene_camera =
+            scene_camera.ok_or_else(|| anyhow!("Missing scene camera for voxel chunk culling"))?;
+
+        let instance_range_id = InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
+
+        self.record(
+            instance_feature_manager,
+            render_resources,
+            timestamp_recorder,
+            command_encoder,
+            scene_camera.camera().view_frustum(),
+            instance_range_id,
+        )
+    }
+
+    fn record(
+        &self,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+        frustum: &Frustum<fre>,
+        instance_range_id: InstanceFeatureBufferRangeID,
     ) -> Result<()> {
         let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
 
@@ -179,9 +205,6 @@ impl VoxelChunkCullingPass {
             return Ok(());
         }
 
-        let scene_camera =
-            scene_camera.ok_or_else(|| anyhow!("Missing scene camera for voxel chunk culling"))?;
-
         let instance_transform_buffer = voxel_object_instance_buffer
             .get_feature_buffer(InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID)
             .ok_or_else(|| {
@@ -200,16 +223,17 @@ impl VoxelChunkCullingPass {
 
         compute_pass.set_pipeline(&self.pipeline);
 
-        let visible_voxel_object_ids =
-            voxel_object_id_buffer.valid_features_in_initial_range::<VoxelObjectID>();
+        let voxel_object_ids =
+            voxel_object_id_buffer.valid_features_in_range::<VoxelObjectID>(instance_range_id);
 
-        let visible_voxel_object_model_view_transforms = instance_transform_buffer
-            .valid_features_in_initial_range::<InstanceModelViewTransformWithPrevious>(
+        let voxel_object_to_frustum_transforms = instance_transform_buffer
+            .valid_features_in_range::<InstanceModelViewTransformWithPrevious>(
+            instance_range_id,
         );
 
-        for (instance_idx, (voxel_object_id, model_view_transform)) in visible_voxel_object_ids
+        for (instance_idx, (voxel_object_id, voxel_object_to_frustum_transform)) in voxel_object_ids
             .iter()
-            .zip(visible_voxel_object_model_view_transforms)
+            .zip(voxel_object_to_frustum_transforms)
             .enumerate()
         {
             let voxel_object_buffer_manager = voxel_object_buffer_managers
@@ -225,16 +249,14 @@ impl VoxelChunkCullingPass {
 
             // We want to transform the frustum planes to the normalized voxel object space
             // where the chunk extent is unity
-            let camera_to_voxel_object_transform =
-                Self::compute_transform_from_camera_space_to_normalized_voxel_object_space(
-                    model_view_transform.current,
+            let frustum_to_voxel_object_transform =
+                Self::compute_transform_from_frustum_space_to_normalized_voxel_object_space(
+                    voxel_object_to_frustum_transform.current,
                     voxel_object_buffer_manager.chunk_extent(),
                 );
 
-            let frustum_planes = FrustumPlanes::for_transformed_frustum(
-                scene_camera.camera().view_frustum(),
-                &camera_to_voxel_object_transform,
-            );
+            let frustum_planes =
+                FrustumPlanes::for_transformed_frustum(frustum, &frustum_to_voxel_object_transform);
 
             self.set_push_constants(&mut compute_pass, frustum_planes, chunk_count, instance_idx);
 
@@ -257,14 +279,15 @@ impl VoxelChunkCullingPass {
         Ok(())
     }
 
-    fn compute_transform_from_camera_space_to_normalized_voxel_object_space(
-        model_view_transform: InstanceModelViewTransform,
+    fn compute_transform_from_frustum_space_to_normalized_voxel_object_space(
+        voxel_object_to_frustum_transform: InstanceModelViewTransform,
         voxel_extent: f64,
     ) -> Similarity3<fre> {
-        let mut camera_to_voxel_object_transform = Similarity3::from(model_view_transform);
-        camera_to_voxel_object_transform.prepend_scaling_mut(voxel_extent as f32);
-        camera_to_voxel_object_transform.inverse_mut();
-        camera_to_voxel_object_transform
+        let mut frustum_to_voxel_object_transform =
+            Similarity3::from(voxel_object_to_frustum_transform);
+        frustum_to_voxel_object_transform.prepend_scaling_mut(voxel_extent as f32);
+        frustum_to_voxel_object_transform.inverse_mut();
+        frustum_to_voxel_object_transform
     }
 }
 
