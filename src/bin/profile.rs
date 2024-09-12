@@ -1,72 +1,126 @@
+use clap::{Parser, ValueEnum};
 use impact::voxel::{
     chunks::ChunkedVoxelObject,
     generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
+    mesh::ChunkedVoxelObjectMesh,
     VoxelType,
 };
 use std::{
-    fmt::Display,
     hint::black_box,
     time::{Duration, Instant},
 };
 
-const TARGETS: [&str; 2] = [
-    "chunked_voxel_object_construction",
-    "chunked_voxel_object_initialize_adjacencies",
-];
+#[derive(Parser, Debug)]
+#[command(about = "Run a profiling target", long_about = None)]
+struct Args {
+    /// Profiling target to run
+    #[arg(short, long, value_enum)]
+    target: Target,
+
+    /// Number of seconds to run the target for (it will always be run at least
+    /// once)
+    #[arg(short, long, default_value_t = 0.0)]
+    duration: f64,
+
+    /// Minimum number of seconds from the program is started until the target
+    /// is run
+    #[arg(long, default_value_t = 0.0)]
+    delay: f64,
+}
+
+#[allow(clippy::enum_variant_names)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Target {
+    ChunkedVoxelObjectConstruction,
+    ChunkedVoxelObjectInitializeAdjacencies,
+    ChunkedVoxelObjectCreateMesh,
+}
+
+#[derive(Debug)]
+struct Delayer {
+    program_start: Instant,
+    delay: Duration,
+}
+
+impl Delayer {
+    fn new(program_start: Instant, delay_seconds: f64) -> Self {
+        Self {
+            program_start,
+            delay: Duration::from_secs_f64(delay_seconds),
+        }
+    }
+
+    fn wait(self) {
+        let remaining = self.delay.saturating_sub(self.program_start.elapsed());
+        if remaining > Duration::ZERO {
+            std::thread::sleep(remaining);
+        }
+    }
+}
 
 fn main() {
-    let target = if let Some(target) = std::env::args().nth(1) {
-        target
-    } else {
-        exit_with_error("Usage: profile <target> <duration in seconds>", true);
-    };
-    let duration = if let Some(duration) = std::env::args().nth(2) {
-        match duration.parse() {
-            Ok(duration) => Duration::from_secs(duration),
-            Err(_) => exit_with_error("Duration must be a positive integer", false),
-        }
-    } else {
-        exit_with_error("Usage: profile <target> <duration in seconds>", false);
-    };
+    let program_start = Instant::now();
 
-    match target.as_str() {
-        "chunked_voxel_object_construction" => profile_chunked_voxel_object_construction(duration),
-        "chunked_voxel_object_initialize_adjacencies" => {
-            profile_chunked_voxel_object_initialize_adjacencies(duration)
+    let args = Args::parse();
+
+    let delayer = Delayer::new(program_start, args.delay);
+
+    let duration = Duration::from_secs_f64(args.duration);
+
+    match args.target {
+        Target::ChunkedVoxelObjectConstruction => {
+            profile_chunked_voxel_object_construction(duration, delayer)
         }
-        _ => {
-            exit_with_error(format!("Unknown target: {}", target), true);
+        Target::ChunkedVoxelObjectInitializeAdjacencies => {
+            profile_chunked_voxel_object_initialize_adjacencies(duration, delayer)
+        }
+        Target::ChunkedVoxelObjectCreateMesh => {
+            profile_chunked_voxel_object_create_mesh(duration, delayer)
         }
     }
 }
 
-fn exit_with_error(message: impl Display, list_targets: bool) -> ! {
-    eprintln!("{}", message);
-    if list_targets {
-        eprintln!("Available targets:");
-        for target in TARGETS {
-            eprintln!("- {}", target);
-        }
-    }
-    std::process::exit(1)
-}
-
-fn profile_chunked_voxel_object_construction(duration: Duration) {
+fn profile_chunked_voxel_object_construction(duration: Duration, delayer: Delayer) {
     let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25, 200, 200, 200);
-    let start = Instant::now();
-    while start.elapsed() < duration {
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
-        black_box(object);
-    }
+    profile(
+        &|| ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap(),
+        duration,
+        delayer,
+    );
 }
 
-fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration) {
+fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration, delayer: Delayer) {
+    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
+    profile(
+        &|| {
+            let mut object = object.clone();
+            object.initialize_adjacencies();
+            object
+        },
+        duration,
+        delayer,
+    );
+}
+
+fn profile_chunked_voxel_object_create_mesh(duration: Duration, delayer: Delayer) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    profile(
+        &|| ChunkedVoxelObjectMesh::create(&object),
+        duration,
+        delayer,
+    );
+}
+
+fn profile<T>(f: &impl Fn() -> T, duration: Duration, delayer: Delayer) {
+    delayer.wait();
     let start = Instant::now();
-    while start.elapsed() < duration {
-        let mut object = object.clone();
-        object.initialize_adjacencies();
-        black_box(object);
+    loop {
+        black_box(f());
+
+        if start.elapsed() > duration {
+            break;
+        }
     }
 }

@@ -88,3 +88,8 @@ Cargo.lock
 # End of https://www.toptal.com/developers/gitignore/api/linux,macos,visualstudiocode,rust
 
 assets/*
+
+# Perf
+*.data
+*.data.old
+*.perf
