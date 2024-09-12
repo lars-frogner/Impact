@@ -13,6 +13,7 @@ members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
+profiling = ["dep:clap"]
 fuzzing = ["dep:arbitrary"]
 
 [dependencies]
@@ -24,6 +25,7 @@ bitflags = "2.6"
 bytemuck = { version = "1.17", features = ["derive"] }
 cfg-if = "1.0"
 chrono = "0.4"
+clap = { version = "4.5", features = ["derive"], optional = true }
 env_logger = "0.11"
 glam = "0.29"
 image = { version = "0.25", default-features = false, features = [
@@ -63,6 +65,7 @@ path = "impact_ecs"
 path = "impact_utils"
 
 [dev-dependencies]
+clap = { version = "4.5", features = ["derive"] }
 criterion = "0.5.1"
 pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
 naga = { version = "22.1", features = ["wgsl-in", "wgsl-out"] }
