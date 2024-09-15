@@ -9,28 +9,30 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
 use nalgebra::{Similarity3, UnitVector3};
 
-/// A mesh representation of a [`ChunkedVoxelObject`]. All the vertices
-/// ([`VoxelMeshVertex`]) and indices for the full object are stored together,
-/// but the index buffer is laid out so that the indices defining the triangles
-/// for a specific chunk are contiguous in the buffer. A list of
-/// [`ChunkSubmesh`] objects mapping each chunk to its segment of the index
-/// buffer is also stored. To save space, the indices in each segment are
-/// defined relative to the chunk's base vertex index, which is stored in the
-/// [`ChunkSubmesh`].
+/// A mesh representation of a [`ChunkedVoxelObject`]. All the vertices and
+/// indices for the full object are stored together, but the index buffer is
+/// laid out so that the indices defining the triangles for a specific chunk are
+/// contiguous in the buffer. A list of [`ChunkSubmesh`] objects mapping each
+/// chunk to its segment of the index buffer is also stored. To save space, the
+/// indices in each segment are defined relative to the chunk's base vertex
+/// index, which is stored in the [`ChunkSubmesh`].
 #[derive(Debug)]
 pub struct ChunkedVoxelObjectMesh {
-    vertices: Vec<VoxelMeshVertex>,
+    positions: Vec<VoxelMeshVertexPosition>,
+    normal_vectors: Vec<VoxelMeshVertexNormalVector>,
     indices: Vec<u16>,
     chunk_submeshes: Vec<ChunkSubmesh>,
 }
 
-/// A vertex in a [`ChunkedVoxelObjectMesh`].
+/// A vertex position in a [`ChunkedVoxelObjectMesh`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct VoxelMeshVertex {
-    pub position: [f32; 3],
-    pub normal_vector: [f32; 3],
-}
+pub struct VoxelMeshVertexPosition(pub [f32; 3]);
+
+/// A vertex normal vector in a [`ChunkedVoxelObjectMesh`].
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct VoxelMeshVertexNormalVector(pub [f32; 3]);
 
 /// Metadata associating a chunk in a [`ChunkedVoxelObject`] with the segment of
 /// the index buffer in the [`ChunkedVoxelObjectMesh`] that defines the
@@ -62,7 +64,8 @@ pub struct FrustumPlane {
 
 impl ChunkedVoxelObjectMesh {
     pub fn create(voxel_object: &ChunkedVoxelObject) -> Self {
-        let mut vertices = Vec::new();
+        let mut positions = Vec::new();
+        let mut normal_vectors = Vec::new();
         let mut indices = Vec::new();
         let mut chunk_submeshes = Vec::new();
 
@@ -88,7 +91,7 @@ impl ChunkedVoxelObjectMesh {
 
             sdf.compute_surface_nets_mesh(voxel_extent, &vertex_position_offset, &mut buffer);
 
-            let base_vertex_index = vertices.len();
+            let base_vertex_index = positions.len();
             let index_count = buffer.indices.len();
 
             chunk_submeshes.push(ChunkSubmesh::new(
@@ -100,22 +103,29 @@ impl ChunkedVoxelObjectMesh {
                 index_count,
             ));
 
-            vertices.extend_from_slice(&buffer.vertices);
+            positions.extend_from_slice(&buffer.positions);
+            normal_vectors.extend_from_slice(&buffer.normal_vectors);
             indices.extend_from_slice(&buffer.indices);
 
             index_offset += index_count;
         });
 
         Self {
-            vertices,
+            positions,
+            normal_vectors,
             indices,
             chunk_submeshes,
         }
     }
 
-    /// Returns a slice with all the vertices of the mesh.
-    pub fn vertices(&self) -> &[VoxelMeshVertex] {
-        &self.vertices
+    /// Returns a slice with the positions of all the vertices of the mesh.
+    pub fn positions(&self) -> &[VoxelMeshVertexPosition] {
+        &self.positions
+    }
+
+    /// Returns a slice with the normal vectors of all the vertices of the mesh.
+    pub fn normal_vectors(&self) -> &[VoxelMeshVertexNormalVector] {
+        &self.normal_vectors
     }
 
     /// Returns a slice with all the indices defining the triangles of the mesh.

@@ -2,7 +2,7 @@
 
 use crate::{
     camera::{buffer::CameraGPUBufferManager, SceneCamera},
-    geometry::Frustum,
+    geometry::{CubemapFace, Frustum},
     gpu::{
         compute,
         push_constant::{PushConstantGroup, PushConstantVariant},
@@ -24,6 +24,7 @@ use crate::{
         },
         GraphicsDevice,
     },
+    light::LightID,
     mesh::buffer::VertexBufferable,
     model::{
         transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
@@ -33,7 +34,7 @@ use crate::{
     voxel::{
         buffer::VoxelObjectGPUBufferManager,
         entity::VOXEL_MODEL_ID,
-        mesh::{FrustumPlanes, VoxelMeshVertex},
+        mesh::{FrustumPlanes, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
         VoxelObjectID,
     },
 };
@@ -85,6 +86,110 @@ impl VoxelRenderCommands {
             timestamp_recorder,
             command_encoder,
         )
+    }
+
+    pub fn record_before_omnidirectional_light_shadow_cubemap_face_update(
+        &self,
+        positive_z_cubemap_face_frustum: &Frustum<fre>,
+        instance_range_id: u32,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.chunk_culling_pass
+            .record_for_omnidirectional_light_shadow_cubemap_face(
+                positive_z_cubemap_face_frustum,
+                instance_range_id,
+                instance_feature_manager,
+                render_resources,
+                timestamp_recorder,
+                command_encoder,
+            )
+    }
+
+    pub fn record_omnidirectional_light_shadow_cubemap_face_update(
+        light_id: LightID,
+        cubemap_face: CubemapFace,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &SynchronizedRenderResources,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) -> Result<()> {
+        let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
+
+        // Return early if there are no voxel objects
+        if voxel_object_buffer_managers.is_empty() {
+            return Ok(());
+        }
+
+        let voxel_object_instance_buffer = instance_feature_manager
+            .get_model_instance_buffer(&VOXEL_MODEL_ID)
+            .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
+
+        let voxel_object_id_buffer = voxel_object_instance_buffer
+            .get_feature_buffer(VoxelObjectID::FEATURE_TYPE_ID)
+            .ok_or_else(|| {
+                anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
+            })?;
+
+        let instance_range_id =
+            light_id.as_instance_feature_buffer_range_id() + cubemap_face.as_idx_u32();
+
+        let (_, voxel_object_ids) =
+            voxel_object_id_buffer.range_with_valid_features::<VoxelObjectID>(instance_range_id);
+
+        // Return early if no voxel objects fall within the cubemap face
+        if voxel_object_ids.is_empty() {
+            return Ok(());
+        }
+
+        let instance_feature_gpu_buffer_managers = render_resources
+            .get_instance_feature_buffer_managers(&VOXEL_MODEL_ID)
+            .ok_or_else(|| anyhow!("Missing instance GPU buffers for voxel objects"))?;
+
+        let transform_gpu_buffer_manager = instance_feature_gpu_buffer_managers
+            .first()
+            .ok_or_else(|| anyhow!("Missing transform GPU buffer for voxel objects"))?;
+
+        // All draw calls share the same transform buffer
+        render_pass.set_vertex_buffer(
+            0,
+            transform_gpu_buffer_manager
+                .vertex_gpu_buffer()
+                .valid_buffer_slice(),
+        );
+
+        for voxel_object_id in voxel_object_ids {
+            let voxel_object_buffer_manager = voxel_object_buffer_managers
+                .get(voxel_object_id)
+                .ok_or_else(|| {
+                    anyhow!("Missing GPU buffer for voxel object {}", voxel_object_id)
+                })?;
+
+            let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
+
+            render_pass.set_vertex_buffer(
+                1,
+                voxel_object_buffer_manager
+                    .vertex_position_gpu_buffer()
+                    .valid_buffer_slice(),
+            );
+
+            render_pass.set_index_buffer(
+                voxel_object_buffer_manager
+                    .index_gpu_buffer()
+                    .valid_buffer_slice(),
+                voxel_object_buffer_manager.index_format(),
+            );
+
+            let indirect_buffer = voxel_object_buffer_manager
+                .indirect_argument_gpu_buffer()
+                .buffer();
+
+            render_pass.multi_draw_indexed_indirect(indirect_buffer, 0, chunk_count);
+        }
+
+        Ok(())
     }
 }
 
@@ -171,6 +276,27 @@ impl VoxelChunkCullingPass {
             command_encoder,
             scene_camera.camera().view_frustum(),
             instance_range_id,
+            Cow::Borrowed("Voxel chunk camera culling pass"),
+        )
+    }
+
+    fn record_for_omnidirectional_light_shadow_cubemap_face(
+        &self,
+        positive_z_cubemap_face_frustum: &Frustum<fre>,
+        instance_range_id: u32,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.record(
+            instance_feature_manager,
+            render_resources,
+            timestamp_recorder,
+            command_encoder,
+            positive_z_cubemap_face_frustum,
+            instance_range_id,
+            Cow::Borrowed("Voxel chunk culling pass for shadow cubemap face"),
         )
     }
 
@@ -182,6 +308,7 @@ impl VoxelChunkCullingPass {
         command_encoder: &mut wgpu::CommandEncoder,
         frustum: &Frustum<fre>,
         instance_range_id: InstanceFeatureBufferRangeID,
+        tag: Cow<'static, str>,
     ) -> Result<()> {
         let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
 
@@ -200,8 +327,11 @@ impl VoxelChunkCullingPass {
                 anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
             })?;
 
-        // Return early if no voxel objects are visible
-        if voxel_object_id_buffer.n_valid_features() == 0 {
+        let (instance_range, voxel_object_ids) =
+            voxel_object_id_buffer.range_with_valid_features::<VoxelObjectID>(instance_range_id);
+
+        // Return early if no voxel objects are buffered in the specified range
+        if voxel_object_ids.is_empty() {
             return Ok(());
         }
 
@@ -211,10 +341,8 @@ impl VoxelChunkCullingPass {
                 anyhow!("Missing transform instance feature buffer for voxel objects")
             })?;
 
-        let timestamp_writes = timestamp_recorder
-            .register_timestamp_writes_for_single_compute_pass(Cow::Borrowed(
-                "Voxel chunk culling pass",
-            ));
+        let timestamp_writes =
+            timestamp_recorder.register_timestamp_writes_for_single_compute_pass(tag);
 
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             timestamp_writes,
@@ -223,27 +351,20 @@ impl VoxelChunkCullingPass {
 
         compute_pass.set_pipeline(&self.pipeline);
 
-        let voxel_object_ids =
-            voxel_object_id_buffer.valid_features_in_range::<VoxelObjectID>(instance_range_id);
-
-        let voxel_object_to_frustum_transforms = instance_transform_buffer
-            .valid_features_in_range::<InstanceModelViewTransformWithPrevious>(
+        let (_, voxel_object_to_frustum_transforms) = instance_transform_buffer
+            .range_with_valid_features::<InstanceModelViewTransformWithPrevious>(
             instance_range_id,
         );
 
-        for (instance_idx, (voxel_object_id, voxel_object_to_frustum_transform)) in voxel_object_ids
-            .iter()
+        for ((instance_idx, voxel_object_id), voxel_object_to_frustum_transform) in instance_range
+            .zip(voxel_object_ids)
             .zip(voxel_object_to_frustum_transforms)
-            .enumerate()
         {
             let voxel_object_buffer_manager = voxel_object_buffer_managers
                 .get(voxel_object_id)
                 .ok_or_else(|| {
                     anyhow!("Missing GPU buffer for voxel object {}", voxel_object_id)
                 })?;
-
-            // Index of this instance's transform in the transform GPU buffer
-            let instance_idx = u32::try_from(instance_idx).unwrap();
 
             let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
 
@@ -318,7 +439,8 @@ impl VoxelGeometryPipeline {
 
         let vertex_buffer_layouts = &[
             InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
-            VoxelMeshVertex::BUFFER_LAYOUT,
+            VoxelMeshVertexPosition::BUFFER_LAYOUT,
+            VoxelMeshVertexNormalVector::BUFFER_LAYOUT,
         ];
 
         let pipeline = render_command::create_render_pipeline(
@@ -399,8 +521,11 @@ impl VoxelGeometryPipeline {
                 anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
             })?;
 
+        let visible_voxel_object_ids =
+            voxel_object_id_buffer.valid_features_in_initial_range::<VoxelObjectID>();
+
         // Return early if no voxel objects are visible
-        if voxel_object_id_buffer.n_valid_features() == 0 {
+        if visible_voxel_object_ids.is_empty() {
             return Ok(());
         }
 
@@ -427,9 +552,6 @@ impl VoxelGeometryPipeline {
                 .valid_buffer_slice(),
         );
 
-        let visible_voxel_object_ids =
-            voxel_object_id_buffer.valid_features_in_initial_range::<VoxelObjectID>();
-
         for voxel_object_id in visible_voxel_object_ids {
             let voxel_object_buffer_manager = voxel_object_buffer_managers
                 .get(voxel_object_id)
@@ -442,7 +564,14 @@ impl VoxelGeometryPipeline {
             render_pass.set_vertex_buffer(
                 1,
                 voxel_object_buffer_manager
-                    .vertex_gpu_buffer()
+                    .vertex_position_gpu_buffer()
+                    .valid_buffer_slice(),
+            );
+
+            render_pass.set_vertex_buffer(
+                2,
+                voxel_object_buffer_manager
+                    .vertex_normal_vector_gpu_buffer()
                     .valid_buffer_slice(),
             );
 

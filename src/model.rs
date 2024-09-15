@@ -409,6 +409,27 @@ impl InstanceFeatureManager {
         instance_buffer.buffer_instance_features_from_storage(&self.feature_storages, feature_ids);
     }
 
+    /// Finds the instance feature buffers for the model with the given ID and
+    /// pushes the value of the feature with the given IDs from its storage
+    /// onto the corresponding buffer.
+    ///
+    /// # Panics
+    /// - If no [`ModelInstanceBuffer`] exists for the model with the given ID.
+    /// - If the model does not have a buffer for the feature type.
+    /// - If there is no storage for features of the given type.
+    pub fn buffer_instance_feature_from_storage(
+        &mut self,
+        model_id: &ModelID,
+        feature_id: InstanceFeatureID,
+    ) {
+        let instance_buffer = self
+            .instance_buffers
+            .get_mut(model_id)
+            .expect("Tried to buffer instance of missing model");
+
+        instance_buffer.buffer_instance_feature_from_storage(&self.feature_storages, feature_id);
+    }
+
     /// Pushes the given feature value onto the associated buffer for the model
     /// with the given ID.
     ///
@@ -624,6 +645,28 @@ impl ModelInstanceBuffer {
 
             feature_buffer.add_feature_from_storage(storage, feature_id);
         }
+    }
+
+    /// Finds the instance feature buffers for the model and pushes the value
+    /// of the feature with the given IDs from the given storages onto the
+    /// buffers.
+    ///
+    /// # Panics
+    /// - If the model does not have a buffer for the feature type.
+    /// - If none of the storages are for features of the given type.
+    fn buffer_instance_feature_from_storage(
+        &mut self,
+        feature_storages: &HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
+        feature_id: InstanceFeatureID,
+    ) {
+        self.get_feature_buffer_mut(feature_id.feature_type_id())
+            .expect("Missing feature buffer for feature type")
+            .add_feature_from_storage(
+                feature_storages
+                    .get(&feature_id.feature_type_id())
+                    .expect("Missing storage for model instance feature"),
+                feature_id,
+            );
     }
 
     /// Pushes the given feature value onto the associated buffer.
@@ -1001,23 +1044,25 @@ impl DynamicInstanceFeatureBuffer {
         }
     }
 
-    /// Returns a slice with the features in the range with the given ID. Ranges
-    /// are defined by calling [`begin_range`]. The range spans from and
-    /// including the first feature added after the `begin_range` call to
-    /// and including the last feature added before the next `begin_range`
-    /// call, or to the last valid feature if the `begin_range` call was the
-    /// last one. Calling [`clear`] removes all range information.
+    /// Returns the range with the given ID and a slice with the features in
+    /// that range. Ranges are defined by calling [`begin_range`]. The range
+    /// spans from and including the first feature added after the
+    /// `begin_range` call to and including the last feature added before
+    /// the next `begin_range` call, or to the last valid feature if the
+    /// `begin_range` call was the last one. Calling [`clear`] removes all
+    /// range information.
     ///
     /// # Panics
     /// - If no range with the given ID exists.
     /// - If `Fe` is not the feature type the buffer was initialized with.
     /// - If `Fe` is a zero-sized type.
-    pub fn valid_features_in_range<Fe: InstanceFeature>(
+    pub fn range_with_valid_features<Fe: InstanceFeature>(
         &self,
         range_id: InstanceFeatureBufferRangeID,
-    ) -> &[Fe] {
+    ) -> (Range<u32>, &[Fe]) {
         let range = self.valid_feature_range(range_id);
-        &self.valid_features()[range.start as usize..range.end as usize]
+        let features = &self.valid_features()[range.start as usize..range.end as usize];
+        (range, features)
     }
 
     /// Returns a slice with the currently valid features added before defining
@@ -1027,7 +1072,8 @@ impl DynamicInstanceFeatureBuffer {
     /// - If `Fe` is not the feature type the buffer was initialized with.
     /// - If `Fe` is a zero-sized type.
     pub fn valid_features_in_initial_range<Fe: InstanceFeature>(&self) -> &[Fe] {
-        self.valid_features_in_range(InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID)
+        self.range_with_valid_features(InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID)
+            .1
     }
 
     /// Returns a slice with the currently valid bytes in the buffer.

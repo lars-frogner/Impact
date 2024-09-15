@@ -2,10 +2,15 @@
 
 use crate::{
     gpu::{buffer::GPUBuffer, indirect::DrawIndexedIndirectArgs, storage, GraphicsDevice},
-    mesh::buffer::{create_vertex_buffer_layout_for_vertex, VertexBufferable},
+    mesh::buffer::{
+        create_vertex_buffer_layout_for_vertex, MeshVertexAttributeLocation, VertexBufferable,
+    },
     voxel::{
         chunks::ChunkedVoxelObject,
-        mesh::{ChunkSubmesh, ChunkedVoxelObjectMesh, VoxelMeshVertex},
+        mesh::{
+            ChunkSubmesh, ChunkedVoxelObjectMesh, VoxelMeshVertexNormalVector,
+            VoxelMeshVertexPosition,
+        },
         VoxelObjectID,
     },
 };
@@ -15,7 +20,8 @@ use std::{borrow::Cow, sync::OnceLock};
 #[derive(Debug)]
 pub struct VoxelObjectGPUBufferManager {
     chunk_extent: f64,
-    vertex_buffer: GPUBuffer,
+    position_buffer: GPUBuffer,
+    normal_vector_buffer: GPUBuffer,
     index_buffer: GPUBuffer,
     n_indices: usize,
     chunk_submesh_buffer: GPUBuffer,
@@ -25,14 +31,13 @@ pub struct VoxelObjectGPUBufferManager {
     pub chunk_submeshes: Vec<ChunkSubmesh>,
 }
 
-const MESH_VERTEX_BINDING_START: u32 = 10;
-
-/// Binding location of a specific type of voxel mesh vertex attribute.
+/// Binding location of a specific type of voxel mesh vertex attribute (matches
+/// the correponding locations in [`MeshVertexAttributeLocation`]).
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum VoxelMeshVertexAttributeLocation {
-    Position = MESH_VERTEX_BINDING_START,
-    NormalVector = (MESH_VERTEX_BINDING_START + 1),
+    Position = MeshVertexAttributeLocation::Position as u32,
+    NormalVector = MeshVertexAttributeLocation::NormalVector as u32,
 }
 
 static CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
@@ -50,10 +55,16 @@ impl VoxelObjectGPUBufferManager {
     ) -> Self {
         let mesh = ChunkedVoxelObjectMesh::create(voxel_object);
 
-        let vertex_buffer = GPUBuffer::new_full_vertex_buffer(
+        let position_buffer = GPUBuffer::new_full_vertex_buffer(
             graphics_device,
-            mesh.vertices(),
-            Cow::Owned(format!("{}", voxel_object_id)),
+            mesh.positions(),
+            Cow::Owned(format!("{} position", voxel_object_id)),
+        );
+
+        let normal_vector_buffer = GPUBuffer::new_full_vertex_buffer(
+            graphics_device,
+            mesh.normal_vectors(),
+            Cow::Owned(format!("{} normal vector", voxel_object_id)),
         );
 
         let index_buffer = GPUBuffer::new_full_index_buffer(
@@ -84,7 +95,8 @@ impl VoxelObjectGPUBufferManager {
 
         Self {
             chunk_extent: voxel_object.chunk_extent(),
-            vertex_buffer,
+            position_buffer,
+            normal_vector_buffer,
             index_buffer,
             n_indices: mesh.indices().len(),
             chunk_submesh_buffer,
@@ -100,10 +112,16 @@ impl VoxelObjectGPUBufferManager {
         self.chunk_extent
     }
 
-    /// Return a reference to the [`GPUBuffer`] holding all the vertices in the
-    /// object's mesh.
-    pub fn vertex_gpu_buffer(&self) -> &GPUBuffer {
-        &self.vertex_buffer
+    /// Return a reference to the [`GPUBuffer`] holding all the vertex positions
+    /// in the object's mesh.
+    pub fn vertex_position_gpu_buffer(&self) -> &GPUBuffer {
+        &self.position_buffer
+    }
+
+    /// Return a reference to the [`GPUBuffer`] holding all the vertex normal
+    /// vectors in the object's mesh.
+    pub fn vertex_normal_vector_gpu_buffer(&self) -> &GPUBuffer {
+        &self.normal_vector_buffer
     }
 
     /// Return a reference to the [`GPUBuffer`] holding all the indices defining
@@ -201,10 +219,16 @@ impl VoxelObjectGPUBufferManager {
     }
 }
 
-impl VertexBufferable for VoxelMeshVertex {
+impl VertexBufferable for VoxelMeshVertexPosition {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             VoxelMeshVertexAttributeLocation::Position as u32 => Float32x3,
+        ]);
+}
+
+impl VertexBufferable for VoxelMeshVertexNormalVector {
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             VoxelMeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
         ]);
 }

@@ -3,7 +3,7 @@
 
 use super::VoxelChunkSignedDistanceField;
 use crate::voxel::{
-    mesh::VoxelMeshVertex,
+    mesh::{VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
 use glam::{Vec3A, Vec3Swizzles};
@@ -13,11 +13,13 @@ use glam::{Vec3A, Vec3Swizzles};
 /// can be reused to avoid reallocating memory.
 #[derive(Debug, Default)]
 pub struct SurfaceNetsBuffer {
-    /// The triangle mesh positions and normals.
+    /// The triangle mesh vertex positions.
+    pub positions: Vec<VoxelMeshVertexPosition>,
+    /// The triangle mesh vertex normal vectors.
     ///
     /// The normals are **not** normalized, since that is done most efficiently
     /// on the GPU.
-    pub vertices: Vec<VoxelMeshVertex>,
+    pub normal_vectors: Vec<VoxelMeshVertexNormalVector>,
     /// The triangle mesh indices.
     pub indices: Vec<u16>,
 
@@ -32,7 +34,8 @@ pub struct SurfaceNetsBuffer {
 impl SurfaceNetsBuffer {
     /// Clears all of the buffers, but keeps the memory allocated for reuse.
     fn reset(&mut self, array_size: usize) {
-        self.vertices.clear();
+        self.positions.clear();
+        self.normal_vectors.clear();
         self.indices.clear();
         self.surface_points_and_linear_indices.clear();
 
@@ -108,15 +111,17 @@ impl VoxelChunkSignedDistanceField {
                             * (Vec3A::from([i as f32, j as f32, k as f32]) + centroid)
                             + position_offset;
 
-                        buffer.vertices.push(VoxelMeshVertex {
-                            position: position.into(),
-                            normal_vector: normal.into(),
-                        });
+                        buffer
+                            .positions
+                            .push(VoxelMeshVertexPosition(position.into()));
+                        buffer
+                            .normal_vectors
+                            .push(VoxelMeshVertexNormalVector(normal.into()));
 
                         // Note: performing these pushes before pushing vertices seems
                         // to produce a significant slowdown
                         buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
-                            buffer.vertices.len() as u16 - 1; // Mind dependency on `vertices`
+                            buffer.positions.len() as u16 - 1; // Mind dependency on `vertices`
                         buffer
                             .surface_points_and_linear_indices
                             .push(([i as u8, j as u8, k as u8], linear_idx as u16));
@@ -189,7 +194,7 @@ impl VoxelChunkSignedDistanceField {
             if j != 0 && k != 0 && i < upper_indices[0] {
                 self.maybe_make_surface_nets_quad(
                     &buffer.voxel_linear_idx_to_vertex_index,
-                    &buffer.vertices,
+                    &buffer.positions,
                     p_linear_idx,
                     p_linear_idx + Self::squared_grid_size(),
                     Self::grid_size(),
@@ -201,7 +206,7 @@ impl VoxelChunkSignedDistanceField {
             if i != 0 && k != 0 && j < upper_indices[1] {
                 self.maybe_make_surface_nets_quad(
                     &buffer.voxel_linear_idx_to_vertex_index,
-                    &buffer.vertices,
+                    &buffer.positions,
                     p_linear_idx,
                     p_linear_idx + Self::grid_size(),
                     1,
@@ -213,7 +218,7 @@ impl VoxelChunkSignedDistanceField {
             if i != 0 && j != 0 && k < upper_indices[2] {
                 self.maybe_make_surface_nets_quad(
                     &buffer.voxel_linear_idx_to_vertex_index,
-                    &buffer.vertices,
+                    &buffer.positions,
                     p_linear_idx,
                     p_linear_idx + 1,
                     Self::squared_grid_size(),
@@ -259,7 +264,7 @@ impl VoxelChunkSignedDistanceField {
     fn maybe_make_surface_nets_quad(
         &self,
         linear_idx_to_vertex_index: &[u16],
-        positions: &[VoxelMeshVertex],
+        positions: &[VoxelMeshVertexPosition],
         p1: usize,
         p2: usize,
         axis_b_linear_idx: usize,
@@ -282,10 +287,10 @@ impl VoxelChunkSignedDistanceField {
         let v3 = linear_idx_to_vertex_index[p1 - axis_c_linear_idx];
         let v4 = linear_idx_to_vertex_index[p1 - axis_b_linear_idx - axis_c_linear_idx];
         let (pos1, pos2, pos3, pos4) = (
-            Vec3A::from(positions[v1 as usize].position),
-            Vec3A::from(positions[v2 as usize].position),
-            Vec3A::from(positions[v3 as usize].position),
-            Vec3A::from(positions[v4 as usize].position),
+            Vec3A::from(positions[v1 as usize].0),
+            Vec3A::from(positions[v2 as usize].0),
+            Vec3A::from(positions[v3 as usize].0),
+            Vec3A::from(positions[v4 as usize].0),
         );
         // Split the quad along the shorter axis, rather than the longer one.
         let quad = if pos1.distance_squared(pos4) < pos2.distance_squared(pos3) {
