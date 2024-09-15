@@ -7,7 +7,7 @@ use crate::{
     },
     light::{buffer::LightGPUBufferManager, MAX_SHADOW_MAP_CASCADES},
     mesh::buffer::MeshVertexAttributeLocation,
-    model::transform::InstanceModelViewTransformWithPrevious,
+    model::transform::InstanceModelLightTransform,
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -52,8 +52,8 @@ impl SpecificShaderTemplate for UnidirectionalLightShadowMapShaderTemplate {
                 template_replacements!(
                     "max_light_count" => self.max_light_count,
                     "cascade_count" => MAX_SHADOW_MAP_CASCADES,
-                    "model_light_transform_rotation_location" => InstanceModelViewTransformWithPrevious::current_rotation_location(),
-                    "model_light_transform_translation_location" => InstanceModelViewTransformWithPrevious::current_translation_and_scaling_location(),
+                    "model_light_transform_rotation_location" => InstanceModelLightTransform::rotation_location(),
+                    "model_light_transform_translation_location" => InstanceModelLightTransform::translation_and_scaling_location(),
                     "light_uniform_group" => 0,
                     "light_uniform_binding" => LightGPUBufferManager::light_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,

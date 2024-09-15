@@ -4,6 +4,12 @@ use crate::{gpu::rendering::fre, impl_InstanceFeature, model::InstanceFeatureMan
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
 
+/// Trait for types that can be referenced as an [`InstanceModelViewTransform`].
+pub trait AsInstanceModelViewTransform {
+    /// Returns a reference to the [`InstanceModelViewTransform`].
+    fn as_instance_model_view_transform(&self) -> &InstanceModelViewTransform;
+}
+
 /// A model-to-camera transform for a specific instance of a model.
 ///
 /// This struct is intended to be passed to the GPU in a vertex buffer. The
@@ -15,6 +21,8 @@ pub struct InstanceModelViewTransform {
     pub translation: Vector3<fre>,
     pub scaling: fre,
 }
+
+pub type InstanceModelLightTransform = InstanceModelViewTransform;
 
 /// A model-to-camera transform for a specific instance of a model, along with
 /// the corresponding transform from the previous frame.
@@ -69,6 +77,15 @@ impl InstanceModelViewTransform {
     pub fn with_model_light_transform(transform: Similarity3<fre>) -> Self {
         Self::with_model_view_transform(transform)
     }
+
+    #[cfg(test)]
+    pub fn dummy_instance_feature_id() -> super::InstanceFeatureID {
+        use crate::model::InstanceFeature;
+        super::InstanceFeatureID {
+            feature_type_id: Self::FEATURE_TYPE_ID,
+            idx: 0,
+        }
+    }
 }
 
 impl From<InstanceModelViewTransform> for Similarity3<fre> {
@@ -85,6 +102,12 @@ impl From<InstanceModelViewTransform> for Similarity3<fre> {
 impl Default for InstanceModelViewTransform {
     fn default() -> Self {
         Self::identity()
+    }
+}
+
+impl AsInstanceModelViewTransform for InstanceModelViewTransform {
+    fn as_instance_model_view_transform(&self) -> &InstanceModelViewTransform {
+        self
     }
 }
 
@@ -135,6 +158,12 @@ impl InstanceModelViewTransformWithPrevious {
             feature_type_id: Self::FEATURE_TYPE_ID,
             idx: 0,
         }
+    }
+}
+
+impl AsInstanceModelViewTransform for InstanceModelViewTransformWithPrevious {
+    fn as_instance_model_view_transform(&self) -> &InstanceModelViewTransform {
+        &self.current
     }
 }
 

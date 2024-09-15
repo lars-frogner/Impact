@@ -7,7 +7,10 @@ use crate::{
     light,
     material::{self, components::MaterialComp},
     mesh::{self, components::MeshComp},
-    model::{transform::InstanceModelViewTransformWithPrevious, InstanceFeature, ModelID},
+    model::{
+        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+        InstanceFeature, ModelID,
+    },
     physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{
@@ -209,9 +212,10 @@ impl Scene {
              -> SceneGraphModelInstanceNodeComp {
                 let model_id = ModelID::for_mesh_and_material(mesh.id, *material.material_handle());
 
-                let mut feature_type_ids = Vec::with_capacity(2);
+                let mut feature_type_ids = Vec::with_capacity(4);
 
                 feature_type_ids.push(InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID);
+                feature_type_ids.push(InstanceModelLightTransform::FEATURE_TYPE_ID);
 
                 feature_type_ids.extend_from_slice(
                     material_library
@@ -227,17 +231,24 @@ impl Scene {
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                let mut feature_ids = Vec::with_capacity(2);
+                let mut feature_ids = Vec::with_capacity(4);
 
-                // Add an entry for the model-to-camera transform for the scene
-                // graph to access and modify using the returned ID
+                // Add entries for the model-to-camera and model-to-light transforms
+                // for the scene graph to access and modify using the returned IDs
                 let model_view_transform_feature_id = instance_feature_manager
                     .get_storage_mut::<InstanceModelViewTransformWithPrevious>()
-                    .expect("Missing storage for InstanceModelViewTransform feature")
+                    .expect("Missing storage for InstanceModelViewTransformWithPrevious feature")
                     .add_feature(&InstanceModelViewTransformWithPrevious::default());
 
-                // The first feature is expected to be the transform
+                let model_light_transform_feature_id = instance_feature_manager
+                    .get_storage_mut::<InstanceModelLightTransform>()
+                    .expect("Missing storage for InstanceModelLightTransform feature")
+                    .add_feature(&InstanceModelLightTransform::default());
+
+                // The first two features are expected to be the model-view transform and
+                // model-light transforms, respectively
                 feature_ids.push(model_view_transform_feature_id);
+                feature_ids.push(model_light_transform_feature_id);
 
                 if let Some(feature_id) = material.material_handle().material_property_feature_id()
                 {
