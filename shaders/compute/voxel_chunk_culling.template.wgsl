@@ -35,6 +35,10 @@ var<storage, read> chunkSubmeshes: array<ChunkSubmesh>;
 @group({{indirect_draw_group}}) @binding({{indirect_draw_binding}})
 var<storage, read_write> indirectDrawArgs: array<IndirectDrawArgs>;
 
+// We use a small non-zero threshold to make sure barely visible chunks are not
+// culled due to imprecision
+const CULLING_THRESHOLD: f32 = -0.05;
+
 fn chunkShouldBeCulled(chunkIndices: vec3f) -> bool {
     // We expect the frustum planes to have been transformed to the normalized
     // voxel object space where the chunks are axis-aligned boxes with extent
@@ -57,12 +61,12 @@ fn chunkShouldBeCulled(chunkIndices: vec3f) -> bool {
     );
     let lowerCorner = chunkIndices;
     return (
-        signedDistance(pcs.frustumPlane0, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[0]]) < 0.0 ||
-        signedDistance(pcs.frustumPlane1, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[1]]) < 0.0 ||
-        signedDistance(pcs.frustumPlane2, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[2]]) < 0.0 ||
-        signedDistance(pcs.frustumPlane3, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[3]]) < 0.0 ||
-        signedDistance(pcs.frustumPlane4, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[4]]) < 0.0 ||
-        signedDistance(pcs.frustumPlane5, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[5]]) < 0.0
+        signedDistance(pcs.frustumPlane0, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[0]]) < CULLING_THRESHOLD ||
+        signedDistance(pcs.frustumPlane1, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[1]]) < CULLING_THRESHOLD ||
+        signedDistance(pcs.frustumPlane2, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[2]]) < CULLING_THRESHOLD ||
+        signedDistance(pcs.frustumPlane3, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[3]]) < CULLING_THRESHOLD ||
+        signedDistance(pcs.frustumPlane4, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[4]]) < CULLING_THRESHOLD ||
+        signedDistance(pcs.frustumPlane5, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[5]]) < CULLING_THRESHOLD
     );
 }
 
