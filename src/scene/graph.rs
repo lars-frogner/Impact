@@ -7,9 +7,10 @@ use crate::{
     light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
     model::{
         transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
-        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, ModelID,
+        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
     },
     num::Float,
+    voxel::{entity::VOXEL_MODEL_ID, VoxelObjectID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
@@ -742,6 +743,12 @@ impl SceneGraph<fre> {
                         range_id,
                     );
 
+                    // Since each voxel object is an instance of the same model, we need to buffer
+                    // voxel object IDs in addition to transforms so that the transform can be
+                    // associated with the correct voxel object
+                    instance_feature_manager
+                        .begin_range_in_feature_buffers(VoxelObjectID::FEATURE_TYPE_ID, range_id);
+
                     let camera_space_face_frustum =
                         omnidirectional_light.compute_camera_space_frustum_for_face(face);
 
@@ -896,6 +903,16 @@ impl SceneGraph<fre> {
                         model_instance_node.model_id(),
                         &instance_model_light_transform,
                     );
+
+                    // If this is a voxel object, we also need to buffer the voxel object ID
+                    if model_instance_node.model_id() == &*VOXEL_MODEL_ID {
+                        instance_feature_manager.buffer_instance_feature_from_storage(
+                            model_instance_node.model_id(),
+                            *model_instance_node
+                                .feature_id_of_type(VoxelObjectID::FEATURE_TYPE_ID)
+                                .unwrap(),
+                        );
+                    }
                 }
             }
         }
@@ -1196,6 +1213,17 @@ impl<F: Float> ModelInstanceNode<F> {
     /// Returns the IDs of the instance's features.
     pub fn feature_ids(&self) -> &[InstanceFeatureID] {
         &self.feature_ids
+    }
+
+    /// Returns the ID of the instance's feature of the given type, or [`None`]
+    /// if the instance does not have such a feature.
+    pub fn feature_id_of_type(
+        &self,
+        feature_type_id: InstanceFeatureTypeID,
+    ) -> Option<&InstanceFeatureID> {
+        self.feature_ids
+            .iter()
+            .find(|feature_id| feature_id.feature_type_id() == feature_type_id)
     }
 
     /// Returns the bounding sphere of the model instance, or [`None`] if it has

@@ -406,10 +406,22 @@ impl<F: Float> CubeMapper<F> {
         Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]
     }
 
+    /// Computes the cubemap-space frustum for the positive z cubemap face,
+    /// using the given near and far distance.
+    pub fn compute_frustum_for_positive_z_face(near_distance: F, far_distance: F) -> Frustum<F> {
+        let (projection_matrix, inverse_projection_matrix) =
+            Self::create_projection_matrix_and_inverse_for_positive_z_face(
+                near_distance,
+                far_distance,
+            );
+
+        Frustum::from_transform_matrix_with_inverse(projection_matrix, inverse_projection_matrix)
+    }
+
     /// Computes the frustum for the given cubemap face, using the given
     /// transform to cubemap space (defining the position and orientation of the
     /// full cubemap in the parent space) and the given near and far distance.
-    pub fn compute_frustum_for_face(
+    pub fn compute_transformed_frustum_for_face(
         face: CubemapFace,
         transform_to_cube_space: &Similarity3<F>,
         near_distance: F,
@@ -833,7 +845,7 @@ mod tests {
         let near = 0.1;
         let far = 10.0;
 
-        let frustum = CubeMapper::compute_frustum_for_face(
+        let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveX,
             &Similarity3::identity(),
             near,
@@ -868,7 +880,7 @@ mod tests {
         let near = 0.1;
         let far = 10.0;
 
-        let frustum = CubeMapper::compute_frustum_for_face(
+        let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::NegativeX,
             &Similarity3::identity(),
             near,
@@ -905,7 +917,7 @@ mod tests {
         let near = 0.1;
         let far = 10.0;
 
-        let frustum = CubeMapper::compute_frustum_for_face(
+        let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveY,
             &Similarity3::identity(),
             near,
@@ -940,7 +952,7 @@ mod tests {
         let near = 0.1;
         let far = 10.0;
 
-        let frustum = CubeMapper::compute_frustum_for_face(
+        let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::NegativeY,
             &Similarity3::identity(),
             near,
@@ -977,7 +989,7 @@ mod tests {
         let near = 0.1;
         let far = 10.0;
 
-        let frustum = CubeMapper::compute_frustum_for_face(
+        let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveZ,
             &Similarity3::identity(),
             near,
@@ -1012,7 +1024,7 @@ mod tests {
         let near = 0.1;
         let far = 10.0;
 
-        let frustum = CubeMapper::compute_frustum_for_face(
+        let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::NegativeZ,
             &Similarity3::identity(),
             near,
@@ -1046,7 +1058,7 @@ mod tests {
 
     #[test]
     fn computed_frusta_for_different_cubemap_faces_are_consistent() {
-        let positive_z_frustum = CubeMapper::compute_frustum_for_face(
+        let positive_z_frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveZ,
             &Similarity3::identity(),
             0.01,
@@ -1054,9 +1066,13 @@ mod tests {
         );
 
         for face in CubemapFace::all() {
-            let frustum_rotated_to_positive_z =
-                CubeMapper::compute_frustum_for_face(face, &Similarity3::identity(), 0.01, 100.0)
-                    .rotated(&CubeMapper::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]);
+            let frustum_rotated_to_positive_z = CubeMapper::compute_transformed_frustum_for_face(
+                face,
+                &Similarity3::identity(),
+                0.01,
+                100.0,
+            )
+            .rotated(&CubeMapper::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]);
 
             assert_abs_diff_eq!(
                 &frustum_rotated_to_positive_z,

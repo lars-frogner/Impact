@@ -67,7 +67,6 @@ use std::{
 #[derive(Debug)]
 pub struct RenderCommandManager {
     attachment_clearing_pass: AttachmentClearingPass,
-    voxel_pre_render_commands: VoxelPreRenderCommands,
     non_physical_model_depth_prepass: DepthPrepass,
     geometry_pass: GeometryPass,
     omnidirectional_light_shadow_map_update_passes: OmnidirectionalLightShadowMapUpdatePasses,
@@ -279,7 +278,6 @@ impl RenderCommandManager {
 
         Self {
             attachment_clearing_pass,
-            voxel_render_commands,
             non_physical_model_depth_prepass,
             geometry_pass,
             omnidirectional_light_shadow_map_update_passes,
@@ -287,6 +285,7 @@ impl RenderCommandManager {
             ambient_light_pass,
             directional_light_pass,
             skybox_pass,
+            voxel_render_commands,
         }
     }
 
@@ -408,9 +407,12 @@ impl RenderCommandManager {
         )?;
 
         self.omnidirectional_light_shadow_map_update_passes.record(
+            &scene.light_storage().read().unwrap(),
+            &instance_feature_manager,
             render_resources,
             timestamp_recorder,
             config.shadow_mapping_enabled,
+            &self.voxel_render_commands,
             command_encoder,
         )?;
 
@@ -1450,9 +1452,12 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
     fn record(
         &self,
+        light_storage: &LightStorage,
+        instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
+        voxel_render_commands: &VoxelRenderCommands,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
@@ -1468,50 +1473,57 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             return Ok(());
         }
 
-        let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
-            .register_timestamp_writes_for_first_and_last_of_render_passes(
-                n_passes,
-                Cow::Borrowed("Omnidirectional light shadow map update passes"),
-            );
-
-        let last_pass_idx = 6 * shadow_map_textures.len() - 1;
-        let mut pass_idx = 0;
-
-        for (light_idx, (light_id, shadow_map_texture)) in light_buffer_manager
+        for (light_idx, (&light_id, shadow_map_texture)) in light_buffer_manager
             .omnidirectional_light_ids()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
+            let omnidirectional_light = light_storage.omnidirectional_light(light_id);
+
+            let positive_z_cubemap_face_frustum =
+                omnidirectional_light.compute_light_space_frustum_for_positive_z_face();
+
             for cubemap_face in CubemapFace::all() {
+                // When updating the shadow map, we don't use model view transforms but rather
+                // the model to light space tranforms that have been written to the range
+                // dedicated for the active light in the transform buffer.
+
+                // Offset the light's buffer range ID with the face index to get the index for
+                // the range of transforms for the specific cubemap face
+                let instance_range_id =
+                    light_id.as_instance_feature_buffer_range_id() + cubemap_face.as_idx_u32();
+
+                if shadow_mapping_enabled {
+                    voxel_render_commands
+                        .record_before_omnidirectional_light_shadow_cubemap_face_update(
+                            &positive_z_cubemap_face_frustum,
+                            instance_range_id,
+                            instance_feature_manager,
+                            render_resources,
+                            timestamp_recorder,
+                            command_encoder,
+                        )?;
+                }
+
                 let shadow_cubemap_face_texture_view = shadow_map_texture.face_view(cubemap_face);
 
                 let color_attachments = Self::color_attachments(shadow_cubemap_face_texture_view);
 
-                let timestamp_writes = if pass_idx == 0 {
-                    first_timestamp_writes.clone()
-                } else if pass_idx == last_pass_idx {
-                    last_timestamp_writes.clone()
-                } else {
-                    None
-                };
-                pass_idx += 1;
+                let mut render_pass = begin_single_render_pass(
+                    command_encoder,
+                    timestamp_recorder,
+                    &color_attachments,
+                    None,
+                    Cow::Owned(format!(
+                        "Update pass for shadow cubemap face {:?} for light {}",
+                        cubemap_face, light_idx,
+                    )),
+                );
 
-                let mut render_pass =
-                    command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments: &color_attachments,
-                        depth_stencil_attachment: None,
-                        timestamp_writes,
-                        occlusion_query_set: None,
-                        label: Some(&format!(
-                            "Update pass for shadow cubemap face {:?} for light {}",
-                            cubemap_face, light_idx,
-                        )),
-                    });
-
-                if !shadow_mapping_enabled || self.models.is_empty() {
-                    // If shadow mapping is disabled or there are no models, we don't do anything in
-                    // the render pass, which means the shadow map textures will just be cleared
+                if !shadow_mapping_enabled {
+                    // If shadow mapping is disabled, we don't do anything in the render pass,
+                    // which means the shadow map textures will just be cleared
                     continue;
                 }
 
@@ -1536,16 +1548,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                             anyhow!("Missing transform GPU buffer for model {}", model_id)
                         })?;
 
-                    // When updating the shadow map, we don't use model view transforms but rather
-                    // the model to light space tranforms that have been written to the range
-                    // dedicated for the active light in the transform buffer.
-
-                    // Offset the light's buffer range ID with the face index to get the index for
-                    // the range of transforms for the specific cubemap face
-                    let buffer_range_id =
-                        light_id.as_instance_feature_buffer_range_id() + cubemap_face.as_idx_u32();
-
-                    let transform_range = transform_buffer_manager.feature_range(buffer_range_id);
+                    let transform_range = transform_buffer_manager.feature_range(instance_range_id);
 
                     if transform_range.is_empty() {
                         continue;
@@ -1582,6 +1585,14 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                         transform_range,
                     );
                 }
+
+                VoxelRenderCommands::record_omnidirectional_light_shadow_cubemap_face_update(
+                    light_id,
+                    cubemap_face,
+                    instance_feature_manager,
+                    render_resources,
+                    &mut render_pass,
+                )?;
             }
         }
 

@@ -305,6 +305,16 @@ impl LightStorage {
         self.update_max_far_distance_for_omnidirectional_lights();
     }
 
+    /// Returns a reference to the [`OmnidirectionalLight`] with the given ID.
+    ///
+    /// # Panics
+    /// If no omnidirectional light with the given ID exists.
+    pub fn omnidirectional_light(&self, light_id: LightID) -> &OmnidirectionalLight {
+        self.omnidirectional_light_buffer
+            .get_uniform(light_id)
+            .expect("Requested missing omnidirectional light")
+    }
+
     /// Returns a mutable reference to the [`OmnidirectionalLight`] with the
     /// given ID.
     ///
@@ -527,9 +537,15 @@ impl OmnidirectionalLight {
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
 
+    /// Computes the frustum for the given positive z cubemap face in light
+    /// space.
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum<fre> {
+        CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
+    }
+
     /// Computes the frustum for the given cubemap face in camera space.
     pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum<fre> {
-        CubeMapper::compute_frustum_for_face(
+        CubeMapper::compute_transformed_frustum_for_face(
             face,
             &self.create_camera_to_light_space_transform(),
             self.near_distance,
