@@ -2,7 +2,7 @@
 
 use crate::{
     camera::{buffer::CameraGPUBufferManager, SceneCamera},
-    geometry::{CubemapFace, Frustum},
+    geometry::{Frustum, OrientedBox},
     gpu::{
         compute,
         push_constant::{PushConstantGroup, PushConstantVariant},
@@ -24,7 +24,6 @@ use crate::{
         },
         GraphicsDevice,
     },
-    light::LightID,
     mesh::buffer::VertexBufferable,
     model::{
         transform::{
@@ -102,7 +101,7 @@ impl VoxelRenderCommands {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.chunk_culling_pass
-            .record_for_omnidirectional_light_shadow_cubemap_face(
+            .record_for_shadow_mapping_with_frustum(
                 positive_z_cubemap_face_frustum,
                 instance_range_id,
                 instance_feature_manager,
@@ -112,9 +111,28 @@ impl VoxelRenderCommands {
             )
     }
 
-    pub fn record_omnidirectional_light_shadow_cubemap_face_update(
-        light_id: LightID,
-        cubemap_face: CubemapFace,
+    pub fn record_before_unidirectional_light_shadow_map_cascade_update(
+        &self,
+        cascade_frustum: &OrientedBox<fre>,
+        instance_range_id: u32,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.chunk_culling_pass
+            .record_for_shadow_mapping_with_orthographic_frustum(
+                cascade_frustum,
+                instance_range_id,
+                instance_feature_manager,
+                render_resources,
+                timestamp_recorder,
+                command_encoder,
+            )
+    }
+
+    pub fn record_shadow_map_update(
+        instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         render_pass: &mut wgpu::RenderPass<'_>,
@@ -136,13 +154,10 @@ impl VoxelRenderCommands {
                 anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
             })?;
 
-        let instance_range_id =
-            light_id.as_instance_feature_buffer_range_id() + cubemap_face.as_idx_u32();
-
         let (_, voxel_object_ids) =
             voxel_object_id_buffer.range_with_valid_features::<VoxelObjectID>(instance_range_id);
 
-        // Return early if no voxel objects fall within the cubemap face
+        // Return early if no voxel objects fall within the shadow map
         if voxel_object_ids.is_empty() {
             return Ok(());
         }
@@ -271,6 +286,8 @@ impl VoxelChunkCullingPass {
         let scene_camera =
             scene_camera.ok_or_else(|| anyhow!("Missing scene camera for voxel chunk culling"))?;
 
+        let frustum = scene_camera.camera().view_frustum();
+
         let instance_range_id = InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
 
         self.record::<InstanceModelViewTransformWithPrevious>(
@@ -278,15 +295,17 @@ impl VoxelChunkCullingPass {
             render_resources,
             timestamp_recorder,
             command_encoder,
-            scene_camera.camera().view_frustum(),
             instance_range_id,
+            &|frustum_to_voxel_object_transform| {
+                FrustumPlanes::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
+            },
             Cow::Borrowed("Voxel chunk camera culling pass"),
         )
     }
 
-    fn record_for_omnidirectional_light_shadow_cubemap_face(
+    fn record_for_shadow_mapping_with_frustum(
         &self,
-        positive_z_cubemap_face_frustum: &Frustum<fre>,
+        frustum: &Frustum<fre>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
@@ -298,9 +317,36 @@ impl VoxelChunkCullingPass {
             render_resources,
             timestamp_recorder,
             command_encoder,
-            positive_z_cubemap_face_frustum,
             instance_range_id,
-            Cow::Borrowed("Voxel chunk culling pass for shadow cubemap face"),
+            &|frustum_to_voxel_object_transform| {
+                FrustumPlanes::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
+            },
+            Cow::Borrowed("Voxel chunk culling pass for shadow map"),
+        )
+    }
+
+    fn record_for_shadow_mapping_with_orthographic_frustum(
+        &self,
+        orthographic_frustum: &OrientedBox<fre>,
+        instance_range_id: u32,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.record::<InstanceModelLightTransform>(
+            instance_feature_manager,
+            render_resources,
+            timestamp_recorder,
+            command_encoder,
+            instance_range_id,
+            &|frustum_to_voxel_object_transform| {
+                FrustumPlanes::for_transformed_orthographic_frustum(
+                    orthographic_frustum,
+                    frustum_to_voxel_object_transform,
+                )
+            },
+            Cow::Borrowed("Voxel chunk culling pass for shadow map"),
         )
     }
 
@@ -310,8 +356,8 @@ impl VoxelChunkCullingPass {
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-        frustum: &Frustum<fre>,
         instance_range_id: InstanceFeatureBufferRangeID,
+        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<fre>) -> FrustumPlanes,
         tag: Cow<'static, str>,
     ) -> Result<()>
     where
@@ -382,7 +428,7 @@ impl VoxelChunkCullingPass {
                 );
 
             let frustum_planes =
-                FrustumPlanes::for_transformed_frustum(frustum, &frustum_to_voxel_object_transform);
+                obtain_frustum_planes_in_voxel_object_space(&frustum_to_voxel_object_transform);
 
             self.set_push_constants(&mut compute_pass, frustum_planes, chunk_count, instance_idx);
 

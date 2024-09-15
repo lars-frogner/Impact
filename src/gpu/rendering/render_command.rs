@@ -369,6 +369,7 @@ impl RenderCommandManager {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let instance_feature_manager = scene.instance_feature_manager().read().unwrap();
+        let light_storage = scene.light_storage().read().unwrap();
 
         self.attachment_clearing_pass.record(
             surface_texture_view,
@@ -407,7 +408,7 @@ impl RenderCommandManager {
         )?;
 
         self.omnidirectional_light_shadow_map_update_passes.record(
-            &scene.light_storage().read().unwrap(),
+            &light_storage,
             &instance_feature_manager,
             render_resources,
             timestamp_recorder,
@@ -417,9 +418,12 @@ impl RenderCommandManager {
         )?;
 
         self.unidirectional_light_shadow_map_update_passes.record(
+            &light_storage,
+            &instance_feature_manager,
             render_resources,
             timestamp_recorder,
             config.shadow_mapping_enabled,
+            &self.voxel_render_commands,
             command_encoder,
         )?;
 
@@ -1598,9 +1602,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                     );
                 }
 
-                VoxelRenderCommands::record_omnidirectional_light_shadow_cubemap_face_update(
-                    light_id,
-                    cubemap_face,
+                VoxelRenderCommands::record_shadow_map_update(
+                    instance_range_id,
                     instance_feature_manager,
                     render_resources,
                     &mut render_pass,
@@ -1806,9 +1809,12 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
     fn record(
         &self,
+        light_storage: &LightStorage,
+        instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
+        voxel_render_commands: &VoxelRenderCommands,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
@@ -1824,50 +1830,57 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             return Ok(());
         }
 
-        let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
-            .register_timestamp_writes_for_first_and_last_of_render_passes(
-                n_passes,
-                Cow::Borrowed("Unidirectional light shadow map update passes"),
-            );
-
-        let last_pass_idx = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len() - 1;
-        let mut pass_idx = 0;
-
-        for (light_idx, (light_id, shadow_map_texture)) in light_buffer_manager
+        for (light_idx, (&light_id, shadow_map_texture)) in light_buffer_manager
             .unidirectional_light_ids()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
+            let unidirectional_light = light_storage.unidirectional_light(light_id);
+
             for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
+                // When updating the shadow map, we don't use model view transforms but rather
+                // the model to light space tranforms that have been written to the range
+                // dedicated for the active light in the transform buffer.
+
+                // Offset the light's buffer range ID with the cascade index to get the index
+                // for the range of transforms for the specific cascade
+                let instance_range_id =
+                    light_id.as_instance_feature_buffer_range_id() + cascade_idx;
+
+                let cascade_frustum = unidirectional_light
+                    .create_light_space_orthographic_obb_for_cascade(cascade_idx);
+
+                if shadow_mapping_enabled {
+                    voxel_render_commands
+                        .record_before_unidirectional_light_shadow_map_cascade_update(
+                            &cascade_frustum,
+                            instance_range_id,
+                            instance_feature_manager,
+                            render_resources,
+                            timestamp_recorder,
+                            command_encoder,
+                        )?;
+                }
+
                 let shadow_map_cascade_texture_view = shadow_map_texture.cascade_view(cascade_idx);
 
                 let color_attachments = Self::color_attachments(shadow_map_cascade_texture_view);
 
-                let timestamp_writes = if pass_idx == 0 {
-                    first_timestamp_writes.clone()
-                } else if pass_idx == last_pass_idx {
-                    last_timestamp_writes.clone()
-                } else {
-                    None
-                };
-                pass_idx += 1;
+                let mut render_pass = begin_single_render_pass(
+                    command_encoder,
+                    timestamp_recorder,
+                    &color_attachments,
+                    None,
+                    Cow::Owned(format!(
+                        "Update pass for shadow map cascade {} for light {}",
+                        cascade_idx, light_idx,
+                    )),
+                );
 
-                let mut render_pass =
-                    command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments: &color_attachments,
-                        depth_stencil_attachment: None,
-                        timestamp_writes,
-                        occlusion_query_set: None,
-                        label: Some(&format!(
-                            "Update pass for shadow map cascade {} for light {}",
-                            cascade_idx, light_idx,
-                        )),
-                    });
-
-                if !shadow_mapping_enabled || self.models.is_empty() {
-                    // If shadow mapping is disabled or there are no models, we don't do anything in
-                    // the render pass, which means the shadow map textures will just be cleared
+                if !shadow_mapping_enabled {
+                    // If shadow mapping is disabled, we don't do anything in the render pass, which
+                    // means the shadow map textures will just be cleared
                     continue;
                 }
 
@@ -1898,16 +1911,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                             )
                         })?;
 
-                    // When updating the shadow map, we don't use model view transforms but rather
-                    // the model to light space tranforms that have been written to the range
-                    // dedicated for the active light in the transform buffer.
-
-                    // Offset the light's buffer range ID with the cascade index to get the index
-                    // for the range of transforms for the specific cascade
-                    let buffer_range_id =
-                        light_id.as_instance_feature_buffer_range_id() + cascade_idx;
-
-                    let transform_range = transform_buffer_manager.feature_range(buffer_range_id);
+                    let transform_range = transform_buffer_manager.feature_range(instance_range_id);
 
                     if transform_range.is_empty() {
                         continue;
@@ -1944,6 +1948,13 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                         transform_range,
                     );
                 }
+
+                VoxelRenderCommands::record_shadow_map_update(
+                    instance_range_id,
+                    instance_feature_manager,
+                    render_resources,
+                    &mut render_pass,
+                )?;
             }
         }
 

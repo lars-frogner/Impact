@@ -6,7 +6,8 @@ pub mod entity;
 
 use crate::{
     geometry::{
-        Angle, AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrthographicTransform, Sphere,
+        Angle, AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox,
+        OrthographicTransform, Sphere,
     },
     gpu::{rendering::fre, texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
     model::InstanceFeatureBufferRangeID,
@@ -324,6 +325,16 @@ impl LightStorage {
         self.omnidirectional_light_buffer
             .get_uniform_mut(light_id)
             .expect("Requested missing omnidirectional light")
+    }
+
+    /// Returns a reference to the [`UnidirectionalLight`] with the given ID.
+    ///
+    /// # Panics
+    /// If no unidirectional light with the given ID exists.
+    pub fn unidirectional_light(&self, light_id: LightID) -> &UnidirectionalLight {
+        self.unidirectional_light_buffer
+            .get_uniform(light_id)
+            .expect("Requested missing unidirectional light")
     }
 
     /// Returns a mutable reference to the [`UnidirectionalLight`] with the
@@ -665,6 +676,18 @@ impl UnidirectionalLight {
         cascade_idx: CascadeIdx,
     ) -> AxisAlignedBox<fre> {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
+    }
+
+    /// Creates an oriented bounding box in the light's reference frame
+    /// containing all models that may cast visible shadows into the given
+    /// cascade.
+    pub fn create_light_space_orthographic_obb_for_cascade(
+        &self,
+        cascade_idx: CascadeIdx,
+    ) -> OrientedBox<fre> {
+        OrientedBox::from_axis_aligned_box(
+            &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
+        )
     }
 
     /// Sets the camera space direction of the light to the given direction.

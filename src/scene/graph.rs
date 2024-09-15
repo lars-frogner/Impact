@@ -836,6 +836,12 @@ impl SceneGraph<fre> {
                         range_id,
                     );
 
+                    // Since each voxel object is an instance of the same model, we need to buffer
+                    // voxel object IDs in addition to transforms so that the transform can be
+                    // associated with the correct voxel object
+                    instance_feature_manager
+                        .begin_range_in_feature_buffers(VoxelObjectID::FEATURE_TYPE_ID, range_id);
+
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
                         instance_feature_manager,
                         unidirectional_light,
@@ -989,6 +995,16 @@ impl SceneGraph<fre> {
                         model_instance_node.model_id(),
                         &instance_model_light_transform,
                     );
+
+                    // If this is a voxel object, we also need to buffer the voxel object ID
+                    if model_instance_node.model_id() == &*VOXEL_MODEL_ID {
+                        instance_feature_manager.buffer_instance_feature_from_storage(
+                            model_instance_node.model_id(),
+                            *model_instance_node
+                                .feature_id_of_type(VoxelObjectID::FEATURE_TYPE_ID)
+                                .unwrap(),
+                        );
+                    }
                 }
             }
         }

@@ -1,6 +1,9 @@
 //! Representation of boxes with arbitrary orientations.
 
-use crate::{geometry::AxisAlignedBox, num::Float};
+use crate::{
+    geometry::{AxisAlignedBox, Plane},
+    num::Float,
+};
 use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 
 /// A box with arbitrary position, orientation and extents.
@@ -139,12 +142,36 @@ impl<F: Float> OrientedBox<F> {
             self.center + half_width_vector + half_height_vector + half_depth_vector,
         ]
     }
+
+    /// Computes the six planes that bound the oriented box.
+    ///
+    /// The order and orientation of the planes are consistent with the planes
+    /// in a [`Frustum`](crate::geometry::Frustum).
+    pub fn compute_bounding_planes(&self) -> [Plane<F>; 6] {
+        let width_axis = self.compute_width_axis();
+        let height_axis = self.compute_height_axis();
+        let depth_axis = self.compute_depth_axis();
+        let width_of_center = width_axis.dot(&self.center.coords);
+        let height_of_center = height_axis.dot(&self.center.coords);
+        let depth_of_center = depth_axis.dot(&self.center.coords);
+        [
+            Plane::new(width_axis, width_of_center - self.half_width),
+            Plane::new(-width_axis, -width_of_center - self.half_width),
+            Plane::new(height_axis, height_of_center - self.half_height),
+            Plane::new(-height_axis, -height_of_center - self.half_height),
+            Plane::new(depth_axis, depth_of_center - self.half_depth),
+            Plane::new(-depth_axis, -depth_of_center - self.half_depth),
+        ]
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::geometry::{Frustum, OrthographicTransform};
+
     use super::*;
     use approx::assert_abs_diff_eq;
+    use nalgebra::point;
     use std::f64::consts::PI;
 
     #[test]
@@ -170,5 +197,23 @@ mod tests {
         assert_abs_diff_eq!(oriented_box.compute_width_axis(), Vector3::z_axis());
         assert_abs_diff_eq!(oriented_box.compute_height_axis(), Vector3::y_axis());
         assert_abs_diff_eq!(oriented_box.compute_depth_axis(), -Vector3::x_axis());
+    }
+
+    #[test]
+    fn oriented_box_bounding_planes_are_consistent_with_orthographic_frustum_planes() {
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 2.0, -3.0, 4.0, -5.0, 6.0).as_projective(),
+        );
+        let oriented_box = OrientedBox::from_axis_aligned_box(&AxisAlignedBox::new(
+            point![-1.0, -3.0, -5.0],
+            point![2.0, 4.0, 6.0],
+        ));
+        for (frustum_plane, oriented_box_plane) in frustum
+            .planes()
+            .iter()
+            .zip(oriented_box.compute_bounding_planes())
+        {
+            assert_abs_diff_eq!(oriented_box_plane, frustum_plane, epsilon = 1e-8);
+        }
     }
 }

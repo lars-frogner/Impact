@@ -1,7 +1,7 @@
 //! Mesh representation of chunked voxel objects.
 
 use crate::{
-    geometry::{Frustum, Plane},
+    geometry::{Frustum, OrientedBox, Plane},
     gpu::rendering::fre,
     voxel::chunks::{sdf::surface_nets::SurfaceNetsBuffer, ChunkedVoxelObject},
 };
@@ -201,5 +201,16 @@ impl FrustumPlanes {
         transformation: &Similarity3<fre>,
     ) -> Self {
         Self::from_planes(frustum.transformed_planes(transformation))
+    }
+
+    /// Transforms the given orthographic frustum (represented by an oriented
+    /// box) with the given similarity transform and gathers the resulting
+    /// frustum planes into a `FrustumPlanes`.
+    pub fn for_transformed_orthographic_frustum(
+        orthographic_frustum: &OrientedBox<fre>,
+        transformation: &Similarity3<fre>,
+    ) -> Self {
+        let transformed_box = orthographic_frustum.transformed(transformation);
+        Self::from_planes(transformed_box.compute_bounding_planes())
     }
 }

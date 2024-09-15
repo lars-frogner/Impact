@@ -64,6 +64,11 @@ impl<F: Float> Frustum<F> {
         }
     }
 
+    /// Returns the planes defining the faces of the frustum.
+    pub fn planes(&self) -> &[Plane<F>; 6] {
+        &self.planes
+    }
+
     /// Returns the plane defining the left face of the frustum.
     pub fn left_plane(&self) -> &Plane<F> {
         &self.planes[0]
