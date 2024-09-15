@@ -156,12 +156,13 @@ fn computeAreaLightQuantities(
     lightSpaceNormalVector: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
+    distanceFromCamera: f32,
     roughness: f32,
     exposure: f32,
 ) -> LightQuantities {
     var output: LightQuantities;
 
-    let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector);
+    let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector, distanceFromCamera);
     output.lightNDCSpacePosition = applyOrthographicProjectionToPosition(
         orthographicTranslation,
         orthographicScaling,
@@ -197,13 +198,14 @@ fn computeLightQuantities(
     lightSpaceNormalVector: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
+    distanceFromCamera: f32,
     exposure: f32,
 ) -> LightQuantities {
     var output: LightQuantities;
 
     output.preExposedIncidentLuminance = exposure * lightPerpendicularIlluminance;
 
-    let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector);
+    let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector, distanceFromCamera);
     output.lightNDCSpacePosition = applyOrthographicProjectionToPosition(
         orthographicTranslation,
         orthographicScaling,
@@ -241,10 +243,11 @@ fn applyOrthographicProjectionToPosition(
 
 fn applyNormalBias(
     lightSpacePosition: vec3f,
-    lightSpaceNormalVector: vec3f
+    lightSpaceNormalVector: vec3f,
+    distanceFromCamera: f32,
     ) -> vec3f {
     let lightDirectionDotNormalVector = -lightSpaceNormalVector.z;
-    return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * 1e-1;
+    return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * max(1e-1, 1e-2 * distanceFromCamera);
 }
 
 fn determineCascadeIdxMax1(partitionDepths: vec4f, depth: f32) -> i32 {
@@ -641,6 +644,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).r;
     let cameraSpacePosition = computePositionFromLinearDepth(depth, input.frustumFarPlanePoint);
     let cameraSpaceViewDirection = computeCameraSpaceViewDirection(cameraSpacePosition);
+    let distanceFromCamera = -cameraSpacePosition.z;
 
     let normalColor = textureSampleLevel(normalVectorTexture, normalVectorSampler, textureCoords, 0.0).rgb;
     let cameraSpaceNormalVector = convertNormalColorToNormalizedNormalVector(normalColor);
@@ -682,6 +686,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         lightSpaceNormalVector,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
+        distanceFromCamera,
         roughness,
         pushConstants.exposure,
     );
@@ -695,6 +700,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         lightSpaceNormalVector,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
+        distanceFromCamera,
         pushConstants.exposure,
     );
 #endif

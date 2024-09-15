@@ -158,10 +158,11 @@ fn computeAreaLightQuantities(
     lightRadius: f32,
     cameraToLightSpaceRotationQuaternion: vec4f,
     nearDistance: f32,
-    inverseDistanceSpan: f32,
+    lightInverseDistanceSpan: f32,
     fragmentPosition: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
+    distanceFromCamera: f32,
     roughness: f32,
     exposure: f32,
 ) -> LightQuantities {
@@ -184,11 +185,12 @@ fn computeAreaLightQuantities(
         lightCenterDisplacement,
         fragmentNormal,
         LDotN,
-        inverseDistanceSpan,
+        lightInverseDistanceSpan,
+        distanceFromCamera,
     );
 
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
-    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
+    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * lightInverseDistanceSpan;
 
     let tanAngularLightRadius = lightRadius * inverseDistance;
 
@@ -209,10 +211,11 @@ fn computeLightQuantities(
     lightLuminousIntensity: vec3f,
     cameraToLightSpaceRotationQuaternion: vec4f,
     nearDistance: f32,
-    inverseDistanceSpan: f32,
+    lightInverseDistanceSpan: f32,
     fragmentPosition: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
+    distanceFromCamera: f32,
     exposure: f32,
 ) -> LightQuantities {
     var output: LightQuantities;
@@ -234,11 +237,12 @@ fn computeLightQuantities(
         lightCenterDisplacement,
         fragmentNormal,
         LDotN,
-        inverseDistanceSpan,
+        lightInverseDistanceSpan,
+        distanceFromCamera,
     );
 
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
-    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
+    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * lightInverseDistanceSpan;
 
     let onePlusLDotV = max(1.0 + LDotV, 1e-6);
     let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
@@ -259,11 +263,12 @@ fn computeOffsetFragmentDisplacement(
     lightCenterDisplacement: vec3f,
     fragmentNormal: vec3f,
     LDotN: f32,
-    inverseDistanceSpan: f32,
+    lightInverseDistanceSpan: f32,
+    distanceFromCamera: f32,
 ) -> vec3f {
     // The offset increases as the light becomes less perpendicular to the
     // surface.
-    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * 4e-3 / inverseDistanceSpan;
+    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * max(4e-3, 4e-4 * distanceFromCamera) / lightInverseDistanceSpan;
 }
 
 fn computePCSSLightAccessFactor(
@@ -612,6 +617,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).r;
     let cameraSpacePosition = computePositionFromLinearDepth(depth, frustumFarPlanePoint);
     let cameraSpaceViewDirection = computeCameraSpaceViewDirection(cameraSpacePosition);
+    let distanceFromCamera = -cameraSpacePosition.z;
 
     let normalColor = textureSampleLevel(normalVectorTexture, normalVectorSampler, textureCoords, 0.0).rgb;
     let cameraSpaceNormalVector = convertNormalColorToNormalizedNormalVector(normalColor);
@@ -642,6 +648,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
+        distanceFromCamera,
         roughness,
         pushConstants.exposure,
     );
@@ -655,6 +662,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
+        distanceFromCamera,
         pushConstants.exposure,
     );
 #endif
