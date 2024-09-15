@@ -429,10 +429,9 @@ fn create_shadow_map_texture(
 
 fn create_shadow_map_sampler(device: &wgpu::Device) -> wgpu::Sampler {
     device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToBorder,
-        address_mode_v: wgpu::AddressMode::ClampToBorder,
-        address_mode_w: wgpu::AddressMode::ClampToBorder,
-        border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
         ..Default::default()
     })
 }

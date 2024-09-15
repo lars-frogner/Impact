@@ -40,8 +40,7 @@ pub fn initialize_for_rendering(
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::FLOAT32_FILTERABLE
             | wgpu::Features::MULTI_DRAW_INDIRECT
-            | wgpu::Features::INDIRECT_FIRST_INSTANCE
-            | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+            | wgpu::Features::INDIRECT_FIRST_INSTANCE,
         wgpu::Limits {
             max_bind_groups: 7,
             max_push_constant_size: 128,
