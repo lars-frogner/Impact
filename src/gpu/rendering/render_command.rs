@@ -49,10 +49,10 @@ use crate::{
     material::{MaterialLibrary, MaterialShaderInput},
     mesh::{self, buffer::VertexBufferable, VertexAttributeSet, VertexPosition},
     model::{
-        transform::InstanceModelViewTransformWithPrevious, InstanceFeature, InstanceFeatureManager,
-        ModelID,
+        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+        InstanceFeature, InstanceFeatureManager, ModelID,
     },
-    scene::Scene,
+    scene::{ModelInstanceNode, Scene},
     skybox::Skybox,
     voxel::render_commands::{VoxelGeometryPipeline, VoxelRenderCommands},
 };
@@ -742,8 +742,15 @@ impl DepthPrepass {
         for model_id in &self.models {
             let transform_buffer_manager = render_resources
                 .get_instance_feature_buffer_managers(model_id)
-                .and_then(|buffers| buffers.first())
-                .ok_or_else(|| anyhow!("Missing transform GPU buffer for model {}", model_id))?;
+                .and_then(|buffers| {
+                    buffers.get(ModelInstanceNode::model_view_transform_feature_idx())
+                })
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Missing model-view transform GPU buffer for model {}",
+                        model_id
+                    )
+                })?;
 
             let transform_range = transform_buffer_manager.initial_feature_range();
 
@@ -861,7 +868,7 @@ impl GeometryPass {
                 // buffered transforms, otherwise it will not be rendered
                 // anyway
                 if instance_feature_buffer_manager
-                    .first()
+                    .get(ModelInstanceNode::model_view_transform_feature_idx())
                     .map_or(false, |buffer| buffer.has_features_in_initial_range())
                 {
                     Some(*model_id)
@@ -988,21 +995,17 @@ impl GeometryPass {
             .get_instance_feature_buffer_managers(model_id)
             .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
 
-        let transform_buffer_manager = instance_feature_buffer_managers
-            .first()
-            .ok_or_else(|| anyhow!("Missing transform GPU buffer for model {}", model_id))?;
-
-        layouts.push(transform_buffer_manager.vertex_buffer_layout().clone());
+        layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT);
 
         // If the material has a buffer of per-instance features, it will be directly
-        // after the transform buffer
+        // after the transform buffers
         if model_id
             .material_handle()
             .material_property_feature_id()
             .is_some()
         {
             let material_property_buffer_manager = instance_feature_buffer_managers
-                .get(1)
+                .get(2)
                 .ok_or_else(|| anyhow!("Missing material GPU buffer for model {}", model_id))?;
 
             layouts.push(
@@ -1172,9 +1175,13 @@ impl GeometryPass {
                         anyhow!("Missing instance GPU buffers for model {}", model_id)
                     })?;
 
-                let transform_buffer_manager =
-                    instance_feature_buffer_managers.first().ok_or_else(|| {
-                        anyhow!("Missing transform GPU buffer for model {}", model_id)
+                let transform_buffer_manager = instance_feature_buffer_managers
+                    .get(ModelInstanceNode::model_view_transform_feature_idx())
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Missing model-view transform GPU buffer for model {}",
+                            model_id
+                        )
                     })?;
 
                 let instance_range = transform_buffer_manager.initial_feature_range();
@@ -1212,7 +1219,7 @@ impl GeometryPass {
                     .is_some()
                 {
                     let material_property_buffer_manager =
-                        instance_feature_buffer_managers.get(1).ok_or_else(|| {
+                        instance_feature_buffer_managers.get(2).ok_or_else(|| {
                             anyhow!("Missing material GPU buffer for model {}", model_id)
                         })?;
 
@@ -1309,7 +1316,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             &pipeline_layout,
             shader,
             &[
-                InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
+                InstanceModelLightTransform::BUFFER_LAYOUT,
                 VertexPosition::BUFFER_LAYOUT,
             ],
             &color_target_states,
@@ -1360,8 +1367,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             // We only add the model if it actually has buffered model-to-light transforms,
             // otherwise it will not be rendered into the shadow map anyway
             if instance_feature_buffer_manager
-                .first()
-                .map_or(true, |buffer| !buffer.has_features_after_initial_range())
+                .get(ModelInstanceNode::model_light_transform_feature_idx())
+                .map_or(true, |buffer| buffer.n_features() == 0)
             {
                 continue;
             }
@@ -1397,7 +1404,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 &self.pipeline_layout,
                 shader,
                 &[
-                    InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
+                    InstanceModelLightTransform::BUFFER_LAYOUT,
                     VertexPosition::BUFFER_LAYOUT,
                 ],
                 &self.color_target_states,
@@ -1543,9 +1550,14 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 for model_id in &self.models {
                     let transform_buffer_manager = render_resources
                         .get_instance_feature_buffer_managers(model_id)
-                        .and_then(|buffers| buffers.first())
+                        .and_then(|buffers| {
+                            buffers.get(ModelInstanceNode::model_light_transform_feature_idx())
+                        })
                         .ok_or_else(|| {
-                            anyhow!("Missing transform GPU buffer for model {}", model_id)
+                            anyhow!(
+                                "Missing model-light transform GPU buffer for model {}",
+                                model_id
+                            )
                         })?;
 
                     let transform_range = transform_buffer_manager.feature_range(instance_range_id);
@@ -1641,7 +1653,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             &pipeline_layout,
             shader,
             &[
-                InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
+                InstanceModelLightTransform::BUFFER_LAYOUT,
                 VertexPosition::BUFFER_LAYOUT,
             ],
             &color_target_states,
@@ -1690,8 +1702,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             // We only add the model if it actually has buffered model-to-light transforms,
             // otherwise it will not be rendered into the shadow map anyway
             if instance_feature_buffer_manager
-                .first()
-                .map_or(true, |buffer| !buffer.has_features_after_initial_range())
+                .get(ModelInstanceNode::model_light_transform_feature_idx())
+                .map_or(true, |buffer| buffer.n_features() == 0)
             {
                 continue;
             }
@@ -1727,7 +1739,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 &self.pipeline_layout,
                 shader,
                 &[
-                    InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
+                    InstanceModelLightTransform::BUFFER_LAYOUT,
                     VertexPosition::BUFFER_LAYOUT,
                 ],
                 &self.color_target_states,
@@ -1876,9 +1888,14 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 for model_id in &self.models {
                     let transform_buffer_manager = render_resources
                         .get_instance_feature_buffer_managers(model_id)
-                        .and_then(|buffers| buffers.first())
+                        .and_then(|buffers| {
+                            buffers.get(ModelInstanceNode::model_light_transform_feature_idx())
+                        })
                         .ok_or_else(|| {
-                            anyhow!("Missing transform GPU buffer for model {}", model_id)
+                            anyhow!(
+                                "Missing model-light transform GPU buffer for model {}",
+                                model_id
+                            )
                         })?;
 
                     // When updating the shadow map, we don't use model view transforms but rather

@@ -6,8 +6,8 @@ use crate::{
     material::{MaterialHandle, MaterialID},
     mesh::MeshID,
     model::{
-        transform::InstanceModelViewTransformWithPrevious, InstanceFeature, InstanceFeatureManager,
-        ModelID,
+        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+        InstanceFeature, InstanceFeatureManager, ModelID,
     },
     physics::motion::components::ReferenceFrameComp,
     scene::{
@@ -149,6 +149,7 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 model_id,
                 &[
                     InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                    InstanceModelLightTransform::FEATURE_TYPE_ID,
                     VoxelObjectID::FEATURE_TYPE_ID,
                 ],
             );
@@ -158,12 +159,17 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 .unwrap_or_default()
                 .create_transform_to_parent_space();
 
-            // Add an entry for the model-to-camera transform for the scene
-            // graph to access and modify using the returned ID
+            // Add entries for the model-to-camera and model-to-light transforms
+            // for the scene graph to access and modify using the returned IDs
             let model_view_transform_feature_id = instance_feature_manager
                 .get_storage_mut::<InstanceModelViewTransformWithPrevious>()
                 .expect("Missing storage for InstanceModelViewTransform feature")
                 .add_feature(&InstanceModelViewTransformWithPrevious::default());
+
+            let model_light_transform_feature_id = instance_feature_manager
+                .get_storage_mut::<InstanceModelLightTransform>()
+                .expect("Missing storage for InstanceModelLightTransform feature")
+                .add_feature(&InstanceModelLightTransform::default());
 
             let voxel_object_id_feature_id = instance_feature_manager
                 .get_storage_mut::<VoxelObjectID>()
@@ -185,7 +191,11 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 model_to_parent_transform,
                 model_id,
                 bounding_sphere,
-                vec![model_view_transform_feature_id, voxel_object_id_feature_id],
+                vec![
+                    model_view_transform_feature_id,
+                    model_light_transform_feature_id,
+                    voxel_object_id_feature_id,
+                ],
             ))
         },
         ![SceneGraphModelInstanceNodeComp]

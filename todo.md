@@ -18,9 +18,9 @@
 
 ## Performance
 
-- Use single bind group for G-buffer attachments.
+- Cull chunks that are obscured from at least three directions based on frustum direction.
 
-- Avoid buffering previous transforms for shadow mapping.
+- Use single bind group for G-buffer attachments.
 
 - Investigate ways to improve shadow map update performance.
 

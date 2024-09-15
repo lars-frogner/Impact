@@ -6,7 +6,10 @@ use crate::{
     gpu::{rendering::fre, texture::shadow_map::CascadeIdx},
     light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
     model::{
-        transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
+        transform::{
+            InstanceModelLightTransform, InstanceModelViewTransform,
+            InstanceModelViewTransformWithPrevious,
+        },
         InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
     },
     num::Float,
@@ -188,9 +191,11 @@ impl<F: Float> SceneGraph<F> {
     /// The ID of the created model instance node.
     ///
     /// # Panics
-    /// - If no feature IDs are provided.
+    /// - If fewer than two feature IDs are provided.
     /// - If the first feature ID is not the
     ///   [`InstanceModelViewTransformWithPrevious`] feature.
+    /// - If the second feature ID is not the [`InstanceModelLightTransform`]
+    ///   feature.
     /// - If the specified parent group node does not exist.
     /// - If no bounding sphere is provided when the parent node is not the root
     ///   node.
@@ -202,11 +207,19 @@ impl<F: Float> SceneGraph<F> {
         frustum_culling_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<InstanceFeatureID>,
     ) -> ModelInstanceNodeID {
-        assert!(!feature_ids.is_empty(), "Tried to create model instance node with no features (at least the transform feature is required)");
+        assert!(
+            feature_ids.len() >= 2,
+            "Tried to create model instance node with too few features"
+        );
         assert_eq!(
             feature_ids[0].feature_type_id(),
             InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
             "First feature for model instance node must be the InstanceModelViewTransformWithPrevious feature"
+        );
+        assert_eq!(
+            feature_ids[1].feature_type_id(),
+            InstanceModelLightTransform::FEATURE_TYPE_ID,
+            "Second feature for model instance node must be the InstanceModelLightTransform feature"
         );
 
         // Since we don't guarantee that any other parent node than the root is
@@ -739,7 +752,7 @@ impl SceneGraph<fre> {
                     let range_id =
                         light_id.as_instance_feature_buffer_range_id() + face.as_idx_u32();
                     instance_feature_manager.begin_range_in_feature_buffers(
-                        InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                        InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
                     );
 
@@ -819,7 +832,7 @@ impl SceneGraph<fre> {
                     // by the light's ID plus a cascade index offset
                     let range_id = light_id.as_instance_feature_buffer_range_id() + cascade_idx;
                     instance_feature_manager.begin_range_in_feature_buffers(
-                        InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                        InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
                     );
 
@@ -886,17 +899,13 @@ impl SceneGraph<fre> {
                 if camera_space_face_frustum
                     .could_contain_part_of_sphere(&model_instance_camera_space_bounding_sphere)
                 {
-                    // TODO: avoid using `InstanceModelViewTransformWithPrevious` for lights (they
-                    // don't need a previous transform)
                     let instance_model_light_transform =
-                        InstanceModelViewTransformWithPrevious::current_only(
-                            InstanceModelViewTransform::with_model_light_transform(
-                                omnidirectional_light
-                                    .create_transform_to_positive_z_cubemap_face_space(
-                                        face,
-                                        &model_instance_to_camera_transform,
-                                    ),
-                            ),
+                        InstanceModelLightTransform::with_model_light_transform(
+                            omnidirectional_light
+                                .create_transform_to_positive_z_cubemap_face_space(
+                                    face,
+                                    &model_instance_to_camera_transform,
+                                ),
                         );
 
                     instance_feature_manager.buffer_instance_feature(
@@ -970,11 +979,9 @@ impl SceneGraph<fre> {
                     &model_instance_camera_space_bounding_sphere,
                 ) {
                     let instance_model_light_transform =
-                        InstanceModelViewTransformWithPrevious::current_only(
-                            InstanceModelViewTransform::with_model_light_transform(
-                                unidirectional_light.create_transform_to_light_space(
-                                    &model_instance_to_camera_transform,
-                                ),
+                        InstanceModelLightTransform::with_model_light_transform(
+                            unidirectional_light.create_transform_to_light_space(
+                                &model_instance_to_camera_transform,
                             ),
                         );
 
@@ -1237,6 +1244,20 @@ impl<F: Float> ModelInstanceNode<F> {
     }
 }
 
+impl ModelInstanceNode<fre> {
+    /// The index of the model-view transform feature in the array of features
+    /// for model instances.
+    pub const fn model_view_transform_feature_idx() -> usize {
+        0
+    }
+
+    /// The index of the model-light transform feature in the array of features
+    /// for model instances.
+    pub const fn model_light_transform_feature_idx() -> usize {
+        1
+    }
+}
+
 impl SceneGraphNodeID for ModelInstanceNodeID {}
 
 impl<F: Float> SceneGraphNode for ModelInstanceNode<F> {
@@ -1342,7 +1363,10 @@ mod tests {
     }
 
     fn create_dummy_model_instance_feature_ids() -> Vec<InstanceFeatureID> {
-        vec![InstanceModelViewTransformWithPrevious::dummy_instance_feature_id()]
+        vec![
+            InstanceModelViewTransformWithPrevious::dummy_instance_feature_id(),
+            InstanceModelLightTransform::dummy_instance_feature_id(),
+        ]
     }
 
     fn create_dummy_camera_node<F: Float>(
