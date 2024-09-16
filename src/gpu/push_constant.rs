@@ -5,7 +5,7 @@ use std::mem;
 use crate::{
     camera::buffer::CameraGPUBufferManager,
     gpu::rendering::{postprocessing::capturing::CapturingCamera, surface::RenderingSurface},
-    voxel::mesh::FrustumPlanes,
+    voxel::mesh::CullingFrustum,
 };
 use bytemuck::Pod;
 
@@ -22,7 +22,7 @@ pub enum PushConstantVariant {
     CameraRotationQuaternion,
     InstanceIdx,
     ChunkCount,
-    FrustumPlanes,
+    CullingFrustum,
 }
 
 /// Specification for a push constant that can be passed to the GPU.
@@ -68,7 +68,7 @@ impl PushConstantVariant {
             Self::CameraRotationQuaternion => {
                 CameraGPUBufferManager::camera_rotation_quaternion_push_constant_size()
             }
-            Self::FrustumPlanes => mem::size_of::<FrustumPlanes>() as u32,
+            Self::CullingFrustum => mem::size_of::<CullingFrustum>() as u32,
         }
     }
 }

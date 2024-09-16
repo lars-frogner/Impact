@@ -42,6 +42,7 @@ pub struct ChunkedVoxelObject {
 #[derive(Clone, Debug)]
 pub struct ExposedVoxelChunk {
     chunk_indices: [usize; 3],
+    flags: VoxelChunkFlags,
 }
 
 /// A superchunk representing a cubic grid of voxel chunks. It has three
@@ -139,7 +140,7 @@ bitflags! {
     /// Bitflags encoding a set of potential binary states for a voxel chunk or
     /// superchunk.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    struct VoxelChunkFlags: u8 {
+    pub struct VoxelChunkFlags: u8 {
         /// The face on the negative x-side of the chunk is fully obscured by
         /// adjacent voxels.
         const IS_OBSCURED_X_DN = 1 << 0;
@@ -2378,13 +2379,21 @@ impl VoxelChunkFlags {
 }
 
 impl ExposedVoxelChunk {
-    fn new(chunk_indices: [usize; 3]) -> Self {
-        Self { chunk_indices }
+    fn new(chunk_indices: [usize; 3], flags: VoxelChunkFlags) -> Self {
+        Self {
+            chunk_indices,
+            flags,
+        }
     }
 
     /// Returns the indices of the voxel chunk in the object's chunk grid.
     pub fn chunk_indices(&self) -> &[usize; 3] {
         &self.chunk_indices
+    }
+
+    /// Returns the flags for the voxel chunk.
+    pub fn flags(&self) -> VoxelChunkFlags {
+        self.flags
     }
 
     pub fn lower_voxel_indices(&self) -> [usize; 3] {

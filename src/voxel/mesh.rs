@@ -3,11 +3,12 @@
 use crate::{
     geometry::{Frustum, OrientedBox, Plane},
     gpu::rendering::fre,
-    voxel::chunks::{sdf::surface_nets::SurfaceNetsBuffer, ChunkedVoxelObject},
+    voxel::chunks::{sdf::surface_nets::SurfaceNetsBuffer, ChunkedVoxelObject, VoxelChunkFlags},
 };
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
-use nalgebra::{Similarity3, UnitVector3};
+use nalgebra::{Point3, Similarity3, UnitVector3};
+use std::array;
 
 /// A mesh representation of a [`ChunkedVoxelObject`]. All the vertices and
 /// indices for the full object are stored together, but the index buffer is
@@ -40,19 +41,26 @@ pub struct VoxelMeshVertexNormalVector(pub [f32; 3]);
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct ChunkSubmesh {
-    pub chunk_indices: [u32; 3],
+    chunk_indices: [u32; 3],
     base_vertex_index: u32,
     index_offset: u32,
     index_count: u32,
+    /// Table of booleans (stored as `u32`s to make it directly representable in
+    /// WGSL) indicating whether the chunk is obscured from a specific
+    /// axis-aligned direction. Used for culling obscured chunks given a view
+    /// direction.
+    is_obscured_from_direction: [[[u32; 2]; 2]; 2],
 }
 
 /// A set of planes defining a frustum together with a small lookup table for
-/// fast culling, gathered in a representation suitable for passing to the GPU.
+/// fast culling and an apex position for computing view directions, gathered in
+/// a representation suitable for passing to the GPU.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
-pub struct FrustumPlanes {
+pub struct CullingFrustum {
     pub planes: [FrustumPlane; 6],
     pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
+    pub apex_position: Point3<fre>,
 }
 
 #[repr(C)]
@@ -101,6 +109,7 @@ impl ChunkedVoxelObjectMesh {
                 base_vertex_index,
                 index_offset,
                 index_count,
+                chunk.flags(),
             ));
 
             positions.extend_from_slice(&buffer.positions);
@@ -157,6 +166,7 @@ impl ChunkSubmesh {
         base_vertex_index: usize,
         index_offset: usize,
         index_count: usize,
+        flags: VoxelChunkFlags,
     ) -> Self {
         let chunk_i = u32::try_from(chunk_i).unwrap();
         let chunk_j = u32::try_from(chunk_j).unwrap();
@@ -164,19 +174,51 @@ impl ChunkSubmesh {
         let base_vertex_index = u32::try_from(base_vertex_index).unwrap();
         let index_offset = u32::try_from(index_offset).unwrap();
         let index_count = u32::try_from(index_count).unwrap();
+        let is_obscured_from_direction = Self::compute_directional_obscuredness_table(flags);
 
         Self {
             chunk_indices: [chunk_i, chunk_j, chunk_k],
             base_vertex_index,
             index_offset,
             index_count,
+            is_obscured_from_direction,
         }
+    }
+
+    fn compute_directional_obscuredness_table(flags: VoxelChunkFlags) -> [[[u32; 2]; 2]; 2] {
+        const OBSCURED_X: [VoxelChunkFlags; 2] = [
+            VoxelChunkFlags::IS_OBSCURED_X_DN,
+            VoxelChunkFlags::IS_OBSCURED_X_UP,
+        ];
+        const OBSCURED_Y: [VoxelChunkFlags; 2] = [
+            VoxelChunkFlags::IS_OBSCURED_Y_DN,
+            VoxelChunkFlags::IS_OBSCURED_Y_UP,
+        ];
+        const OBSCURED_Z: [VoxelChunkFlags; 2] = [
+            VoxelChunkFlags::IS_OBSCURED_Z_DN,
+            VoxelChunkFlags::IS_OBSCURED_Z_UP,
+        ];
+
+        array::from_fn(|i| {
+            let obscured_x = flags.contains(OBSCURED_X[i]);
+            array::from_fn(|j| {
+                let obscured_y = flags.contains(OBSCURED_Y[j]);
+                array::from_fn(|k| {
+                    let obscured_z = flags.contains(OBSCURED_Z[k]);
+                    u32::from(obscured_x && obscured_y && obscured_z)
+                })
+            })
+        })
     }
 }
 
-impl FrustumPlanes {
-    /// Gathers the given frustum planes into a `FrustumPlanes`.
-    pub fn from_planes(planes: [Plane<fre>; 6]) -> Self {
+impl CullingFrustum {
+    /// Gathers the given frustum planes and apex position into a
+    /// `CullingFrustum`.
+    pub fn from_planes_and_apex_position(
+        planes: [Plane<fre>; 6],
+        apex_position: Point3<fre>,
+    ) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
             u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
                 .unwrap()
@@ -191,26 +233,48 @@ impl FrustumPlanes {
         Self {
             planes,
             largest_signed_dist_aab_corner_indices_for_planes,
+            apex_position,
         }
     }
 
     /// Transforms the given frustum with the given similarity transform and
-    /// gathers the resulting frustum planes into a `FrustumPlanes`.
+    /// gathers the resulting frustum planes into a `CullingFrustum`.
+    ///
+    /// The frustum is assumed to be in the space where the apex is at the
+    /// origin before transformation.
     pub fn for_transformed_frustum(
         frustum: &Frustum<fre>,
         transformation: &Similarity3<fre>,
     ) -> Self {
-        Self::from_planes(frustum.transformed_planes(transformation))
+        Self::from_planes_and_apex_position(
+            frustum.transformed_planes(transformation),
+            transformation.isometry.translation.vector.into(),
+        )
     }
 
     /// Transforms the given orthographic frustum (represented by an oriented
     /// box) with the given similarity transform and gathers the resulting
-    /// frustum planes into a `FrustumPlanes`.
+    /// frustum planes into a `CullingFrustum`.
+    ///
+    /// The frustum is assumed to be in the space where the view direction is
+    /// along the negative depth-axis of the box before transformation. An apex
+    /// position is computed based on this direction and the given distance
+    /// from the center of the box (the distance is assumed positive and
+    /// given in the transformed space). While the apex is technically at
+    /// infinity for an orthographic frustum, this can be emulated by
+    /// passing in a sufficiently large distance.
     pub fn for_transformed_orthographic_frustum(
         orthographic_frustum: &OrientedBox<fre>,
         transformation: &Similarity3<fre>,
+        apex_distance: fre,
     ) -> Self {
         let transformed_box = orthographic_frustum.transformed(transformation);
-        Self::from_planes(transformed_box.compute_bounding_planes())
+        let transformed_view_diection = -transformed_box.compute_depth_axis();
+        let transformed_apex_position =
+            transformed_box.center() - transformed_view_diection.scale(apex_distance);
+        Self::from_planes_and_apex_position(
+            transformed_box.compute_bounding_planes(),
+            transformed_apex_position,
+        )
     }
 }

@@ -43,7 +43,7 @@ pub fn initialize_for_rendering(
             | wgpu::Features::INDIRECT_FIRST_INSTANCE,
         wgpu::Limits {
             max_bind_groups: 7,
-            max_push_constant_size: 128,
+            max_push_constant_size: 256,
             max_color_attachment_bytes_per_sample: 64,
             ..wgpu::Limits::default()
         },

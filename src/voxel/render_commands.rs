@@ -37,7 +37,7 @@ use crate::{
     voxel::{
         buffer::VoxelObjectGPUBufferManager,
         entity::VOXEL_MODEL_ID,
-        mesh::{FrustumPlanes, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
+        mesh::{CullingFrustum, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
         VoxelObjectID,
     },
 };
@@ -249,15 +249,15 @@ impl VoxelChunkCullingPass {
     fn set_push_constants(
         &self,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        frustum_planes: FrustumPlanes,
+        culling_frustum: CullingFrustum,
         chunk_count: u32,
         instance_idx: u32,
     ) {
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::FrustumPlanes,
-                || frustum_planes,
+                PushConstantVariant::CullingFrustum,
+                || culling_frustum,
             );
 
         self.push_constants
@@ -297,7 +297,7 @@ impl VoxelChunkCullingPass {
             command_encoder,
             instance_range_id,
             &|frustum_to_voxel_object_transform| {
-                FrustumPlanes::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
+                CullingFrustum::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
             },
             Cow::Borrowed("Voxel chunk camera culling pass"),
         )
@@ -319,7 +319,7 @@ impl VoxelChunkCullingPass {
             command_encoder,
             instance_range_id,
             &|frustum_to_voxel_object_transform| {
-                FrustumPlanes::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
+                CullingFrustum::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
             },
             Cow::Borrowed("Voxel chunk culling pass for shadow map"),
         )
@@ -341,9 +341,10 @@ impl VoxelChunkCullingPass {
             command_encoder,
             instance_range_id,
             &|frustum_to_voxel_object_transform| {
-                FrustumPlanes::for_transformed_orthographic_frustum(
+                CullingFrustum::for_transformed_orthographic_frustum(
                     orthographic_frustum,
                     frustum_to_voxel_object_transform,
+                    10000.0, // Put the apex this many chunks away to emulate infinity
                 )
             },
             Cow::Borrowed("Voxel chunk culling pass for shadow map"),
@@ -357,7 +358,7 @@ impl VoxelChunkCullingPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
         instance_range_id: InstanceFeatureBufferRangeID,
-        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<fre>) -> FrustumPlanes,
+        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<fre>) -> CullingFrustum,
         tag: Cow<'static, str>,
     ) -> Result<()>
     where
