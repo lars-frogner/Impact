@@ -18,8 +18,6 @@
 
 ## Performance
 
-- Cull chunks that are obscured from at least three directions based on frustum direction.
-
 - Use single bind group for G-buffer attachments.
 
 - Investigate ways to improve shadow map update performance.

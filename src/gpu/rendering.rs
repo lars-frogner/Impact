@@ -134,7 +134,7 @@ impl RenderingSystem {
 
         let timestamp_query_manager = TimestampQueryManager::new(
             &graphics_device,
-            NonZeroU32::new(64).unwrap(),
+            NonZeroU32::new(128).unwrap(),
             config.timings_enabled,
         );
 

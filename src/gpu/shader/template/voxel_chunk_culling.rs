@@ -35,7 +35,7 @@ impl VoxelChunkCullingShaderTemplate {
     /// Returns the group of push constants used by the shader.
     pub fn push_constants() -> PushConstantGroup {
         PushConstantGroup::for_compute([
-            PushConstantVariant::FrustumPlanes,
+            PushConstantVariant::CullingFrustum,
             PushConstantVariant::ChunkCount,
             PushConstantVariant::InstanceIdx,
         ])

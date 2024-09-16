@@ -152,11 +152,14 @@ impl ChunkedVoxelObject {
                                             );
 
                                             f(
-                                                ExposedVoxelChunk::new([
-                                                    object_chunk_i,
-                                                    object_chunk_j,
-                                                    object_chunk_k,
-                                                ]),
+                                                ExposedVoxelChunk::new(
+                                                    [
+                                                        object_chunk_i,
+                                                        object_chunk_j,
+                                                        object_chunk_k,
+                                                    ],
+                                                    chunk.flags,
+                                                ),
                                                 &sdf,
                                             );
                                         }
@@ -185,11 +188,14 @@ impl ChunkedVoxelObject {
                                             );
 
                                             f(
-                                                ExposedVoxelChunk::new([
-                                                    object_chunk_i,
-                                                    object_chunk_j,
-                                                    object_chunk_k,
-                                                ]),
+                                                ExposedVoxelChunk::new(
+                                                    [
+                                                        object_chunk_i,
+                                                        object_chunk_j,
+                                                        object_chunk_k,
+                                                    ],
+                                                    chunk.flags,
+                                                ),
                                                 &sdf,
                                             );
                                         }
