@@ -25,7 +25,7 @@ use crate::{
     scene::Scene,
     skybox::Skybox,
     ui::UserInterface,
-    voxel::{self, VoxelManager},
+    voxel::{self, voxel_types::VoxelTypeRegistry, VoxelManager},
     window::Window,
 };
 use anyhow::Result;
@@ -64,6 +64,7 @@ impl Application {
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
         orientation_controller: Option<Box<dyn OrientationController>>,
+        voxel_type_registry: VoxelTypeRegistry,
     ) -> Result<Self> {
         let mut component_registry = ComponentRegistry::new();
         if let Err(err) = components::register_all_components(&mut component_registry) {
@@ -98,7 +99,7 @@ impl Application {
         material::register_material_feature_types(&mut instance_feature_manager);
         voxel::register_voxel_feature_types(&mut instance_feature_manager);
 
-        let voxel_manager = VoxelManager::new();
+        let voxel_manager = VoxelManager::new(voxel_type_registry);
 
         let scene = Scene::new(
             mesh_repository,

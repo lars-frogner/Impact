@@ -65,15 +65,19 @@ use crate::{
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
-        components::{VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelTypeComp},
-        VoxelManager, VoxelType,
+        components::{
+            GradientNoiseVoxelTypesComp, SameVoxelTypeComp, VoxelBoxComp,
+            VoxelGradientNoisePatternComp, VoxelSphereComp,
+        },
+        voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
+        VoxelManager,
     },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
 };
 use anyhow::Result;
 use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
 use rand::{rngs::ThreadRng, Rng, SeedableRng};
-use std::{f64::consts::PI, sync::Arc};
+use std::{borrow::Cow, f64::consts::PI, path::PathBuf, sync::Arc};
 
 pub fn run() -> Result<()> {
     init_logging()?;
@@ -103,12 +107,26 @@ fn init_app(window: Window) -> Result<Application> {
     let orientation_controller =
         RollFreeCameraOrientationController::new(vertical_field_of_view, 1.0);
 
+    let voxel_type_registry = VoxelTypeRegistry::new(
+        vec![Cow::Borrowed("Brick"), Cow::Borrowed("Wood")],
+        vec![
+            FixedVoxelMaterialProperties::new(0.02, 0.6, 0.0, 0.0),
+            FixedVoxelMaterialProperties::new(0.03, 0.7, 0.0, 0.0),
+        ],
+        vec![
+            PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
+            PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
+        ],
+    )
+    .unwrap();
+
     let app = Application::new(
         Arc::new(window),
         rendering_config,
         simulator,
         Some(Box::new(motion_controller)),
         Some(Box::new(orientation_controller)),
+        voxel_type_registry,
     )?;
 
     let mut assets = app.assets().write().unwrap();
@@ -372,13 +390,13 @@ fn init_app(window: Window) -> Result<Application> {
     //     ),
     // ))?;
 
-    // app.create_entity((
-    //     &SphereMeshComp::new(25),
-    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
-    //     &UniformColorComp(vector![1.0, 1.0, 1.0]),
-    //     &UniformEmissiveLuminanceComp(1e6),
-    //     &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
-    // ))?;
+    app.create_entity((
+        &SphereMeshComp::new(25),
+        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
+        &UniformColorComp(vector![1.0, 1.0, 1.0]),
+        &UniformEmissiveLuminanceComp(1e6),
+        &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
+    ))?;
 
     app.create_entity(&UnidirectionalEmissionComp::new(
         vector![1.0, 1.0, 1.0] * 100000.0,
@@ -388,28 +406,39 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
 
-    app.create_entity((
-        // &VoxelSphereComp::new(32),
-        &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 1),
-        &VoxelTypeComp::new(VoxelType::Default, 0.25),
-        &ReferenceFrameComp::unoriented(point![25.0, -25.0, 45.0]),
-    ))?;
+    // TODO: Check why this crashes
+    // app.create_entity((
+    //     &VoxelSphereComp::new(800),
+    //     // &VoxelGradientNoisePatternComp::new(500, 500, 500, 3.0, 0.3, 1),
+    //     &VoxelTypeComp::new(VoxelType::Default, 0.1),
+    //     &ReferenceFrameComp::unoriented(point![25.0, -25.0, -15.0]),
+    // ))?;
+
+    // app.create_entity((
+    //     // &VoxelBoxComp::new(16, 16, 16),
+    //     // &VoxelSphereComp::new(850),
+    //     &VoxelGradientNoisePatternComp::new(0.25, 500, 500, 500, 3.0, 0.3, 1),
+    //     &SameVoxelTypeComp::new(VoxelType::Red),
+    //     &ReferenceFrameComp::unoriented(point![25.0, -25.0, -15.0]),
+    //     // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 0.0]),
+    // ))?;
 
     app.create_entity((
-        // &VoxelBoxComp::new(64, 32, 1),
-        &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 0),
-        &VoxelTypeComp::new(VoxelType::Default, 0.25),
-        // &ReferenceFrameComp::unoriented(point![9.0, -12.0, -5.0]),
+        // &VoxelBoxComp::new(32, 32, 32),
+        &VoxelGradientNoisePatternComp::new(0.5, 150, 150, 150, 3.0, 0.3, 0),
+        // &SameVoxelTypeComp::new(VoxelType::Green),
+        &GradientNoiseVoxelTypesComp::new(["Brick", "Wood"], 1.0, 1e-2, 1e-2, 1e-2, 1),
+        // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
         &ReferenceFrameComp::unoriented(point![-25.0, -25.0, -5.0]),
     ))?;
 
-    app.create_entity((
-        // &VoxelBoxComp::new(64, 32, 1),
-        &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 2),
-        &VoxelTypeComp::new(VoxelType::Default, 0.25),
-        // &ReferenceFrameComp::unoriented(point![9.0, -12.0, -5.0]),
-        &ReferenceFrameComp::unoriented(point![-45.0, 55.0, 25.0]),
-    ))?;
+    // app.create_entity((
+    //     // &VoxelBoxComp::new(64, 32, 1),
+    //     &VoxelGradientNoisePatternComp::new(0.25, 250, 250, 250, 3.0, 0.3, 2),
+    //     &SameVoxelTypeComp::new(VoxelType::Blue),
+    //     // &ReferenceFrameComp::unoriented(point![9.0, -12.0, -5.0]),
+    //     &ReferenceFrameComp::unoriented(point![-45.0, 55.0, 25.0]),
+    // ))?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0),
     // 1.0, 10.0, 3.0); create_free_rotation_experiment(&world, Point3::new(0.0,

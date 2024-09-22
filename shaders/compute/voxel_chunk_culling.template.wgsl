@@ -15,12 +15,12 @@ struct ChunkSubmesh {
     chunkI: u32,
     chunkJ: u32,
     chunkK: u32,
-    baseVertexIndex: u32,
     indexOffset: u32,
     indexCount: u32,
     isObscuredFromDirection: array<array<array<u32, 2>, 2>, 2>,
 }
 
+#if (for_indexed_draw_calls)
 struct IndirectDrawArgs {
     indexCount: u32,
     instanceCount: u32,
@@ -28,6 +28,14 @@ struct IndirectDrawArgs {
     baseVertex: i32,
     firstInstance: u32,
 }
+#else
+struct IndirectDrawArgs {
+    indexCount: u32, // `vertex_count` on CPU side
+    instanceCount: u32,
+    firstIndex: u32, // `first_vertex` on CPU side
+    firstInstance: u32,
+}
+#endif
 
 var<push_constant> pcs: PushConstants;
 
@@ -115,7 +123,6 @@ fn main(
             indirectDrawArgs[globalIdx].indexCount = chunkSubmesh.indexCount;
             indirectDrawArgs[globalIdx].instanceCount = 1u;
             indirectDrawArgs[globalIdx].firstIndex = chunkSubmesh.indexOffset;
-            indirectDrawArgs[globalIdx].baseVertex = i32(chunkSubmesh.baseVertexIndex);
             indirectDrawArgs[globalIdx].firstInstance = instanceIdx;
         }
     }

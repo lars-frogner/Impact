@@ -1,9 +1,11 @@
 //! Mesh generation for voxel chunk signed distance fields using surface nets.
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
+use std::array;
+
 use super::VoxelChunkSignedDistanceField;
 use crate::voxel::{
-    mesh::{VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
+    mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
 use glam::{Vec3A, Vec3Swizzles};
@@ -20,7 +22,11 @@ pub struct SurfaceNetsBuffer {
     /// The normals are **not** normalized, since that is done most efficiently
     /// on the GPU.
     pub normal_vectors: Vec<VoxelMeshVertexNormalVector>,
-    /// The triangle mesh indices.
+    /// The material indices and weights for each vertex in the mesh.
+    pub vertex_materials: Vec<SurfaceNetsVertexMaterials>,
+    /// The material indices and weights for each vertex index in the mesh.
+    pub index_materials: Vec<VoxelMeshIndexMaterials>,
+    /// The vertex index triples defining the triangles in the mesh.
     pub indices: Vec<u16>,
 
     /// Local 3D array coordinates of every voxel that intersects the
@@ -31,11 +37,26 @@ pub struct SurfaceNetsBuffer {
     pub voxel_linear_idx_to_vertex_index: Vec<u16>,
 }
 
+/// The materials of the voxels defining a vertex in a surface nets mesh. Each
+/// material is represented by an index and a weight corresponding to the
+/// number of voxels among the eight voxels defining the vertex that have that
+/// material. There can be at most seven different materials (since at least one
+/// of the eight voxels must be empty for there to be a vertex), and at least
+/// one (since at least one voxel must be non-empty). The materials are sorted
+/// in descending order of weight.
+#[derive(Clone, Debug)]
+pub struct SurfaceNetsVertexMaterials {
+    pub indices: [u8; 8],
+    pub weights: [u8; 8],
+}
+
 impl SurfaceNetsBuffer {
     /// Clears all of the buffers, but keeps the memory allocated for reuse.
     fn reset(&mut self, array_size: usize) {
         self.positions.clear();
         self.normal_vectors.clear();
+        self.vertex_materials.clear();
+        self.index_materials.clear();
         self.indices.clear();
         self.surface_points_and_linear_indices.clear();
 
@@ -89,7 +110,14 @@ impl VoxelChunkSignedDistanceField {
         buffer.reset(Self::grid_cell_count());
 
         self.estimate_surface_nets_surface(voxel_extent, position_offset, buffer);
+
         self.make_all_surface_nets_quads(buffer);
+
+        calculate_all_index_materials(
+            &buffer.indices,
+            &buffer.vertex_materials,
+            &mut buffer.index_materials,
+        );
     }
 
     // Find all vertex positions and normals. Also generate a map from grid position
@@ -104,8 +132,8 @@ impl VoxelChunkSignedDistanceField {
             for j in 0..Self::grid_size_u32() - 1 {
                 for k in 0..Self::grid_size_u32() - 1 {
                     let linear_idx = Self::linear_idx_u32(&[i, j, k]);
-                    if let Some((centroid, normal)) =
-                        self.estimate_surface_net_centroid_and_normal_in_cube(linear_idx)
+                    if let Some((centroid, normal, vertex_materials)) =
+                        self.estimate_surface_net_vertex_attributes_in_cube(linear_idx)
                     {
                         let position = voxel_extent
                             * (Vec3A::from([i as f32, j as f32, k as f32]) + centroid)
@@ -117,6 +145,7 @@ impl VoxelChunkSignedDistanceField {
                         buffer
                             .normal_vectors
                             .push(VoxelMeshVertexNormalVector(normal.into()));
+                        buffer.vertex_materials.push(vertex_materials);
 
                         // Note: performing these pushes before pushing vertices seems
                         // to produce a significant slowdown
@@ -144,17 +173,26 @@ impl VoxelChunkSignedDistanceField {
     // Also computes the normal vector of the surface at the surface point.
     //
     // Returns [`None`] if there is no surface point within the cube.
-    fn estimate_surface_net_centroid_and_normal_in_cube(
+    fn estimate_surface_net_vertex_attributes_in_cube(
         &self,
         min_corner_linear_idx: u32,
-    ) -> Option<(Vec3A, Vec3A)> {
-        // Get the signed distance values at each corner of this cube.
-        let mut corner_dists = [0f32; 8];
+    ) -> Option<(Vec3A, Vec3A, SurfaceNetsVertexMaterials)> {
+        let mut corner_dists = [0.0; 8];
+        let mut corner_has_voxel = [false; 8];
+        let mut corner_material_indices = [0; 8];
+
         let mut num_negative = 0;
-        for (i, dist) in corner_dists.iter_mut().enumerate() {
-            let corner_linear_idx = min_corner_linear_idx + Self::linear_idx_u32(&CUBE_CORNERS[i]);
-            *dist = self.values[corner_linear_idx as usize];
-            if dist.is_sign_negative() {
+
+        // Get the signed distance and material index at each corner of this cube
+        for idx in 0..8 {
+            let corner_linear_idx =
+                min_corner_linear_idx + Self::linear_idx_u32(&CUBE_CORNERS[idx]);
+
+            corner_dists[idx] = self.values[corner_linear_idx as usize];
+            corner_material_indices[idx] = self.voxel_types[corner_linear_idx as usize].idx_u8();
+
+            if corner_dists[idx].is_sign_negative() {
+                corner_has_voxel[idx] = true;
                 num_negative += 1;
             }
         }
@@ -166,8 +204,10 @@ impl VoxelChunkSignedDistanceField {
 
         let centroid = centroid_of_edge_intersections(&corner_dists);
         let normal = sdf_gradient(&corner_dists, centroid);
+        let vertex_materials =
+            SurfaceNetsVertexMaterials::compute(corner_has_voxel, corner_material_indices);
 
-        Some((centroid, normal))
+        Some((centroid, normal, vertex_materials))
     }
 
     // For every edge that crosses the isosurface, makes a quad between the
@@ -260,7 +300,6 @@ impl VoxelChunkSignedDistanceField {
     // then we must find the other 3 quad corners by moving along the other two axes
     // (those orthogonal to A) in the negative directions; these are axis B and axis
     // C.
-    #[allow(clippy::too_many_arguments)]
     fn maybe_make_surface_nets_quad(
         &self,
         linear_idx_to_vertex_index: &[u16],
@@ -276,7 +315,7 @@ impl VoxelChunkSignedDistanceField {
         let negative_face = match (d1.is_sign_negative(), d2.is_sign_negative()) {
             (true, false) => false,
             (false, true) => true,
-            _ => return, // No face.
+            _ => return, // No face
         };
 
         // The triangle points, viewed face-front, look like this:
@@ -376,6 +415,220 @@ fn sdf_gradient(dists: &[f32; 8], s: Vec3A) -> Vec3A {
         + s.yzx() * s.zxy() * d11
 }
 
+macro_rules! sorting_network {
+    ($cmpswap:expr, $(($i:expr, $j:expr)),* $(,)?) => {{
+        $(
+            $cmpswap($i, $j);
+        )*
+    }};
+}
+
+#[rustfmt::skip]
+macro_rules! sorting_network_7 {
+    ($cmpswap:expr) => {
+        sorting_network!($cmpswap,
+            // Step 1
+            (0, 6), (1, 5), (2, 4),
+            // Step 2
+            (0, 3), (1, 2), (4, 5),
+            // Step 3
+            (0, 1), (2, 3), (4, 6), (5, 6),
+            // Step 4
+            (1, 4), (3, 5),
+            // Step 5
+            (1, 2), (3, 4), (5, 6),
+            // Step 6
+            (2, 3), (4, 5),
+        );
+    };
+}
+
+impl SurfaceNetsVertexMaterials {
+    fn compute(corner_has_voxel: [bool; 8], corner_material_indices: [u8; 8]) -> Self {
+        let mut materials = Self {
+            indices: [0; 8],
+            weights: [0; 8],
+        };
+
+        // All voxels can't be empty
+        debug_assert!(!corner_has_voxel.iter().all(|&has_voxel| !has_voxel));
+        // All voxels can't be non-empty
+        debug_assert!(!corner_has_voxel.iter().all(|&has_voxel| has_voxel));
+
+        const INVALID_IDX: u8 = 255;
+        let mut material_idx_map = [INVALID_IDX; 256];
+
+        let mut material_count = 0;
+
+        for (&has_voxel, &corner_material_index) in
+            corner_has_voxel.iter().zip(&corner_material_indices)
+        {
+            if has_voxel {
+                let idx = material_idx_map[corner_material_index as usize];
+                if idx == INVALID_IDX {
+                    materials.indices[material_count] = corner_material_index;
+                    materials.weights[material_count] = 1;
+                    material_idx_map[corner_material_index as usize] = material_count as u8;
+                    material_count += 1;
+                } else {
+                    materials.weights[idx as usize] += 1;
+                }
+            }
+        }
+
+        materials.indices[7] = material_count as u8;
+
+        materials.sort_descending();
+
+        materials
+    }
+
+    #[cfg(test)]
+    fn with_valid_indices_and_weights(indices: &[u8], weights: &[u8]) -> Self {
+        assert_eq!(indices.len(), weights.len());
+        assert!(!indices.is_empty());
+        assert!(indices.len() < 8);
+        assert!(weights.iter().sum::<u8>() > 0);
+        assert!(weights.is_sorted_by(|a, b| a >= b));
+
+        let material_count = indices.len();
+        let mut indices = array::from_fn(|idx| indices.get(idx).copied().unwrap_or(0));
+        indices[7] = material_count as u8;
+
+        let weights = array::from_fn(|idx| weights.get(idx).copied().unwrap_or(0));
+
+        Self { indices, weights }
+    }
+
+    #[inline]
+    fn sort_descending(&mut self) {
+        let mut compare_and_swap = |i: usize, j: usize| {
+            if self.weights[i] < self.weights[j] {
+                self.indices.swap(i, j);
+                self.weights.swap(i, j);
+            }
+        };
+        // We know that at least one voxel must be empty, so we ignore the last
+        // value
+        sorting_network_7!(compare_and_swap);
+    }
+
+    pub fn material_count(&self) -> usize {
+        self.indices[7] as usize
+    }
+
+    pub fn valid_indices(&self) -> &[u8] {
+        &self.indices[..self.material_count()]
+    }
+
+    pub fn valid_weights(&self) -> &[u8] {
+        &self.weights[..self.material_count()]
+    }
+}
+
+fn calculate_all_index_materials(
+    indices: &[u16],
+    vertex_materials: &[SurfaceNetsVertexMaterials],
+    index_materials: &mut Vec<VoxelMeshIndexMaterials>,
+) {
+    index_materials.reserve(indices.len());
+    for indices in indices.chunks_exact(3) {
+        calculate_index_materials_for_triangle(
+            [
+                &vertex_materials[indices[0] as usize],
+                &vertex_materials[indices[1] as usize],
+                &vertex_materials[indices[2] as usize],
+            ],
+            index_materials,
+        );
+    }
+}
+
+#[inline]
+fn calculate_index_materials_for_triangle(
+    vertex_materials: [&SurfaceNetsVertexMaterials; 3],
+    index_materials: &mut Vec<VoxelMeshIndexMaterials>,
+) {
+    // Fast path when all three vertices have the same material
+    if vertex_materials[0].material_count() == 1
+        && vertex_materials[1].material_count() == 1
+        && vertex_materials[2].material_count() == 1
+    {
+        let index = vertex_materials[0].indices[0];
+        if vertex_materials[1].indices[0] == index && vertex_materials[2].indices[0] == index {
+            let index_material = VoxelMeshIndexMaterials {
+                indices: [index, 0, 0, 0],
+                weights: [1, 0, 0, 0],
+            };
+            index_materials.push(index_material);
+            index_materials.push(index_material);
+            index_materials.push(index_material);
+            return;
+        }
+    }
+
+    let mut top_indices = [0; 4];
+    let mut n_top_indices = 0;
+
+    let mut is_top_index = [false; 256];
+
+    let mut offsets = [0; 3];
+
+    for top_index in &mut top_indices {
+        let weights: [u8; 3] = array::from_fn(|i| vertex_materials[i].weights[offsets[i]]);
+
+        let max_weight_idx = if weights[0] >= weights[1] {
+            if weights[0] >= weights[2] {
+                0
+            } else {
+                2
+            }
+        } else if weights[1] >= weights[2] {
+            1
+        } else {
+            2
+        };
+
+        if weights[max_weight_idx] == 0 {
+            break;
+        }
+
+        *top_index = vertex_materials[max_weight_idx].indices[offsets[max_weight_idx]];
+        n_top_indices += 1;
+
+        is_top_index[*top_index as usize] = true;
+
+        // Advance the offsets until we find the next indices that are not among the
+        // existing top indices. We stop if we reach the end of the valid material
+        // indices. When we are at the end, the weight will always be zero.
+        for i in 0..3 {
+            while offsets[i] < vertex_materials[i].material_count()
+                && is_top_index[vertex_materials[i].indices[offsets[i]] as usize]
+            {
+                offsets[i] += 1;
+            }
+        }
+    }
+
+    for materials in vertex_materials {
+        let mut weights = [0; 4];
+
+        for i in 0..n_top_indices {
+            for j in 0..materials.material_count() {
+                if materials.indices[j] == top_indices[i] {
+                    weights[i] = materials.weights[j];
+                    break;
+                }
+            }
+        }
+
+        index_materials.push(VoxelMeshIndexMaterials {
+            indices: top_indices,
+            weights,
+        });
+    }
+}
+
 const CUBE_CORNERS: [[u32; 3]; 8] = [
     [0, 0, 0],
     [0, 0, 1],
@@ -412,3 +665,207 @@ const CUBE_EDGES: [[u32; 2]; 12] = [
     [0b101, 0b111],
     [0b110, 0b111],
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vertex_materials_have_single_nonzero_weight_when_all_voxels_have_same_type() {
+        let corner_has_voxel = [true, true, true, false, true, true, true, true];
+        let materials = SurfaceNetsVertexMaterials::compute(corner_has_voxel, [0; 8]);
+        assert_eq!(materials.material_count(), 1);
+        assert_eq!(materials.valid_indices(), &[0]);
+        assert_eq!(materials.valid_weights(), &[7]);
+
+        let materials = SurfaceNetsVertexMaterials::compute(corner_has_voxel, [1; 8]);
+        assert_eq!(materials.material_count(), 1);
+        assert_eq!(materials.valid_indices(), &[1]);
+        assert_eq!(materials.valid_weights(), &[7]);
+
+        let materials = SurfaceNetsVertexMaterials::compute(corner_has_voxel, [254; 8]);
+        assert_eq!(materials.material_count(), 1);
+        assert_eq!(materials.valid_indices(), &[254]);
+        assert_eq!(materials.valid_weights(), &[7]);
+    }
+
+    #[test]
+    fn vertex_materials_have_two_nonzero_weights_for_two_different_voxel_types() {
+        let corner_has_voxel = [true, true, true, false, true, true, true, true];
+        let materials =
+            SurfaceNetsVertexMaterials::compute(corner_has_voxel, [0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(materials.material_count(), 2);
+        assert_eq!(materials.valid_indices(), &[0, 1]);
+        assert_eq!(materials.valid_weights(), &[6, 1]);
+
+        let materials =
+            SurfaceNetsVertexMaterials::compute(corner_has_voxel, [0, 1, 0, 0, 1, 0, 0, 1]);
+        assert_eq!(materials.material_count(), 2);
+        assert_eq!(materials.valid_indices(), &[0, 1]);
+        assert_eq!(materials.valid_weights(), &[4, 3]);
+
+        let materials =
+            SurfaceNetsVertexMaterials::compute(corner_has_voxel, [1, 1, 1, 0, 1, 1, 1, 0]);
+        assert_eq!(materials.material_count(), 2);
+        assert_eq!(materials.valid_indices(), &[1, 0]);
+        assert_eq!(materials.valid_weights(), &[6, 1]);
+    }
+
+    #[test]
+    fn vertex_materials_have_seven_nonzero_weights_for_seven_different_voxel_types() {
+        let corner_has_voxel = [true, true, true, false, true, true, true, true];
+        let materials =
+            SurfaceNetsVertexMaterials::compute(corner_has_voxel, [0, 1, 2, 0, 4, 5, 6, 7]);
+        assert_eq!(materials.material_count(), 7);
+        assert_eq!(materials.valid_indices(), &[0, 1, 2, 4, 5, 6, 7]);
+        assert_eq!(materials.valid_weights(), &[1, 1, 1, 1, 1, 1, 1]);
+
+        let materials =
+            SurfaceNetsVertexMaterials::compute(corner_has_voxel, [7, 6, 5, 0, 3, 2, 1, 0]);
+        assert_eq!(materials.material_count(), 7);
+        assert_eq!(materials.valid_indices(), &[7, 6, 5, 3, 2, 1, 0]);
+        assert_eq!(materials.valid_weights(), &[1, 1, 1, 1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn vertex_materials_have_correct_weights_for_different_voxel_types_where_multiple_are_empty() {
+        let materials = SurfaceNetsVertexMaterials::compute(
+            [true, true, false, false, true, false, true, true],
+            [4, 2, 0, 7, 0, 3, 0, 7],
+        );
+        assert_eq!(materials.material_count(), 4);
+        assert_eq!(materials.valid_indices(), &[0, 4, 2, 7]);
+        assert_eq!(materials.valid_weights(), &[2, 1, 1, 1]);
+    }
+
+    #[test]
+    fn vertex_materials_are_sorted_correctly() {
+        let materials = SurfaceNetsVertexMaterials::compute(
+            [true, true, false, true, true, true, true, true],
+            [3, 2, 0, 1, 1, 1, 1, 2],
+        );
+        assert_eq!(materials.material_count(), 3);
+        assert_eq!(materials.valid_indices(), &[1, 2, 3]);
+        assert_eq!(materials.valid_weights(), &[4, 2, 1]);
+    }
+
+    #[test]
+    fn triangle_index_materials_are_correct_for_same_vertex_material() {
+        let mut index_materials = Vec::new();
+        calculate_index_materials_for_triangle(
+            [
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[0], &[7]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[0], &[4]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[0], &[1]),
+            ],
+            &mut index_materials,
+        );
+        assert_eq!(
+            index_materials,
+            vec![
+                VoxelMeshIndexMaterials {
+                    indices: [0, 0, 0, 0],
+                    weights: [1, 0, 0, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [0, 0, 0, 0],
+                    weights: [1, 0, 0, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [0, 0, 0, 0],
+                    weights: [1, 0, 0, 0],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn triangle_index_materials_are_correct_for_simple_vertex_material_combo() {
+        let mut index_materials = Vec::new();
+        calculate_index_materials_for_triangle(
+            [
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[1], &[1]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[2], &[1]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[3], &[1]),
+            ],
+            &mut index_materials,
+        );
+        assert_eq!(
+            index_materials,
+            vec![
+                VoxelMeshIndexMaterials {
+                    indices: [1, 2, 3, 0],
+                    weights: [1, 0, 0, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [1, 2, 3, 0],
+                    weights: [0, 1, 0, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [1, 2, 3, 0],
+                    weights: [0, 0, 1, 0],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn triangle_index_materials_are_correct_for_complex_vertex_material_combo_1() {
+        let mut index_materials = Vec::new();
+        calculate_index_materials_for_triangle(
+            [
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[0, 1], &[4, 3]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[4, 1, 0], &[5, 1, 1]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[2, 0], &[2, 1]),
+            ],
+            &mut index_materials,
+        );
+        assert_eq!(
+            index_materials,
+            vec![
+                VoxelMeshIndexMaterials {
+                    indices: [4, 0, 1, 2],
+                    weights: [0, 4, 3, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [4, 0, 1, 2],
+                    weights: [5, 1, 1, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [4, 0, 1, 2],
+                    weights: [0, 1, 0, 2],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn triangle_index_materials_are_correct_for_complex_vertex_material_combo_2() {
+        let mut index_materials = Vec::new();
+        calculate_index_materials_for_triangle(
+            [
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[4, 0], &[3, 2]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[4, 1, 0], &[5, 1, 1]),
+                &SurfaceNetsVertexMaterials::with_valid_indices_and_weights(&[0, 4], &[1, 1]),
+            ],
+            &mut index_materials,
+        );
+        assert_eq!(
+            index_materials,
+            vec![
+                VoxelMeshIndexMaterials {
+                    indices: [4, 0, 1, 0],
+                    weights: [3, 2, 0, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [4, 0, 1, 0],
+                    weights: [5, 1, 1, 0],
+                },
+                VoxelMeshIndexMaterials {
+                    indices: [4, 0, 1, 0],
+                    weights: [1, 1, 0, 0],
+                },
+            ]
+        );
+    }
+}

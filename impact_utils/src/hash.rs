@@ -55,6 +55,18 @@ lazy_static! {
     static ref STRING_HASH_64_REGISTRY: Mutex<HashMap<Hash64, String>> = Mutex::new(HashMap::new());
 }
 
+impl From<Hash32> for u32 {
+    fn from(hash: Hash32) -> Self {
+        hash.0
+    }
+}
+
+impl From<Hash64> for u64 {
+    fn from(hash: Hash64) -> Self {
+        hash.0
+    }
+}
+
 impl StringHash32 {
     /// Creates a new [`StringHash32`] for the given string.
     ///

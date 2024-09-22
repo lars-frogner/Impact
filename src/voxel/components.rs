@@ -2,26 +2,46 @@
 
 use crate::{
     component::ComponentRegistry,
-    voxel::{VoxelObjectID, VoxelType},
+    voxel::{
+        voxel_types::{VoxelType, VoxelTypeRegistry},
+        VoxelObjectID,
+    },
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use num_traits::{FromPrimitive, ToPrimitive};
+use impact_utils::{compute_hash_str_32, Hash32};
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities comprised of identical voxels.
+/// entities whose voxel type is the same everywhere.
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct VoxelTypeComp {
+pub struct SameVoxelTypeComp {
     /// The index of the voxel type.
     voxel_type_idx: usize,
-    /// The extent of a single voxel.
-    voxel_extent: f64,
+}
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose voxel types are distributed according to a gradient noise
+/// pattern.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
+/// creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct GradientNoiseVoxelTypesComp {
+    n_voxel_types: usize,
+    voxel_type_name_hashes: [Hash32; GradientNoiseVoxelTypesComp::VOXEL_TYPE_ARRAY_SIZE],
+    voxel_type_frequency: f64,
+    noise_distance_scale_x: f64,
+    noise_distance_scale_y: f64,
+    noise_distance_scale_z: f64,
+    pub seed: u64,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -33,6 +53,8 @@ pub struct VoxelTypeComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelBoxComp {
+    /// The extent of a single voxel.
+    pub voxel_extent: f64,
     /// The number of voxels along the box in the x-direction.
     pub size_x: usize,
     /// The number of voxels along the box in the y-direction.
@@ -50,6 +72,8 @@ pub struct VoxelBoxComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelSphereComp {
+    /// The extent of a single voxel.
+    voxel_extent: f64,
     /// The number of voxels along the diameter of the sphere.
     n_voxels_across: usize,
 }
@@ -63,6 +87,8 @@ pub struct VoxelSphereComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelGradientNoisePatternComp {
+    /// The extent of a single voxel.
+    pub voxel_extent: f64,
     /// The maximum number of voxels in the x-direction.
     pub size_x: usize,
     /// The maximum number of voxels in the y-direction.
@@ -87,32 +113,93 @@ pub struct VoxelObjectComp {
     pub voxel_object_id: VoxelObjectID,
 }
 
-impl VoxelTypeComp {
+impl SameVoxelTypeComp {
     /// Creates a new component for an entity comprised of voxels of the given
-    /// type and extent.
-    pub fn new(voxel_type: VoxelType, voxel_extent: f64) -> Self {
+    /// type.
+    pub fn new(voxel_type: VoxelType) -> Self {
         Self {
-            voxel_type_idx: voxel_type.to_usize().unwrap(),
-            voxel_extent,
+            voxel_type_idx: voxel_type.idx(),
         }
     }
 
     /// Returns the voxel type.
     pub fn voxel_type(&self) -> VoxelType {
-        VoxelType::from_usize(self.voxel_type_idx).unwrap()
+        VoxelType::from_idx(self.voxel_type_idx)
+    }
+}
+
+impl GradientNoiseVoxelTypesComp {
+    const VOXEL_TYPE_ARRAY_SIZE: usize = VoxelTypeRegistry::max_n_voxel_types().next_power_of_two();
+
+    pub fn new<S: AsRef<str>>(
+        voxel_type_names: impl IntoIterator<Item = S>,
+        voxel_type_frequency: f64,
+        noise_distance_scale_x: f64,
+        noise_distance_scale_y: f64,
+        noise_distance_scale_z: f64,
+        seed: u64,
+    ) -> Self {
+        let mut n_voxel_types = 0;
+        let mut voxel_type_name_hashes = [Hash32::zeroed(); Self::VOXEL_TYPE_ARRAY_SIZE];
+        for name in voxel_type_names {
+            assert!(n_voxel_types < VoxelTypeRegistry::max_n_voxel_types());
+            voxel_type_name_hashes[n_voxel_types] = compute_hash_str_32(name.as_ref());
+            n_voxel_types += 1;
+        }
+        assert!(n_voxel_types > 0);
+        Self {
+            n_voxel_types,
+            voxel_type_name_hashes,
+            voxel_type_frequency,
+            noise_distance_scale_x,
+            noise_distance_scale_y,
+            noise_distance_scale_z,
+            seed,
+        }
     }
 
-    /// Returns the extent of a single voxel.
-    pub fn voxel_extent(&self) -> f64 {
-        self.voxel_extent
+    pub fn voxel_types(&self, voxel_type_registry: &VoxelTypeRegistry) -> Result<Vec<VoxelType>> {
+        let mut voxel_types = Vec::with_capacity(self.n_voxel_types);
+        for (idx, &name_hash) in self.voxel_type_name_hashes[..self.n_voxel_types]
+            .iter()
+            .enumerate()
+        {
+            voxel_types.push(
+                voxel_type_registry
+                    .voxel_type_for_name_hash(name_hash)
+                    .ok_or_else(|| anyhow!("Missing voxel type for name at index {}", idx))?,
+            );
+        }
+        Ok(voxel_types)
+    }
+
+    pub fn voxel_type_frequency(&self) -> f64 {
+        self.voxel_type_frequency
+    }
+
+    pub fn noise_distance_scale_x(&self) -> f64 {
+        self.noise_distance_scale_x
+    }
+
+    pub fn noise_distance_scale_y(&self) -> f64 {
+        self.noise_distance_scale_y
+    }
+
+    pub fn noise_distance_scale_z(&self) -> f64 {
+        self.noise_distance_scale_z
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
     }
 }
 
 impl VoxelBoxComp {
-    /// Creates a new component for a uniform box with the given number of
-    /// voxels in each direction.
-    pub fn new(size_x: usize, size_y: usize, size_z: usize) -> Self {
+    /// Creates a new component for a uniform box with the given voxel extent
+    /// and number of voxels in each direction.
+    pub fn new(voxel_extent: f64, size_x: usize, size_y: usize, size_z: usize) -> Self {
         Self {
+            voxel_extent,
             size_x,
             size_y,
             size_z,
@@ -121,14 +208,22 @@ impl VoxelBoxComp {
 }
 
 impl VoxelSphereComp {
-    /// Creates a new component for a uniform sphere with the given number of
-    /// voxels across its diameter.
+    /// Creates a new component for a uniform sphere with the given voxel extent
+    /// and number of voxels across its diameter.
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
-    pub fn new(n_voxels_across: usize) -> Self {
+    pub fn new(voxel_extent: f64, n_voxels_across: usize) -> Self {
         assert_ne!(n_voxels_across, 0);
-        Self { n_voxels_across }
+        Self {
+            voxel_extent,
+            n_voxels_across,
+        }
+    }
+
+    /// Returns the extent of a single voxel.
+    pub fn voxel_extent(&self) -> f64 {
+        self.voxel_extent
     }
 
     /// Returns the number of voxels across the sphere's diameter.
@@ -142,6 +237,7 @@ impl VoxelGradientNoisePatternComp {
     /// given maximum number of voxels in each direction, spatial noise
     /// frequency, noise threshold and seed.
     pub fn new(
+        voxel_extent: f64,
         size_x: usize,
         size_y: usize,
         size_z: usize,
@@ -150,6 +246,7 @@ impl VoxelGradientNoisePatternComp {
         seed: u64,
     ) -> Self {
         Self {
+            voxel_extent,
             size_x,
             size_y,
             size_z,
@@ -162,7 +259,8 @@ impl VoxelGradientNoisePatternComp {
 
 /// Registers all voxel [`Component`](impact_ecs::component::Component)s.
 pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, VoxelTypeComp)?;
+    register_setup_component!(registry, SameVoxelTypeComp)?;
+    register_setup_component!(registry, GradientNoiseVoxelTypesComp)?;
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
     register_setup_component!(registry, VoxelGradientNoisePatternComp)?;

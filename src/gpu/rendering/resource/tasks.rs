@@ -123,19 +123,19 @@ define_task!(
             let renderer = app.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_voxel_object_buffers_with_voxel_objects(
+                DesynchronizedRenderResources::sync_voxel_resources_with_voxel_manager(
                     renderer.graphics_device(),
+                    app.assets(),
                     render_resource_manager
                         .desynchronized()
-                        .voxel_object_buffer_managers
+                        .voxel_resource_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    app
+                    &app
                         .scene().read().unwrap()
                         .voxel_manager().read().unwrap()
-                        .voxel_objects(),
-                );
+                )?;
             }
             Ok(())
         })

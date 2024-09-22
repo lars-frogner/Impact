@@ -1,9 +1,9 @@
 use clap::{Parser, ValueEnum};
 use impact::voxel::{
     chunks::ChunkedVoxelObject,
-    generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
+    generation::{BoxVoxelGenerator, SameVoxelTypeGenerator, SphereVoxelGenerator},
     mesh::ChunkedVoxelObjectMesh,
-    VoxelType,
+    voxel_types::VoxelType,
 };
 use std::{
     hint::black_box,
@@ -81,7 +81,13 @@ fn main() {
 }
 
 fn profile_chunked_voxel_object_construction(duration: Duration, delayer: Delayer) {
-    let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25, 200, 200, 200);
+    let generator = BoxVoxelGenerator::new(
+        0.25,
+        200,
+        200,
+        200,
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
     profile(
         &|| ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap(),
         duration,
@@ -90,7 +96,8 @@ fn profile_chunked_voxel_object_construction(duration: Duration, delayer: Delaye
 }
 
 fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration, delayer: Delayer) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let generator =
+        SphereVoxelGenerator::new(0.25, 200, SameVoxelTypeGenerator::new(VoxelType::default()));
     let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
     profile(
         &|| {
@@ -104,7 +111,8 @@ fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration, delay
 }
 
 fn profile_chunked_voxel_object_create_mesh(duration: Duration, delayer: Delayer) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let generator =
+        SphereVoxelGenerator::new(0.25, 200, SameVoxelTypeGenerator::new(VoxelType::default()));
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     profile(
         &|| ChunkedVoxelObjectMesh::create(&object),
