@@ -205,7 +205,7 @@ impl Texture {
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
     /// - The row size (width times texel size) is not a multiple of 256 bytes
-    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
@@ -237,7 +237,7 @@ impl Texture {
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
     /// - The row size (width times texel size) is not a multiple of 256 bytes
-    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
@@ -267,7 +267,7 @@ impl Texture {
     /// Returns an error if:
     /// - The image width or height is zero.
     /// - The row size (width times texel size) is not a multiple of 256 bytes
-    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
@@ -321,6 +321,7 @@ impl Texture {
             )
         }
     }
+
     /// Creates a cubemap texture for the image files representing cubemap faces
     /// at the given paths, using the given configuration parameters.
     ///
@@ -328,10 +329,9 @@ impl Texture {
     /// Returns an error if:
     /// - The image dimensions or pixel formats do not match.
     /// - The image file can not be read or decoded.
-    /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
     /// - The row size (width times texel size) is not a multiple of 256 bytes
-    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
@@ -392,7 +392,7 @@ impl Texture {
     /// - The image dimensions or pixel formats do not match.
     /// - The image width or height is zero.
     /// - The row size (width times texel size) is not a multiple of 256 bytes
-    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
@@ -488,6 +488,145 @@ impl Texture {
         )
     }
 
+    /// Creates a texture array for the image files at the given paths, using
+    /// the given configuration parameters.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The image file can not be read or decoded.
+    /// - The number of images is zero.
+    /// - Any of the images are wrapped in an [`Err`].
+    /// - The image width or height is zero.
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
+    /// - The image dimensions or pixel formats do not match.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
+    ///   data between buffers and textures).
+    pub fn array_from_image_paths<I, P>(
+        graphics_device: &GraphicsDevice,
+        mipmapper_generator: &MipmapperGenerator,
+        image_paths: impl IntoIterator<IntoIter = I>,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
+        label: &str,
+    ) -> Result<Self>
+    where
+        I: ExactSizeIterator<Item = P>,
+        P: AsRef<Path>,
+    {
+        let images = image_paths.into_iter().map(|image_path| {
+            ImageReader::open(image_path)
+                .map_err(Into::into)
+                .and_then(|image| image.decode())
+                .map_err(Into::into)
+        });
+
+        Self::array_from_images(
+            graphics_device,
+            mipmapper_generator,
+            images,
+            texture_config,
+            sampler_id,
+            label,
+        )
+    }
+
+    /// Creates a texture array for the given loaded images, using the given
+    /// configuration parameters.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The number of images is zero.
+    /// - Any of the images are wrapped in an [`Err`].
+    /// - The image width or height is zero.
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
+    /// - The image dimensions or pixel formats do not match.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
+    ///   data between buffers and textures).
+    pub fn array_from_images<I>(
+        graphics_device: &GraphicsDevice,
+        mipmapper_generator: &MipmapperGenerator,
+        images: impl IntoIterator<IntoIter = I>,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
+        label: &str,
+    ) -> Result<Self>
+    where
+        I: ExactSizeIterator<Item = Result<DynamicImage>>,
+    {
+        let mut images = images.into_iter();
+        let n_images = images.len();
+
+        let first_image = images
+            .next()
+            .ok_or_else(|| anyhow!("No images for texture array"))??;
+
+        let dimensions = first_image.dimensions();
+        let width = NonZeroU32::new(dimensions.0).ok_or_else(|| anyhow!("Image width is zero"))?;
+        let height =
+            NonZeroU32::new(dimensions.1).ok_or_else(|| anyhow!("Image height is zero"))?;
+        let array_layers = NonZeroU32::new(u32::try_from(n_images).unwrap()).unwrap();
+
+        let color = first_image.color();
+        let texel_description = if color.has_color() {
+            TexelDescription::Rgba8(texture_config.color_space)
+        } else {
+            if texture_config.color_space != ColorSpace::Linear {
+                bail!(
+                    "Unsupported color space {:?} for grayscale image {}",
+                    texture_config.color_space,
+                    label
+                );
+            }
+            TexelDescription::Grayscale8
+        };
+
+        let mut byte_buffer = Vec::with_capacity(
+            n_images * (width.get() * height.get() * texel_description.n_bytes()) as usize,
+        );
+
+        if color.has_color() {
+            byte_buffer.extend_from_slice(&first_image.into_rgba8());
+        } else {
+            byte_buffer.extend_from_slice(&first_image.into_luma8());
+        }
+
+        for image in images {
+            let image = image?;
+
+            if image.dimensions() != dimensions {
+                bail!("Inconsistent dimensions for texture array images")
+            }
+
+            if image.color() != color {
+                bail!("Inconsistent pixel formats for texture array images")
+            }
+
+            if color.has_color() {
+                byte_buffer.extend_from_slice(&image.into_rgba8());
+            } else {
+                byte_buffer.extend_from_slice(&image.into_luma8());
+            }
+        }
+
+        Self::create(
+            graphics_device,
+            Some(mipmapper_generator),
+            &byte_buffer,
+            width,
+            height,
+            DepthOrArrayLayers::ArrayLayers(array_layers),
+            texel_description,
+            false,
+            texture_config,
+            sampler_id,
+            label,
+        )
+    }
+
     /// Creates a texture holding the given lookup table. The texture will be
     /// sampled with (bi/tri)linear interpolation, and lookups outside [0, 1]
     /// are clamped to the edge values.
@@ -495,7 +634,7 @@ impl Texture {
     /// # Errors
     /// Returns an error if the row size (width times data value size) is not a
     /// multiple of 256 bytes (`wgpu` requires that rows are a multiple of 256
-    /// bytes for for copying data between buffers and textures).
+    /// bytes for copying data between buffers and textures).
     pub fn from_lookup_table<T: TexelType>(
         graphics_device: &GraphicsDevice,
         table: &TextureLookupTable<T>,
@@ -534,7 +673,7 @@ impl Texture {
     /// - The texture shape and texel size are inconsistent with the size of the
     ///   byte buffer.
     /// - The row size (width times texel size) is not a multiple of 256 bytes
-    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
     fn create(
         graphics_device: &GraphicsDevice,
