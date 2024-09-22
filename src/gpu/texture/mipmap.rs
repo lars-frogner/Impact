@@ -16,8 +16,8 @@ pub struct MipmapperGenerator {
 #[derive(Debug)]
 pub struct Mipmapper {
     pipeline: Arc<wgpu::RenderPipeline>,
-    texture_views_for_mip_levels: Vec<wgpu::TextureView>,
-    bind_groups_for_previous_mip_levels: Vec<wgpu::BindGroup>,
+    texture_views_for_array_layers_and_mip_levels: Vec<Vec<wgpu::TextureView>>,
+    bind_groups_for_array_layers_and_previous_mip_levels: Vec<Vec<wgpu::BindGroup>>,
     label: Cow<'static, str>,
 }
 
@@ -101,7 +101,7 @@ impl MipmapperGenerator {
     /// texture only has one mip level.
     ///
     /// # Panics
-    /// If the texture's format is not supported.
+    /// If the texture's dimension or format is not supported.
     pub fn generate_mipmapper(
         &self,
         graphics_device: &GraphicsDevice,
@@ -110,6 +110,13 @@ impl MipmapperGenerator {
     ) -> Option<Mipmapper> {
         if texture.mip_level_count() < 2 {
             return None;
+        }
+
+        if texture.dimension() != wgpu::TextureDimension::D2 {
+            panic!(
+                "Tried to create mipmapper for texture with unsupported dimension: {:?}",
+                texture.dimension()
+            );
         }
 
         let (pipeline, bind_group_layout) = self
@@ -122,44 +129,58 @@ impl MipmapperGenerator {
                 )
             });
 
-        let texture_views_for_mip_levels: Vec<_> = (0..texture.mip_level_count())
-            .map(|mip_level| {
-                texture.create_view(&wgpu::TextureViewDescriptor {
-                    base_mip_level: mip_level,
-                    mip_level_count: Some(1),
-                    ..Default::default()
-                })
+        let texture_views_for_array_layers_and_mip_levels: Vec<_> = (0..texture
+            .depth_or_array_layers())
+            .map(|array_layer| {
+                (0..texture.mip_level_count())
+                    .map(|mip_level| {
+                        texture.create_view(&wgpu::TextureViewDescriptor {
+                            dimension: Some(wgpu::TextureViewDimension::D2),
+                            base_mip_level: mip_level,
+                            mip_level_count: Some(1),
+                            base_array_layer: array_layer,
+                            array_layer_count: Some(1),
+                            ..Default::default()
+                        })
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
 
-        let bind_groups_for_previous_mip_levels = (1..texture.mip_level_count() as usize)
-            .map(|target_mip_level| {
-                graphics_device
-                    .device()
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: bind_group_layout,
-                        entries: &[
-                            // Bind the view for the previous mip level
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(
-                                    &texture_views_for_mip_levels[target_mip_level - 1],
-                                ),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: wgpu::BindingResource::Sampler(&self.sampler),
-                            },
-                        ],
-                        label: Some(&format!("{} mipmap bind group", label)),
+        let bind_groups_for_array_layers_and_previous_mip_levels = (0..texture
+            .depth_or_array_layers())
+            .map(|array_layer| {
+                (1..texture.mip_level_count() as usize)
+                    .map(|target_mip_level| {
+                        graphics_device
+                            .device()
+                            .create_bind_group(&wgpu::BindGroupDescriptor {
+                                layout: bind_group_layout,
+                                entries: &[
+                                    // Bind the view for the previous mip level
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(
+                                            &texture_views_for_array_layers_and_mip_levels
+                                                [array_layer as usize][target_mip_level - 1],
+                                        ),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                                    },
+                                ],
+                                label: Some(&format!("{} mipmap bind group", label)),
+                            })
                     })
+                    .collect()
             })
             .collect();
 
         Some(Mipmapper {
             pipeline: Arc::clone(pipeline),
-            texture_views_for_mip_levels,
-            bind_groups_for_previous_mip_levels,
+            texture_views_for_array_layers_and_mip_levels,
+            bind_groups_for_array_layers_and_previous_mip_levels,
             label,
         })
     }
@@ -198,32 +219,38 @@ impl Mipmapper {
     /// level of this [`Mipmapper`]'s texture with the appropriately mipmapped
     /// versions of the full texture.
     pub fn encode_mipmap_passes(&self, command_encoder: &mut wgpu::CommandEncoder) {
-        for (texture_view, bind_group) in self
-            .texture_views_for_mip_levels
+        for (texture_views_for_mip_levels, bind_groups_for_previous_mip_levels) in self
+            .texture_views_for_array_layers_and_mip_levels
             .iter()
-            .skip(1)
-            .zip(&self.bind_groups_for_previous_mip_levels)
+            .zip(&self.bind_groups_for_array_layers_and_previous_mip_levels)
         {
-            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // Render to the view for the current mip level
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: texture_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                label: Some(&format!("{} mipmap render pass", &self.label)),
-            });
+            for (texture_view, bind_group) in texture_views_for_mip_levels
+                .iter()
+                .skip(1)
+                .zip(bind_groups_for_previous_mip_levels)
+            {
+                let mut render_pass =
+                    command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        // Render to the view for the current mip level
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: texture_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        label: Some(&format!("{} mipmap render pass", &self.label)),
+                    });
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, bind_group, &[]);
+                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_bind_group(0, bind_group, &[]);
 
-            render_pass.draw(0..3, 0..1);
+                render_pass.draw(0..3, 0..1);
+            }
         }
     }
 }
