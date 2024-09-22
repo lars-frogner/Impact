@@ -10,6 +10,7 @@ use crate::voxel::{
         SUPERCHUNK_SIZE, SUPERCHUNK_SIZE_SQUARED,
     },
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
+    voxel_types::VoxelType,
     VoxelSignedDistance,
 };
 
@@ -22,6 +23,7 @@ pub struct VoxelChunkSignedDistanceField {
     /// every time more than eats up the performance gain from the smaller
     /// element size.
     values: [f32; SDF_GRID_CELL_COUNT],
+    voxel_types: [VoxelType; SDF_GRID_CELL_COUNT],
     adjacent_is_non_uniform: [[bool; 2]; 3],
 }
 
@@ -36,8 +38,10 @@ const SDF_GRID_SIZE: usize = ChunkedVoxelObject::chunk_size() + 2;
 pub const SDF_GRID_CELL_COUNT: usize = SDF_GRID_SIZE.pow(3);
 
 type LoopForChunkSDF = Loop3<SDF_GRID_SIZE>;
-type LoopForChunkSDFData<'a, 'b> = DataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
-type LoopForChunkSDFDataMut<'a, 'b> = MutDataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
+type LoopForChunkSDFValues<'a, 'b> = DataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
+type LoopForChunkSDFVoxelTypes<'a, 'b> = DataLoop3<'a, 'b, VoxelType, SDF_GRID_SIZE>;
+type LoopForChunkSDFValuesMut<'a, 'b> = MutDataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
+type LoopForChunkSDFVoxelTypesMut<'a, 'b> = MutDataLoop3<'a, 'b, VoxelType, SDF_GRID_SIZE>;
 
 impl VoxelChunkSignedDistanceField {
     /// The number of grid cells holding a signed distance in the SDF grid for a
@@ -74,6 +78,7 @@ impl VoxelChunkSignedDistanceField {
     const fn default() -> Self {
         Self {
             values: [0.0; SDF_GRID_CELL_COUNT],
+            voxel_types: [VoxelType::dummy(); SDF_GRID_CELL_COUNT],
             adjacent_is_non_uniform: [[false; 2]; 3],
         }
     }
@@ -82,15 +87,31 @@ impl VoxelChunkSignedDistanceField {
         self.values.get(Self::linear_idx(&[i, j, k])).copied()
     }
 
-    fn loop_over_data<'a, 'b>(&'b self, lp: &'a LoopForChunkSDF) -> LoopForChunkSDFData<'a, 'b> {
-        LoopForChunkSDFData::new(lp, &self.values)
+    fn loop_over_sdf_values<'a, 'b>(
+        &'b self,
+        lp: &'a LoopForChunkSDF,
+    ) -> LoopForChunkSDFValues<'a, 'b> {
+        LoopForChunkSDFValues::new(lp, &self.values)
     }
 
-    fn loop_over_data_mut<'a, 'b>(
+    fn loop_over_voxel_types<'a, 'b>(
+        &'b self,
+        lp: &'a LoopForChunkSDF,
+    ) -> LoopForChunkSDFVoxelTypes<'a, 'b> {
+        LoopForChunkSDFVoxelTypes::new(lp, &self.voxel_types)
+    }
+
+    fn loops_over_sdf_values_and_voxel_types_mut<'a, 'b>(
         &'b mut self,
         lp: &'a LoopForChunkSDF,
-    ) -> LoopForChunkSDFDataMut<'a, 'b> {
-        LoopForChunkSDFDataMut::new(lp, &mut self.values)
+    ) -> (
+        LoopForChunkSDFValuesMut<'a, 'b>,
+        LoopForChunkSDFVoxelTypesMut<'a, 'b>,
+    ) {
+        (
+            LoopForChunkSDFValuesMut::new(lp, &mut self.values),
+            LoopForChunkSDFVoxelTypesMut::new(lp, &mut self.voxel_types),
+        )
     }
 
     fn set_adjacent_is_non_uniform(&mut self, dim: Dimension, side: Side, is_non_uniform: bool) {
@@ -390,8 +411,15 @@ impl ChunkedVoxelObject {
         chunk: &NonUniformVoxelChunk,
     ) {
         let voxels = self.non_uniform_chunk_voxels(chunk);
-        sdf.loop_over_data_mut(&LoopForChunkSDF::over_interior())
+
+        let sdf_loop = LoopForChunkSDF::over_interior();
+        let (sdf_values_loop, sdf_voxel_types_loop) =
+            sdf.loops_over_sdf_values_and_voxel_types_mut(&sdf_loop);
+
+        sdf_values_loop
             .map_slice_values_into_data(voxels, &|voxel| voxel.signed_distance().to_f32());
+
+        sdf_voxel_types_loop.map_slice_values_into_data(voxels, &|voxel| voxel.voxel_type());
     }
 
     fn fill_sdf_face_padding_for_adjacent_chunk(
@@ -401,9 +429,14 @@ impl ChunkedVoxelObject {
         side: Side,
         adjacent_chunk: &VoxelChunk,
     ) {
+        let sdf_loop = LoopForChunkSDF::over_face_interior(dim, side);
+        let (sdf_values_loop, sdf_voxel_types_loop) =
+            sdf.loops_over_sdf_values_and_voxel_types_mut(&sdf_loop);
+
         let adjacent_is_non_uniform = self.fill_sdf_for_adjacent_chunk_using_loops(
             adjacent_chunk,
-            sdf.loop_over_data_mut(&LoopForChunkSDF::over_face_interior(dim, side)),
+            sdf_values_loop,
+            sdf_voxel_types_loop,
             &LoopForChunkVoxels::over_face(dim, side.opposite()),
         );
         sdf.set_adjacent_is_non_uniform(dim, side, adjacent_is_non_uniform);
@@ -417,13 +450,14 @@ impl ChunkedVoxelObject {
         secondary_side: Side,
         adjacent_chunk: &VoxelChunk,
     ) {
+        let sdf_loop = LoopForChunkSDF::over_edge_interior(face_dim, face_side, secondary_side);
+        let (sdf_values_loop, sdf_voxel_types_loop) =
+            sdf.loops_over_sdf_values_and_voxel_types_mut(&sdf_loop);
+
         self.fill_sdf_for_adjacent_chunk_using_loops(
             adjacent_chunk,
-            sdf.loop_over_data_mut(&LoopForChunkSDF::over_edge_interior(
-                face_dim,
-                face_side,
-                secondary_side,
-            )),
+            sdf_values_loop,
+            sdf_voxel_types_loop,
             &LoopForChunkVoxels::over_edge(
                 face_dim,
                 face_side.opposite(),
@@ -440,9 +474,14 @@ impl ChunkedVoxelObject {
         z_side: Side,
         adjacent_chunk: &VoxelChunk,
     ) {
+        let sdf_loop = LoopForChunkSDF::over_corner(x_side, y_side, z_side);
+        let (sdf_values_loop, sdf_voxel_types_loop) =
+            sdf.loops_over_sdf_values_and_voxel_types_mut(&sdf_loop);
+
         self.fill_sdf_for_adjacent_chunk_using_loops(
             adjacent_chunk,
-            sdf.loop_over_data_mut(&LoopForChunkSDF::over_corner(x_side, y_side, z_side)),
+            sdf_values_loop,
+            sdf_voxel_types_loop,
             &LoopForChunkVoxels::over_corner(
                 x_side.opposite(),
                 y_side.opposite(),
@@ -454,24 +493,28 @@ impl ChunkedVoxelObject {
     fn fill_sdf_for_adjacent_chunk_using_loops(
         &self,
         adjacent_chunk: &VoxelChunk,
-        sdf_data_loop: LoopForChunkSDFDataMut<'_, '_>,
+        sdf_values_loop: LoopForChunkSDFValuesMut<'_, '_>,
+        voxel_types_loop: LoopForChunkSDFVoxelTypesMut<'_, '_>,
         non_uniform_chunk_loop: &LoopForChunkVoxels,
     ) -> bool {
         match adjacent_chunk {
             VoxelChunk::Empty => {
-                sdf_data_loop.fill_data_with_value(VoxelSignedDistance::fully_outside().to_f32());
+                sdf_values_loop.fill_data_with_value(VoxelSignedDistance::fully_outside().to_f32());
                 false
             }
-            VoxelChunk::Uniform(_) => {
-                sdf_data_loop.fill_data_with_value(VoxelSignedDistance::fully_inside().to_f32());
+            VoxelChunk::Uniform(voxel) => {
+                sdf_values_loop.fill_data_with_value(VoxelSignedDistance::fully_inside().to_f32());
+                voxel_types_loop.fill_data_with_value(voxel.voxel_type());
                 false
             }
             VoxelChunk::NonUniform(chunk) => {
                 let voxels = self.non_uniform_chunk_voxels(chunk);
-                sdf_data_loop.map_other_data_into_data(
-                    DataLoop3::new(non_uniform_chunk_loop, voxels),
-                    &|voxel| voxel.signed_distance().to_f32(),
-                );
+                let chunk_voxel_loop = DataLoop3::new(non_uniform_chunk_loop, voxels);
+                sdf_values_loop.map_other_data_into_data(&chunk_voxel_loop, &|voxel| {
+                    voxel.signed_distance().to_f32()
+                });
+                voxel_types_loop
+                    .map_other_data_into_data(&chunk_voxel_loop, &|voxel| voxel.voxel_type());
                 true
             }
         }
@@ -486,7 +529,7 @@ impl ChunkedVoxelObject {
             let lower_chunk_sdf_voxel_indices = lower_chunk_voxel_indices
                 .map(|voxel_index| isize::try_from(voxel_index).unwrap() - 1);
 
-            sdf.loop_over_data(&LoopForChunkSDF::over_all()).execute(
+            sdf.loop_over_sdf_values(&LoopForChunkSDF::over_all()).execute(
                 &mut |sdf_indices, &signed_dist| {
                     let voxel_indices = [
                         lower_chunk_sdf_voxel_indices[0] + isize::try_from(sdf_indices[0]).unwrap(),
@@ -510,6 +553,26 @@ impl ChunkedVoxelObject {
                     }
                 },
             );
+
+            sdf.loop_over_voxel_types(&LoopForChunkSDF::over_all()).execute(
+                &mut |sdf_indices, &voxel_type| {
+                    let voxel_indices = [
+                        lower_chunk_sdf_voxel_indices[0] + isize::try_from(sdf_indices[0]).unwrap(),
+                        lower_chunk_sdf_voxel_indices[1] + isize::try_from(sdf_indices[1]).unwrap(),
+                        lower_chunk_sdf_voxel_indices[2] + isize::try_from(sdf_indices[2]).unwrap(),
+                    ];
+
+                    let voxel =
+                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
+
+                    if matches!(voxel, Some(v) if v.voxel_type() != voxel_type) {
+                        eprintln!(
+                            "Recorded voxel type ({:?}) differs from actual voxel type ({:?}) at indices {:?} (chunk starts at {:?})",
+                            voxel_type, voxel.unwrap().voxel_type(), voxel_indices, lower_chunk_voxel_indices
+                        );
+                    }
+                },
+            );
         });
     }
 }
@@ -517,25 +580,26 @@ impl ChunkedVoxelObject {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::chunks::tests::BoxVoxelGenerator;
+    use crate::voxel::chunks::tests::OffsetBoxVoxelGenerator;
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_single_voxel() {
-        let generator = BoxVoxelGenerator::single_default();
+        let generator = OffsetBoxVoxelGenerator::single_default();
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_full_chunk() {
-        let generator = BoxVoxelGenerator::with_default([ChunkedVoxelObject::chunk_size(); 3]);
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([ChunkedVoxelObject::chunk_size(); 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_two_adjacent_full_chunks() {
-        let generator = BoxVoxelGenerator::with_default([
+        let generator = OffsetBoxVoxelGenerator::with_default([
             2 * ChunkedVoxelObject::chunk_size(),
             ChunkedVoxelObject::chunk_size(),
             ChunkedVoxelObject::chunk_size(),
@@ -546,7 +610,8 @@ mod tests {
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_fully_enclosed_chunk() {
-        let generator = BoxVoxelGenerator::with_default([3 * ChunkedVoxelObject::chunk_size(); 3]);
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([3 * ChunkedVoxelObject::chunk_size(); 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_sdf();
     }

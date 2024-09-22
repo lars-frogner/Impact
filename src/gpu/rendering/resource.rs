@@ -13,14 +13,17 @@ use crate::{
     mesh::{buffer::MeshGPUBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureGPUBufferManager, InstanceFeatureManager, ModelID},
     skybox::{resource::SkyboxGPUResourceManager, Skybox},
-    voxel::{buffer::VoxelObjectGPUBufferManager, chunks::ChunkedVoxelObject, VoxelObjectID},
+    voxel::{
+        resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
+        VoxelManager, VoxelObjectID,
+    },
 };
 use anyhow::Result;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, HashMap},
     hash::Hash,
-    sync::Mutex,
+    sync::{Mutex, RwLock},
 };
 
 /// Manager and owner of render resources representing world data.
@@ -52,7 +55,10 @@ pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraGPUBufferManager>>,
     skybox_resource_manager: Box<Option<SkyboxGPUResourceManager>>,
     mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
-    voxel_object_buffer_managers: Box<VoxelObjectGPUBufferManagerMap>,
+    voxel_resource_managers: Box<(
+        Option<VoxelMaterialGPUResourceManager>,
+        VoxelObjectGPUBufferManagerMap,
+    )>,
     light_buffer_manager: Box<Option<LightGPUBufferManager>>,
     instance_feature_buffer_managers: Box<InstanceFeatureGPUBufferManagerMap>,
 }
@@ -65,7 +71,12 @@ struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
     skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
     mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
-    voxel_object_buffer_managers: Mutex<Box<VoxelObjectGPUBufferManagerMap>>,
+    voxel_resource_managers: Mutex<
+        Box<(
+            Option<VoxelMaterialGPUResourceManager>,
+            VoxelObjectGPUBufferManagerMap,
+        )>,
+    >,
     light_buffer_manager: Mutex<Box<Option<LightGPUBufferManager>>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
@@ -167,13 +178,19 @@ impl SynchronizedRenderResources {
         self.mesh_buffer_managers.get(&mesh_id)
     }
 
+    /// Returns the GPU resource manager for voxel materials, or [`None`] if it
+    /// has not been initialized.
+    pub fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager> {
+        self.voxel_resource_managers.0.as_ref()
+    }
+
     /// Returns the GPU buffer manager for the given voxel object identifier if
     /// the voxel object exists, otherwise returns [`None`].
     pub fn get_voxel_object_buffer_manager(
         &self,
         voxel_object_id: VoxelObjectID,
     ) -> Option<&VoxelObjectGPUBufferManager> {
-        self.voxel_object_buffer_managers.get(&voxel_object_id)
+        self.voxel_resource_managers.1.get(&voxel_object_id)
     }
 
     /// Returns the GPU buffer manager for light data, or [`None`] if it has
@@ -198,7 +215,7 @@ impl SynchronizedRenderResources {
 
     /// Returns a reference to the map of voxel object GPU buffer managers.
     pub fn voxel_object_buffer_managers(&self) -> &VoxelObjectGPUBufferManagerMap {
-        self.voxel_object_buffer_managers.as_ref()
+        &self.voxel_resource_managers.1
     }
 }
 
@@ -208,7 +225,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(Box::new(None)),
             skybox_resource_manager: Mutex::new(Box::new(None)),
             mesh_buffer_managers: Mutex::new(Box::default()),
-            voxel_object_buffer_managers: Mutex::new(Box::default()),
+            voxel_resource_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
         }
@@ -219,7 +236,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             skybox_resource_manager,
             mesh_buffer_managers,
-            voxel_object_buffer_managers,
+            voxel_resource_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
         } = render_resources;
@@ -227,7 +244,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             skybox_resource_manager: Mutex::new(skybox_resource_manager),
             mesh_buffer_managers: Mutex::new(mesh_buffer_managers),
-            voxel_object_buffer_managers: Mutex::new(voxel_object_buffer_managers),
+            voxel_resource_managers: Mutex::new(voxel_resource_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
         }
@@ -238,7 +255,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             skybox_resource_manager,
             mesh_buffer_managers,
-            voxel_object_buffer_managers,
+            voxel_resource_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
         } = self;
@@ -246,7 +263,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
             skybox_resource_manager: skybox_resource_manager.into_inner().unwrap(),
             mesh_buffer_managers: mesh_buffer_managers.into_inner().unwrap(),
-            voxel_object_buffer_managers: voxel_object_buffer_managers.into_inner().unwrap(),
+            voxel_resource_managers: voxel_resource_managers.into_inner().unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
             instance_feature_buffer_managers: instance_feature_buffer_managers
                 .into_inner()
@@ -324,16 +341,31 @@ impl DesynchronizedRenderResources {
         Self::remove_unmatched_render_resources(mesh_gpu_buffers, meshes);
     }
 
-    /// Performs any required updates for keeping the given map of voxel object
-    /// GPU buffers in sync with the given map of voxel objects.
+    /// Performs any required updates for keeping the given voxel GPU resources
+    /// in sync with the given voxel manager.
     ///
     /// GPU buffers whose source data no longer exists will be removed, and
     /// missing GPU buffers for new source data will be created.
-    fn sync_voxel_object_buffers_with_voxel_objects(
+    fn sync_voxel_resources_with_voxel_manager(
         graphics_device: &GraphicsDevice,
-        voxel_object_buffer_managers: &mut VoxelObjectGPUBufferManagerMap,
-        voxel_objects: &HashMap<VoxelObjectID, ChunkedVoxelObject>,
-    ) {
+        assets: &RwLock<Assets>,
+        (voxel_material_resource_manager, voxel_object_buffer_managers): &mut (
+            Option<VoxelMaterialGPUResourceManager>,
+            VoxelObjectGPUBufferManagerMap,
+        ),
+        voxel_manager: &VoxelManager,
+    ) -> Result<()> {
+        let voxel_objects = voxel_manager.voxel_objects();
+
+        if !voxel_objects.is_empty() && voxel_material_resource_manager.is_none() {
+            *voxel_material_resource_manager =
+                Some(VoxelMaterialGPUResourceManager::for_voxel_type_registry(
+                    graphics_device,
+                    &mut assets.write().unwrap(),
+                    voxel_manager.voxel_type_registry(),
+                )?);
+        }
+
         for (voxel_object_id, voxel_object) in voxel_objects {
             voxel_object_buffer_managers
                 .entry(*voxel_object_id)
@@ -347,6 +379,8 @@ impl DesynchronizedRenderResources {
                 });
         }
         Self::remove_unmatched_render_resources(voxel_object_buffer_managers, voxel_objects);
+
+        Ok(())
     }
 
     /// Performs any required updates for keeping the lights in the given render

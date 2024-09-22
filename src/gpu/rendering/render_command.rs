@@ -252,7 +252,7 @@ impl RenderCommandManager {
             config,
         );
 
-        let geometry_pass = GeometryPass::new(graphics_device, shader_manager, config);
+        let geometry_pass = GeometryPass::new(graphics_device, config);
 
         let omnidirectional_light_shadow_map_update_passes =
             OmnidirectionalLightShadowMapUpdatePasses::new(graphics_device, shader_manager);
@@ -805,11 +805,7 @@ impl DepthPrepass {
 }
 
 impl GeometryPass {
-    fn new(
-        graphics_device: &GraphicsDevice,
-        shader_manager: &mut ShaderManager,
-        config: &RenderingConfig,
-    ) -> Self {
+    fn new(graphics_device: &GraphicsDevice, config: &RenderingConfig) -> Self {
         let push_constants = ModelGeometryShaderTemplate::push_constants();
         let output_render_attachments = ModelGeometryShaderTemplate::output_render_attachments();
 
@@ -827,8 +823,7 @@ impl GeometryPass {
 
         let voxel_pipeline = VoxelGeometryPipeline::new(
             graphics_device,
-            shader_manager,
-            &color_target_states,
+            color_target_states.clone(),
             Some(depth_stencil_state.clone()),
             config,
         );
@@ -852,6 +847,12 @@ impl GeometryPass {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
     ) -> Result<()> {
+        self.voxel_pipeline.sync_with_render_resources(
+            graphics_device,
+            shader_manager,
+            render_resources,
+        )?;
+
         let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
         for pipeline in self.model_pipelines.values_mut() {

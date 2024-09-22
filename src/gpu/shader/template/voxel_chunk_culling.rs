@@ -15,7 +15,10 @@ use std::sync::LazyLock;
 /// indirect draw parameter buffer so that those chunks will be excluded in a
 /// subsequent indirect draw call.
 #[derive(Clone, Debug)]
-pub struct VoxelChunkCullingShaderTemplate;
+pub struct VoxelChunkCullingShaderTemplate {
+    /// Whether the draw call arguments to update are for indexed draw calls.
+    pub for_indexed_draw_calls: bool,
+}
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
     LazyLock::new(|| ShaderTemplate::new(compute_template_source!("voxel_chunk_culling")).unwrap());
@@ -44,9 +47,14 @@ impl VoxelChunkCullingShaderTemplate {
 
 impl SpecificShaderTemplate for VoxelChunkCullingShaderTemplate {
     fn resolve(&self) -> String {
+        let flags_to_set: &[&str] = if self.for_indexed_draw_calls {
+            &["for_indexed_draw_calls"] as _
+        } else {
+            &[]
+        };
         TEMPLATE
             .resolve(
-                [],
+                flags_to_set.iter().copied(),
                 template_replacements!(
                     "chunk_submesh_group" => 0,
                     "chunk_submesh_binding" => 0,
@@ -66,6 +74,8 @@ mod tests {
 
     #[test]
     fn should_resolve_to_valid_wgsl() {
-        validate_template(&VoxelChunkCullingShaderTemplate);
+        validate_template(&VoxelChunkCullingShaderTemplate {
+            for_indexed_draw_calls: false,
+        });
     }
 }

@@ -24,15 +24,21 @@ struct PreviousModelViewTransform {
 }
 
 struct VertexInput {
-    @location({{position_location}}) modelSpacePosition: vec3f,
-    @location({{normal_vector_location}}) modelSpaceNormalVector: vec3f,
+    @location({{index_location}}) vertexIndex: u32,
+    @location({{material_indices_location}}) materialIndices: vec4u,
+    @location({{material_weights_location}}) materialWeights: vec4u,
 }
 
 struct FragmentInput {
     @builtin(position) projectedPosition: vec4f,
     @location(0) previousClipSpacePosition: vec4f,
-    @location(1) cameraSpacePosition: vec3f,
-    @location(2) cameraSpaceNormalVector: vec3f,
+    @location(1) modelSpacePosition: vec3f,
+    @location(2) cameraSpacePosition: vec3f,
+    @location(3) modelSpaceNormalVector: vec3f,
+    @location(4) cameraSpaceNormalVector: vec3f,
+    @location(5) @interpolate(flat) materialIndices: vec4u,
+    @location(6) materialWeights: vec4f,
+    @location(7) uniformMaterialProperties: vec4f,
 }
 
 struct FragmentOutput {
@@ -45,10 +51,30 @@ struct FragmentOutput {
 
 const JITTER_COUNT: u32 = {{jitter_count}};
 
+const TEXTURE_FREQUENCY: f32 = {{texture_frequency}};
+
 var<push_constant> pushConstants: PushConstants;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
+
+@group({{material_group}}) @binding({{fixed_material_uniform_binding}})
+var<uniform> fixedMaterialProperties: array<vec4f, {{voxel_type_count}}>;
+
+@group({{material_group}}) @binding({{color_texture_array_binding}})
+var materialColorTextures: texture_2d_array<f32>;
+
+@group({{material_group}}) @binding({{sampler_binding}})
+var materialSampler: sampler;
+
+// We represent the positions as an array of `f32` components rather than
+// `vec3f` because the latter will be assumed aligned to 16 bytes, which is not
+// the case for the actual data
+@group({{position_and_normal_group}}) @binding({{position_buffer_binding}})
+var<storage, read> modelSpaceVertexPositions: array<f32>;
+
+@group({{position_and_normal_group}}) @binding({{normal_buffer_binding}})
+var<storage, read> modelSpaceVertexNormalVectors: array<f32>;
 
 fn transformPosition(
     rotationQuaternion: vec4f,
@@ -95,6 +121,81 @@ fn convertNormalVectorToNormalColor(normalVector: vec3f) -> vec3f {
     return 0.5 * (normalVector + 1.0);
 }
 
+fn getMaxComponent(vector: vec4f) -> f32 {
+    return max(max(vector.x, vector.y), max(vector.z, vector.w));
+}
+
+fn triplanarSampleTexture(
+    textureArray: texture_2d_array<f32>,
+    textureSampler: sampler,
+    weights: vec3f,
+    coordsX: vec2f,
+    coordsY: vec2f,
+    coordsZ: vec2f,
+    arrayIdx: u32,
+) -> vec4f {
+    let sampleX = textureSample(textureArray, textureSampler, coordsX, arrayIdx);
+    let sampleY = textureSample(textureArray, textureSampler, coordsY, arrayIdx);
+    let sampleZ = textureSample(textureArray, textureSampler, coordsZ, arrayIdx);
+    return weights.x * sampleX + weights.y * sampleY + weights.z * sampleZ;
+}
+
+fn triplanarSampleAndBlendTextures(
+    textureArray: texture_2d_array<f32>,
+    textureSampler: sampler,
+    triplanarWeights: vec3f,
+    triplanarCoordsX: vec2f,
+    triplanarCoordsY: vec2f,
+    triplanarCoordsZ: vec2f,
+    materialIndices: vec4u,
+    materialWeights: vec4f,
+) -> vec4f {
+    let sample1 = triplanarSampleTexture(
+        textureArray,
+        textureSampler,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        materialIndices.x
+    );
+    let sample2 = triplanarSampleTexture(
+        textureArray,
+        textureSampler,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        materialIndices.y
+    );
+    let sample3 = triplanarSampleTexture(
+        textureArray,
+        textureSampler,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        materialIndices.z
+    );
+    let sample4 = triplanarSampleTexture(
+        textureArray,
+        textureSampler,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        materialIndices.w
+    );
+    return materialWeights.x * sample1 +
+           materialWeights.y * sample2 +
+           materialWeights.z * sample3 +
+           materialWeights.w * sample4;
+}
+
+fn computeGGXRoughnessFromPerceptuallyLinearRoughness(linearRoughness: f32) -> f32 {
+    return linearRoughness * linearRoughness;
+}
+
 @vertex
 fn mainVS(
     vertex: VertexInput,
@@ -103,13 +204,28 @@ fn mainVS(
 ) -> FragmentInput {
     var output: FragmentInput;
 
+    let xCompIdx = 3 * vertex.vertexIndex;
+    let yCompIdx = xCompIdx + 1;
+    let zCompIdx = xCompIdx + 2;
+
+    output.modelSpacePosition = vec3f(
+        modelSpaceVertexPositions[xCompIdx],
+        modelSpaceVertexPositions[yCompIdx],
+        modelSpaceVertexPositions[zCompIdx],
+    );
+    output.modelSpaceNormalVector = vec3f(
+        modelSpaceVertexNormalVectors[xCompIdx],
+        modelSpaceVertexNormalVectors[yCompIdx],
+        modelSpaceVertexNormalVectors[zCompIdx],
+    );
+
     let projectionMatrix = obtainProjectionMatrix();
 
     let cameraSpacePosition = transformPosition(
         modelViewTransform.rotationQuaternion,
         modelViewTransform.translationAndScaling.xyz,
         modelViewTransform.translationAndScaling.w,
-        vertex.modelSpacePosition,
+        output.modelSpacePosition,
     );
     output.projectedPosition = projectionMatrix * vec4f(cameraSpacePosition, 1.0);
     output.cameraSpacePosition = cameraSpacePosition;
@@ -118,14 +234,17 @@ fn mainVS(
         previousModelViewTransform.rotationQuaternion,
         previousModelViewTransform.translationAndScaling.xyz,
         previousModelViewTransform.translationAndScaling.w,
-        vertex.modelSpacePosition,
+        output.modelSpacePosition,
     );
     output.previousClipSpacePosition = projectionMatrix * vec4f(previousCameraSpacePosition, 1.0);
 
     output.cameraSpaceNormalVector = rotateVectorWithQuaternion(
         modelViewTransform.rotationQuaternion,
-        vertex.modelSpaceNormalVector,
+        output.modelSpaceNormalVector,
     );
+
+    output.materialIndices = vertex.materialIndices;
+    output.materialWeights = vec4f(vertex.materialWeights);
 
     return output;
 }
@@ -145,13 +264,46 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     );
     output.motionVector = computeMotionVector(screenTextureCoords, fragment.previousClipSpacePosition);
 
-    let materialColor = vec3f(0.5);
-    output.materialColor = vec4f(materialColor, 1.0);
+    // No need to normalize the normal vector before computing triplanar
+    // weights, since we normalize the weights anyway
+    var triplanarWeights = abs(fragment.modelSpaceNormalVector);
+    triplanarWeights *= triplanarWeights * triplanarWeights; // Raise to 3rd power
+    triplanarWeights /= triplanarWeights.x + triplanarWeights.y + triplanarWeights.z;
 
-    let specularReflectance = 0.5;
-    let roughness = 0.5;
-    let metalness = 0.0;
-    let preExposedEmissiveLuminance = 0.0 * pushConstants.exposure;
+    let triplanarCoordsX = TEXTURE_FREQUENCY * fragment.modelSpacePosition.zy;
+    let triplanarCoordsY = TEXTURE_FREQUENCY * fragment.modelSpacePosition.xz;
+    let triplanarCoordsZ = TEXTURE_FREQUENCY * fragment.modelSpacePosition.xy;
+
+    // Normalize material weights
+    let materialWeights = fragment.materialWeights
+        / (fragment.materialWeights.x + fragment.materialWeights.y + fragment.materialWeights.z + fragment.materialWeights.w);
+
+    let color = triplanarSampleAndBlendTextures(
+        materialColorTextures,
+        materialSampler,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        fragment.materialIndices,
+        materialWeights,
+    ).rgb;
+    output.materialColor = vec4f(color, 1.0);
+
+    let materialProperties1 = fixedMaterialProperties[fragment.materialIndices.x];
+    let materialProperties2 = fixedMaterialProperties[fragment.materialIndices.y];
+    let materialProperties3 = fixedMaterialProperties[fragment.materialIndices.z];
+    let materialProperties4 = fixedMaterialProperties[fragment.materialIndices.w];
+
+    let materialProperties = materialWeights.x * materialProperties1
+        + materialWeights.y * materialProperties2
+        + materialWeights.z * materialProperties3
+        + materialWeights.w * materialProperties4;
+
+    let specularReflectance = materialProperties.x;
+    let roughness = computeGGXRoughnessFromPerceptuallyLinearRoughness(materialProperties.y);
+    let metalness = materialProperties.z;
+    let preExposedEmissiveLuminance = pushConstants.exposure * materialProperties.w;
 
     output.materialProperties = vec4f(specularReflectance, roughness, metalness, preExposedEmissiveLuminance);
 

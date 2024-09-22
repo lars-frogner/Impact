@@ -90,6 +90,68 @@ impl GPUBuffer {
         }
     }
 
+    /// Creates a full GPU buffer of the given type from the given slice of
+    /// bytes The given additional usages will be assigned to the buffer.
+    ///
+    /// # Panics
+    /// - If `bytes` is empty.
+    pub fn new_full_with_additional_usages(
+        graphics_device: &GraphicsDevice,
+        buffer_type: GPUBufferType,
+        bytes: &[u8],
+        additional_usages: wgpu::BufferUsages,
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new_with_additional_usages(
+            graphics_device,
+            buffer_type,
+            bytes,
+            bytes.len(),
+            additional_usages,
+            label,
+        )
+    }
+
+    /// Creates a GPU buffer of the given type from the given slice of
+    /// bytes. Only the first `n_valid_bytes` in the slice are considered
+    /// to actually represent valid data, the rest is just buffer filling
+    /// that gives room for writing a larger number of bytes than
+    /// `n_valid_bytes` into the buffer at a later point without
+    /// reallocating. The given additional usages will be assigned to the
+    /// buffer.
+    ///
+    /// # Panics
+    /// - If `bytes` is empty.
+    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
+    pub fn new_with_additional_usages(
+        graphics_device: &GraphicsDevice,
+        buffer_type: GPUBufferType,
+        bytes: &[u8],
+        n_valid_bytes: usize,
+        additional_usages: wgpu::BufferUsages,
+        label: Cow<'static, str>,
+    ) -> Self {
+        assert!(!bytes.is_empty(), "Tried to create empty GPU buffer");
+
+        let buffer_size = bytes.len();
+        assert!(n_valid_bytes <= buffer_size);
+
+        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
+        let buffer = Self::create_initialized_buffer(
+            graphics_device.device(),
+            bytes,
+            buffer_type.usage() | wgpu::BufferUsages::COPY_DST | additional_usages,
+            &buffer_label,
+        );
+
+        Self {
+            buffer,
+            buffer_size,
+            n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+            label,
+        }
+    }
+
     /// Creates an uninitialized GPU buffer of the given type with room for
     /// `buffer_size` bytes.
     ///

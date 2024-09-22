@@ -1,23 +1,30 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use impact::voxel::{
     chunks::ChunkedVoxelObject,
-    generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
+    generation::{BoxVoxelGenerator, SameVoxelTypeGenerator, SphereVoxelGenerator},
     mesh::ChunkedVoxelObjectMesh,
-    VoxelType,
+    voxel_types::VoxelType,
 };
 use pprof::criterion::{Output, PProfProfiler};
 
 pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
     c.bench_function("chunked_voxel_object_construction", |b| {
         b.iter(|| {
-            let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25, 200, 200, 200);
+            let generator = BoxVoxelGenerator::new(
+                0.25,
+                200,
+                200,
+                200,
+                SameVoxelTypeGenerator::new(VoxelType::default()),
+            );
             ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         })
     });
 }
 
 pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let generator =
+        SphereVoxelGenerator::new(0.25, 200, SameVoxelTypeGenerator::new(VoxelType::default()));
     let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
     let ranges = object.occupied_voxel_ranges();
     c.bench_function("chunked_voxel_object_get_each_voxel", |b| {
@@ -34,7 +41,8 @@ pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
 }
 
 pub fn bench_chunked_voxel_object_initialize_adjacencies(c: &mut Criterion) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let generator =
+        SphereVoxelGenerator::new(0.25, 200, SameVoxelTypeGenerator::new(VoxelType::default()));
     let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
     c.bench_function("chunked_voxel_object_initialize_adjacencies", |b| {
         b.iter(|| {
@@ -46,7 +54,8 @@ pub fn bench_chunked_voxel_object_initialize_adjacencies(c: &mut Criterion) {
 }
 
 pub fn bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let generator =
+        SphereVoxelGenerator::new(0.25, 200, SameVoxelTypeGenerator::new(VoxelType::default()));
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     c.bench_function(
         "bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf",
@@ -65,7 +74,8 @@ pub fn bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf(c: &mut Criter
 }
 
 pub fn bench_chunked_voxel_object_create_mesh(c: &mut Criterion) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
+    let generator =
+        SphereVoxelGenerator::new(0.25, 200, SameVoxelTypeGenerator::new(VoxelType::default()));
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     c.bench_function("bench_chunked_voxel_object_create_mesh", |b| {
         b.iter(|| {

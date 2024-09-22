@@ -1,38 +1,23 @@
 //! Voxels.
 
-pub mod buffer;
 pub mod chunks;
 pub mod components;
 pub mod entity;
 pub mod generation;
 pub mod mesh;
 pub mod render_commands;
+pub mod resource;
 pub mod utils;
+pub mod voxel_types;
 
 pub use entity::register_voxel_feature_types;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::ChunkedVoxelObject;
-use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
-use num_traits::FromPrimitive;
-use std::fmt;
-use std::{array, collections::HashMap};
+use std::{collections::HashMap, fmt};
 use utils::{Dimension, Side};
-
-/// A type identifier that determines all the properties of a voxel.
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, DeriveToPrimitive, DeriveFromPrimitive)]
-pub enum VoxelType {
-    Default = 0,
-}
-
-/// The total number of separate [`VoxelType`]s.
-const N_VOXEL_TYPES: usize = 1;
-
-/// Identifier for predefined set of voxel properties.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct VoxelPropertyID(u8);
+use voxel_types::{VoxelType, VoxelTypeRegistry};
 
 /// A compact encoding of a signed distance for a voxel.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -71,16 +56,9 @@ bitflags! {
 /// specific properties.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Voxel {
-    property_id: VoxelPropertyID,
+    voxel_type: VoxelType,
     signed_distance: VoxelSignedDistance,
     flags: VoxelFlags,
-}
-
-/// A mapping from voxel types to the corresponding values of a specific voxel
-/// property.
-#[derive(Debug)]
-pub struct VoxelPropertyMap<P> {
-    property_values: [P; N_VOXEL_TYPES],
 }
 
 /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
@@ -91,48 +69,9 @@ pub struct VoxelObjectID(u32);
 /// Manager of all [`ChunkedVoxelObject`]s in a scene.
 #[derive(Debug)]
 pub struct VoxelManager {
+    voxel_type_registry: VoxelTypeRegistry,
     voxel_objects: HashMap<VoxelObjectID, ChunkedVoxelObject>,
     voxel_object_id_counter: u32,
-}
-
-/// Represents a voxel generator that provides a voxel type given the voxel
-/// indices.
-pub trait VoxelGenerator {
-    /// Returns the extent of single voxel.
-    fn voxel_extent(&self) -> f64;
-
-    /// Returns the number of voxels along the x-, y- and z-axis of the grid,
-    /// respectively.
-    fn grid_shape(&self) -> [usize; 3];
-
-    /// Returns the voxel at the given indices in a voxel grid. If the indices
-    /// are outside the bounds of the grid, this should return
-    /// [`Voxel::fully_outside`].
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
-}
-
-impl VoxelType {
-    /// Returns an array with each voxel type in the order of their index.
-    pub fn all() -> [Self; N_VOXEL_TYPES] {
-        array::from_fn(|idx| Self::from_usize(idx).unwrap())
-    }
-}
-
-impl VoxelPropertyID {
-    /// Creates a new property ID for the given `VoxelType`.
-    pub const fn from_voxel_type(voxel_type: VoxelType) -> Self {
-        Self(voxel_type as u8)
-    }
-
-    const fn dummy() -> Self {
-        Self(u8::MAX)
-    }
-}
-
-impl From<VoxelType> for VoxelPropertyID {
-    fn from(voxel_type: VoxelType) -> Self {
-        Self::from_voxel_type(voxel_type)
-    }
 }
 
 impl VoxelSignedDistance {
@@ -233,40 +172,37 @@ impl VoxelFlags {
 }
 
 impl Voxel {
-    /// Creates a new voxel with the given property ID, state flags and signed
+    /// Creates a new voxel with the given type, state flags and signed
     /// distance.
     const fn new(
-        property_id: VoxelPropertyID,
+        voxel_type: VoxelType,
         flags: VoxelFlags,
         signed_distance: VoxelSignedDistance,
     ) -> Self {
         Self {
-            property_id,
+            voxel_type,
             flags,
             signed_distance,
         }
     }
 
-    /// Creates a new voxel with the given property ID and signed distance that
+    /// Creates a new voxel with the given type and signed distance that
     /// is near the surface of the object (it is adjacent to a voxel with an
     /// opposite signed distance).
-    pub const fn near_surface(
-        property_id: VoxelPropertyID,
-        signed_distance: VoxelSignedDistance,
-    ) -> Self {
+    pub const fn near_surface(voxel_type: VoxelType, signed_distance: VoxelSignedDistance) -> Self {
         Self {
-            property_id,
+            voxel_type,
             flags: VoxelFlags::new(),
             signed_distance,
         }
     }
 
-    /// Creates a new voxel with the given property ID that is fully inside the
+    /// Creates a new voxel with the given type that is fully inside the
     /// object (not adjacent to a voxel whose center is outside the object's
     /// surface).
-    pub const fn fully_inside(property_id: VoxelPropertyID) -> Self {
+    pub const fn fully_inside(voxel_type: VoxelType) -> Self {
         Self::new(
-            property_id,
+            voxel_type,
             VoxelFlags::new(),
             VoxelSignedDistance::fully_inside(),
         )
@@ -276,7 +212,7 @@ impl Voxel {
     /// to a voxel whose center is inside the object's surface).
     pub const fn fully_outside() -> Self {
         Self::new(
-            VoxelPropertyID::dummy(),
+            VoxelType::dummy(),
             VoxelFlags::IS_EMPTY,
             VoxelSignedDistance::fully_outside(),
         )
@@ -285,6 +221,11 @@ impl Voxel {
     /// Whether the voxel is empty.
     pub fn is_empty(&self) -> bool {
         self.flags.contains(VoxelFlags::IS_EMPTY)
+    }
+
+    /// Returns the type of the voxel.
+    pub fn voxel_type(&self) -> VoxelType {
+        self.voxel_type
     }
 
     /// Returns the flags encoding the state of the voxel.
@@ -310,20 +251,6 @@ impl Voxel {
     }
 }
 
-impl<P> VoxelPropertyMap<P> {
-    /// Creates a new voxel property map using the given property values, with
-    /// the value for a given voxel type residing at the numerical value of the
-    /// corresponding [`VoxelType`] enum variant.
-    pub fn new(property_values: [P; N_VOXEL_TYPES]) -> Self {
-        Self { property_values }
-    }
-
-    /// Returns a reference to the property value for the given voxel type.
-    pub fn value(&self, voxel_type: VoxelType) -> &P {
-        &self.property_values[voxel_type as usize]
-    }
-}
-
 #[cfg(test)]
 impl VoxelObjectID {
     /// Creates a dummy [`ChunkedVoxelObjectID`] that will never match an actual
@@ -340,11 +267,18 @@ impl std::fmt::Display for VoxelObjectID {
 }
 
 impl VoxelManager {
-    pub fn new() -> Self {
+    /// Creates a new voxel manager with the given registry of voxel types.
+    pub fn new(voxel_type_registry: VoxelTypeRegistry) -> Self {
         Self {
+            voxel_type_registry,
             voxel_objects: HashMap::new(),
             voxel_object_id_counter: 1,
         }
+    }
+
+    /// Returns a reference to the [`VoxelTypeRegistry`].
+    pub fn voxel_type_registry(&self) -> &VoxelTypeRegistry {
+        &self.voxel_type_registry
     }
 
     /// Returns a reference to the [`ChunkedVoxelObject`] with the given ID, or
@@ -391,11 +325,5 @@ impl VoxelManager {
         let voxel_object_id = VoxelObjectID(self.voxel_object_id_counter);
         self.voxel_object_id_counter = self.voxel_object_id_counter.checked_add(1).unwrap();
         voxel_object_id
-    }
-}
-
-impl Default for VoxelManager {
-    fn default() -> Self {
-        Self::new()
     }
 }

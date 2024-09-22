@@ -35,9 +35,9 @@ use crate::{
     },
     scene::ModelInstanceNode,
     voxel::{
-        buffer::VoxelObjectGPUBufferManager,
         entity::VOXEL_MODEL_ID,
-        mesh::{CullingFrustum, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
+        mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
+        resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
         VoxelObjectID,
     },
 };
@@ -56,7 +56,8 @@ pub struct VoxelRenderCommands {
 #[derive(Debug)]
 struct VoxelChunkCullingPass {
     push_constants: PushConstantGroup,
-    pipeline: wgpu::ComputePipeline,
+    pipeline_for_non_indexed: wgpu::ComputePipeline,
+    pipeline_for_indexed: wgpu::ComputePipeline,
 }
 
 /// Pipeline for rendering the geometric and material properties of voxel
@@ -65,7 +66,11 @@ struct VoxelChunkCullingPass {
 #[derive(Debug)]
 pub struct VoxelGeometryPipeline {
     push_constants: PushConstantGroup,
-    pipeline: wgpu::RenderPipeline,
+    color_target_states: Vec<Option<wgpu::ColorTargetState>>,
+    depth_stencil_state: Option<wgpu::DepthStencilState>,
+    polygon_mode: wgpu::PolygonMode,
+    pipeline_layout: wgpu::PipelineLayout,
+    pipeline: Option<wgpu::RenderPipeline>,
 }
 
 impl VoxelRenderCommands {
@@ -82,7 +87,7 @@ impl VoxelRenderCommands {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        self.chunk_culling_pass.record_for_camera(
+        self.chunk_culling_pass.record_for_geometry_pass(
             scene_camera,
             instance_feature_manager,
             render_resources,
@@ -198,11 +203,11 @@ impl VoxelRenderCommands {
                 voxel_object_buffer_manager
                     .index_gpu_buffer()
                     .valid_buffer_slice(),
-                voxel_object_buffer_manager.index_format(),
+                VoxelMeshIndex::format(),
             );
 
             let indirect_buffer = voxel_object_buffer_manager
-                .indirect_argument_gpu_buffer()
+                .indexed_indirect_argument_gpu_buffer()
                 .buffer();
 
             render_pass.multi_draw_indexed_indirect(indirect_buffer, 0, chunk_count);
@@ -228,21 +233,39 @@ impl VoxelChunkCullingPass {
             "Voxel chunk culling pass compute pipeline layout",
         );
 
-        let (_, shader) = shader_manager.get_or_create_compute_shader_from_template(
-            graphics_device,
-            &VoxelChunkCullingShaderTemplate,
-        );
+        let (_, shader_for_non_indexed) = shader_manager
+            .get_or_create_compute_shader_from_template(
+                graphics_device,
+                &VoxelChunkCullingShaderTemplate {
+                    for_indexed_draw_calls: false,
+                },
+            );
 
-        let pipeline = compute::create_compute_pipeline(
+        let pipeline_for_non_indexed = compute::create_compute_pipeline(
             graphics_device.device(),
             &pipeline_layout,
-            shader,
-            "Voxel chunk culling pass compute pipeline",
+            shader_for_non_indexed,
+            "Voxel chunk culling pass compute pipeline for non-indexed draw calls",
+        );
+
+        let (_, shader_for_indexed) = shader_manager.get_or_create_compute_shader_from_template(
+            graphics_device,
+            &VoxelChunkCullingShaderTemplate {
+                for_indexed_draw_calls: true,
+            },
+        );
+
+        let pipeline_for_indexed = compute::create_compute_pipeline(
+            graphics_device.device(),
+            &pipeline_layout,
+            shader_for_indexed,
+            "Voxel chunk culling pass compute pipeline for indexed draw calls",
         );
 
         Self {
             push_constants,
-            pipeline,
+            pipeline_for_non_indexed,
+            pipeline_for_indexed,
         }
     }
 
@@ -275,7 +298,7 @@ impl VoxelChunkCullingPass {
             );
     }
 
-    fn record_for_camera(
+    fn record_for_geometry_pass(
         &self,
         scene_camera: Option<&SceneCamera<fre>>,
         instance_feature_manager: &InstanceFeatureManager,
@@ -299,6 +322,8 @@ impl VoxelChunkCullingPass {
             &|frustum_to_voxel_object_transform| {
                 CullingFrustum::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
             },
+            // The geometry pass uses non-indexed draw calls
+            false,
             Cow::Borrowed("Voxel chunk camera culling pass"),
         )
     }
@@ -321,6 +346,8 @@ impl VoxelChunkCullingPass {
             &|frustum_to_voxel_object_transform| {
                 CullingFrustum::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
             },
+            // Shadow map update passes use indexed draw calls
+            true,
             Cow::Borrowed("Voxel chunk culling pass for shadow map"),
         )
     }
@@ -347,6 +374,8 @@ impl VoxelChunkCullingPass {
                     10000.0, // Put the apex this many chunks away to emulate infinity
                 )
             },
+            // Shadow map update passes use indexed draw calls
+            true,
             Cow::Borrowed("Voxel chunk culling pass for shadow map"),
         )
     }
@@ -359,6 +388,7 @@ impl VoxelChunkCullingPass {
         command_encoder: &mut wgpu::CommandEncoder,
         instance_range_id: InstanceFeatureBufferRangeID,
         obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<fre>) -> CullingFrustum,
+        for_indexed_draw_calls: bool,
         tag: Cow<'static, str>,
     ) -> Result<()>
     where
@@ -403,7 +433,11 @@ impl VoxelChunkCullingPass {
             label: Some("Voxel chunk culling pass"),
         });
 
-        compute_pass.set_pipeline(&self.pipeline);
+        compute_pass.set_pipeline(if for_indexed_draw_calls {
+            &self.pipeline_for_indexed
+        } else {
+            &self.pipeline_for_non_indexed
+        });
 
         let (_, voxel_object_to_frustum_transforms) =
             instance_transform_buffer.range_with_valid_features::<F>(instance_range_id);
@@ -435,7 +469,11 @@ impl VoxelChunkCullingPass {
 
             compute_pass.set_bind_group(
                 0,
-                voxel_object_buffer_manager.submesh_and_argument_buffer_bind_group(),
+                if for_indexed_draw_calls {
+                    voxel_object_buffer_manager.submesh_and_indexed_argument_buffer_bind_group()
+                } else {
+                    voxel_object_buffer_manager.submesh_and_argument_buffer_bind_group()
+                },
                 &[],
             );
 
@@ -467,8 +505,7 @@ impl VoxelChunkCullingPass {
 impl VoxelGeometryPipeline {
     pub fn new(
         graphics_device: &GraphicsDevice,
-        shader_manager: &mut ShaderManager,
-        color_target_states: &[Option<wgpu::ColorTargetState>],
+        color_target_states: Vec<Option<wgpu::ColorTargetState>>,
         depth_stencil_state: Option<wgpu::DepthStencilState>,
         config: &RenderingConfig,
     ) -> Self {
@@ -477,45 +514,77 @@ impl VoxelGeometryPipeline {
         let camera_bind_group_layout =
             CameraGPUBufferManager::get_or_create_bind_group_layout(graphics_device);
 
+        let material_bind_group_layout =
+            VoxelMaterialGPUResourceManager::get_or_create_bind_group_layout(graphics_device);
+
+        let position_and_normal_buffer_bind_group_layout =
+            VoxelObjectGPUBufferManager::get_or_create_position_and_normal_buffer_bind_group_layout(
+                graphics_device,
+            );
+
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[camera_bind_group_layout],
+            &[
+                camera_bind_group_layout,
+                material_bind_group_layout,
+                position_and_normal_buffer_bind_group_layout,
+            ],
             &push_constants.create_ranges(),
             "Voxel geometry pass render pipeline layout",
         );
 
+        let polygon_mode = if config.wireframe_mode_on {
+            wgpu::PolygonMode::Line
+        } else {
+            wgpu::PolygonMode::Fill
+        };
+
+        Self {
+            push_constants,
+            color_target_states,
+            depth_stencil_state,
+            polygon_mode,
+            pipeline_layout,
+            pipeline: None,
+        }
+    }
+
+    pub fn sync_with_render_resources(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        render_resources: &SynchronizedRenderResources,
+    ) -> Result<()> {
+        let n_voxel_types = render_resources
+            .get_voxel_material_resource_manager()
+            .ok_or_else(|| anyhow!("Missing voxel material GPU resource manager"))?
+            .n_voxel_types();
+
         let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
             graphics_device,
-            &VoxelGeometryShaderTemplate,
+            &VoxelGeometryShaderTemplate::new(n_voxel_types, 0.1),
         );
 
         let vertex_buffer_layouts = &[
             InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
-            VoxelMeshVertexPosition::BUFFER_LAYOUT,
-            VoxelMeshVertexNormalVector::BUFFER_LAYOUT,
+            VoxelMeshIndex::BUFFER_LAYOUT,
+            VoxelMeshIndexMaterials::BUFFER_LAYOUT,
         ];
 
-        let pipeline = render_command::create_render_pipeline(
+        self.pipeline = Some(render_command::create_render_pipeline(
             graphics_device.device(),
-            &pipeline_layout,
+            &self.pipeline_layout,
             shader,
             vertex_buffer_layouts,
-            color_target_states,
+            &self.color_target_states,
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
-            if config.wireframe_mode_on {
-                wgpu::PolygonMode::Line
-            } else {
-                wgpu::PolygonMode::Fill
-            },
-            depth_stencil_state,
+            self.polygon_mode,
+            self.depth_stencil_state.clone(),
             "Voxel geometry pass render pipeline",
-        );
+        ));
 
-        Self {
-            push_constants,
-            pipeline,
-        }
+        Ok(())
     }
 
     fn set_push_constants(
@@ -589,10 +658,20 @@ impl VoxelGeometryPipeline {
             .get(ModelInstanceNode::model_view_transform_feature_idx())
             .ok_or_else(|| anyhow!("Missing model-view transform GPU buffer for voxel objects"))?;
 
+        let material_gpu_resource_manager = render_resources
+            .get_voxel_material_resource_manager()
+            .ok_or_else(|| anyhow!("Missing voxel material GPU resource manager"))?;
+
         // We don't assign the camera projection uniform bind group here, as it will
         // already have been assigned by the caller
 
-        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_pipeline(
+            self.pipeline
+                .as_ref()
+                .expect("Missing voxel geometry pipeline"),
+        );
+
+        render_pass.set_bind_group(1, material_gpu_resource_manager.bind_group(), &[]);
 
         self.set_push_constants(render_pass, rendering_surface, postprocessor, frame_counter);
 
@@ -613,32 +692,31 @@ impl VoxelGeometryPipeline {
 
             let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
 
+            render_pass.set_bind_group(
+                2,
+                voxel_object_buffer_manager.position_and_normal_buffer_bind_group(),
+                &[],
+            );
+
             render_pass.set_vertex_buffer(
                 1,
                 voxel_object_buffer_manager
-                    .vertex_position_gpu_buffer()
+                    .index_gpu_buffer()
                     .valid_buffer_slice(),
             );
 
             render_pass.set_vertex_buffer(
                 2,
                 voxel_object_buffer_manager
-                    .vertex_normal_vector_gpu_buffer()
+                    .index_material_gpu_buffer()
                     .valid_buffer_slice(),
-            );
-
-            render_pass.set_index_buffer(
-                voxel_object_buffer_manager
-                    .index_gpu_buffer()
-                    .valid_buffer_slice(),
-                voxel_object_buffer_manager.index_format(),
             );
 
             let indirect_buffer = voxel_object_buffer_manager
                 .indirect_argument_gpu_buffer()
                 .buffer();
 
-            render_pass.multi_draw_indexed_indirect(indirect_buffer, 0, chunk_count);
+            render_pass.multi_draw_indirect(indirect_buffer, 0, chunk_count);
         }
 
         log::debug!(

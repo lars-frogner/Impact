@@ -6,8 +6,10 @@ use crate::{
     geometry::{AxisAlignedBox, Sphere},
     num::Float,
     voxel::{
+        generation::VoxelGenerator,
         utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
-        Voxel, VoxelFlags, VoxelGenerator,
+        voxel_types::{VoxelType, VoxelTypeRegistry},
+        Voxel, VoxelFlags,
     },
 };
 use bitflags::bitflags;
@@ -36,6 +38,7 @@ pub struct ChunkedVoxelObject {
     superchunks: Vec<VoxelSuperchunk>,
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
+    _voxel_types: Vec<VoxelType>,
 }
 
 /// A voxel chunk that is not fully obscured by adjacent voxels.
@@ -306,6 +309,8 @@ impl ChunkedVoxelObject {
 
         let occupied_chunk_ranges = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
 
+        let voxel_types = Self::find_voxel_types(&superchunks, &chunks, &voxels);
+
         Some(Self {
             voxel_extent: generator.voxel_extent(),
             n_superchunks_per_axis,
@@ -314,7 +319,42 @@ impl ChunkedVoxelObject {
             superchunks,
             chunks,
             voxels,
+            _voxel_types: voxel_types,
         })
+    }
+
+    fn find_voxel_types(
+        superchunks: &[VoxelSuperchunk],
+        chunks: &[VoxelChunk],
+        voxels: &[Voxel],
+    ) -> Vec<VoxelType> {
+        let mut has_voxel_type = [false; VoxelTypeRegistry::max_n_voxel_types() + 1];
+
+        for superchunk in superchunks {
+            if let VoxelSuperchunk::Uniform(voxel) = superchunk {
+                has_voxel_type[voxel.voxel_type().idx()] = true;
+            }
+        }
+        for chunk in chunks {
+            if let VoxelChunk::Uniform(voxel) = chunk {
+                has_voxel_type[voxel.voxel_type().idx()] = true;
+            }
+        }
+        for voxel in voxels {
+            has_voxel_type[voxel.voxel_type().idx()] = true;
+        }
+
+        has_voxel_type[..VoxelTypeRegistry::max_n_voxel_types()]
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, &has_voxel_type)| {
+                if has_voxel_type {
+                    Some(VoxelType::from_idx_u8(idx as u8))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Returns the extent of single voxel in the object.
@@ -2607,10 +2647,10 @@ fn extract_slice_segments_mut<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{generation::UniformBoxVoxelGenerator, VoxelPropertyID, VoxelType};
+    use crate::voxel::voxel_types::VoxelType;
     use approx::assert_abs_diff_eq;
 
-    pub struct BoxVoxelGenerator {
+    pub struct OffsetBoxVoxelGenerator {
         shape: [usize; 3],
         offset: [usize; 3],
         voxel: Voxel,
@@ -2621,7 +2661,7 @@ mod tests {
         offset: [usize; 3],
     }
 
-    impl BoxVoxelGenerator {
+    impl OffsetBoxVoxelGenerator {
         pub fn new(shape: [usize; 3], offset: [usize; 3], voxel: Voxel) -> Self {
             Self {
                 shape,
@@ -2639,7 +2679,7 @@ mod tests {
         }
 
         pub fn single_default() -> Self {
-            Self::single(Voxel::fully_inside(VoxelType::Default.into()))
+            Self::single(Voxel::fully_inside(VoxelType::default()))
         }
 
         pub fn single_empty() -> Self {
@@ -2651,11 +2691,7 @@ mod tests {
         }
 
         pub fn offset_with_default(shape: [usize; 3], offset: [usize; 3]) -> Self {
-            Self::new(
-                shape,
-                offset,
-                Voxel::fully_inside(VoxelType::Default.into()),
-            )
+            Self::new(shape, offset, Voxel::fully_inside(VoxelType::default()))
         }
     }
 
@@ -2669,7 +2705,7 @@ mod tests {
         }
     }
 
-    impl VoxelGenerator for BoxVoxelGenerator {
+    impl VoxelGenerator for OffsetBoxVoxelGenerator {
         fn voxel_extent(&self) -> f64 {
             0.25
         }
@@ -2715,7 +2751,7 @@ mod tests {
                 && k < self.offset[2] + N
                 && self.voxels[i - self.offset[0]][j - self.offset[1]][k - self.offset[2]] != 0
             {
-                Voxel::fully_inside(VoxelPropertyID::from_voxel_type(VoxelType::Default))
+                Voxel::fully_inside(VoxelType::default())
             } else {
                 Voxel::fully_outside()
             }
@@ -2725,7 +2761,7 @@ mod tests {
     #[test]
     fn should_yield_none_when_generating_object_with_empty_grid() {
         assert!(ChunkedVoxelObject::generate_without_adjacencies(
-            &BoxVoxelGenerator::with_default([0; 3])
+            &OffsetBoxVoxelGenerator::with_default([0; 3])
         )
         .is_none());
     }
@@ -2733,18 +2769,20 @@ mod tests {
     #[test]
     fn should_yield_none_when_generating_object_of_empty_voxels() {
         assert!(ChunkedVoxelObject::generate_without_adjacencies(
-            &BoxVoxelGenerator::single_empty()
+            &OffsetBoxVoxelGenerator::single_empty()
         )
         .is_none());
         assert!(
-            ChunkedVoxelObject::generate_without_adjacencies(&BoxVoxelGenerator::empty([2, 3, 4]))
-                .is_none()
+            ChunkedVoxelObject::generate_without_adjacencies(&OffsetBoxVoxelGenerator::empty([
+                2, 3, 4
+            ]))
+            .is_none()
         );
     }
 
     #[test]
     fn should_generate_object_with_single_voxel() {
-        let generator = BoxVoxelGenerator::single_default();
+        let generator = OffsetBoxVoxelGenerator::single_default();
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         assert_eq!(object.voxel_extent(), generator.voxel_extent());
         assert_eq!(object.n_superchunks_per_axis(), 1);
@@ -2757,7 +2795,7 @@ mod tests {
 
     #[test]
     fn should_generate_object_with_single_uniform_superchunk() {
-        let generator = BoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS; 3]);
+        let generator = OffsetBoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
@@ -2780,7 +2818,7 @@ mod tests {
     #[cfg(not(miri))]
     #[test]
     fn should_generate_object_with_single_uniform_superchunk_plus_one_voxel() {
-        let generator = BoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS + 1; 3]);
+        let generator = OffsetBoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS + 1; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 2);
         assert_eq!(object.full_grid_size(), 2 * SUPERCHUNK_SIZE_IN_VOXELS);
@@ -2809,7 +2847,7 @@ mod tests {
 
     #[test]
     fn should_generate_object_with_single_uniform_chunk() {
-        let generator = BoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
+        let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
@@ -2821,7 +2859,8 @@ mod tests {
 
     #[test]
     fn should_generate_object_with_single_offset_uniform_chunk() {
-        let generator = BoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
+        let generator =
+            OffsetBoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
@@ -2860,6 +2899,8 @@ mod tests {
         }
     }
 
+    // Too slow for `miri`
+    #[cfg(not(miri))]
     #[test]
     fn should_get_correct_voxels_in_small_offset_grid() {
         let offset = [SUPERCHUNK_SIZE_IN_VOXELS - 2; 3];
@@ -3004,7 +3045,7 @@ mod tests {
 
     #[test]
     fn should_compute_correct_adjacencies_for_single_voxel() {
-        let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25, 1, 1, 1);
+        let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
@@ -3013,13 +3054,7 @@ mod tests {
 
     #[test]
     fn should_compute_correct_adjacencies_for_single_chunk() {
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            CHUNK_SIZE,
-            CHUNK_SIZE,
-            CHUNK_SIZE,
-        );
+        let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
@@ -3028,76 +3063,48 @@ mod tests {
 
     #[test]
     fn should_compute_correct_adjacencies_for_barely_two_chunks() {
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            CHUNK_SIZE + 1,
-            CHUNK_SIZE,
-            CHUNK_SIZE,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE + 1, CHUNK_SIZE, CHUNK_SIZE]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
         object.validate_superchunk_obscuredness();
 
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            CHUNK_SIZE,
-            CHUNK_SIZE + 1,
-            CHUNK_SIZE,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE, CHUNK_SIZE + 1, CHUNK_SIZE]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
         object.validate_superchunk_obscuredness();
 
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            CHUNK_SIZE,
-            CHUNK_SIZE,
-            CHUNK_SIZE + 1,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE + 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
         object.validate_superchunk_obscuredness();
     }
 
+    // Too slow for `miri`
+    #[cfg(not(miri))]
     #[test]
     fn should_compute_correct_adjacencies_with_column_taking_barely_two_superchunks() {
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            SUPERCHUNK_SIZE_IN_VOXELS + 1,
-            1,
-            1,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS + 1, 1, 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
         object.validate_superchunk_obscuredness();
 
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            1,
-            SUPERCHUNK_SIZE_IN_VOXELS + 1,
-            1,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([1, SUPERCHUNK_SIZE_IN_VOXELS + 1, 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
         object.validate_superchunk_obscuredness();
 
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            0.25,
-            1,
-            1,
-            SUPERCHUNK_SIZE_IN_VOXELS + 1,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([1, 1, SUPERCHUNK_SIZE_IN_VOXELS + 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
@@ -3184,7 +3191,7 @@ mod tests {
 
     #[test]
     fn should_compute_correct_aabb_for_single_voxel() {
-        let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 2.0, 1, 1, 1);
+        let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
@@ -3202,13 +3209,7 @@ mod tests {
 
     #[test]
     fn should_compute_correct_aabb_for_single_chunk() {
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            2.0,
-            CHUNK_SIZE,
-            CHUNK_SIZE,
-            CHUNK_SIZE,
-        );
+        let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
@@ -3224,13 +3225,8 @@ mod tests {
 
     #[test]
     fn should_compute_correct_aabb_for_different_numbers_of_chunks_along_each_axis() {
-        let generator = UniformBoxVoxelGenerator::new(
-            VoxelType::Default,
-            2.0,
-            2 * CHUNK_SIZE,
-            3 * CHUNK_SIZE,
-            4 * CHUNK_SIZE,
-        );
+        let generator =
+            OffsetBoxVoxelGenerator::with_default([2 * CHUNK_SIZE, 3 * CHUNK_SIZE, 4 * CHUNK_SIZE]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
@@ -3246,7 +3242,8 @@ mod tests {
 
     #[test]
     fn should_compute_correct_aabb_for_offset_chunk() {
-        let generator = BoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
+        let generator =
+            OffsetBoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(

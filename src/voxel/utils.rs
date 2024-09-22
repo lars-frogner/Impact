@@ -650,7 +650,7 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     ///   maximum linear index in that loop.
     pub fn map_other_data_into_data<U, const M: usize>(
         self,
-        other: DataLoop3<'_, '_, U, M>,
+        other: &DataLoop3<'_, '_, U, M>,
         map: &impl Fn(&U) -> T,
     ) {
         assert!(self.data.len() >= self.lp.max_linear_idx());
