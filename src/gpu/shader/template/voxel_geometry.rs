@@ -65,6 +65,8 @@ impl SpecificShaderTemplate for VoxelGeometryShaderTemplate {
                     "material_group" => 1,
                     "fixed_material_uniform_binding" => VoxelMaterialGPUResourceManager::fixed_properties_binding(),
                     "color_texture_array_binding" => VoxelMaterialGPUResourceManager::color_texture_array_binding(),
+                    "roughness_texture_array_binding" => VoxelMaterialGPUResourceManager::roughness_texture_array_binding(),
+                    "normal_texture_array_binding" => VoxelMaterialGPUResourceManager::normal_texture_array_binding(),
                     "sampler_binding" => VoxelMaterialGPUResourceManager::sampler_binding(),
                     "position_and_normal_group" => 2,
                     "position_buffer_binding" => 0,
