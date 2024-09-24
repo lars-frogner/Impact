@@ -53,9 +53,7 @@ pub struct GradientNoiseVoxelGenerator<T> {
     size_x: usize,
     size_y: usize,
     size_z: usize,
-    noise_distance_scale_x: f64,
-    noise_distance_scale_y: f64,
-    noise_distance_scale_z: f64,
+    noise_frequency: f64,
     noise_threshold: f64,
     noise: Simplex,
     voxel_type_generator: T,
@@ -69,10 +67,8 @@ pub struct SameVoxelTypeGenerator {
 #[derive(Clone, Debug)]
 pub struct GradientNoiseVoxelTypeGenerator {
     voxel_types: Vec<VoxelType>,
-    noise_distance_scale_x: f64,
-    noise_distance_scale_y: f64,
-    noise_distance_scale_z: f64,
-    noise_distance_scale_voxel_type_dim: f64,
+    noise_frequency: f64,
+    noise_scale_for_voxel_type_dim: f64,
     noise: Simplex,
 }
 
@@ -191,10 +187,6 @@ impl<T> GradientNoiseVoxelGenerator<T> {
         seed: u32,
         voxel_type_generator: T,
     ) -> Self {
-        let noise_distance_scale_x = noise_frequency / usize::max(1, size_x) as f64;
-        let noise_distance_scale_y = noise_frequency / usize::max(1, size_y) as f64;
-        let noise_distance_scale_z = noise_frequency / usize::max(1, size_z) as f64;
-
         let noise = Simplex::new(seed);
 
         Self {
@@ -202,9 +194,7 @@ impl<T> GradientNoiseVoxelGenerator<T> {
             size_x,
             size_y,
             size_z,
-            noise_distance_scale_x,
-            noise_distance_scale_y,
-            noise_distance_scale_z,
+            noise_frequency,
             noise_threshold,
             noise,
             voxel_type_generator,
@@ -223,9 +213,9 @@ impl<T: VoxelTypeGenerator> VoxelGenerator for GradientNoiseVoxelGenerator<T> {
 
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
         if i < self.size_x && j < self.size_y && k < self.size_z {
-            let x = i as f64 * self.noise_distance_scale_x;
-            let y = j as f64 * self.noise_distance_scale_y;
-            let z = k as f64 * self.noise_distance_scale_z;
+            let x = i as f64 * self.noise_frequency;
+            let y = j as f64 * self.noise_frequency;
+            let z = k as f64 * self.noise_frequency;
 
             let noise_value = self.noise.get([x, y, z]);
 
@@ -256,24 +246,20 @@ impl VoxelTypeGenerator for SameVoxelTypeGenerator {
 impl GradientNoiseVoxelTypeGenerator {
     pub fn new(
         voxel_types: Vec<VoxelType>,
+        noise_frequency: f64,
         voxel_type_frequency: f64,
-        noise_distance_scale_x: f64,
-        noise_distance_scale_y: f64,
-        noise_distance_scale_z: f64,
         seed: u32,
     ) -> Self {
         assert!(!voxel_types.is_empty());
 
-        let noise_distance_scale_voxel_type_dim = voxel_type_frequency / voxel_types.len() as f64;
+        let noise_scale_for_voxel_type_dim = voxel_type_frequency / voxel_types.len() as f64;
 
         let noise = Simplex::new(seed);
 
         Self {
             voxel_types,
-            noise_distance_scale_x,
-            noise_distance_scale_y,
-            noise_distance_scale_z,
-            noise_distance_scale_voxel_type_dim,
+            noise_frequency,
+            noise_scale_for_voxel_type_dim,
             noise,
         }
     }
@@ -281,16 +267,15 @@ impl GradientNoiseVoxelTypeGenerator {
 
 impl VoxelTypeGenerator for GradientNoiseVoxelTypeGenerator {
     fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
-        let x = i as f64 * self.noise_distance_scale_x;
-        let y = j as f64 * self.noise_distance_scale_y;
-        let z = k as f64 * self.noise_distance_scale_z;
+        let x = i as f64 * self.noise_frequency;
+        let y = j as f64 * self.noise_frequency;
+        let z = k as f64 * self.noise_frequency;
 
         self.voxel_types
             .iter()
             .enumerate()
             .map(|(voxel_type_idx, voxel_type)| {
-                let voxel_type_coord =
-                    voxel_type_idx as f64 * self.noise_distance_scale_voxel_type_dim;
+                let voxel_type_coord = voxel_type_idx as f64 * self.noise_scale_for_voxel_type_dim;
                 let noise_value = self.noise.get([x, y, z, voxel_type_coord]);
                 (noise_value, *voxel_type)
             })
@@ -410,26 +395,19 @@ pub mod fuzzing {
             for _ in 0..u.int_in_range(0..=voxel_types.len() - 1)? {
                 voxel_types.swap_remove(u.int_in_range(0..=voxel_types.len() - 1)?);
             }
+            let noise_frequency = 100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
             let voxel_type_frequency = 100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
-            let noise_distance_scale_x =
-                100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
-            let noise_distance_scale_y =
-                100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
-            let noise_distance_scale_z =
-                100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
             let seed = u.arbitrary()?;
             Ok(Self::new(
                 voxel_types,
+                noise_frequency,
                 voxel_type_frequency,
-                noise_distance_scale_x,
-                noise_distance_scale_y,
-                noise_distance_scale_z,
                 seed,
             ))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let lower_size = mem::size_of::<usize>() + 4 * mem::size_of::<i32>();
+            let lower_size = mem::size_of::<usize>() + 2 * mem::size_of::<i32>();
             let upper_size =
                 lower_size + mem::size_of::<usize>() * (VoxelTypeRegistry::max_n_voxel_types() - 1);
             (lower_size, Some(upper_size))
