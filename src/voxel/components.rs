@@ -37,10 +37,8 @@ pub struct SameVoxelTypeComp {
 pub struct GradientNoiseVoxelTypesComp {
     n_voxel_types: usize,
     voxel_type_name_hashes: [Hash32; GradientNoiseVoxelTypesComp::VOXEL_TYPE_ARRAY_SIZE],
+    noise_frequency: f64,
     voxel_type_frequency: f64,
-    noise_distance_scale_x: f64,
-    noise_distance_scale_y: f64,
-    noise_distance_scale_z: f64,
     pub seed: u64,
 }
 
@@ -133,10 +131,8 @@ impl GradientNoiseVoxelTypesComp {
 
     pub fn new<S: AsRef<str>>(
         voxel_type_names: impl IntoIterator<Item = S>,
+        noise_frequency: f64,
         voxel_type_frequency: f64,
-        noise_distance_scale_x: f64,
-        noise_distance_scale_y: f64,
-        noise_distance_scale_z: f64,
         seed: u64,
     ) -> Self {
         let mut n_voxel_types = 0;
@@ -150,10 +146,8 @@ impl GradientNoiseVoxelTypesComp {
         Self {
             n_voxel_types,
             voxel_type_name_hashes,
+            noise_frequency,
             voxel_type_frequency,
-            noise_distance_scale_x,
-            noise_distance_scale_y,
-            noise_distance_scale_z,
             seed,
         }
     }
@@ -173,20 +167,12 @@ impl GradientNoiseVoxelTypesComp {
         Ok(voxel_types)
     }
 
+    pub fn noise_frequency(&self) -> f64 {
+        self.noise_frequency
+    }
+
     pub fn voxel_type_frequency(&self) -> f64 {
         self.voxel_type_frequency
-    }
-
-    pub fn noise_distance_scale_x(&self) -> f64 {
-        self.noise_distance_scale_x
-    }
-
-    pub fn noise_distance_scale_y(&self) -> f64 {
-        self.noise_distance_scale_y
-    }
-
-    pub fn noise_distance_scale_z(&self) -> f64 {
-        self.noise_distance_scale_z
     }
 
     pub fn seed(&self) -> u64 {

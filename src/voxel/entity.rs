@@ -306,10 +306,8 @@ impl GradientNoiseVoxelTypeGenerator {
             voxel_types
                 .voxel_types(voxel_type_registry)
                 .expect("Invalid voxel types"),
+            voxel_types.noise_frequency(),
             voxel_types.voxel_type_frequency(),
-            voxel_types.noise_distance_scale_x(),
-            voxel_types.noise_distance_scale_y(),
-            voxel_types.noise_distance_scale_z(),
             u32::try_from(voxel_types.seed()).unwrap(),
         )
     }

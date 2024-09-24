@@ -108,14 +108,35 @@ fn init_app(window: Window) -> Result<Application> {
         RollFreeCameraOrientationController::new(vertical_field_of_view, 1.0);
 
     let voxel_type_registry = VoxelTypeRegistry::new(
-        vec![Cow::Borrowed("Brick"), Cow::Borrowed("Wood")],
         vec![
-            FixedVoxelMaterialProperties::new(0.02, 0.6, 0.0, 0.0),
-            FixedVoxelMaterialProperties::new(0.03, 0.7, 0.0, 0.0),
+            Cow::Borrowed("Ground"),
+            Cow::Borrowed("Metal"),
+            Cow::Borrowed("Brick"),
+            Cow::Borrowed("Wood"),
         ],
         vec![
+            FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
+            FixedVoxelMaterialProperties::new(1.0, 1.0, 1.0, 0.0),
+            FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
+            FixedVoxelMaterialProperties::new(0.03, 1.0, 0.0, 0.0),
+        ],
+        vec![
+            PathBuf::from("assets/Ground067_4K-JPG/Ground067_4K-JPG_Color.jpg"),
+            PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Color.jpg"),
             PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
             PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
+        ],
+        vec![
+            PathBuf::from("assets/Ground067_4K-JPG/Ground067_4K-JPG_Roughness.jpg"),
+            PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Roughness.jpg"),
+            PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
+            PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
+        ],
+        vec![
+            PathBuf::from("assets/Ground067_4K-JPG/Ground067_4K-JPG_NormalDX.jpg"),
+            PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_NormalDX.jpg"),
+            PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_NormalDX.jpg"),
+            PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
         ],
     )
     .unwrap();
@@ -425,9 +446,9 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.create_entity((
         // &VoxelBoxComp::new(32, 32, 32),
-        &VoxelGradientNoisePatternComp::new(0.5, 150, 150, 150, 3.0, 0.3, 0),
+        &VoxelGradientNoisePatternComp::new(0.5, 150, 150, 150, 2e-2, 0.3, 0),
         // &SameVoxelTypeComp::new(VoxelType::Green),
-        &GradientNoiseVoxelTypesComp::new(["Brick", "Wood"], 1.0, 1e-2, 1e-2, 1e-2, 1),
+        &GradientNoiseVoxelTypesComp::new(["Ground", "Metal", "Brick", "Wood"], 6e-2, 1.0, 1),
         // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
         &ReferenceFrameComp::unoriented(point![-25.0, -25.0, -5.0]),
     ))?;
