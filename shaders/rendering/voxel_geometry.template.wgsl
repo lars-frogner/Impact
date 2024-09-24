@@ -35,7 +35,7 @@ struct FragmentInput {
     @location(1) modelSpacePosition: vec3f,
     @location(2) cameraSpacePosition: vec3f,
     @location(3) modelSpaceNormalVector: vec3f,
-    @location(4) cameraSpaceNormalVector: vec3f,
+    @location(4) @interpolate(flat) modelToCameraSpaceRotationQuaternion: vec4f,
     @location(5) @interpolate(flat) materialIndices: vec4u,
     @location(6) materialWeights: vec4f,
     @location(7) uniformMaterialProperties: vec4f,
@@ -63,6 +63,12 @@ var<uniform> fixedMaterialProperties: array<vec4f, {{voxel_type_count}}>;
 
 @group({{material_group}}) @binding({{color_texture_array_binding}})
 var materialColorTextures: texture_2d_array<f32>;
+
+@group({{material_group}}) @binding({{roughness_texture_array_binding}})
+var materialRoughnessTextures: texture_2d_array<f32>;
+
+@group({{material_group}}) @binding({{normal_texture_array_binding}})
+var materialNormalTextures: texture_2d_array<f32>;
 
 @group({{material_group}}) @binding({{sampler_binding}})
 var materialSampler: sampler;
@@ -121,6 +127,12 @@ fn convertNormalVectorToNormalColor(normalVector: vec3f) -> vec3f {
     return 0.5 * (normalVector + 1.0);
 }
 
+// From [0, 1] to [-1, 1]
+fn convertNormalColorToNormalVector(color: vec3f) -> vec3f {
+    // May require normalization depending on filtering
+    return 2.0 * (color - 0.5);
+}
+
 fn getMaxComponent(vector: vec4f) -> f32 {
     return max(max(vector.x, vector.y), max(vector.z, vector.w));
 }
@@ -140,56 +152,78 @@ fn triplanarSampleTexture(
     return weights.x * sampleX + weights.y * sampleY + weights.z * sampleZ;
 }
 
+fn triplanarSampleNormalTexture(
+    textureArray: texture_2d_array<f32>,
+    textureSampler: sampler,
+    modelSpaceNormalVector: vec3f,
+    weights: vec3f,
+    coordsX: vec2f,
+    coordsY: vec2f,
+    coordsZ: vec2f,
+    arrayIdx: u32,
+) -> vec3f {
+    var tangentSpaceNormalX = convertNormalColorToNormalVector(textureSample(textureArray, textureSampler, coordsX, arrayIdx).rgb);
+    var tangentSpaceNormalY = convertNormalColorToNormalVector(textureSample(textureArray, textureSampler, coordsY, arrayIdx).rgb);
+    var tangentSpaceNormalZ = convertNormalColorToNormalVector(textureSample(textureArray, textureSampler, coordsZ, arrayIdx).rgb);
+
+    // To convert the sampled tangent space normals to model space, we will
+    // swizzle each of them based on which plane its normal texture was
+    // projected into. But first we make sure their orientation will align with
+    // the unbumped surface normal (see e.g.
+    // https://bgolus.medium.com/normal-mapping-for-a-triplanar-shader-10bf39dca05a).
+    let axisSigns = sign(modelSpaceNormalVector);
+    tangentSpaceNormalX.z *= axisSigns.x;
+    tangentSpaceNormalY.z *= axisSigns.y;
+    tangentSpaceNormalZ.z *= axisSigns.z;
+
+    let modelSpaceNormalX = tangentSpaceNormalX.zyx;
+    let modelSpaceNormalY = tangentSpaceNormalY.xzy;
+    let modelSpaceNormalZ = tangentSpaceNormalZ.xyz;
+
+    return normalize(weights.x * modelSpaceNormalX + weights.y * modelSpaceNormalY + weights.z * modelSpaceNormalZ);
+}
+
 fn triplanarSampleAndBlendTextures(
     textureArray: texture_2d_array<f32>,
     textureSampler: sampler,
     triplanarWeights: vec3f,
-    triplanarCoordsX: vec2f,
-    triplanarCoordsY: vec2f,
-    triplanarCoordsZ: vec2f,
+    coordsX: vec2f,
+    coordsY: vec2f,
+    coordsZ: vec2f,
     materialIndices: vec4u,
     materialWeights: vec4f,
 ) -> vec4f {
-    let sample1 = triplanarSampleTexture(
-        textureArray,
-        textureSampler,
-        triplanarWeights,
-        triplanarCoordsX,
-        triplanarCoordsY,
-        triplanarCoordsZ,
-        materialIndices.x
-    );
-    let sample2 = triplanarSampleTexture(
-        textureArray,
-        textureSampler,
-        triplanarWeights,
-        triplanarCoordsX,
-        triplanarCoordsY,
-        triplanarCoordsZ,
-        materialIndices.y
-    );
-    let sample3 = triplanarSampleTexture(
-        textureArray,
-        textureSampler,
-        triplanarWeights,
-        triplanarCoordsX,
-        triplanarCoordsY,
-        triplanarCoordsZ,
-        materialIndices.z
-    );
-    let sample4 = triplanarSampleTexture(
-        textureArray,
-        textureSampler,
-        triplanarWeights,
-        triplanarCoordsX,
-        triplanarCoordsY,
-        triplanarCoordsZ,
-        materialIndices.w
-    );
+    let sample1 = triplanarSampleTexture(textureArray, textureSampler, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.x);
+    let sample2 = triplanarSampleTexture(textureArray, textureSampler, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.y);
+    let sample3 = triplanarSampleTexture(textureArray, textureSampler, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.z);
+    let sample4 = triplanarSampleTexture(textureArray, textureSampler, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.w);
     return materialWeights.x * sample1 +
            materialWeights.y * sample2 +
            materialWeights.z * sample3 +
            materialWeights.w * sample4;
+}
+
+fn triplanarSampleAndBlendNormalTextures(
+    textureArray: texture_2d_array<f32>,
+    textureSampler: sampler,
+    modelSpaceNormal: vec3f,
+    triplanarWeights: vec3f,
+    coordsX: vec2f,
+    coordsY: vec2f,
+    coordsZ: vec2f,
+    materialIndices: vec4u,
+    materialWeights: vec4f,
+) -> vec3f {
+    let sample1 = triplanarSampleNormalTexture(textureArray, textureSampler, modelSpaceNormal, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.x);
+    let sample2 = triplanarSampleNormalTexture(textureArray, textureSampler, modelSpaceNormal, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.y);
+    let sample3 = triplanarSampleNormalTexture(textureArray, textureSampler, modelSpaceNormal, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.z);
+    let sample4 = triplanarSampleNormalTexture(textureArray, textureSampler, modelSpaceNormal, triplanarWeights, coordsX, coordsY, coordsZ, materialIndices.w);
+    return normalize(
+        materialWeights.x * sample1 +
+        materialWeights.y * sample2 +
+        materialWeights.z * sample3 +
+        materialWeights.w * sample4
+    );
 }
 
 fn computeGGXRoughnessFromPerceptuallyLinearRoughness(linearRoughness: f32) -> f32 {
@@ -238,10 +272,7 @@ fn mainVS(
     );
     output.previousClipSpacePosition = projectionMatrix * vec4f(previousCameraSpacePosition, 1.0);
 
-    output.cameraSpaceNormalVector = rotateVectorWithQuaternion(
-        modelViewTransform.rotationQuaternion,
-        output.modelSpaceNormalVector,
-    );
+    output.modelToCameraSpaceRotationQuaternion = modelViewTransform.rotationQuaternion;
 
     output.materialIndices = vertex.materialIndices;
     output.materialWeights = vec4f(vertex.materialWeights);
@@ -254,10 +285,6 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     var output: FragmentOutput;
 
     output.linearDepth = projectionUniform.inverseFarPlaneZ.x * fragment.cameraSpacePosition.z;
-
-    let cameraSpaceNormalVector = normalize(fragment.cameraSpaceNormalVector);
-
-    output.normalVector = vec4f(convertNormalVectorToNormalColor(cameraSpaceNormalVector), 1.0);
 
     let screenTextureCoords = convertFramebufferPositionToScreenTextureCoords(
         fragment.projectedPosition,
@@ -278,6 +305,24 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     let materialWeights = fragment.materialWeights
         / (fragment.materialWeights.x + fragment.materialWeights.y + fragment.materialWeights.z + fragment.materialWeights.w);
 
+    let blendedModelSpaceNormalVector = triplanarSampleAndBlendNormalTextures(
+        materialNormalTextures,
+        materialSampler,
+        fragment.modelSpaceNormalVector,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        fragment.materialIndices,
+        materialWeights,
+    );
+
+    let cameraSpaceNormalVector = rotateVectorWithQuaternion(
+        fragment.modelToCameraSpaceRotationQuaternion,
+        blendedModelSpaceNormalVector,
+    );
+    output.normalVector = vec4f(convertNormalVectorToNormalColor(cameraSpaceNormalVector), 1.0);
+
     let color = triplanarSampleAndBlendTextures(
         materialColorTextures,
         materialSampler,
@@ -290,6 +335,17 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     ).rgb;
     output.materialColor = vec4f(color, 1.0);
 
+    var roughness = triplanarSampleAndBlendTextures(
+        materialRoughnessTextures,
+        materialSampler,
+        triplanarWeights,
+        triplanarCoordsX,
+        triplanarCoordsY,
+        triplanarCoordsZ,
+        fragment.materialIndices,
+        materialWeights,
+    ).r;
+
     let materialProperties1 = fixedMaterialProperties[fragment.materialIndices.x];
     let materialProperties2 = fixedMaterialProperties[fragment.materialIndices.y];
     let materialProperties3 = fixedMaterialProperties[fragment.materialIndices.z];
@@ -301,7 +357,11 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
         + materialWeights.w * materialProperties4;
 
     let specularReflectance = materialProperties.x;
-    let roughness = computeGGXRoughnessFromPerceptuallyLinearRoughness(materialProperties.y);
+
+    // Apply scale factor to sampled roughness and convert to GGX
+    roughness *= materialProperties.y;
+    roughness = computeGGXRoughnessFromPerceptuallyLinearRoughness(roughness);
+
     let metalness = materialProperties.z;
     let preExposedEmissiveLuminance = pushConstants.exposure * materialProperties.w;
 

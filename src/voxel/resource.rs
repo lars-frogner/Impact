@@ -87,8 +87,16 @@ impl VoxelMaterialGPUResourceManager {
         1
     }
 
-    pub const fn sampler_binding() -> u32 {
+    pub const fn roughness_texture_array_binding() -> u32 {
         2
+    }
+
+    pub const fn normal_texture_array_binding() -> u32 {
+        3
+    }
+
+    pub const fn sampler_binding() -> u32 {
+        4
     }
 
     /// Initializes the material GPU resources for all voxel types in the given
@@ -116,7 +124,28 @@ impl VoxelMaterialGPUResourceManager {
             }),
         )?;
 
+        let roughness_texture_array_id = assets.load_texture_array_from_paths(
+            voxel_type_registry.roughness_texture_paths(),
+            TextureConfig {
+                color_space: ColorSpace::Linear,
+                max_mip_level_count: None,
+            },
+            None,
+        )?;
+
+        let normal_texture_array_id = assets.load_texture_array_from_paths(
+            voxel_type_registry.normal_texture_paths(),
+            TextureConfig {
+                color_space: ColorSpace::Linear,
+                max_mip_level_count: None,
+            },
+            None,
+        )?;
+
         let color_texture_array = &assets.textures[&color_texture_array_id];
+        let roughness_texture_array = &assets.textures[&roughness_texture_array_id];
+        let normal_texture_array = &assets.textures[&normal_texture_array_id];
+
         let sampler = &assets.samplers[&color_texture_array.sampler_id().unwrap()];
 
         let bind_group_layout = Self::get_or_create_bind_group_layout(graphics_device);
@@ -125,6 +154,8 @@ impl VoxelMaterialGPUResourceManager {
             bind_group_layout,
             &fixed_property_buffer,
             color_texture_array,
+            roughness_texture_array,
+            normal_texture_array,
             sampler,
         );
 
@@ -167,6 +198,18 @@ impl VoxelMaterialGPUResourceManager {
                     TexelDescription::Rgba8(ColorSpace::Srgb).texture_format(),
                     wgpu::TextureViewDimension::D2Array,
                 ),
+                texture::create_texture_bind_group_layout_entry(
+                    Self::roughness_texture_array_binding(),
+                    wgpu::ShaderStages::FRAGMENT,
+                    TexelDescription::Grayscale8.texture_format(),
+                    wgpu::TextureViewDimension::D2Array,
+                ),
+                texture::create_texture_bind_group_layout_entry(
+                    Self::normal_texture_array_binding(),
+                    wgpu::ShaderStages::FRAGMENT,
+                    TexelDescription::Rgba8(ColorSpace::Linear).texture_format(),
+                    wgpu::TextureViewDimension::D2Array,
+                ),
                 texture::create_sampler_bind_group_layout_entry(
                     Self::sampler_binding(),
                     wgpu::ShaderStages::FRAGMENT,
@@ -182,6 +225,8 @@ impl VoxelMaterialGPUResourceManager {
         layout: &wgpu::BindGroupLayout,
         fixed_property_buffer: &GPUBuffer,
         color_texture_array: &Texture,
+        roughness_texture_array: &Texture,
+        normal_texture_array: &Texture,
         sampler: &Sampler,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -189,6 +234,9 @@ impl VoxelMaterialGPUResourceManager {
             entries: &[
                 fixed_property_buffer.create_bind_group_entry(Self::fixed_properties_binding()),
                 color_texture_array.create_bind_group_entry(Self::color_texture_array_binding()),
+                roughness_texture_array
+                    .create_bind_group_entry(Self::roughness_texture_array_binding()),
+                normal_texture_array.create_bind_group_entry(Self::normal_texture_array_binding()),
                 sampler.create_bind_group_entry(Self::sampler_binding()),
             ],
             label: Some("Voxel material bind group"),

@@ -19,6 +19,8 @@ pub struct VoxelTypeRegistry {
     name_lookup_table: HashMap<u32, VoxelType, BuildNoHashHasher<u32>>,
     fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
     color_texture_paths: Vec<PathBuf>,
+    roughness_texture_paths: Vec<PathBuf>,
+    normal_texture_paths: Vec<PathBuf>,
 }
 
 /// Specific properties of a voxel material that do not change with position.
@@ -78,6 +80,8 @@ impl VoxelTypeRegistry {
         names: Vec<Cow<'static, str>>,
         fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
         color_texture_paths: Vec<PathBuf>,
+        roughness_texture_paths: Vec<PathBuf>,
+        normal_texture_paths: Vec<PathBuf>,
     ) -> Result<Self> {
         if names.is_empty() {
             bail!("Tried to create empty voxel type registry");
@@ -90,6 +94,12 @@ impl VoxelTypeRegistry {
         }
         if names.len() != color_texture_paths.len() {
             bail!("Mismatching number of voxel type names and color texture paths");
+        }
+        if names.len() != roughness_texture_paths.len() {
+            bail!("Mismatching number of voxel type names and roughness texture paths");
+        }
+        if names.len() != normal_texture_paths.len() {
+            bail!("Mismatching number of voxel type names and normal texture paths");
         }
 
         let name_lookup_table: HashMap<_, _, _> = names
@@ -107,6 +117,8 @@ impl VoxelTypeRegistry {
             name_lookup_table,
             fixed_material_properties,
             color_texture_paths,
+            roughness_texture_paths,
+            normal_texture_paths,
         })
     }
 
@@ -152,20 +164,32 @@ impl VoxelTypeRegistry {
     pub fn color_texture_paths(&self) -> &[PathBuf] {
         &self.color_texture_paths
     }
+
+    /// Returns the slice of roughness texture paths for all registered voxel
+    /// types.
+    pub fn roughness_texture_paths(&self) -> &[PathBuf] {
+        &self.roughness_texture_paths
+    }
+
+    /// Returns the slice of normal texture paths for all registered voxel
+    /// types.
+    pub fn normal_texture_paths(&self) -> &[PathBuf] {
+        &self.normal_texture_paths
+    }
 }
 
 impl FixedVoxelMaterialProperties {
     /// Combines the given fixed properties for a voxel material.
     pub fn new(
         specular_reflectance: fre,
-        roughness: fre,
+        roughness_scale: fre,
         metalness: fre,
         emissive_luminance: fre,
     ) -> Self {
         Self {
             properties: vector![
                 specular_reflectance,
-                roughness,
+                roughness_scale,
                 metalness,
                 emissive_luminance
             ],
