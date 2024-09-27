@@ -169,12 +169,11 @@ fn triplanarSampleNormalTexture(
     // To convert the sampled tangent space normals to model space, we will
     // swizzle each of them based on which plane its normal texture was
     // projected into. But first we make sure their orientation will align with
-    // the unbumped surface normal (see e.g.
+    // the unbumped surface normal using a Whiteout blend (see e.g.
     // https://bgolus.medium.com/normal-mapping-for-a-triplanar-shader-10bf39dca05a).
-    let axisSigns = sign(modelSpaceNormalVector);
-    tangentSpaceNormalX.z *= axisSigns.x;
-    tangentSpaceNormalY.z *= axisSigns.y;
-    tangentSpaceNormalZ.z *= axisSigns.z;
+    tangentSpaceNormalX = vec3f(tangentSpaceNormalX.xy + modelSpaceNormalVector.zy, abs(tangentSpaceNormalX.z) * modelSpaceNormalVector.x);
+    tangentSpaceNormalY = vec3f(tangentSpaceNormalY.xy + modelSpaceNormalVector.xz, abs(tangentSpaceNormalY.z) * modelSpaceNormalVector.y);
+    tangentSpaceNormalZ = vec3f(tangentSpaceNormalZ.xy + modelSpaceNormalVector.xy, abs(tangentSpaceNormalZ.z) * modelSpaceNormalVector.z);
 
     let modelSpaceNormalX = tangentSpaceNormalX.zyx;
     let modelSpaceNormalY = tangentSpaceNormalY.xzy;
