@@ -71,11 +71,11 @@ pub enum SensorSensitivity {
 #[derive(Debug)]
 pub struct CapturingCamera {
     settings: CameraSettings,
-    produces_bloom: bool,
     exposure: fre,
+    produces_bloom: bool,
     tone_mapping_method: ToneMappingMethod,
-    bloom_commands: BloomRenderCommands,
     average_luminance_commands: AverageLuminanceComputeCommands,
+    bloom_commands: BloomRenderCommands,
     tone_mapping_commands: ToneMappingRenderCommands,
 }
 
@@ -197,13 +197,6 @@ impl CapturingCamera {
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
         config: &CapturingCameraConfig,
     ) -> Result<Self> {
-        let bloom_commands = BloomRenderCommands::new(
-            graphics_device,
-            shader_manager,
-            render_attachment_texture_manager,
-            &config.bloom,
-        )?;
-
         let average_luminance_commands = AverageLuminanceComputeCommands::new(
             graphics_device,
             shader_manager,
@@ -211,6 +204,13 @@ impl CapturingCamera {
             gpu_resource_group_manager,
             storage_gpu_buffer_manager,
             &config.average_luminance_computation,
+        )?;
+
+        let bloom_commands = BloomRenderCommands::new(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            &config.bloom,
         )?;
 
         let tone_mapping_commands = ToneMappingRenderCommands::new(
@@ -230,11 +230,11 @@ impl CapturingCamera {
 
         Ok(Self {
             settings,
-            produces_bloom: config.bloom.initially_enabled,
             exposure: initial_exposure,
+            produces_bloom: config.bloom.initially_enabled,
             tone_mapping_method: config.initial_tone_mapping,
-            bloom_commands,
             average_luminance_commands,
+            bloom_commands,
             tone_mapping_commands,
         })
     }
@@ -277,13 +277,6 @@ impl CapturingCamera {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        self.bloom_commands.record(
-            render_resources,
-            render_attachment_texture_manager,
-            timestamp_recorder,
-            self.produces_bloom,
-            command_encoder,
-        )?;
         self.average_luminance_commands.record(
             rendering_surface,
             gpu_resource_group_manager,
@@ -292,6 +285,13 @@ impl CapturingCamera {
             postprocessor,
             timestamp_recorder,
             self.settings.sensitivity().is_auto(),
+            command_encoder,
+        )?;
+        self.bloom_commands.record(
+            render_resources,
+            render_attachment_texture_manager,
+            timestamp_recorder,
+            self.produces_bloom,
             command_encoder,
         )
     }

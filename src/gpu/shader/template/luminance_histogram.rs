@@ -44,8 +44,7 @@ impl LuminanceHistogramShaderTemplate {
         let push_constants = PushConstantGroup::for_compute([PushConstantVariant::InverseExposure]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::single(
-            // The previous pass (bloom) writes to this attachment
-            RenderAttachmentInputDescription::default_for(RenderAttachmentQuantity::LuminanceAux)
+            RenderAttachmentInputDescription::default_for(RenderAttachmentQuantity::Luminance)
                 .with_visibility(wgpu::ShaderStages::COMPUTE),
         );
 
