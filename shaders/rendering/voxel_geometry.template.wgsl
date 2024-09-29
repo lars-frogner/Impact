@@ -53,6 +53,10 @@ const JITTER_COUNT: u32 = {{jitter_count}};
 
 const TEXTURE_FREQUENCY: f32 = {{texture_frequency}};
 
+const FACE_NORMAL_TRANSITION_START_ALIGNMENT: f32 = 0.8;
+const FACE_NORMAL_TRANSITION_END_ALIGNMENT: f32 = 0.6;
+const FACE_NORMAL_TRANSITION_NORM: f32 = 1.0 / (FACE_NORMAL_TRANSITION_START_ALIGNMENT - FACE_NORMAL_TRANSITION_END_ALIGNMENT);
+
 var<push_constant> pushConstants: PushConstants;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
@@ -229,6 +233,12 @@ fn computeGGXRoughnessFromPerceptuallyLinearRoughness(linearRoughness: f32) -> f
     return linearRoughness * linearRoughness;
 }
 
+fn computeFaceNormal(position: vec3f) -> vec3f {
+    let dx = dpdx(position);
+    let dy = dpdy(position);
+    return normalize(cross(dx, -dy));
+}
+
 @vertex
 fn mainVS(
     vertex: VertexInput,
@@ -290,9 +300,22 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     );
     output.motionVector = computeMotionVector(screenTextureCoords, fragment.previousClipSpacePosition);
 
-    // No need to normalize the normal vector before computing triplanar
-    // weights, since we normalize the weights anyway
-    var triplanarWeights = abs(fragment.modelSpaceNormalVector);
+    var modelSpaceNormalVector = normalize(fragment.modelSpaceNormalVector);
+
+    let modelSpaceFaceNormalVector = computeFaceNormal(fragment.modelSpacePosition);
+
+    // If the normal vector deviates significantly from the face normal (which
+    // can happen if adjacent triangles have very different face normals), we
+    // should transition to using the face normal to avoid artifacts.
+    let alignment = dot(modelSpaceNormalVector, modelSpaceFaceNormalVector);
+    if (alignment < FACE_NORMAL_TRANSITION_START_ALIGNMENT) {
+        // Create a smooth transition between the normals depending on how
+        // aligned they are
+        let weight = (FACE_NORMAL_TRANSITION_START_ALIGNMENT - alignment) * FACE_NORMAL_TRANSITION_NORM;
+        modelSpaceNormalVector = normalize(mix(modelSpaceNormalVector, modelSpaceFaceNormalVector, weight));
+    }
+
+    var triplanarWeights = abs(modelSpaceNormalVector);
     triplanarWeights *= triplanarWeights * triplanarWeights; // Raise to 3rd power
     triplanarWeights /= triplanarWeights.x + triplanarWeights.y + triplanarWeights.z;
 
@@ -301,13 +324,13 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     let triplanarCoordsZ = TEXTURE_FREQUENCY * fragment.modelSpacePosition.xy;
 
     // Normalize material weights
-    let materialWeights = fragment.materialWeights
-        / (fragment.materialWeights.x + fragment.materialWeights.y + fragment.materialWeights.z + fragment.materialWeights.w);
+    var materialWeights = fragment.materialWeights;
+    materialWeights /= materialWeights.x + materialWeights.y + materialWeights.z + materialWeights.w;
 
     let blendedModelSpaceNormalVector = triplanarSampleAndBlendNormalTextures(
         materialNormalTextures,
         materialSampler,
-        fragment.modelSpaceNormalVector,
+        modelSpaceNormalVector,
         triplanarWeights,
         triplanarCoordsX,
         triplanarCoordsY,
