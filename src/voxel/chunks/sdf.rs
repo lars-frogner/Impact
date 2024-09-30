@@ -499,11 +499,13 @@ impl ChunkedVoxelObject {
     ) -> bool {
         match adjacent_chunk {
             VoxelChunk::Empty => {
-                sdf_values_loop.fill_data_with_value(VoxelSignedDistance::fully_outside().to_f32());
+                sdf_values_loop
+                    .fill_data_with_value(VoxelSignedDistance::maximally_outside().to_f32());
                 false
             }
             VoxelChunk::Uniform(voxel) => {
-                sdf_values_loop.fill_data_with_value(VoxelSignedDistance::fully_inside().to_f32());
+                sdf_values_loop
+                    .fill_data_with_value(VoxelSignedDistance::maximally_inside().to_f32());
                 voxel_types_loop.fill_data_with_value(voxel.voxel_type());
                 false
             }

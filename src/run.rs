@@ -66,8 +66,8 @@ use crate::{
     util::bounds::UpperExclusiveBounds,
     voxel::{
         components::{
-            GradientNoiseVoxelTypesComp, SameVoxelTypeComp, VoxelBoxComp,
-            VoxelGradientNoisePatternComp, VoxelSphereComp,
+            GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp, SameVoxelTypeComp,
+            VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
         VoxelManager,
@@ -111,32 +111,42 @@ fn init_app(window: Window) -> Result<Application> {
         vec![
             Cow::Borrowed("Ground"),
             Cow::Borrowed("Metal"),
-            Cow::Borrowed("Brick"),
-            Cow::Borrowed("Wood"),
+            Cow::Borrowed("Snow"),
+            Cow::Borrowed("Rock"),
+            // Cow::Borrowed("Brick"),
+            // Cow::Borrowed("Wood"),
         ],
         vec![
             FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
             FixedVoxelMaterialProperties::new(1.0, 1.0, 1.0, 0.0),
-            FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
+            FixedVoxelMaterialProperties::new(0.04, 1.0, 0.0, 0.0),
             FixedVoxelMaterialProperties::new(0.03, 1.0, 0.0, 0.0),
+            // FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
+            // FixedVoxelMaterialProperties::new(0.03, 1.0, 0.0, 0.0),
         ],
         vec![
-            PathBuf::from("assets/Ground067_4K-JPG/Ground067_4K-JPG_Color.jpg"),
+            PathBuf::from("assets/Ground029_4K-JPG/Ground029_4K-JPG_Color.jpg"),
             PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Color.jpg"),
-            PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
-            PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
+            PathBuf::from("assets/Snow007A_4K-JPG/Snow007A_4K-JPG_Color.jpg"),
+            PathBuf::from("assets/Rock022_4K-JPG/Rock022_4K-JPG_Color.jpg"),
+            // PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
+            // PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
         ],
         vec![
-            PathBuf::from("assets/Ground067_4K-JPG/Ground067_4K-JPG_Roughness.jpg"),
+            PathBuf::from("assets/Ground029_4K-JPG/Ground029_4K-JPG_Roughness.jpg"),
             PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Roughness.jpg"),
-            PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
-            PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
+            PathBuf::from("assets/Snow007A_4K-JPG/Snow007A_4K-JPG_Roughness.jpg"),
+            PathBuf::from("assets/Rock022_4K-JPG/Rock022_4K-JPG_Roughness.jpg"),
+            // PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
+            // PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
         ],
         vec![
-            PathBuf::from("assets/Ground067_4K-JPG/Ground067_4K-JPG_NormalDX.jpg"),
+            PathBuf::from("assets/Ground029_4K-JPG/Ground029_4K-JPG_NormalDX.jpg"),
             PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_NormalDX.jpg"),
-            PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_NormalDX.jpg"),
-            PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
+            PathBuf::from("assets/Snow007A_4K-JPG/Snow007A_4K-JPG_NormalDX.jpg"),
+            PathBuf::from("assets/Rock022_4K-JPG/Rock022_4K-JPG_NormalDX.jpg"),
+            // PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_NormalDX.jpg"),
+            // PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
         ],
     )
     .unwrap();
@@ -240,7 +250,7 @@ fn init_app(window: Window) -> Result<Application> {
 
     drop(assets);
 
-    app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 1e6));
+    // app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 1e6));
 
     app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
@@ -445,12 +455,15 @@ fn init_app(window: Window) -> Result<Application> {
     // ))?;
 
     app.create_entity((
-        // &VoxelBoxComp::new(32, 32, 32),
-        &VoxelGradientNoisePatternComp::new(0.5, 150, 150, 150, 2e-2, 0.3, 0),
+        &VoxelSphereComp::new(0.5, 20.0),
+        // &VoxelBoxComp::new(0.1, 2.0, 2.0, 2.0),
+        // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3, 0),
         // &SameVoxelTypeComp::new(VoxelType::Green),
-        &GradientNoiseVoxelTypesComp::new(["Ground", "Metal", "Brick", "Wood"], 6e-2, 1.0, 1),
+        &GradientNoiseVoxelTypesComp::new(["Ground"], 6e-2, 1.0, 1),
+        &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 0),
+        // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2, 1.0, 0),
         // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
-        &ReferenceFrameComp::unoriented(point![-25.0, -25.0, -5.0]),
+        &ReferenceFrameComp::unoriented(point![-25.0, -25.0, 10.0]),
     ))?;
 
     // app.create_entity((

@@ -43,6 +43,42 @@ pub struct GradientNoiseVoxelTypesComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose voxel signed distance field should be modified by unions
+/// with multiscale sphere grid (<https://iquilezles.org/articles/fbmsdf>/).
+///
+/// The purpose of this component is to aid in constructing a
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
+/// creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct MultiscaleSphereModificationComp {
+    pub octaves: usize,
+    pub max_scale: f64,
+    pub persistence: f64,
+    pub inflation: f64,
+    pub smoothness: f64,
+    pub seed: u64,
+}
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose voxel signed distance field should be perturbed by
+/// multifractal noise.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
+/// creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct MultifractalNoiseModificationComp {
+    pub octaves: usize,
+    pub frequency: f64,
+    pub lacunarity: f64,
+    pub persistence: f64,
+    pub amplitude: f64,
+    pub seed: u64,
+}
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities comprised of voxels in a box configuration.
 ///
 /// The purpose of this component is to aid in constructing a
@@ -54,11 +90,11 @@ pub struct VoxelBoxComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
     /// The number of voxels along the box in the x-direction.
-    pub size_x: usize,
+    pub extent_x: f64,
     /// The number of voxels along the box in the y-direction.
-    pub size_y: usize,
+    pub extent_y: f64,
     /// The number of voxels along the box in the z-direction.
-    pub size_z: usize,
+    pub extent_z: f64,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -71,9 +107,9 @@ pub struct VoxelBoxComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelSphereComp {
     /// The extent of a single voxel.
-    voxel_extent: f64,
+    pub voxel_extent: f64,
     /// The number of voxels along the diameter of the sphere.
-    n_voxels_across: usize,
+    pub radius: f64,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -88,11 +124,11 @@ pub struct VoxelGradientNoisePatternComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
     /// The maximum number of voxels in the x-direction.
-    pub size_x: usize,
+    pub extent_x: f64,
     /// The maximum number of voxels in the y-direction.
-    pub size_y: usize,
+    pub extent_y: f64,
     /// The maximum number of voxels in the z-direction.
-    pub size_z: usize,
+    pub extent_z: f64,
     /// The spatial frequency of the noise pattern.
     pub noise_frequency: f64,
     /// The threshold noise value for generating a voxel.
@@ -180,16 +216,69 @@ impl GradientNoiseVoxelTypesComp {
     }
 }
 
+impl MultiscaleSphereModificationComp {
+    pub fn new(
+        octaves: usize,
+        max_scale: f64,
+        persistence: f64,
+        inflation: f64,
+        smoothness: f64,
+        seed: u64,
+    ) -> Self {
+        Self {
+            octaves,
+            max_scale,
+            persistence,
+            inflation,
+            smoothness,
+            seed,
+        }
+    }
+}
+
+impl MultifractalNoiseModificationComp {
+    pub fn new(
+        octaves: usize,
+        frequency: f64,
+        lacunarity: f64,
+        persistence: f64,
+        amplitude: f64,
+        seed: u64,
+    ) -> Self {
+        Self {
+            octaves,
+            frequency,
+            lacunarity,
+            persistence,
+            amplitude,
+            seed,
+        }
+    }
+}
+
 impl VoxelBoxComp {
     /// Creates a new component for a uniform box with the given voxel extent
     /// and number of voxels in each direction.
-    pub fn new(voxel_extent: f64, size_x: usize, size_y: usize, size_z: usize) -> Self {
+    pub fn new(voxel_extent: f64, extent_x: f64, extent_y: f64, extent_z: f64) -> Self {
+        assert!(voxel_extent > 0.0);
+        assert!(extent_x >= 0.0);
+        assert!(extent_y >= 0.0);
+        assert!(extent_z >= 0.0);
         Self {
             voxel_extent,
-            size_x,
-            size_y,
-            size_z,
+            extent_x,
+            extent_y,
+            extent_z,
         }
+    }
+
+    pub fn extents_in_voxels(&self) -> [f64; 3] {
+        let inverse_voxel_extent = self.voxel_extent.recip();
+        [
+            self.extent_x * inverse_voxel_extent,
+            self.extent_y * inverse_voxel_extent,
+            self.extent_z * inverse_voxel_extent,
+        ]
     }
 }
 
@@ -199,22 +288,17 @@ impl VoxelSphereComp {
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
-    pub fn new(voxel_extent: f64, n_voxels_across: usize) -> Self {
-        assert_ne!(n_voxels_across, 0);
+    pub fn new(voxel_extent: f64, radius: f64) -> Self {
+        assert!(voxel_extent > 0.0);
+        assert!(radius >= 0.0);
         Self {
             voxel_extent,
-            n_voxels_across,
+            radius,
         }
     }
 
-    /// Returns the extent of a single voxel.
-    pub fn voxel_extent(&self) -> f64 {
-        self.voxel_extent
-    }
-
-    /// Returns the number of voxels across the sphere's diameter.
-    pub fn n_voxels_across(&self) -> usize {
-        self.n_voxels_across
+    pub fn radius_in_voxels(&self) -> f64 {
+        self.radius / self.voxel_extent
     }
 }
 
@@ -224,22 +308,35 @@ impl VoxelGradientNoisePatternComp {
     /// frequency, noise threshold and seed.
     pub fn new(
         voxel_extent: f64,
-        size_x: usize,
-        size_y: usize,
-        size_z: usize,
+        extent_x: f64,
+        extent_y: f64,
+        extent_z: f64,
         noise_frequency: f64,
         noise_threshold: f64,
         seed: u64,
     ) -> Self {
+        assert!(voxel_extent > 0.0);
+        assert!(extent_x >= 0.0);
+        assert!(extent_y >= 0.0);
+        assert!(extent_z >= 0.0);
         Self {
             voxel_extent,
-            size_x,
-            size_y,
-            size_z,
+            extent_x,
+            extent_y,
+            extent_z,
             noise_frequency,
             noise_threshold,
             seed,
         }
+    }
+
+    pub fn extents_in_voxels(&self) -> [f64; 3] {
+        let inverse_voxel_extent = self.voxel_extent.recip();
+        [
+            self.extent_x * inverse_voxel_extent,
+            self.extent_y * inverse_voxel_extent,
+            self.extent_z * inverse_voxel_extent,
+        ]
     }
 }
 
@@ -247,6 +344,7 @@ impl VoxelGradientNoisePatternComp {
 pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, SameVoxelTypeComp)?;
     register_setup_component!(registry, GradientNoiseVoxelTypesComp)?;
+    register_setup_component!(registry, MultifractalNoiseModificationComp)?;
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
     register_setup_component!(registry, VoxelGradientNoisePatternComp)?;

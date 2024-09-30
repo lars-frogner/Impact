@@ -1,9 +1,10 @@
 //! Generation of spatial voxel distributions.
 
-use crate::voxel::{voxel_types::VoxelType, Voxel};
-use nalgebra::{point, Point3};
-use noise::{NoiseFn, Simplex};
+use crate::voxel::{voxel_types::VoxelType, Voxel, VoxelSignedDistance};
+use nalgebra::{point, vector, Point3, Quaternion, UnitQuaternion, Vector3};
+use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
+use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 /// Represents a voxel generator that provides a voxel type given the voxel
 /// indices.
@@ -21,49 +22,95 @@ pub trait VoxelGenerator {
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
 }
 
+/// Represents a signed distance field generator.
+pub trait SDFGenerator {
+    /// Returns the extents of the domain around the center where the signed
+    /// distance field can be negative.
+    fn domain_extents(&self) -> [f64; 3];
+
+    // Computes the signed distance at the given displacement from the center
+    // of the field.
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64;
+}
+
 pub trait VoxelTypeGenerator {
     fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType;
 }
 
-/// Generator for a box configuration of identical voxels.
+/// Generator for a voxel object from a signed distance field.
 #[derive(Clone, Debug)]
-pub struct BoxVoxelGenerator<T> {
+pub struct SDFVoxelGenerator<SD, VT> {
     voxel_extent: f64,
-    size_x: usize,
-    size_y: usize,
-    size_z: usize,
-    voxel_type_generator: T,
+    grid_shape: [usize; 3],
+    grid_center: Point3<f64>,
+    sdf_generator: SD,
+    voxel_type_generator: VT,
 }
 
-/// Generator for a spherical configuration of identical voxels.
+/// Wrapper for a signed distance field generator that adds a multifractal noise
+/// term to the output signed distance.
+///
+/// Note that the resulting field will in general not contain correct distances,
+/// so this is best used only for minor perturbations.
 #[derive(Clone, Debug)]
-pub struct SphereVoxelGenerator<T> {
-    voxel_extent: f64,
-    n_voxels_across: usize,
-    center: f64,
-    squared_radius: f64,
-    voxel_type_generator: T,
+pub struct MultifractalNoiseSDFModifier<SD> {
+    noise: HybridMulti<Simplex>,
+    amplitude: f64,
+    sdf_generator: SD,
 }
 
-/// Generator for a voxel configuration obtained by thresholding a gradient
+/// Wrapper for a signed distance field generator that performs a stochastic
+/// multiscale modification of the output signed distance around the surface.
+/// This is done by superimposing a field representing a grid of spheres with
+/// randomized radii, which is unioned with the original field aroud the
+/// surface. This is repeated for each octave with successively smaller and more
+/// numerous spheres.
+///
+/// See <https://iquilezles.org/articles/fbmsdf/> for more information.
+///
+/// The output will be a valid signed distance field.
+#[derive(Clone, Debug)]
+pub struct MultiscaleSphereSDFModifier<SD> {
+    octaves: usize,
+    frequency: f64,
+    persistence: f64,
+    inflation: f64,
+    smoothness: f64,
+    seed: u64,
+    sdf_generator: SD,
+}
+
+/// Generator for a signed distance field representing a box.
+#[derive(Clone, Debug)]
+pub struct BoxSDFGenerator {
+    half_extents: Vector3<f64>,
+}
+
+/// Generator for a signed distance field representing a sphere.
+#[derive(Clone, Debug)]
+pub struct SphereSDFGenerator {
+    radius: f64,
+}
+
+/// Generator for a signed "distance" field obtained by thresholding a gradient
 /// noise pattern.
 #[derive(Clone, Debug)]
-pub struct GradientNoiseVoxelGenerator<T> {
-    voxel_extent: f64,
-    size_x: usize,
-    size_y: usize,
-    size_z: usize,
+pub struct GradientNoiseSDFGenerator {
+    extents: [f64; 3],
     noise_frequency: f64,
     noise_threshold: f64,
     noise: Simplex,
-    voxel_type_generator: T,
 }
 
+/// Voxel type generator that always returns the same voxel type.
 #[derive(Clone, Debug)]
 pub struct SameVoxelTypeGenerator {
     voxel_type: VoxelType,
 }
 
+/// Voxel type generator that determines voxel types by generating a 4D
+/// gradient noise pattern and selecting the voxel type for which the fourth
+/// component of the noise is strongest at each location.
 #[derive(Clone, Debug)]
 pub struct GradientNoiseVoxelTypeGenerator {
     voxel_types: Vec<VoxelType>,
@@ -72,162 +119,306 @@ pub struct GradientNoiseVoxelTypeGenerator {
     noise: Simplex,
 }
 
-impl<T> BoxVoxelGenerator<T> {
-    /// Creates a new generator for a box with the given voxel extent and number
-    /// of voxels in each direction, using the given voxel type generator.
-    pub fn new(
-        voxel_extent: f64,
-        size_x: usize,
-        size_y: usize,
-        size_z: usize,
-        voxel_type_generator: T,
-    ) -> Self {
+impl<SD, VT> SDFVoxelGenerator<SD, VT>
+where
+    SD: SDFGenerator,
+{
+    /// Creates a new voxel generator using the given signed distance field
+    /// and voxel type generators.
+    pub fn new(voxel_extent: f64, sdf_generator: SD, voxel_type_generator: VT) -> Self {
+        assert!(voxel_extent > 0.0);
+
+        let sdf_domain_extents = sdf_generator.domain_extents();
+
+        // Make room for a 1-voxel border of empty voxels around the object to so that
+        // the surface nets meshing algorithm can correctly interpolate distances at the
+        // boundaries
+        let grid_shape = sdf_domain_extents.map(|extent| extent.ceil() as usize + 2);
+
+        let grid_center = Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f64));
+
         Self {
-            voxel_type_generator,
             voxel_extent,
-            size_x,
-            size_y,
-            size_z,
+            grid_shape,
+            grid_center,
+            sdf_generator,
+            voxel_type_generator,
         }
     }
 }
 
-impl<T: VoxelTypeGenerator> VoxelGenerator for BoxVoxelGenerator<T> {
+impl<SD, VT> VoxelGenerator for SDFVoxelGenerator<SD, VT>
+where
+    SD: SDFGenerator,
+    VT: VoxelTypeGenerator,
+{
     fn voxel_extent(&self) -> f64 {
         self.voxel_extent
     }
 
     fn grid_shape(&self) -> [usize; 3] {
-        [self.size_x, self.size_y, self.size_z]
+        self.grid_shape
     }
 
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-        if i < self.size_x && j < self.size_y && k < self.size_z {
+        let displacement_from_center = point![i as f64, j as f64, k as f64] - self.grid_center;
+
+        let signed_distance = VoxelSignedDistance::from_f32(
+            self.sdf_generator
+                .compute_signed_distance(&displacement_from_center) as f32,
+        );
+
+        if signed_distance.is_negative() {
             let voxel_type = self.voxel_type_generator.voxel_type_at_indices(i, j, k);
-            Voxel::fully_inside(voxel_type)
+            Voxel::non_empty(voxel_type, signed_distance)
         } else {
-            Voxel::fully_outside()
+            Voxel::empty(signed_distance)
         }
     }
 }
 
-impl<T> SphereVoxelGenerator<T> {
-    /// Creates a new generator for a sphere with the given voxel extent and
-    /// number of voxels across the diameter, using the given voxel type
-    /// generator.
-    ///
-    /// # Panics
-    /// If the given number of voxels across is zero.
-    pub fn new(voxel_extent: f64, n_voxels_across: usize, voxel_type_generator: T) -> Self {
-        assert_ne!(n_voxels_across, 0);
-
-        let center = 0.5 * (n_voxels_across - 1) as f64;
-        let radius = center + 0.5;
-        let squared_radius = radius.powi(2);
-
-        Self {
-            voxel_type_generator,
-            voxel_extent,
-            n_voxels_across,
-            center,
-            squared_radius,
-        }
-    }
-
-    /// Returns the position of the sphere center relative to the position of
-    /// the origin of the voxel grid.
-    pub fn center(&self) -> Point3<f64> {
-        let center_coord = self.center * self.voxel_extent;
-        point![center_coord, center_coord, center_coord]
-    }
-
-    /// Returns the radius of the sphere.
-    pub fn radius(&self) -> f64 {
-        f64::sqrt(self.squared_radius) * self.voxel_extent
-    }
-}
-
-impl<T: VoxelTypeGenerator> VoxelGenerator for SphereVoxelGenerator<T> {
-    fn voxel_extent(&self) -> f64 {
-        self.voxel_extent
-    }
-
-    fn grid_shape(&self) -> [usize; 3] {
-        [self.n_voxels_across; 3]
-    }
-
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-        let squared_dist_from_center = (i as f64 - self.center).powi(2)
-            + (j as f64 - self.center).powi(2)
-            + (k as f64 - self.center).powi(2);
-
-        if squared_dist_from_center <= self.squared_radius {
-            let voxel_type = self.voxel_type_generator.voxel_type_at_indices(i, j, k);
-            Voxel::fully_inside(voxel_type)
-        } else {
-            Voxel::fully_outside()
-        }
-    }
-}
-
-impl<T> GradientNoiseVoxelGenerator<T> {
-    /// Creates a new generator for a gradient noise voxel pattern with the
-    /// given voxel extent and number of voxels in each direction, using the
-    /// given voxel type generator. The given frequency determines the spatial
-    /// scale of the noise pattern, while the given threshold specifies the
-    /// value the noise pattern must exceed at a given location to generate a
-    /// voxel there.
+impl<SD> MultifractalNoiseSDFModifier<SD> {
     pub fn new(
-        voxel_extent: f64,
-        size_x: usize,
-        size_y: usize,
-        size_z: usize,
-        noise_frequency: f64,
-        noise_threshold: f64,
+        sdf_generator: SD,
+        octaves: usize,
+        frequency: f64,
+        lacunarity: f64,
+        persistence: f64,
+        amplitude: f64,
         seed: u32,
-        voxel_type_generator: T,
     ) -> Self {
-        let noise = Simplex::new(seed);
+        let noise = HybridMulti::new(seed)
+            .set_octaves(octaves)
+            .set_frequency(frequency)
+            .set_lacunarity(lacunarity)
+            .set_persistence(persistence);
+        Self {
+            noise,
+            amplitude,
+            sdf_generator,
+        }
+    }
+}
+
+impl<SD> SDFGenerator for MultifractalNoiseSDFModifier<SD>
+where
+    SD: SDFGenerator,
+{
+    fn domain_extents(&self) -> [f64; 3] {
+        self.sdf_generator.domain_extents()
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+        let signed_distance = self
+            .sdf_generator
+            .compute_signed_distance(displacement_from_center);
+
+        let noise_point: [f64; 3] = (*displacement_from_center).into();
+        let perturbation = self.amplitude * self.noise.get(noise_point);
+
+        signed_distance + perturbation
+    }
+}
+
+impl<SD> MultiscaleSphereSDFModifier<SD> {
+    pub fn new(
+        sdf_generator: SD,
+        octaves: usize,
+        max_scale: f64,
+        persistence: f64,
+        inflation: f64,
+        smoothness: f64,
+        seed: u64,
+    ) -> Self {
+        let frequency = 0.5 / max_scale;
+
+        // Scale inflation and smoothness according to the scale of perturbations
+        let inflation = max_scale * inflation;
+        let smoothness = max_scale * smoothness;
 
         Self {
-            voxel_extent,
-            size_x,
-            size_y,
-            size_z,
+            octaves,
+            frequency,
+            persistence,
+            inflation,
+            smoothness,
+            seed,
+            sdf_generator,
+        }
+    }
+
+    fn modify_signed_distance(&self, position: &Vector3<f64>, signed_distance: f64) -> f64 {
+        /// Rotates with an angle of `2 * pi / golden_ratio` around the axis
+        /// `[1, 1, 1]` (to break up the regular grid pattern).
+        const ROTATION: UnitQuaternion<f64> = UnitQuaternion::new_unchecked(Quaternion::new(
+            0.5381091707820528,
+            0.5381091707820528,
+            0.5381091707820528,
+            -0.36237489008036256,
+        ));
+
+        let mut parent_distance = signed_distance;
+        let mut position = self.frequency * position;
+        let mut scale = 1.0;
+
+        for _ in 0..self.octaves {
+            let sphere_grid_distance = scale * self.evaluate_sphere_grid_sdf(&position);
+
+            let intersected_sphere_grid_distance = smooth_sdf_intersection(
+                sphere_grid_distance,
+                parent_distance - self.inflation * scale,
+                self.smoothness * scale,
+            );
+
+            parent_distance = smooth_sdf_union(
+                intersected_sphere_grid_distance,
+                parent_distance,
+                self.smoothness * scale,
+            );
+
+            position = ROTATION * (position / self.persistence);
+
+            scale *= self.persistence;
+        }
+        parent_distance
+    }
+
+    fn evaluate_sphere_grid_sdf(&self, position: &Vector3<f64>) -> f64 {
+        const CORNER_OFFSETS: [Vector3<i32>; 8] = [
+            vector![0, 0, 0],
+            vector![0, 0, 1],
+            vector![0, 1, 0],
+            vector![0, 1, 1],
+            vector![1, 0, 0],
+            vector![1, 0, 1],
+            vector![1, 1, 0],
+            vector![1, 1, 1],
+        ];
+        let grid_cell_indices = position.map(|coord| coord.floor() as i32);
+        let offset_in_grid_cell = position - grid_cell_indices.cast();
+
+        CORNER_OFFSETS
+            .iter()
+            .map(|corner_offsets| {
+                OrderedFloat(self.evaluate_corner_sphere_sdf(
+                    &grid_cell_indices,
+                    &offset_in_grid_cell,
+                    corner_offsets,
+                ))
+            })
+            .min()
+            .unwrap()
+            .0
+    }
+
+    fn evaluate_corner_sphere_sdf(
+        &self,
+        grid_cell_indices: &Vector3<i32>,
+        offset_in_grid_cell: &Vector3<f64>,
+        corner_offsets: &Vector3<i32>,
+    ) -> f64 {
+        let sphere_radius = self.corner_sphere_radius(grid_cell_indices, corner_offsets);
+        let distance_to_sphere_center = (offset_in_grid_cell - corner_offsets.cast()).magnitude();
+        distance_to_sphere_center - sphere_radius
+    }
+
+    /// Every sphere gets a random radius based on its location in the grid.
+    fn corner_sphere_radius(
+        &self,
+        grid_cell_indices: &Vector3<i32>,
+        corner_offsets: &Vector3<i32>,
+    ) -> f64 {
+        // The maximum radius is half the extent of a grid cell, i.e. 0.5
+        const HASH_TO_RADIUS: f64 = 0.5 / u64::MAX as f64;
+        let hash = xxh3_64_with_seed(
+            bytemuck::bytes_of(&(grid_cell_indices + corner_offsets)),
+            self.seed,
+        );
+        HASH_TO_RADIUS * hash as f64
+    }
+}
+
+impl<SD> SDFGenerator for MultiscaleSphereSDFModifier<SD>
+where
+    SD: SDFGenerator,
+{
+    fn domain_extents(&self) -> [f64; 3] {
+        self.sdf_generator
+            .domain_extents()
+            .map(|extent| extent + 5.0 * self.inflation)
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+        let signed_distance = self
+            .sdf_generator
+            .compute_signed_distance(displacement_from_center);
+
+        self.modify_signed_distance(displacement_from_center, signed_distance)
+    }
+}
+
+impl BoxSDFGenerator {
+    /// Creates a new generator for a box with the given extents.
+    pub fn new(extents: [f64; 3]) -> Self {
+        assert!(extents.iter().copied().all(f64::is_sign_positive));
+        let half_extents = 0.5 * Vector3::from(extents);
+        Self { half_extents }
+    }
+}
+
+impl SDFGenerator for BoxSDFGenerator {
+    fn domain_extents(&self) -> [f64; 3] {
+        (2.0 * self.half_extents).into()
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+        let q = displacement_from_center.abs() - self.half_extents;
+        q.sup(&Vector3::zeros()).magnitude() + f64::min(q.max(), 0.0)
+    }
+}
+
+impl SphereSDFGenerator {
+    /// Creates a new generator for a sphere with the given radius.
+    pub fn new(radius: f64) -> Self {
+        assert!(radius >= 0.0);
+        Self { radius }
+    }
+}
+
+impl SDFGenerator for SphereSDFGenerator {
+    fn domain_extents(&self) -> [f64; 3] {
+        [2.0 * self.radius; 3]
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+        displacement_from_center.magnitude() - self.radius
+    }
+}
+
+impl GradientNoiseSDFGenerator {
+    /// Creates a new generator for a gradient noise voxel pattern with the
+    /// given extents, noise frequency, noise threshold and seed.
+    pub fn new(extents: [f64; 3], noise_frequency: f64, noise_threshold: f64, seed: u32) -> Self {
+        assert!(extents.iter().copied().all(f64::is_sign_positive));
+        let noise = Simplex::new(seed);
+        Self {
+            extents,
             noise_frequency,
             noise_threshold,
             noise,
-            voxel_type_generator,
         }
     }
 }
 
-impl<T: VoxelTypeGenerator> VoxelGenerator for GradientNoiseVoxelGenerator<T> {
-    fn voxel_extent(&self) -> f64 {
-        self.voxel_extent
+impl SDFGenerator for GradientNoiseSDFGenerator {
+    fn domain_extents(&self) -> [f64; 3] {
+        self.extents
     }
 
-    fn grid_shape(&self) -> [usize; 3] {
-        [self.size_x, self.size_y, self.size_z]
-    }
-
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-        if i < self.size_x && j < self.size_y && k < self.size_z {
-            let x = i as f64 * self.noise_frequency;
-            let y = j as f64 * self.noise_frequency;
-            let z = k as f64 * self.noise_frequency;
-
-            let noise_value = self.noise.get([x, y, z]);
-
-            if noise_value >= self.noise_threshold {
-                let voxel_type = self.voxel_type_generator.voxel_type_at_indices(i, j, k);
-                Voxel::fully_inside(voxel_type)
-            } else {
-                Voxel::fully_outside()
-            }
-        } else {
-            Voxel::fully_outside()
-        }
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+        let noise_point: [f64; 3] = (self.noise_frequency * displacement_from_center).into();
+        let noise_value = self.noise.get(noise_point);
+        self.noise_threshold - noise_value
     }
 }
 
@@ -285,6 +476,26 @@ impl VoxelTypeGenerator for GradientNoiseVoxelTypeGenerator {
     }
 }
 
+fn smooth_sdf_union(distance_1: f64, distance_2: f64, smoothness: f64) -> f64 {
+    let h = (0.5 + 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
+    mix(distance_2, distance_1, h) - smoothness * h * (1.0 - h)
+}
+
+#[allow(dead_code)]
+fn smooth_sdf_subtraction(distance_1: f64, distance_2: f64, smoothness: f64) -> f64 {
+    let h = (0.5 - 0.5 * (distance_2 + distance_1) / smoothness).clamp(0.0, 1.0);
+    mix(distance_2, -distance_1, h) + smoothness * h * (1.0 - h)
+}
+
+fn smooth_sdf_intersection(distance_1: f64, distance_2: f64, smoothness: f64) -> f64 {
+    let h = (0.5 - 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
+    mix(distance_2, distance_1, h) + smoothness * h * (1.0 - h)
+}
+
+fn mix(a: f64, b: f64, factor: f64) -> f64 {
+    (1.0 - factor) * a + factor * b
+}
+
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use crate::voxel::voxel_types::VoxelTypeRegistry;
@@ -295,95 +506,145 @@ pub mod fuzzing {
 
     #[allow(clippy::large_enum_variant)]
     #[derive(Clone, Debug, Arbitrary)]
-    pub enum ArbitraryVoxelGenerator {
-        Box(BoxVoxelGenerator<GradientNoiseVoxelTypeGenerator>),
-        Sphere(SphereVoxelGenerator<GradientNoiseVoxelTypeGenerator>),
-        GradientNoise(GradientNoiseVoxelGenerator<GradientNoiseVoxelTypeGenerator>),
+    pub enum ArbitraryVoxelTypeGenerator {
+        Same(SameVoxelTypeGenerator),
+        GradientNoise(GradientNoiseVoxelTypeGenerator),
+    }
+
+    #[allow(clippy::large_enum_variant)]
+    #[derive(Clone, Debug, Arbitrary)]
+    pub enum ArbitrarySDFGenerator {
+        Box(BoxSDFGenerator),
+        Sphere(SphereSDFGenerator),
+        GradientNoise(GradientNoiseSDFGenerator),
     }
 
     const MAX_SIZE: usize = 300;
 
-    impl<'a, T> Arbitrary<'a> for BoxVoxelGenerator<T>
+    impl VoxelTypeGenerator for ArbitraryVoxelTypeGenerator {
+        fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+            match self {
+                ArbitraryVoxelTypeGenerator::Same(generator) => {
+                    generator.voxel_type_at_indices(i, j, k)
+                }
+                ArbitraryVoxelTypeGenerator::GradientNoise(generator) => {
+                    generator.voxel_type_at_indices(i, j, k)
+                }
+            }
+        }
+    }
+
+    impl SDFGenerator for ArbitrarySDFGenerator {
+        fn domain_extents(&self) -> [f64; 3] {
+            match self {
+                ArbitrarySDFGenerator::Box(generator) => generator.domain_extents(),
+                ArbitrarySDFGenerator::Sphere(generator) => generator.domain_extents(),
+                ArbitrarySDFGenerator::GradientNoise(generator) => generator.domain_extents(),
+            }
+        }
+
+        fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+            match self {
+                ArbitrarySDFGenerator::Box(generator) => {
+                    generator.compute_signed_distance(displacement_from_center)
+                }
+                ArbitrarySDFGenerator::Sphere(generator) => {
+                    generator.compute_signed_distance(displacement_from_center)
+                }
+                ArbitrarySDFGenerator::GradientNoise(generator) => {
+                    generator.compute_signed_distance(displacement_from_center)
+                }
+            }
+        }
+    }
+
+    impl<'a, SD, VT> Arbitrary<'a> for SDFVoxelGenerator<SD, VT>
     where
-        T: Arbitrary<'a>,
+        SD: SDFGenerator + Arbitrary<'a>,
+        VT: VoxelTypeGenerator + Arbitrary<'a>,
     {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let voxel_extent = 0.25;
-            let size_x = u.int_in_range(0..=MAX_SIZE)?;
-            let size_y = u.int_in_range(0..=MAX_SIZE)?;
-            let size_z = u.int_in_range(0..=MAX_SIZE)?;
+            let sdf_generator: SD = u.arbitrary()?;
             let voxel_type_generator = u.arbitrary()?;
-            Ok(Self::new(
-                voxel_extent,
-                size_x,
-                size_y,
-                size_z,
-                voxel_type_generator,
-            ))
+            let grid_size = u.int_in_range(1..=MAX_SIZE)?;
+            let voxel_extent = sdf_generator
+                .domain_extents()
+                .map(|extent| OrderedFloat(extent / grid_size as f64))
+                .iter()
+                .max()
+                .unwrap()
+                .0;
+            Ok(Self::new(voxel_extent, sdf_generator, voxel_type_generator))
         }
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {
+            size_hint::recursion_guard(depth, |depth| {
+                size_hint::and_all(&[
+                    (mem::size_of::<usize>(), Some(mem::size_of::<usize>())),
+                    SD::size_hint(depth),
+                    VT::size_hint(depth),
+                ])
+            })
+        }
+    }
+
+    impl Arbitrary<'_> for BoxSDFGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let extent_x = 1e3 * arbitrary_norm_f64(u)?;
+            let extent_y = 1e3 * arbitrary_norm_f64(u)?;
+            let extent_z = 1e3 * arbitrary_norm_f64(u)?;
+            Ok(Self::new([extent_x, extent_y, extent_z]))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
             let size = 3 * mem::size_of::<usize>();
-            size_hint::recursion_guard(depth, |depth| {
-                size_hint::and((size, Some(size)), T::size_hint(depth))
-            })
+            (size, Some(size))
         }
     }
 
-    impl<'a, T> Arbitrary<'a> for SphereVoxelGenerator<T>
-    where
-        T: Arbitrary<'a>,
-    {
-        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let voxel_extent = 0.25;
-            let n_voxels_across = u.int_in_range(1..=MAX_SIZE)?;
-            let voxel_type_generator = u.arbitrary()?;
-            Ok(Self::new(
-                voxel_extent,
-                n_voxels_across,
-                voxel_type_generator,
-            ))
+    impl Arbitrary<'_> for SphereSDFGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let radius = 1e3 * arbitrary_norm_f64(u)?;
+            Ok(Self::new(radius))
         }
 
-        fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
             let size = mem::size_of::<usize>();
-            size_hint::recursion_guard(depth, |depth| {
-                size_hint::and((size, Some(size)), T::size_hint(depth))
-            })
+            (size, Some(size))
         }
     }
 
-    impl<'a, T> Arbitrary<'a> for GradientNoiseVoxelGenerator<T>
-    where
-        T: Arbitrary<'a>,
-    {
-        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let voxel_extent = 0.25;
-            let size_x = u.int_in_range(0..=MAX_SIZE)?;
-            let size_y = u.int_in_range(0..=MAX_SIZE)?;
-            let size_z = u.int_in_range(0..=MAX_SIZE)?;
-            let noise_frequency = 100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
-            let noise_threshold = f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
+    impl Arbitrary<'_> for GradientNoiseSDFGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let extent_x = 1e3 * arbitrary_norm_f64(u)?;
+            let extent_y = 1e3 * arbitrary_norm_f64(u)?;
+            let extent_z = 1e3 * arbitrary_norm_f64(u)?;
+            let noise_frequency = 100.0 * arbitrary_norm_f64(u)?;
+            let noise_threshold = arbitrary_norm_f64(u)?;
             let seed = u.arbitrary()?;
-            let voxel_type_generator = u.arbitrary()?;
             Ok(Self::new(
-                voxel_extent,
-                size_x,
-                size_y,
-                size_z,
+                [extent_x, extent_y, extent_z],
                 noise_frequency,
                 noise_threshold,
                 seed,
-                voxel_type_generator,
             ))
         }
 
-        fn size_hint(depth: usize) -> (usize, Option<usize>) {
-            let size =
-                3 * mem::size_of::<usize>() + 2 * mem::size_of::<i32>() + mem::size_of::<u32>();
-            size_hint::recursion_guard(depth, |depth| {
-                size_hint::and((size, Some(size)), T::size_hint(depth))
-            })
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 5 * mem::size_of::<usize>() + mem::size_of::<u32>();
+            (size, Some(size))
+        }
+    }
+
+    impl Arbitrary<'_> for SameVoxelTypeGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let idx = u.arbitrary()?;
+            Ok(Self::new(VoxelType::from_idx_u8(idx)))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = mem::size_of::<u8>();
+            (size, Some(size))
         }
     }
 
@@ -395,8 +656,8 @@ pub mod fuzzing {
             for _ in 0..u.int_in_range(0..=voxel_types.len() - 1)? {
                 voxel_types.swap_remove(u.int_in_range(0..=voxel_types.len() - 1)?);
             }
-            let noise_frequency = 100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
-            let voxel_type_frequency = 100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
+            let noise_frequency = 100.0 * arbitrary_norm_f64(u)?;
+            let voxel_type_frequency = 100.0 * arbitrary_norm_f64(u)?;
             let seed = u.arbitrary()?;
             Ok(Self::new(
                 voxel_types,
@@ -412,5 +673,9 @@ pub mod fuzzing {
                 lower_size + mem::size_of::<usize>() * (VoxelTypeRegistry::max_n_voxel_types() - 1);
             (lower_size, Some(upper_size))
         }
+    }
+
+    fn arbitrary_norm_f64(u: &mut Unstructured<'_>) -> Result<f64> {
+        Ok(f64::from(u.int_in_range(0..=1000000)?) / 1000000.0)
     }
 }

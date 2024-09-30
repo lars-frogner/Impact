@@ -93,13 +93,13 @@ impl VoxelSignedDistance {
         Self::MIN_F32
     }
 
-    /// A `SignedDistance` for a voxel that is fully outside the object.
-    pub const fn fully_outside() -> Self {
+    /// A `SignedDistance` for a voxel that is maximally outside the object.
+    pub const fn maximally_outside() -> Self {
         Self::from_encoded(i8::MAX)
     }
 
-    /// A `SignedDistance` for a voxel that is fully inside the object.
-    pub const fn fully_inside() -> Self {
+    /// A `SignedDistance` for a voxel that is maximally inside the object.
+    pub const fn maximally_inside() -> Self {
         Self::from_encoded(i8::MIN)
     }
 
@@ -121,8 +121,8 @@ impl VoxelSignedDistance {
     }
 
     /// Whether the signed distance is strictly negative.
-    pub fn is_negative(self) -> bool {
-        self.encoded < 0
+    pub const fn is_negative(self) -> bool {
+        self.encoded.is_negative()
     }
 }
 
@@ -186,35 +186,33 @@ impl Voxel {
         }
     }
 
-    /// Creates a new voxel with the given type and signed distance that
-    /// is near the surface of the object (it is adjacent to a voxel with an
-    /// opposite signed distance).
-    pub const fn near_surface(voxel_type: VoxelType, signed_distance: VoxelSignedDistance) -> Self {
-        Self {
-            voxel_type,
-            flags: VoxelFlags::new(),
-            signed_distance,
-        }
+    /// Creates a new non-empty voxel of the given typewith the given signed
+    /// distance.
+    pub const fn non_empty(voxel_type: VoxelType, signed_distance: VoxelSignedDistance) -> Self {
+        Self::new(voxel_type, VoxelFlags::new(), signed_distance)
     }
 
-    /// Creates a new voxel with the given type that is fully inside the
-    /// object (not adjacent to a voxel whose center is outside the object's
-    /// surface).
-    pub const fn fully_inside(voxel_type: VoxelType) -> Self {
+    /// Creates a new empty voxel with the given signed distance.
+    pub const fn empty(signed_distance: VoxelSignedDistance) -> Self {
+        Self::new(VoxelType::dummy(), VoxelFlags::IS_EMPTY, signed_distance)
+    }
+
+    /// Creates a new voxel with the given type that is maximally inside the
+    /// object.
+    pub const fn maximally_inside(voxel_type: VoxelType) -> Self {
         Self::new(
             voxel_type,
             VoxelFlags::new(),
-            VoxelSignedDistance::fully_inside(),
+            VoxelSignedDistance::maximally_inside(),
         )
     }
 
-    /// Creates a new empty voxel that is fully outside the object (not adjacent
-    /// to a voxel whose center is inside the object's surface).
-    pub const fn fully_outside() -> Self {
+    /// Creates a new empty voxel that is maximally outside the object.
+    pub const fn maximally_outside() -> Self {
         Self::new(
             VoxelType::dummy(),
             VoxelFlags::IS_EMPTY,
-            VoxelSignedDistance::fully_outside(),
+            VoxelSignedDistance::maximally_outside(),
         )
     }
 

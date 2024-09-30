@@ -32,4 +32,4 @@
 
 ## Misc
 
-- Investigate holes in rendered voxel objects (probably edge cases in occlusion culling).
+- Fix tiny gaps between chunk meshes due to numerical imprecision.

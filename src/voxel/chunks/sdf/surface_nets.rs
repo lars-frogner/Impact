@@ -443,6 +443,11 @@ macro_rules! sorting_network_7 {
     };
 }
 
+// TODO: When the vertex has a single material and is surrounded by vertices
+// without that material, the resulting blending looks unnatural. This is
+// expected, but it would be nice to make it look better. It is mainly an issue
+// when the single material has a strong contrast with the surrounding
+// materials.
 impl SurfaceNetsVertexMaterials {
     fn compute(corner_has_voxel: [bool; 8], corner_material_indices: [u8; 8]) -> Self {
         let mut materials = Self {

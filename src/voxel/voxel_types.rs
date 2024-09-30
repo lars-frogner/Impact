@@ -9,7 +9,8 @@ use nohash_hasher::BuildNoHashHasher;
 use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 
 /// A type identifier that determines all the properties of a voxel.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelType(u8);
 
 /// Registry containing the names and properties of all voxel types.

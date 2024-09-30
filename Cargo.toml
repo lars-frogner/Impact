@@ -57,6 +57,7 @@ simba = "0.9"
 tobj = "4.0"
 wgpu = { version = "22.1", features = ["naga-ir"] }
 winit = { version = "0.30" }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dependencies.impact_ecs]
 path = "impact_ecs"
