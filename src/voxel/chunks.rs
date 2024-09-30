@@ -605,20 +605,20 @@ impl ChunkedVoxelObject {
                     let voxel = self
                         .get_voxel(i, j, k)
                         .copied()
-                        .unwrap_or(Voxel::fully_outside());
+                        .unwrap_or(Voxel::maximally_outside());
 
                     let adjacent_voxel_x_up = self
                         .get_voxel(i + 1, j, k)
                         .copied()
-                        .unwrap_or(Voxel::fully_outside());
+                        .unwrap_or(Voxel::maximally_outside());
                     let adjacent_voxel_y_up = self
                         .get_voxel(i, j + 1, k)
                         .copied()
-                        .unwrap_or(Voxel::fully_outside());
+                        .unwrap_or(Voxel::maximally_outside());
                     let adjacent_voxel_z_up = self
                         .get_voxel(i, j, k + 1)
                         .copied()
-                        .unwrap_or(Voxel::fully_outside());
+                        .unwrap_or(Voxel::maximally_outside());
 
                     if voxel.is_empty() {
                         assert_missing_flag(&adjacent_voxel_x_up, VoxelFlags::HAS_ADJACENT_X_DN);
@@ -1183,7 +1183,7 @@ impl VoxelSuperchunk {
                                 is_uniform = false;
                             }
                             (None, VoxelChunk::Empty) => {
-                                first_voxel = Some(Voxel::fully_outside());
+                                first_voxel = Some(Voxel::maximally_outside());
                             }
                             (None, VoxelChunk::Uniform(voxel)) => {
                                 first_voxel = Some(*voxel);
@@ -2671,7 +2671,7 @@ mod tests {
         }
 
         pub fn empty(shape: [usize; 3]) -> Self {
-            Self::new(shape, [0; 3], Voxel::fully_outside())
+            Self::new(shape, [0; 3], Voxel::maximally_outside())
         }
 
         pub fn single(voxel: Voxel) -> Self {
@@ -2679,11 +2679,11 @@ mod tests {
         }
 
         pub fn single_default() -> Self {
-            Self::single(Voxel::fully_inside(VoxelType::default()))
+            Self::single(Voxel::maximally_inside(VoxelType::default()))
         }
 
         pub fn single_empty() -> Self {
-            Self::single(Voxel::fully_outside())
+            Self::single(Voxel::maximally_outside())
         }
 
         pub fn with_default(shape: [usize; 3]) -> Self {
@@ -2691,7 +2691,7 @@ mod tests {
         }
 
         pub fn offset_with_default(shape: [usize; 3], offset: [usize; 3]) -> Self {
-            Self::new(shape, offset, Voxel::fully_inside(VoxelType::default()))
+            Self::new(shape, offset, Voxel::maximally_inside(VoxelType::default()))
         }
     }
 
@@ -2728,7 +2728,7 @@ mod tests {
             {
                 self.voxel
             } else {
-                Voxel::fully_outside()
+                Voxel::maximally_outside()
             }
         }
     }
@@ -2751,9 +2751,9 @@ mod tests {
                 && k < self.offset[2] + N
                 && self.voxels[i - self.offset[0]][j - self.offset[1]][k - self.offset[2]] != 0
             {
-                Voxel::fully_inside(VoxelType::default())
+                Voxel::maximally_inside(VoxelType::default())
             } else {
-                Voxel::fully_outside()
+                Voxel::maximally_outside()
             }
         }
     }

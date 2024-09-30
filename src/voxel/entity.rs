@@ -20,12 +20,14 @@ use crate::{
     voxel::{
         chunks::ChunkedVoxelObject,
         components::{
-            GradientNoiseVoxelTypesComp, SameVoxelTypeComp, VoxelBoxComp,
+            GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp,
+            MultiscaleSphereModificationComp, SameVoxelTypeComp, VoxelBoxComp,
             VoxelGradientNoisePatternComp, VoxelObjectComp, VoxelSphereComp,
         },
         generation::{
-            BoxVoxelGenerator, GradientNoiseVoxelGenerator, GradientNoiseVoxelTypeGenerator,
-            SameVoxelTypeGenerator, SphereVoxelGenerator,
+            BoxSDFGenerator, GradientNoiseSDFGenerator, GradientNoiseVoxelTypeGenerator,
+            MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFGenerator,
+            SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator, VoxelTypeGenerator,
         },
         voxel_types::VoxelTypeRegistry,
         VoxelManager, VoxelObjectID,
@@ -51,95 +53,22 @@ pub fn setup_voxel_object_for_new_entity(
             let mut voxel_manager = voxel_manager.write().unwrap();
         },
         components,
-        |voxel_box: &VoxelBoxComp, voxel_type: &SameVoxelTypeComp| -> VoxelObjectComp {
-            let generator = BoxVoxelGenerator::new(
-                voxel_box.voxel_extent,
-                voxel_box.size_x,
-                voxel_box.size_y,
-                voxel_box.size_z,
-                SameVoxelTypeGenerator::new(voxel_type.voxel_type()),
-            );
-
-            let voxel_object = ChunkedVoxelObject::generate(&generator)
-                .expect("Tried to generate object for empty voxel box");
-
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
-
-            VoxelObjectComp { voxel_object_id }
-        },
-        ![VoxelObjectComp]
-    );
-
-    setup!(
-        {
-            let mut voxel_manager = voxel_manager.write().unwrap();
-        },
-        components,
-        |voxel_sphere: &VoxelSphereComp, voxel_type: &SameVoxelTypeComp| -> VoxelObjectComp {
-            let generator = SphereVoxelGenerator::new(
-                voxel_sphere.voxel_extent(),
-                voxel_sphere.n_voxels_across(),
-                SameVoxelTypeGenerator::new(voxel_type.voxel_type()),
-            );
-
-            let voxel_object = ChunkedVoxelObject::generate(&generator)
-                .expect("Tried to generate object for empty voxel sphere");
-
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
-
-            VoxelObjectComp { voxel_object_id }
-        },
-        ![VoxelObjectComp]
-    );
-
-    setup!(
-        {
-            let mut voxel_manager = voxel_manager.write().unwrap();
-        },
-        components,
-        |voxel_noise_pattern: &VoxelGradientNoisePatternComp,
-         voxel_type: &SameVoxelTypeComp|
+        |voxel_box: &VoxelBoxComp,
+         voxel_type: &SameVoxelTypeComp,
+         multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+         multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
          -> VoxelObjectComp {
-            let generator = GradientNoiseVoxelGenerator::new(
-                voxel_noise_pattern.voxel_extent,
-                voxel_noise_pattern.size_x,
-                voxel_noise_pattern.size_y,
-                voxel_noise_pattern.size_z,
-                voxel_noise_pattern.noise_frequency,
-                voxel_noise_pattern.noise_threshold,
-                u32::try_from(voxel_noise_pattern.seed).unwrap(),
-                SameVoxelTypeGenerator::new(voxel_type.voxel_type()),
-            );
+            let sdf_generator = BoxSDFGenerator::new(voxel_box.extents_in_voxels());
+            let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
 
-            let voxel_object = ChunkedVoxelObject::generate(&generator)
-                .expect("Tried to generate object for empty voxel gradient noise pattern");
-
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
-
-            VoxelObjectComp { voxel_object_id }
-        },
-        ![VoxelObjectComp]
-    );
-
-    setup!(
-        {
-            let mut voxel_manager = voxel_manager.write().unwrap();
-        },
-        components,
-        |voxel_box: &VoxelBoxComp, voxel_types: &GradientNoiseVoxelTypesComp| -> VoxelObjectComp {
-            let generator = BoxVoxelGenerator::new(
+            let voxel_object = generate_voxel_object(
                 voxel_box.voxel_extent,
-                voxel_box.size_x,
-                voxel_box.size_y,
-                voxel_box.size_z,
-                GradientNoiseVoxelTypeGenerator::from_component(
-                    voxel_manager.voxel_type_registry(),
-                    voxel_types,
-                ),
-            );
-
-            let voxel_object = ChunkedVoxelObject::generate(&generator)
-                .expect("Tried to generate object for empty voxel box");
+                sdf_generator,
+                voxel_type_generator,
+                multiscale_sphere_modification,
+                multifractal_noise_modification,
+            )
+            .expect("Tried to generate object for empty voxel box");
 
             let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
 
@@ -154,19 +83,21 @@ pub fn setup_voxel_object_for_new_entity(
         },
         components,
         |voxel_sphere: &VoxelSphereComp,
-         voxel_types: &GradientNoiseVoxelTypesComp|
+         voxel_type: &SameVoxelTypeComp,
+         multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+         multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
          -> VoxelObjectComp {
-            let generator = SphereVoxelGenerator::new(
-                voxel_sphere.voxel_extent(),
-                voxel_sphere.n_voxels_across(),
-                GradientNoiseVoxelTypeGenerator::from_component(
-                    voxel_manager.voxel_type_registry(),
-                    voxel_types,
-                ),
-            );
+            let sdf_generator = SphereSDFGenerator::new(voxel_sphere.radius_in_voxels());
+            let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
 
-            let voxel_object = ChunkedVoxelObject::generate(&generator)
-                .expect("Tried to generate object for empty voxel sphere");
+            let voxel_object = generate_voxel_object(
+                voxel_sphere.voxel_extent,
+                sdf_generator,
+                voxel_type_generator,
+                multiscale_sphere_modification,
+                multifractal_noise_modification,
+            )
+            .expect("Tried to generate object for empty voxel sphere");
 
             let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
 
@@ -181,24 +112,26 @@ pub fn setup_voxel_object_for_new_entity(
         },
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePatternComp,
-         voxel_types: &GradientNoiseVoxelTypesComp|
+         voxel_type: &SameVoxelTypeComp,
+         multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+         multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
          -> VoxelObjectComp {
-            let generator = GradientNoiseVoxelGenerator::new(
-                voxel_noise_pattern.voxel_extent,
-                voxel_noise_pattern.size_x,
-                voxel_noise_pattern.size_y,
-                voxel_noise_pattern.size_z,
+            let sdf_generator = GradientNoiseSDFGenerator::new(
+                voxel_noise_pattern.extents_in_voxels(),
                 voxel_noise_pattern.noise_frequency,
                 voxel_noise_pattern.noise_threshold,
                 u32::try_from(voxel_noise_pattern.seed).unwrap(),
-                GradientNoiseVoxelTypeGenerator::from_component(
-                    voxel_manager.voxel_type_registry(),
-                    voxel_types,
-                ),
             );
+            let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
 
-            let voxel_object = ChunkedVoxelObject::generate(&generator)
-                .expect("Tried to generate object for empty voxel gradient noise pattern");
+            let voxel_object = generate_voxel_object(
+                voxel_noise_pattern.voxel_extent,
+                sdf_generator,
+                voxel_type_generator,
+                multiscale_sphere_modification,
+                multifractal_noise_modification,
+            )
+            .expect("Tried to generate object for empty voxel gradient noise pattern");
 
             let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
 
@@ -206,6 +139,177 @@ pub fn setup_voxel_object_for_new_entity(
         },
         ![VoxelObjectComp]
     );
+
+    setup!(
+        {
+            let mut voxel_manager = voxel_manager.write().unwrap();
+        },
+        components,
+        |voxel_box: &VoxelBoxComp,
+         voxel_types: &GradientNoiseVoxelTypesComp,
+         multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+         multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
+         -> VoxelObjectComp {
+            let sdf_generator = BoxSDFGenerator::new(voxel_box.extents_in_voxels());
+            let voxel_type_generator = GradientNoiseVoxelTypeGenerator::from_component(
+                voxel_manager.voxel_type_registry(),
+                voxel_types,
+            );
+
+            let voxel_object = generate_voxel_object(
+                voxel_box.voxel_extent,
+                sdf_generator,
+                voxel_type_generator,
+                multiscale_sphere_modification,
+                multifractal_noise_modification,
+            )
+            .expect("Tried to generate object for empty voxel box");
+
+            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+
+            VoxelObjectComp { voxel_object_id }
+        },
+        ![VoxelObjectComp]
+    );
+
+    setup!(
+        {
+            let mut voxel_manager = voxel_manager.write().unwrap();
+        },
+        components,
+        |voxel_sphere: &VoxelSphereComp,
+         voxel_types: &GradientNoiseVoxelTypesComp,
+         multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+         multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
+         -> VoxelObjectComp {
+            let sdf_generator = SphereSDFGenerator::new(voxel_sphere.radius_in_voxels());
+            let voxel_type_generator = GradientNoiseVoxelTypeGenerator::from_component(
+                voxel_manager.voxel_type_registry(),
+                voxel_types,
+            );
+
+            let voxel_object = generate_voxel_object(
+                voxel_sphere.voxel_extent,
+                sdf_generator,
+                voxel_type_generator,
+                multiscale_sphere_modification,
+                multifractal_noise_modification,
+            )
+            .expect("Tried to generate object for empty voxel sphere");
+
+            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+
+            VoxelObjectComp { voxel_object_id }
+        },
+        ![VoxelObjectComp]
+    );
+
+    setup!(
+        {
+            let mut voxel_manager = voxel_manager.write().unwrap();
+        },
+        components,
+        |voxel_noise_pattern: &VoxelGradientNoisePatternComp,
+         voxel_types: &GradientNoiseVoxelTypesComp,
+         multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+         multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
+         -> VoxelObjectComp {
+            let sdf_generator = GradientNoiseSDFGenerator::new(
+                voxel_noise_pattern.extents_in_voxels(),
+                voxel_noise_pattern.noise_frequency,
+                voxel_noise_pattern.noise_threshold,
+                u32::try_from(voxel_noise_pattern.seed).unwrap(),
+            );
+            let voxel_type_generator = GradientNoiseVoxelTypeGenerator::from_component(
+                voxel_manager.voxel_type_registry(),
+                voxel_types,
+            );
+
+            let voxel_object = generate_voxel_object(
+                voxel_noise_pattern.voxel_extent,
+                sdf_generator,
+                voxel_type_generator,
+                multiscale_sphere_modification,
+                multifractal_noise_modification,
+            )
+            .expect("Tried to generate object for empty voxel gradient noise pattern");
+
+            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+
+            VoxelObjectComp { voxel_object_id }
+        },
+        ![VoxelObjectComp]
+    );
+}
+
+fn generate_voxel_object(
+    voxel_extent: f64,
+    sdf_generator: impl SDFGenerator,
+    voxel_type_generator: impl VoxelTypeGenerator,
+    multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
+    multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>,
+) -> Option<ChunkedVoxelObject> {
+    match (
+        multiscale_sphere_modification,
+        multifractal_noise_modification,
+    ) {
+        (Some(multiscale_sphere_modification), Some(multifractal_noise_modification)) => {
+            let sdf_generator = MultiscaleSphereSDFModifier::new(
+                sdf_generator,
+                multiscale_sphere_modification.octaves,
+                multiscale_sphere_modification.max_scale,
+                multiscale_sphere_modification.persistence,
+                multiscale_sphere_modification.inflation,
+                multiscale_sphere_modification.smoothness,
+                multiscale_sphere_modification.seed,
+            );
+            let sdf_generator = MultifractalNoiseSDFModifier::new(
+                sdf_generator,
+                multifractal_noise_modification.octaves,
+                multifractal_noise_modification.frequency,
+                multifractal_noise_modification.lacunarity,
+                multifractal_noise_modification.persistence,
+                multifractal_noise_modification.amplitude,
+                u32::try_from(multifractal_noise_modification.seed).unwrap(),
+            );
+            let generator =
+                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
+            ChunkedVoxelObject::generate(&generator)
+        }
+        (Some(modification), None) => {
+            let sdf_generator = MultiscaleSphereSDFModifier::new(
+                sdf_generator,
+                modification.octaves,
+                modification.max_scale,
+                modification.persistence,
+                modification.inflation,
+                modification.smoothness,
+                modification.seed,
+            );
+            let generator =
+                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
+            ChunkedVoxelObject::generate(&generator)
+        }
+        (None, Some(modification)) => {
+            let sdf_generator = MultifractalNoiseSDFModifier::new(
+                sdf_generator,
+                modification.octaves,
+                modification.frequency,
+                modification.lacunarity,
+                modification.persistence,
+                modification.amplitude,
+                u32::try_from(modification.seed).unwrap(),
+            );
+            let generator =
+                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
+            ChunkedVoxelObject::generate(&generator)
+        }
+        (None, None) => {
+            let generator =
+                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
+            ChunkedVoxelObject::generate(&generator)
+        }
+    }
 }
 
 pub fn add_model_instance_node_component_for_new_voxel_object_entity(
