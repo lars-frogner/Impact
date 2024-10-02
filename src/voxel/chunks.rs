@@ -1,5 +1,6 @@
 //! Chunked representation of voxel objects.
 
+pub mod intersection;
 pub mod sdf;
 
 use crate::{

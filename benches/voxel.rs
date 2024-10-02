@@ -1,10 +1,16 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use impact::voxel::{
-    chunks::ChunkedVoxelObject,
-    generation::{BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
-    mesh::ChunkedVoxelObjectMesh,
-    voxel_types::VoxelType,
+use impact::{
+    geometry::Sphere,
+    voxel::{
+        chunks::ChunkedVoxelObject,
+        generation::{
+            BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
+        },
+        mesh::ChunkedVoxelObjectMesh,
+        voxel_types::VoxelType,
+    },
 };
+use nalgebra::{vector, UnitVector3};
 use pprof::criterion::{Output, PProfProfiler};
 
 pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
@@ -94,6 +100,32 @@ pub fn bench_chunked_voxel_object_create_mesh(c: &mut Criterion) {
     });
 }
 
+pub fn bench_chunked_voxel_object_modify_voxels_within_sphere(c: &mut Criterion) {
+    let object_radius = 100.0;
+    let sphere_radius = 0.15 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let sphere = Sphere::new(
+        object.compute_aabb::<f64>().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+        sphere_radius,
+    );
+    c.bench_function(
+        "bench_chunked_voxel_object_modify_voxels_within_sphere",
+        |b| {
+            b.iter(|| {
+                object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
+                    black_box((indices, position, voxel));
+                });
+            })
+        },
+    );
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
@@ -103,5 +135,6 @@ criterion_group!(
         bench_chunked_voxel_object_initialize_adjacencies,
         bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf,
         bench_chunked_voxel_object_create_mesh,
+        bench_chunked_voxel_object_modify_voxels_within_sphere,
 );
 criterion_main!(benches);

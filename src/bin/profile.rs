@@ -1,10 +1,16 @@
 use clap::{Parser, ValueEnum};
-use impact::voxel::{
-    chunks::ChunkedVoxelObject,
-    generation::{BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
-    mesh::ChunkedVoxelObjectMesh,
-    voxel_types::VoxelType,
+use impact::{
+    geometry::Sphere,
+    voxel::{
+        chunks::ChunkedVoxelObject,
+        generation::{
+            BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
+        },
+        mesh::ChunkedVoxelObjectMesh,
+        voxel_types::VoxelType,
+    },
 };
+use nalgebra::{vector, UnitVector3};
 use std::{
     hint::black_box,
     time::{Duration, Instant},
@@ -34,6 +40,7 @@ enum Target {
     ChunkedVoxelObjectConstruction,
     ChunkedVoxelObjectInitializeAdjacencies,
     ChunkedVoxelObjectCreateMesh,
+    ChunkedVoxelObjectModifyVoxelsWithinSphere,
 }
 
 #[derive(Debug)]
@@ -76,6 +83,9 @@ fn main() {
         }
         Target::ChunkedVoxelObjectCreateMesh => {
             profile_chunked_voxel_object_create_mesh(duration, delayer);
+        }
+        Target::ChunkedVoxelObjectModifyVoxelsWithinSphere => {
+            profile_chunked_voxel_object_modify_voxels_within_sphere(duration, delayer);
         }
     }
 }
@@ -120,6 +130,31 @@ fn profile_chunked_voxel_object_create_mesh(duration: Duration, delayer: Delayer
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     profile(
         &mut || ChunkedVoxelObjectMesh::create(&object),
+        duration,
+        delayer,
+    );
+}
+
+fn profile_chunked_voxel_object_modify_voxels_within_sphere(duration: Duration, delayer: Delayer) {
+    let object_radius = 100.0;
+    let sphere_radius = 0.15 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let sphere = Sphere::new(
+        object.compute_aabb::<f64>().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+        sphere_radius,
+    );
+    profile(
+        &mut || {
+            object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
+                black_box((indices, position, voxel));
+            });
+        },
         duration,
         delayer,
     );
