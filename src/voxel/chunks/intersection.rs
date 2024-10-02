@@ -4,10 +4,8 @@ use crate::{
     geometry::Sphere,
     voxel::{
         chunks::{
-            linear_chunk_idx_within_superchunk_from_object_chunk_indices,
-            linear_voxel_idx_within_chunk_from_object_voxel_indices, ChunkIndex,
-            ChunkedVoxelObject, NonUniformVoxelChunk, VoxelChunk, CHUNK_SIZE, CHUNK_VOXEL_COUNT,
-            SUPERCHUNK_CHUNK_COUNT, SUPERCHUNK_SIZE,
+            linear_voxel_idx_within_chunk_from_object_voxel_indices, ChunkedVoxelObject,
+            NonUniformVoxelChunk, VoxelChunk, CHUNK_SIZE, CHUNK_VOXEL_COUNT,
         },
         Voxel,
     },
@@ -31,105 +29,59 @@ impl ChunkedVoxelObject {
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        let touched_superchunk_ranges = touched_chunk_ranges
-            .clone()
-            .map(superchunk_range_encompassing_chunk_range);
+        for chunk_i in touched_chunk_ranges[0].clone() {
+            for chunk_j in touched_chunk_ranges[1].clone() {
+                for chunk_k in touched_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
-        for superchunk_i in touched_superchunk_ranges[0].clone() {
-            for superchunk_j in touched_superchunk_ranges[1].clone() {
-                for superchunk_k in touched_superchunk_ranges[2].clone() {
-                    let superchunk_indices = [superchunk_i, superchunk_j, superchunk_k];
-                    let superchunk_idx = self.linear_superchunk_idx(&superchunk_indices);
+                    let chunk = &mut self.chunks[chunk_idx];
 
-                    let superchunk = &mut self.superchunks[superchunk_idx];
-
-                    let start_chunk_idx = match superchunk.start_chunk_idx() {
-                        ChunkIndex::AbsentEmpty => {
+                    let start_voxel_idx = match chunk {
+                        VoxelChunk::Empty => {
                             continue;
                         }
-                        ChunkIndex::AbsentUniform(_) => {
-                            superchunk.convert_to_non_uniform_if_uniform(&mut self.chunks);
-                            superchunk.start_chunk_idx().unwrap_idx()
+                        VoxelChunk::Uniform(_) => {
+                            chunk.convert_to_non_uniform_if_uniform(&mut self.voxels);
+                            chunk.start_voxel_idx_if_non_uniform().unwrap()
                         }
-                        ChunkIndex::Present(idx) => idx,
+                        VoxelChunk::NonUniform(NonUniformVoxelChunk {
+                            start_voxel_idx, ..
+                        }) => *start_voxel_idx,
                     };
 
-                    let object_chunk_ranges_in_superchunk = superchunk_indices
-                        .map(|index| index * SUPERCHUNK_SIZE..(index + 1) * SUPERCHUNK_SIZE);
+                    let object_voxel_ranges_in_chunk =
+                        chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
 
-                    let touched_chunk_ranges_in_superchunk: [Range<_>; 3] = array::from_fn(|dim| {
-                        let range_in_superchunk = &object_chunk_ranges_in_superchunk[dim];
-                        let touched_range = &touched_chunk_ranges[dim];
-                        usize::max(range_in_superchunk.start, touched_range.start)
-                            ..usize::min(range_in_superchunk.end, touched_range.end)
+                    let touched_voxel_ranges_in_chunk: [Range<_>; 3] = array::from_fn(|dim| {
+                        let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
+                        let touched_range = &touched_voxel_ranges[dim];
+                        usize::max(range_in_chunk.start, touched_range.start)
+                            ..usize::min(range_in_chunk.end, touched_range.end)
                     });
 
-                    let chunks =
-                        &mut self.chunks[start_chunk_idx..start_chunk_idx + SUPERCHUNK_CHUNK_COUNT];
+                    let voxels =
+                        &mut self.voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
 
-                    for chunk_i in touched_chunk_ranges_in_superchunk[0].clone() {
-                        for chunk_j in touched_chunk_ranges_in_superchunk[1].clone() {
-                            for chunk_k in touched_chunk_ranges_in_superchunk[2].clone() {
-                                let object_chunk_indices = [chunk_i, chunk_j, chunk_k];
-
-                                let chunk_idx =
-                                    linear_chunk_idx_within_superchunk_from_object_chunk_indices(
-                                        chunk_i, chunk_j, chunk_k,
+                    for i in touched_voxel_ranges_in_chunk[0].clone() {
+                        for j in touched_voxel_ranges_in_chunk[1].clone() {
+                            for k in touched_voxel_ranges_in_chunk[2].clone() {
+                                let voxel_center_position =
+                                    voxel_center_position_from_object_voxel_indices(
+                                        self.voxel_extent,
+                                        i,
+                                        j,
+                                        k,
                                     );
 
-                                let chunk = &mut chunks[chunk_idx];
-
-                                let start_voxel_idx = match chunk {
-                                    VoxelChunk::Empty => {
-                                        continue;
-                                    }
-                                    VoxelChunk::Uniform(_) => {
-                                        chunk.convert_to_non_uniform_if_uniform(&mut self.voxels);
-                                        chunk.start_voxel_idx_if_non_uniform().unwrap()
-                                    }
-                                    VoxelChunk::NonUniform(NonUniformVoxelChunk {
-                                        start_voxel_idx,
-                                        ..
-                                    }) => *start_voxel_idx,
-                                };
-
-                                let object_voxel_ranges_in_chunk = object_chunk_indices
-                                    .map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
-
-                                let touched_voxel_ranges_in_chunk: [Range<_>; 3] =
-                                    array::from_fn(|dim| {
-                                        let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
-                                        let touched_range = &touched_voxel_ranges[dim];
-                                        usize::max(range_in_chunk.start, touched_range.start)
-                                            ..usize::min(range_in_chunk.end, touched_range.end)
-                                    });
-
-                                let voxels = &mut self.voxels
-                                    [start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
-
-                                for i in touched_voxel_ranges_in_chunk[0].clone() {
-                                    for j in touched_voxel_ranges_in_chunk[1].clone() {
-                                        for k in touched_voxel_ranges_in_chunk[2].clone() {
-                                            let voxel_center_position =
-                                                voxel_center_position_from_object_voxel_indices(
-                                                    self.voxel_extent,
-                                                    i,
-                                                    j,
-                                                    k,
-                                                );
-
-                                            if sphere.contains_point(&voxel_center_position) {
-                                                let voxel_idx = linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
-                                                let voxel = &mut voxels[voxel_idx];
-                                                if !voxel.is_empty() {
-                                                    modify_voxel(
-                                                        [i, j, k],
-                                                        voxel_center_position,
-                                                        voxel,
-                                                    );
-                                                }
-                                            }
-                                        }
+                                if sphere.contains_point(&voxel_center_position) {
+                                    let voxel_idx =
+                                        linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                            i, j, k,
+                                        );
+                                    let voxel = &mut voxels[voxel_idx];
+                                    if !voxel.is_empty() {
+                                        modify_voxel([i, j, k], voxel_center_position, voxel);
                                     }
                                 }
                             }
@@ -182,12 +134,6 @@ impl ChunkedVoxelObject {
 
         touched_voxel_ranges
     }
-}
-
-fn superchunk_range_encompassing_chunk_range(chunk_range: Range<usize>) -> Range<usize> {
-    let start = chunk_range.start / SUPERCHUNK_SIZE;
-    let end = chunk_range.end.div_ceil(SUPERCHUNK_SIZE);
-    start..end
 }
 
 fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usize> {
