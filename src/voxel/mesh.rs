@@ -120,6 +120,10 @@ impl ChunkedVoxelObjectMesh {
             let base_vertex_index = positions.len() as u32;
             let index_count = buffer.indices.len();
 
+            if index_count == 0 {
+                return;
+            }
+
             chunk_submeshes.push(ChunkSubmesh::new(
                 chunk_indices[0],
                 chunk_indices[1],
