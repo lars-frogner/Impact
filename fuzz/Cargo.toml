@@ -22,3 +22,10 @@ path = "fuzz_targets/voxel_object_generation.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "obtaining_voxels_within_sphere"
+path = "fuzz_targets/obtaining_voxels_within_sphere.rs"
+test = false
+doc = false
+bench = false
