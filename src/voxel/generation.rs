@@ -23,6 +23,13 @@ pub trait VoxelGenerator {
 }
 
 /// Represents a signed distance field generator.
+///
+/// # Note
+/// We might not actually want a real signed distance field, because it is hard
+/// to modify it efficiently without invalidating distances away from the
+/// surface. Instead, it might be better to embrace it as a signed field that
+/// has correct distances only close to the surface, as this is what we
+/// typically care about.
 pub trait SDFGenerator {
     /// Returns the extents of the domain around the center where the signed
     /// distance field can be negative.
@@ -498,9 +505,8 @@ fn mix(a: f64, b: f64, factor: f64) -> f64 {
 
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
-    use crate::voxel::voxel_types::VoxelTypeRegistry;
-
     use super::*;
+    use crate::voxel::voxel_types::VoxelTypeRegistry;
     use arbitrary::{size_hint, Arbitrary, Result, Unstructured};
     use std::mem;
 
@@ -518,6 +524,9 @@ pub mod fuzzing {
         Sphere(SphereSDFGenerator),
         GradientNoise(GradientNoiseSDFGenerator),
     }
+
+    pub type ArbitrarySDFVoxelGenerator =
+        SDFVoxelGenerator<ArbitrarySDFGenerator, ArbitraryVoxelTypeGenerator>;
 
     const MAX_SIZE: usize = 300;
 
@@ -564,23 +573,16 @@ pub mod fuzzing {
         VT: VoxelTypeGenerator + Arbitrary<'a>,
     {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            let voxel_extent = 10.0 * arbitrary_norm_f64(u)?.max(1e-6);
             let sdf_generator: SD = u.arbitrary()?;
             let voxel_type_generator = u.arbitrary()?;
-            let grid_size = u.int_in_range(1..=MAX_SIZE)?;
-            let voxel_extent = sdf_generator
-                .domain_extents()
-                .map(|extent| OrderedFloat(extent / grid_size as f64))
-                .iter()
-                .max()
-                .unwrap()
-                .0;
             Ok(Self::new(voxel_extent, sdf_generator, voxel_type_generator))
         }
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {
             size_hint::recursion_guard(depth, |depth| {
                 size_hint::and_all(&[
-                    (mem::size_of::<usize>(), Some(mem::size_of::<usize>())),
+                    (mem::size_of::<i32>(), Some(mem::size_of::<i32>())),
                     SD::size_hint(depth),
                     VT::size_hint(depth),
                 ])
@@ -590,9 +592,9 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for BoxSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let extent_x = 1e3 * arbitrary_norm_f64(u)?;
-            let extent_y = 1e3 * arbitrary_norm_f64(u)?;
-            let extent_z = 1e3 * arbitrary_norm_f64(u)?;
+            let extent_x = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
+            let extent_y = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
+            let extent_z = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
             Ok(Self::new([extent_x, extent_y, extent_z]))
         }
 
@@ -604,7 +606,7 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for SphereSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let radius = 1e3 * arbitrary_norm_f64(u)?;
+            let radius = 0.5 * (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
             Ok(Self::new(radius))
         }
 
@@ -616,9 +618,9 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for GradientNoiseSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let extent_x = 1e3 * arbitrary_norm_f64(u)?;
-            let extent_y = 1e3 * arbitrary_norm_f64(u)?;
-            let extent_z = 1e3 * arbitrary_norm_f64(u)?;
+            let extent_x = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
+            let extent_y = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
+            let extent_z = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
             let noise_frequency = 100.0 * arbitrary_norm_f64(u)?;
             let noise_threshold = arbitrary_norm_f64(u)?;
             let seed = u.arbitrary()?;
