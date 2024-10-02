@@ -2644,6 +2644,21 @@ fn extract_slice_segments_mut<T>(
     )
 }
 
+#[cfg(feature = "fuzzing")]
+pub mod fuzzing {
+    use super::*;
+    use crate::voxel::generation::fuzzing::ArbitrarySDFVoxelGenerator;
+
+    pub fn fuzz_test_voxel_object_generation(generator: ArbitrarySDFVoxelGenerator) {
+        if let Some(object) = ChunkedVoxelObject::generate(&generator) {
+            object.validate_adjacencies();
+            object.validate_chunk_obscuredness();
+            object.validate_superchunk_obscuredness();
+            object.validate_sdf();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

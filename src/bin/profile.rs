@@ -69,13 +69,13 @@ fn main() {
 
     match args.target {
         Target::ChunkedVoxelObjectConstruction => {
-            profile_chunked_voxel_object_construction(duration, delayer)
+            profile_chunked_voxel_object_construction(duration, delayer);
         }
         Target::ChunkedVoxelObjectInitializeAdjacencies => {
-            profile_chunked_voxel_object_initialize_adjacencies(duration, delayer)
+            profile_chunked_voxel_object_initialize_adjacencies(duration, delayer);
         }
         Target::ChunkedVoxelObjectCreateMesh => {
-            profile_chunked_voxel_object_create_mesh(duration, delayer)
+            profile_chunked_voxel_object_create_mesh(duration, delayer);
         }
     }
 }
@@ -87,7 +87,7 @@ fn profile_chunked_voxel_object_construction(duration: Duration, delayer: Delaye
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     profile(
-        &|| ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap(),
+        &mut || ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap(),
         duration,
         delayer,
     );
@@ -101,7 +101,7 @@ fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration, delay
     );
     let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
     profile(
-        &|| {
+        &mut || {
             let mut object = object.clone();
             object.initialize_adjacencies();
             object
@@ -119,13 +119,13 @@ fn profile_chunked_voxel_object_create_mesh(duration: Duration, delayer: Delayer
     );
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     profile(
-        &|| ChunkedVoxelObjectMesh::create(&object),
+        &mut || ChunkedVoxelObjectMesh::create(&object),
         duration,
         delayer,
     );
 }
 
-fn profile<T>(f: &impl Fn() -> T, duration: Duration, delayer: Delayer) {
+fn profile<T>(f: &mut impl FnMut() -> T, duration: Duration, delayer: Delayer) {
     delayer.wait();
     let start = Instant::now();
     loop {
