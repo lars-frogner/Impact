@@ -21,22 +21,19 @@ use std::{iter, ops::Range};
 /// An object represented by a grid of voxels.
 ///
 /// The grid is subdivided into cubic chunks that are [`CHUNK_SIZE`] voxels
-/// across. The grid of chunks is further subdivided into superchunks that are
-/// [`SUPERCHUNK_SIZE`] chunks across. The full grid for the object spans the
-/// same whole number of superchunks along each axis.
+/// across. The full grid for the object spans a whole number of chunks along
+/// each axis.
 ///
-/// Uniform voxel information is pulled up to the coarsest possible level of
-/// detail. For example, an empty chunk does not store any information on the
-/// voxel level, and an empty superchunk does not store any information on the
-/// chunk level. Furthermore, a chunk or superchunk where all voxels contain the
-/// exact same information only stores that single voxel.
+/// Uniform voxel information is pulled up to the chunk level. An empty chunk
+/// does not store any information on the voxel level, and a chunk where all
+/// voxels contain the exact same information only stores that single voxel.
 #[derive(Clone, Debug)]
 pub struct ChunkedVoxelObject {
     voxel_extent: f64,
-    n_superchunks_per_axis: usize,
+    chunk_counts: [usize; 3],
+    chunk_idx_strides: [usize; 2],
     occupied_chunk_ranges: [Range<usize>; 3],
     occupied_voxel_ranges: [Range<usize>; 3],
-    superchunks: Vec<VoxelSuperchunk>,
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
     _voxel_types: Vec<VoxelType>,
@@ -46,45 +43,6 @@ pub struct ChunkedVoxelObject {
 #[derive(Clone, Debug)]
 pub struct ExposedVoxelChunk {
     chunk_indices: [usize; 3],
-    flags: VoxelChunkFlags,
-}
-
-/// A superchunk representing a cubic grid of voxel chunks. It has three
-/// representations:
-///
-/// - Empty: The superchunk contains no voxels.
-///
-/// - Uniform: The superchunk is fully packed with voxels carrying the exact
-///   same information. Only the single representative voxel is stored. Since
-///   voxels carry adjacency information, boundary voxels in a uniform
-///   superchunk must have the same adjacencies as interior voxels, meaning that
-///   the superchunk boundaries must be fully obscured by adjacent superchunks
-///   for the superchunk to be considered uniform.
-///
-/// - Non-uniform: The superchunk is not fully packed and/or contains a mix of
-///   voxels with different information. The chunks comprising the non-uniform
-///   superchunk are stored in the parent [`ChunkedVoxelObject`], and the
-///   superchunk stores the index to its first chunk as well as information on
-///   the distribution of voxels across the faces of the superchunk and a set of
-///   flags encoding additional information about the state of the superchunk.
-#[derive(Clone, Copy, Debug)]
-pub enum VoxelSuperchunk {
-    Empty,
-    Uniform(Voxel),
-    NonUniform(NonUniformVoxelSuperchunk),
-}
-
-/// A non-uniform superchunk representing a cubic grid of voxel chunks. The
-/// superchunk is not fully packed and/or contains a mix of voxels with
-/// different information. The chunks comprising the non-uniform superchunk are
-/// stored in the parent [`ChunkedVoxelObject`], and the superchunk stores the
-/// index to its first chunk as well as information on the distribution of
-/// voxels across the faces of the superchunk and a set of flags encoding
-/// additional information about the state of the superchunk.
-#[derive(Clone, Copy, Debug)]
-pub struct NonUniformVoxelSuperchunk {
-    start_chunk_idx: usize,
-    face_distributions: [[FaceVoxelDistribution; 2]; 3],
     flags: VoxelChunkFlags,
 }
 
@@ -127,7 +85,7 @@ pub struct NonUniformVoxelChunk {
 }
 
 /// Information about the distribution of voxels across a specific face of a
-/// chunk or superchunk.
+/// chunk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 enum FaceVoxelDistribution {
@@ -141,8 +99,7 @@ enum FaceVoxelDistribution {
 }
 
 bitflags! {
-    /// Bitflags encoding a set of potential binary states for a voxel chunk or
-    /// superchunk.
+    /// Bitflags encoding a set of potential binary states for a voxel chunk.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct VoxelChunkFlags: u8 {
         /// The face on the negative x-side of the chunk is fully obscured by
@@ -167,33 +124,15 @@ bitflags! {
 }
 
 /// Helper struct for keeping track of the number of empty voxels on each face
-/// of a chunk or superchunk.
+/// of a chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct FaceEmptyCounts([[usize; 2]; 3]);
-
-/// A generalized index referring to a chunk or superchunk that may not be
-/// stored explicitly in the parent [`ChunkedVoxelObject`]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ChunkIndex {
-    /// The chunk or superchunk is not stored anywhere, but it is empty.
-    AbsentEmpty,
-    /// The chunk or superchunk is not stored anywhere, but it is uniformly
-    /// filled with the specified voxel.
-    AbsentUniform(Voxel),
-    /// The chunk or superchunk is stored at the specified index in the parent
-    /// [`ChunkedVoxelObject`].
-    Present(usize),
-}
-
-pub type LoopForSuperchunkChunks = Loop3<SUPERCHUNK_SIZE>;
-pub type LoopOverSuperchunkChunkData<'a, 'b> = DataLoop3<'a, 'b, VoxelChunk, SUPERCHUNK_SIZE>;
 
 pub type LoopForChunkVoxels = Loop3<CHUNK_SIZE>;
 pub type LoopOverChunkVoxelData<'a, 'b> = DataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
 pub type LoopOverChunkVoxelDataMut<'a, 'b> = MutDataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
 
 const LOG2_CHUNK_SIZE: usize = 4;
-const LOG2_SUPERCHUNK_SIZE: usize = 3;
 
 /// The number of voxels across a cubic voxel chunk. It is always a power of
 /// two.
@@ -205,22 +144,8 @@ const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
 // We assume that a linear voxel index within a chunk fits into a `u16`
 const _: () = assert!(CHUNK_VOXEL_COUNT <= u16::MAX as usize);
 
-/// The number of chunks across a cubic superchunk. It is always a power of two.
-pub const SUPERCHUNK_SIZE: usize = 1 << LOG2_SUPERCHUNK_SIZE;
-const SUPERCHUNK_SIZE_SQUARED: usize = SUPERCHUNK_SIZE.pow(2);
-/// The number of voxels across a cubic superchunk.
-const SUPERCHUNK_SIZE_IN_VOXELS: usize = SUPERCHUNK_SIZE * CHUNK_SIZE;
-const SUPERCHUNK_SIZE_IN_VOXELS_SQUARED: usize = SUPERCHUNK_SIZE_IN_VOXELS.pow(2);
-/// The total number of chunks comprising each superchunk.
-const SUPERCHUNK_CHUNK_COUNT: usize = SUPERCHUNK_SIZE.pow(3);
-
-const SUPERCHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT: usize = LOG2_CHUNK_SIZE + LOG2_SUPERCHUNK_SIZE;
 const CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT: usize = LOG2_CHUNK_SIZE;
-const CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_MASK: usize = (1 << LOG2_SUPERCHUNK_SIZE) - 1;
 const VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
-
-const SUPERCHUNK_IDX_FROM_OBJECT_CHUNK_IDX_SHIFT: usize = LOG2_SUPERCHUNK_SIZE;
-const CHUNK_IDX_FROM_OBJECT_CHUNK_IDX_MASK: usize = (1 << LOG2_SUPERCHUNK_SIZE) - 1;
 
 #[allow(clippy::reversed_empty_ranges)]
 const REVERSED_MAX_RANGE: Range<usize> = usize::MAX..usize::MIN;
@@ -261,81 +186,63 @@ impl ChunkedVoxelObject {
             return None;
         }
 
-        let n_superchunks_per_axis = generator_grid_shape
-            .iter()
-            .map(|size| size.div_ceil(SUPERCHUNK_SIZE_IN_VOXELS))
-            .max()
-            .unwrap();
+        let chunk_counts = generator_grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
+        let chunk_idx_strides = [chunk_counts[1] * chunk_counts[2], chunk_counts[2]];
 
-        let mut superchunks = Vec::with_capacity(n_superchunks_per_axis.pow(3));
-
-        let mut chunks = Vec::new();
+        let mut chunks = Vec::with_capacity(chunk_counts.iter().product());
         let mut voxels = Vec::new();
 
         let mut occupied_chunks_i = REVERSED_MAX_RANGE;
         let mut occupied_chunks_j = REVERSED_MAX_RANGE;
         let mut occupied_chunks_k = REVERSED_MAX_RANGE;
 
-        for superchunk_i in 0..n_superchunks_per_axis {
-            for superchunk_j in 0..n_superchunks_per_axis {
-                for superchunk_k in 0..n_superchunks_per_axis {
-                    let (superchunk, occupied_chunks) = VoxelSuperchunk::generate(
-                        &mut chunks,
-                        &mut voxels,
-                        generator,
-                        [superchunk_i, superchunk_j, superchunk_k],
-                    );
+        for chunk_i in 0..chunk_counts[0] {
+            for chunk_j in 0..chunk_counts[1] {
+                for chunk_k in 0..chunk_counts[2] {
+                    let chunk =
+                        VoxelChunk::generate(&mut voxels, generator, [chunk_i, chunk_j, chunk_k]);
 
-                    occupied_chunks_i.start = occupied_chunks_i.start.min(occupied_chunks[0].start);
-                    occupied_chunks_i.end = occupied_chunks_i.end.max(occupied_chunks[0].end);
-                    occupied_chunks_j.start = occupied_chunks_j.start.min(occupied_chunks[1].start);
-                    occupied_chunks_j.end = occupied_chunks_j.end.max(occupied_chunks[1].end);
-                    occupied_chunks_k.start = occupied_chunks_k.start.min(occupied_chunks[2].start);
-                    occupied_chunks_k.end = occupied_chunks_k.end.max(occupied_chunks[2].end);
+                    if !chunk.is_empty() {
+                        occupied_chunks_i.start = occupied_chunks_i.start.min(chunk_i);
+                        occupied_chunks_i.end = occupied_chunks_i.end.max(chunk_i + 1);
+                        occupied_chunks_j.start = occupied_chunks_j.start.min(chunk_j);
+                        occupied_chunks_j.end = occupied_chunks_j.end.max(chunk_j + 1);
+                        occupied_chunks_k.start = occupied_chunks_k.start.min(chunk_k);
+                        occupied_chunks_k.end = occupied_chunks_k.end.max(chunk_k + 1);
+                    }
 
-                    superchunks.push(superchunk);
+                    chunks.push(chunk);
                 }
             }
         }
 
-        if superchunks.iter().all(VoxelSuperchunk::is_empty) {
+        let occupied_chunk_ranges = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
+
+        if occupied_chunk_ranges.iter().any(Range::is_empty) {
             return None;
         }
 
-        let occupied_voxel_ranges = [
-            occupied_chunks_i.start * CHUNK_SIZE..occupied_chunks_i.end * CHUNK_SIZE,
-            occupied_chunks_j.start * CHUNK_SIZE..occupied_chunks_j.end * CHUNK_SIZE,
-            occupied_chunks_k.start * CHUNK_SIZE..occupied_chunks_k.end * CHUNK_SIZE,
-        ];
+        let occupied_voxel_ranges = occupied_chunk_ranges
+            .clone()
+            .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
-        let occupied_chunk_ranges = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
-
-        let voxel_types = Self::find_voxel_types(&superchunks, &chunks, &voxels);
+        let voxel_types = Self::find_voxel_types(&chunks, &voxels);
 
         Some(Self {
             voxel_extent: generator.voxel_extent(),
-            n_superchunks_per_axis,
+            chunk_counts,
+            chunk_idx_strides,
             occupied_chunk_ranges,
             occupied_voxel_ranges,
-            superchunks,
             chunks,
             voxels,
             _voxel_types: voxel_types,
         })
     }
 
-    fn find_voxel_types(
-        superchunks: &[VoxelSuperchunk],
-        chunks: &[VoxelChunk],
-        voxels: &[Voxel],
-    ) -> Vec<VoxelType> {
+    fn find_voxel_types(chunks: &[VoxelChunk], voxels: &[Voxel]) -> Vec<VoxelType> {
         let mut has_voxel_type = [false; VoxelTypeRegistry::max_n_voxel_types() + 1];
 
-        for superchunk in superchunks {
-            if let VoxelSuperchunk::Uniform(voxel) = superchunk {
-                has_voxel_type[voxel.voxel_type().idx()] = true;
-            }
-        }
         for chunk in chunks {
             if let VoxelChunk::Uniform(voxel) = chunk {
                 has_voxel_type[voxel.voxel_type().idx()] = true;
@@ -368,24 +275,25 @@ impl ChunkedVoxelObject {
         self.voxel_extent * CHUNK_SIZE as f64
     }
 
-    /// Returns the number of superchunks along each axis of the object's voxel
+    /// Returns the number of chunks along each axis of the object's voxel
     /// grid.
-    pub fn n_superchunks_per_axis(&self) -> usize {
-        self.n_superchunks_per_axis
+    pub fn chunk_counts(&self) -> &[usize; 3] {
+        &self.chunk_counts
     }
 
-    /// Returns the total number of chunks, incuding empty ones, logically
-    /// contained in the object's chunk grid.
-    pub fn logical_chunk_count(&self) -> usize {
-        (self.n_superchunks_per_axis * SUPERCHUNK_SIZE).pow(3)
+    /// Returns the total number of chunks, incuding empty ones, contained in
+    /// the object's chunk grid.
+    pub fn total_chunk_count(&self) -> usize {
+        self.chunk_counts.iter().product()
     }
 
-    /// Returns the number of voxels along each axis of the object's voxel grid.
-    pub fn full_grid_size(&self) -> usize {
-        self.n_superchunks_per_axis * SUPERCHUNK_SIZE_IN_VOXELS
+    /// Returns the range of indices along each axis of the object's chunk
+    /// grid that may contain non-empty chunks.
+    pub fn occupied_chunk_ranges(&self) -> &[Range<usize>] {
+        &self.occupied_chunk_ranges
     }
 
-    /// Returns the range of indices along the each axis of the object's voxel
+    /// Returns the range of indices along each axis of the object's voxel
     /// grid that may contain non-empty voxels.
     pub fn occupied_voxel_ranges(&self) -> &[Range<usize>] {
         &self.occupied_voxel_ranges
@@ -395,9 +303,9 @@ impl ChunkedVoxelObject {
     /// object (as opposed to the count of voxels the object logically
     /// contains).
     pub fn stored_voxel_count(&self) -> usize {
-        self.superchunks
+        self.chunks
             .iter()
-            .map(|superchunk| superchunk.stored_voxel_count(&self.chunks))
+            .map(|chunk| chunk.stored_voxel_count())
             .sum()
     }
 
@@ -459,10 +367,9 @@ impl ChunkedVoxelObject {
     /// voxel grid, or [`None`] if the voxel is empty or the indices are out of
     /// bounds.
     ///
-    /// Despite the hierarchical organization of voxels into chunks and
-    /// superchunks, this lookup is relatively efficient because we can perform
-    /// simple bit manipulations to determine the superchunk and chunk
-    /// containing the voxel.
+    /// Despite the organization of voxels into chunks, this lookup is
+    /// relatively efficient because we can perform simple bit manipulations
+    /// to determine the chunk containing the voxel.
     pub fn get_voxel<I: PrimInt>(&self, i: I, j: I, k: I) -> Option<&Voxel> {
         if i < I::from(self.occupied_voxel_ranges[0].start).unwrap()
             || j < I::from(self.occupied_voxel_ranges[1].start).unwrap()
@@ -478,32 +385,21 @@ impl ChunkedVoxelObject {
         let j = NumCast::from(j).unwrap();
         let k = NumCast::from(k).unwrap();
 
-        let superchunk_idx = self.linear_superchunk_idx_from_object_voxel_indices(i, j, k);
-        let superchunk = &self.superchunks[superchunk_idx];
-        match superchunk {
-            VoxelSuperchunk::Empty => None,
-            VoxelSuperchunk::Uniform(voxel) => Some(voxel),
-            VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk {
-                start_chunk_idx, ..
+        let chunk_idx = self.linear_chunk_idx_from_object_voxel_indices(i, j, k);
+        let chunk = &self.chunks[chunk_idx];
+        match &chunk {
+            VoxelChunk::Empty => None,
+            VoxelChunk::Uniform(voxel) => Some(voxel),
+            VoxelChunk::NonUniform(NonUniformVoxelChunk {
+                start_voxel_idx, ..
             }) => {
-                let chunk_idx = start_chunk_idx
-                    + linear_chunk_idx_within_superchunk_from_object_voxel_indices(i, j, k);
-                let chunk = &self.chunks[chunk_idx];
-                match &chunk {
-                    VoxelChunk::Empty => None,
-                    VoxelChunk::Uniform(voxel) => Some(voxel),
-                    VoxelChunk::NonUniform(NonUniformVoxelChunk {
-                        start_voxel_idx, ..
-                    }) => {
-                        let voxel_idx = start_voxel_idx
-                            + linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
-                        let voxel = &self.voxels[voxel_idx];
-                        if voxel.is_empty() {
-                            None
-                        } else {
-                            Some(voxel)
-                        }
-                    }
+                let voxel_idx = start_voxel_idx
+                    + linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
+                let voxel = &self.voxels[voxel_idx];
+                if voxel.is_empty() {
+                    None
+                } else {
+                    Some(voxel)
                 }
             }
         }
@@ -526,49 +422,13 @@ impl ChunkedVoxelObject {
         let chunk_j = NumCast::from(chunk_j).unwrap();
         let chunk_k = NumCast::from(chunk_k).unwrap();
 
-        let superchunk_idx =
-            self.linear_superchunk_idx_from_object_chunk_indices(chunk_i, chunk_j, chunk_k);
-        let superchunk = &self.superchunks[superchunk_idx];
-        match superchunk {
-            VoxelSuperchunk::Empty => VoxelChunk::Empty,
-            &VoxelSuperchunk::Uniform(voxel) => VoxelChunk::Uniform(voxel),
-            VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk {
-                start_chunk_idx, ..
-            }) => {
-                let chunk_idx = start_chunk_idx
-                    + linear_chunk_idx_within_superchunk_from_object_chunk_indices(
-                        chunk_i, chunk_j, chunk_k,
-                    );
-                self.chunks[chunk_idx]
-            }
-        }
-    }
-
-    /// Returns the [`VoxelSuperchunk`] at the given indices in the object's
-    /// superchunk grid. If the indices are out of bounds, an empty superchunk
-    /// is returned.
-    #[cfg(any(test, feature = "fuzzing"))]
-    fn get_superchunk(
-        &self,
-        superchunk_i: usize,
-        superchunk_j: usize,
-        superchunk_k: usize,
-    ) -> VoxelSuperchunk {
-        if superchunk_i >= self.n_superchunks_per_axis
-            || superchunk_j >= self.n_superchunks_per_axis
-            || superchunk_k >= self.n_superchunks_per_axis
-        {
-            return VoxelSuperchunk::Empty;
-        }
-        let superchunk_idx =
-            self.linear_superchunk_idx(&[superchunk_i, superchunk_j, superchunk_k]);
-        self.superchunks[superchunk_idx]
+        let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
+        self.chunks[chunk_idx]
     }
 
     /// Determines the adjacency [`VoxelFlags`] for each voxel in the object
     /// according to which of their six neighbor voxels are present. Also
-    /// records which faces of the chunks and superchunks are fully obscured by
-    /// adjacent voxels.
+    /// records which faces of the chunks are fully obscured by adjacent voxels.
     ///
     /// # Warning
     /// This method assumes that the object has not been modified since it was
@@ -849,863 +709,105 @@ impl ChunkedVoxelObject {
         }
     }
 
-    /// Validates the obscuredness [`VoxelChunkFlags`] computed by the efficient
-    /// [`Self::initialize_adjacencies`] method for superchunks by performing a
-    /// simple brute-force iteration over all superchunks and checking their
-    /// neighbors.
-    #[cfg(any(test, feature = "fuzzing"))]
-    pub fn validate_superchunk_obscuredness(&self) {
-        let mut invalid_missing_flags = Vec::new();
-        let mut invalid_present_flags = Vec::new();
-        let mut invalid_uniform = Vec::new();
-
-        for superchunk_i in 0..self.n_superchunks_per_axis {
-            for superchunk_j in 0..self.n_superchunks_per_axis {
-                for superchunk_k in 0..self.n_superchunks_per_axis {
-                    let mut assert_has_flag = |chunk: &VoxelSuperchunk, flag| match chunk {
-                        VoxelSuperchunk::Empty | VoxelSuperchunk::Uniform(_) => {}
-                        VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk {
-                            flags, ..
-                        }) => {
-                            if !flags.contains(flag) {
-                                invalid_missing_flags
-                                    .push(([superchunk_i, superchunk_j, superchunk_k], flag));
-                            }
-                        }
-                    };
-                    let mut assert_missing_flag = |chunk: &VoxelSuperchunk, flag| match chunk {
-                        VoxelSuperchunk::Empty => {}
-                        VoxelSuperchunk::Uniform(_) => {
-                            // Uniform superchunks implicitly have all obscuredness flags set
-                            invalid_uniform.push([superchunk_i, superchunk_j, superchunk_k]);
-                        }
-                        VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk {
-                            flags, ..
-                        }) => {
-                            if flags.contains(flag) {
-                                invalid_present_flags
-                                    .push(([superchunk_i, superchunk_j, superchunk_k], flag));
-                            }
-                        }
-                    };
-
-                    let superchunk = self.get_superchunk(superchunk_i, superchunk_j, superchunk_k);
-
-                    let adjacent_superchunk_x_up =
-                        self.get_superchunk(superchunk_i + 1, superchunk_j, superchunk_k);
-                    let adjacent_superchunk_y_up =
-                        self.get_superchunk(superchunk_i, superchunk_j + 1, superchunk_k);
-                    let adjacent_superchunk_z_up =
-                        self.get_superchunk(superchunk_i, superchunk_j, superchunk_k + 1);
-
-                    if superchunk.upper_face_voxel_distribution(Dimension::X)
-                        == FaceVoxelDistribution::Full
-                    {
-                        assert_has_flag(
-                            &adjacent_superchunk_x_up,
-                            VoxelChunkFlags::IS_OBSCURED_X_DN,
-                        );
-                    } else {
-                        assert_missing_flag(
-                            &adjacent_superchunk_x_up,
-                            VoxelChunkFlags::IS_OBSCURED_X_DN,
-                        );
-                    }
-                    if superchunk.upper_face_voxel_distribution(Dimension::Y)
-                        == FaceVoxelDistribution::Full
-                    {
-                        assert_has_flag(
-                            &adjacent_superchunk_y_up,
-                            VoxelChunkFlags::IS_OBSCURED_Y_DN,
-                        );
-                    } else {
-                        assert_missing_flag(
-                            &adjacent_superchunk_y_up,
-                            VoxelChunkFlags::IS_OBSCURED_Y_DN,
-                        );
-                    }
-                    if superchunk.upper_face_voxel_distribution(Dimension::Z)
-                        == FaceVoxelDistribution::Full
-                    {
-                        assert_has_flag(
-                            &adjacent_superchunk_z_up,
-                            VoxelChunkFlags::IS_OBSCURED_Z_DN,
-                        );
-                    } else {
-                        assert_missing_flag(
-                            &adjacent_superchunk_z_up,
-                            VoxelChunkFlags::IS_OBSCURED_Z_DN,
-                        );
-                    }
-
-                    if adjacent_superchunk_x_up.lower_face_voxel_distribution(Dimension::X)
-                        == FaceVoxelDistribution::Full
-                    {
-                        assert_has_flag(&superchunk, VoxelChunkFlags::IS_OBSCURED_X_UP);
-                    } else {
-                        assert_missing_flag(&superchunk, VoxelChunkFlags::IS_OBSCURED_X_UP);
-                    }
-                    if adjacent_superchunk_y_up.lower_face_voxel_distribution(Dimension::Y)
-                        == FaceVoxelDistribution::Full
-                    {
-                        assert_has_flag(&superchunk, VoxelChunkFlags::IS_OBSCURED_Y_UP);
-                    } else {
-                        assert_missing_flag(&superchunk, VoxelChunkFlags::IS_OBSCURED_Y_UP);
-                    }
-                    if adjacent_superchunk_z_up.lower_face_voxel_distribution(Dimension::Z)
-                        == FaceVoxelDistribution::Full
-                    {
-                        assert_has_flag(&superchunk, VoxelChunkFlags::IS_OBSCURED_Z_UP);
-                    } else {
-                        assert_missing_flag(&superchunk, VoxelChunkFlags::IS_OBSCURED_Z_UP);
-                    }
-                }
-            }
-        }
-
-        for superchunk_j in 0..self.n_superchunks_per_axis {
-            for superchunk_k in 0..self.n_superchunks_per_axis {
-                match self.get_superchunk(0, superchunk_j, superchunk_k) {
-                    VoxelSuperchunk::Empty => {}
-                    VoxelSuperchunk::Uniform(_) => {
-                        invalid_uniform.push([0, superchunk_j, superchunk_k]);
-                    }
-                    VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => {
-                        if flags.contains(VoxelChunkFlags::IS_OBSCURED_X_DN) {
-                            invalid_present_flags.push((
-                                [0, superchunk_j, superchunk_k],
-                                VoxelChunkFlags::IS_OBSCURED_X_DN,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        for superchunk_i in 0..self.n_superchunks_per_axis {
-            for superchunk_k in 0..self.n_superchunks_per_axis {
-                match self.get_superchunk(superchunk_i, 0, superchunk_k) {
-                    VoxelSuperchunk::Empty => {}
-                    VoxelSuperchunk::Uniform(_) => {
-                        invalid_uniform.push([superchunk_i, 0, superchunk_k]);
-                    }
-                    VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => {
-                        if flags.contains(VoxelChunkFlags::IS_OBSCURED_Y_DN) {
-                            invalid_present_flags.push((
-                                [superchunk_i, 0, superchunk_k],
-                                VoxelChunkFlags::IS_OBSCURED_Y_DN,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        for superchunk_i in 0..self.n_superchunks_per_axis {
-            for superchunk_j in 0..self.n_superchunks_per_axis {
-                match self.get_superchunk(superchunk_i, superchunk_j, 0) {
-                    VoxelSuperchunk::Empty => {}
-                    VoxelSuperchunk::Uniform(_) => {
-                        invalid_uniform.push([superchunk_i, superchunk_j, 0]);
-                    }
-                    VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => {
-                        if flags.contains(VoxelChunkFlags::IS_OBSCURED_Z_DN) {
-                            invalid_present_flags.push((
-                                [superchunk_i, superchunk_j, 0],
-                                VoxelChunkFlags::IS_OBSCURED_Z_DN,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        if !invalid_missing_flags.is_empty() || !invalid_present_flags.is_empty() {
-            panic!(
-                "Invalid superchunk obscuredness:\nMissing flags = {:?}\nPresent flags that should not be = {:?}",
-                &invalid_missing_flags[..usize::min(20, invalid_missing_flags.len())],
-                &invalid_present_flags[..usize::min(20, invalid_present_flags.len())]
-            );
-        }
-        if !invalid_uniform.is_empty() {
-            panic!(
-                "Invalid uniform superchunks:\nUniform superchunks not completely obscured = {:?}",
-                &invalid_uniform[..usize::min(20, invalid_uniform.len())]
-            );
-        }
-    }
-
     fn initialize_all_chunk_boundary_adjacencies(&mut self) {
-        let mut superchunk_idx = 0;
-
-        for superchunk_i in 0..self.n_superchunks_per_axis {
-            for superchunk_j in 0..self.n_superchunks_per_axis {
-                for superchunk_k in 0..self.n_superchunks_per_axis {
-                    for (adjacent_superchunk_indices, dim) in [
-                        ([superchunk_i + 1, superchunk_j, superchunk_k], Dimension::X),
-                        ([superchunk_i, superchunk_j + 1, superchunk_k], Dimension::Y),
-                        ([superchunk_i, superchunk_j, superchunk_k + 1], Dimension::Z),
-                    ] {
-                        let lower_superchunk_idx = ChunkIndex::Present(superchunk_idx);
-
-                        let upper_superchunk_idx = if adjacent_superchunk_indices[dim.idx()]
-                            < self.n_superchunks_per_axis
-                        {
-                            let adjacent_superchunk_idx =
-                                self.linear_superchunk_idx(&adjacent_superchunk_indices);
-
-                            ChunkIndex::Present(adjacent_superchunk_idx)
-                        } else {
-                            ChunkIndex::AbsentEmpty
-                        };
-
-                        VoxelSuperchunk::initialize_mutual_face_adjacencies(
-                            self.superchunks.as_mut_slice(),
-                            &mut self.chunks,
-                            &mut self.voxels,
-                            lower_superchunk_idx,
-                            upper_superchunk_idx,
-                            dim,
-                        );
-                    }
-
-                    self.superchunks[superchunk_idx]
-                        .initialize_internal_chunk_boundary_adjacencies(
-                            self.chunks.as_mut_slice(),
-                            &mut self.voxels,
-                        );
-
-                    superchunk_idx += 1;
-                }
-            }
-        }
-
-        // Handle lower faces of the full object, since these are not included
-        // in the loop above
-        for superchunk_n in 0..self.n_superchunks_per_axis {
-            for superchunk_m in 0..self.n_superchunks_per_axis {
-                for (superchunk_indices, dim) in [
-                    ([0, superchunk_n, superchunk_m], Dimension::X),
-                    ([superchunk_n, 0, superchunk_m], Dimension::Y),
-                    ([superchunk_n, superchunk_m, 0], Dimension::Z),
-                ] {
-                    let superchunk_idx = self.linear_superchunk_idx(&superchunk_indices);
-
-                    VoxelSuperchunk::initialize_mutual_face_adjacencies(
-                        self.superchunks.as_mut_slice(),
-                        &mut self.chunks,
-                        &mut self.voxels,
-                        ChunkIndex::AbsentEmpty,
-                        ChunkIndex::Present(superchunk_idx),
-                        dim,
-                    );
-                }
-            }
-        }
-    }
-
-    /// Computes the index in `self.superchunks` of the superchunk containing
-    /// the voxel at the given indices into the object's voxel grid.
-    fn linear_superchunk_idx_from_object_voxel_indices(
-        &self,
-        i: usize,
-        j: usize,
-        k: usize,
-    ) -> usize {
-        let superchunk_indices = superchunk_indices_from_object_voxel_indices(i, j, k);
-        self.linear_superchunk_idx(&superchunk_indices)
-    }
-
-    /// Computes the index in `self.superchunks` of the superchunk containing
-    /// the chunk at the given indices into the object's chunk grid.
-    fn linear_superchunk_idx_from_object_chunk_indices(
-        &self,
-        chunk_i: usize,
-        chunk_j: usize,
-        chunk_k: usize,
-    ) -> usize {
-        let superchunk_indices =
-            superchunk_indices_from_object_chunk_indices(chunk_i, chunk_j, chunk_k);
-        self.linear_superchunk_idx(&superchunk_indices)
-    }
-
-    /// Computes the index in `self.superchunks` of the superchunk with the
-    /// given 3D index in the object's superchunk grid.
-    fn linear_superchunk_idx(&self, superchunk_indices: &[usize; 3]) -> usize {
-        superchunk_indices[0] * self.n_superchunks_per_axis * self.n_superchunks_per_axis
-            + superchunk_indices[1] * self.n_superchunks_per_axis
-            + superchunk_indices[2]
-    }
-}
-
-impl VoxelSuperchunk {
-    fn generate<G>(
-        chunks: &mut Vec<VoxelChunk>,
-        voxels: &mut Vec<Voxel>,
-        generator: &G,
-        superchunk_indices: [usize; 3],
-    ) -> (Self, [Range<usize>; 3])
-    where
-        G: VoxelGenerator,
-    {
-        let mut first_voxel: Option<Voxel> = None;
-        let mut is_uniform = true;
-
-        let start_chunk_idx = chunks.len();
-        chunks.reserve(SUPERCHUNK_CHUNK_COUNT);
-
-        // Note: These are global chunk indices, not the chunk indices within
-        // the current superchunk
-        let start_chunk_indices = superchunk_indices.map(|idx| idx * SUPERCHUNK_SIZE);
-
-        let mut face_empty_counts = FaceEmptyCounts::zero();
-
-        let mut occupied_chunks_i = REVERSED_MAX_RANGE;
-        let mut occupied_chunks_j = REVERSED_MAX_RANGE;
-        let mut occupied_chunks_k = REVERSED_MAX_RANGE;
-
-        let range_i = start_chunk_indices[0]..start_chunk_indices[0] + SUPERCHUNK_SIZE;
-        let range_j = start_chunk_indices[1]..start_chunk_indices[1] + SUPERCHUNK_SIZE;
-        let range_k = start_chunk_indices[2]..start_chunk_indices[2] + SUPERCHUNK_SIZE;
-
-        for chunk_i in range_i.clone() {
-            for chunk_j in range_j.clone() {
-                for chunk_k in range_k.clone() {
-                    let (chunk, chunk_face_empty_counts) =
-                        VoxelChunk::generate(voxels, generator, [chunk_i, chunk_j, chunk_k]);
-
-                    if is_uniform {
-                        match (&first_voxel, &chunk) {
-                            (Some(first_voxel), VoxelChunk::Empty) => {
-                                is_uniform = first_voxel.is_empty();
-                            }
-                            (Some(first_voxel), VoxelChunk::Uniform(voxel)) => {
-                                is_uniform = first_voxel == voxel;
-                            }
-                            (_, VoxelChunk::NonUniform(_)) => {
-                                is_uniform = false;
-                            }
-                            (None, VoxelChunk::Empty) => {
-                                first_voxel = Some(Voxel::maximally_outside());
-                            }
-                            (None, VoxelChunk::Uniform(voxel)) => {
-                                first_voxel = Some(*voxel);
-                            }
-                        }
-                    }
-
-                    if !chunk.is_empty() {
-                        occupied_chunks_i.start = occupied_chunks_i.start.min(chunk_i);
-                        occupied_chunks_i.end = occupied_chunks_i.end.max(chunk_i + 1);
-                        occupied_chunks_j.start = occupied_chunks_j.start.min(chunk_j);
-                        occupied_chunks_j.end = occupied_chunks_j.end.max(chunk_j + 1);
-                        occupied_chunks_k.start = occupied_chunks_k.start.min(chunk_k);
-                        occupied_chunks_k.end = occupied_chunks_k.end.max(chunk_k + 1);
-                    }
-
-                    if chunk_i == range_i.start {
-                        face_empty_counts.add_x_dn(&chunk_face_empty_counts);
-                    } else if chunk_i == range_i.end - 1 {
-                        face_empty_counts.add_x_up(&chunk_face_empty_counts);
-                    }
-                    if chunk_j == range_j.start {
-                        face_empty_counts.add_y_dn(&chunk_face_empty_counts);
-                    } else if chunk_j == range_j.end - 1 {
-                        face_empty_counts.add_y_up(&chunk_face_empty_counts);
-                    }
-                    if chunk_k == range_k.start {
-                        face_empty_counts.add_z_dn(&chunk_face_empty_counts);
-                    } else if chunk_k == range_k.end - 1 {
-                        face_empty_counts.add_z_up(&chunk_face_empty_counts);
-                    }
-
-                    chunks.push(chunk);
-                }
-            }
-        }
-
-        let occupied_chunks = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
-
-        if is_uniform {
-            chunks.truncate(start_chunk_idx);
-
-            let mut first_voxel = first_voxel.unwrap();
-
-            // Since the voxel flags must be valid for every voxel in the
-            // superchunk, a truly uniform superchunk must have all voxels with
-            // full adjacency. If this does not hold at the boundaries, we will
-            // make the superchunk and its boundary chunks non-uniform when we
-            // update the adjacencies.
-            first_voxel.add_flags(VoxelFlags::full_adjacency());
-
-            (
-                if first_voxel.is_empty() {
-                    Self::Empty
-                } else {
-                    Self::Uniform(first_voxel)
-                },
-                occupied_chunks,
-            )
-        } else {
-            let face_distributions =
-                face_empty_counts.to_face_distributions(SUPERCHUNK_SIZE_IN_VOXELS_SQUARED);
-            (
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx,
-                    face_distributions,
-                    flags: VoxelChunkFlags::empty(),
-                }),
-                occupied_chunks,
-            )
-        }
-    }
-
-    const fn is_empty(&self) -> bool {
-        matches!(self, Self::Empty)
-    }
-
-    const fn start_chunk_idx(&self) -> ChunkIndex {
-        match self {
-            Self::Empty => ChunkIndex::AbsentEmpty,
-            &Self::Uniform(voxel) => ChunkIndex::AbsentUniform(voxel),
-            Self::NonUniform(NonUniformVoxelSuperchunk {
-                start_chunk_idx, ..
-            }) => ChunkIndex::Present(*start_chunk_idx),
-        }
-    }
-
-    fn stored_voxel_count(&self, chunks: &[VoxelChunk]) -> usize {
-        match self {
-            Self::Empty => 0,
-            Self::Uniform(_) => 1,
-            &Self::NonUniform(NonUniformVoxelSuperchunk {
-                start_chunk_idx, ..
-            }) => chunks[start_chunk_idx..start_chunk_idx + SUPERCHUNK_CHUNK_COUNT]
-                .iter()
-                .map(VoxelChunk::stored_voxel_count)
-                .sum(),
-        }
-    }
-
-    fn upper_face_voxel_distribution(&self, dim: Dimension) -> FaceVoxelDistribution {
-        match self {
-            Self::Empty => FaceVoxelDistribution::Empty,
-            Self::Uniform(_) => FaceVoxelDistribution::Full,
-            Self::NonUniform(NonUniformVoxelSuperchunk {
-                face_distributions, ..
-            }) => face_distributions[dim.idx()][1],
-        }
-    }
-
-    fn lower_face_voxel_distribution(&self, dim: Dimension) -> FaceVoxelDistribution {
-        match self {
-            Self::Empty => FaceVoxelDistribution::Empty,
-            Self::Uniform(_) => FaceVoxelDistribution::Full,
-            Self::NonUniform(NonUniformVoxelSuperchunk {
-                face_distributions, ..
-            }) => face_distributions[dim.idx()][0],
-        }
-    }
-
-    fn initialize_internal_chunk_boundary_adjacencies(
-        &self,
-        chunks: &mut [VoxelChunk],
-        voxels: &mut Vec<Voxel>,
-    ) {
-        // We only need to update the internal adjacency if the superchunk is
-        // non-uniform
-        let start_chunk_idx = if let Self::NonUniform(NonUniformVoxelSuperchunk {
-            start_chunk_idx,
-            ..
-        }) = self
-        {
-            *start_chunk_idx
-        } else {
-            return;
-        };
-
-        // Extract the sub-slice of chunk for this superchunk so that we get
-        // out-of-bounds when trying to access chunks outside the superchunk
-        let superchunk_chunks =
-            &mut chunks[start_chunk_idx..start_chunk_idx + SUPERCHUNK_CHUNK_COUNT];
-
-        for chunk_i in 0..SUPERCHUNK_SIZE {
-            for chunk_j in 0..SUPERCHUNK_SIZE {
-                for chunk_k in 0..SUPERCHUNK_SIZE {
-                    let chunk_idx =
-                        linear_chunk_idx_within_superchunk(&[chunk_i, chunk_j, chunk_k]);
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
 
                     for (adjacent_chunk_indices, dim) in [
                         ([chunk_i + 1, chunk_j, chunk_k], Dimension::X),
                         ([chunk_i, chunk_j + 1, chunk_k], Dimension::Y),
                         ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
                     ] {
-                        if adjacent_chunk_indices[dim.idx()] < SUPERCHUNK_SIZE {
-                            let adjacent_chunk_idx =
-                                linear_chunk_idx_within_superchunk(&adjacent_chunk_indices);
+                        let upper_chunk_idx = if adjacent_chunk_indices[dim.idx()]
+                            < self.occupied_chunk_ranges[dim.idx()].end
+                        {
+                            let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
 
-                            VoxelChunk::initialize_mutual_face_adjacencies(
-                                superchunk_chunks,
-                                voxels,
-                                ChunkIndex::Present(chunk_idx),
-                                ChunkIndex::Present(adjacent_chunk_idx),
-                                dim,
-                            );
-                        }
+                            Some(adjacent_chunk_idx)
+                        } else {
+                            None
+                        };
+
+                        VoxelChunk::initialize_mutual_face_adjacencies(
+                            &mut self.chunks,
+                            &mut self.voxels,
+                            Some(chunk_idx),
+                            upper_chunk_idx,
+                            dim,
+                        );
                     }
                 }
             }
         }
-    }
 
-    fn convert_to_non_uniform_if_uniform(&mut self, chunks: &mut Vec<VoxelChunk>) {
-        if let &mut Self::Uniform(voxel) = self {
-            let start_chunk_idx = chunks.len();
-            chunks.reserve(SUPERCHUNK_CHUNK_COUNT);
-            chunks.extend(iter::repeat(VoxelChunk::Uniform(voxel)).take(SUPERCHUNK_CHUNK_COUNT));
-            *self = Self::NonUniform(NonUniformVoxelSuperchunk {
-                start_chunk_idx,
-                face_distributions: [[FaceVoxelDistribution::Full; 2]; 3],
-                flags: VoxelChunkFlags::fully_obscured(),
-            });
-        }
-    }
-
-    fn mark_lower_face_as_obscured(&mut self, dim: Dimension) {
-        let flags = match self {
-            Self::Empty | Self::Uniform(_) => {
-                return;
-            }
-            Self::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => flags,
-        };
-        flags.mark_lower_face_as_obscured(dim);
-    }
-
-    fn mark_upper_face_as_obscured(&mut self, dim: Dimension) {
-        let flags = match self {
-            Self::Empty | Self::Uniform(_) => {
-                return;
-            }
-            Self::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => flags,
-        };
-        flags.mark_upper_face_as_obscured(dim);
-    }
-
-    fn mark_lower_face_as_unobscured(&mut self, dim: Dimension) {
-        let flags = match self {
-            Self::Empty => {
-                return;
-            }
-            Self::Uniform(_) => {
-                panic!("Tried to mark lower face of uniform superchunk as unobscured");
-            }
-            Self::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => flags,
-        };
-        flags.mark_lower_face_as_unobscured(dim);
-    }
-
-    fn mark_upper_face_as_unobscured(&mut self, dim: Dimension) {
-        let flags = match self {
-            Self::Empty => {
-                return;
-            }
-            Self::Uniform(_) => {
-                panic!("Tried to mark upper face of uniform superchunk as unobscured");
-            }
-            Self::NonUniform(NonUniformVoxelSuperchunk { flags, .. }) => flags,
-        };
-        flags.mark_upper_face_as_unobscured(dim);
-    }
-
-    fn initialize_mutual_face_adjacencies(
-        superchunks: &mut [VoxelSuperchunk],
-        chunks: &mut Vec<VoxelChunk>,
-        voxels: &mut Vec<Voxel>,
-        lower_superchunk_idx: ChunkIndex,
-        upper_superchunk_idx: ChunkIndex,
-        dim: Dimension,
-    ) {
-        let lower_superchunk = lower_superchunk_idx.to_superchunk(superchunks);
-        let upper_superchunk = upper_superchunk_idx.to_superchunk(superchunks);
-
-        match (lower_superchunk, upper_superchunk) {
-            // If both superchunks are empty or uniform, there is nothing to do
-            (Self::Empty, Self::Empty) | (Self::Uniform(_), Self::Uniform(_)) => {}
-            // If one is uniform and the other is empty, we need to convert the
-            // uniform superchunk to non-uniform and update its adjacencies with
-            // the empty superchunk, as well as mark the adjoining face of the
-            // uniform superchunk as unobscured
-            (Self::Uniform(_), Self::Empty) => {
-                let lower_superchunk = &mut superchunks[lower_superchunk_idx.unwrap_idx()];
-                lower_superchunk.convert_to_non_uniform_if_uniform(chunks);
-
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    lower_superchunk.start_chunk_idx(),
-                    ChunkIndex::AbsentEmpty,
-                    dim,
-                );
-
-                lower_superchunk.mark_upper_face_as_unobscured(dim);
-            }
-            (Self::Empty, Self::Uniform(_)) => {
-                let upper_superchunk = &mut superchunks[upper_superchunk_idx.unwrap_idx()];
-                upper_superchunk.convert_to_non_uniform_if_uniform(chunks);
-
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    ChunkIndex::AbsentEmpty,
-                    upper_superchunk.start_chunk_idx(),
-                    dim,
-                );
-
-                upper_superchunk.mark_lower_face_as_unobscured(dim);
-            }
-            // If one is non-uniform and the other is empty, we need to clear
-            // the adjacencies of the non-uniform superchunk with the empty
-            // superchunk, as well as mark the adjoining face of the
-            // non-homogeneous superchunk as unobscured
-            (
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx: lower_superchunk_start_chunk_idx,
-                    ..
-                }),
-                Self::Empty,
-            ) => {
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    ChunkIndex::Present(lower_superchunk_start_chunk_idx),
-                    ChunkIndex::AbsentEmpty,
-                    dim,
-                );
-
-                superchunks[lower_superchunk_idx.unwrap_idx()].mark_upper_face_as_unobscured(dim);
-            }
-            (
-                Self::Empty,
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx: upper_superchunk_start_chunk_idx,
-                    ..
-                }),
-            ) => {
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    ChunkIndex::AbsentEmpty,
-                    ChunkIndex::Present(upper_superchunk_start_chunk_idx),
-                    dim,
-                );
-
-                superchunks[upper_superchunk_idx.unwrap_idx()].mark_lower_face_as_unobscured(dim);
-            }
-            // If one is non-uniform and the other is uniform, we need to set
-            // the adjacencies of the non-uniform superchunk with the uniform
-            // superchunk, and if the adjoining face of the non-uniform
-            // superchunk is not full, we must convert the uniform superchunk to
-            // non-uniform and update its adjacencies as well. We also need to
-            // mark the adjoining face of the non-homogeneous superchunk as
-            // obscured, and potentially the adjoining face of the uniform one
-            // as unobscured.
-            (
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx: lower_superchunk_start_chunk_idx,
-                    face_distributions: lower_superchunk_face_distributions,
-                    ..
-                }),
-                Self::Uniform(voxel),
-            ) => {
-                let lower_superchunk_face_distribution =
-                    lower_superchunk_face_distributions[dim.idx()][1];
-
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    ChunkIndex::Present(lower_superchunk_start_chunk_idx),
-                    ChunkIndex::AbsentUniform(voxel),
-                    dim,
-                );
-
-                superchunks[lower_superchunk_idx.unwrap_idx()].mark_upper_face_as_obscured(dim);
-
-                match lower_superchunk_face_distribution {
-                    FaceVoxelDistribution::Full => {}
-                    FaceVoxelDistribution::Empty => {
-                        let upper_superchunk = &mut superchunks[upper_superchunk_idx.unwrap_idx()];
-                        upper_superchunk.convert_to_non_uniform_if_uniform(chunks);
-
-                        Self::initialize_mutual_outward_adjacencies_for_dim(
-                            chunks,
-                            voxels,
-                            ChunkIndex::AbsentEmpty,
-                            upper_superchunk.start_chunk_idx(),
-                            dim,
-                        );
-
-                        upper_superchunk.mark_lower_face_as_unobscured(dim);
-                    }
-                    FaceVoxelDistribution::Mixed => {
-                        let upper_superchunk = &mut superchunks[upper_superchunk_idx.unwrap_idx()];
-                        upper_superchunk.convert_to_non_uniform_if_uniform(chunks);
-
-                        Self::initialize_mutual_outward_adjacencies_for_dim(
-                            chunks,
-                            voxels,
-                            ChunkIndex::Present(lower_superchunk_start_chunk_idx),
-                            upper_superchunk.start_chunk_idx(),
-                            dim,
-                        );
-
-                        upper_superchunk.mark_lower_face_as_unobscured(dim);
-                    }
-                }
-            }
-            (
-                Self::Uniform(voxel),
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx: upper_superchunk_start_chunk_idx,
-                    face_distributions: upper_superchunk_face_distributions,
-                    ..
-                }),
-            ) => {
-                let upper_superchunk_face_distribution =
-                    upper_superchunk_face_distributions[dim.idx()][0];
-
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    ChunkIndex::AbsentUniform(voxel),
-                    ChunkIndex::Present(upper_superchunk_start_chunk_idx),
-                    dim,
-                );
-
-                superchunks[upper_superchunk_idx.unwrap_idx()].mark_lower_face_as_obscured(dim);
-
-                match upper_superchunk_face_distribution {
-                    FaceVoxelDistribution::Full => {}
-                    FaceVoxelDistribution::Empty => {
-                        let lower_superchunk = &mut superchunks[lower_superchunk_idx.unwrap_idx()];
-                        lower_superchunk.convert_to_non_uniform_if_uniform(chunks);
-
-                        Self::initialize_mutual_outward_adjacencies_for_dim(
-                            chunks,
-                            voxels,
-                            lower_superchunk.start_chunk_idx(),
-                            ChunkIndex::AbsentEmpty,
-                            dim,
-                        );
-
-                        lower_superchunk.mark_upper_face_as_unobscured(dim);
-                    }
-                    FaceVoxelDistribution::Mixed => {
-                        let lower_superchunk = &mut superchunks[lower_superchunk_idx.unwrap_idx()];
-                        lower_superchunk.convert_to_non_uniform_if_uniform(chunks);
-
-                        Self::initialize_mutual_outward_adjacencies_for_dim(
-                            chunks,
-                            voxels,
-                            lower_superchunk.start_chunk_idx(),
-                            ChunkIndex::Present(upper_superchunk_start_chunk_idx),
-                            dim,
-                        );
-
-                        lower_superchunk.mark_upper_face_as_unobscured(dim);
-                    }
-                }
-            }
-            // If both superchunks are non-uniform, we need to update the
-            // adjacencies and obscuredness for both according to their
-            // adjoining faces
-            (
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx: lower_superchunk_start_chunk_idx,
-                    face_distributions: lower_superchunk_face_distributions,
-                    ..
-                }),
-                Self::NonUniform(NonUniformVoxelSuperchunk {
-                    start_chunk_idx: upper_superchunk_start_chunk_idx,
-                    face_distributions: upper_superchunk_face_distributions,
-                    ..
-                }),
-            ) => {
-                Self::initialize_mutual_outward_adjacencies_for_dim(
-                    chunks,
-                    voxels,
-                    ChunkIndex::Present(lower_superchunk_start_chunk_idx),
-                    ChunkIndex::Present(upper_superchunk_start_chunk_idx),
-                    dim,
-                );
-
-                let lower_superchunk = &mut superchunks[lower_superchunk_idx.unwrap_idx()];
-                if upper_superchunk_face_distributions[dim.idx()][0] == FaceVoxelDistribution::Full
-                {
-                    lower_superchunk.mark_upper_face_as_obscured(dim);
-                } else {
-                    lower_superchunk.mark_upper_face_as_unobscured(dim);
-                }
-
-                let upper_superchunk = &mut superchunks[upper_superchunk_idx.unwrap_idx()];
-                if lower_superchunk_face_distributions[dim.idx()][1] == FaceVoxelDistribution::Full
-                {
-                    upper_superchunk.mark_lower_face_as_obscured(dim);
-                } else {
-                    upper_superchunk.mark_lower_face_as_unobscured(dim);
-                }
-            }
-        }
-    }
-
-    fn initialize_mutual_outward_adjacencies_for_dim(
-        chunks: &mut [VoxelChunk],
-        voxels: &mut Vec<Voxel>,
-        lower_superchunk_start_chunk_idx: ChunkIndex,
-        upper_superchunk_start_chunk_idx: ChunkIndex,
-        dim: Dimension,
-    ) {
-        LoopForSuperchunkChunks::over_face(dim, Side::Upper).zip_execute(
-            &LoopForSuperchunkChunks::over_face(dim, Side::Lower),
-            &mut |upper_face_chunk_indices, lower_face_chunk_indices| {
-                let lower_chunk_idx = lower_superchunk_start_chunk_idx.map_idx(|start_idx| {
-                    start_idx + linear_chunk_idx_within_superchunk(upper_face_chunk_indices)
-                });
-                let upper_chunk_idx = upper_superchunk_start_chunk_idx.map_idx(|start_idx| {
-                    start_idx + linear_chunk_idx_within_superchunk(lower_face_chunk_indices)
-                });
+        // Handle lower faces of the full object, since these are not included
+        // in the loop above
+        for chunk_j in self.occupied_chunk_ranges[1].clone() {
+            for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                let chunk_idx = self.linear_chunk_idx(&[0, chunk_j, chunk_k]);
                 VoxelChunk::initialize_mutual_face_adjacencies(
-                    chunks,
-                    voxels,
-                    lower_chunk_idx,
-                    upper_chunk_idx,
-                    dim,
+                    &mut self.chunks,
+                    &mut self.voxels,
+                    None,
+                    Some(chunk_idx),
+                    Dimension::X,
                 );
-            },
-        );
+            }
+        }
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                let chunk_idx = self.linear_chunk_idx(&[chunk_i, 0, chunk_k]);
+                VoxelChunk::initialize_mutual_face_adjacencies(
+                    &mut self.chunks,
+                    &mut self.voxels,
+                    None,
+                    Some(chunk_idx),
+                    Dimension::Y,
+                );
+            }
+        }
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, 0]);
+                VoxelChunk::initialize_mutual_face_adjacencies(
+                    &mut self.chunks,
+                    &mut self.voxels,
+                    None,
+                    Some(chunk_idx),
+                    Dimension::Z,
+                );
+            }
+        }
+    }
+
+    /// Computes the index in `self.chunks` of the chunk containing
+    /// the voxel at the given indices into the object's voxel grid.
+    fn linear_chunk_idx_from_object_voxel_indices(&self, i: usize, j: usize, k: usize) -> usize {
+        let chunk_indices = chunk_indices_from_object_voxel_indices(i, j, k);
+        self.linear_chunk_idx(&chunk_indices)
+    }
+
+    /// Computes the index in `self.chunks` of the chunk with the given 3D index
+    /// in the object's chunk grid.
+    fn linear_chunk_idx(&self, chunk_indices: &[usize; 3]) -> usize {
+        chunk_indices[0] * self.chunk_idx_strides[0]
+            + chunk_indices[1] * self.chunk_idx_strides[1]
+            + chunk_indices[2]
     }
 }
 
 impl VoxelChunk {
-    fn generate<G>(
-        voxels: &mut Vec<Voxel>,
-        generator: &G,
-        global_chunk_indices: [usize; 3],
-    ) -> (Self, FaceEmptyCounts)
+    fn generate<G>(voxels: &mut Vec<Voxel>, generator: &G, chunk_indices: [usize; 3]) -> Self
     where
         G: VoxelGenerator,
     {
         let origin = [
-            global_chunk_indices[0] * CHUNK_SIZE,
-            global_chunk_indices[1] * CHUNK_SIZE,
-            global_chunk_indices[2] * CHUNK_SIZE,
+            chunk_indices[0] * CHUNK_SIZE,
+            chunk_indices[1] * CHUNK_SIZE,
+            chunk_indices[2] * CHUNK_SIZE,
         ];
-
-        // Return early if the chunk is completely outside the grid
-        if origin
-            .iter()
-            .zip(generator.grid_shape())
-            .any(|(&idx, size)| idx >= size)
-        {
-            return (Self::Empty, FaceEmptyCounts::same(CHUNK_SIZE_SQUARED));
-        }
 
         let mut first_voxel = generator.voxel_at_indices(origin[0], origin[1], origin[2]);
         let mut is_uniform = true;
@@ -1755,7 +857,7 @@ impl VoxelChunk {
             voxels.truncate(start_voxel_idx);
 
             if first_voxel.is_empty() {
-                (Self::Empty, face_empty_counts)
+                Self::Empty
             } else {
                 // Most voxels in a uniform chunk are surrounded by neighbors,
                 // so we assume this also holds for the boundary voxels for now
@@ -1763,18 +865,16 @@ impl VoxelChunk {
                 // are not full
                 first_voxel.add_flags(VoxelFlags::full_adjacency());
 
-                (Self::Uniform(first_voxel), face_empty_counts)
+                Self::Uniform(first_voxel)
             }
         } else {
             let face_distributions = face_empty_counts.to_face_distributions(CHUNK_SIZE_SQUARED);
-            (
-                Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx,
-                    face_distributions,
-                    flags: VoxelChunkFlags::empty(),
-                }),
-                face_empty_counts,
-            )
+
+            Self::NonUniform(NonUniformVoxelChunk {
+                start_voxel_idx,
+                face_distributions,
+                flags: VoxelChunkFlags::empty(),
+            })
         }
     }
 
@@ -1938,12 +1038,14 @@ impl VoxelChunk {
     fn initialize_mutual_face_adjacencies(
         chunks: &mut [VoxelChunk],
         voxels: &mut Vec<Voxel>,
-        lower_chunk_idx: ChunkIndex,
-        upper_chunk_idx: ChunkIndex,
+        lower_chunk_idx: Option<usize>,
+        upper_chunk_idx: Option<usize>,
         dim: Dimension,
     ) {
-        let lower_chunk = lower_chunk_idx.to_chunk(chunks);
-        let upper_chunk = upper_chunk_idx.to_chunk(chunks);
+        let lower_chunk =
+            lower_chunk_idx.map_or_else(|| VoxelChunk::Empty, |chunk_idx| chunks[chunk_idx]);
+        let upper_chunk =
+            upper_chunk_idx.map_or_else(|| VoxelChunk::Empty, |chunk_idx| chunks[chunk_idx]);
 
         match (lower_chunk, upper_chunk) {
             // If both chunks are empty or uniform, there is nothing to do
@@ -1955,7 +1057,7 @@ impl VoxelChunk {
             // empty chunk, as well as mark the adjoining face of the uniform
             // chunk as unobscured
             (Self::Uniform(_), Self::Empty) => {
-                let lower_chunk = &mut chunks[lower_chunk_idx.unwrap_idx()];
+                let lower_chunk = &mut chunks[lower_chunk_idx.unwrap()];
                 lower_chunk.convert_to_non_uniform_if_uniform(voxels);
 
                 Self::remove_all_outward_adjacencies_for_face(
@@ -1968,7 +1070,7 @@ impl VoxelChunk {
                 lower_chunk.mark_upper_face_as_unobscured(dim);
             }
             (Self::Empty, Self::Uniform(_)) => {
-                let upper_chunk = &mut chunks[upper_chunk_idx.unwrap_idx()];
+                let upper_chunk = &mut chunks[upper_chunk_idx.unwrap()];
                 upper_chunk.convert_to_non_uniform_if_uniform(voxels);
 
                 Self::remove_all_outward_adjacencies_for_face(
@@ -2002,7 +1104,7 @@ impl VoxelChunk {
                     );
                 }
 
-                chunks[lower_chunk_idx.unwrap_idx()].mark_upper_face_as_unobscured(dim);
+                chunks[lower_chunk_idx.unwrap()].mark_upper_face_as_unobscured(dim);
             }
             (
                 Self::Empty,
@@ -2021,7 +1123,7 @@ impl VoxelChunk {
                     );
                 }
 
-                chunks[upper_chunk_idx.unwrap_idx()].mark_lower_face_as_unobscured(dim);
+                chunks[upper_chunk_idx.unwrap()].mark_lower_face_as_unobscured(dim);
             }
             // If one is non-uniform and the other is uniform, we need to set
             // the adjacencies of the non-uniform chunk with the uniform chunk,
@@ -2049,12 +1151,12 @@ impl VoxelChunk {
                     );
                 }
 
-                chunks[lower_chunk_idx.unwrap_idx()].mark_upper_face_as_obscured(dim);
+                chunks[lower_chunk_idx.unwrap()].mark_upper_face_as_obscured(dim);
 
                 match lower_chunk_face_distribution {
                     FaceVoxelDistribution::Full => {}
                     FaceVoxelDistribution::Empty => {
-                        let upper_chunk = &mut chunks[upper_chunk_idx.unwrap_idx()];
+                        let upper_chunk = &mut chunks[upper_chunk_idx.unwrap()];
                         upper_chunk.convert_to_non_uniform_if_uniform(voxels);
 
                         Self::remove_all_outward_adjacencies_for_face(
@@ -2067,7 +1169,7 @@ impl VoxelChunk {
                         upper_chunk.mark_lower_face_as_unobscured(dim);
                     }
                     FaceVoxelDistribution::Mixed => {
-                        let upper_chunk = &mut chunks[upper_chunk_idx.unwrap_idx()];
+                        let upper_chunk = &mut chunks[upper_chunk_idx.unwrap()];
                         upper_chunk.convert_to_non_uniform_if_uniform(voxels);
 
                         Self::update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
@@ -2101,12 +1203,12 @@ impl VoxelChunk {
                     );
                 }
 
-                chunks[upper_chunk_idx.unwrap_idx()].mark_lower_face_as_obscured(dim);
+                chunks[upper_chunk_idx.unwrap()].mark_lower_face_as_obscured(dim);
 
                 match upper_chunk_face_distribution {
                     FaceVoxelDistribution::Full => {}
                     FaceVoxelDistribution::Empty => {
-                        let lower_chunk = &mut chunks[lower_chunk_idx.unwrap_idx()];
+                        let lower_chunk = &mut chunks[lower_chunk_idx.unwrap()];
                         lower_chunk.convert_to_non_uniform_if_uniform(voxels);
 
                         Self::remove_all_outward_adjacencies_for_face(
@@ -2119,7 +1221,7 @@ impl VoxelChunk {
                         lower_chunk.mark_upper_face_as_unobscured(dim);
                     }
                     FaceVoxelDistribution::Mixed => {
-                        let lower_chunk = &mut chunks[lower_chunk_idx.unwrap_idx()];
+                        let lower_chunk = &mut chunks[lower_chunk_idx.unwrap()];
                         lower_chunk.convert_to_non_uniform_if_uniform(voxels);
 
                         Self::update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
@@ -2209,14 +1311,14 @@ impl VoxelChunk {
                     }
                 }
 
-                let lower_chunk = &mut chunks[lower_chunk_idx.unwrap_idx()];
+                let lower_chunk = &mut chunks[lower_chunk_idx.unwrap()];
                 if upper_chunk_face_distribution == FaceVoxelDistribution::Full {
                     lower_chunk.mark_upper_face_as_obscured(dim);
                 } else {
                     lower_chunk.mark_upper_face_as_unobscured(dim);
                 }
 
-                let upper_chunk = &mut chunks[upper_chunk_idx.unwrap_idx()];
+                let upper_chunk = &mut chunks[upper_chunk_idx.unwrap()];
                 if lower_chunk_face_distribution == FaceVoxelDistribution::Full {
                     upper_chunk.mark_lower_face_as_obscured(dim);
                 } else {
@@ -2329,10 +1431,6 @@ impl FaceEmptyCounts {
         Self([[0; 2]; 3])
     }
 
-    const fn same(count: usize) -> Self {
-        Self([[count; 2]; 3])
-    }
-
     fn increment_x_dn(&mut self) {
         self.0[0][0] += 1;
     }
@@ -2350,25 +1448,6 @@ impl FaceEmptyCounts {
     }
     fn increment_z_up(&mut self) {
         self.0[2][1] += 1;
-    }
-
-    fn add_x_dn(&mut self, other: &Self) {
-        self.0[0][0] += other.0[0][0];
-    }
-    fn add_x_up(&mut self, other: &Self) {
-        self.0[0][1] += other.0[0][1];
-    }
-    fn add_y_dn(&mut self, other: &Self) {
-        self.0[1][0] += other.0[1][0];
-    }
-    fn add_y_up(&mut self, other: &Self) {
-        self.0[1][1] += other.0[1][1];
-    }
-    fn add_z_dn(&mut self, other: &Self) {
-        self.0[2][0] += other.0[2][0];
-    }
-    fn add_z_up(&mut self, other: &Self) {
-        self.0[2][1] += other.0[2][1];
     }
 
     fn to_face_distributions(&self, full_face_count: usize) -> [[FaceVoxelDistribution; 2]; 3] {
@@ -2454,49 +1533,6 @@ impl ExposedVoxelChunk {
     }
 }
 
-impl ChunkIndex {
-    fn to_chunk(self, chunks: &[VoxelChunk]) -> VoxelChunk {
-        match self {
-            Self::AbsentEmpty => VoxelChunk::Empty,
-            Self::AbsentUniform(voxel) => VoxelChunk::Uniform(voxel),
-            Self::Present(idx) => chunks[idx],
-        }
-    }
-
-    fn to_superchunk(self, superchunks: &[VoxelSuperchunk]) -> VoxelSuperchunk {
-        match self {
-            Self::AbsentEmpty => VoxelSuperchunk::Empty,
-            Self::AbsentUniform(voxel) => VoxelSuperchunk::Uniform(voxel),
-            Self::Present(idx) => superchunks[idx],
-        }
-    }
-
-    fn map_idx(&self, f: impl FnOnce(usize) -> usize) -> Self {
-        match self {
-            Self::Present(idx) => Self::Present(f(*idx)),
-            _ => *self,
-        }
-    }
-
-    fn unwrap_idx(&self) -> usize {
-        match self {
-            Self::Present(idx) => *idx,
-            _ => panic!("Tried to unwrap absent chunk index"),
-        }
-    }
-}
-
-/// Computes the index into a superchunk's flattened chunk grid of the chunk
-/// containing the voxel at the given indices in the parent object's voxel grid.
-const fn linear_chunk_idx_within_superchunk_from_object_voxel_indices(
-    i: usize,
-    j: usize,
-    k: usize,
-) -> usize {
-    let chunk_indices = chunk_indices_within_superchunk_from_object_voxel_indices(i, j, k);
-    linear_chunk_idx_within_superchunk(&chunk_indices)
-}
-
 /// Computes the index into a chunk's flattened voxel grid of the voxel at the
 /// given indices in the parent object's voxel grid.
 const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
@@ -2508,71 +1544,32 @@ const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
     linear_voxel_idx_within_chunk(&voxel_indices)
 }
 
-/// Computes the index into a superchunk's flattened chunk grid of the chunk
-/// at the given indices in the parent object's chunk grid.
-const fn linear_chunk_idx_within_superchunk_from_object_chunk_indices(
-    chunk_i: usize,
-    chunk_j: usize,
-    chunk_k: usize,
-) -> usize {
-    let chunk_indices =
-        chunk_indices_within_superchunk_from_object_chunk_indices(chunk_i, chunk_j, chunk_k);
-    linear_chunk_idx_within_superchunk(&chunk_indices)
-}
-
-/// Computes the index into a superchunk's flattened chunk grid of the chunk
-/// with the given 3D index in the chunk grid.
-const fn linear_chunk_idx_within_superchunk(chunk_indices: &[usize; 3]) -> usize {
-    chunk_indices[0] * SUPERCHUNK_SIZE_SQUARED
-        + chunk_indices[1] * SUPERCHUNK_SIZE
-        + chunk_indices[2]
-}
-
 /// Computes the index into a chunk's flattened voxel grid of the voxel with the
 /// given 3D index in the voxel grid.
 const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
     voxel_indices[0] * CHUNK_SIZE_SQUARED + voxel_indices[1] * CHUNK_SIZE + voxel_indices[2]
 }
 
-/// Computes the 3D index in the parent object's superchunk grid of the
-/// superchunk containing the voxel at the given indices in the object's voxel
-/// grid.
+/// Computes the 3D index in the parent object's chunk grid of the chunk
+/// containing the voxel at the given indices in the object's voxel grid.
 ///
-/// Since chunks and superchunks have a power-of-two number of voxels along each
-/// axis, the superchunk index is encoded in the upper bits of the corresponding
-/// object voxel index.
-const fn superchunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -> [usize; 3] {
+/// Since chunks have a power-of-two number of voxels along each axis, the
+/// chunk index is encoded in the upper bits of the corresponding object voxel
+/// index.
+const fn chunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -> [usize; 3] {
     [
-        i >> SUPERCHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
-        j >> SUPERCHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
-        k >> SUPERCHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
-    ]
-}
-
-/// Computes the 3D index in a superchunk's chunk grid of the chunk containing
-/// the voxel at the given indices in the parent object's voxel grid.
-///
-/// Since chunks and superchunks have a power-of-two number of voxels along each
-/// axis, the chunk index is encoded in the middle bits of the corresponding
-/// object voxel index.
-const fn chunk_indices_within_superchunk_from_object_voxel_indices(
-    i: usize,
-    j: usize,
-    k: usize,
-) -> [usize; 3] {
-    [
-        (i >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT) & CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
-        (j >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT) & CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
-        (k >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT) & CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
+        i >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
+        j >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
+        k >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
     ]
 }
 
 /// Computes the 3D index in a chunk's voxel grid of the voxel at the given
 /// indices in the parent object's voxel grid.
 ///
-/// Since chunks and superchunks have a power-of-two number of voxels along each
-/// axis, the voxel index within the chunk is encoded in the lower bits of the
-/// corresponding object voxel index.
+/// Since chunks have a power-of-two number of voxels along each axis, the voxel
+/// index within the chunk is encoded in the lower bits of the corresponding
+/// object voxel index.
 const fn voxel_indices_within_chunk_from_object_voxel_indices(
     i: usize,
     j: usize,
@@ -2582,43 +1579,6 @@ const fn voxel_indices_within_chunk_from_object_voxel_indices(
         i & VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
         j & VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
         k & VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
-    ]
-}
-
-/// Computes the 3D index in the parent object's superchunk grid of the
-/// superchunk containing the chunk at the given indices in the object's chunk
-/// grid.
-///
-/// Since superchunks have a power-of-two number of chunk along each axis, the
-/// superchunk index is encoded in the upper bits of the corresponding object
-/// chunk index.
-const fn superchunk_indices_from_object_chunk_indices(
-    chunk_i: usize,
-    chunk_j: usize,
-    chunk_k: usize,
-) -> [usize; 3] {
-    [
-        chunk_i >> SUPERCHUNK_IDX_FROM_OBJECT_CHUNK_IDX_SHIFT,
-        chunk_j >> SUPERCHUNK_IDX_FROM_OBJECT_CHUNK_IDX_SHIFT,
-        chunk_k >> SUPERCHUNK_IDX_FROM_OBJECT_CHUNK_IDX_SHIFT,
-    ]
-}
-
-/// Computes the 3D index in a superchunk's chunk grid of the chunk at the given
-/// indices in the parent object's chunk grid.
-///
-/// Since superchunks have a power-of-two number of chunks along each axis, the
-/// chunk index within the superchunk is encoded in the lower bits of the
-/// corresponding object chunk index.
-const fn chunk_indices_within_superchunk_from_object_chunk_indices(
-    chunk_i: usize,
-    chunk_j: usize,
-    chunk_k: usize,
-) -> [usize; 3] {
-    [
-        chunk_i & CHUNK_IDX_FROM_OBJECT_CHUNK_IDX_MASK,
-        chunk_j & CHUNK_IDX_FROM_OBJECT_CHUNK_IDX_MASK,
-        chunk_k & CHUNK_IDX_FROM_OBJECT_CHUNK_IDX_MASK,
     ]
 }
 
@@ -2654,7 +1614,6 @@ pub mod fuzzing {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
             object.validate_adjacencies();
             object.validate_chunk_obscuredness();
-            object.validate_superchunk_obscuredness();
             object.validate_sdf();
         }
     }
@@ -2801,8 +1760,7 @@ mod tests {
         let generator = OffsetBoxVoxelGenerator::single_default();
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
         assert_eq!(object.voxel_extent(), generator.voxel_extent());
-        assert_eq!(object.n_superchunks_per_axis(), 1);
-        assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
+        assert_eq!(object.chunk_counts(), &[1, 1, 1]);
         assert_eq!(object.occupied_voxel_ranges()[0], 0..CHUNK_SIZE);
         assert_eq!(object.occupied_voxel_ranges()[1], 0..CHUNK_SIZE);
         assert_eq!(object.occupied_voxel_ranges()[2], 0..CHUNK_SIZE);
@@ -2810,63 +1768,10 @@ mod tests {
     }
 
     #[test]
-    fn should_generate_object_with_single_uniform_superchunk() {
-        let generator = OffsetBoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS; 3]);
-        let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
-        assert_eq!(object.n_superchunks_per_axis(), 1);
-        assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(
-            object.occupied_voxel_ranges()[0],
-            0..SUPERCHUNK_SIZE_IN_VOXELS
-        );
-        assert_eq!(
-            object.occupied_voxel_ranges()[1],
-            0..SUPERCHUNK_SIZE_IN_VOXELS
-        );
-        assert_eq!(
-            object.occupied_voxel_ranges()[2],
-            0..SUPERCHUNK_SIZE_IN_VOXELS
-        );
-        assert_eq!(object.stored_voxel_count(), 1);
-    }
-
-    // Too slow for `miri`
-    #[cfg(not(miri))]
-    #[test]
-    fn should_generate_object_with_single_uniform_superchunk_plus_one_voxel() {
-        let generator = OffsetBoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS + 1; 3]);
-        let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
-        assert_eq!(object.n_superchunks_per_axis(), 2);
-        assert_eq!(object.full_grid_size(), 2 * SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(
-            object.occupied_voxel_ranges()[0],
-            0..SUPERCHUNK_SIZE_IN_VOXELS + CHUNK_SIZE
-        );
-        assert_eq!(
-            object.occupied_voxel_ranges()[1],
-            0..SUPERCHUNK_SIZE_IN_VOXELS + CHUNK_SIZE
-        );
-        assert_eq!(
-            object.occupied_voxel_ranges()[2],
-            0..SUPERCHUNK_SIZE_IN_VOXELS + CHUNK_SIZE
-        );
-        assert_eq!(
-            object.stored_voxel_count(),
-            // First superchunk (full) + faces of the three adjacent superchunks
-            // + edges of the three semi-diagonal superchunks + corner of the fully diagonal
-            //   superchunk
-            1 + 3 * CHUNK_VOXEL_COUNT * SUPERCHUNK_SIZE.pow(2)
-                + 3 * CHUNK_VOXEL_COUNT * SUPERCHUNK_SIZE
-                + CHUNK_VOXEL_COUNT
-        );
-    }
-
-    #[test]
     fn should_generate_object_with_single_uniform_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
-        assert_eq!(object.n_superchunks_per_axis(), 1);
-        assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
+        assert_eq!(object.chunk_counts(), &[1, 1, 1]);
         assert_eq!(object.occupied_voxel_ranges()[0], 0..CHUNK_SIZE);
         assert_eq!(object.occupied_voxel_ranges()[1], 0..CHUNK_SIZE);
         assert_eq!(object.occupied_voxel_ranges()[2], 0..CHUNK_SIZE);
@@ -2878,8 +1783,7 @@ mod tests {
         let generator =
             OffsetBoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
-        assert_eq!(object.n_superchunks_per_axis(), 1);
-        assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
+        assert_eq!(object.chunk_counts(), &[2, 2, 2]);
         assert_eq!(
             object.occupied_voxel_ranges()[0],
             CHUNK_SIZE..2 * CHUNK_SIZE
@@ -2915,11 +1819,9 @@ mod tests {
         }
     }
 
-    // Too slow for `miri`
-    #[cfg(not(miri))]
     #[test]
     fn should_get_correct_voxels_in_small_offset_grid() {
-        let offset = [SUPERCHUNK_SIZE_IN_VOXELS - 2; 3];
+        let offset = [CHUNK_SIZE - 2; 3];
         let generator = ManualVoxelGenerator::<3>::with_offset(
             [
                 [[1, 1, 0], [1, 0, 1], [0, 1, 0]],
@@ -3065,7 +1967,6 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
     }
 
     #[test]
@@ -3074,7 +1975,6 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
     }
 
     #[test]
@@ -3084,47 +1984,36 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
 
         let generator =
             OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE, CHUNK_SIZE + 1, CHUNK_SIZE]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
 
         let generator =
             OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE + 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
     }
 
-    // Too slow for `miri`
-    #[cfg(not(miri))]
     #[test]
-    fn should_compute_correct_adjacencies_with_column_taking_barely_two_superchunks() {
-        let generator =
-            OffsetBoxVoxelGenerator::with_default([SUPERCHUNK_SIZE_IN_VOXELS + 1, 1, 1]);
+    fn should_compute_correct_adjacencies_with_column_taking_barely_two_chunks() {
+        let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE + 1, 1, 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
 
-        let generator =
-            OffsetBoxVoxelGenerator::with_default([1, SUPERCHUNK_SIZE_IN_VOXELS + 1, 1]);
+        let generator = OffsetBoxVoxelGenerator::with_default([1, CHUNK_SIZE + 1, 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
 
-        let generator =
-            OffsetBoxVoxelGenerator::with_default([1, 1, SUPERCHUNK_SIZE_IN_VOXELS + 1]);
+        let generator = OffsetBoxVoxelGenerator::with_default([1, 1, CHUNK_SIZE + 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
-        object.validate_superchunk_obscuredness();
     }
 
     #[test]

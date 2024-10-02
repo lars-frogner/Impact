@@ -4,10 +4,7 @@ pub mod surface_nets;
 
 use crate::voxel::{
     chunks::{
-        linear_chunk_idx_within_superchunk, ChunkedVoxelObject, ExposedVoxelChunk,
-        LoopForChunkVoxels, LoopForSuperchunkChunks, NonUniformVoxelChunk,
-        NonUniformVoxelSuperchunk, VoxelChunk, VoxelSuperchunk, SUPERCHUNK_CHUNK_COUNT,
-        SUPERCHUNK_SIZE, SUPERCHUNK_SIZE_SQUARED,
+        ChunkedVoxelObject, ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk, VoxelChunk,
     },
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
@@ -138,96 +135,31 @@ impl ChunkedVoxelObject {
     ) {
         let mut sdf = VoxelChunkSignedDistanceField::default();
 
-        let mut superchunks = self.superchunks.iter();
-        for superchunk_i in 0..self.n_superchunks_per_axis {
-            for superchunk_j in 0..self.n_superchunks_per_axis {
-                for superchunk_k in 0..self.n_superchunks_per_axis {
-                    match superchunks.next().unwrap() {
-                        VoxelSuperchunk::NonUniform(NonUniformVoxelSuperchunk {
-                            start_chunk_idx,
-                            flags,
-                            ..
-                        }) if flags.has_exposed_face() => {
-                            let start_object_chunk_i = superchunk_i * SUPERCHUNK_SIZE;
-                            let start_object_chunk_j = superchunk_j * SUPERCHUNK_SIZE;
-                            let start_object_chunk_k = superchunk_k * SUPERCHUNK_SIZE;
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
-                            let chunks = &self.chunks
-                                [*start_chunk_idx..start_chunk_idx + SUPERCHUNK_CHUNK_COUNT];
-
-                            LoopForSuperchunkChunks::over_interior().execute(
-                                &mut |chunk_i, chunk_j, chunk_k| {
-                                    let chunk_idx = linear_chunk_idx_within_superchunk(&[
-                                        chunk_i, chunk_j, chunk_k,
-                                    ]);
-                                    match &chunks[chunk_idx] {
-                                        VoxelChunk::NonUniform(chunk)
-                                            if chunk.flags.has_exposed_face() =>
-                                        {
-                                            let object_chunk_i = start_object_chunk_i + chunk_i;
-                                            let object_chunk_j = start_object_chunk_j + chunk_j;
-                                            let object_chunk_k = start_object_chunk_k + chunk_k;
-
-                                            self.fill_sdf_for_non_uniform_interior_chunk(
-                                                &mut sdf, chunks, chunk_idx, chunk,
-                                            );
-
-                                            f(
-                                                ExposedVoxelChunk::new(
-                                                    [
-                                                        object_chunk_i,
-                                                        object_chunk_j,
-                                                        object_chunk_k,
-                                                    ],
-                                                    chunk.flags,
-                                                ),
-                                                &sdf,
-                                            );
-                                        }
-                                        _ => {}
-                                    }
-                                },
-                            );
-
-                            for boundary_loop in LoopForSuperchunkChunks::over_full_boundary() {
-                                boundary_loop.execute(&mut |chunk_i, chunk_j, chunk_k| {
-                                    let chunk_idx = linear_chunk_idx_within_superchunk(&[
-                                        chunk_i, chunk_j, chunk_k,
-                                    ]);
-                                    match &chunks[chunk_idx] {
-                                        VoxelChunk::NonUniform(chunk)
-                                            if chunk.flags.has_exposed_face() =>
-                                        {
-                                            let object_chunk_i = start_object_chunk_i + chunk_i;
-                                            let object_chunk_j = start_object_chunk_j + chunk_j;
-                                            let object_chunk_k = start_object_chunk_k + chunk_k;
-
-                                            self.fill_sdf_for_non_uniform_chunk(
-                                                &mut sdf,
-                                                [object_chunk_i, object_chunk_j, object_chunk_k],
-                                                chunk,
-                                            );
-
-                                            f(
-                                                ExposedVoxelChunk::new(
-                                                    [
-                                                        object_chunk_i,
-                                                        object_chunk_j,
-                                                        object_chunk_k,
-                                                    ],
-                                                    chunk.flags,
-                                                ),
-                                                &sdf,
-                                            );
-                                        }
-                                        _ => {}
-                                    }
-                                });
+                    match &self.chunks[chunk_idx] {
+                        VoxelChunk::NonUniform(chunk) if chunk.flags.has_exposed_face() => {
+                            if chunk_i > 0
+                                && chunk_i < self.chunk_counts[0] - 1
+                                && chunk_j > 0
+                                && chunk_j < self.chunk_counts[1] - 1
+                                && chunk_k > 0
+                                && chunk_k < self.chunk_counts[2] - 1
+                            {
+                                self.fill_sdf_for_non_uniform_interior_chunk(
+                                    &mut sdf, chunk_idx, chunk,
+                                );
+                            } else {
+                                self.fill_sdf_for_non_uniform_chunk(&mut sdf, chunk_indices, chunk);
                             }
+
+                            f(ExposedVoxelChunk::new(chunk_indices, chunk.flags), &sdf);
                         }
-                        _ => {
-                            continue;
-                        }
+                        _ => {}
                     }
                 }
             }
@@ -237,22 +169,20 @@ impl ChunkedVoxelObject {
     fn fill_sdf_for_non_uniform_interior_chunk(
         &self,
         sdf: &mut VoxelChunkSignedDistanceField,
-        superchunk_chunks: &[VoxelChunk],
         chunk_idx: usize,
         chunk: &NonUniformVoxelChunk,
     ) {
-        // Since we know we are in the interior of the
-        // superchunk, all adjacent chunks are in the `chunks`
-        // slice
+        // Since we know we are in the interior of the object, all adjacent
+        // chunks are in the `chunks` slice
 
         self.fill_sdf_interior_for_non_uniform_chunk(sdf, chunk);
 
         #[rustfmt::skip]
         let adjacent_face_offsets = [
-            (Dimension::X, Side::Lower, chunk_idx - SUPERCHUNK_SIZE_SQUARED),
-            (Dimension::X, Side::Upper, chunk_idx + SUPERCHUNK_SIZE_SQUARED),
-            (Dimension::Y, Side::Lower, chunk_idx - SUPERCHUNK_SIZE),
-            (Dimension::Y, Side::Upper, chunk_idx + SUPERCHUNK_SIZE),
+            (Dimension::X, Side::Lower, chunk_idx - self.chunk_idx_strides[0]),
+            (Dimension::X, Side::Upper, chunk_idx + self.chunk_idx_strides[0]),
+            (Dimension::Y, Side::Lower, chunk_idx - self.chunk_idx_strides[1]),
+            (Dimension::Y, Side::Upper, chunk_idx + self.chunk_idx_strides[1]),
             (Dimension::Z, Side::Lower, chunk_idx - 1),
             (Dimension::Z, Side::Upper, chunk_idx + 1),
         ];
@@ -262,24 +192,24 @@ impl ChunkedVoxelObject {
                 sdf,
                 dim,
                 side,
-                &superchunk_chunks[adjacent_chunk_idx],
+                &self.chunks[adjacent_chunk_idx],
             );
         }
 
         #[rustfmt::skip]
         let adjacent_edge_offsets = [
-            (Dimension::X, Side::Lower, Side::Lower, chunk_idx - SUPERCHUNK_SIZE_SQUARED - SUPERCHUNK_SIZE),
-            (Dimension::X, Side::Lower, Side::Upper, chunk_idx - SUPERCHUNK_SIZE_SQUARED + SUPERCHUNK_SIZE),
-            (Dimension::X, Side::Upper, Side::Lower, chunk_idx + SUPERCHUNK_SIZE_SQUARED - SUPERCHUNK_SIZE),
-            (Dimension::X, Side::Upper, Side::Upper, chunk_idx + SUPERCHUNK_SIZE_SQUARED + SUPERCHUNK_SIZE),
-            (Dimension::Y, Side::Lower, Side::Lower, chunk_idx - SUPERCHUNK_SIZE - 1),
-            (Dimension::Y, Side::Lower, Side::Upper, chunk_idx - SUPERCHUNK_SIZE + 1),
-            (Dimension::Y, Side::Upper, Side::Lower, chunk_idx + SUPERCHUNK_SIZE - 1),
-            (Dimension::Y, Side::Upper, Side::Upper, chunk_idx + SUPERCHUNK_SIZE + 1),
-            (Dimension::Z, Side::Lower, Side::Lower, chunk_idx - 1 - SUPERCHUNK_SIZE_SQUARED),
-            (Dimension::Z, Side::Lower, Side::Upper, chunk_idx - 1 + SUPERCHUNK_SIZE_SQUARED),
-            (Dimension::Z, Side::Upper, Side::Lower, chunk_idx + 1 - SUPERCHUNK_SIZE_SQUARED),
-            (Dimension::Z, Side::Upper, Side::Upper, chunk_idx + 1 + SUPERCHUNK_SIZE_SQUARED),
+            (Dimension::X, Side::Lower, Side::Lower, chunk_idx - self.chunk_idx_strides[0] - self.chunk_idx_strides[1]),
+            (Dimension::X, Side::Lower, Side::Upper, chunk_idx - self.chunk_idx_strides[0] + self.chunk_idx_strides[1]),
+            (Dimension::X, Side::Upper, Side::Lower, chunk_idx + self.chunk_idx_strides[0] - self.chunk_idx_strides[1]),
+            (Dimension::X, Side::Upper, Side::Upper, chunk_idx + self.chunk_idx_strides[0] + self.chunk_idx_strides[1]),
+            (Dimension::Y, Side::Lower, Side::Lower, chunk_idx - self.chunk_idx_strides[1] - 1),
+            (Dimension::Y, Side::Lower, Side::Upper, chunk_idx - self.chunk_idx_strides[1] + 1),
+            (Dimension::Y, Side::Upper, Side::Lower, chunk_idx + self.chunk_idx_strides[1] - 1),
+            (Dimension::Y, Side::Upper, Side::Upper, chunk_idx + self.chunk_idx_strides[1] + 1),
+            (Dimension::Z, Side::Lower, Side::Lower, chunk_idx - 1 - self.chunk_idx_strides[0]),
+            (Dimension::Z, Side::Lower, Side::Upper, chunk_idx - 1 + self.chunk_idx_strides[0]),
+            (Dimension::Z, Side::Upper, Side::Lower, chunk_idx + 1 - self.chunk_idx_strides[0]),
+            (Dimension::Z, Side::Upper, Side::Upper, chunk_idx + 1 + self.chunk_idx_strides[0]),
         ];
 
         for (face_dim, face_side, secondary_side, adjacent_chunk_idx) in adjacent_edge_offsets {
@@ -288,20 +218,20 @@ impl ChunkedVoxelObject {
                 face_dim,
                 face_side,
                 secondary_side,
-                &superchunk_chunks[adjacent_chunk_idx],
+                &self.chunks[adjacent_chunk_idx],
             );
         }
 
         #[rustfmt::skip]
         let adjacent_corner_offsets = [
-            (Side::Lower, Side::Lower, Side::Lower, chunk_idx - SUPERCHUNK_SIZE_SQUARED - SUPERCHUNK_SIZE - 1),
-            (Side::Lower, Side::Lower, Side::Upper, chunk_idx - SUPERCHUNK_SIZE_SQUARED - SUPERCHUNK_SIZE + 1),
-            (Side::Lower, Side::Upper, Side::Lower, chunk_idx - SUPERCHUNK_SIZE_SQUARED + SUPERCHUNK_SIZE - 1),
-            (Side::Lower, Side::Upper, Side::Upper, chunk_idx - SUPERCHUNK_SIZE_SQUARED + SUPERCHUNK_SIZE + 1),
-            (Side::Upper, Side::Lower, Side::Lower, chunk_idx + SUPERCHUNK_SIZE_SQUARED - SUPERCHUNK_SIZE - 1),
-            (Side::Upper, Side::Lower, Side::Upper, chunk_idx + SUPERCHUNK_SIZE_SQUARED - SUPERCHUNK_SIZE + 1),
-            (Side::Upper, Side::Upper, Side::Lower, chunk_idx + SUPERCHUNK_SIZE_SQUARED + SUPERCHUNK_SIZE - 1),
-            (Side::Upper, Side::Upper, Side::Upper, chunk_idx + SUPERCHUNK_SIZE_SQUARED + SUPERCHUNK_SIZE + 1),
+            (Side::Lower, Side::Lower, Side::Lower, chunk_idx - self.chunk_idx_strides[0] - self.chunk_idx_strides[1] - 1),
+            (Side::Lower, Side::Lower, Side::Upper, chunk_idx - self.chunk_idx_strides[0] - self.chunk_idx_strides[1] + 1),
+            (Side::Lower, Side::Upper, Side::Lower, chunk_idx - self.chunk_idx_strides[0] + self.chunk_idx_strides[1] - 1),
+            (Side::Lower, Side::Upper, Side::Upper, chunk_idx - self.chunk_idx_strides[0] + self.chunk_idx_strides[1] + 1),
+            (Side::Upper, Side::Lower, Side::Lower, chunk_idx + self.chunk_idx_strides[0] - self.chunk_idx_strides[1] - 1),
+            (Side::Upper, Side::Lower, Side::Upper, chunk_idx + self.chunk_idx_strides[0] - self.chunk_idx_strides[1] + 1),
+            (Side::Upper, Side::Upper, Side::Lower, chunk_idx + self.chunk_idx_strides[0] + self.chunk_idx_strides[1] - 1),
+            (Side::Upper, Side::Upper, Side::Upper, chunk_idx + self.chunk_idx_strides[0] + self.chunk_idx_strides[1] + 1),
         ];
 
         for (x_side, y_side, z_side, adjacent_chunk_idx) in adjacent_corner_offsets {
@@ -310,7 +240,7 @@ impl ChunkedVoxelObject {
                 x_side,
                 y_side,
                 z_side,
-                &superchunk_chunks[adjacent_chunk_idx],
+                &self.chunks[adjacent_chunk_idx],
             );
         }
     }
@@ -318,7 +248,7 @@ impl ChunkedVoxelObject {
     fn fill_sdf_for_non_uniform_chunk(
         &self,
         sdf: &mut VoxelChunkSignedDistanceField,
-        [object_chunk_i, object_chunk_j, object_chunk_k]: [usize; 3],
+        [chunk_i, chunk_j, chunk_k]: [usize; 3],
         chunk: &NonUniformVoxelChunk,
     ) {
         #[rustfmt::skip]
@@ -361,25 +291,17 @@ impl ChunkedVoxelObject {
 
         self.fill_sdf_interior_for_non_uniform_chunk(sdf, chunk);
 
-        let object_chunk_i = isize::try_from(object_chunk_i).unwrap();
-        let object_chunk_j = isize::try_from(object_chunk_j).unwrap();
-        let object_chunk_k = isize::try_from(object_chunk_k).unwrap();
+        let chunk_i = isize::try_from(chunk_i).unwrap();
+        let chunk_j = isize::try_from(chunk_j).unwrap();
+        let chunk_k = isize::try_from(chunk_k).unwrap();
 
         for (dim, side, [di, dj, dk]) in ADJACENT_FACE_OFFSETS {
-            let adjacent_chunk = self.get_chunk(
-                object_chunk_i + di,
-                object_chunk_j + dj,
-                object_chunk_k + dk,
-            );
+            let adjacent_chunk = self.get_chunk(chunk_i + di, chunk_j + dj, chunk_k + dk);
             self.fill_sdf_face_padding_for_adjacent_chunk(sdf, dim, side, &adjacent_chunk);
         }
 
         for (face_dim, face_side, secondary_side, [di, dj, dk]) in ADJACENT_EDGE_OFFSETS {
-            let adjacent_chunk = self.get_chunk(
-                object_chunk_i + di,
-                object_chunk_j + dj,
-                object_chunk_k + dk,
-            );
+            let adjacent_chunk = self.get_chunk(chunk_i + di, chunk_j + dj, chunk_k + dk);
             self.fill_sdf_edge_padding_for_adjacent_chunk(
                 sdf,
                 face_dim,
@@ -390,11 +312,7 @@ impl ChunkedVoxelObject {
         }
 
         for (x_side, y_side, z_side, [di, dj, dk]) in ADJACENT_CORNER_OFFSETS {
-            let adjacent_chunk = self.get_chunk(
-                object_chunk_i + di,
-                object_chunk_j + dj,
-                object_chunk_k + dk,
-            );
+            let adjacent_chunk = self.get_chunk(chunk_i + di, chunk_j + dj, chunk_k + dk);
             self.fill_sdf_corner_padding_for_adjacent_chunk(
                 sdf,
                 x_side,
@@ -543,12 +461,12 @@ impl ChunkedVoxelObject {
                         self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
 
                     if signed_dist.is_sign_negative() && voxel.map_or(true, |voxel| voxel.is_empty()) {
-                        eprintln!(
+                        panic!(
                             "SDF value ({}) is negative for empty voxel at indices {:?} (chunk starts at {:?})",
                             signed_dist, voxel_indices, lower_chunk_voxel_indices
                         );
                     } else if signed_dist.is_sign_positive() && voxel.map_or(false, |voxel| !voxel.is_empty()) {
-                        eprintln!(
+                        panic!(
                             "SDF value ({}) is non-negative for non-empty voxel at indices {:?} (chunk starts at {:?})",
                             signed_dist, voxel_indices, lower_chunk_voxel_indices
                         );
@@ -568,7 +486,7 @@ impl ChunkedVoxelObject {
                         self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
 
                     if matches!(voxel, Some(v) if v.voxel_type() != voxel_type) {
-                        eprintln!(
+                        panic!(
                             "Recorded voxel type ({:?}) differs from actual voxel type ({:?}) at indices {:?} (chunk starts at {:?})",
                             voxel_type, voxel.unwrap().voxel_type(), voxel_indices, lower_chunk_voxel_indices
                         );

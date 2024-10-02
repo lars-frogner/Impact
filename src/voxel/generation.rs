@@ -528,7 +528,7 @@ pub mod fuzzing {
     pub type ArbitrarySDFVoxelGenerator =
         SDFVoxelGenerator<ArbitrarySDFGenerator, ArbitraryVoxelTypeGenerator>;
 
-    const MAX_SIZE: usize = 300;
+    const MAX_SIZE: usize = 200;
 
     impl VoxelTypeGenerator for ArbitraryVoxelTypeGenerator {
         fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
