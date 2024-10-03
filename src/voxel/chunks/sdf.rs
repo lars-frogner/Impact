@@ -84,10 +84,6 @@ impl VoxelChunkSignedDistanceField {
         self.values.get(Self::linear_idx(&[i, j, k])).copied()
     }
 
-    fn voxel_types_u8(&self) -> &[u8] {
-        bytemuck::cast_slice(&self.voxel_types)
-    }
-
     fn loop_over_sdf_values<'a, 'b>(
         &'b self,
         lp: &'a LoopForChunkSDF,
