@@ -1,5 +1,6 @@
 //! Graphics and physics engine.
 
+#![feature(portable_simd, array_chunks)]
 #![warn(
     clippy::all,
     clippy::await_holding_lock,
