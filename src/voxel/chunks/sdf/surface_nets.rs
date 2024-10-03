@@ -1,14 +1,25 @@
 //! Mesh generation for voxel chunk signed distance fields using surface nets.
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
-use std::array;
+#![allow(dead_code)]
 
 use super::VoxelChunkSignedDistanceField;
 use crate::voxel::{
+    chunks::sdf::SDF_GRID_SIZE,
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
 use glam::{Vec3A, Vec3Swizzles};
+use std::{
+    array,
+    ops::Neg,
+    simd::{
+        cmp::{SimdPartialEq, SimdPartialOrd},
+        f32x4, f32x8, i32x4, i32x8,
+        num::{SimdFloat, SimdInt},
+        u32x4, u32x8, u8x4, u8x8, usizex4, usizex8, Mask, Simd,
+    },
+};
 
 /// The output buffers used by
 /// [`VoxelChunkSignedDistanceField::compute_surface_nets_mesh`]. These buffers
@@ -44,7 +55,7 @@ pub struct SurfaceNetsBuffer {
 /// of the eight voxels must be empty for there to be a vertex), and at least
 /// one (since at least one voxel must be non-empty). The materials are sorted
 /// in descending order of weight.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct SurfaceNetsVertexMaterials {
     pub indices: [u8; 8],
     pub weights: [u8; 8],
@@ -109,7 +120,8 @@ impl VoxelChunkSignedDistanceField {
     ) {
         buffer.reset(Self::grid_cell_count());
 
-        self.estimate_surface_nets_surface(voxel_extent, position_offset, buffer);
+        // self.estimate_surface_nets_surface(voxel_extent, position_offset, buffer);
+        self.estimate_surface_nets_surface_simd_8(voxel_extent, position_offset, buffer);
 
         self.make_all_surface_nets_quads(buffer);
 
@@ -150,7 +162,201 @@ impl VoxelChunkSignedDistanceField {
                         // Note: performing these pushes before pushing vertices seems
                         // to produce a significant slowdown
                         buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
-                            buffer.positions.len() as u16 - 1; // Mind dependency on `vertices`
+                            buffer.positions.len() as u16 - 1; // Mind dependency on `positions`
+                        buffer
+                            .surface_points_and_linear_indices
+                            .push(([i as u8, j as u8, k as u8], linear_idx as u16));
+                    } else {
+                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] = NULL_VERTEX;
+                    }
+                }
+            }
+        }
+    }
+
+    fn estimate_surface_nets_surface_simd_8(
+        &self,
+        voxel_extent: f32,
+        position_offset: &Vec3A,
+        buffer: &mut SurfaceNetsBuffer,
+    ) {
+        const K_BOUNDARY: u32 = 8 * ((SDF_GRID_SIZE as u32 - 1) / 8);
+
+        for i in 0..Self::grid_size_u32() - 1 {
+            for j in 0..Self::grid_size_u32() - 1 {
+                for k in (0..K_BOUNDARY).step_by(8) {
+                    let linear_idx = Self::linear_idx_u32(&[i, j, k]);
+                    if let Some((centroids, normals, vertex_materials, mask)) =
+                        self.estimate_surface_net_vertex_attributes_in_cube_simd_8(k, linear_idx)
+                    {
+                        for (offset, ((centroid, normal), vertex_materials)) in centroids
+                            .array_chunks::<3>()
+                            .zip(normals.array_chunks::<3>())
+                            .zip(vertex_materials)
+                            .enumerate()
+                        {
+                            let offset_linear_idx = linear_idx as usize + offset;
+                            let offset_k = k + offset as u32;
+
+                            if offset_k >= Self::grid_size_u32() - 1 {
+                                break;
+                            }
+
+                            if mask.test(offset) {
+                                let position = voxel_extent
+                                    * (Vec3A::from([i as f32, j as f32, offset_k as f32])
+                                        + Vec3A::from(*centroid))
+                                    + position_offset;
+
+                                buffer
+                                    .positions
+                                    .push(VoxelMeshVertexPosition(position.into()));
+                                buffer
+                                    .normal_vectors
+                                    .push(VoxelMeshVertexNormalVector(*normal));
+                                buffer.vertex_materials.push(vertex_materials);
+
+                                // Note: performing these pushes before pushing vertices seems
+                                // to produce a significant slowdown
+                                buffer.voxel_linear_idx_to_vertex_index[offset_linear_idx] =
+                                    buffer.positions.len() as u16 - 1; // Mind dependency on `vertices`
+                                buffer.surface_points_and_linear_indices.push((
+                                    [i as u8, j as u8, offset_k as u8],
+                                    offset_linear_idx as u16,
+                                ));
+                            } else {
+                                buffer.voxel_linear_idx_to_vertex_index[offset_linear_idx] =
+                                    NULL_VERTEX;
+                            }
+                        }
+                    } else {
+                        for idx in linear_idx..linear_idx + 8 {
+                            buffer.voxel_linear_idx_to_vertex_index[idx as usize] = NULL_VERTEX;
+                        }
+                    }
+                }
+            }
+        }
+        for i in 0..Self::grid_size_u32() - 1 {
+            for j in 0..Self::grid_size_u32() - 1 {
+                for k in K_BOUNDARY..Self::grid_size_u32() - 1 {
+                    let linear_idx = Self::linear_idx_u32(&[i, j, k]);
+                    if let Some((centroid, normal, vertex_materials)) =
+                        self.estimate_surface_net_vertex_attributes_in_cube(linear_idx)
+                    {
+                        let position = voxel_extent
+                            * (Vec3A::from([i as f32, j as f32, k as f32]) + centroid)
+                            + position_offset;
+
+                        buffer
+                            .positions
+                            .push(VoxelMeshVertexPosition(position.into()));
+                        buffer
+                            .normal_vectors
+                            .push(VoxelMeshVertexNormalVector(normal.into()));
+                        buffer.vertex_materials.push(vertex_materials);
+
+                        // Note: performing these pushes before pushing vertices seems
+                        // to produce a significant slowdown
+                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
+                            buffer.positions.len() as u16 - 1; // Mind dependency on `positions`
+                        buffer
+                            .surface_points_and_linear_indices
+                            .push(([i as u8, j as u8, k as u8], linear_idx as u16));
+                    } else {
+                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] = NULL_VERTEX;
+                    }
+                }
+            }
+        }
+    }
+
+    fn estimate_surface_nets_surface_simd_4(
+        &self,
+        voxel_extent: f32,
+        position_offset: &Vec3A,
+        buffer: &mut SurfaceNetsBuffer,
+    ) {
+        const K_BOUNDARY: u32 = 4 * ((SDF_GRID_SIZE as u32 - 1) / 4);
+
+        for i in 0..Self::grid_size_u32() - 1 {
+            for j in 0..Self::grid_size_u32() - 1 {
+                for k in (0..K_BOUNDARY).step_by(4) {
+                    let linear_idx = Self::linear_idx_u32(&[i, j, k]);
+                    if let Some((centroids, normals, vertex_materials, mask)) =
+                        self.estimate_surface_net_vertex_attributes_in_cube_simd_4(k, linear_idx)
+                    {
+                        for (offset, ((centroid, normal), vertex_materials)) in centroids
+                            .array_chunks::<3>()
+                            .zip(normals.array_chunks::<3>())
+                            .zip(vertex_materials)
+                            .enumerate()
+                        {
+                            let offset_linear_idx = linear_idx as usize + offset;
+                            let offset_k = k + offset as u32;
+
+                            if offset_k >= Self::grid_size_u32() - 1 {
+                                break;
+                            }
+
+                            if mask.test(offset) {
+                                let position = voxel_extent
+                                    * (Vec3A::from([i as f32, j as f32, offset_k as f32])
+                                        + Vec3A::from(*centroid))
+                                    + position_offset;
+
+                                buffer
+                                    .positions
+                                    .push(VoxelMeshVertexPosition(position.into()));
+                                buffer
+                                    .normal_vectors
+                                    .push(VoxelMeshVertexNormalVector(*normal));
+                                buffer.vertex_materials.push(vertex_materials);
+
+                                // Note: performing these pushes before pushing vertices seems
+                                // to produce a significant slowdown
+                                buffer.voxel_linear_idx_to_vertex_index[offset_linear_idx] =
+                                    buffer.positions.len() as u16 - 1; // Mind dependency on `vertices`
+                                buffer.surface_points_and_linear_indices.push((
+                                    [i as u8, j as u8, offset_k as u8],
+                                    offset_linear_idx as u16,
+                                ));
+                            } else {
+                                buffer.voxel_linear_idx_to_vertex_index[offset_linear_idx] =
+                                    NULL_VERTEX;
+                            }
+                        }
+                    } else {
+                        for idx in linear_idx..linear_idx + 4 {
+                            buffer.voxel_linear_idx_to_vertex_index[idx as usize] = NULL_VERTEX;
+                        }
+                    }
+                }
+            }
+        }
+        for i in 0..Self::grid_size_u32() - 1 {
+            for j in 0..Self::grid_size_u32() - 1 {
+                for k in K_BOUNDARY..Self::grid_size_u32() - 1 {
+                    let linear_idx = Self::linear_idx_u32(&[i, j, k]);
+                    if let Some((centroid, normal, vertex_materials)) =
+                        self.estimate_surface_net_vertex_attributes_in_cube(linear_idx)
+                    {
+                        let position = voxel_extent
+                            * (Vec3A::from([i as f32, j as f32, k as f32]) + centroid)
+                            + position_offset;
+
+                        buffer
+                            .positions
+                            .push(VoxelMeshVertexPosition(position.into()));
+                        buffer
+                            .normal_vectors
+                            .push(VoxelMeshVertexNormalVector(normal.into()));
+                        buffer.vertex_materials.push(vertex_materials);
+
+                        // Note: performing these pushes before pushing vertices seems
+                        // to produce a significant slowdown
+                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
+                            buffer.positions.len() as u16 - 1; // Mind dependency on `positions`
                         buffer
                             .surface_points_and_linear_indices
                             .push(([i as u8, j as u8, k as u8], linear_idx as u16));
@@ -208,6 +414,152 @@ impl VoxelChunkSignedDistanceField {
             SurfaceNetsVertexMaterials::compute(corner_has_voxel, corner_material_indices);
 
         Some((centroid, normal, vertex_materials))
+    }
+
+    fn estimate_surface_net_vertex_attributes_in_cube_simd_8(
+        &self,
+        min_corner_k: u32,
+        min_corner_linear_idx: u32,
+    ) -> Option<(
+        [f32; 3 * 8],
+        [f32; 3 * 8],
+        [SurfaceNetsVertexMaterials; 8],
+        Mask<i32, 8>,
+    )> {
+        const K_OFFSETS: u32x8 = Simd::from_array([0, 1, 2, 3, 4, 5, 6, 7]);
+
+        const MAX_K: u32x8 = Simd::from_array([SDF_GRID_SIZE as u32 - 2; 8]);
+
+        const SCATTERS_3: [usizex8; 3] = [
+            Simd::from_array([0, 3, 6, 9, 12, 15, 18, 21]),
+            Simd::from_array([1, 4, 7, 10, 13, 16, 19, 22]),
+            Simd::from_array([2, 5, 8, 11, 14, 17, 20, 23]),
+        ];
+
+        let mut corner_dists = [f32x8::splat(0.0); 8];
+        let mut corner_has_voxel = [Mask::<i32, 8>::splat(false); 8];
+        let mut corner_material_indices = [u8x8::splat(0); 8];
+
+        let mut num_negative = i32x8::splat(0);
+
+        // Get the signed distance and material index at each corner of this cube
+        for idx in 0..8 {
+            let corner_linear_idx =
+                (min_corner_linear_idx + Self::linear_idx_u32(&CUBE_CORNERS[idx])) as usize;
+
+            corner_dists[idx] = Simd::from_slice(&self.values[corner_linear_idx..]);
+            corner_material_indices[idx] =
+                Simd::from_slice(&self.voxel_types_u8()[corner_linear_idx..]);
+            corner_has_voxel[idx] = corner_dists[idx].is_sign_negative();
+
+            num_negative += corner_has_voxel[idx].to_int();
+        }
+
+        let mask = num_negative.simd_ne(Simd::splat(0))
+            & num_negative.simd_ne(Simd::splat(-8))
+            & (Simd::splat(min_corner_k) + K_OFFSETS).simd_le(MAX_K);
+
+        if !mask.any() {
+            // No crossings.
+            return None;
+        }
+
+        let centroid = centroid_of_edge_intersections_simd_8(&corner_dists);
+
+        let normal = sdf_gradient_simd_8(&corner_dists, &centroid);
+
+        let mut centroids = [0.0; 3 * 8];
+        let mut normals = [0.0; 3 * 8];
+        for dim in 0..3 {
+            centroid[dim].scatter(&mut centroids, SCATTERS_3[dim]);
+            normal[dim].scatter(&mut normals, SCATTERS_3[dim]);
+        }
+
+        let mut vertex_materials = [SurfaceNetsVertexMaterials::zeroed(); 8];
+
+        for idx in 0..8 {
+            if mask.test(idx) {
+                let corner_has_voxel = corner_has_voxel.map(|mask| mask.test(idx));
+                let corner_material_indices = corner_material_indices.map(|indices| indices[idx]);
+                vertex_materials[idx] =
+                    SurfaceNetsVertexMaterials::compute(corner_has_voxel, corner_material_indices);
+            }
+        }
+
+        Some((centroids, normals, vertex_materials, mask))
+    }
+
+    fn estimate_surface_net_vertex_attributes_in_cube_simd_4(
+        &self,
+        min_corner_k: u32,
+        min_corner_linear_idx: u32,
+    ) -> Option<(
+        [f32; 3 * 4],
+        [f32; 3 * 4],
+        [SurfaceNetsVertexMaterials; 4],
+        Mask<i32, 4>,
+    )> {
+        const K_OFFSETS: u32x4 = Simd::from_array([0, 1, 2, 3]);
+
+        const MAX_K: u32x4 = Simd::from_array([SDF_GRID_SIZE as u32 - 2; 4]);
+
+        const SCATTERS_3: [usizex4; 3] = [
+            Simd::from_array([0, 3, 6, 9]),
+            Simd::from_array([1, 4, 7, 10]),
+            Simd::from_array([2, 5, 8, 11]),
+        ];
+
+        let mut corner_dists = [f32x4::splat(0.0); 8];
+        let mut corner_has_voxel = [Mask::<i32, 4>::splat(false); 8];
+        let mut corner_material_indices = [u8x4::splat(0); 8];
+
+        let mut num_negative = i32x4::splat(0);
+
+        // Get the signed distance and material index at each corner of this cube
+        for idx in 0..8 {
+            let corner_linear_idx =
+                (min_corner_linear_idx + Self::linear_idx_u32(&CUBE_CORNERS[idx])) as usize;
+
+            corner_dists[idx] = Simd::from_slice(&self.values[corner_linear_idx..]);
+            corner_material_indices[idx] =
+                Simd::from_slice(&self.voxel_types_u8()[corner_linear_idx..]);
+            corner_has_voxel[idx] = corner_dists[idx].is_sign_negative();
+
+            num_negative += corner_has_voxel[idx].to_int();
+        }
+
+        let mask = num_negative.simd_ne(Simd::splat(0))
+            & num_negative.simd_ne(Simd::splat(-8))
+            & (Simd::splat(min_corner_k) + K_OFFSETS).simd_le(MAX_K);
+
+        if !mask.any() {
+            // No crossings.
+            return None;
+        }
+
+        let centroid = centroid_of_edge_intersections_simd_4(&corner_dists);
+
+        let normal = sdf_gradient_simd_4(&corner_dists, &centroid);
+
+        let mut centroids = [0.0; 3 * 4];
+        let mut normals = [0.0; 3 * 4];
+        for dim in 0..3 {
+            centroid[dim].scatter(&mut centroids, SCATTERS_3[dim]);
+            normal[dim].scatter(&mut normals, SCATTERS_3[dim]);
+        }
+
+        let mut vertex_materials = [SurfaceNetsVertexMaterials::zeroed(); 4];
+
+        for idx in 0..4 {
+            if mask.test(idx) {
+                let corner_has_voxel = corner_has_voxel.map(|mask| mask.test(idx));
+                let corner_material_indices = corner_material_indices.map(|indices| indices[idx]);
+                vertex_materials[idx] =
+                    SurfaceNetsVertexMaterials::compute(corner_has_voxel, corner_material_indices);
+            }
+        }
+
+        Some((centroids, normals, vertex_materials, mask))
     }
 
     // For every edge that crosses the isosurface, makes a quad between the
@@ -381,6 +733,80 @@ fn estimate_surface_edge_intersection(
         + interp1 * CUBE_CORNER_VECTORS[corner2 as usize]
 }
 
+#[inline]
+fn centroid_of_edge_intersections_simd_8(dists: &[f32x8; 8]) -> [f32x8; 3] {
+    let mut count = Simd::splat(0);
+    let mut sum = [Simd::splat(0.0); 3];
+
+    for &[corner1, corner2] in &CUBE_EDGES {
+        let d1 = dists[corner1 as usize];
+        let d2 = dists[corner2 as usize];
+
+        let opposite_signs = opposite_signs_simd_8(d1, d2);
+        count += opposite_signs.to_int();
+
+        let interp1 = d1 / (d1 - d2);
+        let interp2 = Simd::splat(1.0) - interp1;
+
+        let cube_corner_vector_1 = CUBE_CORNER_VECTORS[corner1 as usize];
+        let cube_corner_vector_2 = CUBE_CORNER_VECTORS[corner2 as usize];
+
+        for dim in 0..3 {
+            sum[dim] += opposite_signs.select(
+                interp2 * Simd::splat(cube_corner_vector_1[dim])
+                    + interp1 * Simd::splat(cube_corner_vector_2[dim]),
+                Simd::splat(0.0),
+            );
+        }
+    }
+
+    let norm = count.cast::<f32>().neg().recip();
+
+    sum.map(|s| s * norm)
+}
+
+#[inline]
+fn centroid_of_edge_intersections_simd_4(dists: &[f32x4; 8]) -> [f32x4; 3] {
+    let mut count = Simd::splat(0);
+    let mut sum = [Simd::splat(0.0); 3];
+
+    for &[corner1, corner2] in &CUBE_EDGES {
+        let d1 = dists[corner1 as usize];
+        let d2 = dists[corner2 as usize];
+
+        let opposite_signs = opposite_signs_simd_4(d1, d2);
+        count += opposite_signs.to_int();
+
+        let interp1 = d1 / (d1 - d2);
+        let interp2 = Simd::splat(1.0) - interp1;
+
+        let cube_corner_vector_1 = CUBE_CORNER_VECTORS[corner1 as usize];
+        let cube_corner_vector_2 = CUBE_CORNER_VECTORS[corner2 as usize];
+
+        for dim in 0..3 {
+            sum[dim] += opposite_signs.select(
+                interp2 * Simd::splat(cube_corner_vector_1[dim])
+                    + interp1 * Simd::splat(cube_corner_vector_2[dim]),
+                Simd::splat(0.0),
+            );
+        }
+    }
+
+    let norm = count.cast::<f32>().neg().recip();
+
+    sum.map(|s| s * norm)
+}
+
+#[inline]
+fn opposite_signs_simd_8(a: f32x8, b: f32x8) -> Mask<i32, 8> {
+    ((a.to_bits() ^ b.to_bits()) & Simd::splat(0x8000_0000)).simd_ne(Simd::splat(0))
+}
+
+#[inline]
+fn opposite_signs_simd_4(a: f32x4, b: f32x4) -> Mask<i32, 4> {
+    ((a.to_bits() ^ b.to_bits()) & Simd::splat(0x8000_0000)).simd_ne(Simd::splat(0))
+}
+
 /// Calculates an unnormalized surface normal vector as the gradient of the
 /// distance field.
 ///
@@ -413,6 +839,84 @@ fn sdf_gradient(dists: &[f32; 8], s: Vec3A) -> Vec3A {
         + neg.yzx() * s.zxy() * d01
         + s.yzx() * neg.zxy() * d10
         + s.yzx() * s.zxy() * d11
+}
+
+#[inline]
+fn sdf_gradient_simd_8(dists: &[f32x8; 8], s: &[f32x8; 3]) -> [f32x8; 3] {
+    let p00 = [dists[0b100], dists[0b010], dists[0b001]];
+    let n00 = [dists[0b000], dists[0b000], dists[0b000]];
+
+    let p01 = [dists[0b101], dists[0b110], dists[0b011]];
+    let n01 = [dists[0b001], dists[0b100], dists[0b010]];
+
+    let p10 = [dists[0b110], dists[0b011], dists[0b101]];
+    let n10 = [dists[0b010], dists[0b001], dists[0b100]];
+
+    let p11 = [dists[0b111], dists[0b111], dists[0b111]];
+    let n11 = [dists[0b011], dists[0b101], dists[0b110]];
+
+    // Each dimension encodes an edge delta, giving 12 in total
+    let d00: [_; 3] = array::from_fn(|dim| p00[dim] - n00[dim]); // Edges (0bx00, 0b0y0, 0b00z)
+    let d01: [_; 3] = array::from_fn(|dim| p01[dim] - n01[dim]); // Edges (0bx01, 0b1y0, 0b01z)
+    let d10: [_; 3] = array::from_fn(|dim| p10[dim] - n10[dim]); // Edges (0bx10, 0b0y1, 0b10z)
+    let d11: [_; 3] = array::from_fn(|dim| p11[dim] - n11[dim]); // Edges (0bx11, 0b1y1, 0b11z)
+
+    let neg = s.map(|c| Simd::splat(1.0) - c);
+
+    // Do bilinear interpolation between 4 edges in each dimension
+    [
+        neg[1] * neg[2] * d00[0]
+            + neg[1] * s[2] * d01[0]
+            + s[1] * neg[2] * d10[0]
+            + s[1] * s[2] * d11[0],
+        neg[2] * neg[0] * d00[1]
+            + neg[2] * s[0] * d01[1]
+            + s[2] * neg[0] * d10[1]
+            + s[2] * s[0] * d11[1],
+        neg[0] * neg[1] * d00[2]
+            + neg[0] * s[1] * d01[2]
+            + s[0] * neg[1] * d10[2]
+            + s[0] * s[1] * d11[2],
+    ]
+}
+
+#[inline]
+fn sdf_gradient_simd_4(dists: &[f32x4; 8], s: &[f32x4; 3]) -> [f32x4; 3] {
+    let p00 = [dists[0b100], dists[0b010], dists[0b001]];
+    let n00 = [dists[0b000], dists[0b000], dists[0b000]];
+
+    let p01 = [dists[0b101], dists[0b110], dists[0b011]];
+    let n01 = [dists[0b001], dists[0b100], dists[0b010]];
+
+    let p10 = [dists[0b110], dists[0b011], dists[0b101]];
+    let n10 = [dists[0b010], dists[0b001], dists[0b100]];
+
+    let p11 = [dists[0b111], dists[0b111], dists[0b111]];
+    let n11 = [dists[0b011], dists[0b101], dists[0b110]];
+
+    // Each dimension encodes an edge delta, giving 12 in total
+    let d00: [_; 3] = array::from_fn(|dim| p00[dim] - n00[dim]); // Edges (0bx00, 0b0y0, 0b00z)
+    let d01: [_; 3] = array::from_fn(|dim| p01[dim] - n01[dim]); // Edges (0bx01, 0b1y0, 0b01z)
+    let d10: [_; 3] = array::from_fn(|dim| p10[dim] - n10[dim]); // Edges (0bx10, 0b0y1, 0b10z)
+    let d11: [_; 3] = array::from_fn(|dim| p11[dim] - n11[dim]); // Edges (0bx11, 0b1y1, 0b11z)
+
+    let neg = s.map(|c| Simd::splat(1.0) - c);
+
+    // Do bilinear interpolation between 4 edges in each dimension
+    [
+        neg[1] * neg[2] * d00[0]
+            + neg[1] * s[2] * d01[0]
+            + s[1] * neg[2] * d10[0]
+            + s[1] * s[2] * d11[0],
+        neg[2] * neg[0] * d00[1]
+            + neg[2] * s[0] * d01[1]
+            + s[2] * neg[0] * d10[1]
+            + s[2] * s[0] * d11[1],
+        neg[0] * neg[1] * d00[2]
+            + neg[0] * s[1] * d01[2]
+            + s[0] * neg[1] * d10[2]
+            + s[0] * s[1] * d11[2],
+    ]
 }
 
 macro_rules! sorting_network {
@@ -449,6 +953,13 @@ macro_rules! sorting_network_7 {
 // when the single material has a strong contrast with the surrounding
 // materials.
 impl SurfaceNetsVertexMaterials {
+    const fn zeroed() -> Self {
+        Self {
+            indices: [0; 8],
+            weights: [0; 8],
+        }
+    }
+
     fn compute(corner_has_voxel: [bool; 8], corner_material_indices: [u8; 8]) -> Self {
         let mut materials = Self {
             indices: [0; 8],
