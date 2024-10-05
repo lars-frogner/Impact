@@ -1,8 +1,8 @@
 //! Mesh generation for voxel chunk signed distance fields using surface nets.
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
-use super::VoxelChunkSignedDistanceField;
 use crate::voxel::{
+    chunks::sdf::{VoxelChunkSignedDistanceField, SDF_GRID_CELL_COUNT},
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
@@ -12,7 +12,7 @@ use std::array;
 /// The output buffers used by
 /// [`VoxelChunkSignedDistanceField::compute_surface_nets_mesh`]. These buffers
 /// can be reused to avoid reallocating memory.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SurfaceNetsBuffer {
     /// The triangle mesh vertex positions.
     pub positions: Vec<VoxelMeshVertexPosition>,
@@ -33,7 +33,7 @@ pub struct SurfaceNetsBuffer {
     /// array.
     pub surface_points_and_linear_indices: Vec<([u8; 3], u16)>,
     /// Used to map back from voxel linear index to vertex index.
-    pub voxel_linear_idx_to_vertex_index: Vec<u16>,
+    pub voxel_linear_idx_to_vertex_index: [u16; SDF_GRID_CELL_COUNT],
 }
 
 /// The materials of the voxels defining a vertex in a surface nets mesh. Each
@@ -50,19 +50,34 @@ pub struct SurfaceNetsVertexMaterials {
 }
 
 impl SurfaceNetsBuffer {
+    /// Whether the buffer is empty.
+    pub fn is_empty(&self) -> bool {
+        self.indices.is_empty()
+    }
+
+    /// Creates a new empty buffer with the given capacities for vertices and
+    /// indices.
+    pub fn with_capacities(vertex_capacity: usize, index_capacity: usize) -> Self {
+        Self {
+            positions: Vec::with_capacity(vertex_capacity),
+            normal_vectors: Vec::with_capacity(vertex_capacity),
+            vertex_materials: Vec::with_capacity(vertex_capacity),
+            index_materials: Vec::with_capacity(index_capacity),
+            indices: Vec::with_capacity(index_capacity),
+            surface_points_and_linear_indices: Vec::with_capacity(vertex_capacity),
+            voxel_linear_idx_to_vertex_index: [NULL_VERTEX; SDF_GRID_CELL_COUNT],
+        }
+    }
+
     /// Clears all of the buffers, but keeps the memory allocated for reuse.
-    fn reset(&mut self, array_size: usize) {
+    fn reset(&mut self) {
         self.positions.clear();
         self.normal_vectors.clear();
         self.vertex_materials.clear();
         self.index_materials.clear();
         self.indices.clear();
         self.surface_points_and_linear_indices.clear();
-
-        // Just make sure this buffer is big enough, whether or not we've used it
-        // before.
-        self.voxel_linear_idx_to_vertex_index
-            .resize(array_size, NULL_VERTEX);
+        self.voxel_linear_idx_to_vertex_index.fill(NULL_VERTEX);
     }
 }
 
@@ -106,7 +121,7 @@ impl VoxelChunkSignedDistanceField {
         position_offset: &Vec3A,
         buffer: &mut SurfaceNetsBuffer,
     ) {
-        buffer.reset(Self::grid_cell_count());
+        buffer.reset();
 
         self.estimate_surface_nets_surface(voxel_extent, position_offset, buffer);
 
@@ -138,6 +153,12 @@ impl VoxelChunkSignedDistanceField {
                             * (Vec3A::from([i as f32, j as f32, k as f32]) + centroid)
                             + position_offset;
 
+                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
+                            buffer.positions.len() as u16; // Mind dependency on `positions`
+                        buffer
+                            .surface_points_and_linear_indices
+                            .push(([i as u8, j as u8, k as u8], linear_idx as u16));
+
                         buffer
                             .positions
                             .push(VoxelMeshVertexPosition(position.into()));
@@ -145,16 +166,6 @@ impl VoxelChunkSignedDistanceField {
                             .normal_vectors
                             .push(VoxelMeshVertexNormalVector(normal.into()));
                         buffer.vertex_materials.push(vertex_materials);
-
-                        // Note: performing these pushes before pushing vertices seems
-                        // to produce a significant slowdown
-                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
-                            buffer.positions.len() as u16 - 1; // Mind dependency on `positions`
-                        buffer
-                            .surface_points_and_linear_indices
-                            .push(([i as u8, j as u8, k as u8], linear_idx as u16));
-                    } else {
-                        buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] = NULL_VERTEX;
                     }
                 }
             }

@@ -480,9 +480,9 @@ impl GPUBuffer {
 
         Self::new(
             graphics_device,
-            GPUBufferType::Uniform,
             bytes,
             n_valid_bytes,
+            GPUBufferType::Uniform.usage(),
             label,
         )
     }
@@ -547,9 +547,9 @@ impl GPUBuffer {
 
         Self::new(
             graphics_device,
-            GPUBufferType::Uniform,
             uniform_bytes,
             uniform_bytes.len(),
+            GPUBufferType::Uniform.usage(),
             label,
         )
     }

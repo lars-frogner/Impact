@@ -52,21 +52,20 @@ pub enum GPUBufferType {
 }
 
 impl GPUBuffer {
-    /// Creates a GPU buffer of the given type from the given slice of
-    /// bytes. Only the first `n_valid_bytes` in the slice are considered
-    /// to actually represent valid data, the rest is just buffer filling
-    /// that gives room for writing a larger number of bytes than
-    /// `n_valid_bytes` into the buffer at a later point without
-    /// reallocating.
+    /// Creates a GPU buffer with the given usage from the given slice of
+    /// bytes. Only the first `n_valid_bytes` in the slice are considered to
+    /// actually represent valid data, the rest is just buffer filling that
+    /// gives room for writing a larger number of bytes than `n_valid_bytes`
+    /// into the buffer at a later point without reallocating.
     ///
     /// # Panics
     /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
     pub fn new(
         graphics_device: &GraphicsDevice,
-        buffer_type: GPUBufferType,
         bytes: &[u8],
         n_valid_bytes: usize,
+        usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
         assert!(!bytes.is_empty(), "Tried to create empty GPU buffer");
@@ -74,11 +73,11 @@ impl GPUBuffer {
         let buffer_size = bytes.len();
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
-        let buffer = Self::create_initialized_buffer_of_type(
+        let buffer_label = format!("{} GPU buffer", label);
+        let buffer = Self::create_initialized_buffer(
             graphics_device.device(),
-            buffer_type,
             bytes,
+            usage | wgpu::BufferUsages::COPY_DST,
             &buffer_label,
         );
 
@@ -90,64 +89,41 @@ impl GPUBuffer {
         }
     }
 
-    /// Creates a full GPU buffer of the given type from the given slice of
-    /// bytes The given additional usages will be assigned to the buffer.
+    /// Creates a GPU buffer with the given size and usage. The given slice of
+    /// valid bytes will be written into the beginning of the buffer.
     ///
     /// # Panics
-    /// - If `bytes` is empty.
-    pub fn new_full_with_additional_usages(
+    /// - If `buffer_size` is zero.
+    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    pub fn new_with_spare_capacity(
         graphics_device: &GraphicsDevice,
-        buffer_type: GPUBufferType,
-        bytes: &[u8],
-        additional_usages: wgpu::BufferUsages,
+        buffer_size: usize,
+        valid_bytes: &[u8],
+        usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
-        Self::new_with_additional_usages(
-            graphics_device,
-            buffer_type,
-            bytes,
-            bytes.len(),
-            additional_usages,
-            label,
-        )
-    }
+        assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
+        assert!(valid_bytes.len() <= buffer_size);
 
-    /// Creates a GPU buffer of the given type from the given slice of
-    /// bytes. Only the first `n_valid_bytes` in the slice are considered
-    /// to actually represent valid data, the rest is just buffer filling
-    /// that gives room for writing a larger number of bytes than
-    /// `n_valid_bytes` into the buffer at a later point without
-    /// reallocating. The given additional usages will be assigned to the
-    /// buffer.
-    ///
-    /// # Panics
-    /// - If `bytes` is empty.
-    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
-    pub fn new_with_additional_usages(
-        graphics_device: &GraphicsDevice,
-        buffer_type: GPUBufferType,
-        bytes: &[u8],
-        n_valid_bytes: usize,
-        additional_usages: wgpu::BufferUsages,
-        label: Cow<'static, str>,
-    ) -> Self {
-        assert!(!bytes.is_empty(), "Tried to create empty GPU buffer");
-
-        let buffer_size = bytes.len();
-        assert!(n_valid_bytes <= buffer_size);
-
-        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
-        let buffer = Self::create_initialized_buffer(
+        let buffer_label = format!("{} GPU buffer", label);
+        let buffer = Self::create_uninitialized_buffer(
             graphics_device.device(),
-            bytes,
-            buffer_type.usage() | wgpu::BufferUsages::COPY_DST | additional_usages,
+            buffer_size as u64,
+            usage | wgpu::BufferUsages::COPY_DST,
             &buffer_label,
+        );
+        queue_write_to_buffer(
+            graphics_device.queue(),
+            &buffer,
+            0,
+            valid_bytes,
+            buffer_size,
         );
 
         Self {
             buffer,
             buffer_size,
-            n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+            n_valid_bytes: AtomicUsize::new(valid_bytes.len()),
             label,
         }
     }
@@ -157,29 +133,26 @@ impl GPUBuffer {
     ///
     /// # Panics
     /// - If `buffer_size` is zero.
-    /// - If `n_valid_bytes` exceeds `buffer_size`.
     pub fn new_uninitialized(
         graphics_device: &GraphicsDevice,
-        buffer_type: GPUBufferType,
         buffer_size: usize,
-        n_valid_bytes: usize,
+        usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
         assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
-        assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
+        let buffer_label = format!("{} GPU buffer", label);
         let buffer = Self::create_uninitialized_buffer(
             graphics_device.device(),
             buffer_size as u64,
-            buffer_type.usage(),
+            usage,
             &buffer_label,
         );
 
         Self {
             buffer,
             buffer_size,
-            n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+            n_valid_bytes: AtomicUsize::new(0),
             label,
         }
     }
@@ -211,6 +184,36 @@ impl GPUBuffer {
     /// contain any valid data.
     pub fn is_empty(&self) -> bool {
         self.n_valid_bytes() == 0
+    }
+
+    /// Queues a write of the given slice of bytes to the existing buffer,
+    /// starting at the given byte offset. All bytes in the buffer that were
+    /// previously considered valid will still be consider valid, along with any
+    /// bytes up to the last byte written by this call.
+    ///
+    /// # Panics
+    /// If the end of the region of updated bytes would exceed the total size of
+    /// the buffer.
+    pub fn update_bytes_from_offset(
+        &self,
+        graphics_device: &GraphicsDevice,
+        byte_offset: usize,
+        updated_bytes: &[u8],
+    ) {
+        let end_offset = byte_offset + updated_bytes.len();
+        assert!(end_offset <= self.buffer_size());
+
+        if end_offset > self.n_valid_bytes() {
+            self.set_n_valid_bytes(end_offset);
+        }
+
+        queue_write_to_buffer(
+            graphics_device.queue(),
+            self.buffer(),
+            byte_offset,
+            updated_bytes,
+            self.buffer_size(),
+        );
     }
 
     /// Queues a write of the given slice of bytes to the existing
@@ -302,16 +305,6 @@ impl GPUBuffer {
     pub fn set_n_valid_bytes(&self, n_valid_bytes: usize) {
         assert!(n_valid_bytes <= self.buffer_size);
         self.n_valid_bytes.store(n_valid_bytes, Ordering::Release);
-    }
-
-    fn create_initialized_buffer_of_type(
-        device: &wgpu::Device,
-        buffer_type: GPUBufferType,
-        bytes: &[u8],
-        label: &str,
-    ) -> wgpu::Buffer {
-        let usage = buffer_type.usage() | wgpu::BufferUsages::COPY_DST;
-        Self::create_initialized_buffer(device, bytes, usage, label)
     }
 
     fn create_initialized_buffer(
@@ -533,7 +526,8 @@ impl CountedGPUBuffer {
 }
 
 impl GPUBufferType {
-    fn usage(&self) -> wgpu::BufferUsages {
+    /// Returns the default [`wgpu::BufferUsages`] for this buffer type.
+    pub fn usage(&self) -> wgpu::BufferUsages {
         match self {
             Self::Vertex => wgpu::BufferUsages::VERTEX,
             Self::Index => wgpu::BufferUsages::INDEX,
@@ -635,5 +629,13 @@ fn queue_write_to_buffer(
         "Bytes to write do not fit in original buffer"
     );
 
-    queue.write_buffer(buffer, byte_offset as wgpu::BufferAddress, bytes);
+    let mut view = queue
+        .write_buffer_with(
+            buffer,
+            byte_offset as wgpu::BufferAddress,
+            wgpu::BufferSize::new(bytes.len() as u64).unwrap(),
+        )
+        .unwrap();
+
+    view.copy_from_slice(bytes);
 }

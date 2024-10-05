@@ -16,7 +16,7 @@ use crate::{
 use bitflags::bitflags;
 use nalgebra::point;
 use num_traits::{NumCast, PrimInt};
-use std::{iter, ops::Range};
+use std::{collections::HashSet, iter, ops::Range};
 
 /// An object represented by a grid of voxels.
 ///
@@ -37,6 +37,7 @@ pub struct ChunkedVoxelObject {
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
     _voxel_types: Vec<VoxelType>,
+    invalidated_mesh_chunk_indices: HashSet<[usize; 3]>,
 }
 
 /// A voxel chunk that is not fully obscured by adjacent voxels.
@@ -237,6 +238,7 @@ impl ChunkedVoxelObject {
             chunks,
             voxels,
             _voxel_types: voxel_types,
+            invalidated_mesh_chunk_indices: HashSet::new(),
         })
     }
 
@@ -285,6 +287,15 @@ impl ChunkedVoxelObject {
     /// the object's chunk grid.
     pub fn total_chunk_count(&self) -> usize {
         self.chunk_counts.iter().product()
+    }
+
+    /// Returns a guess for the rough number of exposed chunks the object
+    /// contains based on its size.
+    pub fn exposed_chunk_count_heuristic(&self) -> usize {
+        // It is probably roughly equal to the total number of boundary chunks
+        2 * (self.chunk_counts[0] * self.chunk_counts[1]
+            + self.chunk_counts[1] * self.chunk_counts[2]
+            + self.chunk_counts[2] * self.chunk_counts[0])
     }
 
     /// Returns the range of indices along each axis of the object's chunk
@@ -429,16 +440,27 @@ impl ChunkedVoxelObject {
     /// Determines the adjacency [`VoxelFlags`] for each voxel in the object
     /// according to which of their six neighbor voxels are present. Also
     /// records which faces of the chunks are fully obscured by adjacent voxels.
-    ///
-    /// # Warning
-    /// This method assumes that the object has not been modified since it was
-    /// created. Calling it after modifying the object may yield incorrect
-    /// results.
     pub fn initialize_adjacencies(&mut self) {
         for chunk in &self.chunks {
             chunk.update_internal_adjacencies(self.voxels.as_mut_slice());
         }
-        self.initialize_all_chunk_boundary_adjacencies();
+        self.update_all_chunk_boundary_adjacencies();
+    }
+
+    /// Returns an iterator over the indices in the object's chunk grid of the
+    /// chunks whose (hypothetical) meshes have been invalidated by changes in
+    /// the voxel object since the object was created or
+    /// [`Self::mark_chunk_meshes_synchronized`] was last called.
+    pub fn invalidated_mesh_chunk_indices(
+        &self,
+    ) -> impl ExactSizeIterator<Item = &[usize; 3]> + '_ {
+        self.invalidated_mesh_chunk_indices.iter()
+    }
+
+    /// Signals that the mesh data of all the object's chunks is up to date with
+    /// the object's voxels.
+    pub fn mark_chunk_meshes_synchronized(&mut self) {
+        self.invalidated_mesh_chunk_indices.clear();
     }
 
     /// Validates the adjacency [`VoxelFlags`] computed by the efficient
@@ -709,10 +731,17 @@ impl ChunkedVoxelObject {
         }
     }
 
-    fn initialize_all_chunk_boundary_adjacencies(&mut self) {
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
-                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+    fn update_all_chunk_boundary_adjacencies(&mut self) {
+        self.update_boundary_adjacencies_for_chunks_in_ranges(self.occupied_chunk_ranges.clone());
+    }
+
+    fn update_boundary_adjacencies_for_chunks_in_ranges(
+        &mut self,
+        chunk_ranges: [Range<usize>; 3],
+    ) {
+        for chunk_i in chunk_ranges[0].clone() {
+            for chunk_j in chunk_ranges[1].clone() {
+                for chunk_k in chunk_ranges[2].clone() {
                     let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
 
                     for (adjacent_chunk_indices, dim) in [
@@ -730,7 +759,7 @@ impl ChunkedVoxelObject {
                             None
                         };
 
-                        VoxelChunk::initialize_mutual_face_adjacencies(
+                        VoxelChunk::update_mutual_face_adjacencies(
                             &mut self.chunks,
                             &mut self.voxels,
                             Some(chunk_idx),
@@ -747,7 +776,7 @@ impl ChunkedVoxelObject {
         for chunk_j in self.occupied_chunk_ranges[1].clone() {
             for chunk_k in self.occupied_chunk_ranges[2].clone() {
                 let chunk_idx = self.linear_chunk_idx(&[0, chunk_j, chunk_k]);
-                VoxelChunk::initialize_mutual_face_adjacencies(
+                VoxelChunk::update_mutual_face_adjacencies(
                     &mut self.chunks,
                     &mut self.voxels,
                     None,
@@ -759,7 +788,7 @@ impl ChunkedVoxelObject {
         for chunk_i in self.occupied_chunk_ranges[0].clone() {
             for chunk_k in self.occupied_chunk_ranges[2].clone() {
                 let chunk_idx = self.linear_chunk_idx(&[chunk_i, 0, chunk_k]);
-                VoxelChunk::initialize_mutual_face_adjacencies(
+                VoxelChunk::update_mutual_face_adjacencies(
                     &mut self.chunks,
                     &mut self.voxels,
                     None,
@@ -771,7 +800,7 @@ impl ChunkedVoxelObject {
         for chunk_i in self.occupied_chunk_ranges[0].clone() {
             for chunk_j in self.occupied_chunk_ranges[1].clone() {
                 let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, 0]);
-                VoxelChunk::initialize_mutual_face_adjacencies(
+                VoxelChunk::update_mutual_face_adjacencies(
                     &mut self.chunks,
                     &mut self.voxels,
                     None,
@@ -859,10 +888,10 @@ impl VoxelChunk {
             if first_voxel.is_empty() {
                 Self::Empty
             } else {
-                // Most voxels in a uniform chunk are surrounded by neighbors,
-                // so we assume this also holds for the boundary voxels for now
-                // and update the boundary voxels later if the adjacent chunks
-                // are not full
+                // If the chunk has truly uniform information, even the boundary voxels must be
+                // fully surrounded by neighbors. We don't know if this is the case yet, but we
+                // assume it to be true and fix it by making the chunk non-uniform later if it
+                // turns out not to be the case
                 first_voxel.add_flags(VoxelFlags::full_adjacency());
 
                 Self::Uniform(first_voxel)
@@ -1035,7 +1064,7 @@ impl VoxelChunk {
         flags.mark_upper_face_as_unobscured(dim);
     }
 
-    fn initialize_mutual_face_adjacencies(
+    fn update_mutual_face_adjacencies(
         chunks: &mut [VoxelChunk],
         voxels: &mut Vec<Voxel>,
         lower_chunk_idx: Option<usize>,

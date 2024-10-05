@@ -445,34 +445,17 @@ fn init_app(window: Window) -> Result<Application> {
     //     &ReferenceFrameComp::unoriented(point![25.0, -25.0, -15.0]),
     // ))?;
 
-    // app.create_entity((
-    //     // &VoxelBoxComp::new(16, 16, 16),
-    //     // &VoxelSphereComp::new(850),
-    //     &VoxelGradientNoisePatternComp::new(0.25, 500, 500, 500, 3.0, 0.3, 1),
-    //     &SameVoxelTypeComp::new(VoxelType::Red),
-    //     &ReferenceFrameComp::unoriented(point![25.0, -25.0, -15.0]),
-    //     // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 0.0]),
-    // ))?;
-
     app.create_entity((
         &VoxelSphereComp::new(0.5, 20.0),
-        // &VoxelBoxComp::new(0.1, 2.0, 2.0, 2.0),
+        // &VoxelBoxComp::new(1.0, 14.0, 14.0, 14.0),
         // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3, 0),
-        // &SameVoxelTypeComp::new(VoxelType::Green),
+        // &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
         &GradientNoiseVoxelTypesComp::new(["Ground"], 6e-2, 1.0, 1),
         &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 0),
         // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2, 1.0, 0),
         // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
         &ReferenceFrameComp::unoriented(point![-25.0, -25.0, 10.0]),
     ))?;
-
-    // app.create_entity((
-    //     // &VoxelBoxComp::new(64, 32, 1),
-    //     &VoxelGradientNoisePatternComp::new(0.25, 250, 250, 250, 3.0, 0.3, 2),
-    //     &SameVoxelTypeComp::new(VoxelType::Blue),
-    //     // &ReferenceFrameComp::unoriented(point![9.0, -12.0, -5.0]),
-    //     &ReferenceFrameComp::unoriented(point![-45.0, 55.0, 25.0]),
-    // ))?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0),
     // 1.0, 10.0, 3.0); create_free_rotation_experiment(&world, Point3::new(0.0,

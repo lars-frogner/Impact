@@ -411,6 +411,35 @@ impl GPUBuffer {
         Self::new_vertex_buffer(graphics_device, vertices, vertices.len(), label)
     }
 
+    /// Creates a vertex GPU buffer with capacity for the given number of
+    /// vertices, with the start of the buffer initialized with the given
+    /// vertices.
+    ///
+    /// # Panics
+    /// - If `total_vertex_capacity` is zero.
+    /// - If the length of the `initial_vertices` slice exceeds
+    ///   `total_vertex_capacity`.
+    pub fn new_vertex_buffer_with_spare_capacity<V>(
+        graphics_device: &GraphicsDevice,
+        total_vertex_capacity: usize,
+        initial_vertices: &[V],
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        V: VertexBufferable,
+    {
+        let buffer_size = mem::size_of::<V>()
+            .checked_mul(total_vertex_capacity)
+            .unwrap();
+        let valid_bytes = bytemuck::cast_slice(initial_vertices);
+        Self::new_vertex_buffer_with_bytes_and_spare_capacity(
+            graphics_device,
+            buffer_size,
+            valid_bytes,
+            label,
+        )
+    }
+
     /// Creates a vertex GPU buffer initialized with the given bytes
     /// representing vertex data, with the first `n_valid_bytes` considered
     /// valid data.
@@ -427,9 +456,30 @@ impl GPUBuffer {
         assert!(!bytes.is_empty(), "Tried to create empty vertex GPU buffer");
         Self::new(
             graphics_device,
-            GPUBufferType::Vertex,
             bytes,
             n_valid_bytes,
+            GPUBufferType::Vertex.usage(),
+            label,
+        )
+    }
+
+    /// Creates a vertex GPU buffer with the given size. The given slice of
+    /// valid bytes will be written into the beginning of the buffer.
+    ///
+    /// # Panics
+    /// - If `buffer_size` is zero.
+    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    pub fn new_vertex_buffer_with_bytes_and_spare_capacity(
+        graphics_device: &GraphicsDevice,
+        buffer_size: usize,
+        valid_bytes: &[u8],
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new_with_spare_capacity(
+            graphics_device,
+            buffer_size,
+            valid_bytes,
+            GPUBufferType::Vertex.usage(),
             label,
         )
     }
@@ -461,9 +511,9 @@ impl GPUBuffer {
 
         Self::new(
             graphics_device,
-            GPUBufferType::Index,
             bytes,
             n_valid_bytes,
+            GPUBufferType::Index.usage(),
             label,
         )
     }
@@ -482,6 +532,38 @@ impl GPUBuffer {
         I: IndexBufferable,
     {
         Self::new_index_buffer(graphics_device, indices, indices.len(), label)
+    }
+
+    /// Creates a index GPU buffer with capacity for the given number of
+    /// index, with the start of the buffer initialized with the given
+    /// index.
+    ///
+    /// # Panics
+    /// - If `total_index_capacity` is zero.
+    /// - If the length of the `initial_indices` slice exceeds
+    ///   `total_index_capacity`.
+    pub fn new_index_buffer_with_spare_capacity<I>(
+        graphics_device: &GraphicsDevice,
+        total_index_capacity: usize,
+        initial_indices: &[I],
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        I: IndexBufferable,
+    {
+        let buffer_size = mem::size_of::<I>()
+            .checked_mul(total_index_capacity)
+            .unwrap();
+
+        let valid_bytes = bytemuck::cast_slice(initial_indices);
+
+        Self::new_with_spare_capacity(
+            graphics_device,
+            buffer_size,
+            valid_bytes,
+            GPUBufferType::Index.usage(),
+            label,
+        )
     }
 }
 

@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use impact::{
     geometry::Sphere,
     voxel::{
-        chunks::ChunkedVoxelObject,
+        chunks::{sdf::VoxelChunkSignedDistanceField, ChunkedVoxelObject},
         generation::{
             BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
         },
@@ -75,7 +75,8 @@ pub fn bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf(c: &mut Criter
         |b| {
             b.iter(|| {
                 let mut count = 0;
-                object.for_each_exposed_chunk_with_sdf(&mut |chunk, sdf| {
+                let mut sdf = VoxelChunkSignedDistanceField::default();
+                object.for_each_exposed_chunk_with_sdf(&mut sdf, &mut |chunk, sdf| {
                     black_box(chunk);
                     black_box(sdf);
                     count += 1;
@@ -126,6 +127,34 @@ pub fn bench_chunked_voxel_object_modify_voxels_within_sphere(c: &mut Criterion)
     );
 }
 
+pub fn bench_chunked_voxel_object_update_mesh(c: &mut Criterion) {
+    let object_radius = 100.0;
+    let sphere_radius = 0.15 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let mut mesh = ChunkedVoxelObjectMesh::create(&object);
+
+    let sphere = Sphere::new(
+        object.compute_aabb::<f64>().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+        sphere_radius,
+    );
+
+    c.bench_function("bench_chunked_voxel_object_update_mesh", |b| {
+        b.iter(|| {
+            object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
+                black_box((indices, position, voxel));
+            });
+            mesh.sync_with_voxel_object(&mut object);
+            black_box((&object, &mesh));
+        })
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
@@ -136,5 +165,6 @@ criterion_group!(
         bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf,
         bench_chunked_voxel_object_create_mesh,
         bench_chunked_voxel_object_modify_voxels_within_sphere,
+        bench_chunked_voxel_object_update_mesh,
 );
 criterion_main!(benches);

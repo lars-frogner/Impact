@@ -41,6 +41,7 @@ enum Target {
     ChunkedVoxelObjectInitializeAdjacencies,
     ChunkedVoxelObjectCreateMesh,
     ChunkedVoxelObjectModifyVoxelsWithinSphere,
+    ChunkedVoxelObjectUpdateMesh,
 }
 
 #[derive(Debug)]
@@ -86,6 +87,9 @@ fn main() {
         }
         Target::ChunkedVoxelObjectModifyVoxelsWithinSphere => {
             profile_chunked_voxel_object_modify_voxels_within_sphere(duration, delayer);
+        }
+        Target::ChunkedVoxelObjectUpdateMesh => {
+            profile_chunked_voxel_object_update_mesh(duration, delayer);
         }
     }
 }
@@ -154,6 +158,36 @@ fn profile_chunked_voxel_object_modify_voxels_within_sphere(duration: Duration, 
             object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
                 black_box((indices, position, voxel));
             });
+        },
+        duration,
+        delayer,
+    );
+}
+
+fn profile_chunked_voxel_object_update_mesh(duration: Duration, delayer: Delayer) {
+    let object_radius = 100.0;
+    let sphere_radius = 0.15 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let mut mesh = ChunkedVoxelObjectMesh::create(&object);
+
+    let sphere = Sphere::new(
+        object.compute_aabb::<f64>().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+        sphere_radius,
+    );
+
+    profile(
+        &mut || {
+            object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
+                black_box((indices, position, voxel));
+            });
+            mesh.sync_with_voxel_object(&mut object);
+            black_box((&object, &mesh));
         },
         duration,
         delayer,

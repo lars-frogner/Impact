@@ -14,6 +14,15 @@ use nalgebra::{point, Point3};
 use std::{array, ops::Range};
 
 impl ChunkedVoxelObject {
+    /// Finds all non-empty voxels whose center fall within the given sphere and
+    /// calls the given closure with the voxel's indices, center position and a
+    /// mutable reference to the voxel itself.
+    ///
+    /// Since it is assumed that the given closure will modify the voxels, the
+    /// adjacency information will be updated for all voxels within the sphere,
+    /// and any chunk whose mesh data would be invalidated by changes to these
+    /// voxels will be registered. The invalidated chunks can be obtained by
+    /// calling [`Self::invalidated_mesh_chunk_indices`].
     pub fn modify_voxels_within_sphere(
         &mut self,
         sphere: &Sphere<f64>,
@@ -53,7 +62,7 @@ impl ChunkedVoxelObject {
                     let object_voxel_ranges_in_chunk =
                         chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
 
-                    let touched_voxel_ranges_in_chunk: [Range<_>; 3] = array::from_fn(|dim| {
+                    let touched_voxel_ranges_in_chunk: [_; 3] = array::from_fn(|dim| {
                         let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
                         let touched_range = &touched_voxel_ranges[dim];
                         usize::max(range_in_chunk.start, touched_range.start)
@@ -62,6 +71,8 @@ impl ChunkedVoxelObject {
 
                     let voxels =
                         &mut self.voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
+
+                    let mut chunk_touched = false;
 
                     for i in touched_voxel_ranges_in_chunk[0].clone() {
                         for j in touched_voxel_ranges_in_chunk[1].clone() {
@@ -83,13 +94,52 @@ impl ChunkedVoxelObject {
                                     if !voxel.is_empty() {
                                         modify_voxel([i, j, k], voxel_center_position, voxel);
                                     }
+                                    chunk_touched = true;
                                 }
+                            }
+                        }
+                    }
+
+                    if chunk_touched {
+                        chunk.update_internal_adjacencies(&mut self.voxels);
+
+                        // The mesh of the touched chunk is invalidated
+                        self.invalidated_mesh_chunk_indices.insert(chunk_indices);
+
+                        for dim in 0..3 {
+                            // The meshes of adjacent chunks are invalidated if any voxel within 2
+                            // voxels of the relevant boundary was touched (that is, a boundary
+                            // voxel or a voxel adjacent to a boundary voxel)
+
+                            let voxel_range = &object_voxel_ranges_in_chunk[dim];
+                            let touched_voxel_range = &touched_voxel_ranges_in_chunk[dim];
+
+                            if chunk_indices[dim] > self.occupied_chunk_ranges[dim].start
+                                && touched_voxel_range.start - voxel_range.start < 2
+                            {
+                                let mut adjacent_chunk_indices = chunk_indices;
+                                adjacent_chunk_indices[dim] -= 1;
+                                self.invalidated_mesh_chunk_indices
+                                    .insert(adjacent_chunk_indices);
+                            }
+
+                            if chunk_indices[dim] < self.occupied_chunk_ranges[dim].end - 1
+                                && voxel_range.end - touched_voxel_range.end < 2
+                            {
+                                let mut adjacent_chunk_indices = chunk_indices;
+                                adjacent_chunk_indices[dim] += 1;
+                                self.invalidated_mesh_chunk_indices
+                                    .insert(adjacent_chunk_indices);
                             }
                         }
                     }
                 }
             }
         }
+
+        self.update_boundary_adjacencies_for_chunks_in_ranges(
+            touched_chunk_ranges.map(|range| range.start..range.end - 1),
+        );
     }
 
     #[cfg(any(test, feature = "fuzzing"))]

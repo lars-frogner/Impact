@@ -14,7 +14,7 @@ pub use entity::register_voxel_feature_types;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use chunks::ChunkedVoxelObject;
+use mesh::MeshedChunkedVoxelObject;
 use std::{collections::HashMap, fmt};
 use utils::{Dimension, Side};
 use voxel_types::{VoxelType, VoxelTypeRegistry};
@@ -70,7 +70,7 @@ pub struct VoxelObjectID(u32);
 #[derive(Debug)]
 pub struct VoxelManager {
     voxel_type_registry: VoxelTypeRegistry,
-    voxel_objects: HashMap<VoxelObjectID, ChunkedVoxelObject>,
+    voxel_objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
     voxel_object_id_counter: u32,
 }
 
@@ -279,18 +279,21 @@ impl VoxelManager {
         &self.voxel_type_registry
     }
 
-    /// Returns a reference to the [`ChunkedVoxelObject`] with the given ID, or
-    /// [`None`] if the voxel object is not present.
-    pub fn get_voxel_object(&self, voxel_object_id: VoxelObjectID) -> Option<&ChunkedVoxelObject> {
+    /// Returns a reference to the [`MeshedChunkedVoxelObject`] with the given
+    /// ID, or [`None`] if the voxel object is not present.
+    pub fn get_voxel_object(
+        &self,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<&MeshedChunkedVoxelObject> {
         self.voxel_objects.get(&voxel_object_id)
     }
 
-    /// Returns a mutable reference to the [`ChunkedVoxelObject`] with the given
-    /// ID, or [`None`] if the voxel object is not present.
+    /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
+    /// given ID, or [`None`] if the voxel object is not present.
     pub fn get_voxel_object_mut(
         &mut self,
         voxel_object_id: VoxelObjectID,
-    ) -> Option<&mut ChunkedVoxelObject> {
+    ) -> Option<&mut MeshedChunkedVoxelObject> {
         self.voxel_objects.get_mut(&voxel_object_id)
     }
 
@@ -300,15 +303,21 @@ impl VoxelManager {
     }
 
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
-    pub fn voxel_objects(&self) -> &HashMap<VoxelObjectID, ChunkedVoxelObject> {
+    pub fn voxel_objects(&self) -> &HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
         &self.voxel_objects
     }
 
-    /// Adds the given [`ChunkedVoxelObject`] to the manager.
+    /// Returns a mutable reference to the [`HashMap`] storing all voxel
+    /// objects.
+    pub fn voxel_objects_mut(&mut self) -> &mut HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
+        &mut self.voxel_objects
+    }
+
+    /// Adds the given [`MeshedChunkedVoxelObject`] to the manager.
     ///
     /// # Returns
     /// A new [`ChunkedVoxelObjectID`] representing the added voxel object.
-    pub fn add_voxel_object(&mut self, voxel_object: ChunkedVoxelObject) -> VoxelObjectID {
+    pub fn add_voxel_object(&mut self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
         let voxel_object_id = self.create_new_voxel_object_id();
         self.voxel_objects.insert(voxel_object_id, voxel_object);
         voxel_object_id
