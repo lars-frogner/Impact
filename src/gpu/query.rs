@@ -343,9 +343,8 @@ impl GPUBuffer {
         let buffer_size = (n_queries.get() * wgpu::QUERY_SIZE) as usize;
         Self::new_uninitialized(
             graphics_device,
-            GPUBufferType::Query,
             buffer_size,
-            buffer_size,
+            GPUBufferType::Query.usage(),
             label,
         )
     }

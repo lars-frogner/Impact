@@ -18,9 +18,8 @@ use crate::{
         create_vertex_buffer_layout_for_vertex, MeshVertexAttributeLocation, VertexBufferable,
     },
     voxel::{
-        chunks::ChunkedVoxelObject,
         mesh::{
-            ChunkedVoxelObjectMesh, VoxelMeshIndex, VoxelMeshIndexMaterials,
+            ChunkSubmesh, MeshedChunkedVoxelObject, VoxelMeshIndex, VoxelMeshIndexMaterials,
             VoxelMeshVertexNormalVector, VoxelMeshVertexPosition,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
@@ -28,8 +27,9 @@ use crate::{
     },
 };
 use anyhow::Result;
+use bytemuck::Pod;
 use impact_utils::ConstStringHash64;
-use std::{borrow::Cow, sync::OnceLock};
+use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
 
 /// Owner and manager of the GPU resources for all voxel materials.
 #[derive(Debug)]
@@ -47,9 +47,7 @@ pub struct VoxelObjectGPUBufferManager {
     normal_vector_buffer: GPUBuffer,
     index_material_buffer: GPUBuffer,
     index_buffer: GPUBuffer,
-    n_indices: usize,
     chunk_submesh_buffer: GPUBuffer,
-    n_chunks: usize,
     indirect_argument_buffer: GPUBuffer,
     indexed_indirect_argument_buffer: GPUBuffer,
     position_and_normal_buffer_bind_group: wgpu::BindGroup,
@@ -246,69 +244,54 @@ impl VoxelMaterialGPUResourceManager {
 
 impl VoxelObjectGPUBufferManager {
     /// Creates a new manager of GPU resources for the given
-    /// [`ChunkedVoxelObject`]. This involves creating the
-    /// [`ChunkedVoxelObjectMesh`] for the object and initializing GPU buffers
-    /// for the associated data.
+    /// [`MeshedChunkedVoxelObject`]. This involves initializing GPU buffers
+    /// for the relevant data in the object's [`ChunkedVoxelObjectMesh`].
     pub fn for_voxel_object(
         graphics_device: &GraphicsDevice,
         voxel_object_id: VoxelObjectID,
-        voxel_object: &ChunkedVoxelObject,
+        voxel_object: &MeshedChunkedVoxelObject,
     ) -> Self {
-        let mesh = ChunkedVoxelObjectMesh::create(voxel_object);
+        let mesh = voxel_object.mesh();
 
-        // The position buffer is bound as a vertex buffer for indexed drawing (when
-        // updating shadow maps) and as a storage buffer for the geometry pass
-        let position_buffer = GPUBuffer::new_full_with_additional_usages(
+        let position_buffer = Self::create_position_buffer(
             graphics_device,
-            GPUBufferType::Vertex,
-            bytemuck::cast_slice(mesh.positions()),
-            wgpu::BufferUsages::STORAGE,
-            Cow::Owned(format!("{} position", voxel_object_id)),
+            mesh.positions(),
+            Cow::Owned(format!("{} vertex position", voxel_object_id)),
         );
 
-        // The normal vector is bound as a storage buffer for the geometry pass
-        let normal_vector_buffer = GPUBuffer::new_storage_buffer(
+        let normal_vector_buffer = Self::create_normal_vector_buffer(
             graphics_device,
             mesh.normal_vectors(),
             Cow::Owned(format!("{} normal vector", voxel_object_id)),
         );
 
-        // The the index material buffer is bound as a vertex buffer for the
-        // geometry pass
-        let index_material_buffer = GPUBuffer::new_full_vertex_buffer(
+        let index_material_buffer = Self::create_index_material_buffer(
             graphics_device,
             mesh.index_materials(),
-            Cow::Owned(format!("{} material", voxel_object_id)),
+            Cow::Owned(format!("{} index material", voxel_object_id)),
         );
 
-        // The index buffer is bound as an ordinary index buffer for indexed drawing
-        // (when updating shadow maps) and as a vertex buffer for the geometry
-        // pass
-        let index_buffer = GPUBuffer::new_full_with_additional_usages(
+        let index_buffer = Self::create_index_buffer(
             graphics_device,
-            GPUBufferType::Index,
-            bytemuck::cast_slice(mesh.indices()),
-            wgpu::BufferUsages::VERTEX,
+            mesh.indices(),
             Cow::Owned(format!("{}", voxel_object_id)),
         );
 
-        let chunk_submesh_buffer = GPUBuffer::new_storage_buffer(
+        let chunk_submesh_buffer = Self::create_chunk_submesh_buffer(
             graphics_device,
             mesh.chunk_submeshes(),
             Cow::Owned(format!("{} chunk info", voxel_object_id)),
         );
 
-        // Used for non-indexed indirect draw calls
-        let indirect_argument_buffer = GPUBuffer::new_draw_indirect_buffer(
+        let indirect_argument_buffer = Self::create_indirect_argument_buffer(
             graphics_device,
-            &vec![DrawIndirectArgs::default(); mesh.n_chunks()],
+            mesh.n_chunks(),
             Cow::Owned(format!("{} draw argument", voxel_object_id)),
         );
 
-        // Used for indexed indirect draw calls
-        let indexed_indirect_argument_buffer = GPUBuffer::new_draw_indexed_indirect_buffer(
+        let indexed_indirect_argument_buffer = Self::create_indexed_indirect_argument_buffer(
             graphics_device,
-            &vec![DrawIndexedIndirectArgs::default(); mesh.n_chunks()],
+            mesh.n_chunks(),
             Cow::Owned(format!("{} indexed draw argument", voxel_object_id)),
         );
 
@@ -343,14 +326,12 @@ impl VoxelObjectGPUBufferManager {
             );
 
         Self {
-            chunk_extent: voxel_object.chunk_extent(),
+            chunk_extent: voxel_object.object().chunk_extent(),
             position_buffer,
             normal_vector_buffer,
             index_material_buffer,
             index_buffer,
-            n_indices: mesh.indices().len(),
             chunk_submesh_buffer,
-            n_chunks: mesh.n_chunks(),
             indirect_argument_buffer,
             indexed_indirect_argument_buffer,
             position_and_normal_buffer_bind_group,
@@ -388,11 +369,6 @@ impl VoxelObjectGPUBufferManager {
         &self.index_buffer
     }
 
-    /// Returns the total number of indices in the index buffer.
-    pub fn n_indices(&self) -> usize {
-        self.n_indices
-    }
-
     /// Returns the GPU buffer containing the submesh data for each chunk.
     pub fn chunk_submesh_gpu_buffer(&self) -> &GPUBuffer {
         &self.chunk_submesh_buffer
@@ -400,7 +376,7 @@ impl VoxelObjectGPUBufferManager {
 
     /// Returns the total number of chunks in the chunk submesh buffer.
     pub fn n_chunks(&self) -> usize {
-        self.n_chunks
+        self.chunk_submesh_buffer.n_valid_bytes() / mem::size_of::<ChunkSubmesh>()
     }
 
     /// Returns the GPU buffer containing the non-indexed indirect draw call
@@ -453,6 +429,286 @@ impl VoxelObjectGPUBufferManager {
     /// indirect argument buffers.
     pub fn submesh_and_indexed_argument_buffer_bind_group(&self) -> &wgpu::BindGroup {
         &self.chunk_submesh_and_indexed_argument_buffer_bind_group
+    }
+
+    /// Synchronizes any updated data in the voxel object mesh with the
+    /// appropriate GPU buffers.
+    pub fn sync_with_voxel_object(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        voxel_object: &mut MeshedChunkedVoxelObject,
+    ) {
+        let mesh = voxel_object.mesh();
+        let updated_data_ranges = mesh.updated_chunk_submesh_data_ranges();
+
+        if updated_data_ranges.is_empty() {
+            return;
+        }
+
+        if mem::size_of_val(mesh.positions()) > self.position_buffer.buffer_size() {
+            // If the current size of the mesh's position slice exceeds the
+            // current buffer size, we have to recreate the position and normal
+            // vector buffers (each of these have room for the same number of
+            // elements) and their bind group
+
+            self.position_buffer = Self::create_position_buffer(
+                graphics_device,
+                mesh.positions(),
+                self.position_buffer.label().clone(),
+            );
+            self.normal_vector_buffer = Self::create_normal_vector_buffer(
+                graphics_device,
+                mesh.normal_vectors(),
+                self.normal_vector_buffer.label().clone(),
+            );
+
+            let position_and_normal_buffer_bind_group_layout =
+                Self::get_or_create_position_and_normal_buffer_bind_group_layout(graphics_device);
+
+            self.position_and_normal_buffer_bind_group =
+                Self::create_position_and_normal_buffer_bind_group(
+                    graphics_device.device(),
+                    &self.position_buffer,
+                    &self.normal_vector_buffer,
+                    position_and_normal_buffer_bind_group_layout,
+                );
+        } else {
+            // If the updated vertex data still fits in the existing buffers, we write each
+            // updated range to the buffers
+            for ranges in updated_data_ranges {
+                let vertex_range = ranges.vertex_range.clone();
+                Self::update_buffer_range(
+                    graphics_device,
+                    &self.position_buffer,
+                    mesh.positions(),
+                    vertex_range.clone(),
+                );
+                Self::update_buffer_range(
+                    graphics_device,
+                    &self.normal_vector_buffer,
+                    mesh.normal_vectors(),
+                    vertex_range,
+                );
+            }
+        }
+
+        if mem::size_of_val(mesh.indices()) > self.index_buffer.buffer_size() {
+            // If the current size of the mesh's index slice exceeds the current buffer
+            // size, we have to recreate the index and index material buffers (each of these
+            // have room for the same number of elements)
+
+            self.index_material_buffer = Self::create_index_material_buffer(
+                graphics_device,
+                mesh.index_materials(),
+                self.index_material_buffer.label().clone(),
+            );
+            self.index_buffer = Self::create_index_buffer(
+                graphics_device,
+                mesh.indices(),
+                self.index_buffer.label().clone(),
+            );
+        } else {
+            // If the updated index data still fits in the existing buffers, we write each
+            // updated range to the buffers
+            for ranges in updated_data_ranges {
+                let index_range = ranges.index_range.clone();
+                Self::update_buffer_range(
+                    graphics_device,
+                    &self.index_material_buffer,
+                    mesh.index_materials(),
+                    index_range.clone(),
+                );
+                Self::update_buffer_range(
+                    graphics_device,
+                    &self.index_buffer,
+                    mesh.indices(),
+                    index_range,
+                );
+            }
+        }
+
+        if mem::size_of_val(mesh.chunk_submeshes()) > self.chunk_submesh_buffer.buffer_size() {
+            // If the current size of the mesh's chunk slice exceeds the current buffer
+            // size, we have to recreate the relevant buffers (each of these
+            // have room for the same number of elements) and their bind groups
+
+            self.chunk_submesh_buffer = Self::create_chunk_submesh_buffer(
+                graphics_device,
+                mesh.chunk_submeshes(),
+                self.chunk_submesh_buffer.label().clone(),
+            );
+            self.indirect_argument_buffer = Self::create_indirect_argument_buffer(
+                graphics_device,
+                mesh.n_chunks(),
+                self.indirect_argument_buffer.label().clone(),
+            );
+            self.indexed_indirect_argument_buffer = Self::create_indexed_indirect_argument_buffer(
+                graphics_device,
+                mesh.n_chunks(),
+                self.indexed_indirect_argument_buffer.label().clone(),
+            );
+
+            let chunk_submesh_and_argument_buffer_bind_group_layout =
+                Self::get_or_create_submesh_and_argument_buffer_bind_group_layout(graphics_device);
+
+            self.chunk_submesh_and_argument_buffer_bind_group =
+                Self::create_submesh_and_argument_buffer_bind_group(
+                    graphics_device.device(),
+                    &self.chunk_submesh_buffer,
+                    &self.indirect_argument_buffer,
+                    chunk_submesh_and_argument_buffer_bind_group_layout,
+                );
+
+            self.chunk_submesh_and_indexed_argument_buffer_bind_group =
+                Self::create_submesh_and_argument_buffer_bind_group(
+                    graphics_device.device(),
+                    &self.chunk_submesh_buffer,
+                    &self.indexed_indirect_argument_buffer,
+                    chunk_submesh_and_argument_buffer_bind_group_layout,
+                );
+        } else {
+            // If the updated chunks still fit in the existing buffer, we simply overwrite
+            // the existing chunk buffer with the new data (since this buffer is relatively
+            // small, we don't bother writing only the parts that actually changed)
+            self.chunk_submesh_buffer.update_valid_bytes(
+                graphics_device,
+                bytemuck::cast_slice(mesh.chunk_submeshes()),
+            );
+        }
+
+        voxel_object.clear_updated_chunk_submesh_data_ranges();
+    }
+
+    fn create_position_buffer(
+        graphics_device: &GraphicsDevice,
+        positions: &[VoxelMeshVertexPosition],
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let buffer_size = mem::size_of::<VoxelMeshVertexPosition>()
+            .checked_mul(Self::add_spare_buffer_capacity(positions.len()))
+            .unwrap();
+
+        // The position buffer is bound as a vertex buffer for indexed drawing (when
+        // updating shadow maps) and as a storage buffer for the geometry pass
+        let usage = GPUBufferType::Vertex.usage() | wgpu::BufferUsages::STORAGE;
+
+        GPUBuffer::new_with_spare_capacity(
+            graphics_device,
+            buffer_size,
+            bytemuck::cast_slice(positions),
+            usage,
+            label,
+        )
+    }
+
+    fn create_normal_vector_buffer(
+        graphics_device: &GraphicsDevice,
+        normal_vectors: &[VoxelMeshVertexNormalVector],
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let total_capacity = Self::add_spare_buffer_capacity(normal_vectors.len());
+
+        // The normal vector is bound as a storage buffer for the geometry pass
+        GPUBuffer::new_storage_buffer_with_spare_capacity(
+            graphics_device,
+            total_capacity,
+            normal_vectors,
+            label,
+        )
+    }
+
+    fn create_index_material_buffer(
+        graphics_device: &GraphicsDevice,
+        index_materials: &[VoxelMeshIndexMaterials],
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let total_capacity = Self::add_spare_buffer_capacity(index_materials.len());
+
+        // The the index material buffer is bound as a vertex buffer for the
+        // geometry pass
+        GPUBuffer::new_vertex_buffer_with_spare_capacity(
+            graphics_device,
+            total_capacity,
+            index_materials,
+            label,
+        )
+    }
+
+    fn create_index_buffer(
+        graphics_device: &GraphicsDevice,
+        indices: &[VoxelMeshIndex],
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let buffer_size = mem::size_of::<VoxelMeshIndex>()
+            .checked_mul(Self::add_spare_buffer_capacity(indices.len()))
+            .unwrap();
+
+        // The index buffer is bound as an ordinary index buffer for indexed drawing
+        // (when updating shadow maps) and as a vertex buffer for the geometry
+        // pass
+        let usage = GPUBufferType::Index.usage() | wgpu::BufferUsages::VERTEX;
+
+        GPUBuffer::new_with_spare_capacity(
+            graphics_device,
+            buffer_size,
+            bytemuck::cast_slice(indices),
+            usage,
+            label,
+        )
+    }
+
+    fn create_chunk_submesh_buffer(
+        graphics_device: &GraphicsDevice,
+        chunk_submeshes: &[ChunkSubmesh],
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let total_capacity = Self::add_spare_buffer_capacity(chunk_submeshes.len());
+
+        // The normal vector is bound as a storage buffer for the geometry pass
+        GPUBuffer::new_storage_buffer_with_spare_capacity(
+            graphics_device,
+            total_capacity,
+            chunk_submeshes,
+            label,
+        )
+    }
+
+    fn create_indirect_argument_buffer(
+        graphics_device: &GraphicsDevice,
+        n_chunks: usize,
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let total_capacity = Self::add_spare_buffer_capacity(n_chunks);
+
+        // Used for non-indexed indirect draw calls
+        GPUBuffer::new_draw_indirect_buffer_with_spare_capacity(
+            graphics_device,
+            total_capacity,
+            &vec![DrawIndirectArgs::default(); n_chunks],
+            label,
+        )
+    }
+
+    fn create_indexed_indirect_argument_buffer(
+        graphics_device: &GraphicsDevice,
+        n_chunks: usize,
+        label: Cow<'static, str>,
+    ) -> GPUBuffer {
+        let total_capacity = Self::add_spare_buffer_capacity(n_chunks);
+
+        // Used for indexed indirect draw calls
+        GPUBuffer::new_draw_indexed_indirect_buffer_with_spare_capacity(
+            graphics_device,
+            total_capacity,
+            &vec![DrawIndexedIndirectArgs::default(); n_chunks],
+            label,
+        )
+    }
+
+    /// To avoid frequent buffer recreation as the mesh is updated, we make room
+    /// for some extra elements whenever we create a buffer.
+    fn add_spare_buffer_capacity(current_size: usize) -> usize {
+        3 * current_size / 2
     }
 
     fn create_position_and_normal_buffer_bind_group_layout(
@@ -530,11 +786,19 @@ impl VoxelObjectGPUBufferManager {
         })
     }
 
-    pub fn sync_with_voxel_object(
-        &mut self,
-        _graphics_device: &GraphicsDevice,
-        _voxel_object: &ChunkedVoxelObject,
+    fn update_buffer_range<T: Pod>(
+        graphics_device: &GraphicsDevice,
+        buffer: &GPUBuffer,
+        all_values: &[T],
+        range: Range<usize>,
     ) {
+        let byte_offset = mem::size_of::<T>().checked_mul(range.start).unwrap();
+
+        buffer.update_bytes_from_offset(
+            graphics_device,
+            byte_offset,
+            bytemuck::cast_slice(&all_values[range]),
+        );
     }
 }
 

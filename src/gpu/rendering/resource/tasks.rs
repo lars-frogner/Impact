@@ -132,9 +132,9 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    &app
+                    &mut app
                         .scene().read().unwrap()
-                        .voxel_manager().read().unwrap()
+                        .voxel_manager().write().unwrap()
                 )?;
             }
             Ok(())

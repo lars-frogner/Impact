@@ -4,7 +4,8 @@ pub mod surface_nets;
 
 use crate::voxel::{
     chunks::{
-        ChunkedVoxelObject, ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk, VoxelChunk,
+        ChunkedVoxelObject, ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk,
+        VoxelChunk, VoxelChunkFlags,
     },
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
@@ -72,7 +73,7 @@ impl VoxelChunkSignedDistanceField {
             + indices[2]
     }
 
-    const fn default() -> Self {
+    pub const fn default() -> Self {
         Self {
             values: [0.0; SDF_GRID_CELL_COUNT],
             voxel_types: [VoxelType::dummy(); SDF_GRID_CELL_COUNT],
@@ -122,47 +123,65 @@ impl VoxelChunkSignedDistanceField {
 
 impl ChunkedVoxelObject {
     /// Calls the given closure for each exposed chunk in the object, passing in
-    /// the chunk and a reference to the associated
-    /// [`VoxelChunkSignedDistanceField`].
+    /// the chunk and a reference to the given
+    /// [`VoxelChunkSignedDistanceField`] that has been filled with signed
+    /// distances for the chunk.
     ///
     /// While the closure is guaranteed to be called for every chunk that is in
     /// any way exposed to the outside of the object, some of the chunks may not
     /// actually be exposed to the outside (for example, the chunk could be part
-    /// of a closed hollow volume that crosses a superchunk boundary).
+    /// of a closed hollow volume).
     pub fn for_each_exposed_chunk_with_sdf(
         &self,
+        sdf: &mut VoxelChunkSignedDistanceField,
         f: &mut impl FnMut(ExposedVoxelChunk, &VoxelChunkSignedDistanceField),
     ) {
-        let mut sdf = VoxelChunkSignedDistanceField::default();
-
         for chunk_i in self.occupied_chunk_ranges[0].clone() {
             for chunk_j in self.occupied_chunk_ranges[1].clone() {
                 for chunk_k in self.occupied_chunk_ranges[2].clone() {
                     let chunk_indices = [chunk_i, chunk_j, chunk_k];
-                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
-
-                    match &self.chunks[chunk_idx] {
-                        VoxelChunk::NonUniform(chunk) if chunk.flags.has_exposed_face() => {
-                            if chunk_i > 0
-                                && chunk_i < self.chunk_counts[0] - 1
-                                && chunk_j > 0
-                                && chunk_j < self.chunk_counts[1] - 1
-                                && chunk_k > 0
-                                && chunk_k < self.chunk_counts[2] - 1
-                            {
-                                self.fill_sdf_for_non_uniform_interior_chunk(
-                                    &mut sdf, chunk_idx, chunk,
-                                );
-                            } else {
-                                self.fill_sdf_for_non_uniform_chunk(&mut sdf, chunk_indices, chunk);
-                            }
-
-                            f(ExposedVoxelChunk::new(chunk_indices, chunk.flags), &sdf);
-                        }
-                        _ => {}
+                    if let Some(chunk_flags) =
+                        self.fill_sdf_for_chunk_if_exposed(sdf, chunk_indices)
+                    {
+                        f(ExposedVoxelChunk::new(chunk_indices, chunk_flags), sdf);
                     }
                 }
             }
+        }
+    }
+
+    /// If the voxel chunk at the given indices in the object's chunk grid is
+    /// exposed, fills the given [`VoxelChunkSignedDistanceField`] for it and
+    /// returns its [`VoxelChunkFlags`]. Otherwise, returns [`None`].
+    pub fn fill_sdf_for_chunk_if_exposed(
+        &self,
+        sdf: &mut VoxelChunkSignedDistanceField,
+        chunk_indices: [usize; 3],
+    ) -> Option<VoxelChunkFlags> {
+        assert!(chunk_indices
+            .iter()
+            .zip(self.chunk_counts())
+            .all(|(&index, &count)| index < count));
+
+        let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+        match &self.chunks[chunk_idx] {
+            VoxelChunk::NonUniform(chunk) if chunk.flags.has_exposed_face() => {
+                if chunk_indices[0] > 0
+                    && chunk_indices[0] < self.chunk_counts[0] - 1
+                    && chunk_indices[1] > 0
+                    && chunk_indices[1] < self.chunk_counts[1] - 1
+                    && chunk_indices[2] > 0
+                    && chunk_indices[2] < self.chunk_counts[2] - 1
+                {
+                    self.fill_sdf_for_non_uniform_interior_chunk(sdf, chunk_idx, chunk);
+                } else {
+                    self.fill_sdf_for_non_uniform_chunk(sdf, chunk_indices, chunk);
+                }
+
+                Some(chunk.flags)
+            }
+            _ => None,
         }
     }
 
@@ -442,7 +461,8 @@ impl ChunkedVoxelObject {
 
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn validate_sdf(&self) {
-        self.for_each_exposed_chunk_with_sdf(&mut |chunk, sdf| {
+        let mut sdf = VoxelChunkSignedDistanceField::default();
+        self.for_each_exposed_chunk_with_sdf(&mut sdf,&mut |chunk, sdf| {
             let lower_chunk_voxel_indices = chunk.lower_voxel_indices();
 
             // The SDF for the chunk is padded by one voxel

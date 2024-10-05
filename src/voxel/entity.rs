@@ -29,6 +29,7 @@ use crate::{
             MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFGenerator,
             SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator, VoxelTypeGenerator,
         },
+        mesh::MeshedChunkedVoxelObject,
         voxel_types::VoxelTypeRegistry,
         VoxelManager, VoxelObjectID,
     },
@@ -70,7 +71,9 @@ pub fn setup_voxel_object_for_new_entity(
             )
             .expect("Tried to generate object for empty voxel box");
 
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+            let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+            let voxel_object_id = voxel_manager.add_voxel_object(meshed_voxel_object);
 
             VoxelObjectComp { voxel_object_id }
         },
@@ -99,7 +102,9 @@ pub fn setup_voxel_object_for_new_entity(
             )
             .expect("Tried to generate object for empty voxel sphere");
 
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+            let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+            let voxel_object_id = voxel_manager.add_voxel_object(meshed_voxel_object);
 
             VoxelObjectComp { voxel_object_id }
         },
@@ -133,7 +138,9 @@ pub fn setup_voxel_object_for_new_entity(
             )
             .expect("Tried to generate object for empty voxel gradient noise pattern");
 
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+            let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+            let voxel_object_id = voxel_manager.add_voxel_object(meshed_voxel_object);
 
             VoxelObjectComp { voxel_object_id }
         },
@@ -165,7 +172,9 @@ pub fn setup_voxel_object_for_new_entity(
             )
             .expect("Tried to generate object for empty voxel box");
 
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+            let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+            let voxel_object_id = voxel_manager.add_voxel_object(meshed_voxel_object);
 
             VoxelObjectComp { voxel_object_id }
         },
@@ -197,7 +206,9 @@ pub fn setup_voxel_object_for_new_entity(
             )
             .expect("Tried to generate object for empty voxel sphere");
 
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+            let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+            let voxel_object_id = voxel_manager.add_voxel_object(meshed_voxel_object);
 
             VoxelObjectComp { voxel_object_id }
         },
@@ -234,7 +245,9 @@ pub fn setup_voxel_object_for_new_entity(
             )
             .expect("Tried to generate object for empty voxel gradient noise pattern");
 
-            let voxel_object_id = voxel_manager.add_voxel_object(voxel_object);
+            let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+            let voxel_object_id = voxel_manager.add_voxel_object(meshed_voxel_object);
 
             VoxelObjectComp { voxel_object_id }
         },
@@ -333,7 +346,8 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
 
             let voxel_object = voxel_manager
                 .get_voxel_object(voxel_object_id)
-                .expect("Tried to create model instance node for missing voxel object");
+                .expect("Tried to create model instance node for missing voxel object")
+                .object();
 
             let model_id = *VOXEL_MODEL_ID;
 
