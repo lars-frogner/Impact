@@ -30,6 +30,11 @@ where
         Self::default()
     }
 
+    /// Creates a new mapper with at least the specificed capacity and no keys.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_and_hasher(capacity, RandomState::default())
+    }
+
     /// Creates a new mapper with the given key.
     pub fn new_with_key(key: K) -> Self {
         Self::with_hasher_and_key(RandomState::default(), key)
@@ -50,11 +55,12 @@ where
     K: Copy + Hash + Eq + Debug,
     S: BuildHasher + Default,
 {
-    /// Creates a new mapper with the given hasher and with no keys.
-    pub fn with_hasher(hash_builder: S) -> Self {
+    /// Creates a new mapper with at least the specificed capacity, the given
+    /// hasher and with no keys.
+    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
         Self {
-            indices_for_keys: HashMap::with_hasher(hash_builder),
-            keys_at_indices: Vec::new(),
+            indices_for_keys: HashMap::with_capacity_and_hasher(capacity, hash_builder),
+            keys_at_indices: Vec::with_capacity(capacity),
         }
     }
 
@@ -70,7 +76,9 @@ where
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
     pub fn with_hasher_and_keys(hash_builder: S, key_iter: impl IntoIterator<Item = K>) -> Self {
-        let mut mapper = Self::with_hasher(hash_builder);
+        let key_iter = key_iter.into_iter();
+        let capacity = key_iter.size_hint().0;
+        let mut mapper = Self::with_capacity_and_hasher(capacity, hash_builder);
         for key in key_iter {
             mapper.push_key(key);
         }
@@ -234,7 +242,7 @@ where
     S: BuildHasher + Default,
 {
     fn default() -> Self {
-        Self::with_hasher(S::default())
+        Self::with_capacity_and_hasher(0, S::default())
     }
 }
 
