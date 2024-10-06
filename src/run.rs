@@ -13,7 +13,7 @@ use crate::{
     game_loop::{GameLoop, GameLoopConfig},
     gpu::{
         self,
-        rendering::{fre, RenderingConfig},
+        rendering::RenderingConfig,
         texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     },
     light::components::{

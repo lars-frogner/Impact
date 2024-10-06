@@ -1,7 +1,7 @@
 //! Management of force data for entities.
 
 use super::{detailed_drag, RigidBodyForceManager};
-use crate::{gpu::rendering::fre, mesh::MeshRepository};
+use crate::mesh::MeshRepository;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use std::sync::RwLock;
 
@@ -11,7 +11,7 @@ impl RigidBodyForceManager {
     /// setup and adds any required auxiliary components to the entity.
     pub fn perform_setup_for_new_entity(
         &self,
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         components: &mut ArchetypeComponentStorage,
     ) {
         detailed_drag::entity::setup_drag_load_map_for_new_entity(

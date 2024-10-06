@@ -7,7 +7,7 @@ pub mod tone_mapping;
 use crate::gpu::{
     query::TimestampQueryRegistry,
     rendering::{
-        fre, postprocessing::Postprocessor, resource::SynchronizedRenderResources,
+        postprocessing::Postprocessor, resource::SynchronizedRenderResources,
         surface::RenderingSurface,
     },
     resource_group::GPUResourceGroupManager,
@@ -44,18 +44,18 @@ pub struct CameraSettings {
     ///
     /// # Unit
     /// F-stops.
-    relative_aperture: fre,
+    relative_aperture: f32,
     /// The duration the sensor is exposed.
     ///
     /// # Unit
     /// Seconds.
-    shutter_speed: fre,
+    shutter_speed: f32,
     /// The sensitivity of the camera sensor.
     sensitivity: SensorSensitivity,
     /// The maximum exposure of the camera sensor. This corresponds to the
     /// reciprocal of the minimum incident luminance in cd/m² that can saturate
     /// the sensor.
-    max_exposure: fre,
+    max_exposure: f32,
 }
 
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
@@ -63,15 +63,15 @@ pub struct CameraSettings {
 /// optional exposure value compensation in f-stops.
 #[derive(Clone, Copy, Debug)]
 pub enum SensorSensitivity {
-    Manual { iso: fre },
-    Auto { ev_compensation: fre },
+    Manual { iso: f32 },
+    Auto { ev_compensation: f32 },
 }
 
 /// A camera capturing the incident scene luminance.
 #[derive(Debug)]
 pub struct CapturingCamera {
     settings: CameraSettings,
-    exposure: fre,
+    exposure: f32,
     produces_bloom: bool,
     tone_mapping_method: ToneMappingMethod,
     average_luminance_commands: AverageLuminanceComputeCommands,
@@ -94,17 +94,17 @@ impl Default for CameraSettings {
 
 impl CameraSettings {
     /// The fraction of attenuation by the lens and vignetting.
-    const ATTENUATION_FACTOR: fre = 0.65;
+    const ATTENUATION_FACTOR: f32 = 0.65;
 
     /// The reflected-light meter calibration constant.
-    const CALIBRATION_CONSTANT: fre = 12.5;
+    const CALIBRATION_CONSTANT: f32 = 12.5;
 
     /// Groups the given camera settings.
     pub fn new(
-        relative_aperture: fre,
-        shutter_speed: fre,
+        relative_aperture: f32,
+        shutter_speed: f32,
         sensitivity: SensorSensitivity,
-        max_exposure: fre,
+        max_exposure: f32,
     ) -> Self {
         Self {
             relative_aperture,
@@ -115,12 +115,12 @@ impl CameraSettings {
     }
 
     /// Returns the relative aperture in f-stops.
-    pub fn relative_aperture(&self) -> fre {
+    pub fn relative_aperture(&self) -> f32 {
         self.relative_aperture
     }
 
     /// Returns the camera shutter speed in seconds.
-    pub fn shutter_speed(&self) -> fre {
+    pub fn shutter_speed(&self) -> f32 {
         self.shutter_speed
     }
 
@@ -145,8 +145,8 @@ impl CameraSettings {
     /// The exposure is clamped to the maximum exposure of the camera.
     pub fn compute_exposure(
         &self,
-        obtain_average_luminance: impl FnOnce() -> Result<fre>,
-    ) -> Result<fre> {
+        obtain_average_luminance: impl FnOnce() -> Result<f32>,
+    ) -> Result<f32> {
         let ev_100 = match self.sensitivity {
             SensorSensitivity::Manual { iso } => self.compute_exposure_value_at_100_iso(iso),
             SensorSensitivity::Auto { ev_compensation } => {
@@ -163,18 +163,18 @@ impl CameraSettings {
         Ok(f32::min(self.max_exposure, exposure))
     }
 
-    fn compute_exposure_value_at_100_iso(&self, iso: fre) -> fre {
-        fre::log2(self.relative_aperture.powi(2) * 100.0 / (self.shutter_speed * iso))
+    fn compute_exposure_value_at_100_iso(&self, iso: f32) -> f32 {
+        f32::log2(self.relative_aperture.powi(2) * 100.0 / (self.shutter_speed * iso))
     }
 
     fn compute_exposure_value_at_100_iso_for_correct_exposure_with_average_luminance(
-        average_luminance: fre,
-    ) -> fre {
-        fre::log2(100.0 * average_luminance / Self::CALIBRATION_CONSTANT)
+        average_luminance: f32,
+    ) -> f32 {
+        f32::log2(100.0 * average_luminance / Self::CALIBRATION_CONSTANT)
     }
 
-    fn compute_maximum_luminance_to_saturate_sensor(exposure_value_at_100_iso: fre) -> fre {
-        (78.0 / (100.0 * Self::ATTENUATION_FACTOR)) * fre::exp2(exposure_value_at_100_iso)
+    fn compute_maximum_luminance_to_saturate_sensor(exposure_value_at_100_iso: f32) -> f32 {
+        (78.0 / (100.0 * Self::ATTENUATION_FACTOR)) * f32::exp2(exposure_value_at_100_iso)
     }
 }
 
@@ -242,22 +242,22 @@ impl CapturingCamera {
     /// Returns the size of the push constant obtained by calling
     /// [`Self::exposure_push_constant`].
     pub const fn exposure_push_constant_size() -> u32 {
-        mem::size_of::<fre>() as u32
+        mem::size_of::<f32>() as u32
     }
 
     /// Returns the exposure push constant.
-    pub fn exposure_push_constant(&self) -> fre {
+    pub fn exposure_push_constant(&self) -> f32 {
         self.exposure
     }
 
     /// Returns the size of the push constant obtained by calling
     /// [`Self::inverse_exposure_push_constant`].
     pub const fn inverse_exposure_push_constant_size() -> u32 {
-        mem::size_of::<fre>() as u32
+        mem::size_of::<f32>() as u32
     }
 
     /// Returns the inverse exposure push constant.
-    pub fn inverse_exposure_push_constant(&self) -> fre {
+    pub fn inverse_exposure_push_constant(&self) -> f32 {
         self.exposure.recip()
     }
 

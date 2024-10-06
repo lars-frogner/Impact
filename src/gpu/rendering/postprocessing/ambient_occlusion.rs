@@ -5,7 +5,6 @@ use crate::{
     gpu::{
         query::TimestampQueryRegistry,
         rendering::{
-            fre,
             postprocessing::Postprocessor,
             render_command::{PostprocessingRenderPass, StencilValue},
             resource::SynchronizedRenderResources,
@@ -44,11 +43,11 @@ pub struct AmbientOcclusionConfig {
     /// The number of samples to use for computing ambient occlusion.
     pub sample_count: u32,
     /// The sampling radius to use when computing ambient occlusion.
-    pub sample_radius: fre,
+    pub sample_radius: f32,
     /// Factor for scaling the intensity of the ambient occlusion.
-    pub intensity: fre,
+    pub intensity: f32,
     /// Factor for scaling the contrast of the ambient occlusion.
-    pub contrast: fre,
+    pub contrast: f32,
 }
 
 #[derive(Debug)]
@@ -67,11 +66,11 @@ pub(super) struct AmbientOcclusionRenderCommands {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct AmbientOcclusionSamples {
-    sample_offsets: [Vector4<fre>; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
+    sample_offsets: [Vector4<f32>; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
     sample_count: u32,
     sample_radius: f32,
     sample_normalization: f32,
-    contrast: fre,
+    contrast: f32,
 }
 
 impl Default for AmbientOcclusionConfig {
@@ -185,7 +184,7 @@ impl AmbientOcclusionRenderCommands {
 }
 
 impl AmbientOcclusionSamples {
-    fn new(sample_count: u32, sample_radius: fre, intensity_scale: f32, contrast: f32) -> Self {
+    fn new(sample_count: u32, sample_radius: f32, intensity_scale: f32, contrast: f32) -> Self {
         assert_ne!(sample_count, 0);
         assert!(sample_count <= MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u32);
         assert!(sample_radius > 0.0);
@@ -195,22 +194,22 @@ impl AmbientOcclusionSamples {
         for (offset, (radius_halton_sample, angle_halton_sample)) in sample_offsets
             [..(sample_count as usize)]
             .iter_mut()
-            .zip(HaltonSequence::<fre>::new(2).zip(HaltonSequence::<fre>::new(3)))
+            .zip(HaltonSequence::<f32>::new(2).zip(HaltonSequence::<f32>::new(3)))
         {
             // Take square root of the sampled value (which is uniformly
             // distributed between 0 and 1) to ensure uniform distribution over
             // the disk
-            let radius_fraction = fre::sqrt(radius_halton_sample);
+            let radius_fraction = f32::sqrt(radius_halton_sample);
             let radius = sample_radius * radius_fraction;
 
-            let angle = angle_halton_sample * fre::TWO_PI;
-            let (sin_angle, cos_angle) = fre::sin_cos(angle);
+            let angle = angle_halton_sample * f32::TWO_PI;
+            let (sin_angle, cos_angle) = f32::sin_cos(angle);
 
             offset.x = radius * cos_angle;
             offset.y = radius * sin_angle;
         }
 
-        let sample_normalization = 2.0 * intensity_scale / (fre::PI * (sample_count as fre));
+        let sample_normalization = 2.0 * intensity_scale / (f32::PI * (sample_count as f32));
 
         Self {
             sample_offsets,
@@ -248,9 +247,9 @@ fn create_ambient_occlusion_computation_render_pass(
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     sample_count: u32,
-    sample_radius: fre,
-    intensity_scale: fre,
-    contrast: fre,
+    sample_radius: f32,
+    intensity_scale: f32,
+    contrast: f32,
 ) -> Result<PostprocessingRenderPass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "AmbientOcclusionSamples{{ sample_count: {}, sample_radius: {} }}",

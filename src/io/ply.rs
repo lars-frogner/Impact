@@ -1,11 +1,8 @@
 //! Input/output of mesh data in Polygon File Format.
 
-use crate::{
-    gpu::rendering::fre,
-    mesh::{
-        components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
-        TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
-    },
+use crate::mesh::{
+    components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
+    TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
 };
 use anyhow::{bail, Result};
 use bytemuck::{Pod, Zeroable};
@@ -19,7 +16,7 @@ use std::{fmt::Debug, fs::File, io::BufReader, path::Path};
 
 #[derive(Clone, Debug)]
 struct PlyVertex {
-    property_values: Vec<fre>,
+    property_values: Vec<f32>,
 }
 
 #[repr(transparent)]
@@ -36,7 +33,7 @@ struct PlyTriangleVertexIndices([u32; 3]);
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file<P>(
-    mesh_repository: &mut MeshRepository<fre>,
+    mesh_repository: &mut MeshRepository<f32>,
     ply_file_path: P,
 ) -> Result<MeshComp>
 where
@@ -66,9 +63,9 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file_with_projection<P>(
-    mesh_repository: &mut MeshRepository<fre>,
+    mesh_repository: &mut MeshRepository<f32>,
     ply_file_path: P,
-    projection: &impl TextureProjection<fre>,
+    projection: &impl TextureProjection<f32>,
 ) -> Result<MeshComp>
 where
     P: AsRef<Path> + Debug,
@@ -92,7 +89,7 @@ where
     Ok(MeshComp { id: mesh_id })
 }
 
-pub fn read_mesh_from_ply_file<P>(ply_file_path: P) -> Result<TriangleMesh<fre>>
+pub fn read_mesh_from_ply_file<P>(ply_file_path: P) -> Result<TriangleMesh<f32>>
 where
     P: AsRef<Path> + Debug,
 {
@@ -137,7 +134,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
     vertex_property_names: Vec<&String>,
     vertex_list: Vec<PlyVertex>,
     triangle_vertex_indices_list: Vec<PlyTriangleVertexIndices>,
-) -> TriangleMesh<fre> {
+) -> TriangleMesh<f32> {
     let mut prop_idx = 0;
 
     let mut vertex_positions = Vec::new();
@@ -251,7 +248,7 @@ impl PropertyAccess for PlyVertex {
                 | "texture_v" | "v",
                 Property::Double(value),
             ) => {
-                self.property_values.push(value as fre);
+                self.property_values.push(value as f32);
             }
             ("red" | "green" | "blue", Property::UChar(color)) => {
                 self.property_values.push(f32::from(color) / 255.0);

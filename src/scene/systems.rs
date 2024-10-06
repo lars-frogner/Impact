@@ -2,7 +2,6 @@
 
 use crate::{
     camera::SceneCamera,
-    gpu::rendering::fre,
     light::{
         components::{
             AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
@@ -23,7 +22,7 @@ use nalgebra::{Similarity3, UnitVector3};
 /// node representing an entity that also has the [`ReferenceFrameComp`]
 /// component so that the translational, rotational and scaling parts match the
 /// origin offset, position, orientation and scaling.
-pub fn sync_scene_object_transforms(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph<fre>) {
+pub fn sync_scene_object_transforms(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph<f32>) {
     query!(
         ecs_world,
         |node: &SceneGraphNodeComp<GroupNodeID>, frame: &ReferenceFrameComp| {
@@ -51,8 +50,8 @@ pub fn sync_scene_object_transforms(ecs_world: &ECSWorld, scene_graph: &mut Scen
 /// light source in the [`LightStorage`](crate::light::LightStorage).
 pub fn sync_lights_in_storage(
     ecs_world: &ECSWorld,
-    scene_graph: &SceneGraph<fre>,
-    scene_camera: Option<&SceneCamera<fre>>,
+    scene_graph: &SceneGraph<f32>,
+    scene_camera: Option<&SceneCamera<f32>>,
     light_storage: &mut LightStorage,
 ) {
     let view_transform = scene_camera.map_or_else(Similarity3::identity, |scene_camera| {

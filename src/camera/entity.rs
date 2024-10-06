@@ -5,7 +5,7 @@ use crate::{
         components::{OrthographicCameraComp, PerspectiveCameraComp},
         OrthographicCamera, PerspectiveCamera, SceneCamera,
     },
-    gpu::rendering::{fre, RenderingSystem},
+    gpu::rendering::RenderingSystem,
     physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
@@ -30,8 +30,8 @@ use std::sync::RwLock;
 pub fn add_camera_to_scene_for_new_entity(
     window: &Window,
     renderer: &RwLock<RenderingSystem>,
-    scene_graph: &RwLock<SceneGraph<fre>>,
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_graph: &RwLock<SceneGraph<f32>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
@@ -65,8 +65,8 @@ pub fn add_camera_to_scene_for_new_entity(
 pub fn add_perspective_camera_to_scene_for_new_entity(
     window: &Window,
     renderer: &RwLock<RenderingSystem>,
-    scene_graph: &RwLock<SceneGraph<fre>>,
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_graph: &RwLock<SceneGraph<f32>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
@@ -88,7 +88,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
          camera_comp: &PerspectiveCameraComp,
          parent: Option<&SceneGraphParentNodeComp>|
          -> SceneGraphCameraNodeComp {
-            let camera = PerspectiveCamera::<fre>::new(
+            let camera = PerspectiveCamera::<f32>::new(
                 window.aspect_ratio(),
                 camera_comp.vertical_field_of_view(),
                 UpperExclusiveBounds::new(camera_comp.near_distance(), camera_comp.far_distance()),
@@ -135,8 +135,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 pub fn add_orthographic_camera_to_scene_for_new_entity(
     window: &Window,
     renderer: &RwLock<RenderingSystem>,
-    scene_graph: &RwLock<SceneGraph<fre>>,
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_graph: &RwLock<SceneGraph<f32>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
@@ -158,7 +158,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
          camera_comp: &OrthographicCameraComp,
          parent: Option<&SceneGraphParentNodeComp>|
          -> SceneGraphCameraNodeComp {
-            let camera = OrthographicCamera::<fre>::new(
+            let camera = OrthographicCamera::<f32>::new(
                 window.aspect_ratio(),
                 camera_comp.vertical_field_of_view(),
                 UpperExclusiveBounds::new(camera_comp.near_distance(), camera_comp.far_distance()),
@@ -197,8 +197,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 /// removes the corresponding camera node from the given [`SceneGraph`] and sets
 /// the content of `scene_camera` to [`None`].
 pub fn remove_camera_from_scene_for_removed_entity(
-    scene_graph: &RwLock<SceneGraph<fre>>,
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_graph: &RwLock<SceneGraph<f32>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {

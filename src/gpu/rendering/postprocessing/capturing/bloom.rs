@@ -5,7 +5,6 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
-            fre,
             render_command::{
                 additive_blend_state, create_postprocessing_render_pipeline,
                 create_postprocessing_render_pipeline_layout, RenderAttachmentTextureCopyCommand,
@@ -44,13 +43,13 @@ pub struct BloomConfig {
     /// The radius of the blur filter to apply during upsampling. A larger
     /// radius will result in stronger blurring. This should probably be left at
     /// the default value.
-    pub blur_filter_radius: fre,
+    pub blur_filter_radius: f32,
     /// How strongly the blurred luminance should be weighted when blending with
     /// the original luminance. A value of zero will result in no blending,
     /// effectively disabling bloom. A value of one will replace the original
     /// luminance with the blurred luminance. Use a small value for convincing
     /// bloom.
-    pub blurred_luminance_weight: fre,
+    pub blurred_luminance_weight: f32,
 }
 
 #[derive(Debug)]
@@ -95,7 +94,7 @@ impl BloomRenderCommands {
         // bother weighting the blends since the blurred image will be blended with
         // the unblurred luminance texture at the end. We instead normalize the blurred
         // luminance during this final bend.
-        let blurred_luminance_normalization = 1.0 / n_downsamplings as fre;
+        let blurred_luminance_normalization = 1.0 / n_downsamplings as f32;
 
         // This is not necessarily the full window dimensions, but the dimensions of the
         // mip level we are outputting to
@@ -496,7 +495,7 @@ impl BloomRenderCommands {
     fn compute_inverse_output_view_size(
         texture: &RenderAttachmentTexture,
         output_mip_level: u32,
-    ) -> [fre; 2] {
+    ) -> [f32; 2] {
         let output_view_size = texture
             .texture()
             .texture()
@@ -504,8 +503,8 @@ impl BloomRenderCommands {
             .mip_level_size(output_mip_level, wgpu::TextureDimension::D2);
 
         [
-            1.0 / (output_view_size.width as fre),
-            1.0 / (output_view_size.height as fre),
+            1.0 / (output_view_size.width as f32),
+            1.0 / (output_view_size.height as f32),
         ]
     }
 }

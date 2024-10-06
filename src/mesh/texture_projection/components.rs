@@ -1,7 +1,8 @@
-//! [`Component`](impact_ecs::component::Component)s related to texture projections.
+//! [`Component`](impact_ecs::component::Component)s related to texture
+//! projections.
 
 use crate::{
-    component::ComponentRegistry, gpu::rendering::fre, mesh::components::RectangleMeshComp,
+    component::ComponentRegistry, mesh::components::RectangleMeshComp,
     mesh::texture_projection::PlanarTextureProjection,
 };
 use anyhow::Result;
@@ -19,13 +20,13 @@ use nalgebra::{point, vector, Point3, Vector3};
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct PlanarTextureProjectionComp {
     /// The origin of the plane, where the texture coordinates will be zero.
-    pub origin: Point3<fre>,
+    pub origin: Point3<f32>,
     /// The axis along which the U texture coordinate will increase. The texture
     /// coordinate will be unity at the tip of the vector.
-    pub u_vector: Vector3<fre>,
+    pub u_vector: Vector3<f32>,
     /// The axis along which the V texture coordinate will increase. The texture
     /// coordinate will be unity at the tip of the vector.
-    pub v_vector: Vector3<fre>,
+    pub v_vector: Vector3<f32>,
 }
 
 impl PlanarTextureProjectionComp {
@@ -33,7 +34,7 @@ impl PlanarTextureProjectionComp {
     /// given origin and two vectors defining the axes along which the U and V
     /// texture coordinates will increase. The texture coordinates will be zero
     /// at the origin and unity at the tip of the respective u- or v-vector.
-    pub fn new(origin: Point3<fre>, u_vector: Vector3<fre>, v_vector: Vector3<fre>) -> Self {
+    pub fn new(origin: Point3<f32>, u_vector: Vector3<f32>, v_vector: Vector3<f32>) -> Self {
         Self {
             origin,
             u_vector,
@@ -49,8 +50,8 @@ impl PlanarTextureProjectionComp {
     /// z-axis.
     pub fn for_rectangle(
         rectangle: &RectangleMeshComp,
-        n_repeats_u: fre,
-        n_repeats_v: fre,
+        n_repeats_u: f32,
+        n_repeats_v: f32,
     ) -> Self {
         let origin = point![-0.5, 0.0, 0.5];
         let u_vector = vector![rectangle.extent_x / n_repeats_u, 0.0, 0.0];
@@ -59,7 +60,7 @@ impl PlanarTextureProjectionComp {
     }
 
     /// Creates the [`PlanarTextureProjection`] corresponding to this component.
-    pub fn create_projection(&self) -> PlanarTextureProjection<fre> {
+    pub fn create_projection(&self) -> PlanarTextureProjection<f32> {
         PlanarTextureProjection::new(self.origin, self.u_vector, self.v_vector)
     }
 }

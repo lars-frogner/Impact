@@ -2,7 +2,6 @@
 
 use super::DragLoadMapRepository;
 use crate::{
-    gpu::rendering::fre,
     mesh::{components::MeshComp, MeshID, MeshRepository},
     physics::rigid_body::{
         components::RigidBodyComp,
@@ -20,16 +19,16 @@ use std::{path::PathBuf, sync::RwLock};
 /// the map and adds it to the drag load map repository if not present, then
 /// adds the appropriate drag load map component to the entity.
 pub fn setup_drag_load_map_for_new_entity(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
-    drag_load_map_repository: &RwLock<DragLoadMapRepository<fre>>,
+    mesh_repository: &RwLock<MeshRepository<f32>>,
+    drag_load_map_repository: &RwLock<DragLoadMapRepository<f32>>,
     components: &mut ArchetypeComponentStorage,
 ) {
     fn generate_map(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         config: &DragLoadMapConfig,
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,
-    ) -> DragLoadMap<fre> {
+    ) -> DragLoadMap<f32> {
         let center_of_mass = rigid_body.0.inertial_properties().center_of_mass();
 
         let mesh_repository = mesh_repository.read().unwrap();
@@ -43,7 +42,7 @@ pub fn setup_drag_load_map_for_new_entity(
             mesh_id,
             config.smoothness,
             config.n_direction_samples; {
-            DragLoadMap::<fre>::compute_from_mesh(
+            DragLoadMap::<f32>::compute_from_mesh(
                 mesh,
                 center_of_mass,
                 config.n_direction_samples,
@@ -76,7 +75,7 @@ pub fn setup_drag_load_map_for_new_entity(
             let map_file_exists = map_path.exists();
 
             let map = if config.use_saved_maps && map_file_exists {
-                DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
+                DragLoadMap::<f32>::read_from_file(&map_path).unwrap_or_else(|err| {
                     log::error!("Could not load drag load map from file: {}", err);
                     generate_map(mesh_repository, config, mesh_id, rigid_body)
                 })

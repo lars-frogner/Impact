@@ -1,7 +1,6 @@
 //! Management of voxels for entities.
 
 use crate::{
-    gpu::rendering::fre,
     impl_InstanceFeature,
     material::{MaterialHandle, MaterialID},
     mesh::MeshID,
@@ -328,7 +327,7 @@ fn generate_voxel_object(
 pub fn add_model_instance_node_component_for_new_voxel_object_entity(
     voxel_manager: &RwLock<VoxelManager>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
-    scene_graph: &RwLock<SceneGraph<fre>>,
+    scene_graph: &RwLock<SceneGraph<f32>>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(

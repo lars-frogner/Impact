@@ -3,7 +3,6 @@
 use crate::{
     component::ComponentRegistry,
     geometry::Degrees,
-    gpu::rendering::fre,
     light::{Illumninance, LightID, LuminousIntensity},
 };
 use anyhow::Result;
@@ -39,7 +38,7 @@ pub struct OmnidirectionalEmissionComp {
     ///
     /// # Unit
     /// Meter (m)
-    pub source_extent: fre,
+    pub source_extent: f32,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that emit light
@@ -54,10 +53,10 @@ pub struct UnidirectionalEmissionComp {
     /// Lux (lx = lm/m²)
     pub perpendicular_illuminance: Illumninance,
     /// The direction of the emitted light.
-    pub direction: UnitVector3<fre>,
+    pub direction: UnitVector3<f32>,
     /// The angular extent of the light source, which determines the softness of
     /// the resulting shadows.
-    pub angular_source_extent: Degrees<fre>,
+    pub angular_source_extent: Degrees<f32>,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
@@ -100,7 +99,7 @@ impl AmbientEmissionComp {
 impl OmnidirectionalEmissionComp {
     /// Creates a new omnidirectional light emission component with the given
     /// luminous intensity (in candela) and source extent.
-    pub fn new(luminous_intensity: LuminousIntensity, source_extent: fre) -> Self {
+    pub fn new(luminous_intensity: LuminousIntensity, source_extent: f32) -> Self {
         Self {
             luminous_intensity,
             source_extent,
@@ -114,8 +113,8 @@ impl UnidirectionalEmissionComp {
     /// extent.
     pub fn new(
         perpendicular_illuminance: Illumninance,
-        direction: UnitVector3<fre>,
-        angular_source_extent: Degrees<fre>,
+        direction: UnitVector3<f32>,
+        angular_source_extent: Degrees<f32>,
     ) -> Self {
         Self {
             perpendicular_illuminance,

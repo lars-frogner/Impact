@@ -3,7 +3,6 @@
 use crate::{
     component::ComponentRegistry,
     geometry::{Angle, Radians},
-    gpu::rendering::fre,
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use anyhow::Result;
@@ -23,9 +22,9 @@ use impact_ecs::Component;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct PerspectiveCameraComp {
-    vertical_field_of_view_rad: fre,
-    near_distance: fre,
-    far_distance: fre,
+    vertical_field_of_view_rad: f32,
+    near_distance: f32,
+    far_distance: f32,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -40,9 +39,9 @@ pub struct PerspectiveCameraComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OrthographicCameraComp {
-    vertical_field_of_view_rad: fre,
-    near_distance: fre,
-    far_distance: fre,
+    vertical_field_of_view_rad: f32,
+    near_distance: f32,
+    far_distance: f32,
 }
 
 impl PerspectiveCameraComp {
@@ -53,8 +52,8 @@ impl PerspectiveCameraComp {
     /// # Panics
     /// If `vertical_field_of_view` or the near distance is zero.
     pub fn new(
-        vertical_field_of_view: impl Angle<fre>,
-        near_and_far_distance: UpperExclusiveBounds<fre>,
+        vertical_field_of_view: impl Angle<f32>,
+        near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let vertical_field_of_view_rad = vertical_field_of_view.radians();
         assert_abs_diff_ne!(vertical_field_of_view_rad, 0.0);
@@ -70,17 +69,17 @@ impl PerspectiveCameraComp {
     }
 
     /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<fre> {
+    pub fn vertical_field_of_view(&self) -> Radians<f32> {
         Radians(self.vertical_field_of_view_rad)
     }
 
     /// Returns the near distance of the camera.
-    pub fn near_distance(&self) -> fre {
+    pub fn near_distance(&self) -> f32 {
         self.near_distance
     }
 
     /// Returns the far distance of the camera.
-    pub fn far_distance(&self) -> fre {
+    pub fn far_distance(&self) -> f32 {
         self.far_distance
     }
 }
@@ -93,8 +92,8 @@ impl OrthographicCameraComp {
     /// # Panics
     /// If `vertical_field_of_view` is zero.
     pub fn new(
-        vertical_field_of_view: impl Angle<fre>,
-        near_and_far_distance: UpperExclusiveBounds<fre>,
+        vertical_field_of_view: impl Angle<f32>,
+        near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let vertical_field_of_view_rad = vertical_field_of_view.radians();
         assert_abs_diff_ne!(vertical_field_of_view_rad, 0.0);
@@ -109,17 +108,17 @@ impl OrthographicCameraComp {
     }
 
     /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<fre> {
+    pub fn vertical_field_of_view(&self) -> Radians<f32> {
         Radians(self.vertical_field_of_view_rad)
     }
 
     /// Returns the near distance of the camera.
-    pub fn near_distance(&self) -> fre {
+    pub fn near_distance(&self) -> f32 {
         self.near_distance
     }
 
     /// Returns the far distance of the camera.
-    pub fn far_distance(&self) -> fre {
+    pub fn far_distance(&self) -> f32 {
         self.far_distance
     }
 }

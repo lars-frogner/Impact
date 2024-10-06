@@ -2,7 +2,6 @@
 
 use crate::{
     component::ComponentRegistry,
-    gpu::rendering::fre,
     mesh::{FrontFaceSide, MeshID},
 };
 use anyhow::Result;
@@ -23,9 +22,9 @@ use super::texture_projection;
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RectangleMeshComp {
     /// The extent of the rectangle in the x-direction.
-    pub extent_x: fre,
+    pub extent_x: f32,
     /// The extent of the rectangle in the z-direction.
-    pub extent_z: fre,
+    pub extent_z: f32,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -37,11 +36,11 @@ pub struct RectangleMeshComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct BoxMeshComp {
     /// The extent of the box in the x-direction.
-    pub extent_x: fre,
+    pub extent_x: f32,
     /// The extent of the box in the y-direction.
-    pub extent_y: fre,
+    pub extent_y: f32,
     /// The extent of the box in the z-direction.
-    pub extent_z: fre,
+    pub extent_z: f32,
     front_faces_on_outside: u32,
 }
 
@@ -54,9 +53,9 @@ pub struct BoxMeshComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CylinderMeshComp {
     /// The length of the cylinder.
-    pub length: fre,
+    pub length: f32,
     /// The diameter of the cylinder.
-    pub diameter: fre,
+    pub diameter: f32,
     /// The number of vertices used for representing a circular cross-section of
     /// the cylinder.
     pub n_circumference_vertices: u32,
@@ -71,9 +70,9 @@ pub struct CylinderMeshComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ConeMeshComp {
     /// The length of the cone.
-    pub length: fre,
+    pub length: f32,
     /// The maximum diameter of the cone.
-    pub max_diameter: fre,
+    pub max_diameter: f32,
     /// The number of vertices used for representing a circular cross-section of
     /// the cone.
     pub n_circumference_vertices: u32,
@@ -88,11 +87,11 @@ pub struct ConeMeshComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CircularFrustumMeshComp {
     /// The length of the frustum.
-    pub length: fre,
+    pub length: f32,
     /// The bottom diameter of the frustum.
-    pub bottom_diameter: fre,
+    pub bottom_diameter: f32,
     /// The top diameter of the frustum.
-    pub top_diameter: fre,
+    pub top_diameter: f32,
     /// The number of vertices used for representing a circular cross-section of
     /// the frustum.
     pub n_circumference_vertices: u32,
@@ -153,7 +152,7 @@ impl RectangleMeshComp {
 
     /// Creates a new component for a rectangle mesh with the given horizontal
     /// extents.
-    pub fn new(extent_x: fre, extent_z: fre) -> Self {
+    pub fn new(extent_x: f32, extent_z: f32) -> Self {
         Self { extent_x, extent_z }
     }
 
@@ -184,9 +183,9 @@ impl BoxMeshComp {
 
     /// Creates a new component for a box mesh with the given extents.
     pub fn new(
-        extent_x: fre,
-        extent_y: fre,
-        extent_z: fre,
+        extent_x: f32,
+        extent_y: f32,
+        extent_z: f32,
         front_face_side: FrontFaceSide,
     ) -> Self {
         Self {
@@ -222,7 +221,7 @@ impl BoxMeshComp {
 impl CylinderMeshComp {
     /// Creates a new component for a cylinder mesh with the given length,
     /// diameter and number of circumeference vertices.
-    pub fn new(length: fre, diameter: fre, n_circumference_vertices: u32) -> Self {
+    pub fn new(length: f32, diameter: f32, n_circumference_vertices: u32) -> Self {
         Self {
             length,
             diameter,
@@ -243,7 +242,7 @@ impl CylinderMeshComp {
 impl ConeMeshComp {
     /// Creates a new component for a cone mesh with the given length, maximum
     /// diameter and number of circumeference vertices.
-    pub fn new(length: fre, max_diameter: fre, n_circumference_vertices: u32) -> Self {
+    pub fn new(length: f32, max_diameter: f32, n_circumference_vertices: u32) -> Self {
         Self {
             length,
             max_diameter,
@@ -265,9 +264,9 @@ impl CircularFrustumMeshComp {
     /// Creates a new component for a circular frustum mesh with the given
     /// length, bottom and top diameter and number of circumeference vertices.
     pub fn new(
-        length: fre,
-        bottom_diameter: fre,
-        top_diameter: fre,
+        length: f32,
+        bottom_diameter: f32,
+        top_diameter: f32,
         n_circumference_vertices: u32,
     ) -> Self {
         Self {

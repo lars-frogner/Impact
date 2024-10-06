@@ -1,7 +1,6 @@
 //! Management of meshes for entities.
 
 use crate::{
-    gpu::rendering::fre,
     material::{components::MaterialComp, MaterialLibrary},
     mesh::{
         components::{
@@ -24,21 +23,21 @@ use std::sync::RwLock;
 /// mesh repository if not present, then adds the appropriate mesh component
 /// to the entity.
 pub fn setup_mesh_for_new_entity(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    mesh_repository: &RwLock<MeshRepository<f32>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
-    fn create_projection_label(projection: Option<&impl TextureProjection<fre>>) -> String {
+    fn create_projection_label(projection: Option<&impl TextureProjection<f32>>) -> String {
         projection
             .as_ref()
             .map_or("None".to_string(), |projection| projection.identifier())
     }
 
     fn execute_setup_for_rectangle_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         rectangle_mesh: &RectangleMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = rectangle_mesh.generate_id(create_projection_label(projection));
 
@@ -62,10 +61,10 @@ pub fn setup_mesh_for_new_entity(
     }
 
     fn execute_setup_for_box_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         box_mesh: &BoxMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = box_mesh.generate_id(create_projection_label(projection));
 
@@ -93,10 +92,10 @@ pub fn setup_mesh_for_new_entity(
     }
 
     fn execute_setup_for_cylinder_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         cylinder_mesh: &CylinderMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = cylinder_mesh.generate_id(create_projection_label(projection));
 
@@ -123,10 +122,10 @@ pub fn setup_mesh_for_new_entity(
     }
 
     fn execute_setup_for_cone_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         cone_mesh: &ConeMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = cone_mesh.generate_id(create_projection_label(projection));
 
@@ -153,10 +152,10 @@ pub fn setup_mesh_for_new_entity(
     }
 
     fn execute_setup_for_circular_frustum_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         circular_frustum_mesh: &CircularFrustumMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = circular_frustum_mesh.generate_id(create_projection_label(projection));
 
@@ -184,10 +183,10 @@ pub fn setup_mesh_for_new_entity(
     }
 
     fn execute_setup_for_sphere_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         sphere_mesh: &SphereMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = sphere_mesh.generate_id(create_projection_label(projection));
 
@@ -210,10 +209,10 @@ pub fn setup_mesh_for_new_entity(
     }
 
     fn execute_setup_for_hemisphere_mesh(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
+        mesh_repository: &RwLock<MeshRepository<f32>>,
         desynchronized: &mut RenderResourcesDesynchronized,
         hemisphere_mesh: &HemisphereMeshComp,
-        projection: Option<&impl TextureProjection<fre>>,
+        projection: Option<&impl TextureProjection<f32>>,
     ) -> MeshComp {
         let mesh_id = hemisphere_mesh.generate_id(create_projection_label(projection));
 
@@ -404,7 +403,7 @@ pub fn setup_mesh_for_new_entity(
 /// required by the material, and if so, generates the missing vertex
 /// attributes if possible.
 pub fn generate_missing_vertex_properties_for_new_entity_mesh(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    mesh_repository: &RwLock<MeshRepository<f32>>,
     material_library: &MaterialLibrary,
     components: &ArchetypeComponentStorage,
 ) {

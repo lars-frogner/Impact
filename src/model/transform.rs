@@ -1,6 +1,6 @@
 //! Model instance transforms.
 
-use crate::{gpu::rendering::fre, impl_InstanceFeature, model::InstanceFeatureManager};
+use crate::{impl_InstanceFeature, model::InstanceFeatureManager};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
 
@@ -17,9 +17,9 @@ pub trait AsInstanceModelViewTransform {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InstanceModelViewTransform {
-    pub rotation: UnitQuaternion<fre>,
-    pub translation: Vector3<fre>,
-    pub scaling: fre,
+    pub rotation: UnitQuaternion<f32>,
+    pub translation: Vector3<f32>,
+    pub scaling: f32,
 }
 
 pub type InstanceModelLightTransform = InstanceModelViewTransform;
@@ -62,7 +62,7 @@ impl InstanceModelViewTransform {
 
     /// Creates a new model-to-camera transform corresponding to the given
     /// similarity transform.
-    pub fn with_model_view_transform(transform: Similarity3<fre>) -> Self {
+    pub fn with_model_view_transform(transform: Similarity3<f32>) -> Self {
         let scaling = transform.scaling();
 
         Self {
@@ -74,7 +74,7 @@ impl InstanceModelViewTransform {
 
     /// Creates a new model-to-light transform corresponding to the given
     /// similarity transform.
-    pub fn with_model_light_transform(transform: Similarity3<fre>) -> Self {
+    pub fn with_model_light_transform(transform: Similarity3<f32>) -> Self {
         Self::with_model_view_transform(transform)
     }
 
@@ -88,7 +88,7 @@ impl InstanceModelViewTransform {
     }
 }
 
-impl From<InstanceModelViewTransform> for Similarity3<fre> {
+impl From<InstanceModelViewTransform> for Similarity3<f32> {
     fn from(transform: InstanceModelViewTransform) -> Self {
         let InstanceModelViewTransform {
             rotation,

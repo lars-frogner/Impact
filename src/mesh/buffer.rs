@@ -3,7 +3,6 @@
 use crate::{
     gpu::{
         buffer::{GPUBuffer, GPUBufferType},
-        rendering::fre,
         GraphicsDevice,
     },
     mesh::{
@@ -67,7 +66,7 @@ impl MeshGPUBufferManager {
     pub fn for_mesh(
         graphics_device: &GraphicsDevice,
         mesh_id: MeshID,
-        mesh: &TriangleMesh<fre>,
+        mesh: &TriangleMesh<f32>,
     ) -> Self {
         assert!(
             mesh.has_indices(),
@@ -128,7 +127,7 @@ impl MeshGPUBufferManager {
     }
 
     /// Ensures that the GPU buffers are in sync with the given mesh.
-    pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<fre>) {
+    pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<f32>) {
         self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
         self.sync_vertex_buffer(
             graphics_device,
@@ -567,28 +566,28 @@ impl GPUBuffer {
     }
 }
 
-impl VertexBufferable for VertexPosition<fre> {
+impl VertexBufferable for VertexPosition<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::Position as u32 => Float32x3,
         ]);
 }
 
-impl VertexBufferable for VertexNormalVector<fre> {
+impl VertexBufferable for VertexNormalVector<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
         ]);
 }
 
-impl VertexBufferable for VertexTextureCoords<fre> {
+impl VertexBufferable for VertexTextureCoords<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
         ]);
 }
 
-impl VertexBufferable for VertexTangentSpaceQuaternion<fre> {
+impl VertexBufferable for VertexTangentSpaceQuaternion<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,

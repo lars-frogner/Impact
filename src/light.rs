@@ -9,7 +9,7 @@ use crate::{
         Angle, AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox,
         OrthographicTransform, Sphere,
     },
-    gpu::{rendering::fre, texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
+    gpu::{texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
     model::InstanceFeatureBufferRangeID,
     num::Float,
     util::bounds::UpperExclusiveBounds,
@@ -22,16 +22,16 @@ use std::iter;
 
 /// The luminous intensity of a light source, which is the visible power
 /// (luminous flux) emitted per unit solid angle, represented as an RGB triplet.
-pub type LuminousIntensity = Vector3<fre>;
+pub type LuminousIntensity = Vector3<f32>;
 
 /// The illuminance of surface, which is the visible power (luminous flux)
 /// received per unit area, represented as an RGB triplet.
-pub type Illumninance = Vector3<fre>;
+pub type Illumninance = Vector3<f32>;
 
 /// A luminance, which is the visible power (luminous flux) per unit solid angle
 /// and area of light traveling in a given direction, represented as an RGB
 /// triplet.
-pub type Luminance = Vector3<fre>;
+pub type Luminance = Vector3<f32>;
 
 /// Identifier for a light in a [`LightStorage`].
 #[repr(transparent)]
@@ -57,7 +57,7 @@ pub enum LightType {
 pub struct AmbientLight {
     luminance: Luminance,
     // Padding to make size multiple of 16-bytes
-    _padding: fre,
+    _padding: f32,
 }
 
 /// An omnidirectional light source represented by a camera space position, an
@@ -78,21 +78,21 @@ pub struct AmbientLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct OmnidirectionalLight {
-    camera_to_light_space_rotation: UnitQuaternion<fre>,
-    camera_space_position: Point3<fre>,
+    camera_to_light_space_rotation: UnitQuaternion<f32>,
+    camera_space_position: Point3<f32>,
     // Padding to obtain 16-byte alignment for next field
-    _padding_1: fre,
+    _padding_1: f32,
     // Luminous intensity and emission radius are treated as a single
     // 4-component vector in the shader
     luminous_intensity: LuminousIntensity,
-    emission_radius: fre,
+    emission_radius: f32,
     // The `near_distance` and `inverse_distance_span` fields are accessed as a
     // struct in a single field in the shader
-    near_distance: fre,
-    inverse_distance_span: fre,
+    near_distance: f32,
+    inverse_distance_span: f32,
     // Padding to make size multiple of 16-bytes
-    far_distance: fre,
-    max_far_distance: fre,
+    far_distance: f32,
+    max_far_distance: f32,
 }
 
 /// Maximum number of cascades supported in a cascaded shadow map for
@@ -125,30 +125,30 @@ const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct UnidirectionalLight {
-    camera_to_light_space_rotation: UnitQuaternion<fre>,
-    camera_space_direction: UnitVector3<fre>,
+    camera_to_light_space_rotation: UnitQuaternion<f32>,
+    camera_space_direction: UnitVector3<f32>,
     // Padding to obtain 16-byte alignment for next field
-    near_partition_depth: fre,
+    near_partition_depth: f32,
     // Illuminance and angular radius are treated as a single 4-component vector
     // in the shader
     perpendicular_illuminance: Illumninance,
-    tan_angular_radius: fre,
+    tan_angular_radius: f32,
     orthographic_transforms: [OrthographicTranslationAndScaling; MAX_SHADOW_MAP_CASCADES_USIZE],
-    partition_depths: [fre; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
+    partition_depths: [f32; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
     // Padding to make size multiple of 16-bytes
-    far_partition_depth: fre,
-    _padding_3: [fre; 4 - MAX_SHADOW_MAP_CASCADES_USIZE],
+    far_partition_depth: f32,
+    _padding_3: [f32; 4 - MAX_SHADOW_MAP_CASCADES_USIZE],
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct OrthographicTranslationAndScaling {
-    translation: Translation3<fre>,
+    translation: Translation3<f32>,
     // Padding to obtain 16-byte alignment for next field
-    _padding_1: fre,
-    scaling: Scale3<fre>,
+    _padding_1: f32,
+    scaling: Scale3<f32>,
     // Padding to make size multiple of 16-bytes
-    _padding_2: fre,
+    _padding_2: f32,
 }
 
 type LightUniformBuffer<L> = UniformBuffer<LightID, L>;
@@ -382,7 +382,7 @@ impl LightStorage {
     fn update_max_far_distance_for_omnidirectional_lights(&mut self) {
         let total_ambient_luminance =
             compute_scalar_luminance_from_rgb_luminance(&self.total_ambient_luminance);
-        let min_incident_luminance = fre::max(
+        let min_incident_luminance = f32::max(
             OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_FLOOR,
             total_ambient_luminance
                 * OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO,
@@ -420,13 +420,13 @@ impl AmbientLight {
 }
 
 impl OmnidirectionalLight {
-    const MIN_NEAR_DISTANCE: fre = 1e-2;
+    const MIN_NEAR_DISTANCE: f32 = 1e-2;
 
-    const MIN_INCIDENT_LUMINANCE_FLOOR: fre = 0.1;
-    const MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO: fre = 0.1;
+    const MIN_INCIDENT_LUMINANCE_FLOOR: f32 = 0.1;
+    const MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO: f32 = 0.1;
 
     fn new(
-        camera_space_position: Point3<fre>,
+        camera_space_position: Point3<f32>,
         luminous_intensity: LuminousIntensity,
         emission_extent: f32,
     ) -> Self {
@@ -453,8 +453,8 @@ impl OmnidirectionalLight {
     pub fn create_transform_to_positive_z_cubemap_face_space(
         &self,
         face: CubemapFace,
-        transform_to_camera_space: &Similarity3<fre>,
-    ) -> Similarity3<fre> {
+        transform_to_camera_space: &Similarity3<f32>,
+    ) -> Similarity3<f32> {
         self.create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
             * transform_to_camera_space
     }
@@ -464,18 +464,18 @@ impl OmnidirectionalLight {
     pub fn create_transform_from_camera_space_to_positive_z_cubemap_face_space(
         &self,
         face: CubemapFace,
-    ) -> Similarity3<fre> {
+    ) -> Similarity3<f32> {
         CubeMapper::rotation_to_positive_z_face_from_face(face)
             * self.create_camera_to_light_space_transform()
     }
 
     /// Returns a reference to the camera space position of the light.
-    pub fn camera_space_position(&self) -> &Point3<fre> {
+    pub fn camera_space_position(&self) -> &Point3<f32> {
         &self.camera_space_position
     }
 
     /// Sets the camera space position of the light to the given position.
-    pub fn set_camera_space_position(&mut self, camera_space_position: Point3<fre>) {
+    pub fn set_camera_space_position(&mut self, camera_space_position: Point3<f32>) {
         self.camera_space_position = camera_space_position;
     }
 
@@ -485,7 +485,7 @@ impl OmnidirectionalLight {
     }
 
     /// Sets the emission extent of the light to the given value.
-    pub fn set_emission_extent(&mut self, emission_extent: fre) {
+    pub fn set_emission_extent(&mut self, emission_extent: f32) {
         self.emission_radius = 0.5 * emission_extent;
     }
 
@@ -494,8 +494,8 @@ impl OmnidirectionalLight {
     /// unnecessary draw calls.
     pub fn orient_and_scale_cubemap_for_shadow_casting_models(
         &mut self,
-        camera_space_bounding_sphere: &Sphere<fre>,
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<fre>>,
+        camera_space_bounding_sphere: &Sphere<f32>,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<f32>>,
     ) {
         let bounding_sphere_center_distance = na::distance(
             &self.camera_space_position,
@@ -550,12 +550,12 @@ impl OmnidirectionalLight {
 
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum<fre> {
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum<f32> {
         CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
     }
 
     /// Computes the frustum for the given cubemap face in camera space.
-    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum<fre> {
+    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum<f32> {
         CubeMapper::compute_transformed_frustum_for_face(
             face,
             &self.create_camera_to_light_space_transform(),
@@ -566,8 +566,8 @@ impl OmnidirectionalLight {
 
     /// Whether the given cubemap face frustum may contain any visible models.
     pub fn camera_space_frustum_for_face_may_contain_visible_models(
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<fre>>,
-        camera_space_face_frustum: &Frustum<fre>,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<f32>>,
+        camera_space_face_frustum: &Frustum<f32>,
     ) -> bool {
         if let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models {
             !camera_space_face_frustum
@@ -583,7 +583,7 @@ impl OmnidirectionalLight {
     /// luminance from the light equals `min_incident_luminance`.
     fn update_max_far_distance_based_on_min_incident_luminance(
         &mut self,
-        min_incident_luminance: fre,
+        min_incident_luminance: f32,
     ) {
         self.max_far_distance = Self::compute_max_far_distance_from_min_incident_luminance(
             &self.luminous_intensity,
@@ -596,15 +596,15 @@ impl OmnidirectionalLight {
     /// `min_incident_luminance`.
     fn compute_max_far_distance_from_min_incident_luminance(
         luminous_intensity: &LuminousIntensity,
-        min_incident_luminance: fre,
-    ) -> fre {
+        min_incident_luminance: f32,
+    ) -> f32 {
         let scalar_luminuous_intensity =
             compute_scalar_luminance_from_rgb_luminance(luminous_intensity);
 
-        fre::sqrt(scalar_luminuous_intensity / min_incident_luminance)
+        f32::sqrt(scalar_luminuous_intensity / min_incident_luminance)
     }
 
-    fn create_camera_to_light_space_transform(&self) -> Similarity3<fre> {
+    fn create_camera_to_light_space_transform(&self) -> Similarity3<f32> {
         Similarity3::from_isometry(
             self.camera_to_light_space_rotation * Translation3::from(-self.camera_space_position),
             1.0,
@@ -612,10 +612,10 @@ impl OmnidirectionalLight {
     }
 
     fn compute_camera_to_light_space_rotation(
-        camera_space_direction: &UnitVector3<fre>,
-    ) -> UnitQuaternion<fre> {
+        camera_space_direction: &UnitVector3<f32>,
+    ) -> UnitQuaternion<f32> {
         let direction_is_very_close_to_vertical =
-            fre::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
+            f32::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
 
         // We orient the light's local coordinate system so that the light
         // direction in camera space maps to the -z-direction in light space,
@@ -633,9 +633,9 @@ impl OmnidirectionalLight {
 
 impl UnidirectionalLight {
     fn new(
-        camera_space_direction: UnitVector3<fre>,
+        camera_space_direction: UnitVector3<f32>,
         illuminance: Illumninance,
-        angular_extent: impl Angle<fre>,
+        angular_extent: impl Angle<f32>,
     ) -> Self {
         Self {
             camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
@@ -655,7 +655,7 @@ impl UnidirectionalLight {
 
     /// Returns a reference to the quaternion that rotates camera space to light
     /// space.
-    pub fn camera_to_light_space_rotation(&self) -> &UnitQuaternion<fre> {
+    pub fn camera_to_light_space_rotation(&self) -> &UnitQuaternion<f32> {
         &self.camera_to_light_space_rotation
     }
 
@@ -663,8 +663,8 @@ impl UnidirectionalLight {
     /// transform into the light's space.
     pub fn create_transform_to_light_space(
         &self,
-        transform_to_camera_space: &Similarity3<fre>,
-    ) -> Similarity3<fre> {
+        transform_to_camera_space: &Similarity3<f32>,
+    ) -> Similarity3<f32> {
         self.camera_to_light_space_rotation * transform_to_camera_space
     }
 
@@ -674,7 +674,7 @@ impl UnidirectionalLight {
     pub fn create_light_space_orthographic_aabb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBox<fre> {
+    ) -> AxisAlignedBox<f32> {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
     }
 
@@ -684,14 +684,14 @@ impl UnidirectionalLight {
     pub fn create_light_space_orthographic_obb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> OrientedBox<fre> {
+    ) -> OrientedBox<f32> {
         OrientedBox::from_axis_aligned_box(
             &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
         )
     }
 
     /// Sets the camera space direction of the light to the given direction.
-    pub fn set_camera_space_direction(&mut self, camera_space_direction: UnitVector3<fre>) {
+    pub fn set_camera_space_direction(&mut self, camera_space_direction: UnitVector3<f32>) {
         self.camera_space_direction = camera_space_direction;
         self.camera_to_light_space_rotation =
             Self::compute_camera_to_light_space_rotation(&camera_space_direction);
@@ -703,7 +703,7 @@ impl UnidirectionalLight {
     }
 
     /// Sets the angular extent of the light to the given value.
-    pub fn set_angular_extent(&mut self, angular_extent: impl Angle<fre>) {
+    pub fn set_angular_extent(&mut self, angular_extent: impl Angle<f32>) {
         self.tan_angular_radius = Self::tan_angular_radius_from_angular_extent(angular_extent);
     }
 
@@ -711,20 +711,20 @@ impl UnidirectionalLight {
     /// the near and far distance required for encompassing visible models.
     pub fn update_cascade_partition_depths(
         &mut self,
-        camera_space_view_frustum: &Frustum<fre>,
-        camera_space_bounding_sphere: &Sphere<fre>,
+        camera_space_view_frustum: &Frustum<f32>,
+        camera_space_bounding_sphere: &Sphere<f32>,
     ) {
-        const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: fre = 0.5;
+        const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
 
         // Find the tightest near and far distance that encompass visible models
-        let near_distance = fre::max(
+        let near_distance = f32::max(
             camera_space_view_frustum.near_distance(),
             -(camera_space_bounding_sphere.center().z + camera_space_bounding_sphere.radius()),
         );
 
-        let far_distance = fre::max(
-            near_distance + fre::EPSILON,
-            fre::min(
+        let far_distance = f32::max(
+            near_distance + f32::EPSILON,
+            f32::min(
                 camera_space_view_frustum.far_distance(),
                 -(camera_space_bounding_sphere.center().z - camera_space_bounding_sphere.radius()),
             ),
@@ -734,9 +734,9 @@ impl UnidirectionalLight {
         // cascades going from the near distance to the far distance
 
         let distance_ratio =
-            (far_distance / near_distance).powf(1.0 / (MAX_SHADOW_MAP_CASCADES as fre));
+            (far_distance / near_distance).powf(1.0 / (MAX_SHADOW_MAP_CASCADES as f32));
 
-        let distance_difference = (far_distance - near_distance) / (MAX_SHADOW_MAP_CASCADES as fre);
+        let distance_difference = (far_distance - near_distance) / (MAX_SHADOW_MAP_CASCADES as f32);
 
         let mut exponential_distance = near_distance;
         let mut linear_distance = near_distance;
@@ -764,8 +764,8 @@ impl UnidirectionalLight {
     /// into each cascade, will be included in the clip space for that cascade.
     pub fn bound_orthographic_transforms_to_cascaded_view_frustum(
         &mut self,
-        camera_space_view_frustum: &Frustum<fre>,
-        camera_space_bounding_sphere: &Sphere<fre>,
+        camera_space_view_frustum: &Frustum<f32>,
+        camera_space_bounding_sphere: &Sphere<f32>,
     ) {
         // Rotate to light space, where the light direction is -z
         let light_space_view_frustum =
@@ -826,7 +826,7 @@ impl UnidirectionalLight {
     pub fn bounding_sphere_may_cast_visible_shadow_in_cascade(
         &self,
         cascade_idx: CascadeIdx,
-        camera_space_bounding_sphere: &Sphere<fre>,
+        camera_space_bounding_sphere: &Sphere<f32>,
     ) -> bool {
         let light_space_bounding_sphere =
             camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
@@ -837,10 +837,10 @@ impl UnidirectionalLight {
     }
 
     fn compute_camera_to_light_space_rotation(
-        camera_space_direction: &UnitVector3<fre>,
-    ) -> UnitQuaternion<fre> {
+        camera_space_direction: &UnitVector3<f32>,
+    ) -> UnitQuaternion<f32> {
         let direction_is_very_close_to_vertical =
-            fre::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
+            f32::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
 
         // We orient the light's local coordinate system so that the light
         // direction in camera space maps to the -z-direction in light space,
@@ -855,13 +855,13 @@ impl UnidirectionalLight {
         }
     }
 
-    fn tan_angular_radius_from_angular_extent(angular_extent: impl Angle<fre>) -> fre {
-        fre::tan(0.5 * angular_extent.radians())
+    fn tan_angular_radius_from_angular_extent(angular_extent: impl Angle<f32>) -> f32 {
+        f32::tan(0.5 * angular_extent.radians())
     }
 }
 
 impl OrthographicTranslationAndScaling {
-    fn set_planes(&mut self, left: fre, right: fre, bottom: fre, top: fre, near: fre, far: fre) {
+    fn set_planes(&mut self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) {
         (self.translation, self.scaling) =
             OrthographicTransform::compute_orthographic_translation_and_scaling(
                 left, right, bottom, top, near, far,
@@ -876,7 +876,7 @@ impl OrthographicTranslationAndScaling {
         }
     }
 
-    fn compute_aabb(&self) -> AxisAlignedBox<fre> {
+    fn compute_aabb(&self) -> AxisAlignedBox<f32> {
         let (orthographic_center, orthographic_half_extents) =
             OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(
                 &self.translation,
@@ -896,9 +896,9 @@ impl OrthographicTranslationAndScaling {
 /// Computes the isotropic luminance incident on any surface in a light field
 /// with the given uniform illuminance.
 pub fn compute_luminance_for_uniform_illuminance(illuminance: &Illumninance) -> Luminance {
-    illuminance * fre::FRAC_1_PI
+    illuminance * f32::FRAC_1_PI
 }
 
-fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> fre {
+fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> f32 {
     0.2125 * rgb_luminance.x + 0.7154 * rgb_luminance.y + 0.0721 * rgb_luminance.z
 }

@@ -10,7 +10,7 @@ pub use features::{
 
 use crate::{
     assets::Assets,
-    gpu::{rendering::fre, resource_group::GPUResourceGroup, texture::TextureID, GraphicsDevice},
+    gpu::{resource_group::GPUResourceGroup, texture::TextureID, GraphicsDevice},
     mesh::VertexAttributeSet,
     model::{InstanceFeatureID, InstanceFeatureTypeID},
 };
@@ -25,7 +25,7 @@ use std::{
 };
 
 /// A color with RGB components.
-pub type RGBColor = Vector3<fre>;
+pub type RGBColor = Vector3<f32>;
 
 stringhash64_newtype!(
     /// Identifier for specific material types.

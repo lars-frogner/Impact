@@ -2,7 +2,6 @@
 
 use crate::{
     gpu::{
-        rendering::fre,
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::RenderAttachmentQuantity,
     },
@@ -18,8 +17,8 @@ use std::sync::LazyLock;
 pub struct BloomBlendingShaderTemplate {
     luminance_quantity: RenderAttachmentQuantity,
     blurred_luminance_quantity: RenderAttachmentQuantity,
-    blurred_luminance_normalization: fre,
-    blurred_luminance_weight: fre,
+    blurred_luminance_normalization: f32,
+    blurred_luminance_weight: f32,
 }
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
@@ -32,8 +31,8 @@ impl BloomBlendingShaderTemplate {
     pub fn new(
         luminance_quantity: RenderAttachmentQuantity,
         blurred_luminance_quantity: RenderAttachmentQuantity,
-        blurred_luminance_normalization: fre,
-        blurred_luminance_weight: fre,
+        blurred_luminance_normalization: f32,
+        blurred_luminance_weight: f32,
     ) -> Self {
         Self {
             luminance_quantity,

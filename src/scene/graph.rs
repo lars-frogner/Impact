@@ -3,7 +3,7 @@
 use crate::{
     camera::SceneCamera,
     geometry::{CubemapFace, Frustum, Sphere},
-    gpu::{rendering::fre, texture::shadow_map::CascadeIdx},
+    gpu::texture::shadow_map::CascadeIdx,
     light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
     model::{
         transform::{
@@ -411,7 +411,7 @@ impl<F: Float> SceneGraph<F> {
         scene_camera: &SceneCamera<F>,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
-        F: simba::scalar::SubsetOf<fre>,
+        F: simba::scalar::SubsetOf<f32>,
     {
         let root_node = self.group_nodes.node(self.root_node_id());
 
@@ -576,7 +576,7 @@ impl<F: Float> SceneGraph<F> {
         group_to_camera_transform: &NodeTransform<F>,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
-        F: simba::scalar::SubsetOf<fre>,
+        F: simba::scalar::SubsetOf<f32>,
     {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -647,7 +647,7 @@ impl<F: Float> SceneGraph<F> {
         model_view_transform: &NodeTransform<F>,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
-        F: simba::scalar::SubsetOf<fre>,
+        F: simba::scalar::SubsetOf<f32>,
     {
         let instance_model_view_transform =
             InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
@@ -701,7 +701,7 @@ impl<F: Float> SceneGraph<F> {
     }
 }
 
-impl SceneGraph<fre> {
+impl SceneGraph<f32> {
     /// Goes through all omnidirectional lights in the given light storage and
     /// updates their cubemap orientations and distance spans to encompass all
     /// model instances that may cast visible shadows in a way that preserves
@@ -720,7 +720,7 @@ impl SceneGraph<fre> {
         &self,
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
-        scene_camera: &SceneCamera<fre>,
+        scene_camera: &SceneCamera<f32>,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
         let view_transform = scene_camera.view_transform();
@@ -800,7 +800,7 @@ impl SceneGraph<fre> {
         &self,
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
-        scene_camera: &SceneCamera<fre>,
+        scene_camera: &SceneCamera<f32>,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
         let view_transform = scene_camera.view_transform();
@@ -859,9 +859,9 @@ impl SceneGraph<fre> {
         instance_feature_manager: &mut InstanceFeatureManager,
         omnidirectional_light: &OmnidirectionalLight,
         face: CubemapFace,
-        camera_space_face_frustum: &Frustum<fre>,
-        group_node: &GroupNode<fre>,
-        group_to_camera_transform: &NodeTransform<fre>,
+        camera_space_face_frustum: &Frustum<f32>,
+        group_node: &GroupNode<f32>,
+        group_to_camera_transform: &NodeTransform<f32>,
     ) {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -938,8 +938,8 @@ impl SceneGraph<fre> {
         instance_feature_manager: &mut InstanceFeatureManager,
         unidirectional_light: &UnidirectionalLight,
         cascade_idx: CascadeIdx,
-        group_node: &GroupNode<fre>,
-        group_to_camera_transform: &NodeTransform<fre>,
+        group_node: &GroupNode<f32>,
+        group_to_camera_transform: &NodeTransform<f32>,
     ) {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -1260,7 +1260,7 @@ impl<F: Float> ModelInstanceNode<F> {
     }
 }
 
-impl ModelInstanceNode<fre> {
+impl ModelInstanceNode<f32> {
     /// The index of the model-view transform feature in the array of features
     /// for model instances.
     pub const fn model_view_transform_feature_idx() -> usize {

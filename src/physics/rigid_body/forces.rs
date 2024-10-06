@@ -6,7 +6,7 @@ pub mod entity;
 pub mod spring;
 pub mod uniform_gravity;
 
-use crate::{gpu::rendering::fre, physics::UniformMedium};
+use crate::physics::UniformMedium;
 use anyhow::Result;
 use detailed_drag::{DragLoadMapConfig, DragLoadMapRepository};
 use impact_ecs::world::{Entity, World as ECSWorld};
@@ -15,7 +15,7 @@ use std::sync::RwLock;
 /// Manager of all systems resulting in forces and torques on rigid bodies.
 #[derive(Debug)]
 pub struct RigidBodyForceManager {
-    drag_load_map_repository: RwLock<DragLoadMapRepository<fre>>,
+    drag_load_map_repository: RwLock<DragLoadMapRepository<f32>>,
 }
 
 /// Configuration parameters for rigid body force generation.

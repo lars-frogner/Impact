@@ -8,7 +8,6 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
-            fre,
             postprocessing::Postprocessor,
             render_command::{self, STANDARD_FRONT_FACE},
             resource::SynchronizedRenderResources,
@@ -81,7 +80,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_geometry_pass(
         &self,
-        scene_camera: Option<&SceneCamera<fre>>,
+        scene_camera: Option<&SceneCamera<f32>>,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -98,7 +97,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_omnidirectional_light_shadow_cubemap_face_update(
         &self,
-        positive_z_cubemap_face_frustum: &Frustum<fre>,
+        positive_z_cubemap_face_frustum: &Frustum<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
@@ -118,7 +117,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_unidirectional_light_shadow_map_cascade_update(
         &self,
-        cascade_frustum: &OrientedBox<fre>,
+        cascade_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
@@ -300,7 +299,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_geometry_pass(
         &self,
-        scene_camera: Option<&SceneCamera<fre>>,
+        scene_camera: Option<&SceneCamera<f32>>,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -330,7 +329,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_shadow_mapping_with_frustum(
         &self,
-        frustum: &Frustum<fre>,
+        frustum: &Frustum<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
@@ -354,7 +353,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_shadow_mapping_with_orthographic_frustum(
         &self,
-        orthographic_frustum: &OrientedBox<fre>,
+        orthographic_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
@@ -387,7 +386,7 @@ impl VoxelChunkCullingPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
         instance_range_id: InstanceFeatureBufferRangeID,
-        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<fre>) -> CullingFrustum,
+        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<f32>) -> CullingFrustum,
         for_indexed_draw_calls: bool,
         tag: Cow<'static, str>,
     ) -> Result<()>
@@ -493,7 +492,7 @@ impl VoxelChunkCullingPass {
     fn compute_transform_from_frustum_space_to_normalized_voxel_object_space(
         voxel_object_to_frustum_transform: InstanceModelViewTransform,
         voxel_extent: f64,
-    ) -> Similarity3<fre> {
+    ) -> Similarity3<f32> {
         let mut frustum_to_voxel_object_transform =
             Similarity3::from(voxel_object_to_frustum_transform);
         frustum_to_voxel_object_transform.prepend_scaling_mut(voxel_extent as f32);

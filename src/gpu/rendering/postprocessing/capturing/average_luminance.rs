@@ -6,7 +6,7 @@ use crate::{
         compute::ComputePass,
         query::TimestampQueryRegistry,
         rendering::{
-            fre, postprocessing::Postprocessor, render_command::StorageBufferResultCopyCommand,
+            postprocessing::Postprocessor, render_command::StorageBufferResultCopyCommand,
             surface::RenderingSurface,
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -39,13 +39,13 @@ pub struct AverageLuminanceComputationConfig {
     ///
     /// # Unit
     /// Nit (cd/m²)
-    pub luminance_bounds: UpperExclusiveBounds<fre>,
+    pub luminance_bounds: UpperExclusiveBounds<f32>,
     /// How much the average luminance computed for the current frame will be
     /// weighted compared to the average luminance computed for the previous
     /// frame. A value of 0.0 reuses the previous luminance without
     /// modification, while a value of 1.0 uses the current luminance without
     /// any contribution from the previous frame.
-    pub current_frame_weight: fre,
+    pub current_frame_weight: f32,
 }
 
 #[derive(Debug)]
@@ -63,8 +63,8 @@ pub(super) struct AverageLuminanceComputeCommands {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct LuminanceHistogramParameters {
-    min_log2_luminance: fre,
-    inverse_log2_luminance_range: fre,
+    min_log2_luminance: f32,
+    inverse_log2_luminance_range: f32,
     _pad: [u8; 8],
 }
 
@@ -76,9 +76,9 @@ struct LuminanceHistogramParameters {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct LuminanceHistogramAverageParameters {
-    min_log2_luminance: fre,
-    log2_luminance_range: fre,
-    current_frame_weight: fre,
+    min_log2_luminance: f32,
+    log2_luminance_range: f32,
+    current_frame_weight: f32,
     _pad: [u8; 4],
 }
 
@@ -183,9 +183,9 @@ impl AverageLuminanceComputeCommands {
 }
 
 impl LuminanceHistogramParameters {
-    fn new(luminance_bounds: &UpperExclusiveBounds<fre>) -> Self {
-        let log2_lower_bound = fre::log2(luminance_bounds.lower());
-        let log2_upper_bound = fre::log2(luminance_bounds.upper());
+    fn new(luminance_bounds: &UpperExclusiveBounds<f32>) -> Self {
+        let log2_lower_bound = f32::log2(luminance_bounds.lower());
+        let log2_upper_bound = f32::log2(luminance_bounds.upper());
         Self {
             min_log2_luminance: log2_lower_bound,
             inverse_log2_luminance_range: (log2_upper_bound - log2_lower_bound).recip(),
@@ -207,9 +207,9 @@ impl UniformBufferable for LuminanceHistogramParameters {
 assert_uniform_valid!(LuminanceHistogramParameters);
 
 impl LuminanceHistogramAverageParameters {
-    fn new(luminance_bounds: &UpperExclusiveBounds<fre>, current_frame_weight: fre) -> Self {
-        let log2_lower_bound = fre::log2(luminance_bounds.lower());
-        let log2_upper_bound = fre::log2(luminance_bounds.upper());
+    fn new(luminance_bounds: &UpperExclusiveBounds<f32>, current_frame_weight: f32) -> Self {
+        let log2_lower_bound = f32::log2(luminance_bounds.lower());
+        let log2_upper_bound = f32::log2(luminance_bounds.upper());
         Self {
             min_log2_luminance: log2_lower_bound,
             log2_luminance_range: log2_upper_bound - log2_lower_bound,
@@ -234,7 +234,7 @@ assert_uniform_valid!(LuminanceHistogramAverageParameters);
 pub(super) fn load_computed_average_luminance(
     graphics_device: &GraphicsDevice,
     storage_gpu_buffer_manager: &StorageGPUBufferManager,
-) -> Option<Result<fre>> {
+) -> Option<Result<f32>> {
     storage_gpu_buffer_manager
         .get_storage_buffer(*AVERAGE_LUMINANCE_STORAGE_BUFFER_ID)
         .map(|buffer| {
@@ -252,7 +252,7 @@ fn create_luminance_histogram_compute_pass(
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-    luminance_bounds: &UpperExclusiveBounds<fre>,
+    luminance_bounds: &UpperExclusiveBounds<f32>,
 ) -> Result<ComputePass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "LuminanceHistogramResources{{ luminance_range: [{}, {}) }}",
@@ -308,8 +308,8 @@ fn create_luminance_histogram_average_compute_pass(
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-    luminance_bounds: &UpperExclusiveBounds<fre>,
-    current_frame_weight: fre,
+    luminance_bounds: &UpperExclusiveBounds<f32>,
+    current_frame_weight: f32,
 ) -> Result<ComputePass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "LuminanceHistogramAverageResources{{ luminance_range: [{}, {}), current_frame_weight: {} }}",
@@ -338,7 +338,7 @@ fn create_luminance_histogram_average_compute_pass(
                 .or_insert_with(|| {
                     StorageGPUBuffer::new_read_write_with_result_on_cpu(
                         graphics_device,
-                        mem::size_of::<fre>(),
+                        mem::size_of::<f32>(),
                         Cow::Borrowed("Average luminance buffer"),
                     )
                 });
@@ -384,7 +384,7 @@ fn get_or_create_histogram_storage_buffer<'a>(
         .or_insert_with(|| {
             StorageGPUBuffer::new_read_write(
                 graphics_device,
-                HISTOGRAM_BIN_COUNT * mem::size_of::<fre>(),
+                HISTOGRAM_BIN_COUNT * mem::size_of::<f32>(),
                 Cow::Borrowed("Luminance histogram buffer"),
             )
         })
