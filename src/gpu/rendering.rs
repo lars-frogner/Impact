@@ -38,14 +38,6 @@ use std::{
 };
 use surface::RenderingSurface;
 
-/// Floating point type used for rendering.
-///
-/// # Note
-/// Changing this would also require additional code changes where the type is
-/// hardcoded.
-#[allow(non_camel_case_types)]
-pub type fre = f32;
-
 /// Container for data and systems required for rendering.
 #[derive(Debug)]
 pub struct RenderingSystem {

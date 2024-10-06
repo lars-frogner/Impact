@@ -1,6 +1,5 @@
 //! Voxel types and their properties.
 
-use crate::gpu::rendering::fre;
 use anyhow::{bail, Result};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{compute_hash_str_32, Hash32};
@@ -28,7 +27,7 @@ pub struct VoxelTypeRegistry {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct FixedVoxelMaterialProperties {
-    properties: Vector4<fre>,
+    properties: Vector4<f32>,
 }
 
 impl VoxelType {
@@ -182,10 +181,10 @@ impl VoxelTypeRegistry {
 impl FixedVoxelMaterialProperties {
     /// Combines the given fixed properties for a voxel material.
     pub fn new(
-        specular_reflectance: fre,
-        roughness_scale: fre,
-        metalness: fre,
-        emissive_luminance: fre,
+        specular_reflectance: f32,
+        roughness_scale: f32,
+        metalness: f32,
+        emissive_luminance: f32,
     ) -> Self {
         Self {
             properties: vector![

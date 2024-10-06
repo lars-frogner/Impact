@@ -5,7 +5,6 @@ use crate::{
     assert_uniform_valid,
     assets::Assets,
     gpu::{
-        rendering::fre,
         resource_group::GPUResourceGroup,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
@@ -120,12 +119,12 @@ impl SkyboxGPUResourceManager {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct SkyboxProperties {
-    max_luminance: fre,
+    max_luminance: f32,
     _pad: [u8; 12],
 }
 
 impl SkyboxProperties {
-    fn new(max_luminance: fre) -> Self {
+    fn new(max_luminance: f32) -> Self {
         Self {
             max_luminance,
             _pad: [0; 12],

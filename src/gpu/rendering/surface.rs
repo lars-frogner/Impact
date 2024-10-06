@@ -1,6 +1,6 @@
 //! Representation of surfaces to render to.
 
-use crate::{gpu::rendering::fre, gpu::GraphicsDevice, window::Window};
+use crate::{gpu::GraphicsDevice, window::Window};
 use anyhow::Result;
 use std::{mem, num::NonZeroU32};
 use wgpu::SurfaceTarget;
@@ -103,11 +103,11 @@ impl RenderingSurface {
 
     /// Returns the data for the push constant containing the reciprocals of the
     /// window dimensions in pixels.
-    pub fn inverse_window_dimensions_push_constant(&self) -> [fre; 2] {
+    pub fn inverse_window_dimensions_push_constant(&self) -> [f32; 2] {
         let (width, height) = self.surface_config.surface_dimensions();
         [
-            1.0 / (u32::from(width) as fre),
-            1.0 / (u32::from(height) as fre),
+            1.0 / (u32::from(width) as f32),
+            1.0 / (u32::from(height) as f32),
         ]
     }
 

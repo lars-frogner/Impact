@@ -2,10 +2,7 @@
 
 use crate::{
     assets::Assets,
-    gpu::{
-        rendering::fre,
-        texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
-    },
+    gpu::texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     material::{
         components::{
             NormalMapComp, TexturedColorComp, TexturedSpecularReflectanceComp, UniformColorComp,
@@ -44,7 +41,7 @@ use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
 /// found or loaded.
 pub fn load_models_from_obj_file<P>(
     assets: &mut Assets,
-    mesh_repository: &mut MeshRepository<fre>,
+    mesh_repository: &mut MeshRepository<f32>,
     obj_file_path: P,
 ) -> Result<Vec<SingleInstance<ArchetypeComponentStorage>>>
 where
@@ -117,7 +114,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file<P>(
-    mesh_repository: &mut MeshRepository<fre>,
+    mesh_repository: &mut MeshRepository<f32>,
     obj_file_path: P,
 ) -> Result<MeshComp>
 where
@@ -158,9 +155,9 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file_with_projection<P>(
-    mesh_repository: &mut MeshRepository<fre>,
+    mesh_repository: &mut MeshRepository<f32>,
     obj_file_path: P,
-    projection: &impl TextureProjection<fre>,
+    projection: &impl TextureProjection<f32>,
 ) -> Result<MeshComp>
 where
     P: AsRef<Path> + Debug,
@@ -195,7 +192,7 @@ where
     Ok(MeshComp { id: mesh_id })
 }
 
-pub fn read_meshes_from_obj_file<P>(obj_file_path: P) -> Result<Vec<TriangleMesh<fre>>>
+pub fn read_meshes_from_obj_file<P>(obj_file_path: P) -> Result<Vec<TriangleMesh<f32>>>
 where
     P: AsRef<Path> + Debug,
 {
@@ -206,8 +203,8 @@ where
         .collect())
 }
 
-fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
-    fn aggregate_3<T>(values: &[fre], aggregator: impl Fn(fre, fre, fre) -> T) -> Vec<T> {
+fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {
+    fn aggregate_3<T>(values: &[f32], aggregator: impl Fn(f32, f32, f32) -> T) -> Vec<T> {
         values
             .iter()
             .step_by(3)
@@ -217,7 +214,7 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
             .collect()
     }
 
-    fn aggregate_2<T>(values: &[fre], aggregator: impl Fn(fre, fre) -> T) -> Vec<T> {
+    fn aggregate_2<T>(values: &[f32], aggregator: impl Fn(f32, f32) -> T) -> Vec<T> {
         values
             .iter()
             .step_by(2)

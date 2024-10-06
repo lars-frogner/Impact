@@ -13,7 +13,6 @@ pub use graph::{
 
 use crate::{
     camera::SceneCamera,
-    gpu::rendering::fre,
     light::LightStorage,
     material::{MaterialLibrary, MaterialLibraryState},
     mesh::{MeshRepository, MeshRepositoryState},
@@ -27,15 +26,15 @@ use std::{num::NonZeroU32, sync::RwLock};
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
-    mesh_repository: RwLock<MeshRepository<fre>>,
+    mesh_repository: RwLock<MeshRepository<f32>>,
     initial_mesh_repository_state: MeshRepositoryState,
     material_library: RwLock<MaterialLibrary>,
     initial_material_library_state: MaterialLibraryState,
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
     voxel_manager: RwLock<VoxelManager>,
-    scene_graph: RwLock<SceneGraph<fre>>,
-    scene_camera: RwLock<Option<SceneCamera<fre>>>,
+    scene_graph: RwLock<SceneGraph<f32>>,
+    scene_camera: RwLock<Option<SceneCamera<f32>>>,
     skybox: RwLock<Option<Skybox>>,
 }
 
@@ -50,7 +49,7 @@ pub enum RenderResourcesDesynchronized {
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(
-        mesh_repository: MeshRepository<fre>,
+        mesh_repository: MeshRepository<f32>,
         material_library: MaterialLibrary,
         instance_feature_manager: InstanceFeatureManager,
         voxel_manager: VoxelManager,
@@ -72,7 +71,7 @@ impl Scene {
     }
 
     /// Returns a reference to the [`MeshRepository`], guarded by a [`RwLock`].
-    pub fn mesh_repository(&self) -> &RwLock<MeshRepository<fre>> {
+    pub fn mesh_repository(&self) -> &RwLock<MeshRepository<f32>> {
         &self.mesh_repository
     }
 
@@ -98,13 +97,13 @@ impl Scene {
     }
 
     /// Returns a reference to the [`SceneGraph`], guarded by a [`RwLock`].
-    pub fn scene_graph(&self) -> &RwLock<SceneGraph<fre>> {
+    pub fn scene_graph(&self) -> &RwLock<SceneGraph<f32>> {
         &self.scene_graph
     }
 
     /// Returns a reference to the [`SceneCamera`], or [`None`] if no scene
     /// camera has been set, guarded by a [`RwLock`].
-    pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<fre>>> {
+    pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<f32>>> {
         &self.scene_camera
     }
 

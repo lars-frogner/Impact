@@ -3,10 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    gpu::{
-        rendering::fre,
-        texture::{DepthOrArrayLayers, TextureLookupTable},
-    },
+    gpu::texture::{DepthOrArrayLayers, TextureLookupTable},
     num::Float,
 };
 use std::num::NonZeroU32;
@@ -28,13 +25,13 @@ pub fn create_specular_ggx_reflectance_lookup_tables(
     num_v_dot_n_samples: usize,
     num_roughness_samples: usize,
 ) -> TextureLookupTable<f32> {
-    const MIN_ROUGHNESS: fre = 0.05;
+    const MIN_ROUGHNESS: f32 = 0.05;
 
     assert!(num_v_dot_n_samples > 1);
     assert!(num_roughness_samples > 1);
 
-    let v_dot_n_delta = 1.0 / ((num_v_dot_n_samples - 1) as fre);
-    let roughness_delta = (1.0 - MIN_ROUGHNESS) / ((num_roughness_samples - 1) as fre);
+    let v_dot_n_delta = 1.0 / ((num_v_dot_n_samples - 1) as f32);
+    let roughness_delta = (1.0 - MIN_ROUGHNESS) / ((num_roughness_samples - 1) as f32);
 
     let mut data = Vec::with_capacity(2 * num_roughness_samples * num_v_dot_n_samples);
 
@@ -74,19 +71,19 @@ pub fn create_specular_ggx_reflectance_lookup_tables(
 /// `l_dot_n` and `l_dot_v` as its only arguments. The radiance function is
 /// assumed isotropic.
 pub fn compute_reflectance_integral(
-    evaluate_radiance: impl Fn(fre, fre, fre) -> fre,
-    v_dot_n: fre,
-) -> fre {
-    let evaluate_integrand_for_l_dot_n = |l_dot_n: fre| -> fre {
+    evaluate_radiance: impl Fn(f32, f32, f32) -> f32,
+    v_dot_n: f32,
+) -> f32 {
+    let evaluate_integrand_for_l_dot_n = |l_dot_n: f32| -> f32 {
         let l_dot_v_offset = v_dot_n * l_dot_n;
-        let l_dot_v_scale = fre::sqrt((1.0 - v_dot_n.powi(2)) * (1.0 - l_dot_n.powi(2)));
+        let l_dot_v_scale = f32::sqrt((1.0 - v_dot_n.powi(2)) * (1.0 - l_dot_n.powi(2)));
 
-        let evaluate_integrand_for_phi = |phi: fre| -> fre {
-            let l_dot_v = l_dot_v_offset + fre::cos(phi) * l_dot_v_scale;
+        let evaluate_integrand_for_phi = |phi: f32| -> f32 {
+            let l_dot_v = l_dot_v_offset + f32::cos(phi) * l_dot_v_scale;
             evaluate_radiance(v_dot_n, l_dot_n, l_dot_v)
         };
 
-        l_dot_n * integrate_hundred_point_gauss_legendre(evaluate_integrand_for_phi, 0.0, fre::PI)
+        l_dot_n * integrate_hundred_point_gauss_legendre(evaluate_integrand_for_phi, 0.0, f32::PI)
     };
 
     // Multiply with 2 since we only integrated over half the hemisphere (0 <=
@@ -96,13 +93,14 @@ pub fn compute_reflectance_integral(
 
 /// Evaluates the specular BRDF based on the GGX distribution of microfacet
 /// normals.
+#[allow(non_snake_case)]
 pub fn evaluate_specular_ggx_brdf(
-    F0: fre,
-    roughness: fre,
-    v_dot_n: fre,
-    l_dot_n: fre,
-    l_dot_v: fre,
-) -> fre {
+    F0: f32,
+    roughness: f32,
+    v_dot_n: f32,
+    l_dot_n: f32,
+    l_dot_v: f32,
+) -> f32 {
     let (n_dot_h, _, l_dot_h) = compute_half_vector_dot_products(v_dot_n, l_dot_n, l_dot_v);
 
     let fre = compute_fresnel_reflectance(F0, l_dot_h);
@@ -115,10 +113,10 @@ pub fn evaluate_specular_ggx_brdf(
 /// Uses the definition of the half vector, `h = (l + v) / |l + v|`, to
 /// efficiently compute the dot products of the light direction `l`, view
 /// direction `v` and normal vector `n` with `h`.
-fn compute_half_vector_dot_products(v_dot_n: fre, l_dot_n: fre, l_dot_v: fre) -> (fre, fre, fre) {
+fn compute_half_vector_dot_products(v_dot_n: f32, l_dot_n: f32, l_dot_v: f32) -> (f32, f32, f32) {
     let one_plus_l_dot_v = 1.0 + l_dot_v;
     let l_plus_v_squared_len = 2.0 * one_plus_l_dot_v;
-    let inverse_l_plus_v_len = 1.0 / fre::sqrt(l_plus_v_squared_len);
+    let inverse_l_plus_v_len = 1.0 / f32::sqrt(l_plus_v_squared_len);
 
     let l_dot_h = one_plus_l_dot_v * inverse_l_plus_v_len;
     let n_dot_h = (l_dot_n + v_dot_n) * inverse_l_plus_v_len;
@@ -133,9 +131,10 @@ fn compute_half_vector_dot_products(v_dot_n: fre, l_dot_n: fre, l_dot_v: fre) ->
 ///
 /// # Note
 /// For a specular microfacet BRDF, the half vector `h` should be used as the
-/// normal vector in `l_dot_n` rather than the macroscopic normal vector `n`
-fn compute_fresnel_reflectance(F0: fre, l_dot_n: fre) -> fre {
-    F0 + (1.0 - F0) * (1.0 - fre::max(0.0, l_dot_n)).powi(5)
+/// normal vector in `l_dot_n` rather than the macroscopic normal vector `n`.
+#[allow(non_snake_case)]
+fn compute_fresnel_reflectance(F0: f32, l_dot_n: f32) -> f32 {
+    F0 + (1.0 - F0) * (1.0 - f32::max(0.0, l_dot_n)).powi(5)
 }
 
 /// Evaluates the Smith height-correlated masking shadowing function `G` for the
@@ -144,10 +143,10 @@ fn compute_fresnel_reflectance(F0: fre, l_dot_n: fre) -> fre {
 ///
 /// Uses the approximation of Hammon (2017).
 fn evaluate_scaled_ggx_masking_shadowing_function(
-    v_dot_n: fre,
-    l_dot_n: fre,
-    roughness: fre,
-) -> fre {
+    v_dot_n: f32,
+    l_dot_n: f32,
+    roughness: f32,
+) -> f32 {
     let abs_v_dot_n = v_dot_n.abs();
     let abs_l_dot_n = l_dot_n.abs();
     0.5 / ((1.0 - roughness) * (2.0 * abs_v_dot_n * abs_l_dot_n)
@@ -158,11 +157,11 @@ fn evaluate_scaled_ggx_masking_shadowing_function(
 /// Evaluates the GGX distribution of microfacet normals. The `m` vector in
 /// `n_dot_m` is the microfacet normal, which for a specular BRDF should be the
 /// half vector `h`.
-fn evaluate_ggx_distribution(n_dot_m: fre, roughness: fre) -> fre {
+fn evaluate_ggx_distribution(n_dot_m: f32, roughness: f32) -> f32 {
     if n_dot_m > 0.0 {
         let roughness_squared = roughness.powi(2);
         roughness_squared
-            / (fre::PI * (1.0 + n_dot_m.powi(2) * (roughness_squared - 1.0)).powi(2) + 1e-6)
+            / (f32::PI * (1.0 + n_dot_m.powi(2) * (roughness_squared - 1.0)).powi(2) + 1e-6)
     } else {
         0.0
     }
@@ -171,13 +170,13 @@ fn evaluate_ggx_distribution(n_dot_m: fre, roughness: fre) -> fre {
 /// Estimates the integral of the given function over the given interval using a
 /// hundred-point Gauss-Legendre quadrature.
 fn integrate_hundred_point_gauss_legendre(
-    evaluate_integrand: impl Fn(fre) -> fre,
-    start: fre,
-    end: fre,
-) -> fre {
+    evaluate_integrand: impl Fn(f32) -> f32,
+    start: f32,
+    end: f32,
+) -> f32 {
     #[rustfmt::skip]
     #[allow(clippy::excessive_precision)]
-    const COORDS: &[fre] = &[
+    const COORDS: &[f32] = &[
         -0.9997137268, -0.9984919506, -0.996295135, -0.993124937, -0.988984395,
         -0.983877541, -0.977809358, -0.970785776, -0.962813654, -0.953900783,
         -0.9440558701, -0.933288535, -0.921609298, -0.909029571, -0.895561645,
@@ -202,7 +201,7 @@ fn integrate_hundred_point_gauss_legendre(
 
     #[rustfmt::skip]
     #[allow(clippy::excessive_precision)]
-    const WEIGHTS: &[fre] = &[
+    const WEIGHTS: &[f32] = &[
         7.346345E-4, 0.0017093927, 0.002683925372, 0.0036559612, 0.0046244501,
         0.005588428, 0.0065469485, 0.00749907326, 0.008443871, 0.0093804197,
         0.0103078026, 0.011225114, 0.0121314577, 0.013025948, 0.0139077107,
@@ -252,21 +251,21 @@ mod tests {
     #[test]
     fn gauss_legendre_integration_works() {
         assert_abs_diff_eq!(
-            integrate_hundred_point_gauss_legendre(fre::sin, 0.0, fre::TWO_PI),
+            integrate_hundred_point_gauss_legendre(f32::sin, 0.0, f32::TWO_PI),
             0.0
         );
         assert_abs_diff_eq!(
-            integrate_hundred_point_gauss_legendre(fre::sin, 0.0, fre::PI),
+            integrate_hundred_point_gauss_legendre(f32::sin, 0.0, f32::PI),
             2.0
         );
         assert_abs_diff_eq!(
-            integrate_hundred_point_gauss_legendre(fre::exp, -1.0, 1.0),
-            fre::exp(1.0) - 1.0 / fre::exp(1.0),
+            integrate_hundred_point_gauss_legendre(f32::exp, -1.0, 1.0),
+            f32::exp(1.0) - 1.0 / f32::exp(1.0),
             epsilon = 1e-6
         );
         assert_abs_diff_eq!(
             integrate_hundred_point_gauss_legendre(
-                |x| fre::exp(x) * fre::sin(x).powi(2),
+                |x| f32::exp(x) * f32::sin(x).powi(2),
                 -1.0,
                 0.5
             ),

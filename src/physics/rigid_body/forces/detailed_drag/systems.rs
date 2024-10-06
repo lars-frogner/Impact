@@ -1,19 +1,14 @@
 //! ECS systems related to the detailed drag model.
 
 use super::DragLoadMapRepository;
-use crate::{
-    gpu::rendering::fre,
-    physics::{
-        fph,
-        medium::UniformMedium,
-        motion::{
-            components::{ReferenceFrameComp, Static, VelocityComp},
-            Direction,
-        },
-        rigid_body::{
-            components::RigidBodyComp, forces::detailed_drag::components::DragLoadMapComp,
-        },
+use crate::physics::{
+    fph,
+    medium::UniformMedium,
+    motion::{
+        components::{ReferenceFrameComp, Static, VelocityComp},
+        Direction,
     },
+    rigid_body::{components::RigidBodyComp, forces::detailed_drag::components::DragLoadMapComp},
 };
 use impact_ecs::{query, world::World as ECSWorld};
 
@@ -22,7 +17,7 @@ use impact_ecs::{query, world::World as ECSWorld};
 /// [`DragLoadMapComp`].
 pub fn apply_detailed_drag(
     ecs_world: &ECSWorld,
-    drag_load_map_repository: &DragLoadMapRepository<fre>,
+    drag_load_map_repository: &DragLoadMapRepository<f32>,
     medium: &UniformMedium,
 ) {
     query!(
@@ -45,7 +40,7 @@ pub fn apply_detailed_drag(
 }
 
 fn apply_detailed_drag_for_entity(
-    drag_load_map_repository: &DragLoadMapRepository<fre>,
+    drag_load_map_repository: &DragLoadMapRepository<f32>,
     medium: &UniformMedium,
     rigid_body: &mut RigidBodyComp,
     frame: &ReferenceFrameComp,

@@ -10,7 +10,6 @@ use crate::{
     gpu::{
         query::TimestampQueryRegistry,
         rendering::{
-            fre,
             postprocessing::Postprocessor,
             render_command::{PostprocessingRenderPass, RenderAttachmentTextureCopyCommand},
             resource::SynchronizedRenderResources,
@@ -34,8 +33,8 @@ pub struct TemporalAntiAliasingConfig {
     pub initially_enabled: bool,
     /// How much the luminance of the current frame should be weighted compared
     /// to the luminance reprojected from the previous frame.
-    pub current_frame_weight: fre,
-    pub variance_clipping_threshold: fre,
+    pub current_frame_weight: f32,
+    pub variance_clipping_threshold: f32,
 }
 
 #[derive(Debug)]
@@ -52,8 +51,8 @@ pub(super) struct TemporalAntiAliasingRenderCommands {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct TemporalAntiAliasingParameters {
-    current_frame_weight: fre,
-    variance_clipping_threshold: fre,
+    current_frame_weight: f32,
+    variance_clipping_threshold: f32,
     _pad: [u8; 8],
 }
 
@@ -128,7 +127,7 @@ impl TemporalAntiAliasingRenderCommands {
 }
 
 impl TemporalAntiAliasingParameters {
-    fn new(current_frame_weight: fre, variance_clipping_threshold: fre) -> Self {
+    fn new(current_frame_weight: f32, variance_clipping_threshold: f32) -> Self {
         Self {
             current_frame_weight,
             variance_clipping_threshold,
@@ -168,8 +167,8 @@ fn create_temporal_anti_aliasing_blending_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
-    current_frame_weight: fre,
-    variance_clipping_threshold: fre,
+    current_frame_weight: f32,
+    variance_clipping_threshold: f32,
 ) -> Result<PostprocessingRenderPass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "TemporalAntiAliasingParameters{{ current_frame_weight: {} }}",

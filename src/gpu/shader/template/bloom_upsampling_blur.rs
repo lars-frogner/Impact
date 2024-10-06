@@ -2,7 +2,6 @@
 
 use crate::{
     gpu::{
-        rendering::fre,
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::RenderAttachmentQuantity,
     },
@@ -16,7 +15,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct BloomUpsamplingBlurShaderTemplate {
     render_attachment_quantity: RenderAttachmentQuantity,
-    blur_filter_radius: fre,
+    blur_filter_radius: f32,
 }
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> = LazyLock::new(|| {
@@ -28,7 +27,7 @@ impl BloomUpsamplingBlurShaderTemplate {
     /// given render attachment quantity and blur filter radius.
     pub fn new(
         render_attachment_quantity: RenderAttachmentQuantity,
-        blur_filter_radius: fre,
+        blur_filter_radius: f32,
     ) -> Self {
         assert!(blur_filter_radius > 0.0);
         Self {

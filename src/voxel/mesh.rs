@@ -2,7 +2,6 @@
 
 use crate::{
     geometry::{Frustum, OrientedBox, Plane},
-    gpu::rendering::fre,
     voxel::chunks::{
         sdf::{surface_nets::SurfaceNetsBuffer, VoxelChunkSignedDistanceField},
         ChunkedVoxelObject, VoxelChunkFlags,
@@ -98,14 +97,14 @@ pub struct ChunkSubmeshDataRanges {
 pub struct CullingFrustum {
     pub planes: [FrustumPlane; 6],
     pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
-    pub apex_position: Point3<fre>,
+    pub apex_position: Point3<f32>,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct FrustumPlane {
-    pub unit_normal: UnitVector3<fre>,
-    pub displacement: fre,
+    pub unit_normal: UnitVector3<f32>,
+    pub displacement: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -201,7 +200,7 @@ impl ChunkedVoxelObjectMesh {
                 Self::vertex_position_offset_for_chunk(voxel_object, chunk_indices);
 
             sdf.compute_surface_nets_mesh(
-                voxel_object.voxel_extent() as fre,
+                voxel_object.voxel_extent() as f32,
                 &vertex_position_offset,
                 &mut surface_nets_buffer,
             );
@@ -261,7 +260,7 @@ impl ChunkedVoxelObjectMesh {
                     Self::vertex_position_offset_for_chunk(voxel_object, chunk_indices);
 
                 self.sdf_buffer.compute_surface_nets_mesh(
-                    voxel_object.voxel_extent() as fre,
+                    voxel_object.voxel_extent() as f32,
                     &vertex_position_offset,
                     &mut self.surface_nets_buffer,
                 );
@@ -410,17 +409,17 @@ impl ChunkedVoxelObjectMesh {
         voxel_object: &ChunkedVoxelObject,
         chunk_indices: &[usize; 3],
     ) -> Vec3A {
-        let voxel_extent = voxel_object.voxel_extent() as fre;
-        let chunk_extent = voxel_object.chunk_extent() as fre;
+        let voxel_extent = voxel_object.voxel_extent() as f32;
+        let chunk_extent = voxel_object.chunk_extent() as f32;
 
         // Since the `VoxelChunkSignedDistanceField` has a 1-voxel padding
         // around the chunk boundary, we need to subtract the voxel extent
         // from the position of the chunk's lower corner to get the offset
         // of the vertices for the surface nets mesh.
         Vec3A::new(
-            chunk_indices[0] as fre * chunk_extent - voxel_extent,
-            chunk_indices[1] as fre * chunk_extent - voxel_extent,
-            chunk_indices[2] as fre * chunk_extent - voxel_extent,
+            chunk_indices[0] as f32 * chunk_extent - voxel_extent,
+            chunk_indices[1] as f32 * chunk_extent - voxel_extent,
+            chunk_indices[2] as f32 * chunk_extent - voxel_extent,
         )
     }
 }
@@ -483,8 +482,8 @@ impl CullingFrustum {
     /// Gathers the given frustum planes and apex position into a
     /// `CullingFrustum`.
     pub fn from_planes_and_apex_position(
-        planes: [Plane<fre>; 6],
-        apex_position: Point3<fre>,
+        planes: [Plane<f32>; 6],
+        apex_position: Point3<f32>,
     ) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
             u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
@@ -510,8 +509,8 @@ impl CullingFrustum {
     /// The frustum is assumed to be in the space where the apex is at the
     /// origin before transformation.
     pub fn for_transformed_frustum(
-        frustum: &Frustum<fre>,
-        transformation: &Similarity3<fre>,
+        frustum: &Frustum<f32>,
+        transformation: &Similarity3<f32>,
     ) -> Self {
         Self::from_planes_and_apex_position(
             frustum.transformed_planes(transformation),
@@ -531,9 +530,9 @@ impl CullingFrustum {
     /// infinity for an orthographic frustum, this can be emulated by
     /// passing in a sufficiently large distance.
     pub fn for_transformed_orthographic_frustum(
-        orthographic_frustum: &OrientedBox<fre>,
-        transformation: &Similarity3<fre>,
-        apex_distance: fre,
+        orthographic_frustum: &OrientedBox<f32>,
+        transformation: &Similarity3<f32>,
+        apex_distance: f32,
     ) -> Self {
         let transformed_box = orthographic_frustum.transformed(transformation);
         let transformed_view_diection = -transformed_box.compute_depth_axis();

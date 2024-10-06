@@ -3,7 +3,7 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
-        rendering::{fre, render_command::PostprocessingRenderPass, surface::RenderingSurface},
+        rendering::{render_command::PostprocessingRenderPass, surface::RenderingSurface},
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{template::gaussian_blur::GaussianBlurShaderTemplate, ShaderManager},
         texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
@@ -44,7 +44,7 @@ pub struct GaussianBlurSamples {
     /// as the second component. The remaining vector components are ignored.
     /// The reason we need to use a `Vector4` is that arrays in uniforms must
     /// have elements aligned to 16 bytes.
-    sample_offsets_and_weights: [Vector4<fre>; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
+    sample_offsets_and_weights: [Vector4<f32>; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
     sample_count: u32,
     truncated_tail_samples: u32,
     _pad: [u8; 8],
@@ -94,7 +94,7 @@ impl GaussianBlurSamples {
         // To obtain the weight, we must normalize each coefficient by the sum
         // of all coefficients
         let coefficient_sum: u64 = truncated_binomial_coefficients.iter().copied().sum();
-        let weight_normalization = (coefficient_sum as fre).recip();
+        let weight_normalization = (coefficient_sum as f32).recip();
 
         // Drop the coefficients on the negative offset side
         let coefficients_from_center =
@@ -107,10 +107,10 @@ impl GaussianBlurSamples {
             .enumerate()
         {
             // Offset
-            offset_and_weight.x = sample_idx as fre;
+            offset_and_weight.x = sample_idx as f32;
             // Weight
             offset_and_weight.y =
-                coefficients_from_center[sample_idx] as fre * weight_normalization;
+                coefficients_from_center[sample_idx] as f32 * weight_normalization;
         }
 
         Self {
@@ -135,7 +135,7 @@ impl GaussianBlurSamples {
     /// Returns an iterator over the 1D Gaussian kernel sample offsets starting
     /// at the center and proceeding along the positive offset side.
     #[cfg(test)]
-    pub fn sample_offsets(&self) -> impl Iterator<Item = fre> + '_ {
+    pub fn sample_offsets(&self) -> impl Iterator<Item = f32> + '_ {
         self.sample_offsets_and_weights
             .iter()
             .take(self.sample_count as usize)
@@ -145,7 +145,7 @@ impl GaussianBlurSamples {
     /// Returns an iterator over the 1D Gaussian kernel sample weights starting
     /// at the center and proceeding along the positive offset side.
     #[cfg(test)]
-    pub fn sample_weights(&self) -> impl Iterator<Item = fre> + '_ {
+    pub fn sample_weights(&self) -> impl Iterator<Item = f32> + '_ {
         self.sample_offsets_and_weights
             .iter()
             .take(self.sample_count as usize)

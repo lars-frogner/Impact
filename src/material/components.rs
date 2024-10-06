@@ -2,7 +2,7 @@
 
 use crate::{
     component::ComponentRegistry,
-    gpu::{rendering::fre, texture::TextureID},
+    gpu::texture::TextureID,
     material::{MaterialHandle, RGBColor},
 };
 use anyhow::Result;
@@ -71,7 +71,7 @@ pub struct TexturedColorComp(pub TextureID);
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct UniformSpecularReflectanceComp(pub fre);
+pub struct UniformSpecularReflectanceComp(pub f32);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a textured scalar specular reflectance at normal
@@ -84,7 +84,7 @@ pub struct UniformSpecularReflectanceComp(pub fre);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct TexturedSpecularReflectanceComp {
     pub texture_id: TextureID,
-    pub scale_factor: fre,
+    pub scale_factor: f32,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -95,7 +95,7 @@ pub struct TexturedSpecularReflectanceComp {
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct UniformRoughnessComp(pub fre);
+pub struct UniformRoughnessComp(pub f32);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a textured surface roughness. The roughness ranges from
@@ -107,7 +107,7 @@ pub struct UniformRoughnessComp(pub fre);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct TexturedRoughnessComp {
     pub texture_id: TextureID,
-    pub scale_factor: fre,
+    pub scale_factor: f32,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -130,7 +130,7 @@ pub struct TexturedRoughnessComp {
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct UniformMetalnessComp(pub fre);
+pub struct UniformMetalnessComp(pub f32);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a textured metalness.
@@ -154,7 +154,7 @@ pub struct UniformMetalnessComp(pub fre);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct TexturedMetalnessComp {
     pub texture_id: TextureID,
-    pub scale_factor: fre,
+    pub scale_factor: f32,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -167,7 +167,7 @@ pub struct TexturedMetalnessComp {
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct UniformEmissiveLuminanceComp(pub fre);
+pub struct UniformEmissiveLuminanceComp(pub f32);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a textured monochromatic emissive luminance.
@@ -181,7 +181,7 @@ pub struct UniformEmissiveLuminanceComp(pub fre);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct TexturedEmissiveLuminanceComp {
     pub texture_id: TextureID,
-    pub scale_factor: fre,
+    pub scale_factor: f32,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -202,8 +202,8 @@ pub struct NormalMapComp(pub TextureID);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ParallaxMapComp {
     pub height_map_texture_id: TextureID,
-    pub displacement_scale: fre,
-    pub uv_per_distance: Vector2<fre>,
+    pub displacement_scale: f32,
+    pub uv_per_distance: Vector2<f32>,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that
@@ -228,13 +228,13 @@ impl UniformSpecularReflectanceComp {
     pub const WATER: Self = Self(0.02);
     pub const SKIN: Self = Self(0.028);
 
-    pub const LIVING_TISSUE: (fre, fre) = (0.02, 0.04);
-    pub const FABRIC: (fre, fre) = (0.04, 0.056);
-    pub const STONE: (fre, fre) = (0.035, 0.056);
-    pub const PLASTIC: (fre, fre) = (0.04, 0.05);
-    pub const GLASS: (fre, fre) = (0.04, 0.05);
+    pub const LIVING_TISSUE: (f32, f32) = (0.02, 0.04);
+    pub const FABRIC: (f32, f32) = (0.04, 0.056);
+    pub const STONE: (f32, f32) = (0.035, 0.056);
+    pub const PLASTIC: (f32, f32) = (0.04, 0.05);
+    pub const GLASS: (f32, f32) = (0.04, 0.05);
 
-    pub fn in_range_of(range: (fre, fre), percentage: fre) -> Self {
+    pub fn in_range_of(range: (f32, f32), percentage: f32) -> Self {
         Self(range.0 + 0.01 * percentage * (range.1 - range.0))
     }
 }
@@ -283,8 +283,8 @@ impl TexturedEmissiveLuminanceComp {
 impl ParallaxMapComp {
     pub fn new(
         height_map_texture_id: TextureID,
-        displacement_scale: fre,
-        uv_per_distance: Vector2<fre>,
+        displacement_scale: f32,
+        uv_per_distance: Vector2<f32>,
     ) -> Self {
         Self {
             height_map_texture_id,

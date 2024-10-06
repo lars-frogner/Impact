@@ -14,7 +14,7 @@ use crate::{
     },
     gpu::{
         self,
-        rendering::{fre, RenderingConfig, RenderingSystem, ScreenCapturer},
+        rendering::{RenderingConfig, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
     io,
@@ -246,7 +246,7 @@ impl Application {
     pub fn load_mesh_from_obj_file_with_projection<P>(
         &self,
         obj_file_path: P,
-        projection: &impl TextureProjection<fre>,
+        projection: &impl TextureProjection<f32>,
     ) -> Result<MeshComp>
     where
         P: AsRef<Path> + Debug,
@@ -291,7 +291,7 @@ impl Application {
     pub fn load_mesh_from_ply_file_with_projection<P>(
         &self,
         ply_file_path: P,
-        projection: &impl TextureProjection<fre>,
+        projection: &impl TextureProjection<f32>,
     ) -> Result<MeshComp>
     where
         P: AsRef<Path> + Debug,

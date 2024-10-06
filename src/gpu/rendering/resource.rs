@@ -5,10 +5,7 @@ pub mod tasks;
 use crate::{
     assets::Assets,
     camera::{buffer::CameraGPUBufferManager, SceneCamera},
-    gpu::{
-        rendering::{fre, RenderingConfig},
-        GraphicsDevice,
-    },
+    gpu::{rendering::RenderingConfig, GraphicsDevice},
     light::{buffer::LightGPUBufferManager, LightStorage},
     mesh::{buffer::MeshGPUBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureGPUBufferManager, InstanceFeatureManager, ModelID},
@@ -276,7 +273,7 @@ impl DesynchronizedRenderResources {
     fn sync_camera_buffer_with_scene_camera(
         graphics_device: &GraphicsDevice,
         camera_buffer_manager: &mut Option<CameraGPUBufferManager>,
-        scene_camera: Option<&SceneCamera<fre>>,
+        scene_camera: Option<&SceneCamera<f32>>,
     ) {
         if let Some(scene_camera) = scene_camera {
             if let Some(camera_buffer_manager) = camera_buffer_manager {
@@ -330,7 +327,7 @@ impl DesynchronizedRenderResources {
     fn sync_mesh_buffers_with_meshes(
         graphics_device: &GraphicsDevice,
         mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
-        meshes: &HashMap<MeshID, TriangleMesh<fre>>,
+        meshes: &HashMap<MeshID, TriangleMesh<f32>>,
     ) {
         for (&mesh_id, mesh) in meshes {
             mesh_gpu_buffers

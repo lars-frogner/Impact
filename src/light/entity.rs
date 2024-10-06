@@ -3,7 +3,6 @@
 use crate::{
     camera::SceneCamera,
     geometry::Degrees,
-    gpu::rendering::fre,
     light::{
         components::{
             AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
@@ -23,7 +22,7 @@ use std::sync::RwLock;
 /// the light storage and adds a correspondong light component with the light's
 /// ID to the entity.
 pub fn setup_light_for_new_entity(
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -87,7 +86,7 @@ pub fn setup_ambient_light_for_new_entity(
 /// [`OmnidirectionalLight`] to the light storage and adds a
 /// [`OmnidirectionalLightComp`] with the light's ID to the entity.
 pub fn setup_omnidirectional_light_for_new_entity(
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -113,7 +112,7 @@ pub fn setup_omnidirectional_light_for_new_entity(
             let omnidirectional_light = OmnidirectionalLight::new(
                 view_transform.transform_point(&frame.position.cast()),
                 omnidirectional_emission.luminous_intensity,
-                fre::max(omnidirectional_emission.source_extent, 0.0),
+                f32::max(omnidirectional_emission.source_extent, 0.0),
             );
             let id = light_storage.add_omnidirectional_light(omnidirectional_light);
 
@@ -128,7 +127,7 @@ pub fn setup_omnidirectional_light_for_new_entity(
 /// [`UnidirectionalLight`] to the light storage and adds a
 /// [`UnidirectionalLightComp`] with the light's ID to the entity.
 pub fn setup_unidirectional_light_for_new_entity(
-    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -155,7 +154,7 @@ pub fn setup_unidirectional_light_for_new_entity(
                     view_transform.transform_vector(&unidirectional_emission.direction),
                 ),
                 unidirectional_emission.perpendicular_illuminance,
-                Degrees(fre::max(
+                Degrees(f32::max(
                     unidirectional_emission.angular_source_extent.0,
                     0.0,
                 )),
