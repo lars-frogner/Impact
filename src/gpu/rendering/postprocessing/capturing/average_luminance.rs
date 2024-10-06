@@ -102,7 +102,7 @@ impl Default for AverageLuminanceComputationConfig {
     fn default() -> Self {
         Self {
             luminance_bounds: UpperExclusiveBounds::new(1e-2, 1e9),
-            current_frame_weight: 0.5,
+            current_frame_weight: 0.02,
         }
     }
 }
