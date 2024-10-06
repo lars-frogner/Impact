@@ -78,8 +78,8 @@ impl Default for AmbientOcclusionConfig {
         Self {
             initially_enabled: true,
             sample_count: 4,
-            sample_radius: 0.5,
-            intensity: 1.0,
+            sample_radius: 1.0,
+            intensity: 2.0,
             contrast: 0.75,
         }
     }
