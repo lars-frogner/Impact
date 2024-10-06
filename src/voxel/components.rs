@@ -2,6 +2,7 @@
 
 use crate::{
     component::ComponentRegistry,
+    geometry::Sphere,
     voxel::{
         voxel_types::{VoxelType, VoxelTypeRegistry},
         VoxelObjectID,
@@ -11,6 +12,7 @@ use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use impact_utils::{compute_hash_str_32, Hash32};
+use nalgebra::{Point3, Vector3};
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities whose voxel type is the same everywhere.
@@ -145,6 +147,23 @@ pub struct VoxelObjectComp {
     /// The ID of the entity's
     /// [`ChunkedVoxelObject`](crate::voxel::ChunkedVoxelObject).
     pub voxel_object_id: VoxelObjectID,
+}
+
+/// [`Component`](impact_ecs::component::Component) for entities that have a
+/// sphere that absorbs voxels it comes in contact with. The rate of absorption
+/// is highest at the center of the sphere and decreases quadratically to zero
+/// at the full radius.
+///
+/// Does nothing if the entity does not have a [`ReferenceFrameComp`].
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VoxelAbsorbingSphereComp {
+    /// The offset of the sphere in the reference frame of the entity.
+    offset: Vector3<f64>,
+    /// The radius of the sphere.
+    radius: f64,
+    /// The maximum rate of absorption (at the center of the sphere).
+    rate: f64,
 }
 
 impl SameVoxelTypeComp {
@@ -340,6 +359,31 @@ impl VoxelGradientNoisePatternComp {
     }
 }
 
+impl VoxelAbsorbingSphereComp {
+    /// Creates a new [`VoxelAbsorbingSphereComp`] with the given offset and
+    /// radius in the reference frame of the entity and the given maximum
+    /// absorption rate (at the center of the sphere).
+    pub fn new(offset: Vector3<f64>, radius: f64, rate: f64) -> Self {
+        assert!(radius >= 0.0);
+        assert!(rate >= 0.0);
+        Self {
+            offset,
+            radius,
+            rate,
+        }
+    }
+
+    /// Returns the sphere in the reference frame of the entity.
+    pub fn sphere(&self) -> Sphere<f64> {
+        Sphere::new(Point3::from(self.offset), self.radius)
+    }
+
+    /// Returns the maximum absorption rate.
+    pub fn rate(&self) -> f64 {
+        self.rate
+    }
+}
+
 /// Registers all voxel [`Component`](impact_ecs::component::Component)s.
 pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, SameVoxelTypeComp)?;
@@ -348,5 +392,6 @@ pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()>
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
     register_setup_component!(registry, VoxelGradientNoisePatternComp)?;
-    register_setup_component!(registry, VoxelObjectComp)
+    register_component!(registry, VoxelObjectComp)?;
+    register_component!(registry, VoxelAbsorbingSphereComp)
 }

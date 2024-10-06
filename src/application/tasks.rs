@@ -2,7 +2,7 @@
 
 use crate::{
     application::Application, gpu, physics, scene, scheduling::TaskScheduler,
-    thread::ThreadPoolTaskErrors, window::EventLoopController,
+    thread::ThreadPoolTaskErrors, voxel, window::EventLoopController,
 };
 use anyhow::Result;
 use std::{num::NonZeroUsize, sync::Arc};
@@ -56,5 +56,6 @@ pub fn register_all_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     scene::tasks::register_scene_tasks(task_scheduler)?;
     gpu::rendering::tasks::register_rendering_tasks(task_scheduler)?;
     physics::tasks::register_physics_tasks(task_scheduler)?;
+    voxel::tasks::register_voxel_tasks(task_scheduler)?;
     task_scheduler.complete_task_registration()
 }

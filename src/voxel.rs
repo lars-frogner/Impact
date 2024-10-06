@@ -7,6 +7,8 @@ pub mod generation;
 pub mod mesh;
 pub mod render_commands;
 pub mod resource;
+pub mod systems;
+pub mod tasks;
 pub mod utils;
 pub mod voxel_types;
 
@@ -237,6 +239,16 @@ impl Voxel {
         self.signed_distance
     }
 
+    /// Increases the signed distance by the given amount, and marks the voxel
+    /// as empty if the signed distance becomes positive.
+    pub fn increase_signed_distance(&mut self, signed_distance_delta: f32) {
+        let new_signed_distance = self.signed_distance.to_f32() + signed_distance_delta;
+        self.signed_distance = VoxelSignedDistance::from_f32(new_signed_distance);
+        if !self.signed_distance.is_negative() {
+            self.add_flags(VoxelFlags::IS_EMPTY);
+        }
+    }
+
     /// Sets the given state flags for the voxel (this will not clear any
     /// existing flags).
     fn add_flags(&mut self, flags: VoxelFlags) {
@@ -321,6 +333,11 @@ impl VoxelManager {
         let voxel_object_id = self.create_new_voxel_object_id();
         self.voxel_objects.insert(voxel_object_id, voxel_object);
         voxel_object_id
+    }
+
+    /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.
+    pub fn remove_voxel_object(&mut self, voxel_object_id: VoxelObjectID) {
+        self.voxel_objects.remove(&voxel_object_id);
     }
 
     /// Removes all voxel objects in the manager.

@@ -140,6 +140,12 @@ impl Scene {
             &mut desynchronized,
         );
 
+        voxel::entity::cleanup_voxel_object_for_removed_entity(
+            self.voxel_manager(),
+            entity,
+            &mut desynchronized,
+        );
+
         desynchronized
     }
 
