@@ -732,44 +732,9 @@ impl ChunkedVoxelObject {
     }
 
     fn update_all_chunk_boundary_adjacencies(&mut self) {
-        self.update_boundary_adjacencies_for_chunks_in_ranges(self.occupied_chunk_ranges.clone());
-    }
-
-    fn update_boundary_adjacencies_for_chunks_in_ranges(
-        &mut self,
-        chunk_ranges: [Range<usize>; 3],
-    ) {
-        for chunk_i in chunk_ranges[0].clone() {
-            for chunk_j in chunk_ranges[1].clone() {
-                for chunk_k in chunk_ranges[2].clone() {
-                    let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
-
-                    for (adjacent_chunk_indices, dim) in [
-                        ([chunk_i + 1, chunk_j, chunk_k], Dimension::X),
-                        ([chunk_i, chunk_j + 1, chunk_k], Dimension::Y),
-                        ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
-                    ] {
-                        let upper_chunk_idx = if adjacent_chunk_indices[dim.idx()]
-                            < self.occupied_chunk_ranges[dim.idx()].end
-                        {
-                            let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
-
-                            Some(adjacent_chunk_idx)
-                        } else {
-                            None
-                        };
-
-                        VoxelChunk::update_mutual_face_adjacencies(
-                            &mut self.chunks,
-                            &mut self.voxels,
-                            Some(chunk_idx),
-                            upper_chunk_idx,
-                            dim,
-                        );
-                    }
-                }
-            }
-        }
+        self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
+            self.occupied_chunk_ranges.clone(),
+        );
 
         // Handle lower faces of the full object, since these are not included
         // in the loop above
@@ -807,6 +772,43 @@ impl ChunkedVoxelObject {
                     Some(chunk_idx),
                     Dimension::Z,
                 );
+            }
+        }
+    }
+
+    fn update_upper_boundary_adjacencies_for_chunks_in_ranges(
+        &mut self,
+        chunk_ranges: [Range<usize>; 3],
+    ) {
+        for chunk_i in chunk_ranges[0].clone() {
+            for chunk_j in chunk_ranges[1].clone() {
+                for chunk_k in chunk_ranges[2].clone() {
+                    let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
+
+                    for (adjacent_chunk_indices, dim) in [
+                        ([chunk_i + 1, chunk_j, chunk_k], Dimension::X),
+                        ([chunk_i, chunk_j + 1, chunk_k], Dimension::Y),
+                        ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
+                    ] {
+                        let upper_chunk_idx = if adjacent_chunk_indices[dim.idx()]
+                            < self.occupied_chunk_ranges[dim.idx()].end
+                        {
+                            let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
+
+                            Some(adjacent_chunk_idx)
+                        } else {
+                            None
+                        };
+
+                        VoxelChunk::update_mutual_face_adjacencies(
+                            &mut self.chunks,
+                            &mut self.voxels,
+                            Some(chunk_idx),
+                            upper_chunk_idx,
+                            dim,
+                        );
+                    }
+                }
             }
         }
     }
@@ -1016,6 +1018,95 @@ impl VoxelChunk {
                 }
             }
         }
+    }
+
+    fn update_face_distributions_and_internal_adjacencies(&mut self, voxels: &mut [Voxel]) {
+        // We only need to update the face distributions and internal adjacencies if the
+        // chunk is non-uniform
+        let (start_voxel_idx, face_distributions) =
+            if let Self::NonUniform(NonUniformVoxelChunk {
+                start_voxel_idx,
+                face_distributions,
+                ..
+            }) = self
+            {
+                (*start_voxel_idx, face_distributions)
+            } else {
+                return;
+            };
+
+        // Extract the sub-slice of voxels for this chunk so that we get
+        // out-of-bounds if trying to access voxels outside the chunk
+        let chunk_voxels = &mut voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
+
+        let mut face_empty_counts = FaceEmptyCounts::zero();
+
+        for i in 0..CHUNK_SIZE {
+            for j in 0..CHUNK_SIZE {
+                for k in 0..CHUNK_SIZE {
+                    let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
+
+                    if chunk_voxels[idx].is_empty() {
+                        if i == 0 {
+                            face_empty_counts.increment_x_dn();
+                        } else if i == CHUNK_SIZE - 1 {
+                            face_empty_counts.increment_x_up();
+                        }
+                        if j == 0 {
+                            face_empty_counts.increment_y_dn();
+                        } else if j == CHUNK_SIZE - 1 {
+                            face_empty_counts.increment_y_up();
+                        }
+                        if k == 0 {
+                            face_empty_counts.increment_z_dn();
+                        } else if k == CHUNK_SIZE - 1 {
+                            face_empty_counts.increment_z_up();
+                        }
+                        continue;
+                    }
+
+                    let mut flags = VoxelFlags::empty();
+
+                    // Since we will update the flag of the adjacent voxel in
+                    // addition to this one, we only need to look up the upper
+                    // adjacent voxels to cover every adjacency over the course
+                    // of the full loop
+                    for (adjacent_indices, flag_for_current, flag_for_adjacent, dim) in [
+                        (
+                            [i + 1, j, k],
+                            VoxelFlags::HAS_ADJACENT_X_UP,
+                            VoxelFlags::HAS_ADJACENT_X_DN,
+                            Dimension::X,
+                        ),
+                        (
+                            [i, j + 1, k],
+                            VoxelFlags::HAS_ADJACENT_Y_UP,
+                            VoxelFlags::HAS_ADJACENT_Y_DN,
+                            Dimension::Y,
+                        ),
+                        (
+                            [i, j, k + 1],
+                            VoxelFlags::HAS_ADJACENT_Z_UP,
+                            VoxelFlags::HAS_ADJACENT_Z_DN,
+                            Dimension::Z,
+                        ),
+                    ] {
+                        if adjacent_indices[dim.idx()] < CHUNK_SIZE {
+                            let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                            let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
+                            if !adjacent_voxel.is_empty() {
+                                flags |= flag_for_current;
+                                adjacent_voxel.add_flags(flag_for_adjacent);
+                            }
+                        }
+                    }
+
+                    chunk_voxels[idx].add_flags(flags);
+                }
+            }
+        }
+
+        *face_distributions = face_empty_counts.to_face_distributions(CHUNK_SIZE_SQUARED);
     }
 
     fn mark_lower_face_as_obscured(&mut self, dim: Dimension) {

@@ -14,7 +14,7 @@ use crate::{
             SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
             UncullableComp,
         },
-        SceneGraph,
+        RenderResourcesDesynchronized, SceneGraph,
     },
     voxel::{
         chunks::ChunkedVoxelObject,
@@ -33,7 +33,7 @@ use crate::{
         VoxelManager, VoxelObjectID,
     },
 };
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_utils::hash64;
 use std::sync::{LazyLock, RwLock};
 
@@ -405,6 +405,25 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
         },
         ![SceneGraphModelInstanceNodeComp]
     );
+}
+
+/// Checks if the given entity has a [`VoxelObjectComp`], and if so, removes the
+/// assocated voxel object from the given [`VoxelManager`].
+pub fn cleanup_voxel_object_for_removed_entity(
+    voxel_manager: &RwLock<VoxelManager>,
+    entity: &EntityEntry<'_>,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) {
+    if let Some(voxel_object) = entity.get_component::<VoxelObjectComp>() {
+        let voxel_object = voxel_object.access();
+
+        voxel_manager
+            .write()
+            .unwrap()
+            .remove_voxel_object(voxel_object.voxel_object_id);
+
+        desynchronized.set_yes();
+    }
 }
 
 impl_InstanceFeature!(

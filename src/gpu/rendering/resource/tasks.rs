@@ -10,6 +10,7 @@ use crate::{
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
         SyncLightsInStorage, SyncSceneCameraViewTransform,
     },
+    voxel::tasks::SyncVoxelObjectMeshes,
 };
 use anyhow::Result;
 
@@ -116,7 +117,7 @@ define_task!(
 
 define_task!(
     SyncVoxelObjectGPUBuffers,
-    depends_on = [],
+    depends_on = [SyncVoxelObjectMeshes],
     execute_on = [RenderingTag],
     |app: &Application| {
         with_debug_logging!("Synchronizing voxel object GPU buffers"; {

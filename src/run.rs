@@ -67,7 +67,7 @@ use crate::{
     voxel::{
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp, SameVoxelTypeComp,
-            VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp,
+            VoxelAbsorbingSphereComp, VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
         VoxelManager,
@@ -268,6 +268,7 @@ fn init_app(window: Window) -> Result<Application> {
         &VelocityComp::stationary(),
         &MotionControlComp::new(),
         &OrientationControlComp::new(),
+        &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, -2.0], 2.0, 10.0),
         // &UniformGravityComp::downward(9.81),
     ))?;
 
@@ -435,7 +436,7 @@ fn init_app(window: Window) -> Result<Application> {
         Degrees(2.0),
     ))?;
 
-    app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
+    app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 1000.0))?;
 
     // TODO: Check why this crashes
     // app.create_entity((
@@ -446,11 +447,11 @@ fn init_app(window: Window) -> Result<Application> {
     // ))?;
 
     app.create_entity((
-        &VoxelSphereComp::new(0.5, 20.0),
-        // &VoxelBoxComp::new(1.0, 14.0, 14.0, 14.0),
+        &VoxelSphereComp::new(0.25, 20.0),
+        // &VoxelBoxComp::new(0.5, 28.0, 28.0, 28.0),
         // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3, 0),
         // &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
-        &GradientNoiseVoxelTypesComp::new(["Ground"], 6e-2, 1.0, 1),
+        &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0, 1),
         &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 0),
         // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2, 1.0, 0),
         // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),

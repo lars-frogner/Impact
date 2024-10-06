@@ -10,13 +10,14 @@ use crate::{
         Voxel,
     },
 };
-use nalgebra::{point, Point3};
+use nalgebra::{self as na, point, Point3};
 use std::{array, ops::Range};
 
 impl ChunkedVoxelObject {
     /// Finds all non-empty voxels whose center fall within the given sphere and
-    /// calls the given closure with the voxel's indices, center position and a
-    /// mutable reference to the voxel itself.
+    /// calls the given closure with the voxel's indices, squared distance
+    /// between the voxel center and the center of the sphere and a mutable
+    /// reference to the voxel itself.
     ///
     /// Since it is assumed that the given closure will modify the voxels, the
     /// adjacency information will be updated for all voxels within the sphere,
@@ -26,7 +27,7 @@ impl ChunkedVoxelObject {
     pub fn modify_voxels_within_sphere(
         &mut self,
         sphere: &Sphere<f64>,
-        modify_voxel: &mut impl FnMut([usize; 3], Point3<f64>, &mut Voxel),
+        modify_voxel: &mut impl FnMut([usize; 3], f64, &mut Voxel),
     ) {
         let touched_voxel_ranges = self.voxel_ranges_touching_sphere(sphere);
 
@@ -85,15 +86,16 @@ impl ChunkedVoxelObject {
                                         k,
                                     );
 
-                                if sphere.contains_point(&voxel_center_position) {
+                                let distance_squared =
+                                    na::distance_squared(sphere.center(), &voxel_center_position);
+
+                                if distance_squared < sphere.radius_squared() {
                                     let voxel_idx =
                                         linear_voxel_idx_within_chunk_from_object_voxel_indices(
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
-                                    if !voxel.is_empty() {
-                                        modify_voxel([i, j, k], voxel_center_position, voxel);
-                                    }
+                                    modify_voxel([i, j, k], distance_squared, voxel);
                                     chunk_touched = true;
                                 }
                             }
@@ -101,7 +103,7 @@ impl ChunkedVoxelObject {
                     }
 
                     if chunk_touched {
-                        chunk.update_internal_adjacencies(&mut self.voxels);
+                        chunk.update_face_distributions_and_internal_adjacencies(&mut self.voxels);
 
                         // The mesh of the touched chunk is invalidated
                         self.invalidated_mesh_chunk_indices.insert(chunk_indices);
@@ -137,9 +139,7 @@ impl ChunkedVoxelObject {
             }
         }
 
-        self.update_boundary_adjacencies_for_chunks_in_ranges(
-            touched_chunk_ranges.map(|range| range.start..range.end - 1),
-        );
+        self.update_upper_boundary_adjacencies_for_chunks_in_ranges(touched_chunk_ranges);
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
@@ -153,9 +153,7 @@ impl ChunkedVoxelObject {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
                         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k);
-                    if sphere.contains_point(&voxel_center_position)
-                        && self.get_voxel(i, j, k).is_some()
-                    {
+                    if sphere.contains_point(&voxel_center_position) {
                         f([i, j, k]);
                     }
                 }
