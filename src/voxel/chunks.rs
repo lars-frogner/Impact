@@ -60,8 +60,8 @@ pub struct ExposedVoxelChunk {
 ///
 /// - Non-uniform: The chunk is not fully packed and/or contains a mix of voxels
 ///   with different information. The voxels comprising the non-uniform chunk
-///   are stored in the parent [`ChunkedVoxelObject`], and the chunk stores the
-///   index to its first voxel as well as information on the distribution of
+///   are stored in the parent [`ChunkedVoxelObject`], and the chunk stores an
+///   offset to its voxel data as well as information on the distribution of
 ///   voxels across the faces of the chunk and a set of flags encoding
 ///   additional information about the state of the chunk.
 #[derive(Clone, Copy, Debug)]
@@ -74,13 +74,13 @@ pub enum VoxelChunk {
 /// A non-uniform chunk representing a cubic grid of voxel chunks. The chunk is
 /// not fully packed and/or contains a mix of voxels with different information.
 /// The voxels comprising the non-uniform chunk are stored in the parent
-/// [`ChunkedVoxelObject`], and the chunk stores the index to its first voxel as
+/// [`ChunkedVoxelObject`], and the chunk stores an offset to its voxel data as
 /// well as information on the distribution of voxels across the faces of the
 /// chunk and a set of flags encoding additional information about the state of
 /// the chunk.
 #[derive(Clone, Copy, Debug)]
 pub struct NonUniformVoxelChunk {
-    start_voxel_idx: usize,
+    data_offset: u32,
     face_distributions: [[FaceVoxelDistribution; 2]; 3],
     flags: VoxelChunkFlags,
 }
@@ -147,6 +147,8 @@ const _: () = assert!(CHUNK_VOXEL_COUNT <= u16::MAX as usize);
 
 const CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT: usize = LOG2_CHUNK_SIZE;
 const VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
+
+const VOXEL_INDEX_FROM_LINEAR_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
 
 #[allow(clippy::reversed_empty_ranges)]
 const REVERSED_MAX_RANGE: Range<usize> = usize::MAX..usize::MIN;
@@ -371,7 +373,8 @@ impl ChunkedVoxelObject {
     /// May panic of the chunk's handle to its segment of the object's voxel
     /// buffer is invalid.
     pub fn non_uniform_chunk_voxels(&self, chunk: &NonUniformVoxelChunk) -> &[Voxel] {
-        &self.voxels[chunk.start_voxel_idx..chunk.start_voxel_idx + CHUNK_VOXEL_COUNT]
+        let start_voxel_idx = chunk_start_voxel_idx(chunk.data_offset);
+        &self.voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT]
     }
 
     /// Returns a reference to the voxel at the given indices in the object's
@@ -401,10 +404,8 @@ impl ChunkedVoxelObject {
         match &chunk {
             VoxelChunk::Empty => None,
             VoxelChunk::Uniform(voxel) => Some(voxel),
-            VoxelChunk::NonUniform(NonUniformVoxelChunk {
-                start_voxel_idx, ..
-            }) => {
-                let voxel_idx = start_voxel_idx
+            VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                let voxel_idx = chunk_start_voxel_idx(*data_offset)
                     + linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
                 let voxel = &self.voxels[voxel_idx];
                 if voxel.is_empty() {
@@ -902,7 +903,7 @@ impl VoxelChunk {
             let face_distributions = face_empty_counts.to_face_distributions(CHUNK_SIZE_SQUARED);
 
             Self::NonUniform(NonUniformVoxelChunk {
-                start_voxel_idx,
+                data_offset: chunk_data_offset_from_start_voxel_idx(start_voxel_idx),
                 face_distributions,
                 flags: VoxelChunkFlags::empty(),
             })
@@ -913,12 +914,17 @@ impl VoxelChunk {
         matches!(self, Self::Empty)
     }
 
+    const fn data_offset_if_non_uniform(&self) -> Option<u32> {
+        if let Self::NonUniform(NonUniformVoxelChunk { data_offset, .. }) = self {
+            Some(*data_offset)
+        } else {
+            None
+        }
+    }
+
     const fn start_voxel_idx_if_non_uniform(&self) -> Option<usize> {
-        if let Self::NonUniform(NonUniformVoxelChunk {
-            start_voxel_idx, ..
-        }) = self
-        {
-            Some(*start_voxel_idx)
+        if let Some(data_offset) = self.data_offset_if_non_uniform() {
+            Some(chunk_start_voxel_idx(data_offset))
         } else {
             None
         }
@@ -955,12 +961,8 @@ impl VoxelChunk {
     fn update_internal_adjacencies(&self, voxels: &mut [Voxel]) {
         // We only need to update the internal adjacency if the chunk is
         // non-uniform
-        let start_voxel_idx = if let Self::NonUniform(NonUniformVoxelChunk {
-            start_voxel_idx,
-            ..
-        }) = self
-        {
-            *start_voxel_idx
+        let start_voxel_idx = if let Some(start_voxel_idx) = self.start_voxel_idx_if_non_uniform() {
+            start_voxel_idx
         } else {
             return;
         };
@@ -1025,12 +1027,12 @@ impl VoxelChunk {
         // chunk is non-uniform
         let (start_voxel_idx, face_distributions) =
             if let Self::NonUniform(NonUniformVoxelChunk {
-                start_voxel_idx,
+                data_offset,
                 face_distributions,
                 ..
             }) = self
             {
-                (*start_voxel_idx, face_distributions)
+                (chunk_start_voxel_idx(*data_offset), face_distributions)
             } else {
                 return;
             };
@@ -1182,7 +1184,7 @@ impl VoxelChunk {
 
                 Self::remove_all_outward_adjacencies_for_face(
                     voxels,
-                    lower_chunk.start_voxel_idx_if_non_uniform().unwrap(),
+                    lower_chunk.data_offset_if_non_uniform().unwrap(),
                     dim,
                     Side::Upper,
                 );
@@ -1195,7 +1197,7 @@ impl VoxelChunk {
 
                 Self::remove_all_outward_adjacencies_for_face(
                     voxels,
-                    upper_chunk.start_voxel_idx_if_non_uniform().unwrap(),
+                    upper_chunk.data_offset_if_non_uniform().unwrap(),
                     dim,
                     Side::Lower,
                 );
@@ -1208,7 +1210,7 @@ impl VoxelChunk {
             // unobscured
             (
                 Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx: lower_chunk_start_voxel_idx,
+                    data_offset: lower_chunk_data_offset,
                     face_distributions: lower_chunk_face_distributions,
                     ..
                 }),
@@ -1218,7 +1220,7 @@ impl VoxelChunk {
                 if lower_chunk_face_distributions[dim.idx()][1] != FaceVoxelDistribution::Empty {
                     Self::remove_all_outward_adjacencies_for_face(
                         voxels,
-                        lower_chunk_start_voxel_idx,
+                        lower_chunk_data_offset,
                         dim,
                         Side::Upper,
                     );
@@ -1229,7 +1231,7 @@ impl VoxelChunk {
             (
                 Self::Empty,
                 Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx: upper_chunk_start_voxel_idx,
+                    data_offset: upper_chunk_data_offset,
                     face_distributions: upper_chunk_face_distributions,
                     ..
                 }),
@@ -1237,7 +1239,7 @@ impl VoxelChunk {
                 if upper_chunk_face_distributions[dim.idx()][0] != FaceVoxelDistribution::Empty {
                     Self::remove_all_outward_adjacencies_for_face(
                         voxels,
-                        upper_chunk_start_voxel_idx,
+                        upper_chunk_data_offset,
                         dim,
                         Side::Lower,
                     );
@@ -1254,7 +1256,7 @@ impl VoxelChunk {
             // adjoining face of the uniform one as unobscured.
             (
                 Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx: lower_chunk_start_voxel_idx,
+                    data_offset: lower_chunk_data_offset,
                     face_distributions: lower_chunk_face_distributions,
                     ..
                 }),
@@ -1265,7 +1267,7 @@ impl VoxelChunk {
                 if lower_chunk_face_distribution != FaceVoxelDistribution::Empty {
                     Self::add_all_outward_adjacencies_for_face(
                         voxels,
-                        lower_chunk_start_voxel_idx,
+                        lower_chunk_data_offset,
                         dim,
                         Side::Upper,
                     );
@@ -1281,7 +1283,7 @@ impl VoxelChunk {
 
                         Self::remove_all_outward_adjacencies_for_face(
                             voxels,
-                            upper_chunk.start_voxel_idx_if_non_uniform().unwrap(),
+                            upper_chunk.data_offset_if_non_uniform().unwrap(),
                             dim,
                             Side::Lower,
                         );
@@ -1294,8 +1296,8 @@ impl VoxelChunk {
 
                         Self::update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
                             voxels,
-                            upper_chunk.start_voxel_idx_if_non_uniform().unwrap(),
-                            lower_chunk_start_voxel_idx,
+                            upper_chunk.data_offset_if_non_uniform().unwrap(),
+                            lower_chunk_data_offset,
                             dim,
                             Side::Lower,
                         );
@@ -1307,7 +1309,7 @@ impl VoxelChunk {
             (
                 Self::Uniform(_),
                 Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx: upper_chunk_start_voxel_idx,
+                    data_offset: upper_chunk_data_offset,
                     face_distributions: upper_chunk_face_distributions,
                     ..
                 }),
@@ -1317,7 +1319,7 @@ impl VoxelChunk {
                 if upper_chunk_face_distribution != FaceVoxelDistribution::Empty {
                     Self::add_all_outward_adjacencies_for_face(
                         voxels,
-                        upper_chunk_start_voxel_idx,
+                        upper_chunk_data_offset,
                         dim,
                         Side::Lower,
                     );
@@ -1333,7 +1335,7 @@ impl VoxelChunk {
 
                         Self::remove_all_outward_adjacencies_for_face(
                             voxels,
-                            lower_chunk.start_voxel_idx_if_non_uniform().unwrap(),
+                            lower_chunk.data_offset_if_non_uniform().unwrap(),
                             dim,
                             Side::Upper,
                         );
@@ -1346,8 +1348,8 @@ impl VoxelChunk {
 
                         Self::update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
                             voxels,
-                            lower_chunk.start_voxel_idx_if_non_uniform().unwrap(),
-                            upper_chunk_start_voxel_idx,
+                            lower_chunk.data_offset_if_non_uniform().unwrap(),
+                            upper_chunk_data_offset,
                             dim,
                             Side::Upper,
                         );
@@ -1360,12 +1362,12 @@ impl VoxelChunk {
             // and obscuredness for both according to their adjoining faces
             (
                 Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx: lower_chunk_start_voxel_idx,
+                    data_offset: lower_chunk_data_offset,
                     face_distributions: lower_chunk_face_distributions,
                     ..
                 }),
                 Self::NonUniform(NonUniformVoxelChunk {
-                    start_voxel_idx: upper_chunk_start_voxel_idx,
+                    data_offset: upper_chunk_data_offset,
                     face_distributions: upper_chunk_face_distributions,
                     ..
                 }),
@@ -1378,7 +1380,7 @@ impl VoxelChunk {
                         FaceVoxelDistribution::Empty => {
                             Self::remove_all_outward_adjacencies_for_face(
                                 voxels,
-                                lower_chunk_start_voxel_idx,
+                                lower_chunk_data_offset,
                                 dim,
                                 Side::Upper,
                             );
@@ -1386,7 +1388,7 @@ impl VoxelChunk {
                         FaceVoxelDistribution::Full => {
                             Self::add_all_outward_adjacencies_for_face(
                                 voxels,
-                                lower_chunk_start_voxel_idx,
+                                lower_chunk_data_offset,
                                 dim,
                                 Side::Upper,
                             );
@@ -1394,8 +1396,8 @@ impl VoxelChunk {
                         FaceVoxelDistribution::Mixed => {
                             Self::update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
                                 voxels,
-                                lower_chunk_start_voxel_idx,
-                                upper_chunk_start_voxel_idx,
+                                lower_chunk_data_offset,
+                                upper_chunk_data_offset,
                                dim, Side::Upper,
                             );
                         }
@@ -1407,7 +1409,7 @@ impl VoxelChunk {
                         FaceVoxelDistribution::Empty => {
                             Self::remove_all_outward_adjacencies_for_face(
                                 voxels,
-                                upper_chunk_start_voxel_idx,
+                                upper_chunk_data_offset,
                                 dim,
                                 Side::Lower,
                             );
@@ -1415,7 +1417,7 @@ impl VoxelChunk {
                         FaceVoxelDistribution::Full => {
                             Self::add_all_outward_adjacencies_for_face(
                                 voxels,
-                                upper_chunk_start_voxel_idx,
+                                upper_chunk_data_offset,
                                 dim,
                                 Side::Lower,
                             );
@@ -1423,8 +1425,8 @@ impl VoxelChunk {
                         FaceVoxelDistribution::Mixed => {
                             Self::update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
                                 voxels,
-                                upper_chunk_start_voxel_idx,
-                                lower_chunk_start_voxel_idx,
+                                upper_chunk_data_offset,
+                                lower_chunk_data_offset,
                                dim, Side::Lower,
                             );
                         }
@@ -1454,7 +1456,7 @@ impl VoxelChunk {
             voxels.reserve(CHUNK_VOXEL_COUNT);
             voxels.extend(iter::repeat(voxel).take(CHUNK_VOXEL_COUNT));
             *self = Self::NonUniform(NonUniformVoxelChunk {
-                start_voxel_idx,
+                data_offset: chunk_data_offset_from_start_voxel_idx(start_voxel_idx),
                 face_distributions: [[FaceVoxelDistribution::Full; 2]; 3],
                 flags: VoxelChunkFlags::fully_obscured(),
             });
@@ -1463,13 +1465,13 @@ impl VoxelChunk {
 
     fn add_all_outward_adjacencies_for_face(
         voxels: &mut [Voxel],
-        start_voxel_idx: usize,
+        data_offset: u32,
         face_dim: Dimension,
         face_side: Side,
     ) {
         Self::update_all_outward_adjacencies_for_face(
             voxels,
-            start_voxel_idx,
+            data_offset,
             face_dim,
             face_side,
             &Voxel::add_flags,
@@ -1478,13 +1480,13 @@ impl VoxelChunk {
 
     fn remove_all_outward_adjacencies_for_face(
         voxels: &mut [Voxel],
-        start_voxel_idx: usize,
+        data_offset: u32,
         face_dim: Dimension,
         face_side: Side,
     ) {
         Self::update_all_outward_adjacencies_for_face(
             voxels,
-            start_voxel_idx,
+            data_offset,
             face_dim,
             face_side,
             &Voxel::remove_flags,
@@ -1493,11 +1495,12 @@ impl VoxelChunk {
 
     fn update_all_outward_adjacencies_for_face(
         voxels: &mut [Voxel],
-        start_voxel_idx: usize,
+        data_offset: u32,
         face_dim: Dimension,
         face_side: Side,
         update_flags: &impl Fn(&mut Voxel, VoxelFlags),
     ) {
+        let start_voxel_idx = chunk_start_voxel_idx(data_offset);
         let chunk_voxels = &mut voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
 
         let flag = VoxelFlags::adjacency_for_face(face_dim, face_side);
@@ -1513,11 +1516,14 @@ impl VoxelChunk {
 
     fn update_outward_adjacencies_with_non_uniform_adjacent_chunk_for_face(
         voxels: &mut [Voxel],
-        current_chunk_start_voxel_idx: usize,
-        adjacent_chunk_start_voxel_idx: usize,
+        current_chunk_data_offset: u32,
+        adjacent_chunk_data_offset: u32,
         face_dim: Dimension,
         face_side: Side,
     ) {
+        let current_chunk_start_voxel_idx = chunk_start_voxel_idx(current_chunk_data_offset);
+        let adjacent_chunk_start_voxel_idx = chunk_start_voxel_idx(adjacent_chunk_data_offset);
+
         let (current_chunk_voxels, adjacent_chunk_voxels) = extract_slice_segments_mut(
             voxels,
             current_chunk_start_voxel_idx,
@@ -1653,6 +1659,14 @@ impl ExposedVoxelChunk {
     }
 }
 
+const fn chunk_start_voxel_idx(data_offset: u32) -> usize {
+    (data_offset as usize) << (3 * LOG2_CHUNK_SIZE)
+}
+
+const fn chunk_data_offset_from_start_voxel_idx(start_voxel_idx: usize) -> u32 {
+    (start_voxel_idx >> (3 * LOG2_CHUNK_SIZE)) as u32
+}
+
 /// Computes the index into a chunk's flattened voxel grid of the voxel at the
 /// given indices in the parent object's voxel grid.
 const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
@@ -1667,7 +1681,19 @@ const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
 /// Computes the index into a chunk's flattened voxel grid of the voxel with the
 /// given 3D index in the voxel grid.
 const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
-    voxel_indices[0] * CHUNK_SIZE_SQUARED + voxel_indices[1] * CHUNK_SIZE + voxel_indices[2]
+    (voxel_indices[0] << (2 * LOG2_CHUNK_SIZE))
+        + (voxel_indices[1] << LOG2_CHUNK_SIZE)
+        + voxel_indices[2]
+}
+
+/// Computes the 3D index into a chunk's voxel grid for the voxel with the
+/// given linear index into the flattened version of the chunk's voxel grid.
+const fn chunk_voxel_indices_from_linear_idx(idx: usize) -> [usize; 3] {
+    [
+        idx >> (2 * LOG2_CHUNK_SIZE),
+        (idx >> LOG2_CHUNK_SIZE) & VOXEL_INDEX_FROM_LINEAR_IDX_MASK,
+        idx & VOXEL_INDEX_FROM_LINEAR_IDX_MASK,
+    ]
 }
 
 /// Computes the 3D index in the parent object's chunk grid of the chunk
