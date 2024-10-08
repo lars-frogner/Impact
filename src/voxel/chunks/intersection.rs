@@ -1,5 +1,6 @@
 //! Intersection of shapes with chunked voxel objects.
 
+use super::chunk_start_voxel_idx;
 use crate::{
     geometry::Sphere,
     voxel::{
@@ -55,9 +56,9 @@ impl ChunkedVoxelObject {
                             chunk.convert_to_non_uniform_if_uniform(&mut self.voxels);
                             chunk.start_voxel_idx_if_non_uniform().unwrap()
                         }
-                        VoxelChunk::NonUniform(NonUniformVoxelChunk {
-                            start_voxel_idx, ..
-                        }) => *start_voxel_idx,
+                        VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                            chunk_start_voxel_idx(*data_offset)
+                        }
                     };
 
                     let object_voxel_ranges_in_chunk =
