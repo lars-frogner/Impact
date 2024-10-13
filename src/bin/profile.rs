@@ -38,7 +38,11 @@ struct Args {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Target {
     ChunkedVoxelObjectConstruction,
-    ChunkedVoxelObjectInitializeAdjacencies,
+    ChunkedVoxelObjectUpdateInternalAdjacenciesForAllChunks,
+    ChunkedVoxelObjectUpdateConnectedRegionsForAllChunks,
+    ChunkedVoxelObjectUpdateAllChunkBoundaryAdjacencies,
+    ChunkedVoxelObjectResolveConnectedRegionsBetweenAllChunks,
+    ChunkedVoxelObjectComputeAllDerivedState,
     ChunkedVoxelObjectCreateMesh,
     ChunkedVoxelObjectModifyVoxelsWithinSphere,
     ChunkedVoxelObjectUpdateMesh,
@@ -79,8 +83,24 @@ fn main() {
         Target::ChunkedVoxelObjectConstruction => {
             profile_chunked_voxel_object_construction(duration, delayer);
         }
-        Target::ChunkedVoxelObjectInitializeAdjacencies => {
-            profile_chunked_voxel_object_initialize_adjacencies(duration, delayer);
+        Target::ChunkedVoxelObjectUpdateInternalAdjacenciesForAllChunks => {
+            profile_chunked_voxel_object_update_internal_adjacencies_for_all_chunks(
+                duration, delayer,
+            );
+        }
+        Target::ChunkedVoxelObjectUpdateConnectedRegionsForAllChunks => {
+            profile_chunked_voxel_object_update_connected_regions_for_all_chunks(duration, delayer);
+        }
+        Target::ChunkedVoxelObjectUpdateAllChunkBoundaryAdjacencies => {
+            profile_chunked_voxel_object_update_all_chunk_boundary_adjacencies(duration, delayer);
+        }
+        Target::ChunkedVoxelObjectResolveConnectedRegionsBetweenAllChunks => {
+            profile_chunked_voxel_object_resolve_connected_regions_between_all_chunks(
+                duration, delayer,
+            );
+        }
+        Target::ChunkedVoxelObjectComputeAllDerivedState => {
+            profile_chunked_voxel_object_compute_all_derived_state(duration, delayer);
         }
         Target::ChunkedVoxelObjectCreateMesh => {
             profile_chunked_voxel_object_create_mesh(duration, delayer);
@@ -101,28 +121,113 @@ fn profile_chunked_voxel_object_construction(duration: Duration, delayer: Delaye
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     profile(
-        &mut || ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap(),
+        &mut || ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap(),
         duration,
         delayer,
     );
 }
 
-fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration, delayer: Delayer) {
+fn profile_chunked_voxel_object_update_internal_adjacencies_for_all_chunks(
+    duration: Duration,
+    delayer: Delayer,
+) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
-    let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
     profile(
         &mut || {
-            let mut object = object.clone();
-            object.initialize_adjacencies();
-            object
+            object.update_internal_adjacencies_for_all_chunks();
         },
         duration,
         delayer,
     );
+    black_box(object);
+}
+
+fn profile_chunked_voxel_object_update_connected_regions_for_all_chunks(
+    duration: Duration,
+    delayer: Delayer,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    object.update_internal_adjacencies_for_all_chunks();
+    profile(
+        &mut || {
+            object.update_local_connected_regions_for_all_chunks();
+        },
+        duration,
+        delayer,
+    );
+    black_box(object);
+}
+
+fn profile_chunked_voxel_object_update_all_chunk_boundary_adjacencies(
+    duration: Duration,
+    delayer: Delayer,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    object.update_internal_adjacencies_for_all_chunks();
+    object.update_local_connected_regions_for_all_chunks();
+    profile(
+        &mut || {
+            object.update_all_chunk_boundary_adjacencies();
+        },
+        duration,
+        delayer,
+    );
+    black_box(object);
+}
+
+fn profile_chunked_voxel_object_resolve_connected_regions_between_all_chunks(
+    duration: Duration,
+    delayer: Delayer,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    object.update_internal_adjacencies_for_all_chunks();
+    object.update_local_connected_regions_for_all_chunks();
+    object.update_all_chunk_boundary_adjacencies();
+    profile(
+        &mut || {
+            object.resolve_connected_regions_between_all_chunks();
+        },
+        duration,
+        delayer,
+    );
+    black_box(object);
+}
+
+fn profile_chunked_voxel_object_compute_all_derived_state(duration: Duration, delayer: Delayer) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    profile(
+        &mut || {
+            object.compute_all_derived_state();
+        },
+        duration,
+        delayer,
+    );
+    black_box(object);
 }
 
 fn profile_chunked_voxel_object_create_mesh(duration: Duration, delayer: Delayer) {

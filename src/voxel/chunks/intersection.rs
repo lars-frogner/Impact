@@ -1,12 +1,12 @@
 //! Intersection of shapes with chunked voxel objects.
 
-use super::chunk_start_voxel_idx;
+use super::chunk_voxels_mut;
 use crate::{
     geometry::Sphere,
     voxel::{
         chunks::{
             linear_voxel_idx_within_chunk_from_object_voxel_indices, ChunkedVoxelObject,
-            NonUniformVoxelChunk, VoxelChunk, CHUNK_SIZE, CHUNK_VOXEL_COUNT,
+            VoxelChunk, CHUNK_SIZE,
         },
         Voxel,
     },
@@ -48,17 +48,22 @@ impl ChunkedVoxelObject {
 
                     let chunk = &mut self.chunks[chunk_idx];
 
-                    let start_voxel_idx = match chunk {
+                    let chunk = match chunk {
                         VoxelChunk::Empty => {
                             continue;
                         }
                         VoxelChunk::Uniform(_) => {
-                            chunk.convert_to_non_uniform_if_uniform(&mut self.voxels);
-                            chunk.start_voxel_idx_if_non_uniform().unwrap()
+                            chunk.convert_to_non_uniform_if_uniform(
+                                &mut self.voxels,
+                                &mut self.split_detector,
+                            );
+                            if let VoxelChunk::NonUniform(chunk) = chunk {
+                                chunk
+                            } else {
+                                unreachable!()
+                            }
                         }
-                        VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
-                            chunk_start_voxel_idx(*data_offset)
-                        }
+                        VoxelChunk::NonUniform(chunk) => chunk,
                     };
 
                     let object_voxel_ranges_in_chunk =
@@ -71,8 +76,7 @@ impl ChunkedVoxelObject {
                             ..usize::min(range_in_chunk.end, touched_range.end)
                     });
 
-                    let voxels =
-                        &mut self.voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
+                    let voxels = chunk_voxels_mut(&mut self.voxels, chunk.data_offset);
 
                     let mut chunk_touched = false;
 
@@ -105,6 +109,13 @@ impl ChunkedVoxelObject {
 
                     if chunk_touched {
                         chunk.update_face_distributions_and_internal_adjacencies(&mut self.voxels);
+
+                        self.split_detector
+                            .update_local_connected_regions_for_chunk(
+                                &self.voxels,
+                                chunk,
+                                chunk_idx as u32,
+                            );
 
                         // The mesh of the touched chunk is invalidated
                         self.invalidated_mesh_chunk_indices.insert(chunk_indices);
@@ -141,6 +152,9 @@ impl ChunkedVoxelObject {
         }
 
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(touched_chunk_ranges);
+
+        self.resolve_connected_regions_between_all_chunks();
+        dbg!(self.count_regions());
     }
 
     #[cfg(any(test, feature = "fuzzing"))]

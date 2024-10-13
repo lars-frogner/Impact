@@ -5,7 +5,7 @@ pub mod surface_nets;
 use crate::voxel::{
     chunks::{
         ChunkedVoxelObject, ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk,
-        VoxelChunk, VoxelChunkFlags,
+        UniformVoxelChunk, VoxelChunk, VoxelChunkFlags,
     },
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
@@ -440,7 +440,7 @@ impl ChunkedVoxelObject {
                     .fill_data_with_value(VoxelSignedDistance::maximally_outside().to_f32());
                 false
             }
-            VoxelChunk::Uniform(voxel) => {
+            VoxelChunk::Uniform(UniformVoxelChunk { voxel, .. }) => {
                 sdf_values_loop
                     .fill_data_with_value(VoxelSignedDistance::maximally_inside().to_f32());
                 voxel_types_loop.fill_data_with_value(voxel.voxel_type());
