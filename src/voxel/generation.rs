@@ -592,36 +592,43 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for BoxSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let extent_x = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
-            let extent_y = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
-            let extent_z = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
+            let extent_x =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+            let extent_y =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+            let extent_z =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
             Ok(Self::new([extent_x, extent_y, extent_z]))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let size = 3 * mem::size_of::<usize>();
+            let size = 6 * mem::size_of::<usize>();
             (size, Some(size))
         }
     }
 
     impl Arbitrary<'_> for SphereSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let radius = 0.5 * (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
+            let radius = u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE / 2 - 1) as f64
+                + arbitrary_norm_f64(u)?;
             Ok(Self::new(radius))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let size = mem::size_of::<usize>();
+            let size = 2 * mem::size_of::<usize>();
             (size, Some(size))
         }
     }
 
     impl Arbitrary<'_> for GradientNoiseSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let extent_x = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
-            let extent_y = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
-            let extent_z = (MAX_SIZE as f64) * arbitrary_norm_f64(u)?;
-            let noise_frequency = 100.0 * arbitrary_norm_f64(u)?;
+            let extent_x =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+            let extent_y =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+            let extent_z =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+            let noise_frequency = 0.15 * arbitrary_norm_f64(u)?;
             let noise_threshold = arbitrary_norm_f64(u)?;
             let seed = u.arbitrary()?;
             Ok(Self::new(
@@ -633,7 +640,7 @@ pub mod fuzzing {
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let size = 5 * mem::size_of::<usize>() + mem::size_of::<u32>();
+            let size = 8 * mem::size_of::<usize>() + mem::size_of::<u32>();
             (size, Some(size))
         }
     }
@@ -658,8 +665,8 @@ pub mod fuzzing {
             for _ in 0..u.int_in_range(0..=voxel_types.len() - 1)? {
                 voxel_types.swap_remove(u.int_in_range(0..=voxel_types.len() - 1)?);
             }
-            let noise_frequency = 100.0 * arbitrary_norm_f64(u)?;
-            let voxel_type_frequency = 100.0 * arbitrary_norm_f64(u)?;
+            let noise_frequency = 0.15 * arbitrary_norm_f64(u)?;
+            let voxel_type_frequency = 0.15 * arbitrary_norm_f64(u)?;
             let seed = u.arbitrary()?;
             Ok(Self::new(
                 voxel_types,
