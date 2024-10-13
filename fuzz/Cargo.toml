@@ -29,3 +29,10 @@ path = "fuzz_targets/obtaining_voxels_within_sphere.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "voxel_object_connected_regions"
+path = "fuzz_targets/voxel_object_connected_regions.rs"
+test = false
+doc = false
+bench = false

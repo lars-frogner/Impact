@@ -14,14 +14,28 @@ use nalgebra::{vector, UnitVector3};
 use pprof::criterion::{Output, PProfProfiler};
 
 pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        BoxSDFGenerator::new([200.0; 3]),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
     c.bench_function("chunked_voxel_object_construction", |b| {
         b.iter(|| {
-            let generator = SDFVoxelGenerator::new(
-                1.0,
-                BoxSDFGenerator::new([200.0; 3]),
-                SameVoxelTypeGenerator::new(VoxelType::default()),
-            );
-            ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
+            ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        })
+    });
+}
+
+pub fn bench_chunked_voxel_object_clone(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    c.bench_function("bench_chunked_voxel_object_clone", |b| {
+        b.iter(|| {
+            black_box(object.clone());
         })
     });
 }
@@ -32,7 +46,7 @@ pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
-    let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
+    let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
     let ranges = object.occupied_voxel_ranges();
     c.bench_function("chunked_voxel_object_get_each_voxel", |b| {
         b.iter(|| {
@@ -47,20 +61,96 @@ pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
     });
 }
 
-pub fn bench_chunked_voxel_object_initialize_adjacencies(c: &mut Criterion) {
+pub fn bench_chunked_voxel_object_update_internal_adjacencies_for_all_chunks(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
-    let object = ChunkedVoxelObject::generate_without_adjacencies(&generator).unwrap();
-    c.bench_function("chunked_voxel_object_initialize_adjacencies", |b| {
-        b.iter(|| {
-            let mut object = object.clone();
-            object.initialize_adjacencies();
-            black_box(object);
-        })
-    });
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    c.bench_function(
+        "bench_chunked_voxel_object_update_internal_adjacencies_for_all_chunks",
+        |b| {
+            b.iter(|| {
+                object.update_internal_adjacencies_for_all_chunks();
+            })
+        },
+    );
+}
+
+pub fn bench_chunked_voxel_object_update_connected_regions_for_all_chunks(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    object.update_internal_adjacencies_for_all_chunks();
+    c.bench_function(
+        "bench_chunked_voxel_object_update_connected_regions_for_all_chunks",
+        |b| {
+            b.iter(|| {
+                object.update_local_connected_regions_for_all_chunks();
+            })
+        },
+    );
+}
+
+pub fn bench_chunked_voxel_object_update_all_chunk_boundary_adjacencies(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    object.update_internal_adjacencies_for_all_chunks();
+    object.update_local_connected_regions_for_all_chunks();
+    c.bench_function(
+        "bench_chunked_voxel_object_update_all_chunk_boundary_adjacencies",
+        |b| {
+            b.iter(|| {
+                object.update_all_chunk_boundary_adjacencies();
+            })
+        },
+    );
+}
+
+pub fn bench_chunked_voxel_object_resolve_connected_regions_between_all_chunks(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    object.update_internal_adjacencies_for_all_chunks();
+    object.update_local_connected_regions_for_all_chunks();
+    object.update_all_chunk_boundary_adjacencies();
+    c.bench_function(
+        "bench_chunked_voxel_object_resolve_connected_regions_between_all_chunks",
+        |b| {
+            b.iter(|| {
+                object.resolve_connected_regions_between_all_chunks();
+                black_box(object.find_disconnected_region());
+            })
+        },
+    );
+}
+
+pub fn bench_chunked_voxel_object_compute_all_derived_state(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    c.bench_function(
+        "bench_chunked_voxel_object_compute_all_derived_state",
+        |b| {
+            b.iter(|| {
+                object.compute_all_derived_state();
+            })
+        },
+    );
 }
 
 pub fn bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
@@ -160,8 +250,13 @@ criterion_group!(
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
     targets =
         bench_chunked_voxel_object_construction,
+        bench_chunked_voxel_object_clone,
         bench_chunked_voxel_object_get_each_voxel,
-        bench_chunked_voxel_object_initialize_adjacencies,
+        bench_chunked_voxel_object_update_internal_adjacencies_for_all_chunks,
+        bench_chunked_voxel_object_update_connected_regions_for_all_chunks,
+        bench_chunked_voxel_object_update_all_chunk_boundary_adjacencies,
+        bench_chunked_voxel_object_resolve_connected_regions_between_all_chunks,
+        bench_chunked_voxel_object_compute_all_derived_state,
         bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf,
         bench_chunked_voxel_object_create_mesh,
         bench_chunked_voxel_object_modify_voxels_within_sphere,
