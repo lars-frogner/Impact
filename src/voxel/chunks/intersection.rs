@@ -154,14 +154,13 @@ impl ChunkedVoxelObject {
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(touched_chunk_ranges);
 
         self.resolve_connected_regions_between_all_chunks();
-        dbg!(self.count_regions());
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
-    fn for_each_voxel_indices_in_sphere_brute_force(
+    fn for_each_non_empty_voxel_in_sphere_brute_force(
         &self,
         sphere: &Sphere<f64>,
-        f: &mut impl FnMut([usize; 3]),
+        f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
             for j in self.occupied_voxel_ranges[1].clone() {
@@ -169,7 +168,9 @@ impl ChunkedVoxelObject {
                     let voxel_center_position =
                         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k);
                     if sphere.contains_point(&voxel_center_position) {
-                        f([i, j, k]);
+                        if let Some(voxel) = self.get_voxel(i, j, k) {
+                            f([i, j, k], voxel);
+                        }
                     }
                 }
             }
@@ -249,12 +250,14 @@ pub mod fuzzing {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let mut indices_of_inside_voxels = HashSet::new();
 
-            object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, _| {
-                let was_absent = indices_of_inside_voxels.insert(indices);
-                assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+            object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
+                if !voxel.is_empty() {
+                    let was_absent = indices_of_inside_voxels.insert(indices);
+                    assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+                }
             });
 
-            object.for_each_voxel_indices_in_sphere_brute_force(&sphere.0, &mut |indices| {
+            object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere.0, &mut |indices, _| {
                 let was_present = indices_of_inside_voxels.remove(&indices);
                 assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
             });
@@ -264,6 +267,8 @@ pub mod fuzzing {
                 "Found voxels not inside sphere: {:?}",
                 &indices_of_inside_voxels
             );
+
+            object.validate_region_count();
         }
     }
 
@@ -302,12 +307,14 @@ mod tests {
 
         let mut indices_of_inside_voxels = HashSet::new();
 
-        object.modify_voxels_within_sphere(&sphere, &mut |indices, _, _| {
-            let was_absent = indices_of_inside_voxels.insert(indices);
-            assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+        object.modify_voxels_within_sphere(&sphere, &mut |indices, _, voxel| {
+            if !voxel.is_empty() {
+                let was_absent = indices_of_inside_voxels.insert(indices);
+                assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+            }
         });
 
-        object.for_each_voxel_indices_in_sphere_brute_force(&sphere, &mut |indices| {
+        object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere, &mut |indices, _| {
             let was_present = indices_of_inside_voxels.remove(&indices);
             assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
         });
