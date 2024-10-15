@@ -36,3 +36,10 @@ path = "fuzz_targets/voxel_object_connected_regions.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "split_off_disconnected_voxel_object_region"
+path = "fuzz_targets/split_off_disconnected_voxel_object_region.rs"
+test = false
+doc = false
+bench = false

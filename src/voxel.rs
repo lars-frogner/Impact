@@ -218,6 +218,11 @@ impl Voxel {
         )
     }
 
+    /// Whether this voxel has the same type and flags as the given voxel.
+    pub fn matches_type_and_flags(&self, other: Self) -> bool {
+        self.voxel_type == other.voxel_type && self.flags == other.flags
+    }
+
     /// Whether the voxel is empty.
     pub fn is_empty(&self) -> bool {
         self.flags.contains(VoxelFlags::IS_EMPTY)

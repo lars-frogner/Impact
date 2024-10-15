@@ -130,7 +130,7 @@ pub fn bench_chunked_voxel_object_resolve_connected_regions_between_all_chunks(c
         |b| {
             b.iter(|| {
                 object.resolve_connected_regions_between_all_chunks();
-                black_box(object.find_disconnected_region());
+                black_box(object.find_two_disconnected_regions());
             })
         },
     );

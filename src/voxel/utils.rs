@@ -17,6 +17,16 @@ pub enum Side {
     Upper,
 }
 
+/// The dimensions and sides of each face of box.
+pub const FACES: [(Dimension, Side); 6] = [
+    (Dimension::X, Side::Lower),
+    (Dimension::X, Side::Upper),
+    (Dimension::Y, Side::Lower),
+    (Dimension::Y, Side::Upper),
+    (Dimension::Z, Side::Lower),
+    (Dimension::Z, Side::Upper),
+];
+
 /// Helper for iterating over part of a 3D grid of elements, with `N` elements
 /// along each dimension.
 #[derive(Clone, Debug)]
