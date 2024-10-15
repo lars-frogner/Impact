@@ -39,7 +39,6 @@ pub struct ChunkedVoxelObject {
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
     split_detector: SplitDetector,
-    _voxel_types: Vec<VoxelType>,
     invalidated_mesh_chunk_indices: HashSet<[usize; 3]>,
 }
 
@@ -253,8 +252,6 @@ impl ChunkedVoxelObject {
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
-        let voxel_types = Self::find_voxel_types(&chunks, &voxels);
-
         let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
         Some(Self {
@@ -266,12 +263,11 @@ impl ChunkedVoxelObject {
             chunks,
             voxels,
             split_detector,
-            _voxel_types: voxel_types,
             invalidated_mesh_chunk_indices: HashSet::new(),
         })
     }
 
-    fn find_voxel_types(chunks: &[VoxelChunk], voxels: &[Voxel]) -> Vec<VoxelType> {
+    fn _find_voxel_types(chunks: &[VoxelChunk], voxels: &[Voxel]) -> Vec<VoxelType> {
         let mut has_voxel_type = [false; VoxelTypeRegistry::max_n_voxel_types() + 1];
 
         for chunk in chunks {
@@ -475,6 +471,10 @@ impl ChunkedVoxelObject {
     ///   object is split into disconnected voxel regions.
     pub fn compute_all_derived_state(&mut self) {
         self.update_internal_adjacencies_for_all_chunks();
+        self.compute_all_derived_state_except_internal_adjacencies();
+    }
+
+    fn compute_all_derived_state_except_internal_adjacencies(&mut self) {
         self.update_local_connected_regions_for_all_chunks();
         self.update_all_chunk_boundary_adjacencies();
         self.resolve_connected_regions_between_all_chunks();
@@ -906,7 +906,7 @@ impl VoxelChunk {
                 for k in range_k.clone() {
                     let voxel = generator.voxel_at_indices(i, j, k);
 
-                    if is_uniform && voxel != first_voxel {
+                    if is_uniform && !voxel.matches_type_and_flags(first_voxel) {
                         is_uniform = false;
                     }
 
@@ -957,7 +957,7 @@ impl VoxelChunk {
         } else {
             *non_uniform_chunk_count += 1;
 
-            let face_distributions = face_empty_counts.to_face_distributions(CHUNK_SIZE_SQUARED);
+            let face_distributions = face_empty_counts.to_chunk_face_distributions();
 
             Self::NonUniform(NonUniformVoxelChunk {
                 data_offset: chunk_data_offset_from_start_voxel_idx(start_voxel_idx),
@@ -1777,7 +1777,7 @@ impl NonUniformVoxelChunk {
             }
         }
 
-        self.face_distributions = face_empty_counts.to_face_distributions(CHUNK_SIZE_SQUARED);
+        self.face_distributions = face_empty_counts.to_chunk_face_distributions();
     }
 }
 
@@ -1803,6 +1803,10 @@ impl FaceEmptyCounts {
     }
     fn increment_z_up(&mut self) {
         self.0[2][1] += 1;
+    }
+
+    fn to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
+        self.to_face_distributions(CHUNK_SIZE_SQUARED)
     }
 
     fn to_face_distributions(&self, full_face_count: usize) -> [[FaceVoxelDistribution; 2]; 3] {
