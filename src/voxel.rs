@@ -16,6 +16,8 @@ pub use entity::register_voxel_feature_types;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use chunks::disconnection::DisconnectedVoxelObject;
+use impact_ecs::world::Entity;
 use mesh::MeshedChunkedVoxelObject;
 use std::{collections::HashMap, fmt};
 use utils::{Dimension, Side};
@@ -73,6 +75,8 @@ pub struct VoxelObjectID(u32);
 pub struct VoxelManager {
     voxel_type_registry: VoxelTypeRegistry,
     voxel_objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
+    emptied_voxel_object_entities: Vec<Entity>,
+    disconnected_voxel_objects: Vec<(Entity, DisconnectedVoxelObject)>,
     voxel_object_id_counter: u32,
 }
 
@@ -287,6 +291,8 @@ impl VoxelManager {
         Self {
             voxel_type_registry,
             voxel_objects: HashMap::new(),
+            emptied_voxel_object_entities: Vec::new(),
+            disconnected_voxel_objects: Vec::new(),
             voxel_object_id_counter: 1,
         }
     }
@@ -338,6 +344,36 @@ impl VoxelManager {
         let voxel_object_id = self.create_new_voxel_object_id();
         self.voxel_objects.insert(voxel_object_id, voxel_object);
         voxel_object_id
+    }
+
+    /// Pushes the given the [`Entity`] representing a voxel object that has
+    /// been emptied onto a buffer, awaiting removal of the entity and
+    /// associated resources.
+    pub fn mark_voxel_object_as_empty_for_entity(&mut self, object_entity: Entity) {
+        self.emptied_voxel_object_entities.push(object_entity);
+    }
+
+    /// Pushes the given [`DisconnectedVoxelObject`] along with the [`Entity`]
+    /// of the parent object onto a buffer, awaiting meshing and entity
+    /// creation.
+    pub fn push_disconnected_voxel_object(
+        &mut self,
+        parent_object_entity: Entity,
+        disconnected_object: DisconnectedVoxelObject,
+    ) {
+        self.disconnected_voxel_objects
+            .push((parent_object_entity, disconnected_object));
+    }
+
+    /// Pops the last [`Entity`] for an emptied voxel object off the buffer.
+    pub fn pop_empty_voxel_object_entity(&mut self) -> Option<Entity> {
+        self.emptied_voxel_object_entities.pop()
+    }
+
+    /// Pops the last [`DisconnectedVoxelObject`] along with the [`Entity`]
+    /// of the parent object off the buffer.
+    pub fn pop_disconnected_voxel_object(&mut self) -> Option<(Entity, DisconnectedVoxelObject)> {
+        self.disconnected_voxel_objects.pop()
     }
 
     /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.

@@ -30,6 +30,12 @@
 
 - Consider reducing usage of `RwLock` in `impact_ecs`.
 
+- Define consistent locking order for all lock-protected resources under `Application` to avoid deadlocks in parallel `Tasks` (with optional run-time verification to identify violations).
+
+- Offset the voxels in small disconnected regions straddling chunk boundaries to fit in a single chunk.
+
+- Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
+
 ## Misc
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.

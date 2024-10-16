@@ -6,12 +6,25 @@ use crate::voxel::{
         chunk_start_voxel_idx, chunk_voxel_indices_from_linear_idx, linear_voxel_idx_within_chunk,
         ChunkedVoxelObject, LoopForChunkVoxels, NonUniformVoxelChunk, UniformVoxelChunk,
         VoxelChunk, VoxelChunkFlags, CHUNK_SIZE, CHUNK_VOXEL_COUNT, LOG2_CHUNK_SIZE,
+        NON_EMPTY_VOXEL_THRESHOLD,
     },
     utils::{DataLoop3, Dimension, Side},
     Voxel, VoxelFlags,
 };
 use nalgebra::vector;
 use std::{array, cmp::Ordering, collections::HashSet, iter, mem, ops::Range};
+
+/// A [`ChunkedVoxelObject`] that has been disconnected from a larger object.
+#[derive(Clone, Debug)]
+pub struct DisconnectedVoxelObject {
+    /// The disconnected object.
+    pub object: ChunkedVoxelObject,
+    /// The offset in whole voxels from the origin of the original object to the
+    /// origin of the disconnected object, in the reference frame of the
+    /// original object (the disconnected object has the same orientation as the
+    /// original object, only the offset is different).
+    pub origin_offset: [usize; 3],
+}
 
 /// Auxiliary data structure for finding regions of connected voxels in a
 /// [`ChunkedVoxelObject`], and hence determining whether and where the object
@@ -181,7 +194,7 @@ impl ChunkedVoxelObject {
     /// if so, splits off one of them into a seperate object and returns it.
     /// Both this object and the returned object will have the correct derived
     /// state when this call returns.
-    pub fn split_off_any_disconnected_region(&mut self) -> Option<Self> {
+    pub fn split_off_any_disconnected_region(&mut self) -> Option<DisconnectedVoxelObject> {
         // If we just look for any disconnected region and split it off, that region
         // could turn out to contain most of the object. To avoid this, we consider two
         // regions in tandem and split off whichever of them contains the fewest chunks.
@@ -349,7 +362,7 @@ impl ChunkedVoxelObject {
         region_linear_chunk_indices: Vec<usize>,
         region_non_uniform_chunk_count: usize,
         region_chunk_ranges: [Range<usize>; 3],
-    ) -> Option<Self> {
+    ) -> Option<DisconnectedVoxelObject> {
         let region_chunk_counts = region_chunk_ranges.clone().map(|range| range.len());
         let total_region_chunk_count = region_chunk_counts.iter().product();
         let region_uniform_chunk_count =
@@ -446,7 +459,7 @@ impl ChunkedVoxelObject {
                                     // go ahead and compute the face distributions and internal
                                     // adjacencies for the chunk
                                     region_chunk
-                                        .update_face_distributions_and_internal_adjacencies(
+                                        .update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
                                             &mut region_voxels,
                                         );
                                 } else {
@@ -474,7 +487,7 @@ impl ChunkedVoxelObject {
                                     // If the original chunk still contains data, its face
                                     // distributions, internal adjacencies and connected regions
                                     // data are invalidated, so we recompute it all
-                                    chunk.update_face_distributions_and_internal_adjacencies(
+                                    chunk.update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
                                         &mut self.voxels,
                                     );
 
@@ -527,6 +540,10 @@ impl ChunkedVoxelObject {
         );
         assert_eq!(region_chunks.len(), total_region_chunk_count);
 
+        // Now that we have removed part of the original object, we may be able to
+        // shrink the recorded occupied chunk and voxel ranges
+        self.shrink_occupied_ranges();
+
         // Any chunk within or adjacent to the block of chunks covering the splitted off
         // region may have invalidated adjacencies
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
@@ -539,41 +556,57 @@ impl ChunkedVoxelObject {
         // object has been modified
         self.resolve_connected_regions_between_all_chunks();
 
-        // The chunk grid of the splitted off object should start at the origin
-        let split_off_chunk_ranges = region_chunk_counts.map(|count| 0..count);
+        // If the disconnected region only contains a few non-empty voxels, we discard
+        // the disconnected object to avoid creating a lot of tiny voxel objects
+        if region_uniform_chunk_count == 0 && region_non_uniform_chunk_count < 8 {
+            let disconnected_non_empty_voxel_count = region_voxels
+                .iter()
+                .filter(|voxel| !voxel.is_empty())
+                .count();
 
-        let split_off_chunk_idx_strides = [
+            if disconnected_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD {
+                return None;
+            }
+        }
+
+        // The chunk grid of the disconnected object should start at the origin
+        let disconnected_chunk_ranges = region_chunk_counts.map(|count| 0..count);
+
+        let disconnected_origin_offset = region_chunk_ranges.map(|range| range.start * CHUNK_SIZE);
+
+        let disconnected_chunk_idx_strides = [
             region_chunk_counts[2] * region_chunk_counts[1],
             region_chunk_counts[2],
             1,
         ];
 
-        let split_off_voxel_ranges = split_off_chunk_ranges
+        let disconnected_voxel_ranges = disconnected_chunk_ranges
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
-        let split_off_split_detector =
+        let disconnected_split_detector =
             SplitDetector::new(region_uniform_chunk_count, region_non_uniform_chunk_count);
 
-        let split_off_invalidated_mesh_chunk_indices = HashSet::new();
-
-        let mut split_off_object = Self {
+        let mut disconnected_object = Self {
             voxel_extent: self.voxel_extent,
             chunk_counts: region_chunk_counts,
-            chunk_idx_strides: split_off_chunk_idx_strides,
-            occupied_chunk_ranges: split_off_chunk_ranges,
-            occupied_voxel_ranges: split_off_voxel_ranges,
+            chunk_idx_strides: disconnected_chunk_idx_strides,
+            occupied_chunk_ranges: disconnected_chunk_ranges,
+            occupied_voxel_ranges: disconnected_voxel_ranges,
             chunks: region_chunks,
             voxels: region_voxels,
-            split_detector: split_off_split_detector,
-            invalidated_mesh_chunk_indices: split_off_invalidated_mesh_chunk_indices,
+            split_detector: disconnected_split_detector,
+            invalidated_mesh_chunk_indices: HashSet::new(),
         };
 
-        // We have already computed the internal adjacencies in the splitted off object,
+        // We have already computed the internal adjacencies in the disconnected object,
         // but all other derived state must be computed from scratch
-        split_off_object.compute_all_derived_state_except_internal_adjacencies();
+        disconnected_object.compute_all_derived_state_except_internal_adjacencies();
 
-        Some(split_off_object)
+        Some(DisconnectedVoxelObject {
+            object: disconnected_object,
+            origin_offset: disconnected_origin_offset,
+        })
     }
 
     /// Identifies two disconnected regions of the voxel object (if there are
@@ -2275,15 +2308,16 @@ pub mod fuzzing {
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let original_region_count = object.count_regions();
-            if let Some(split_off_object) = object.split_off_any_disconnected_region() {
+            if let Some(disconnected_object) = object.split_off_any_disconnected_region() {
+                let disconnected_object = disconnected_object.object;
                 assert!(original_region_count > 1);
-                assert_eq!(split_off_object.count_regions(), 1);
+                assert_eq!(disconnected_object.count_regions(), 1);
                 assert_eq!(object.count_regions(), original_region_count - 1);
 
-                split_off_object.validate_adjacencies();
-                split_off_object.validate_chunk_obscuredness();
-                split_off_object.validate_sdf();
-                split_off_object.validate_region_count();
+                disconnected_object.validate_adjacencies();
+                disconnected_object.validate_chunk_obscuredness();
+                disconnected_object.validate_sdf();
+                disconnected_object.validate_region_count();
 
                 object.validate_adjacencies();
                 object.validate_chunk_obscuredness();
