@@ -1,6 +1,7 @@
 //! Management of voxels for entities.
 
 use crate::{
+    application::Application,
     impl_InstanceFeature,
     material::{MaterialHandle, MaterialID},
     mesh::MeshID,
@@ -8,7 +9,10 @@ use crate::{
         transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
         InstanceFeature, InstanceFeatureManager, ModelID,
     },
-    physics::motion::components::ReferenceFrameComp,
+    physics::{
+        fph,
+        motion::components::{ReferenceFrameComp, VelocityComp},
+    },
     scene::{
         components::{
             SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
@@ -17,7 +21,7 @@ use crate::{
         RenderResourcesDesynchronized, SceneGraph,
     },
     voxel::{
-        chunks::ChunkedVoxelObject,
+        chunks::{disconnection::DisconnectedVoxelObject, ChunkedVoxelObject},
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp,
             MultiscaleSphereModificationComp, SameVoxelTypeComp, VoxelBoxComp,
@@ -33,7 +37,13 @@ use crate::{
         VoxelManager, VoxelObjectID,
     },
 };
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use anyhow::Result;
+use impact_ecs::{
+    archetype::ArchetypeComponentStorage,
+    component::{ComponentArray, SingleInstance},
+    setup,
+    world::{Entity, EntityEntry},
+};
 use impact_utils::hash64;
 use std::sync::{LazyLock, RwLock};
 
@@ -424,6 +434,116 @@ pub fn cleanup_voxel_object_for_removed_entity(
 
         desynchronized.set_yes();
     }
+}
+
+pub fn handle_emptied_voxel_objects(app: &Application) -> Result<()> {
+    loop {
+        let scene = app.scene().read().unwrap();
+        let mut voxel_manager = scene.voxel_manager().write().unwrap();
+
+        if let Some(entity) = voxel_manager.pop_empty_voxel_object_entity() {
+            // We must release these locks before attempting to remove the entity, or we
+            // will deadlock
+            drop(voxel_manager);
+            drop(scene);
+
+            log::debug!("Removing entity for emptied voxel object");
+            app.remove_entity(&entity)?;
+        } else {
+            break;
+        }
+    }
+    Ok(())
+}
+
+pub fn handle_disconnected_voxel_objects(app: &Application) -> Result<()> {
+    loop {
+        let scene = app.scene().read().unwrap();
+        let mut voxel_manager = scene.voxel_manager().write().unwrap();
+
+        if let Some((parent_entity, disconnected_object)) =
+            voxel_manager.pop_disconnected_voxel_object()
+        {
+            // We must release these locks before calling the inner function, or we will
+            // deadlock
+            drop(voxel_manager);
+            drop(scene);
+
+            handle_disconnected_voxel_object(app, parent_entity, disconnected_object)?;
+        } else {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn handle_disconnected_voxel_object(
+    app: &Application,
+    parent_entity: Entity,
+    disconnected_object: DisconnectedVoxelObject,
+) -> Result<()> {
+    let DisconnectedVoxelObject {
+        object,
+        origin_offset,
+    } = disconnected_object;
+
+    let voxel_extent = object.voxel_extent();
+    let meshed_voxel_object = MeshedChunkedVoxelObject::create(object);
+
+    let voxel_object_id = app
+        .scene()
+        .read()
+        .unwrap()
+        .voxel_manager()
+        .write()
+        .unwrap()
+        .add_voxel_object(meshed_voxel_object);
+
+    let ecs_world = app.ecs_world().read().unwrap();
+    let Some(parent) = ecs_world.get_entity(&parent_entity) else {
+        // If the parent entity has been removed, we discard the disconnected object
+        return Ok(());
+    };
+
+    let mut components = ArchetypeComponentStorage::empty();
+
+    components.add_new_component_type(VoxelObjectComp { voxel_object_id }.into_storage())?;
+
+    if let Some(parent_reference_frame) = parent.get_component() {
+        let parent_reference_frame: &ReferenceFrameComp = parent_reference_frame.access();
+        let mut reference_frame = *parent_reference_frame;
+
+        let origin_offset_in_voxel_object_space =
+            origin_offset.map(|offset| offset as fph * voxel_extent);
+
+        // Offset the reference frame of the new object compared to the frame of the
+        // parent object to account for the origin difference
+        reference_frame.position += parent_reference_frame
+            .create_transform_to_parent_space()
+            .transform_vector(&origin_offset_in_voxel_object_space.into());
+
+        components.add_new_component_type(reference_frame.into_storage())?;
+
+        if let Some(parent_velocity) = parent.get_component() {
+            let parent_velocity: &VelocityComp = parent_velocity.access();
+            // TODO: Handle angular velocity
+            let velocity = VelocityComp::linear(parent_velocity.linear);
+            components.add_new_component_type(velocity.into_storage())?;
+        }
+    }
+
+    if let Some(scene_graph_parent) = parent.get_component() {
+        let scene_graph_parent: &SceneGraphParentNodeComp = scene_graph_parent.access();
+        components.add_new_component_type(scene_graph_parent.into_storage())?;
+    }
+
+    // Release all locks before attempting to create entity
+    drop(parent);
+    drop(ecs_world);
+
+    app.create_entity(SingleInstance::new(components))?;
+
+    Ok(())
 }
 
 impl_InstanceFeature!(

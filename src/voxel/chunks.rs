@@ -1,8 +1,8 @@
 //! Chunked representation of voxel objects.
 
+pub mod disconnection;
 pub mod intersection;
 pub mod sdf;
-pub mod split;
 
 use crate::{
     geometry::{AxisAlignedBox, Sphere},
@@ -15,10 +15,12 @@ use crate::{
     },
 };
 use bitflags::bitflags;
-use nalgebra::point;
+use disconnection::{
+    NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
+};
+use nalgebra::{point, vector};
 use num_traits::{NumCast, PrimInt};
-use split::{NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData};
-use std::{collections::HashSet, iter, ops::Range};
+use std::{array, collections::HashSet, iter, ops::Range};
 
 /// An object represented by a grid of voxels.
 ///
@@ -149,6 +151,10 @@ pub type LoopOverChunkVoxelData<'a, 'b> = DataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
 pub type LoopOverChunkVoxelDataMut<'a, 'b> = MutDataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
 
 const LOG2_CHUNK_SIZE: usize = 4;
+
+/// The minimum number of non-empty voxels that should be present in a chunk for
+/// it to be considered non-empty.
+pub const NON_EMPTY_VOXEL_THRESHOLD: usize = 8;
 
 /// The number of voxels across a cubic voxel chunk. It is always a power of
 /// two.
@@ -345,6 +351,46 @@ impl ChunkedVoxelObject {
             .sum()
     }
 
+    /// Checks whether the object consists of fewer than
+    /// [`NON_EMPTY_VOXEL_THRESHOLD`] non-empty voxels. Assumes that
+    /// [`Self::shrink_occupied_ranges`] has been called since the last time a
+    /// chunk was emptied.
+    pub fn is_effectively_empty(&self) -> bool {
+        let occupied_chunk_count: usize =
+            self.occupied_chunk_ranges.iter().map(Range::len).product();
+
+        if occupied_chunk_count > 8 {
+            return false;
+        } else if occupied_chunk_count == 0 {
+            return true;
+        }
+
+        let mut total_non_empty_voxel_count = 0;
+
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+                    let non_empty_voxel_count = match &self.chunks[chunk_idx] {
+                        VoxelChunk::Empty => 0,
+                        VoxelChunk::Uniform(_) => CHUNK_VOXEL_COUNT,
+                        VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                            let chunk_voxels = chunk_voxels(&self.voxels, *data_offset);
+                            chunk_voxels
+                                .iter()
+                                .filter(|voxel| !voxel.is_empty())
+                                .count()
+                        }
+                    };
+                    total_non_empty_voxel_count += non_empty_voxel_count;
+                }
+            }
+        }
+
+        total_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD
+    }
+
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
     /// the object.
     pub fn compute_aabb<F: Float>(&self) -> AxisAlignedBox<F> {
@@ -478,6 +524,42 @@ impl ChunkedVoxelObject {
         self.update_local_connected_regions_for_all_chunks();
         self.update_all_chunk_boundary_adjacencies();
         self.resolve_connected_regions_between_all_chunks();
+    }
+
+    /// Shrinks the recorded occupied chunk and voxel ranges to a tighter fit if
+    /// chunks have been removed.
+    pub fn shrink_occupied_ranges(&mut self) {
+        let mut min_chunk_indices = vector![usize::MAX, usize::MAX, usize::MAX];
+        let mut max_chunk_indices = vector![0, 0, 0];
+        let mut has_non_empty_chunks = false;
+
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+                    match &self.chunks[chunk_idx] {
+                        VoxelChunk::Uniform(_) | VoxelChunk::NonUniform(_) => {
+                            min_chunk_indices = min_chunk_indices.inf(&chunk_indices.into());
+                            max_chunk_indices = max_chunk_indices.sup(&chunk_indices.into());
+                            has_non_empty_chunks = true;
+                        }
+                        VoxelChunk::Empty => {}
+                    }
+                }
+            }
+        }
+
+        self.occupied_chunk_ranges = if has_non_empty_chunks {
+            array::from_fn(|dim| min_chunk_indices[dim]..max_chunk_indices[dim] + 1)
+        } else {
+            [0..0, 0..0, 0..0]
+        };
+
+        self.occupied_voxel_ranges = self
+            .occupied_chunk_ranges
+            .clone()
+            .map(|range| range.start * CHUNK_SIZE..range.end * CHUNK_SIZE);
     }
 
     /// Returns an iterator over the indices in the object's chunk grid of the
@@ -1705,12 +1787,16 @@ impl NonUniformVoxelChunk {
         }
     }
 
-    fn update_face_distributions_and_internal_adjacencies(&mut self, voxels: &mut [Voxel]) {
+    fn update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
+        &mut self,
+        voxels: &mut [Voxel],
+    ) -> usize {
         // Extract the sub-slice of voxels for this chunk so that we get
         // out-of-bounds if trying to access voxels outside the chunk
         let chunk_voxels = chunk_voxels_mut(voxels, self.data_offset);
 
         let mut face_empty_counts = FaceEmptyCounts::zero();
+        let mut non_empty_voxel_count = 0;
 
         for i in 0..CHUNK_SIZE {
             for j in 0..CHUNK_SIZE {
@@ -1734,6 +1820,8 @@ impl NonUniformVoxelChunk {
                             face_empty_counts.increment_z_up();
                         }
                         continue;
+                    } else {
+                        non_empty_voxel_count += 1;
                     }
 
                     let mut flags = VoxelFlags::empty();
@@ -1778,6 +1866,8 @@ impl NonUniformVoxelChunk {
         }
 
         self.face_distributions = face_empty_counts.to_chunk_face_distributions();
+
+        non_empty_voxel_count
     }
 }
 

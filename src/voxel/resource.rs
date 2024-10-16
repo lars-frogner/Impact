@@ -31,6 +31,8 @@ use bytemuck::Pod;
 use impact_utils::ConstStringHash64;
 use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
 
+use super::mesh::VoxelMeshModifications;
+
 /// Owner and manager of the GPU resources for all voxel materials.
 #[derive(Debug)]
 pub struct VoxelMaterialGPUResourceManager {
@@ -439,9 +441,26 @@ impl VoxelObjectGPUBufferManager {
         voxel_object: &mut MeshedChunkedVoxelObject,
     ) {
         let mesh = voxel_object.mesh();
-        let updated_data_ranges = mesh.updated_chunk_submesh_data_ranges();
 
-        if updated_data_ranges.is_empty() {
+        let VoxelMeshModifications {
+            updated_chunk_submesh_data_ranges: updated_data_ranges,
+            chunks_were_removed,
+        } = mesh.mesh_modifications();
+
+        if updated_data_ranges.is_empty() && !chunks_were_removed {
+            return;
+        }
+
+        if updated_data_ranges.is_empty() && chunks_were_removed {
+            // If the only modifications are removed chunks, we just copy over the new chunk
+            // buffer and call it a day
+            self.chunk_submesh_buffer.update_valid_bytes(
+                graphics_device,
+                bytemuck::cast_slice(mesh.chunk_submeshes()),
+            );
+
+            voxel_object.report_gpu_resources_synchronized();
+
             return;
         }
 
@@ -576,7 +595,7 @@ impl VoxelObjectGPUBufferManager {
             );
         }
 
-        voxel_object.clear_updated_chunk_submesh_data_ranges();
+        voxel_object.report_gpu_resources_synchronized();
     }
 
     fn create_position_buffer(

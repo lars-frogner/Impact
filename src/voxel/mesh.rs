@@ -89,6 +89,16 @@ pub struct ChunkSubmeshDataRanges {
     pub index_range: Range<usize>,
 }
 
+/// Modifcations that were made to the voxel mesh since it was last synchronized
+/// with the GPU.
+#[derive(Clone, Debug)]
+pub struct VoxelMeshModifications<'a> {
+    /// The chunk submesh data ranges that have been updated with new data.
+    pub updated_chunk_submesh_data_ranges: &'a [ChunkSubmeshDataRanges],
+    /// Whether any chunks were removed as opposed to updated.
+    pub chunks_were_removed: bool,
+}
+
 /// A set of planes defining a frustum together with a small lookup table for
 /// fast culling and an apex position for computing view directions, gathered in
 /// a representation suitable for passing to the GPU.
@@ -115,6 +125,7 @@ struct ChunkSubmeshManager {
     vertex_range_allocator: RangeAllocator,
     index_range_allocator: RangeAllocator,
     updated_data_ranges: Vec<ChunkSubmeshDataRanges>,
+    chunks_were_removed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -162,11 +173,10 @@ impl MeshedChunkedVoxelObject {
         self.mesh.sync_with_voxel_object(&mut self.object);
     }
 
-    /// Clears the list of chunk submesh data ranges that have been updated with
-    /// new data, signaling that the updated data has been synchronized with the
-    /// GPU.
-    pub fn clear_updated_chunk_submesh_data_ranges(&mut self) {
-        self.mesh.clear_updated_chunk_submesh_data_ranges();
+    /// Signaling that the mesh modifications from [`Self::mesh_modifications`]
+    /// have been synchronized with the GPU.
+    pub fn report_gpu_resources_synchronized(&mut self) {
+        self.mesh.report_gpu_resources_synchronized();
     }
 }
 
@@ -336,6 +346,11 @@ impl ChunkedVoxelObjectMesh {
                         );
                     }
                 }
+            } else {
+                // If the chunk is no longer exposed (most likely because it has been
+                // disconnected from the object), we remove its mesh
+                self.chunk_submesh_manager
+                    .remove_chunk_if_present(chunk_indices);
             }
         }
 
@@ -377,19 +392,17 @@ impl ChunkedVoxelObjectMesh {
         self.chunk_submeshes().len()
     }
 
-    /// Returns a slice with the chunk submesh data ranges that have been
-    /// updated with new data.
-    pub fn updated_chunk_submesh_data_ranges(&self) -> &[ChunkSubmeshDataRanges] {
-        self.chunk_submesh_manager
-            .updated_chunk_submesh_data_ranges()
+    /// Returns the modifications that were made to the mesh since it was last
+    /// synchronized with the GPU.
+    pub fn mesh_modifications(&self) -> VoxelMeshModifications<'_> {
+        self.chunk_submesh_manager.modifications()
     }
 
-    /// Clears the list of chunk submesh data ranges that have been updated with
-    /// new data, signaling that the updated data has been synchronized with the
-    /// GPU.
-    pub fn clear_updated_chunk_submesh_data_ranges(&mut self) {
+    /// Signaling that the mesh modifications from [`Self::mesh_modifications`]
+    /// have been synchronized with the GPU.
+    pub fn report_gpu_resources_synchronized(&mut self) {
         self.chunk_submesh_manager
-            .clear_updated_chunk_submesh_data_ranges();
+            .report_gpu_resources_synchronized();
     }
 
     /// Returns a guess for the typical number of vertices in a chunk mesh.
@@ -554,6 +567,7 @@ impl ChunkSubmeshManager {
             vertex_range_allocator: RangeAllocator::new(),
             index_range_allocator: RangeAllocator::new(),
             updated_data_ranges: Vec::new(),
+            chunks_were_removed: false,
         }
     }
 
@@ -652,6 +666,8 @@ impl ChunkSubmeshManager {
             self.vertex_range_allocator.free_range(&vertex_range);
             self.index_range_allocator
                 .free_range(&chunk_submesh.index_range());
+
+            self.chunks_were_removed = true;
         }
     }
 
@@ -660,12 +676,16 @@ impl ChunkSubmeshManager {
         self.index_range_allocator.merge_consecutive_ranges();
     }
 
-    fn updated_chunk_submesh_data_ranges(&self) -> &[ChunkSubmeshDataRanges] {
-        &self.updated_data_ranges
+    fn modifications(&self) -> VoxelMeshModifications<'_> {
+        VoxelMeshModifications {
+            updated_chunk_submesh_data_ranges: &self.updated_data_ranges,
+            chunks_were_removed: self.chunks_were_removed,
+        }
     }
 
-    fn clear_updated_chunk_submesh_data_ranges(&mut self) {
+    fn report_gpu_resources_synchronized(&mut self) {
         self.updated_data_ranges.clear();
+        self.chunks_were_removed = false;
     }
 }
 

@@ -25,6 +25,12 @@ impl ChunkedVoxelObject {
     /// and any chunk whose mesh data would be invalidated by changes to these
     /// voxels will be registered. The invalidated chunks can be obtained by
     /// calling [`Self::invalidated_mesh_chunk_indices`].
+    ///
+    /// Even though modifying the object will invalidate the connected region
+    /// information, this method does not call
+    /// [`Self::resolve_connected_regions_between_all_chunks`] to avoid
+    /// duplicating work when this method is called multiple times. Make sure to
+    /// call it once all modifications have been made.
     pub fn modify_voxels_within_sphere(
         &mut self,
         sphere: &Sphere<f64>,
@@ -40,6 +46,8 @@ impl ChunkedVoxelObject {
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
+        let mut removed_chunks = false;
+
         for chunk_i in touched_chunk_ranges[0].clone() {
             for chunk_j in touched_chunk_ranges[1].clone() {
                 for chunk_k in touched_chunk_ranges[2].clone() {
@@ -48,7 +56,7 @@ impl ChunkedVoxelObject {
 
                     let chunk = &mut self.chunks[chunk_idx];
 
-                    let chunk = match chunk {
+                    let data_offset = match chunk {
                         VoxelChunk::Empty => {
                             continue;
                         }
@@ -58,12 +66,12 @@ impl ChunkedVoxelObject {
                                 &mut self.split_detector,
                             );
                             if let VoxelChunk::NonUniform(chunk) = chunk {
-                                chunk
+                                chunk.data_offset
                             } else {
                                 unreachable!()
                             }
                         }
-                        VoxelChunk::NonUniform(chunk) => chunk,
+                        VoxelChunk::NonUniform(chunk) => chunk.data_offset,
                     };
 
                     let object_voxel_ranges_in_chunk =
@@ -76,7 +84,7 @@ impl ChunkedVoxelObject {
                             ..usize::min(range_in_chunk.end, touched_range.end)
                     });
 
-                    let voxels = chunk_voxels_mut(&mut self.voxels, chunk.data_offset);
+                    let voxels = chunk_voxels_mut(&mut self.voxels, data_offset);
 
                     let mut chunk_touched = false;
 
@@ -108,14 +116,30 @@ impl ChunkedVoxelObject {
                     }
 
                     if chunk_touched {
-                        chunk.update_face_distributions_and_internal_adjacencies(&mut self.voxels);
+                        // We need to update the face distributions and internal adjacencies of the
+                        // touched chunk
+                        let non_empty_voxel_count = if let VoxelChunk::NonUniform(chunk) = chunk {
+                            chunk.update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(&mut self.voxels)
+                        } else {
+                            unreachable!()
+                        };
 
-                        self.split_detector
-                            .update_local_connected_regions_for_chunk(
-                                &self.voxels,
-                                chunk,
-                                chunk_idx as u32,
-                            );
+                        // Mark the chunk as empty if no non-empty voxels remain in the chunk
+                        if non_empty_voxel_count == 0 {
+                            *chunk = VoxelChunk::Empty;
+                            removed_chunks = true;
+                        }
+
+                        // If the chunk has not been emptied, we also need to update the local
+                        // connected regions
+                        if let VoxelChunk::NonUniform(chunk) = chunk {
+                            self.split_detector
+                                .update_local_connected_regions_for_chunk(
+                                    &self.voxels,
+                                    chunk,
+                                    chunk_idx as u32,
+                                );
+                        }
 
                         // The mesh of the touched chunk is invalidated
                         self.invalidated_mesh_chunk_indices.insert(chunk_indices);
@@ -151,9 +175,13 @@ impl ChunkedVoxelObject {
             }
         }
 
-        self.update_upper_boundary_adjacencies_for_chunks_in_ranges(touched_chunk_ranges);
+        if removed_chunks {
+            self.shrink_occupied_ranges();
+        }
 
-        self.resolve_connected_regions_between_all_chunks();
+        self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
+            touched_chunk_ranges.map(|range| range.start.saturating_sub(1)..range.end),
+        );
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
@@ -256,6 +284,7 @@ pub mod fuzzing {
                     assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
                 }
             });
+            object.resolve_connected_regions_between_all_chunks();
 
             object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere.0, &mut |indices, _| {
                 let was_present = indices_of_inside_voxels.remove(&indices);
