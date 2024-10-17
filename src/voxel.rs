@@ -23,15 +23,27 @@ use std::{collections::HashMap, fmt};
 use utils::{Dimension, Side};
 use voxel_types::{VoxelType, VoxelTypeRegistry};
 
+/// A voxel, which may either be be empty or filled with a material with
+/// specific properties.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+pub struct Voxel {
+    voxel_type: VoxelType,
+    signed_distance: VoxelSignedDistance,
+    flags: VoxelFlags,
+}
+
 /// A compact encoding of a signed distance for a voxel.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct VoxelSignedDistance {
     encoded: i8,
 }
 
 bitflags! {
     /// Bitflags encoding a set of potential binary states for a voxel.
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct VoxelFlags: u8 {
         /// The voxel is empty.
         const IS_EMPTY          = 1 << 0;
@@ -54,15 +66,6 @@ bitflags! {
         /// z-direction.
         const HAS_ADJACENT_Z_UP = 1 << 7;
     }
-}
-
-/// A voxel, which may either be be empty or filled with a material with
-/// specific properties.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Voxel {
-    voxel_type: VoxelType,
-    signed_distance: VoxelSignedDistance,
-    flags: VoxelFlags,
 }
 
 /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].

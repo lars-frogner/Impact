@@ -4,14 +4,14 @@ use super::{chunk_voxels, chunk_voxels_mut, extract_slice_segments_mut, FaceVoxe
 use crate::voxel::{
     chunks::{
         chunk_start_voxel_idx, chunk_voxel_indices_from_linear_idx, linear_voxel_idx_within_chunk,
-        ChunkedVoxelObject, LoopForChunkVoxels, NonUniformVoxelChunk, UniformVoxelChunk,
-        VoxelChunk, VoxelChunkFlags, CHUNK_SIZE, CHUNK_VOXEL_COUNT, LOG2_CHUNK_SIZE,
-        NON_EMPTY_VOXEL_THRESHOLD,
+        ChunkedVoxelObject, LoopForChunkVoxels, LoopOverChunkVoxelData, NonUniformVoxelChunk,
+        UniformVoxelChunk, VoxelChunk, VoxelChunkFlags, CHUNK_SIZE, CHUNK_VOXEL_COUNT,
+        LOG2_CHUNK_SIZE, NON_EMPTY_VOXEL_THRESHOLD,
     },
     utils::{DataLoop3, Dimension, Side},
     Voxel, VoxelFlags,
 };
-use nalgebra::vector;
+use nalgebra::{vector, Vector3};
 use std::{array, cmp::Ordering, collections::HashSet, iter, mem, ops::Range};
 
 /// A [`ChunkedVoxelObject`] that has been disconnected from a larger object.
@@ -212,9 +212,8 @@ impl ChunkedVoxelObject {
                 for chunk_k in self.occupied_chunk_ranges[2].clone() {
                     let chunk_indices = [chunk_i, chunk_j, chunk_k];
                     let chunk_idx = self.linear_chunk_idx(&chunk_indices);
-                    let chunk = &self.chunks[chunk_idx];
 
-                    match chunk {
+                    match &self.chunks[chunk_idx] {
                         VoxelChunk::NonUniform(chunk) => {
                             let chunk_data = &chunk.split_detection;
 
@@ -558,7 +557,7 @@ impl ChunkedVoxelObject {
 
         // If the disconnected region only contains a few non-empty voxels, we discard
         // the disconnected object to avoid creating a lot of tiny voxel objects
-        if region_uniform_chunk_count == 0 && region_non_uniform_chunk_count < 8 {
+        if region_uniform_chunk_count == 0 && region_non_uniform_chunk_count <= 8 {
             let disconnected_non_empty_voxel_count = region_voxels
                 .iter()
                 .filter(|voxel| !voxel.is_empty())
@@ -569,44 +568,267 @@ impl ChunkedVoxelObject {
             }
         }
 
+        // Offset in number of voxels from the origin of the original object to the
+        // origin of the disconnected object
+        let origin_offset = region_chunk_ranges.map(|range| range.start * CHUNK_SIZE);
+
+        Some(if region_chunk_counts.iter().all(|&count| count <= 2) {
+            // If the disconnected object consists of at most 2 x 2 x 2 chunks, there is a
+            // reasonable chance that the actual region of disconnected voxels could fit
+            // within a single chunk if we offset it appropriately. It is worth doing the
+            // extra work of attempting this to avoid creating a lot of unneccesary
+            // multi-chunk objects.
+            Self::create_disconnected_voxel_object_in_single_chunk_if_possible(
+                self.voxel_extent,
+                origin_offset,
+                region_chunk_counts,
+                region_uniform_chunk_count,
+                region_non_uniform_chunk_count,
+                region_chunks,
+                region_voxels,
+            )
+        } else {
+            Self::create_disconnected_voxel_object(
+                self.voxel_extent,
+                origin_offset,
+                region_chunk_counts,
+                region_uniform_chunk_count,
+                region_non_uniform_chunk_count,
+                region_chunks,
+                region_voxels,
+            )
+        })
+    }
+
+    fn create_disconnected_voxel_object_in_single_chunk_if_possible(
+        voxel_extent: f64,
+        origin_offset: [usize; 3],
+        chunk_counts: [usize; 3],
+        uniform_chunk_count: usize,
+        non_uniform_chunk_count: usize,
+        chunks: Vec<VoxelChunk>,
+        voxels: Vec<Voxel>,
+    ) -> DisconnectedVoxelObject {
+        // If there uniform chunks, the object either won't fit in a single chunk or it
+        // does so already. If it is already a single chunk, we don't have to do any
+        // extra work.
+        if uniform_chunk_count == 0 && chunk_counts.iter().product::<usize>() > 1 {
+            let occupied_voxel_ranges =
+                Self::determine_occupied_voxel_ranges(chunk_counts, &chunks, &voxels);
+
+            // We need room for an empty single-voxel boundary to ensure smooth signed
+            // distances around the surface if it is close to the boundary
+            if occupied_voxel_ranges
+                .iter()
+                .all(|range| range.len() <= CHUNK_SIZE - 2)
+            {
+                let origin_offset_within_object = occupied_voxel_ranges
+                    .clone()
+                    .map(|range| range.start.saturating_sub(1)); // -1 for the empty boundary
+
+                let mut single_chunk_voxels = vec![Voxel::maximally_outside(); CHUNK_VOXEL_COUNT];
+
+                let mut chunk_idx = 0;
+                for chunk_i in 0..chunk_counts[0] {
+                    for chunk_j in 0..chunk_counts[1] {
+                        for chunk_k in 0..chunk_counts[2] {
+                            let chunk_indices = [chunk_i, chunk_j, chunk_k];
+
+                            // Copy over the voxels in the sub-block of this chunk that overlaps our
+                            // single chunk
+
+                            let single_chunk_ranges_within_chunk: [_; 3] = array::from_fn(|dim| {
+                                let start = origin_offset_within_object[dim]
+                                    .saturating_sub(chunk_indices[dim] * CHUNK_SIZE)
+                                    .min(CHUNK_SIZE);
+                                let end = (origin_offset_within_object[dim] + CHUNK_SIZE)
+                                    .saturating_sub(chunk_indices[dim] * CHUNK_SIZE)
+                                    .min(CHUNK_SIZE);
+                                start..end
+                            });
+
+                            let overlap_spans = single_chunk_ranges_within_chunk
+                                .clone()
+                                .map(|range| range.len());
+
+                            let offset_within_single_chunk: [_; 3] = array::from_fn(|dim| {
+                                (chunk_indices[dim] * CHUNK_SIZE)
+                                    .saturating_sub(origin_offset_within_object[dim])
+                            });
+
+                            match &chunks[chunk_idx] {
+                                VoxelChunk::NonUniform(NonUniformVoxelChunk {
+                                    data_offset,
+                                    ..
+                                }) => {
+                                    let chunk_voxels = chunk_voxels(&voxels, *data_offset);
+
+                                    for i in 0..overlap_spans[0] {
+                                        for j in 0..overlap_spans[1] {
+                                            for k in 0..overlap_spans[2] {
+                                                let indices = [i, j, k];
+                                                let src_idx = linear_voxel_idx_within_chunk(
+                                                    &array::from_fn(|dim| {
+                                                        single_chunk_ranges_within_chunk[dim].start
+                                                            + indices[dim]
+                                                    }),
+                                                );
+                                                let dest_idx = linear_voxel_idx_within_chunk(
+                                                    &array::from_fn(|dim| {
+                                                        offset_within_single_chunk[dim]
+                                                            + indices[dim]
+                                                    }),
+                                                );
+                                                single_chunk_voxels[dest_idx] =
+                                                    chunk_voxels[src_idx];
+                                            }
+                                        }
+                                    }
+                                }
+                                VoxelChunk::Empty => {}
+                                VoxelChunk::Uniform(_) => unreachable!(),
+                            }
+                            chunk_idx += 1;
+                        }
+                    }
+                }
+
+                let single_chunk_origin_offset =
+                    array::from_fn(|dim| origin_offset[dim] + origin_offset_within_object[dim]);
+
+                let face_distributions = array::from_fn(|dim| {
+                    let lower =
+                        if origin_offset_within_object[dim] == occupied_voxel_ranges[dim].start {
+                            FaceVoxelDistribution::Mixed
+                        } else {
+                            FaceVoxelDistribution::Empty
+                        };
+                    let upper = if origin_offset_within_object[dim] + CHUNK_SIZE
+                        == occupied_voxel_ranges[dim].end
+                    {
+                        FaceVoxelDistribution::Mixed
+                    } else {
+                        FaceVoxelDistribution::Empty
+                    };
+                    [lower, upper]
+                });
+
+                let single_chunk = VoxelChunk::NonUniform(NonUniformVoxelChunk {
+                    data_offset: 0,
+                    face_distributions,
+                    flags: VoxelChunkFlags::empty(),
+                    split_detection: NonUniformChunkSplitDetectionData::new(),
+                });
+
+                return Self::create_disconnected_voxel_object(
+                    voxel_extent,
+                    single_chunk_origin_offset,
+                    [1; 3],
+                    0,
+                    1,
+                    vec![single_chunk],
+                    single_chunk_voxels,
+                );
+            }
+        }
+
+        Self::create_disconnected_voxel_object(
+            voxel_extent,
+            origin_offset,
+            chunk_counts,
+            uniform_chunk_count,
+            non_uniform_chunk_count,
+            chunks,
+            voxels,
+        )
+    }
+
+    fn determine_occupied_voxel_ranges(
+        chunk_counts: [usize; 3],
+        chunks: &[VoxelChunk],
+        voxels: &[Voxel],
+    ) -> [Range<usize>; 3] {
+        let mut min_voxel_indices = vector![usize::MAX, usize::MAX, usize::MAX];
+        let mut max_voxel_indices = vector![0, 0, 0];
+
+        let mut chunk_idx = 0;
+        for chunk_i in 0..chunk_counts[0] {
+            for chunk_j in 0..chunk_counts[1] {
+                for chunk_k in 0..chunk_counts[2] {
+                    let voxel_index_offsets = vector![chunk_i, chunk_j, chunk_k] * CHUNK_SIZE;
+                    match &chunks[chunk_idx] {
+                        VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                            let chunk_voxels = chunk_voxels(voxels, *data_offset);
+                            LoopOverChunkVoxelData::new(
+                                &LoopForChunkVoxels::over_all(),
+                                chunk_voxels,
+                            )
+                            .execute(&mut |&voxel_indices, voxel| {
+                                if !voxel.is_empty() {
+                                    let object_voxel_indices =
+                                        voxel_index_offsets + Vector3::from(voxel_indices);
+                                    min_voxel_indices =
+                                        min_voxel_indices.inf(&object_voxel_indices);
+                                    max_voxel_indices =
+                                        max_voxel_indices.sup(&object_voxel_indices);
+                                }
+                            });
+                        }
+                        VoxelChunk::Uniform(_) => {
+                            min_voxel_indices = min_voxel_indices.inf(&voxel_index_offsets);
+                            max_voxel_indices = max_voxel_indices
+                                .sup(&(voxel_index_offsets.add_scalar(CHUNK_SIZE - 1)));
+                        }
+                        VoxelChunk::Empty => {}
+                    }
+                    chunk_idx += 1;
+                }
+            }
+        }
+
+        array::from_fn(|dim| min_voxel_indices[dim]..max_voxel_indices[dim] + 1)
+    }
+
+    fn create_disconnected_voxel_object(
+        voxel_extent: f64,
+        origin_offset: [usize; 3],
+        chunk_counts: [usize; 3],
+        uniform_chunk_count: usize,
+        non_uniform_chunk_count: usize,
+        chunks: Vec<VoxelChunk>,
+        voxels: Vec<Voxel>,
+    ) -> DisconnectedVoxelObject {
         // The chunk grid of the disconnected object should start at the origin
-        let disconnected_chunk_ranges = region_chunk_counts.map(|count| 0..count);
+        let offset_chunk_ranges = chunk_counts.map(|count| 0..count);
 
-        let disconnected_origin_offset = region_chunk_ranges.map(|range| range.start * CHUNK_SIZE);
+        let chunk_idx_strides = [chunk_counts[2] * chunk_counts[1], chunk_counts[2], 1];
 
-        let disconnected_chunk_idx_strides = [
-            region_chunk_counts[2] * region_chunk_counts[1],
-            region_chunk_counts[2],
-            1,
-        ];
-
-        let disconnected_voxel_ranges = disconnected_chunk_ranges
+        let offset_voxel_ranges = offset_chunk_ranges
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
-        let disconnected_split_detector =
-            SplitDetector::new(region_uniform_chunk_count, region_non_uniform_chunk_count);
+        let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
-        let mut disconnected_object = Self {
-            voxel_extent: self.voxel_extent,
-            chunk_counts: region_chunk_counts,
-            chunk_idx_strides: disconnected_chunk_idx_strides,
-            occupied_chunk_ranges: disconnected_chunk_ranges,
-            occupied_voxel_ranges: disconnected_voxel_ranges,
-            chunks: region_chunks,
-            voxels: region_voxels,
-            split_detector: disconnected_split_detector,
+        let mut object = Self {
+            voxel_extent,
+            chunk_counts,
+            chunk_idx_strides,
+            occupied_chunk_ranges: offset_chunk_ranges,
+            occupied_voxel_ranges: offset_voxel_ranges,
+            chunks,
+            voxels,
+            split_detector,
             invalidated_mesh_chunk_indices: HashSet::new(),
         };
 
         // We have already computed the internal adjacencies in the disconnected object,
         // but all other derived state must be computed from scratch
-        disconnected_object.compute_all_derived_state_except_internal_adjacencies();
+        object.compute_all_derived_state_except_internal_adjacencies();
 
-        Some(DisconnectedVoxelObject {
-            object: disconnected_object,
-            origin_offset: disconnected_origin_offset,
-        })
+        DisconnectedVoxelObject {
+            object,
+            origin_offset,
+        }
     }
 
     /// Identifies two disconnected regions of the voxel object (if there are
@@ -621,42 +843,51 @@ impl ChunkedVoxelObject {
         let mut region_count = 0;
         let mut disconnected_regions = [GlobalRegionLabel::zero(); 2];
 
-        for (chunk_idx, chunk) in self.chunks.iter().enumerate() {
-            match chunk {
-                VoxelChunk::NonUniform(chunk) => {
-                    let chunk_data = &chunk.split_detection;
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
-                    let start_region_idx = non_uniform_chunk_start_region_idx(
-                        self.split_detector.original_uniform_chunk_count,
-                        chunk.data_offset,
-                    );
-                    let chunk_regions = &regions
-                        [start_region_idx..start_region_idx + chunk_data.region_count as usize];
+                    match &self.chunks[chunk_idx] {
+                        VoxelChunk::NonUniform(chunk) => {
+                            let chunk_data = &chunk.split_detection;
 
-                    for (region_idx, region) in chunk_regions.iter().enumerate() {
-                        if region.parent_label
-                            == GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32)
-                        {
-                            disconnected_regions[region_count] = region.parent_label;
-                            region_count += 1;
-                            if region_count > 1 {
-                                return Some(disconnected_regions);
+                            let start_region_idx = non_uniform_chunk_start_region_idx(
+                                self.split_detector.original_uniform_chunk_count,
+                                chunk.data_offset,
+                            );
+                            let chunk_regions = &regions[start_region_idx
+                                ..start_region_idx + chunk_data.region_count as usize];
+
+                            for (region_idx, region) in chunk_regions.iter().enumerate() {
+                                if region.parent_label
+                                    == GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32)
+                                {
+                                    disconnected_regions[region_count] = region.parent_label;
+                                    region_count += 1;
+                                    if region_count > 1 {
+                                        return Some(disconnected_regions);
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                VoxelChunk::Uniform(chunk) => {
-                    let region = &regions[chunk.split_detection.data_offset as usize];
-                    let region_idx = 0;
-                    if region.parent_label == GlobalRegionLabel::new(chunk_idx as u32, region_idx) {
-                        disconnected_regions[region_count] = region.parent_label;
-                        region_count += 1;
-                        if region_count > 1 {
-                            return Some(disconnected_regions);
+                        VoxelChunk::Uniform(chunk) => {
+                            let region = &regions[chunk.split_detection.data_offset as usize];
+                            let region_idx = 0;
+                            if region.parent_label
+                                == GlobalRegionLabel::new(chunk_idx as u32, region_idx)
+                            {
+                                disconnected_regions[region_count] = region.parent_label;
+                                region_count += 1;
+                                if region_count > 1 {
+                                    return Some(disconnected_regions);
+                                }
+                            }
                         }
+                        VoxelChunk::Empty => {}
                     }
                 }
-                VoxelChunk::Empty => {}
             }
         }
 
@@ -673,34 +904,43 @@ impl ChunkedVoxelObject {
 
         let mut region_count = 0;
 
-        for (chunk_idx, chunk) in self.chunks.iter().enumerate() {
-            match chunk {
-                VoxelChunk::NonUniform(chunk) => {
-                    let chunk_data = &chunk.split_detection;
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
-                    let start_region_idx = non_uniform_chunk_start_region_idx(
-                        self.split_detector.original_uniform_chunk_count,
-                        chunk.data_offset,
-                    );
-                    let chunk_regions = &regions
-                        [start_region_idx..start_region_idx + chunk_data.region_count as usize];
+                    match &self.chunks[chunk_idx] {
+                        VoxelChunk::NonUniform(chunk) => {
+                            let chunk_data = &chunk.split_detection;
 
-                    for (region_idx, region) in chunk_regions.iter().enumerate() {
-                        if region.parent_label
-                            == GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32)
-                        {
-                            region_count += 1;
+                            let start_region_idx = non_uniform_chunk_start_region_idx(
+                                self.split_detector.original_uniform_chunk_count,
+                                chunk.data_offset,
+                            );
+                            let chunk_regions = &regions[start_region_idx
+                                ..start_region_idx + chunk_data.region_count as usize];
+
+                            for (region_idx, region) in chunk_regions.iter().enumerate() {
+                                if region.parent_label
+                                    == GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32)
+                                {
+                                    region_count += 1;
+                                }
+                            }
                         }
+                        VoxelChunk::Uniform(chunk) => {
+                            let region = &regions[chunk.split_detection.data_offset as usize];
+                            let region_idx = 0;
+                            if region.parent_label
+                                == GlobalRegionLabel::new(chunk_idx as u32, region_idx)
+                            {
+                                region_count += 1;
+                            }
+                        }
+                        VoxelChunk::Empty => {}
                     }
                 }
-                VoxelChunk::Uniform(chunk) => {
-                    let region = &regions[chunk.split_detection.data_offset as usize];
-                    let region_idx = 0;
-                    if region.parent_label == GlobalRegionLabel::new(chunk_idx as u32, region_idx) {
-                        region_count += 1;
-                    }
-                }
-                VoxelChunk::Empty => {}
             }
         }
 
@@ -728,7 +968,6 @@ impl ChunkedVoxelObject {
     /// This should be called whenever any local regions or connections between
     /// them have changed.
     pub fn resolve_connected_regions_between_all_chunks(&mut self) {
-        let regions = &mut self.split_detector.regions;
         let adjacent_region_connections = &self.split_detector.adjacent_region_connections;
         let uniform_chunk_adjacent_region_connections = &self
             .split_detector
@@ -739,133 +978,157 @@ impl ChunkedVoxelObject {
         // region for Disjoint Set Forest labeling by marking it as the representative
         // region in its own unique set by setting its parent label to have its own
         // region and chunk index (making it a root in the graph).
-        for (chunk_idx, chunk) in self.chunks.iter().enumerate() {
-            match chunk {
-                VoxelChunk::NonUniform(chunk) => {
-                    let chunk_data = &chunk.split_detection;
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
-                    let start_region_idx = non_uniform_chunk_start_region_idx(
-                        self.split_detector.original_uniform_chunk_count,
-                        chunk.data_offset,
-                    );
-                    let chunk_regions = &mut regions[start_region_idx
-                        ..start_region_idx + chunk_data.boundary_region_count as usize];
+                    match &self.chunks[chunk_idx] {
+                        VoxelChunk::NonUniform(chunk) => {
+                            let chunk_data = &chunk.split_detection;
 
-                    for (region_idx, region) in chunk_regions.iter_mut().enumerate() {
-                        region.parent_label =
-                            GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32);
+                            let start_region_idx = non_uniform_chunk_start_region_idx(
+                                self.split_detector.original_uniform_chunk_count,
+                                chunk.data_offset,
+                            );
+                            let chunk_regions = &mut self.split_detector.regions[start_region_idx
+                                ..start_region_idx + chunk_data.boundary_region_count as usize];
+
+                            for (region_idx, region) in chunk_regions.iter_mut().enumerate() {
+                                region.parent_label =
+                                    GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32);
+                            }
+                        }
+                        VoxelChunk::Uniform(chunk) => {
+                            let region = &mut self.split_detector.regions
+                                [chunk.split_detection.data_offset as usize];
+                            let region_idx = 0;
+                            region.parent_label =
+                                GlobalRegionLabel::new(chunk_idx as u32, region_idx);
+                        }
+                        VoxelChunk::Empty => {}
                     }
                 }
-                VoxelChunk::Uniform(chunk) => {
-                    let region = &mut regions[chunk.split_detection.data_offset as usize];
-                    let region_idx = 0;
-                    region.parent_label = GlobalRegionLabel::new(chunk_idx as u32, region_idx);
-                }
-                VoxelChunk::Empty => {}
             }
         }
 
         // We then go through and join the roots of all local regions that are connected
         // based on the stored connection information
-        for (chunk_idx, chunk) in self.chunks.iter().enumerate() {
-            match chunk {
-                VoxelChunk::NonUniform(chunk) => {
-                    let chunk_data = &chunk.split_detection;
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
-                    let start_region_idx = non_uniform_chunk_start_region_idx(
-                        self.split_detector.original_uniform_chunk_count,
-                        chunk.data_offset,
-                    );
-                    let chunk_boundary_region_range = 0..chunk_data.boundary_region_count as usize;
+                    match &self.chunks[chunk_idx] {
+                        VoxelChunk::NonUniform(chunk) => {
+                            let chunk_data = &chunk.split_detection;
 
-                    let chunk_adjacent_region_connections = chunk_adjacent_region_connections(
-                        adjacent_region_connections,
-                        chunk.data_offset,
-                    );
-
-                    for region_idx in chunk_boundary_region_range {
-                        let region = &regions[start_region_idx + region_idx];
-                        let parent_label = region.parent_label;
-
-                        let range_of_adjacent_region_connections =
-                            region.range_of_adjacent_region_connections();
-
-                        let region_root_label = if parent_label
-                            == GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32)
-                        {
-                            parent_label
-                        } else {
-                            find_root_for_region_and_compress_path(
-                                &self.chunks,
-                                regions,
+                            let start_region_idx = non_uniform_chunk_start_region_idx(
                                 self.split_detector.original_uniform_chunk_count,
-                                parent_label,
-                            )
-                        };
-
-                        for adjacent_region in
-                            &chunk_adjacent_region_connections[range_of_adjacent_region_connections]
-                        {
-                            let adjacent_chunk_idx = adjacent_region
-                                .compute_relative_linear_chunk_idx(
-                                    &self.chunk_idx_strides,
-                                    chunk_idx,
-                                );
-                            let adjacent_region_idx = adjacent_region.region_idx() as usize;
-
-                            set_root_for_region(
-                                &self.chunks,
-                                regions,
-                                self.split_detector.original_uniform_chunk_count,
-                                adjacent_chunk_idx,
-                                adjacent_region_idx,
-                                region_root_label,
+                                chunk.data_offset,
                             );
+                            let chunk_boundary_region_range =
+                                0..chunk_data.boundary_region_count as usize;
+
+                            let chunk_adjacent_region_connections =
+                                chunk_adjacent_region_connections(
+                                    adjacent_region_connections,
+                                    chunk.data_offset,
+                                );
+
+                            for region_idx in chunk_boundary_region_range {
+                                let region =
+                                    &self.split_detector.regions[start_region_idx + region_idx];
+                                let parent_label = region.parent_label;
+
+                                let range_of_adjacent_region_connections =
+                                    region.range_of_adjacent_region_connections();
+
+                                let region_root_label = if parent_label
+                                    == GlobalRegionLabel::new(chunk_idx as u32, region_idx as u32)
+                                {
+                                    parent_label
+                                } else {
+                                    find_root_for_region_and_compress_path(
+                                        &self.chunks,
+                                        &mut self.split_detector.regions,
+                                        self.split_detector.original_uniform_chunk_count,
+                                        parent_label,
+                                    )
+                                };
+
+                                for adjacent_region in &chunk_adjacent_region_connections
+                                    [range_of_adjacent_region_connections]
+                                {
+                                    let adjacent_chunk_idx = adjacent_region
+                                        .compute_relative_linear_chunk_idx(
+                                            &self.chunk_idx_strides,
+                                            chunk_idx,
+                                        );
+                                    let adjacent_region_idx = adjacent_region.region_idx() as usize;
+
+                                    set_root_for_region(
+                                        &self.chunks,
+                                        &mut self.split_detector.regions,
+                                        self.split_detector.original_uniform_chunk_count,
+                                        adjacent_chunk_idx,
+                                        adjacent_region_idx,
+                                        region_root_label,
+                                    );
+                                }
+                            }
                         }
+                        VoxelChunk::Uniform(chunk) => {
+                            let region = &self.split_detector.regions
+                                [chunk.split_detection.data_offset as usize];
+                            let parent_label = region.parent_label;
+
+                            let range_of_adjacent_region_connections =
+                                region.range_of_adjacent_region_connections();
+
+                            let region_root_label =
+                                if parent_label == GlobalRegionLabel::new(chunk_idx as u32, 0) {
+                                    parent_label
+                                } else {
+                                    find_root_for_region_and_compress_path(
+                                        &self.chunks,
+                                        &mut self.split_detector.regions,
+                                        self.split_detector.original_uniform_chunk_count,
+                                        parent_label,
+                                    )
+                                };
+
+                            let chunk_adjacent_region_connections =
+                                chunk_adjacent_region_connections(
+                                    uniform_chunk_adjacent_region_connections,
+                                    chunk.split_detection.data_offset,
+                                );
+
+                            for adjacent_region in &chunk_adjacent_region_connections
+                                [range_of_adjacent_region_connections]
+                            {
+                                let adjacent_chunk_idx = adjacent_region
+                                    .compute_relative_linear_chunk_idx(
+                                        &self.chunk_idx_strides,
+                                        chunk_idx,
+                                    );
+                                let adjacent_region_idx = adjacent_region.region_idx() as usize;
+
+                                set_root_for_region(
+                                    &self.chunks,
+                                    &mut self.split_detector.regions,
+                                    self.split_detector.original_uniform_chunk_count,
+                                    adjacent_chunk_idx,
+                                    adjacent_region_idx,
+                                    region_root_label,
+                                );
+                            }
+                        }
+                        VoxelChunk::Empty => {}
                     }
                 }
-                VoxelChunk::Uniform(chunk) => {
-                    let region = &regions[chunk.split_detection.data_offset as usize];
-                    let parent_label = region.parent_label;
-
-                    let range_of_adjacent_region_connections =
-                        region.range_of_adjacent_region_connections();
-
-                    let region_root_label =
-                        if parent_label == GlobalRegionLabel::new(chunk_idx as u32, 0) {
-                            parent_label
-                        } else {
-                            find_root_for_region_and_compress_path(
-                                &self.chunks,
-                                regions,
-                                self.split_detector.original_uniform_chunk_count,
-                                parent_label,
-                            )
-                        };
-
-                    let chunk_adjacent_region_connections = chunk_adjacent_region_connections(
-                        uniform_chunk_adjacent_region_connections,
-                        chunk.split_detection.data_offset,
-                    );
-
-                    for adjacent_region in
-                        &chunk_adjacent_region_connections[range_of_adjacent_region_connections]
-                    {
-                        let adjacent_chunk_idx = adjacent_region
-                            .compute_relative_linear_chunk_idx(&self.chunk_idx_strides, chunk_idx);
-                        let adjacent_region_idx = adjacent_region.region_idx() as usize;
-
-                        set_root_for_region(
-                            &self.chunks,
-                            regions,
-                            self.split_detector.original_uniform_chunk_count,
-                            adjacent_chunk_idx,
-                            adjacent_region_idx,
-                            region_root_label,
-                        );
-                    }
-                }
-                VoxelChunk::Empty => {}
             }
         }
     }
@@ -2323,8 +2586,6 @@ pub mod fuzzing {
                 object.validate_chunk_obscuredness();
                 object.validate_sdf();
                 object.validate_region_count();
-            } else {
-                assert_eq!(original_region_count, 1);
             }
         }
     }
