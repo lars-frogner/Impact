@@ -32,11 +32,11 @@ pub trait VoxelGenerator {
 /// typically care about.
 pub trait SDFGenerator {
     /// Returns the extents of the domain around the center where the signed
-    /// distance field can be negative.
+    /// distance field can be negative, in voxel grid coordinates.
     fn domain_extents(&self) -> [f64; 3];
 
-    // Computes the signed distance at the given displacement from the center
-    // of the field.
+    // Computes the signed distance at the given displacement in voxel grid
+    // coordinates from the center of the field.
     fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64;
 }
 
@@ -365,7 +365,7 @@ where
 }
 
 impl BoxSDFGenerator {
-    /// Creates a new generator for a box with the given extents.
+    /// Creates a new generator for a box with the given extents (in voxels).
     pub fn new(extents: [f64; 3]) -> Self {
         assert!(extents.iter().copied().all(f64::is_sign_positive));
         let half_extents = 0.5 * Vector3::from(extents);
@@ -385,7 +385,7 @@ impl SDFGenerator for BoxSDFGenerator {
 }
 
 impl SphereSDFGenerator {
-    /// Creates a new generator for a sphere with the given radius.
+    /// Creates a new generator for a sphere with the given radius (in voxels).
     pub fn new(radius: f64) -> Self {
         assert!(radius >= 0.0);
         Self { radius }
@@ -404,7 +404,7 @@ impl SDFGenerator for SphereSDFGenerator {
 
 impl GradientNoiseSDFGenerator {
     /// Creates a new generator for a gradient noise voxel pattern with the
-    /// given extents, noise frequency, noise threshold and seed.
+    /// given extents (in voxels), noise frequency, noise threshold and seed.
     pub fn new(extents: [f64; 3], noise_frequency: f64, noise_threshold: f64, seed: u32) -> Self {
         assert!(extents.iter().copied().all(f64::is_sign_positive));
         let noise = Simplex::new(seed);
