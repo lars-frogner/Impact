@@ -1,17 +1,21 @@
 //! Detection of disconnected regions in voxel objects.
 
-use super::{chunk_voxels, chunk_voxels_mut, extract_slice_segments_mut, FaceVoxelDistribution};
+use super::{
+    chunk_voxels, chunk_voxels_mut, determine_occupied_voxel_ranges, extract_slice_segments_mut,
+    FaceVoxelDistribution,
+};
 use crate::voxel::{
     chunks::{
         chunk_start_voxel_idx, chunk_voxel_indices_from_linear_idx, linear_voxel_idx_within_chunk,
-        ChunkedVoxelObject, LoopForChunkVoxels, LoopOverChunkVoxelData, NonUniformVoxelChunk,
-        UniformVoxelChunk, VoxelChunk, VoxelChunkFlags, CHUNK_SIZE, CHUNK_VOXEL_COUNT,
-        LOG2_CHUNK_SIZE, NON_EMPTY_VOXEL_THRESHOLD,
+        ChunkedVoxelObject, LoopForChunkVoxels, NonUniformVoxelChunk, UniformVoxelChunk,
+        VoxelChunk, VoxelChunkFlags, CHUNK_SIZE, CHUNK_VOXEL_COUNT, LOG2_CHUNK_SIZE,
+        NON_EMPTY_VOXEL_THRESHOLD,
     },
     utils::{DataLoop3, Dimension, Side},
     Voxel, VoxelFlags,
 };
 use cfg_if::cfg_if;
+use nalgebra::vector;
 use std::{array, cmp::Ordering, collections::HashSet, iter, mem, ops::Range};
 
 /// A [`ChunkedVoxelObject`] that has been disconnected from a larger object.
@@ -62,16 +66,16 @@ pub struct SplitDetector {
     /// Connections between pairs of chunk-local regions across chunk
     /// boundaries. This buffer is only for outward connections from regions in
     /// non-uniform chunks. It consists of segments of
-    /// `CHUNK_MAX_ADJACENT_REGION_CONNECTION` connections, one segment for each
-    /// non-uniform chunk.
+    /// `CHUNK_MAX_ADJACENT_REGION_CONNECTIONS` connections, one segment for
+    /// each non-uniform chunk.
     adjacent_region_connections: Vec<AdjacentRegionConnection>,
     /// Connections between pairs of chunk-local regions across chunk
     /// boundaries. This buffer is only for outward connections from the single
     /// regions in uniform chunks. It consists of segments of
-    /// `CHUNK_MAX_ADJACENT_REGION_CONNECTION` connections, one segment for each
-    /// uniform chunk. We don't bother truncating or modifying the buffer
-    /// when a uniform chunk is converted to non-uniform, we just keep the
-    /// stale entries around.
+    /// `CHUNK_MAX_ADJACENT_REGION_CONNECTIONS` connections, one segment for
+    /// each uniform chunk. We don't bother truncating or modifying the
+    /// buffer when a uniform chunk is converted to non-uniform, we just
+    /// keep the stale entries around.
     uniform_chunk_adjacencent_region_connections: Vec<AdjacentRegionConnection>,
 }
 
@@ -372,12 +376,16 @@ impl ChunkedVoxelObject {
 
         let mut region_chunks = Vec::with_capacity(total_region_chunk_count);
 
+        let mut region_split_detector =
+            SplitDetector::new(region_uniform_chunk_count, region_non_uniform_chunk_count);
+
         // We use this to lookup if a `LocalRegionLabel` for a voxel corresponds to the
         // global region that we are splitting off
         let mut split_off_voxel_at_label = [false; CHUNK_MAX_REGIONS];
 
         // This keeps track of how far we have gotten in `region_linear_chunk_indices`
         let mut cursor = 0;
+        let mut region_uniform_chunk_data_offset = 0;
         let mut region_non_uniform_chunk_data_offset = 0;
 
         for chunk_i in region_chunk_ranges[0].clone() {
@@ -461,6 +469,12 @@ impl ChunkedVoxelObject {
                                         .update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
                                             &mut region_voxels,
                                         );
+
+                                    region_split_detector.update_local_connected_regions_for_chunk(
+                                        &region_voxels,
+                                        &mut region_chunk,
+                                        region_chunks.len() as u32,
+                                        );
                                 } else {
                                     // If the chunk only contains voxels belonging to the region we
                                     // are splitting off, we can copy over all the voxels in one go
@@ -477,6 +491,16 @@ impl ChunkedVoxelObject {
                                     // Since the chunk has just changed owner, the face
                                     // distributions are still valid
                                     region_chunk.face_distributions = chunk.face_distributions;
+
+                                    // The internal connected region information can also be copied
+                                    // over
+                                    region_split_detector
+                                        .copy_local_connected_regions_from_chunk_in_other(
+                                            &mut region_chunk,
+                                            region_chunks.len() as u32,
+                                            &self.split_detector,
+                                            &chunk,
+                                        );
                                 }
 
                                 region_chunks.push(VoxelChunk::NonUniform(region_chunk));
@@ -513,10 +537,17 @@ impl ChunkedVoxelObject {
                                 // address them here.
                                 self.invalidated_mesh_chunk_indices.insert(chunk_indices);
                             }
-                            chunk @ VoxelChunk::Uniform(_) => {
+                            VoxelChunk::Uniform(mut chunk) => {
                                 // If the chunk to split off is uniform, we can just move it over
-                                // and replace it with an empty chunk
-                                region_chunks.push(chunk);
+                                // and replace it with an empty chunk, after making sure to
+                                // overwrite the data offset with the correct value for the
+                                // disconnected object
+
+                                chunk.split_detection.data_offset =
+                                    region_uniform_chunk_data_offset;
+                                region_uniform_chunk_data_offset += 1;
+
+                                region_chunks.push(VoxelChunk::Uniform(chunk));
                                 self.chunks[chunk_idx] = VoxelChunk::Empty;
                             }
                             VoxelChunk::Empty => {
@@ -543,7 +574,7 @@ impl ChunkedVoxelObject {
         // shrink the recorded occupied chunk and voxel ranges
         self.shrink_occupied_ranges();
 
-        // Any chunk within or adjacent to the block of chunks covering the splitted off
+        // Any chunk within or adjacent to the block of chunks covering the disconnected
         // region may have invalidated adjacencies
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
             region_chunk_ranges
@@ -583,19 +614,18 @@ impl ChunkedVoxelObject {
                 origin_offset,
                 region_chunk_counts,
                 region_uniform_chunk_count,
-                region_non_uniform_chunk_count,
                 region_chunks,
                 region_voxels,
+                region_split_detector,
             )
         } else {
             Self::create_disconnected_voxel_object(
                 self.voxel_extent,
                 origin_offset,
                 region_chunk_counts,
-                region_uniform_chunk_count,
-                region_non_uniform_chunk_count,
                 region_chunks,
                 region_voxels,
+                region_split_detector,
             )
         })
     }
@@ -605,16 +635,16 @@ impl ChunkedVoxelObject {
         origin_offset: [usize; 3],
         chunk_counts: [usize; 3],
         uniform_chunk_count: usize,
-        non_uniform_chunk_count: usize,
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
+        split_detector: SplitDetector,
     ) -> DisconnectedVoxelObject {
         // If there uniform chunks, the object either won't fit in a single chunk or it
         // does so already. If it is already a single chunk, we don't have to do any
         // extra work.
         if uniform_chunk_count == 0 && chunk_counts.iter().product::<usize>() > 1 {
             let occupied_voxel_ranges =
-                Self::determine_occupied_voxel_ranges(chunk_counts, &chunks, &voxels);
+                determine_occupied_voxel_ranges(chunk_counts, &chunks, &voxels);
 
             // We need room for an empty single-voxel boundary to ensure smooth signed
             // distances around the surface if it is close to the boundary
@@ -713,21 +743,28 @@ impl ChunkedVoxelObject {
                     [lower, upper]
                 });
 
-                let single_chunk = VoxelChunk::NonUniform(NonUniformVoxelChunk {
+                let mut single_chunk = NonUniformVoxelChunk {
                     data_offset: 0,
                     face_distributions,
                     flags: VoxelChunkFlags::empty(),
                     split_detection: NonUniformChunkSplitDetectionData::new(),
-                });
+                };
+
+                // Since the voxels are now chunked differently, we need a new split detector
+                let mut single_chunk_split_detector = SplitDetector::new(0, 1);
+                single_chunk_split_detector.update_local_connected_regions_for_chunk(
+                    &single_chunk_voxels,
+                    &mut single_chunk,
+                    0,
+                );
 
                 return Self::create_disconnected_voxel_object(
                     voxel_extent,
                     single_chunk_origin_offset,
                     [1; 3],
-                    0,
-                    1,
-                    vec![single_chunk],
+                    vec![VoxelChunk::NonUniform(single_chunk)],
                     single_chunk_voxels,
+                    single_chunk_split_detector,
                 );
             }
         }
@@ -736,67 +773,19 @@ impl ChunkedVoxelObject {
             voxel_extent,
             origin_offset,
             chunk_counts,
-            uniform_chunk_count,
-            non_uniform_chunk_count,
             chunks,
             voxels,
+            split_detector,
         )
-    }
-
-    fn determine_occupied_voxel_ranges(
-        chunk_counts: [usize; 3],
-        chunks: &[VoxelChunk],
-        voxels: &[Voxel],
-    ) -> [Range<usize>; 3] {
-        let mut min_voxel_indices = vector![usize::MAX, usize::MAX, usize::MAX];
-        let mut max_voxel_indices = vector![0, 0, 0];
-
-        let mut chunk_idx = 0;
-        for chunk_i in 0..chunk_counts[0] {
-            for chunk_j in 0..chunk_counts[1] {
-                for chunk_k in 0..chunk_counts[2] {
-                    let voxel_index_offsets = vector![chunk_i, chunk_j, chunk_k] * CHUNK_SIZE;
-                    match &chunks[chunk_idx] {
-                        VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
-                            let chunk_voxels = chunk_voxels(voxels, *data_offset);
-                            LoopOverChunkVoxelData::new(
-                                &LoopForChunkVoxels::over_all(),
-                                chunk_voxels,
-                            )
-                            .execute(&mut |&voxel_indices, voxel| {
-                                if !voxel.is_empty() {
-                                    let object_voxel_indices =
-                                        voxel_index_offsets + Vector3::from(voxel_indices);
-                                    min_voxel_indices =
-                                        min_voxel_indices.inf(&object_voxel_indices);
-                                    max_voxel_indices =
-                                        max_voxel_indices.sup(&object_voxel_indices);
-                                }
-                            });
-                        }
-                        VoxelChunk::Uniform(_) => {
-                            min_voxel_indices = min_voxel_indices.inf(&voxel_index_offsets);
-                            max_voxel_indices = max_voxel_indices
-                                .sup(&(voxel_index_offsets.add_scalar(CHUNK_SIZE - 1)));
-                        }
-                        VoxelChunk::Empty => {}
-                    }
-                    chunk_idx += 1;
-                }
-            }
-        }
-
-        array::from_fn(|dim| min_voxel_indices[dim]..max_voxel_indices[dim] + 1)
     }
 
     fn create_disconnected_voxel_object(
         voxel_extent: f64,
         origin_offset: [usize; 3],
         chunk_counts: [usize; 3],
-        uniform_chunk_count: usize,
-        non_uniform_chunk_count: usize,
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
+        split_detector: SplitDetector,
     ) -> DisconnectedVoxelObject {
         // The chunk grid of the disconnected object should start at the origin
         let offset_chunk_ranges = chunk_counts.map(|count| 0..count);
@@ -806,8 +795,6 @@ impl ChunkedVoxelObject {
         let offset_voxel_ranges = offset_chunk_ranges
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
-
-        let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
         let mut object = Self {
             voxel_extent,
@@ -821,9 +808,10 @@ impl ChunkedVoxelObject {
             invalidated_mesh_chunk_indices: HashSet::new(),
         };
 
-        // We have already computed the internal adjacencies in the disconnected object,
-        // but all other derived state must be computed from scratch
-        object.compute_all_derived_state_except_internal_adjacencies();
+        // We have already computed the internal adjacencies and local region
+        // connectivity in the disconnected object, but all derived state between chunks
+        // must be computed from scratch
+        object.compute_all_chunk_external_derived_state();
 
         DisconnectedVoxelObject {
             object,
@@ -1453,6 +1441,51 @@ impl SplitDetector {
         for region_idx in chunk.boundary_region_count..chunk.region_count {
             regions[region_idx as usize].parent_label =
                 GlobalRegionLabel::new(chunk_idx, u32::from(region_idx));
+        }
+    }
+
+    fn copy_local_connected_regions_from_chunk_in_other(
+        &mut self,
+        this_chunk: &mut NonUniformVoxelChunk,
+        this_chunk_idx: u32,
+        other: &Self,
+        other_chunk: &NonUniformVoxelChunk,
+    ) {
+        let these_region_labels =
+            chunk_voxel_region_labels_mut(&mut self.voxel_region_labels, this_chunk.data_offset);
+        let other_region_labels =
+            chunk_voxel_region_labels(&other.voxel_region_labels, other_chunk.data_offset);
+        these_region_labels.copy_from_slice(other_region_labels);
+
+        let these_regions = non_uniform_chunk_regions_mut(
+            &mut self.regions,
+            self.original_uniform_chunk_count,
+            this_chunk.data_offset,
+        );
+        let other_regions = non_uniform_chunk_regions(
+            &other.regions,
+            other.original_uniform_chunk_count,
+            other_chunk.data_offset,
+        );
+        these_regions.copy_from_slice(other_regions);
+
+        let this_chunk = &mut this_chunk.split_detection;
+        let other_chunk = &other_chunk.split_detection;
+
+        this_chunk.region_count = other_chunk.region_count;
+        this_chunk.boundary_region_count = other_chunk.boundary_region_count;
+
+        for region in these_regions
+            .iter_mut()
+            .take(this_chunk.region_count as usize)
+        {
+            region.adjacent_region_connection_start_idx = 0;
+            region.adjacent_region_connection_count = 0;
+        }
+
+        for region_idx in this_chunk.boundary_region_count..this_chunk.region_count {
+            these_regions[region_idx as usize].parent_label =
+                GlobalRegionLabel::new(this_chunk_idx, u32::from(region_idx));
         }
     }
 
