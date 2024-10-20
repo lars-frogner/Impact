@@ -11,7 +11,7 @@ use crate::voxel::{
     utils::{DataLoop3, Dimension, Side},
     Voxel, VoxelFlags,
 };
-use nalgebra::{vector, Vector3};
+use cfg_if::cfg_if;
 use std::{array, cmp::Ordering, collections::HashSet, iter, mem, ops::Range};
 
 /// A [`ChunkedVoxelObject`] that has been disconnected from a larger object.
@@ -1418,7 +1418,7 @@ impl SplitDetector {
                         if set_id != idx {
                             region_labels[idx] = region_labels[set_id];
                         }
-                        // TODO: Remove this for performance
+                        #[cfg(not(feature = "unchecked"))]
                         assert_ne!(region_labels[idx], EMPTY_VOXEL_LABEL);
                     }
                 }
@@ -2161,12 +2161,19 @@ fn give_voxels_same_root(parents: &mut [u16], idx_1: usize, idx_2: usize) {
         // Jumping back to update the root of the first voxel every time is much
         // worse for cache locality than updating the root of the adjacent
         // voxel.
+        cfg_if! {
+            if #[cfg(feature = "unchecked")] {
+                unsafe{ *parents.get_unchecked_mut(root_2_idx) = root_1_idx as u16; }
+            } else {
         parents[root_2_idx] = root_1_idx as u16;
+            }
+        }
     }
 }
 
 /// Walks the tree of parent voxels for the voxel with the given index until
 /// the root voxel index representing the local region is found.
+#[cfg(not(feature = "unchecked"))]
 fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
     let parent_idx = parents[idx] as usize;
 
@@ -2183,8 +2190,10 @@ fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
     root_idx
 }
 
-#[allow(dead_code)]
-fn find_root_for_voxel_fast(parents: &mut [u16], idx: usize) -> usize {
+/// Walks the tree of parent voxels for the voxel with the given index until
+/// the root voxel index representing the local region is found.
+#[cfg(feature = "unchecked")]
+fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
     let parent_idx = unsafe { *parents.get_unchecked(idx) as usize };
 
     // If the parent is the same entry, this is a root
@@ -2204,12 +2213,14 @@ fn find_root_for_voxel_fast(parents: &mut [u16], idx: usize) -> usize {
     };
 
     // Compress the path to the root by making the root the direct parent
-    parents[idx] = root_idx as u16;
+    unsafe {
+        *parents.get_unchecked_mut(idx) = root_idx as u16;
+    }
 
     root_idx
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "unchecked")]
 fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) -> usize {
     let parent_idx = unsafe { *parents.get_unchecked(idx) as usize };
 
@@ -2225,16 +2236,29 @@ fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) 
 
     let root_idx = find_root_for_voxel_alternating_compression(parents, grandparent_idx);
 
-    parents[parent_idx] = root_idx as u16;
+    unsafe {
+        *parents.get_unchecked_mut(parent_idx) = root_idx as u16;
+    }
 
     root_idx
 }
 
+#[cfg(not(feature = "unchecked"))]
 fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
     // Set the new root voxel as the parent of the old root voxel
     parents[root_idx] = idx as u16;
     // Make the new root voxel its own parent, marking it as a root
     parents[idx] = idx as u16;
+}
+
+#[cfg(feature = "unchecked")]
+fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
+    unsafe {
+        // Set the new root voxel as the parent of the old root voxel
+        *parents.get_unchecked_mut(root_idx) = idx as u16;
+        // Make the new root voxel its own parent, marking it as a root
+        *parents.get_unchecked_mut(idx) = idx as u16;
+    }
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -2265,6 +2289,7 @@ fn find_root_for_voxel_usize(parents: &mut [usize], idx: usize) -> usize {
 /// Walks the tree of parent regions for the given region to find its
 /// root and merges the tree with the tree with the given target root by
 /// assigning the target root as the parent of the current root.
+#[cfg(not(feature = "unchecked"))]
 fn set_root_for_region(
     chunks: &[VoxelChunk],
     regions: &mut [LocalRegion],
@@ -2280,7 +2305,6 @@ fn set_root_for_region(
         region_idx,
     );
     let region = &regions[global_region_idx];
-    // let region = unsafe { regions.get_unchecked(global_region_idx) };
 
     let region_root_label = find_root_for_region_and_compress_path(
         chunks,
@@ -2293,102 +2317,49 @@ fn set_root_for_region(
         let global_root_region_idx =
             object_region_idx_for_region_label(chunks, uniform_chunk_count, region_root_label);
         regions[global_root_region_idx].parent_label = root_label;
-        // unsafe {
-        //     regions
-        //         .get_unchecked_mut(global_root_region_idx)
-        //         .parent_label = root_label;
-        // }
     }
 }
 
-/// Walks the tree of parent regions for the region with the given label until
-/// the root region label identifying the global region is found. The path to
-/// the root is then shortened by making the root the direct parent of the
-/// region.
-#[allow(dead_code)]
-fn find_root_for_region_and_compress_path_fast(
+#[cfg(feature = "unchecked")]
+fn set_root_for_region(
     chunks: &[VoxelChunk],
     regions: &mut [LocalRegion],
     uniform_chunk_count: usize,
-    region_label: GlobalRegionLabel,
-) -> GlobalRegionLabel {
-    let region_idx = object_region_idx_for_region_label(chunks, uniform_chunk_count, region_label);
-    // let region = &regions[region_idx];
-    let region = unsafe { regions.get_unchecked(region_idx) };
+    region_chunk_idx: usize,
+    region_idx: usize,
+    root_label: GlobalRegionLabel,
+) {
+    let global_region_idx = object_region_idx_for_region_in_chunk(
+        chunks,
+        uniform_chunk_count,
+        region_chunk_idx,
+        region_idx,
+    );
+    let region = unsafe { regions.get_unchecked(global_region_idx) };
 
-    if region.parent_label == region_label {
-        return region_label;
-    }
-
-    let region_root_label = {
-        let parent_region_idx =
-            object_region_idx_for_region_label(chunks, uniform_chunk_count, region.parent_label);
-        // let parent_region = &regions[parent_region_idx];
-        let parent_region = unsafe { regions.get_unchecked(parent_region_idx) };
-
-        if parent_region.parent_label == region.parent_label {
-            region.parent_label
-        } else {
-            find_root_for_region_alternating_compression(
-                chunks,
-                regions,
-                uniform_chunk_count,
-                parent_region.parent_label,
-            )
-        }
-    };
-
-    // regions[region_idx].parent_label = region_root_label;
-    unsafe {
-        regions.get_unchecked_mut(region_idx).parent_label = region_root_label;
-    }
-
-    region_root_label
-}
-
-#[allow(dead_code)]
-fn find_root_for_region_alternating_compression(
-    chunks: &[VoxelChunk],
-    regions: &mut [LocalRegion],
-    uniform_chunk_count: usize,
-    region_label: GlobalRegionLabel,
-) -> GlobalRegionLabel {
-    let region_idx = object_region_idx_for_region_label(chunks, uniform_chunk_count, region_label);
-    // let region = &regions[region_idx];
-    let region = unsafe { regions.get_unchecked(region_idx) };
-
-    if region.parent_label == region_label {
-        return region_label;
-    }
-
-    let parent_region_idx =
-        object_region_idx_for_region_label(chunks, uniform_chunk_count, region.parent_label);
-    // let parent_region = &regions[parent_region_idx];
-    let parent_region = unsafe { regions.get_unchecked(parent_region_idx) };
-
-    if parent_region.parent_label == region.parent_label {
-        return region.parent_label;
-    }
-
-    let region_root_label = find_root_for_region_alternating_compression(
+    let region_root_label = find_root_for_region_and_compress_path(
         chunks,
         regions,
         uniform_chunk_count,
-        parent_region.parent_label,
+        region.parent_label,
     );
 
-    // regions[parent_region_idx].parent_label = region_root_label;
-    unsafe {
-        regions.get_unchecked_mut(parent_region_idx).parent_label = region_root_label;
+    if region_root_label != root_label {
+        let global_root_region_idx =
+            object_region_idx_for_region_label(chunks, uniform_chunk_count, region_root_label);
+        unsafe {
+            regions
+                .get_unchecked_mut(global_root_region_idx)
+                .parent_label = root_label;
+        }
     }
-
-    region_root_label
 }
 
 /// Walks the tree of parent regions for the region with the given label until
 /// the root region label identifying the global region is found. The path to
 /// the root is then shortened by making the root the direct parent of the
 /// region.
+#[cfg(not(feature = "unchecked"))]
 fn find_root_for_region_and_compress_path(
     chunks: &[VoxelChunk],
     regions: &mut [LocalRegion],
@@ -2412,6 +2383,84 @@ fn find_root_for_region_and_compress_path(
 
     // Compress the path to the root by making the root the direct parent
     regions[region_idx].parent_label = region_root_label;
+
+    region_root_label
+}
+
+/// Walks the tree of parent regions for the region with the given label until
+/// the root region label identifying the global region is found. The path to
+/// the root is then shortened by making the root the direct parent of the
+/// region.
+#[cfg(feature = "unchecked")]
+fn find_root_for_region_and_compress_path(
+    chunks: &[VoxelChunk],
+    regions: &mut [LocalRegion],
+    uniform_chunk_count: usize,
+    region_label: GlobalRegionLabel,
+) -> GlobalRegionLabel {
+    let region_idx = object_region_idx_for_region_label(chunks, uniform_chunk_count, region_label);
+    let region = unsafe { regions.get_unchecked(region_idx) };
+
+    if region.parent_label == region_label {
+        return region_label;
+    }
+
+    let region_root_label = {
+        let parent_region_idx =
+            object_region_idx_for_region_label(chunks, uniform_chunk_count, region.parent_label);
+        let parent_region = unsafe { regions.get_unchecked(parent_region_idx) };
+
+        if parent_region.parent_label == region.parent_label {
+            region.parent_label
+        } else {
+            find_root_for_region_alternating_compression(
+                chunks,
+                regions,
+                uniform_chunk_count,
+                parent_region.parent_label,
+            )
+        }
+    };
+
+    unsafe {
+        regions.get_unchecked_mut(region_idx).parent_label = region_root_label;
+    }
+
+    region_root_label
+}
+
+#[cfg(feature = "unchecked")]
+fn find_root_for_region_alternating_compression(
+    chunks: &[VoxelChunk],
+    regions: &mut [LocalRegion],
+    uniform_chunk_count: usize,
+    region_label: GlobalRegionLabel,
+) -> GlobalRegionLabel {
+    let region_idx = object_region_idx_for_region_label(chunks, uniform_chunk_count, region_label);
+    let region = unsafe { regions.get_unchecked(region_idx) };
+
+    if region.parent_label == region_label {
+        return region_label;
+    }
+
+    let parent_region_idx =
+        object_region_idx_for_region_label(chunks, uniform_chunk_count, region.parent_label);
+    let parent_region = unsafe { regions.get_unchecked(parent_region_idx) };
+
+    if parent_region.parent_label == region.parent_label {
+        return region.parent_label;
+    }
+
+    let region_root_label = find_root_for_region_alternating_compression(
+        chunks,
+        regions,
+        uniform_chunk_count,
+        parent_region.parent_label,
+    );
+
+    unsafe {
+        regions.get_unchecked_mut(parent_region_idx).parent_label = region_root_label;
+    }
 
     region_root_label
 }
@@ -2462,6 +2511,7 @@ fn object_region_idx_for_region_label(
     )
 }
 
+#[cfg(not(feature = "unchecked"))]
 fn object_region_idx_for_region_in_chunk(
     chunks: &[VoxelChunk],
     uniform_chunk_count: usize,
@@ -2483,8 +2533,8 @@ fn object_region_idx_for_region_in_chunk(
     }
 }
 
-#[allow(dead_code)]
-fn object_region_idx_for_region_in_chunk_unchecked(
+#[cfg(feature = "unchecked")]
+fn object_region_idx_for_region_in_chunk(
     chunks: &[VoxelChunk],
     uniform_chunk_count: usize,
     chunk_idx: usize,
