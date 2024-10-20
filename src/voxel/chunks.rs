@@ -18,7 +18,7 @@ use bitflags::bitflags;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
-use nalgebra::{point, vector};
+use nalgebra::{point, vector, Vector3};
 use num_traits::{NumCast, PrimInt};
 use std::{array, collections::HashSet, iter, ops::Range};
 
@@ -517,11 +517,11 @@ impl ChunkedVoxelObject {
     ///   object is split into disconnected voxel regions.
     pub fn compute_all_derived_state(&mut self) {
         self.update_internal_adjacencies_for_all_chunks();
-        self.compute_all_derived_state_except_internal_adjacencies();
+        self.update_local_connected_regions_for_all_chunks();
+        self.compute_all_chunk_external_derived_state();
     }
 
-    fn compute_all_derived_state_except_internal_adjacencies(&mut self) {
-        self.update_local_connected_regions_for_all_chunks();
+    fn compute_all_chunk_external_derived_state(&mut self) {
         self.update_all_chunk_boundary_adjacencies();
         self.resolve_connected_regions_between_all_chunks();
     }
@@ -1980,6 +1980,49 @@ impl ExposedVoxelChunk {
             self.chunk_indices[2] * CHUNK_SIZE + CHUNK_SIZE - 1,
         ]
     }
+}
+
+fn determine_occupied_voxel_ranges(
+    chunk_counts: [usize; 3],
+    chunks: &[VoxelChunk],
+    voxels: &[Voxel],
+) -> [Range<usize>; 3] {
+    let mut min_voxel_indices = vector![usize::MAX, usize::MAX, usize::MAX];
+    let mut max_voxel_indices = vector![0, 0, 0];
+
+    let mut chunk_idx = 0;
+    for chunk_i in 0..chunk_counts[0] {
+        for chunk_j in 0..chunk_counts[1] {
+            for chunk_k in 0..chunk_counts[2] {
+                let voxel_index_offsets = vector![chunk_i, chunk_j, chunk_k] * CHUNK_SIZE;
+                match &chunks[chunk_idx] {
+                    VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                        let chunk_voxels = chunk_voxels(voxels, *data_offset);
+                        LoopOverChunkVoxelData::new(&LoopForChunkVoxels::over_all(), chunk_voxels)
+                            .execute(&mut |&voxel_indices, voxel| {
+                                if !voxel.is_empty() {
+                                    let object_voxel_indices =
+                                        voxel_index_offsets + Vector3::from(voxel_indices);
+                                    min_voxel_indices =
+                                        min_voxel_indices.inf(&object_voxel_indices);
+                                    max_voxel_indices =
+                                        max_voxel_indices.sup(&object_voxel_indices);
+                                }
+                            });
+                    }
+                    VoxelChunk::Uniform(_) => {
+                        min_voxel_indices = min_voxel_indices.inf(&voxel_index_offsets);
+                        max_voxel_indices = max_voxel_indices
+                            .sup(&(voxel_index_offsets.add_scalar(CHUNK_SIZE - 1)));
+                    }
+                    VoxelChunk::Empty => {}
+                }
+                chunk_idx += 1;
+            }
+        }
+    }
+
+    array::from_fn(|dim| min_voxel_indices[dim]..max_voxel_indices[dim] + 1)
 }
 
 const fn chunk_start_voxel_idx(data_offset: u32) -> usize {
