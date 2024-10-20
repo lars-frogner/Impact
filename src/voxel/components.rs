@@ -292,18 +292,13 @@ impl VoxelBoxComp {
     }
 
     pub fn extents_in_voxels(&self) -> [f64; 3] {
-        let inverse_voxel_extent = self.voxel_extent.recip();
-        [
-            self.extent_x * inverse_voxel_extent,
-            self.extent_y * inverse_voxel_extent,
-            self.extent_z * inverse_voxel_extent,
-        ]
+        [self.extent_x, self.extent_y, self.extent_z]
     }
 }
 
 impl VoxelSphereComp {
     /// Creates a new component for a uniform sphere with the given voxel extent
-    /// and number of voxels across its diameter.
+    /// and number of voxels across its radius.
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
@@ -317,7 +312,7 @@ impl VoxelSphereComp {
     }
 
     pub fn radius_in_voxels(&self) -> f64 {
-        self.radius / self.voxel_extent
+        self.radius
     }
 }
 
@@ -350,12 +345,7 @@ impl VoxelGradientNoisePatternComp {
     }
 
     pub fn extents_in_voxels(&self) -> [f64; 3] {
-        let inverse_voxel_extent = self.voxel_extent.recip();
-        [
-            self.extent_x * inverse_voxel_extent,
-            self.extent_y * inverse_voxel_extent,
-            self.extent_z * inverse_voxel_extent,
-        ]
+        [self.extent_x, self.extent_y, self.extent_z]
     }
 }
 
