@@ -4,6 +4,7 @@ use crate::voxel::{voxel_types::VoxelType, Voxel, VoxelSignedDistance};
 use nalgebra::{point, vector, Point3, Quaternion, UnitQuaternion, Vector3};
 use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
+use std::array;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 /// Represents a voxel generator that provides a voxel type given the voxel
@@ -85,6 +86,18 @@ pub struct MultiscaleSphereSDFModifier<SD> {
     smoothness: f64,
     seed: u64,
     sdf_generator: SD,
+}
+
+/// Wrapper over two signed distance field generators that outputs the smooth
+/// union of the two SDFs.
+#[derive(Clone, Debug)]
+pub struct SDFUnion<SD1, SD2> {
+    smoothness: f64,
+    domain_extents: [f64; 3],
+    displacement_from_center_to_center_1: Vector3<f64>,
+    displacement_from_center_to_center_2: Vector3<f64>,
+    sdf_generator_1: SD1,
+    sdf_generator_2: SD2,
 }
 
 /// Generator for a signed distance field representing a box.
@@ -361,6 +374,79 @@ where
             .compute_signed_distance(displacement_from_center);
 
         self.modify_signed_distance(displacement_from_center, signed_distance)
+    }
+}
+
+impl<SD1, SD2> SDFUnion<SD1, SD2>
+where
+    SD1: SDFGenerator,
+    SD2: SDFGenerator,
+{
+    /// Creates a new smooth union wrapper over the given signed distance field
+    /// generators, assuming that the centers of the two field domains are
+    /// offset by the given offset (in voxels).
+    pub fn new(
+        sdf_generator_1: SD1,
+        sdf_generator_2: SD2,
+        center_offsets: [f64; 3],
+        smoothness: f64,
+    ) -> Self {
+        let domain_extents_1 = sdf_generator_1.domain_extents();
+        let domain_extents_2 = sdf_generator_2.domain_extents();
+
+        let lower_corner_offsets: [_; 3] = array::from_fn(|dim| {
+            center_offsets[dim] + 0.5 * (domain_extents_1[dim] - domain_extents_2[dim])
+        });
+
+        let lower_corner: [_; 3] = array::from_fn(|dim| f64::min(0.0, lower_corner_offsets[dim]));
+
+        let domain_extents = array::from_fn(|dim| {
+            domain_extents_1[dim].max(domain_extents_2[dim] + lower_corner_offsets[dim])
+                - lower_corner[dim]
+        });
+
+        let displacement_from_center_to_center_1 =
+            array::from_fn(|dim| 0.5 * (domain_extents_1[dim] - domain_extents[dim])).into();
+
+        let displacement_from_center_to_center_2 = array::from_fn(|dim| {
+            lower_corner_offsets[dim] + 0.5 * (domain_extents_2[dim] - domain_extents[dim])
+        })
+        .into();
+
+        Self {
+            smoothness,
+            domain_extents,
+            displacement_from_center_to_center_1,
+            displacement_from_center_to_center_2,
+            sdf_generator_1,
+            sdf_generator_2,
+        }
+    }
+}
+
+impl<SD1, SD2> SDFGenerator for SDFUnion<SD1, SD2>
+where
+    SD1: SDFGenerator,
+    SD2: SDFGenerator,
+{
+    fn domain_extents(&self) -> [f64; 3] {
+        self.domain_extents
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
+        let displacement_from_center_1 =
+            displacement_from_center + self.displacement_from_center_to_center_1;
+        let displacement_from_center_2 =
+            displacement_from_center + self.displacement_from_center_to_center_2;
+
+        let signed_distance_1 = self
+            .sdf_generator_1
+            .compute_signed_distance(&displacement_from_center_1);
+        let signed_distance_2 = self
+            .sdf_generator_2
+            .compute_signed_distance(&displacement_from_center_2);
+
+        smooth_sdf_union(signed_distance_1, signed_distance_2, self.smoothness)
     }
 }
 

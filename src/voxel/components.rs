@@ -110,8 +110,31 @@ pub struct VoxelBoxComp {
 pub struct VoxelSphereComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
-    /// The number of voxels along the diameter of the sphere.
+    /// The number of voxels along the radius of the sphere.
     pub radius: f64,
+}
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities comprised of voxels in a configuration described by the smooth
+/// union of two spheres.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
+/// creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VoxelSphereUnionComp {
+    /// The extent of a single voxel.
+    pub voxel_extent: f64,
+    /// The number of voxels along the radius of the first sphere.
+    pub radius_1: f64,
+    /// The number of voxels along the radius of the second sphere.
+    pub radius_2: f64,
+    /// The offset in number of voxels in each dimension between the centers of
+    /// the two spheres.
+    pub center_offsets: [f64; 3],
+    /// The smoothness of the union operation.
+    pub smoothness: f64,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -276,8 +299,12 @@ impl MultifractalNoiseModificationComp {
 }
 
 impl VoxelBoxComp {
-    /// Creates a new component for a uniform box with the given voxel extent
+    /// Creates a new component for a box with the given voxel extent
     /// and number of voxels in each direction.
+    ///
+    /// # Panics
+    /// - If the voxel extent is negative.
+    /// - If either of the extents is zero or negative.
     pub fn new(voxel_extent: f64, extent_x: f64, extent_y: f64, extent_z: f64) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(extent_x >= 0.0);
@@ -297,11 +324,12 @@ impl VoxelBoxComp {
 }
 
 impl VoxelSphereComp {
-    /// Creates a new component for a uniform sphere with the given voxel extent
+    /// Creates a new component for a sphere with the given voxel extent
     /// and number of voxels across its radius.
     ///
     /// # Panics
-    /// If the given number of voxels across is zero.
+    /// - If the voxel extent is negative.
+    /// - If the radius zero or negative.
     pub fn new(voxel_extent: f64, radius: f64) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(radius >= 0.0);
@@ -313,6 +341,41 @@ impl VoxelSphereComp {
 
     pub fn radius_in_voxels(&self) -> f64 {
         self.radius
+    }
+}
+
+impl VoxelSphereUnionComp {
+    /// Creates a new component for a sphere union with the given smoothness of
+    /// the spheres with the given radii and center offsets (in voxels).
+    ///
+    /// # Panics
+    /// - If the voxel extent is negative.
+    /// - If either of the radii is zero or negative.
+    pub fn new(
+        voxel_extent: f64,
+        radius_1: f64,
+        radius_2: f64,
+        center_offsets: [f64; 3],
+        smoothness: f64,
+    ) -> Self {
+        assert!(voxel_extent > 0.0);
+        assert!(radius_1 >= 0.0);
+        assert!(radius_2 >= 0.0);
+        Self {
+            voxel_extent,
+            radius_1,
+            radius_2,
+            center_offsets,
+            smoothness,
+        }
+    }
+
+    pub fn radius_1_in_voxels(&self) -> f64 {
+        self.radius_1
+    }
+
+    pub fn radius_2_in_voxels(&self) -> f64 {
+        self.radius_2
     }
 }
 
@@ -381,6 +444,7 @@ pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()>
     register_setup_component!(registry, MultifractalNoiseModificationComp)?;
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
+    register_setup_component!(registry, VoxelSphereUnionComp)?;
     register_setup_component!(registry, VoxelGradientNoisePatternComp)?;
     register_component!(registry, VoxelObjectComp)?;
     register_component!(registry, VoxelAbsorbingSphereComp)
