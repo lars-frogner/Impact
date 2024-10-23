@@ -188,6 +188,11 @@ impl RigidBody {
         self.apply_torque(&(position - self.position).cross(force));
     }
 
+    /// Sets the given inertial properties for the body.
+    pub fn update_inertial_properties(&mut self, inertial_properties: InertialProperties) {
+        self.inertial_properties = inertial_properties;
+    }
+
     /// Recomputes the body's momentum according to the given velocity.
     pub fn synchronize_momentum(&mut self, velocity: &Velocity) {
         self.momentum = Self::compute_momentum(&self.inertial_properties, velocity);

@@ -8,5 +8,5 @@ done
 shift # Ignore "--"
 profileargs=("$@") # What's left goes to profile
 
-cargo build --release --features profiling --bin profile
+cargo build --release --features "profiling,unchecked" --bin profile
 sudo perf stat "${perfargs[@]}" --delay 400 --detailed ./target/release/profile "${profileargs[@]}" --delay 0.5

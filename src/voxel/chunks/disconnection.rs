@@ -18,6 +18,16 @@ use cfg_if::cfg_if;
 use nalgebra::vector;
 use std::{array, cmp::Ordering, collections::HashSet, iter, mem, ops::Range};
 
+/// Represents a helper for keeping track of the transferral of some aggregate
+/// voxel property when a voxel object is split into multiple objects.
+pub trait PropertyTransferrer {
+    fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel);
+
+    fn transfer_non_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxels: &[Voxel]);
+
+    fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel);
+}
+
 /// A [`ChunkedVoxelObject`] that has been disconnected from a larger object.
 #[derive(Clone, Debug)]
 pub struct DisconnectedVoxelObject {
@@ -151,6 +161,8 @@ pub struct GlobalRegionLabel(u32);
 #[derive(Clone, Copy, Debug)]
 struct AdjacentRegionConnection(u16);
 
+struct NoPropertyTransferrer;
+
 /// The maximum number of [`LocalRegion`]s in a chunk.
 const CHUNK_MAX_REGIONS: usize = 1 << LOG2_MAX_REGIONS_PER_CHUNK;
 
@@ -199,6 +211,19 @@ impl ChunkedVoxelObject {
     /// Both this object and the returned object will have the correct derived
     /// state when this call returns.
     pub fn split_off_any_disconnected_region(&mut self) -> Option<DisconnectedVoxelObject> {
+        self.split_off_any_disconnected_region_with_property_transferrer(&mut NoPropertyTransferrer)
+    }
+
+    /// Checks if the object consists of more than one disconnected region, and
+    /// if so, splits off one of them into a seperate object and returns it.
+    /// Both this object and the returned object will have the correct derived
+    /// state when this call returns. The methods of the given
+    /// `PropertyTransferrer` will be called appropriately when voxels or whole
+    /// chunks are copied over to the disconnected object.
+    pub fn split_off_any_disconnected_region_with_property_transferrer(
+        &mut self,
+        property_transferrer: &mut impl PropertyTransferrer,
+    ) -> Option<DisconnectedVoxelObject> {
         // If we just look for any disconnected region and split it off, that region
         // could turn out to contain most of the object. To avoid this, we consider two
         // regions in tandem and split off whichever of them contains the fewest chunks.
@@ -356,6 +381,7 @@ impl ChunkedVoxelObject {
             smallest_region_linear_chunk_indices,
             smallest_non_uniform_chunk_count,
             smallest_region_chunk_ranges,
+            property_transferrer,
         )
     }
 
@@ -365,6 +391,7 @@ impl ChunkedVoxelObject {
         region_linear_chunk_indices: Vec<usize>,
         region_non_uniform_chunk_count: usize,
         region_chunk_ranges: [Range<usize>; 3],
+        property_transferrer: &mut impl PropertyTransferrer,
     ) -> Option<DisconnectedVoxelObject> {
         let region_chunk_counts = region_chunk_ranges.clone().map(|range| range.len());
         let total_region_chunk_count = region_chunk_counts.iter().product();
@@ -441,25 +468,45 @@ impl ChunkedVoxelObject {
                                         chunk.data_offset,
                                     );
 
-                                    for (voxel, &label) in chunk_voxels.iter_mut().zip(labels) {
-                                        let region_voxel = if voxel.is_empty() {
-                                            // Since the signed distances of empty voxels adjacent
-                                            // to non-empty ones affect meshing, we copy over empty
-                                            // voxels unconditionally
-                                            *voxel
-                                        } else if split_off_voxel_at_label[label as usize] {
-                                            // The voxel belongs to the region we are splitting off,
-                                            // so we grab it and replace it with an empty voxel in
-                                            // the original object
-                                            let region_voxel = *voxel;
-                                            *voxel = Voxel::maximally_outside();
-                                            region_voxel
-                                        } else {
-                                            // The voxel belongs to some other region, so we write
-                                            // an empty voxel to the splitted off object
-                                            Voxel::maximally_outside()
-                                        };
-                                        region_voxels.push(region_voxel);
+                                    let voxel_object_index_ranges = chunk_indices
+                                        .map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
+
+                                    let mut voxel_idx = 0;
+
+                                    for i in voxel_object_index_ranges[0].clone() {
+                                        for j in voxel_object_index_ranges[1].clone() {
+                                            for k in voxel_object_index_ranges[2].clone() {
+                                                let voxel = &mut chunk_voxels[voxel_idx];
+                                                let label = labels[voxel_idx];
+
+                                                let region_voxel = if voxel.is_empty() {
+                                                    // Since the signed distances of empty voxels
+                                                    // adjacent to non-empty ones affect meshing, we
+                                                    // copy over empty voxels unconditionally
+                                                    *voxel
+                                                } else if split_off_voxel_at_label[label as usize] {
+                                                    // The voxel belongs to the region we are
+                                                    // splitting off, so we grab it and replace it
+                                                    // with an empty voxel in the original object
+                                                    let region_voxel = *voxel;
+
+                                                    property_transferrer
+                                                        .transfer_voxel(&[i, j, k], region_voxel);
+
+                                                    *voxel = Voxel::maximally_outside();
+
+                                                    region_voxel
+                                                } else {
+                                                    // The voxel belongs to some other region, so we
+                                                    // write an empty voxel to the splitted off
+                                                    // object
+                                                    Voxel::maximally_outside()
+                                                };
+                                                region_voxels.push(region_voxel);
+
+                                                voxel_idx += 1;
+                                            }
+                                        }
                                     }
 
                                     // We have filled this chunk of the splitted off object, so we
@@ -474,8 +521,11 @@ impl ChunkedVoxelObject {
                                         &region_voxels,
                                         &mut region_chunk,
                                         region_chunks.len() as u32,
-                                        );
+                                    );
                                 } else {
+                                    property_transferrer
+                                        .transfer_non_uniform_chunk(&chunk_indices, chunk_voxels);
+
                                     // If the chunk only contains voxels belonging to the region we
                                     // are splitting off, we can copy over all the voxels in one go
                                     region_voxels.extend_from_slice(chunk_voxels);
@@ -542,6 +592,9 @@ impl ChunkedVoxelObject {
                                 // and replace it with an empty chunk, after making sure to
                                 // overwrite the data offset with the correct value for the
                                 // disconnected object
+
+                                property_transferrer
+                                    .transfer_uniform_chunk(&chunk_indices, chunk.voxel);
 
                                 chunk.split_detection.data_offset =
                                     region_uniform_chunk_data_offset;
@@ -2069,6 +2122,15 @@ impl AdjacentRegionConnection {
     }
 }
 
+impl PropertyTransferrer for NoPropertyTransferrer {
+    fn transfer_voxel(&mut self, _object_voxel_indices: &[usize; 3], _voxel: Voxel) {}
+
+    fn transfer_non_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxels: &[Voxel]) {
+    }
+
+    fn transfer_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxel: Voxel) {}
+}
+
 const fn non_uniform_chunk_start_region_idx(uniform_chunk_count: usize, data_offset: u32) -> usize {
     uniform_chunk_count + ((data_offset as usize) << LOG2_MAX_REGIONS_PER_CHUNK)
 }
@@ -2198,7 +2260,7 @@ fn give_voxels_same_root(parents: &mut [u16], idx_1: usize, idx_2: usize) {
             if #[cfg(feature = "unchecked")] {
                 unsafe{ *parents.get_unchecked_mut(root_2_idx) = root_1_idx as u16; }
             } else {
-        parents[root_2_idx] = root_1_idx as u16;
+                parents[root_2_idx] = root_1_idx as u16;
             }
         }
     }
@@ -2641,7 +2703,12 @@ fn add_adjacent_connection_for_region(
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
-    use crate::voxel::generation::fuzzing::ArbitrarySDFVoxelGenerator;
+    use crate::voxel::{
+        chunks::inertia::VoxelObjectInertialPropertyManager,
+        generation::fuzzing::ArbitrarySDFVoxelGenerator,
+    };
+    use approx::assert_relative_eq;
+    use nalgebra::Vector3;
 
     pub fn fuzz_test_voxel_object_connected_regions(generator: ArbitrarySDFVoxelGenerator) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
@@ -2653,13 +2720,40 @@ pub mod fuzzing {
         generator: ArbitrarySDFVoxelGenerator,
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
+            let voxel_type_densities = vec![1.0; 256];
+
+            let original_inertial_property_manager =
+                VoxelObjectInertialPropertyManager::initialized_from(
+                    &object,
+                    &voxel_type_densities,
+                );
+
+            let mut inertial_property_manager = original_inertial_property_manager.clone();
+            let mut disconnected_inertial_property_manager =
+                VoxelObjectInertialPropertyManager::zeroed();
+
+            let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
+                &mut disconnected_inertial_property_manager,
+                object.voxel_extent(),
+                &voxel_type_densities,
+            );
+
             let original_region_count = object.count_regions();
-            if let Some(disconnected_object) = object.split_off_any_disconnected_region() {
-                let disconnected_object = disconnected_object.object;
+            if let Some(disconnected_object) = object
+                .split_off_any_disconnected_region_with_property_transferrer(
+                    &mut inertial_property_transferrer,
+                )
+            {
+                let DisconnectedVoxelObject {
+                    object: disconnected_object,
+                    origin_offset,
+                } = disconnected_object;
+
                 assert!(original_region_count > 1);
                 assert_eq!(disconnected_object.count_regions(), 1);
                 assert_eq!(object.count_regions(), original_region_count - 1);
 
+                assert!(!disconnected_object.is_effectively_empty());
                 disconnected_object.validate_adjacencies();
                 disconnected_object.validate_chunk_obscuredness();
                 disconnected_object.validate_sdf();
@@ -2669,7 +2763,23 @@ pub mod fuzzing {
                 object.validate_chunk_obscuredness();
                 object.validate_sdf();
                 object.validate_region_count();
+
+                assert_relative_eq!(
+                    &inertial_property_manager.add(&disconnected_inertial_property_manager),
+                    &original_inertial_property_manager,
+                    epsilon = 1e-8,
+                    max_relative = 1e-8,
+                );
+
+                disconnected_inertial_property_manager.offset_reference_point_by(&Vector3::from(
+                    origin_offset.map(|offset| offset as f64 * object.voxel_extent()),
+                ));
+
+                disconnected_inertial_property_manager
+                    .validate_for_object(&disconnected_object, &voxel_type_densities);
             }
+
+            inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
         }
     }
 }
@@ -2679,7 +2789,8 @@ mod tests {
     use super::*;
     use crate::voxel::{
         generation::{
-            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator,
+            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFUnion, SDFVoxelGenerator,
+            SameVoxelTypeGenerator, SphereSDFGenerator,
         },
         voxel_types::VoxelType,
     };
@@ -2709,5 +2820,21 @@ mod tests {
         );
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_region_count();
+    }
+
+    #[test]
+    fn should_split_off_disconnected_sphere() {
+        let generator = SDFVoxelGenerator::new(
+            1.0,
+            SDFUnion::new(
+                SphereSDFGenerator::new(25.0),
+                SphereSDFGenerator::new(25.0),
+                [60.0, 0.0, 0.0],
+                1.0,
+            ),
+            SameVoxelTypeGenerator::new(VoxelType::default()),
+        );
+        let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+        assert!(object.split_off_any_disconnected_region().is_some());
     }
 }

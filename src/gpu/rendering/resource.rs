@@ -352,16 +352,20 @@ impl DesynchronizedRenderResources {
         ),
         voxel_manager: &mut VoxelManager,
     ) -> Result<()> {
-        if !voxel_manager.voxel_objects().is_empty() && voxel_material_resource_manager.is_none() {
+        let voxel_object_manager = &mut voxel_manager.object_manager;
+
+        if !voxel_object_manager.voxel_objects().is_empty()
+            && voxel_material_resource_manager.is_none()
+        {
             *voxel_material_resource_manager =
                 Some(VoxelMaterialGPUResourceManager::for_voxel_type_registry(
                     graphics_device,
                     &mut assets.write().unwrap(),
-                    voxel_manager.voxel_type_registry(),
+                    &voxel_manager.type_registry,
                 )?);
         }
 
-        for (voxel_object_id, voxel_object) in voxel_manager.voxel_objects_mut() {
+        for (voxel_object_id, voxel_object) in voxel_object_manager.voxel_objects_mut() {
             voxel_object_buffer_managers
                 .entry(*voxel_object_id)
                 .and_modify(|manager| manager.sync_with_voxel_object(graphics_device, voxel_object))
@@ -375,7 +379,7 @@ impl DesynchronizedRenderResources {
         }
         Self::remove_unmatched_render_resources(
             voxel_object_buffer_managers,
-            voxel_manager.voxel_objects(),
+            voxel_object_manager.voxel_objects(),
         );
 
         Ok(())

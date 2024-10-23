@@ -43,3 +43,17 @@ path = "fuzz_targets/split_off_disconnected_voxel_object_region.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "voxel_object_split_off_disconnected_region_with_inertial_properties"
+path = "fuzz_targets/voxel_object_split_off_disconnected_region_with_inertial_properties.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "voxel_object_absorbing_voxels_within_sphere"
+path = "fuzz_targets/voxel_object_absorbing_voxels_within_sphere.rs"
+test = false
+doc = false
+bench = false

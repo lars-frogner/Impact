@@ -2,9 +2,10 @@ use clap::{Parser, ValueEnum};
 use impact::{
     geometry::Sphere,
     voxel::{
-        chunks::ChunkedVoxelObject,
+        chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject},
         generation::{
-            BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
+            BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator,
+            SphereSDFGenerator,
         },
         mesh::ChunkedVoxelObjectMesh,
         voxel_types::VoxelType,
@@ -43,8 +44,11 @@ enum Target {
     ChunkedVoxelObjectUpdateAllChunkBoundaryAdjacencies,
     ChunkedVoxelObjectResolveConnectedRegionsBetweenAllChunks,
     ChunkedVoxelObjectComputeAllDerivedState,
+    ChunkedVoxelObjectInitializeInertialProperties,
     ChunkedVoxelObjectCreateMesh,
     ChunkedVoxelObjectModifyVoxelsWithinSphere,
+    ChunkedVoxelObjectSplitOffDisconnectedRegion,
+    ChunkedVoxelObjectSplitOffDisconnectedRegionWithInertialPropertyTransfer,
     ChunkedVoxelObjectUpdateMesh,
 }
 
@@ -102,11 +106,20 @@ fn main() {
         Target::ChunkedVoxelObjectComputeAllDerivedState => {
             profile_chunked_voxel_object_compute_all_derived_state(duration, delayer);
         }
+        Target::ChunkedVoxelObjectInitializeInertialProperties => {
+            profile_chunked_voxel_object_initialize_inertial_properties(duration, delayer);
+        }
         Target::ChunkedVoxelObjectCreateMesh => {
             profile_chunked_voxel_object_create_mesh(duration, delayer);
         }
         Target::ChunkedVoxelObjectModifyVoxelsWithinSphere => {
             profile_chunked_voxel_object_modify_voxels_within_sphere(duration, delayer);
+        }
+        Target::ChunkedVoxelObjectSplitOffDisconnectedRegion => {
+            profile_chunked_voxel_object_split_off_disconnected_region(duration, delayer);
+        }
+        Target::ChunkedVoxelObjectSplitOffDisconnectedRegionWithInertialPropertyTransfer => {
+            profile_chunked_voxel_object_split_off_disconnected_region_with_inertial_property_transfer(duration, delayer);
         }
         Target::ChunkedVoxelObjectUpdateMesh => {
             profile_chunked_voxel_object_update_mesh(duration, delayer);
@@ -230,6 +243,26 @@ fn profile_chunked_voxel_object_compute_all_derived_state(duration: Duration, de
     black_box(object);
 }
 
+fn profile_chunked_voxel_object_initialize_inertial_properties(
+    duration: Duration,
+    delayer: Delayer,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let voxel_type_densities = [1.0; 256];
+    let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    profile(
+        &mut || {
+            VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities)
+        },
+        duration,
+        delayer,
+    );
+}
+
 fn profile_chunked_voxel_object_create_mesh(duration: Duration, delayer: Delayer) {
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -263,6 +296,73 @@ fn profile_chunked_voxel_object_modify_voxels_within_sphere(duration: Duration, 
             object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
                 black_box((indices, position, voxel));
             });
+        },
+        duration,
+        delayer,
+    );
+}
+
+fn profile_chunked_voxel_object_split_off_disconnected_region(
+    duration: Duration,
+    delayer: Delayer,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SDFUnion::new(
+            SphereSDFGenerator::new(50.0),
+            SphereSDFGenerator::new(50.0),
+            [120.0, 0.0, 0.0],
+            1.0,
+        ),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    profile(
+        &mut || object.clone().split_off_any_disconnected_region().unwrap(),
+        duration,
+        delayer,
+    );
+}
+
+fn profile_chunked_voxel_object_split_off_disconnected_region_with_inertial_property_transfer(
+    duration: Duration,
+    delayer: Delayer,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SDFUnion::new(
+            SphereSDFGenerator::new(50.0),
+            SphereSDFGenerator::new(50.0),
+            [120.0, 0.0, 0.0],
+            1.0,
+        ),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let voxel_type_densities = [1.0; 256];
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let inertial_property_manager =
+        VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
+    profile(
+        &mut || {
+            let mut inertial_property_manager = inertial_property_manager.clone();
+            let mut disconnected_inertial_property_manager =
+                VoxelObjectInertialPropertyManager::zeroed();
+            let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
+                &mut disconnected_inertial_property_manager,
+                object.voxel_extent(),
+                &voxel_type_densities,
+            );
+            let disconnected_object = object
+                .clone()
+                .split_off_any_disconnected_region_with_property_transferrer(
+                    &mut inertial_property_transferrer,
+                )
+                .unwrap();
+            (
+                disconnected_object,
+                inertial_property_manager,
+                disconnected_inertial_property_manager,
+            )
         },
         duration,
         delayer,

@@ -1,16 +1,29 @@
 //! ECS systems related to voxels.
 
 use crate::{
-    physics::{motion::components::ReferenceFrameComp, PhysicsSimulator},
+    physics::{
+        fph,
+        inertia::InertialProperties,
+        motion::components::{ReferenceFrameComp, VelocityComp},
+        rigid_body::components::RigidBodyComp,
+        PhysicsSimulator,
+    },
+    scene::components::SceneGraphParentNodeComp,
     voxel::{
+        chunks::{
+            disconnection::DisconnectedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
+        },
         components::{VoxelAbsorbingSphereComp, VoxelObjectComp},
-        VoxelManager,
+        StagedVoxelObject, VoxelManager, VoxelObjectManager,
     },
 };
 use impact_ecs::{
+    archetype::ArchetypeComponentStorage,
+    component::ComponentArray,
     query,
     world::{Entity, World as ECSWorld},
 };
+use nalgebra::Vector3;
 
 /// Applies each voxel-absorbing sphere to the affected voxel objects.
 pub fn apply_sphere_absorption(
@@ -22,15 +35,28 @@ pub fn apply_sphere_absorption(
         ecs_world,
         |entity: Entity,
          voxel_object: &VoxelObjectComp,
-         voxel_object_frame: &ReferenceFrameComp| {
-            let voxel_object = voxel_manager
-                .get_voxel_object_mut(voxel_object.voxel_object_id)
+         reference_frame: &mut ReferenceFrameComp,
+         velocity: &mut VelocityComp,
+         rigid_body: &mut RigidBodyComp| {
+            let (object, inertial_property_manager) = voxel_manager
+                .object_manager
+                .get_voxel_object_with_inertial_property_manager_mut(voxel_object.voxel_object_id);
+
+            let object = object
                 .expect("Missing voxel object for entity with VoxelObjectComp")
                 .object_mut();
 
-            let world_to_voxel_object_transform = voxel_object_frame
+            let inertial_property_manager = inertial_property_manager
+                .expect("Missing inertial property manager for entity with VoxelObjectComp");
+
+            let world_to_voxel_object_transform = reference_frame
                 .create_transform_to_parent_space::<f64>()
                 .inverse();
+
+            let mut inertial_property_updater = inertial_property_manager.begin_update(
+                object.voxel_extent(),
+                voxel_manager.type_registry.mass_densities(),
+            );
 
             query!(
                 ecs_world,
@@ -49,42 +75,304 @@ pub fn apply_sphere_absorption(
                     let absorption_rate_per_frame =
                         absorbing_sphere.rate() * simulator.time_step_duration();
 
-                    voxel_object.modify_voxels_within_sphere(
+                    object.modify_voxels_within_sphere(
                         &sphere_in_voxel_object_space,
-                        &mut |_, squared_distance, voxel| {
+                        &mut |object_voxel_indices, squared_distance, voxel| {
+                            let was_empty = voxel.is_empty();
+
                             let signed_distance_delta = absorption_rate_per_frame
                                 * (1.0 - squared_distance * inverse_radius_squared);
-                            voxel.increase_signed_distance(signed_distance_delta as f32);
+
+                            voxel.increase_signed_distance(
+                                signed_distance_delta as f32,
+                                &mut |voxel| {
+                                    if !was_empty {
+                                        inertial_property_updater
+                                            .remove_voxel(&object_voxel_indices, *voxel);
+                                    }
+                                },
+                            );
                         },
                     );
                 }
             );
 
-            if voxel_object.invalidated_mesh_chunk_indices().len() > 0 {
-                // The object could have become empty
-                if voxel_object.is_effectively_empty() {
-                    log::debug!("Marked voxel object as empty");
-                    voxel_manager.mark_voxel_object_as_empty_for_entity(entity);
-                } else {
-                    // If the object has not become empty, we must resolve the connected region
-                    // information
-                    voxel_object.resolve_connected_regions_between_all_chunks();
-
-                    // It could also have been split into multiple disconnected regions
-                    if let Some(disconnected_voxel_object) =
-                        voxel_object.split_off_any_disconnected_region()
-                    {
-                        // It could have become empty after splitting
-                        if voxel_object.is_effectively_empty() {
-                            log::debug!("Marked voxel object as empty");
-                            voxel_manager.mark_voxel_object_as_empty_for_entity(entity);
-                        }
-                        log::debug!("Disconnected voxel object");
-                        voxel_manager
-                            .push_disconnected_voxel_object(entity, disconnected_voxel_object);
-                    }
-                }
+            if object.invalidated_mesh_chunk_indices().len() > 0 {
+                handle_voxel_object_after_removing_voxels(
+                    voxel_manager,
+                    ecs_world,
+                    entity,
+                    voxel_object,
+                    reference_frame,
+                    velocity,
+                    rigid_body,
+                );
             }
         }
     );
+}
+
+fn handle_voxel_object_after_removing_voxels(
+    voxel_manager: &mut VoxelManager,
+    ecs_world: &ECSWorld,
+    entity: Entity,
+    voxel_object: &VoxelObjectComp,
+    reference_frame: &mut ReferenceFrameComp,
+    velocity: &mut VelocityComp,
+    rigid_body: &mut RigidBodyComp,
+) {
+    let (object, inertial_property_manager) = voxel_manager
+        .object_manager
+        .get_voxel_object_with_inertial_property_manager_mut(voxel_object.voxel_object_id);
+
+    let object = object
+        .expect("Missing voxel object for entity with VoxelObjectComp")
+        .object_mut();
+
+    let inertial_property_manager = inertial_property_manager
+        .expect("Missing inertial property manager for entity with VoxelObjectComp");
+
+    if object.is_effectively_empty() {
+        log::debug!("Marked voxel object as empty");
+        voxel_manager
+            .object_manager
+            .mark_voxel_object_as_empty_for_entity(entity);
+        return;
+    }
+
+    // If the object has not become empty, we must resolve the connected region
+    // information
+    object.resolve_connected_regions_between_all_chunks();
+
+    // Removing voxels could have divided the object into multiple disconnected
+    // regions. If there is a disconnection, we will split off a disconnected region
+    // and make it a new independent voxel object. In the process of splitting off
+    // the new object, we will compute the inertial properties of the disconnected
+    // region, remove them from the original object and add them to the new object.
+
+    let mut disconnected_object_inertial_property_manager =
+        VoxelObjectInertialPropertyManager::zeroed();
+
+    let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
+        &mut disconnected_object_inertial_property_manager,
+        object.voxel_extent(),
+        voxel_manager.type_registry.mass_densities(),
+    );
+
+    if let Some(disconnected_voxel_object) = object
+        .split_off_any_disconnected_region_with_property_transferrer(
+            &mut inertial_property_transferrer,
+        )
+    {
+        let original_reference_frame = *reference_frame;
+        let original_velocity = *velocity;
+        let original_rigid_body = *rigid_body;
+
+        // The inertial properties of the original object have now changed, and if the
+        // object has not become effectively empty due to the splitting we will need
+        // them to update the physics-related components of the object
+        let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
+
+        if object.is_effectively_empty() {
+            log::debug!("Marked voxel object as empty");
+            voxel_manager
+                .object_manager
+                .mark_voxel_object_as_empty_for_entity(entity);
+        } else {
+            // We need to know how the center of mass of the original object has changed to
+            // update its linear velocity. Here we compute the change in the local frame of
+            // the object.
+            let local_center_of_mass_displacement = new_inertial_properties.center_of_mass().coords
+                - original_reference_frame.origin_offset;
+
+            update_physics_components_after_disconnection(
+                reference_frame,
+                velocity,
+                rigid_body,
+                new_inertial_properties,
+                &local_center_of_mass_displacement,
+            );
+        }
+
+        // We also need to handle the part that was disconnected
+        handle_disconnected_voxel_object(
+            &mut voxel_manager.object_manager,
+            ecs_world,
+            entity,
+            original_reference_frame,
+            original_velocity,
+            original_rigid_body,
+            disconnected_voxel_object,
+            disconnected_object_inertial_property_manager,
+        );
+    } else {
+        // Even though the splitting attempt did not produce a new object, that could
+        // just be because the disconnected part was very small. In case this is what
+        // happened, we update the physics components to reflect the (small) change in
+        // inertial properties.
+        update_physics_components_after_voxel_removal_without_disconnection(
+            reference_frame,
+            rigid_body,
+            inertial_property_manager.derive_inertial_properties(),
+        );
+    }
+}
+
+#[allow(clippy::large_types_passed_by_value)]
+fn handle_disconnected_voxel_object(
+    voxel_object_manager: &mut VoxelObjectManager,
+    ecs_world: &ECSWorld,
+    parent_entity: Entity,
+    original_reference_frame: ReferenceFrameComp,
+    original_velocity: VelocityComp,
+    original_rigid_body: RigidBodyComp,
+    object: DisconnectedVoxelObject,
+    mut inertial_property_manager: VoxelObjectInertialPropertyManager,
+) {
+    let mut reference_frame = original_reference_frame;
+    let mut velocity = original_velocity;
+    let mut rigid_body = original_rigid_body;
+
+    // We must compute the center of mass displacement *before* offsetting the
+    // origin for `inertial_property_manager`, because after that the new center of
+    // mass will not be in the same reference frame as the original one
+    let local_center_of_mass_displacement =
+        inertial_property_manager.derive_center_of_mass() - original_reference_frame.origin_offset;
+
+    let DisconnectedVoxelObject {
+        object,
+        origin_offset,
+    } = object;
+
+    let origin_offset_in_voxel_object_space =
+        Vector3::from(origin_offset.map(|offset| offset as fph * object.voxel_extent()));
+
+    // The inertial properties are assumed defined with respect to the lower corner
+    // of the voxel object's voxel grid, so we must offset them from the origin of
+    // the original object to the origin of the disconnected object
+    inertial_property_manager.offset_reference_point_by(&origin_offset_in_voxel_object_space);
+
+    // Similarly, we must offset the reference frame of the new object compared to
+    // the frame of the parent object to account for the origin difference
+    reference_frame.position += reference_frame
+        .create_transform_to_parent_space()
+        .transform_vector(&origin_offset_in_voxel_object_space);
+
+    update_physics_components_after_disconnection(
+        &mut reference_frame,
+        &mut velocity,
+        &mut rigid_body,
+        inertial_property_manager.derive_inertial_properties(),
+        &local_center_of_mass_displacement,
+    );
+
+    let mut components =
+        ArchetypeComponentStorage::try_from_view((&reference_frame, &velocity, &rigid_body))
+            .unwrap();
+
+    add_additional_parent_components_for_disconnected_object(
+        ecs_world,
+        parent_entity,
+        &mut components,
+    );
+
+    // Stage the object for being added to the scene as an entity by a separate task
+    voxel_object_manager.stage_new_voxel_object(StagedVoxelObject {
+        object,
+        inertial_property_manager: Some(inertial_property_manager),
+        components,
+    });
+}
+
+fn add_additional_parent_components_for_disconnected_object(
+    ecs_world: &ECSWorld,
+    parent_entity: Entity,
+    components: &mut ArchetypeComponentStorage,
+) {
+    let parent = ecs_world
+        .get_entity(&parent_entity)
+        .expect("Missing parent entity for disconnected voxel object");
+
+    if let Some(scene_graph_parent) = parent.get_component() {
+        let scene_graph_parent: &SceneGraphParentNodeComp = scene_graph_parent.access();
+        components
+            .add_new_component_type(scene_graph_parent.into_storage())
+            .unwrap();
+    };
+}
+
+fn update_physics_components_after_disconnection(
+    reference_frame: &mut ReferenceFrameComp,
+    velocity: &mut VelocityComp,
+    rigid_body: &mut RigidBodyComp,
+    new_inertial_properties: InertialProperties,
+    local_center_of_mass_displacement: &Vector3<fph>,
+) {
+    // The disconnection is really just a partitioning of the mass, inertia tensor
+    // and linear and angular momentum of the original object into two parts. Since
+    // these quantities are additive, any such partitioning of the object is valid
+    // regardless of whether the two parts are connected. What happens during a
+    // disconnection is that we change the frames of reference for the two parts.
+    // Instead of expressing the partitioned quantities with respect to the center
+    // of mass of the original object, we express them with respect to the parts'
+    // own center of mass. We also remove the constraint that the parts must behave
+    // as being part of the same rigid body, but this doesn't affect anything at
+    // the moment of disconnection, only the future evolution. In practice, all we
+    // need to do for a part is to assign the properly partitioned mass and inertia
+    // tensor properties to its rigid body component, update its reference frame
+    // component to use its own center of mass, and update the velocity component to
+    // be the velocity of its own center of mass rather than that of the original
+    // center of mass.
+
+    let world_center_of_mass_displacement = reference_frame
+        .orientation
+        .transform_vector(local_center_of_mass_displacement);
+
+    // Compute the linear velocity of the new center of mass compared to the old one
+    let linear_velocity_change = velocity
+        .angular
+        .as_vector()
+        .cross(&world_center_of_mass_displacement);
+
+    // Assign new center of mass
+    reference_frame.update_origin_offset_while_preserving_position(
+        new_inertial_properties.center_of_mass().coords,
+    );
+
+    // Transform velocity to new center of mass
+    velocity.linear += linear_velocity_change;
+
+    rigid_body
+        .0
+        .update_inertial_properties(new_inertial_properties);
+
+    // The momentum of the rigid body must be updated to be consistent with the new
+    // mass and linear velocity
+    rigid_body.0.synchronize_momentum(&velocity.linear);
+
+    // The angular momentum of the rigid body must be updated to be consistent with
+    // the new inertia tensor (the angular velocity is the same for the disconnected
+    // object as for the original one)
+    rigid_body.0.synchronize_angular_momentum(
+        &reference_frame.orientation,
+        reference_frame.scaling,
+        &velocity.angular,
+    );
+}
+
+fn update_physics_components_after_voxel_removal_without_disconnection(
+    reference_frame: &mut ReferenceFrameComp,
+    rigid_body: &mut RigidBodyComp,
+    new_inertial_properties: InertialProperties,
+) {
+    // We don't modify the velocity here, since there was no disconnected object to
+    // carry away momentum
+
+    reference_frame.update_origin_offset_while_preserving_position(
+        new_inertial_properties.center_of_mass().coords,
+    );
+
+    rigid_body
+        .0
+        .update_inertial_properties(new_inertial_properties);
 }
