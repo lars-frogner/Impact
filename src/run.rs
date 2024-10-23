@@ -68,6 +68,7 @@ use crate::{
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp, SameVoxelTypeComp,
             VoxelAbsorbingSphereComp, VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp,
+            VoxelSphereUnionComp,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
         VoxelManager,
@@ -116,6 +117,7 @@ fn init_app(window: Window) -> Result<Application> {
             // Cow::Borrowed("Brick"),
             // Cow::Borrowed("Wood"),
         ],
+        vec![1.0; 4],
         vec![
             FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
             FixedVoxelMaterialProperties::new(1.0, 1.0, 1.0, 0.0),
@@ -163,12 +165,12 @@ fn init_app(window: Window) -> Result<Application> {
     let mut assets = app.assets().write().unwrap();
 
     let skybox_texture_id = assets.load_cubemap_texture_from_paths(
-        "assets/skybox/right.jpg",
-        "assets/skybox/left.jpg",
-        "assets/skybox/top.jpg",
-        "assets/skybox/bottom.jpg",
-        "assets/skybox/front.jpg",
-        "assets/skybox/back.jpg",
+        "assets/ocean_skybox/right.jpg",
+        "assets/ocean_skybox/left.jpg",
+        "assets/ocean_skybox/top.jpg",
+        "assets/ocean_skybox/bottom.jpg",
+        "assets/ocean_skybox/front.jpg",
+        "assets/ocean_skybox/back.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
             ..Default::default()
@@ -176,81 +178,81 @@ fn init_app(window: Window) -> Result<Application> {
         Some(SamplerConfig::default()),
     )?;
 
-    let bricks_color_texture_id = assets.load_texture_from_path(
-        "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Srgb,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
+    // let bricks_color_texture_id = assets.load_texture_from_path(
+    //     "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
+    //     TextureConfig {
+    //         color_space: ColorSpace::Srgb,
+    //         ..Default::default()
+    //     },
+    //     Some(SamplerConfig {
+    //         addressing: TextureAddressingConfig::REPEATING,
+    //         ..Default::default()
+    //     }),
+    // )?;
 
-    let bricks_roughness_texture_id = assets.load_texture_from_path(
-        "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
+    // let bricks_roughness_texture_id = assets.load_texture_from_path(
+    //     "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
+    //     TextureConfig {
+    //         color_space: ColorSpace::Linear,
+    //         ..Default::default()
+    //     },
+    //     Some(SamplerConfig {
+    //         addressing: TextureAddressingConfig::REPEATING,
+    //         ..Default::default()
+    //     }),
+    // )?;
 
-    let bricks_height_texture_id = assets.load_texture_from_path(
-        "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
+    // let bricks_height_texture_id = assets.load_texture_from_path(
+    //     "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
+    //     TextureConfig {
+    //         color_space: ColorSpace::Linear,
+    //         ..Default::default()
+    //     },
+    //     Some(SamplerConfig {
+    //         addressing: TextureAddressingConfig::REPEATING,
+    //         ..Default::default()
+    //     }),
+    // )?;
 
-    let wood_floor_color_texture_id = assets.load_texture_from_path(
-        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Srgb,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
+    // let wood_floor_color_texture_id = assets.load_texture_from_path(
+    //     "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
+    //     TextureConfig {
+    //         color_space: ColorSpace::Srgb,
+    //         ..Default::default()
+    //     },
+    //     Some(SamplerConfig {
+    //         addressing: TextureAddressingConfig::REPEATING,
+    //         ..Default::default()
+    //     }),
+    // )?;
 
-    let wood_floor_roughness_texture_id = assets.load_texture_from_path(
-        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
+    // let wood_floor_roughness_texture_id = assets.load_texture_from_path(
+    //     "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
+    //     TextureConfig {
+    //         color_space: ColorSpace::Linear,
+    //         ..Default::default()
+    //     },
+    //     Some(SamplerConfig {
+    //         addressing: TextureAddressingConfig::REPEATING,
+    //         ..Default::default()
+    //     }),
+    // )?;
 
-    let wood_floor_normal_texture_id = assets.load_texture_from_path(
-        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
+    // let wood_floor_normal_texture_id = assets.load_texture_from_path(
+    //     "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
+    //     TextureConfig {
+    //         color_space: ColorSpace::Linear,
+    //         ..Default::default()
+    //     },
+    //     Some(SamplerConfig {
+    //         addressing: TextureAddressingConfig::REPEATING,
+    //         ..Default::default()
+    //     }),
+    // )?;
 
     drop(assets);
 
-    // app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 1e6));
+    app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 1e5));
 
     app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
@@ -268,7 +270,7 @@ fn init_app(window: Window) -> Result<Application> {
         &VelocityComp::stationary(),
         &MotionControlComp::new(),
         &OrientationControlComp::new(),
-        &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, -2.0], 2.0, 10.0),
+        &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, -4.0], 1.0, 15.0),
         // &UniformGravityComp::downward(9.81),
     ))?;
 
@@ -447,15 +449,17 @@ fn init_app(window: Window) -> Result<Application> {
     // ))?;
 
     app.create_entity((
-        &VoxelSphereComp::new(0.25, 20.0),
-        // &VoxelBoxComp::new(0.5, 28.0, 28.0, 28.0),
+        // &VoxelSphereComp::new(0.25, 20.0),
+        // &VoxelBoxComp::new(0.25, 4.0, 2.0, 1.0),
         // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3, 0),
+        &VoxelSphereUnionComp::new(0.25, 10.0, 10.0, [20.0, 0.0, 0.0], 5.0),
         // &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
         &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0, 1),
-        &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 0),
+        // &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 0),
         // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2, 1.0, 0),
         // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
-        &ReferenceFrameComp::unoriented(point![-25.0, -25.0, 10.0]),
+        &ReferenceFrameComp::unoriented(point![0.0, 0.0, 30.0]),
+        &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(), Degrees(10.0))),
     ))?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0),

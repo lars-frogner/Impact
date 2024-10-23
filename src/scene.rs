@@ -152,6 +152,7 @@ impl Scene {
         self.voxel_manager
             .write()
             .unwrap()
+            .object_manager
             .remove_all_voxel_objects();
 
         self.scene_graph.write().unwrap().clear_nodes();

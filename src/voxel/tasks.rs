@@ -37,7 +37,7 @@ define_task!(
         with_debug_logging!("Synchronizing voxel object meshes"; {
             let scene = app.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
-            for voxel_object in voxel_manager.voxel_objects_mut().values_mut() {
+            for voxel_object in voxel_manager.object_manager.voxel_objects_mut().values_mut() {
                 voxel_object.sync_mesh_with_object();
             }
             Ok(())
@@ -47,16 +47,15 @@ define_task!(
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) handles meshing and entity
-    /// creation for voxel objects that have been disconnected from a larger
-    /// object.
-    [pub] HandleDisconnectedVoxelObjects,
+    /// creation for voxel objects that have been staged for realization.
+    [pub] HandleStagedVoxelObjects,
     // This may add entities, which is best done after rendering is initated
     // so as to not affect the render resources for the current frame
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
     |app: &Application| {
-        with_debug_logging!("Handling disconnected voxel objects"; {
-            voxel::entity::handle_disconnected_voxel_objects(app)
+        with_debug_logging!("Handling staged voxel objects"; {
+            voxel::entity::handle_staged_voxel_objects(app)
         })
     }
 );
@@ -65,9 +64,7 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) handles entity removal for voxel
     /// objects that have been emptied.
     [pub] HandleEmptiedVoxelObjects,
-    // We need to handle disconnected objects first, since they need the parent
-    // entity to still exist when they are created
-    depends_on = [SyncRenderCommands, HandleDisconnectedVoxelObjects],
+    depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
     |app: &Application| {
         with_debug_logging!("Handling emptied voxel objects"; {
@@ -81,5 +78,5 @@ pub fn register_voxel_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()>
     task_scheduler.register_task(ApplySphereVoxelAbsorption)?;
     task_scheduler.register_task(SyncVoxelObjectMeshes)?;
     task_scheduler.register_task(HandleEmptiedVoxelObjects)?;
-    task_scheduler.register_task(HandleDisconnectedVoxelObjects)
+    task_scheduler.register_task(HandleStagedVoxelObjects)
 }

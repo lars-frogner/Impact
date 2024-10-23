@@ -17,6 +17,7 @@ pub struct VoxelType(u8);
 pub struct VoxelTypeRegistry {
     names: Vec<Cow<'static, str>>,
     name_lookup_table: HashMap<u32, VoxelType, BuildNoHashHasher<u32>>,
+    mass_densities: Vec<f32>,
     fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
     color_texture_paths: Vec<PathBuf>,
     roughness_texture_paths: Vec<PathBuf>,
@@ -67,7 +68,7 @@ impl VoxelTypeRegistry {
     }
 
     /// Creates a new voxel type registry for the voxel types with the given
-    /// names and fixed and textured material properties.
+    /// names, mass densities and fixed and textured material properties.
     ///
     /// # Errors
     /// Returns an error if:
@@ -78,6 +79,7 @@ impl VoxelTypeRegistry {
     /// - The inputs have different lengths.
     pub fn new(
         names: Vec<Cow<'static, str>>,
+        mass_densities: Vec<f32>,
         fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
         color_texture_paths: Vec<PathBuf>,
         roughness_texture_paths: Vec<PathBuf>,
@@ -88,6 +90,9 @@ impl VoxelTypeRegistry {
         }
         if names.len() >= Self::max_n_voxel_types() {
             bail!("Too many voxel types for registry");
+        }
+        if names.len() != mass_densities.len() {
+            bail!("Mismatching number of voxel type names and mass densities");
         }
         if names.len() != fixed_material_properties.len() {
             bail!("Mismatching number of voxel type names and fixed material properties");
@@ -115,6 +120,7 @@ impl VoxelTypeRegistry {
         Ok(Self {
             names,
             name_lookup_table,
+            mass_densities,
             fixed_material_properties,
             color_texture_paths,
             roughness_texture_paths,
@@ -152,6 +158,11 @@ impl VoxelTypeRegistry {
     /// is not present in the registry.
     pub fn get_name(&self, voxel_type: VoxelType) -> Option<&str> {
         self.names.get(voxel_type.idx()).map(|name| name.as_ref())
+    }
+
+    /// Returns the slice of mass densities for all registered voxel types.
+    pub fn mass_densities(&self) -> &[f32] {
+        &self.mass_densities
     }
 
     /// Returns the slice of fixed material properties for all registered voxel

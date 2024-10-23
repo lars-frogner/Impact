@@ -1,6 +1,7 @@
 //! Chunked representation of voxel objects.
 
 pub mod disconnection;
+pub mod inertia;
 pub mod intersection;
 pub mod sdf;
 
@@ -15,6 +16,7 @@ use crate::{
     },
 };
 use bitflags::bitflags;
+use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
@@ -210,6 +212,8 @@ impl ChunkedVoxelObject {
             return None;
         }
 
+        let voxel_extent = generator.voxel_extent();
+
         let chunk_counts = generator_grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
         let chunk_idx_strides = [chunk_counts[2] * chunk_counts[1], chunk_counts[2], 1];
 
@@ -261,7 +265,7 @@ impl ChunkedVoxelObject {
         let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
         Some(Self {
-            voxel_extent: generator.voxel_extent(),
+            voxel_extent,
             chunk_counts,
             chunk_idx_strides,
             occupied_chunk_ranges,
@@ -331,14 +335,26 @@ impl ChunkedVoxelObject {
 
     /// Returns the range of indices along each axis of the object's chunk
     /// grid that may contain non-empty chunks.
-    pub fn occupied_chunk_ranges(&self) -> &[Range<usize>] {
+    pub fn occupied_chunk_ranges(&self) -> &[Range<usize>; 3] {
         &self.occupied_chunk_ranges
     }
 
     /// Returns the range of indices along each axis of the object's voxel
     /// grid that may contain non-empty voxels.
-    pub fn occupied_voxel_ranges(&self) -> &[Range<usize>] {
+    pub fn occupied_voxel_ranges(&self) -> &[Range<usize>; 3] {
         &self.occupied_voxel_ranges
+    }
+
+    /// Returns the stride in the linear chunk index correponding to
+    /// incrementing each 3D chunk index.
+    pub fn chunk_idx_strides(&self) -> &[usize; 3] {
+        &self.chunk_idx_strides
+    }
+
+    /// Determines the exact range of indices along each axis of the object's
+    /// voxel grid that may contain non-empty voxels.
+    pub fn determine_tight_occupied_voxel_ranges(&self) -> [Range<usize>; 3] {
+        determine_occupied_voxel_ranges(self.chunk_counts, &self.chunks, &self.voxels)
     }
 
     /// Returns the number of voxels (potentially empty) actually stored in the
@@ -349,6 +365,16 @@ impl ChunkedVoxelObject {
             .iter()
             .map(|chunk| chunk.stored_voxel_count())
             .sum()
+    }
+
+    /// Returns the slice of all voxel chunks.
+    pub fn chunks(&self) -> &[VoxelChunk] {
+        &self.chunks
+    }
+
+    /// Returns the slice of all stored (non-uniform chunk) voxels.
+    pub fn voxels(&self) -> &[Voxel] {
+        &self.voxels
     }
 
     /// Checks whether the object consists of fewer than
@@ -1741,47 +1767,75 @@ impl NonUniformVoxelChunk {
                 for k in 0..CHUNK_SIZE {
                     let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
 
-                    if chunk_voxels[idx].is_empty() {
-                        continue;
-                    }
+                    let voxel = chunk_voxels[idx];
 
-                    let mut flags = VoxelFlags::empty();
-
-                    // Since we will update the flag of the adjacent voxel in
-                    // addition to this one, we only need to look up the upper
-                    // adjacent voxels to cover every adjacency over the course
-                    // of the full loop
-                    for (adjacent_indices, flag_for_current, flag_for_adjacent, dim) in [
-                        (
-                            [i + 1, j, k],
-                            VoxelFlags::HAS_ADJACENT_X_UP,
-                            VoxelFlags::HAS_ADJACENT_X_DN,
-                            Dimension::X,
-                        ),
-                        (
-                            [i, j + 1, k],
-                            VoxelFlags::HAS_ADJACENT_Y_UP,
-                            VoxelFlags::HAS_ADJACENT_Y_DN,
-                            Dimension::Y,
-                        ),
-                        (
-                            [i, j, k + 1],
-                            VoxelFlags::HAS_ADJACENT_Z_UP,
-                            VoxelFlags::HAS_ADJACENT_Z_DN,
-                            Dimension::Z,
-                        ),
-                    ] {
-                        if adjacent_indices[dim.idx()] < CHUNK_SIZE {
-                            let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
-                            let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
-                            if !adjacent_voxel.is_empty() {
-                                flags |= flag_for_current;
-                                adjacent_voxel.add_flags(flag_for_adjacent);
+                    if voxel.is_empty() {
+                        // Since we will update the flag of the adjacent voxel in
+                        // addition to this one, we only need to look up the upper
+                        // adjacent voxels to cover every adjacency over the course
+                        // of the full loop
+                        for (adjacent_indices, flag_for_adjacent, dim) in [
+                            ([i + 1, j, k], VoxelFlags::HAS_ADJACENT_X_DN, Dimension::X),
+                            ([i, j + 1, k], VoxelFlags::HAS_ADJACENT_Y_DN, Dimension::Y),
+                            ([i, j, k + 1], VoxelFlags::HAS_ADJACENT_Z_DN, Dimension::Z),
+                        ] {
+                            if adjacent_indices[dim.idx()] < CHUNK_SIZE {
+                                let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                                cfg_if! {
+                                    if #[cfg(feature = "unchecked")] {
+                                        let adjacent_voxel =
+                                            unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) };
+                                    } else {
+                                        let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
+                                    }
+                                }
+                                adjacent_voxel.remove_flags(flag_for_adjacent);
                             }
                         }
-                    }
+                    } else {
+                        let mut flags = voxel.flags();
 
-                    chunk_voxels[idx].add_flags(flags);
+                        for (adjacent_indices, flag_for_current, flag_for_adjacent, dim) in [
+                            (
+                                [i + 1, j, k],
+                                VoxelFlags::HAS_ADJACENT_X_UP,
+                                VoxelFlags::HAS_ADJACENT_X_DN,
+                                Dimension::X,
+                            ),
+                            (
+                                [i, j + 1, k],
+                                VoxelFlags::HAS_ADJACENT_Y_UP,
+                                VoxelFlags::HAS_ADJACENT_Y_DN,
+                                Dimension::Y,
+                            ),
+                            (
+                                [i, j, k + 1],
+                                VoxelFlags::HAS_ADJACENT_Z_UP,
+                                VoxelFlags::HAS_ADJACENT_Z_DN,
+                                Dimension::Z,
+                            ),
+                        ] {
+                            if adjacent_indices[dim.idx()] < CHUNK_SIZE {
+                                let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                                cfg_if! {
+                                    if #[cfg(feature = "unchecked")] {
+                                        let adjacent_voxel =
+                                            unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) };
+                                    } else {
+                                        let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
+                                    }
+                                }
+                                if adjacent_voxel.is_empty() {
+                                    flags -= flag_for_current;
+                                } else {
+                                    flags |= flag_for_current;
+                                    adjacent_voxel.add_flags(flag_for_adjacent);
+                                }
+                            }
+                        }
+
+                        chunk_voxels[idx].update_flags(flags);
+                    }
                 }
             }
         }
@@ -1803,7 +1857,9 @@ impl NonUniformVoxelChunk {
                 for k in 0..CHUNK_SIZE {
                     let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
 
-                    if chunk_voxels[idx].is_empty() {
+                    let voxel = chunk_voxels[idx];
+
+                    if voxel.is_empty() {
                         if i == 0 {
                             face_empty_counts.increment_x_dn();
                         } else if i == CHUNK_SIZE - 1 {
@@ -1819,48 +1875,74 @@ impl NonUniformVoxelChunk {
                         } else if k == CHUNK_SIZE - 1 {
                             face_empty_counts.increment_z_up();
                         }
-                        continue;
-                    } else {
-                        non_empty_voxel_count += 1;
-                    }
 
-                    let mut flags = VoxelFlags::empty();
-
-                    // Since we will update the flag of the adjacent voxel in
-                    // addition to this one, we only need to look up the upper
-                    // adjacent voxels to cover every adjacency over the course
-                    // of the full loop
-                    for (adjacent_indices, flag_for_current, flag_for_adjacent, dim) in [
-                        (
-                            [i + 1, j, k],
-                            VoxelFlags::HAS_ADJACENT_X_UP,
-                            VoxelFlags::HAS_ADJACENT_X_DN,
-                            Dimension::X,
-                        ),
-                        (
-                            [i, j + 1, k],
-                            VoxelFlags::HAS_ADJACENT_Y_UP,
-                            VoxelFlags::HAS_ADJACENT_Y_DN,
-                            Dimension::Y,
-                        ),
-                        (
-                            [i, j, k + 1],
-                            VoxelFlags::HAS_ADJACENT_Z_UP,
-                            VoxelFlags::HAS_ADJACENT_Z_DN,
-                            Dimension::Z,
-                        ),
-                    ] {
-                        if adjacent_indices[dim.idx()] < CHUNK_SIZE {
-                            let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
-                            let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
-                            if !adjacent_voxel.is_empty() {
-                                flags |= flag_for_current;
-                                adjacent_voxel.add_flags(flag_for_adjacent);
+                        // Since we will update the flag of the adjacent voxel in
+                        // addition to this one, we only need to look up the upper
+                        // adjacent voxels to cover every adjacency over the course
+                        // of the full loop
+                        for (adjacent_indices, flag_for_adjacent, dim) in [
+                            ([i + 1, j, k], VoxelFlags::HAS_ADJACENT_X_DN, Dimension::X),
+                            ([i, j + 1, k], VoxelFlags::HAS_ADJACENT_Y_DN, Dimension::Y),
+                            ([i, j, k + 1], VoxelFlags::HAS_ADJACENT_Z_DN, Dimension::Z),
+                        ] {
+                            if adjacent_indices[dim.idx()] < CHUNK_SIZE {
+                                let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                                cfg_if! {
+                                    if #[cfg(feature = "unchecked")] {
+                                        let adjacent_voxel =
+                                            unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) };
+                                    } else {
+                                        let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
+                                    }
+                                }
+                                adjacent_voxel.remove_flags(flag_for_adjacent);
                             }
                         }
-                    }
+                    } else {
+                        let mut flags = voxel.flags();
 
-                    chunk_voxels[idx].add_flags(flags);
+                        for (adjacent_indices, flag_for_current, flag_for_adjacent, dim) in [
+                            (
+                                [i + 1, j, k],
+                                VoxelFlags::HAS_ADJACENT_X_UP,
+                                VoxelFlags::HAS_ADJACENT_X_DN,
+                                Dimension::X,
+                            ),
+                            (
+                                [i, j + 1, k],
+                                VoxelFlags::HAS_ADJACENT_Y_UP,
+                                VoxelFlags::HAS_ADJACENT_Y_DN,
+                                Dimension::Y,
+                            ),
+                            (
+                                [i, j, k + 1],
+                                VoxelFlags::HAS_ADJACENT_Z_UP,
+                                VoxelFlags::HAS_ADJACENT_Z_DN,
+                                Dimension::Z,
+                            ),
+                        ] {
+                            if adjacent_indices[dim.idx()] < CHUNK_SIZE {
+                                let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                                cfg_if! {
+                                    if #[cfg(feature = "unchecked")] {
+                                        let adjacent_voxel =
+                                            unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) };
+                                    } else {
+                                        let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
+                                    }
+                                }
+                                if adjacent_voxel.is_empty() {
+                                    flags -= flag_for_current;
+                                } else {
+                                    flags |= flag_for_current;
+                                    adjacent_voxel.add_flags(flag_for_adjacent);
+                                }
+                            }
+                        }
+
+                        chunk_voxels[idx].update_flags(flags);
+                        non_empty_voxel_count += 1;
+                    }
                 }
             }
         }

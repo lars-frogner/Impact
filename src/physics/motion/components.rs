@@ -311,6 +311,19 @@ impl ReferenceFrameComp {
             F::from_f64(self.scaling).unwrap(),
         ) * Translation3::from(-self.origin_offset.cast::<F>())
     }
+
+    /// Sets the reference frame's origin offset to the given vector, adjusting
+    /// the frame's origin position in the parent space such that the positions
+    /// within the reference frame map to the same positions in the parent space
+    /// as before.
+    pub fn update_origin_offset_while_preserving_position(&mut self, origin_offset: Vector3<fph>) {
+        let displacement_in_frame = origin_offset - self.origin_offset;
+        let displacement_in_parent_frame = self
+            .orientation
+            .transform_vector(&(self.scaling * displacement_in_frame));
+        self.origin_offset = origin_offset;
+        self.position += displacement_in_parent_frame;
+    }
 }
 
 impl VelocityComp {
@@ -358,4 +371,42 @@ pub fn register_motion_components(registry: &mut ComponentRegistry) -> Result<()
     register_component!(registry, LogsKineticEnergy)?;
     register_component!(registry, LogsMomentum)?;
     analytical::components::register_analytical_motion_components(registry)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+    use nalgebra::{point, vector, UnitQuaternion};
+
+    #[test]
+    fn updating_origin_offset_while_preserving_position_works() {
+        let position = point![1.0, 2.0, 3.0];
+        let orientation = UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3);
+        let scaling = 1.5;
+        let original_origin_offset = vector![4.0, 2.0, 3.0];
+        let new_origin_offset = vector![4.5, 1.5, 1.0];
+
+        let mut frame = ReferenceFrameComp::scaled_with_offset_origin(
+            original_origin_offset,
+            position,
+            orientation,
+            scaling,
+        );
+        let point_within_frame = point![-2.0, 0.5, 3.0];
+        let point_before = frame
+            .create_transform_to_parent_space()
+            .transform_point(&point_within_frame);
+
+        frame.update_origin_offset_while_preserving_position(new_origin_offset);
+
+        let point_after = frame
+            .create_transform_to_parent_space()
+            .transform_point(&point_within_frame);
+
+        assert_eq!(frame.orientation, orientation);
+        assert_eq!(frame.scaling, scaling);
+        assert_eq!(frame.origin_offset, new_origin_offset);
+        assert_abs_diff_eq!(point_after, point_before, epsilon = 1e-6);
+    }
 }

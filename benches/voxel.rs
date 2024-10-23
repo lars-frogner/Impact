@@ -2,9 +2,13 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use impact::{
     geometry::Sphere,
     voxel::{
-        chunks::{sdf::VoxelChunkSignedDistanceField, ChunkedVoxelObject},
+        chunks::{
+            inertia::VoxelObjectInertialPropertyManager, sdf::VoxelChunkSignedDistanceField,
+            ChunkedVoxelObject,
+        },
         generation::{
-            BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
+            BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator,
+            SphereSDFGenerator,
         },
         mesh::ChunkedVoxelObjectMesh,
         voxel_types::VoxelType,
@@ -153,6 +157,27 @@ pub fn bench_chunked_voxel_object_compute_all_derived_state(c: &mut Criterion) {
     );
 }
 
+pub fn bench_chunked_voxel_object_initialize_inertial_properties(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let voxel_type_densities = [1.0; 256];
+    let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    c.bench_function(
+        "bench_chunked_voxel_object_initialize_inertial_properties",
+        |b| {
+            b.iter(|| {
+                black_box(VoxelObjectInertialPropertyManager::initialized_from(
+                    &object,
+                    &voxel_type_densities,
+                ));
+            })
+        },
+    );
+}
+
 pub fn bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -217,6 +242,75 @@ pub fn bench_chunked_voxel_object_modify_voxels_within_sphere(c: &mut Criterion)
     );
 }
 
+pub fn bench_chunked_voxel_object_split_off_disconnected_region(c: &mut Criterion) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SDFUnion::new(
+            SphereSDFGenerator::new(50.0),
+            SphereSDFGenerator::new(50.0),
+            [120.0, 0.0, 0.0],
+            1.0,
+        ),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    c.bench_function(
+        "bench_chunked_voxel_object_split_off_disconnected_region",
+        |b| {
+            b.iter(|| {
+                black_box(object.clone().split_off_any_disconnected_region().unwrap());
+            })
+        },
+    );
+}
+
+pub fn bench_chunked_voxel_object_split_off_disconnected_region_with_inertial_property_transfer(
+    c: &mut Criterion,
+) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SDFUnion::new(
+            SphereSDFGenerator::new(50.0),
+            SphereSDFGenerator::new(50.0),
+            [120.0, 0.0, 0.0],
+            1.0,
+        ),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let voxel_type_densities = [1.0; 256];
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let inertial_property_manager =
+        VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
+    c.bench_function(
+        "bench_chunked_voxel_object_split_off_disconnected_region_with_inertial_property_transfer",
+        |b| {
+            b.iter(|| {
+                let mut inertial_property_manager = inertial_property_manager.clone();
+                let mut disconnected_inertial_property_manager =
+                    VoxelObjectInertialPropertyManager::zeroed();
+                let mut inertial_property_transferrer = inertial_property_manager
+                    .begin_transfer_to(
+                        &mut disconnected_inertial_property_manager,
+                        object.voxel_extent(),
+                        &voxel_type_densities,
+                    );
+                black_box(
+                    object
+                        .clone()
+                        .split_off_any_disconnected_region_with_property_transferrer(
+                            &mut inertial_property_transferrer,
+                        )
+                        .unwrap(),
+                );
+                black_box((
+                    inertial_property_manager,
+                    disconnected_inertial_property_manager,
+                ));
+            })
+        },
+    );
+}
+
 pub fn bench_chunked_voxel_object_update_mesh(c: &mut Criterion) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
@@ -257,9 +351,12 @@ criterion_group!(
         bench_chunked_voxel_object_update_all_chunk_boundary_adjacencies,
         bench_chunked_voxel_object_resolve_connected_regions_between_all_chunks,
         bench_chunked_voxel_object_compute_all_derived_state,
+        bench_chunked_voxel_object_initialize_inertial_properties,
         bench_chunked_voxel_object_for_each_exposed_chunk_with_sdf,
         bench_chunked_voxel_object_create_mesh,
         bench_chunked_voxel_object_modify_voxels_within_sphere,
+        bench_chunked_voxel_object_split_off_disconnected_region,
+        bench_chunked_voxel_object_split_off_disconnected_region_with_inertial_property_transfer,
         bench_chunked_voxel_object_update_mesh,
 );
 criterion_main!(benches);

@@ -16,8 +16,8 @@ pub use entity::register_voxel_feature_types;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use chunks::disconnection::DisconnectedVoxelObject;
-use impact_ecs::world::Entity;
+use chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject};
+use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
 use mesh::MeshedChunkedVoxelObject;
 use std::{collections::HashMap, fmt};
 use utils::{Dimension, Side};
@@ -73,14 +73,30 @@ bitflags! {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct VoxelObjectID(u32);
 
-/// Manager of all [`ChunkedVoxelObject`]s in a scene.
+/// Manager of voxels in a scene.
 #[derive(Debug)]
 pub struct VoxelManager {
-    voxel_type_registry: VoxelTypeRegistry,
-    voxel_objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
-    emptied_voxel_object_entities: Vec<Entity>,
-    disconnected_voxel_objects: Vec<(Entity, DisconnectedVoxelObject)>,
-    voxel_object_id_counter: u32,
+    pub type_registry: VoxelTypeRegistry,
+    pub object_manager: VoxelObjectManager,
+}
+
+/// Manager of all [`ChunkedVoxelObject`]s in a scene.
+#[derive(Debug)]
+pub struct VoxelObjectManager {
+    objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
+    inertial_property_managers: HashMap<VoxelObjectID, VoxelObjectInertialPropertyManager>,
+    staged_objects: Vec<StagedVoxelObject>,
+    emptied_object_entities: Vec<Entity>,
+    id_counter: u32,
+}
+
+/// A voxel object with associated data that is staged for begin added in a
+/// scene as an entity.
+#[derive(Debug)]
+pub struct StagedVoxelObject {
+    pub object: ChunkedVoxelObject,
+    pub inertial_property_manager: Option<VoxelObjectInertialPropertyManager>,
+    pub components: ArchetypeComponentStorage,
 }
 
 impl VoxelSignedDistance {
@@ -252,13 +268,24 @@ impl Voxel {
     }
 
     /// Increases the signed distance by the given amount, and marks the voxel
-    /// as empty if the signed distance becomes positive.
-    pub fn increase_signed_distance(&mut self, signed_distance_delta: f32) {
+    /// as empty and calls the given closure if the signed distance becomes
+    /// positive.
+    pub fn increase_signed_distance(
+        &mut self,
+        signed_distance_delta: f32,
+        on_empty: &mut impl FnMut(&Self),
+    ) {
         let new_signed_distance = self.signed_distance.to_f32() + signed_distance_delta;
         self.signed_distance = VoxelSignedDistance::from_f32(new_signed_distance);
         if !self.signed_distance.is_negative() {
             self.add_flags(VoxelFlags::IS_EMPTY);
+            on_empty(self);
         }
+    }
+
+    /// Updates the voxel's state flags to the given set of flags.
+    fn update_flags(&mut self, flags: VoxelFlags) {
+        self.flags = flags;
     }
 
     /// Sets the given state flags for the voxel (this will not clear any
@@ -292,17 +319,22 @@ impl VoxelManager {
     /// Creates a new voxel manager with the given registry of voxel types.
     pub fn new(voxel_type_registry: VoxelTypeRegistry) -> Self {
         Self {
-            voxel_type_registry,
-            voxel_objects: HashMap::new(),
-            emptied_voxel_object_entities: Vec::new(),
-            disconnected_voxel_objects: Vec::new(),
-            voxel_object_id_counter: 1,
+            type_registry: voxel_type_registry,
+            object_manager: VoxelObjectManager::new(),
         }
     }
+}
 
-    /// Returns a reference to the [`VoxelTypeRegistry`].
-    pub fn voxel_type_registry(&self) -> &VoxelTypeRegistry {
-        &self.voxel_type_registry
+impl VoxelObjectManager {
+    /// Creates a new voxel object manager with no objects.
+    pub fn new() -> Self {
+        Self {
+            objects: HashMap::new(),
+            inertial_property_managers: HashMap::new(),
+            emptied_object_entities: Vec::new(),
+            staged_objects: Vec::new(),
+            id_counter: 1,
+        }
     }
 
     /// Returns a reference to the [`MeshedChunkedVoxelObject`] with the given
@@ -311,7 +343,7 @@ impl VoxelManager {
         &self,
         voxel_object_id: VoxelObjectID,
     ) -> Option<&MeshedChunkedVoxelObject> {
-        self.voxel_objects.get(&voxel_object_id)
+        self.objects.get(&voxel_object_id)
     }
 
     /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
@@ -320,23 +352,38 @@ impl VoxelManager {
         &mut self,
         voxel_object_id: VoxelObjectID,
     ) -> Option<&mut MeshedChunkedVoxelObject> {
-        self.voxel_objects.get_mut(&voxel_object_id)
+        self.objects.get_mut(&voxel_object_id)
+    }
+
+    /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
+    /// given ID if it exists, along with the associated
+    /// [`VoxelObjectInertialPropertyManager`] if it exists.
+    pub fn get_voxel_object_with_inertial_property_manager_mut(
+        &mut self,
+        voxel_object_id: VoxelObjectID,
+    ) -> (
+        Option<&mut MeshedChunkedVoxelObject>,
+        Option<&mut VoxelObjectInertialPropertyManager>,
+    ) {
+        let voxel_object = self.objects.get_mut(&voxel_object_id);
+        let inertial_property_manager = self.inertial_property_managers.get_mut(&voxel_object_id);
+        (voxel_object, inertial_property_manager)
     }
 
     /// Whether a voxel object with the given ID exists in the manager.
     pub fn has_voxel_object(&self, voxel_object_id: VoxelObjectID) -> bool {
-        self.voxel_objects.contains_key(&voxel_object_id)
+        self.objects.contains_key(&voxel_object_id)
     }
 
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
     pub fn voxel_objects(&self) -> &HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
-        &self.voxel_objects
+        &self.objects
     }
 
     /// Returns a mutable reference to the [`HashMap`] storing all voxel
     /// objects.
     pub fn voxel_objects_mut(&mut self) -> &mut HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
-        &mut self.voxel_objects
+        &mut self.objects
     }
 
     /// Adds the given [`MeshedChunkedVoxelObject`] to the manager.
@@ -345,53 +392,65 @@ impl VoxelManager {
     /// A new [`ChunkedVoxelObjectID`] representing the added voxel object.
     pub fn add_voxel_object(&mut self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
         let voxel_object_id = self.create_new_voxel_object_id();
-        self.voxel_objects.insert(voxel_object_id, voxel_object);
+        self.objects.insert(voxel_object_id, voxel_object);
         voxel_object_id
+    }
+
+    /// Adds the given [`VoxelObjectInertialPropertyManager`] for the voxel
+    /// object with the given ID to the manager.
+    pub fn add_inertial_property_manager_for_voxel_object(
+        &mut self,
+        voxel_object_id: VoxelObjectID,
+        inertial_property_manager: VoxelObjectInertialPropertyManager,
+    ) {
+        self.inertial_property_managers
+            .insert(voxel_object_id, inertial_property_manager);
+    }
+
+    /// Pushes the given [`StagedVoxelObject`] onto a buffer, awaiting meshing
+    /// and entity creation.
+    pub fn stage_new_voxel_object(&mut self, staged_object: StagedVoxelObject) {
+        self.staged_objects.push(staged_object);
     }
 
     /// Pushes the given the [`Entity`] representing a voxel object that has
     /// been emptied onto a buffer, awaiting removal of the entity and
     /// associated resources.
     pub fn mark_voxel_object_as_empty_for_entity(&mut self, object_entity: Entity) {
-        self.emptied_voxel_object_entities.push(object_entity);
+        self.emptied_object_entities.push(object_entity);
     }
 
-    /// Pushes the given [`DisconnectedVoxelObject`] along with the [`Entity`]
-    /// of the parent object onto a buffer, awaiting meshing and entity
-    /// creation.
-    pub fn push_disconnected_voxel_object(
-        &mut self,
-        parent_object_entity: Entity,
-        disconnected_object: DisconnectedVoxelObject,
-    ) {
-        self.disconnected_voxel_objects
-            .push((parent_object_entity, disconnected_object));
+    /// Pops the last [`StagedVoxelObject`] off the staging buffer.
+    pub fn pop_staged_voxel_object(&mut self) -> Option<StagedVoxelObject> {
+        self.staged_objects.pop()
     }
 
     /// Pops the last [`Entity`] for an emptied voxel object off the buffer.
     pub fn pop_empty_voxel_object_entity(&mut self) -> Option<Entity> {
-        self.emptied_voxel_object_entities.pop()
-    }
-
-    /// Pops the last [`DisconnectedVoxelObject`] along with the [`Entity`]
-    /// of the parent object off the buffer.
-    pub fn pop_disconnected_voxel_object(&mut self) -> Option<(Entity, DisconnectedVoxelObject)> {
-        self.disconnected_voxel_objects.pop()
+        self.emptied_object_entities.pop()
     }
 
     /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.
+    /// Also removes any associated [`VoxelObjectInertialPropertyManager`].
     pub fn remove_voxel_object(&mut self, voxel_object_id: VoxelObjectID) {
-        self.voxel_objects.remove(&voxel_object_id);
+        self.objects.remove(&voxel_object_id);
+        self.inertial_property_managers.remove(&voxel_object_id);
     }
 
     /// Removes all voxel objects in the manager.
     pub fn remove_all_voxel_objects(&mut self) {
-        self.voxel_objects.clear();
+        self.objects.clear();
     }
 
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {
-        let voxel_object_id = VoxelObjectID(self.voxel_object_id_counter);
-        self.voxel_object_id_counter = self.voxel_object_id_counter.checked_add(1).unwrap();
+        let voxel_object_id = VoxelObjectID(self.id_counter);
+        self.id_counter = self.id_counter.checked_add(1).unwrap();
         voxel_object_id
+    }
+}
+
+impl Default for VoxelObjectManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

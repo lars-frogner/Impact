@@ -5,7 +5,7 @@ use crate::{
     num::Float,
     physics::{fph, motion::Position},
 };
-use approx::AbsDiffEq;
+use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{point, vector, Matrix3, Point3, Similarity3, UnitQuaternion, Vector3};
 use simba::scalar::SubsetOf;
@@ -227,6 +227,33 @@ impl AbsDiffEq for InertialProperties {
     }
 }
 
+impl RelativeEq for InertialProperties {
+    fn default_max_relative() -> Self::Epsilon {
+        fph::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        fph::relative_eq(&self.mass, &other.mass, epsilon, max_relative)
+            && Point3::relative_eq(
+                &self.center_of_mass,
+                &other.center_of_mass,
+                epsilon,
+                max_relative,
+            )
+            && InertiaTensor::relative_eq(
+                &self.inertia_tensor,
+                &other.inertia_tensor,
+                epsilon,
+                max_relative,
+            )
+    }
+}
+
 impl InertiaTensor {
     /// Creates a new inertia tensor corresponding to the given matrix.
     pub fn from_matrix(matrix: Matrix3<fph>) -> Self {
@@ -380,29 +407,90 @@ impl InertiaTensor {
         Self::from_matrix_and_inverse(rotated_inertia_matrix, rotated_inverse_inertia_matrix)
     }
 
-    /// Computes the difference matrix between the inertia tensor with respect
-    /// to the center of mass and the inertia tensor with respect to a point at
-    /// the given displacement from the center of mass. Adding this difference
-    /// to the latter yields the center of mass inertia tensor.
-    pub fn compute_parallel_axis_inertia_matrix_difference(
+    /// Uses the parallel axis theorem to compute the difference matrix that
+    /// must be added to the inertia tensor for it to be defined with respect to
+    /// when the center of mass when the center of mass has the given
+    /// displacement from the point the current inertia tensor is defined with
+    /// respect to.
+    pub fn compute_delta_to_com_inertia_matrix(
         mass: fph,
-        displacement_from_com: &Vector3<fph>,
+        displacement_to_com: &Vector3<fph>,
     ) -> Matrix3<fph> {
-        let squared_displacement = displacement_from_com.component_mul(displacement_from_com);
+        let (moment_of_inertia_deltas, product_of_inertia_deltas) =
+            Self::compute_delta_to_com_moments_and_products_of_inertia(mass, displacement_to_com);
 
-        let shift_xx = -mass * (squared_displacement.y + squared_displacement.z);
-        let shift_yy = -mass * (squared_displacement.z + squared_displacement.x);
-        let shift_zz = -mass * (squared_displacement.x + squared_displacement.y);
-
-        let shift_xy = mass * displacement_from_com.x * displacement_from_com.y;
-        let shift_yz = mass * displacement_from_com.y * displacement_from_com.z;
-        let shift_zx = mass * displacement_from_com.z * displacement_from_com.x;
+        let [shift_xx, shift_yy, shift_zz] = moment_of_inertia_deltas.into();
+        let [shift_xy, shift_yz, shift_zx] = (-product_of_inertia_deltas).into();
 
         Matrix3::from_columns(&[
             vector![shift_xx, shift_xy, shift_zx],
             vector![shift_xy, shift_yy, shift_yz],
             vector![shift_zx, shift_yz, shift_zz],
         ])
+    }
+
+    /// Uses the parallel axis theorem to compute the differences that must be
+    /// added to the moments and products of inertia for them to be defined
+    /// with respect to the center of mass when the center of mass has the
+    /// given displacement from the point they are currently defined with
+    /// respect to.
+    pub fn compute_delta_to_com_moments_and_products_of_inertia(
+        mass: fph,
+        displacement_to_com: &Vector3<fph>,
+    ) -> (Vector3<fph>, Vector3<fph>) {
+        let squared_displacement = displacement_to_com.component_mul(displacement_to_com);
+
+        let moment_of_inertia_deltas = vector![
+            -mass * (squared_displacement.y + squared_displacement.z),
+            -mass * (squared_displacement.z + squared_displacement.x),
+            -mass * (squared_displacement.x + squared_displacement.y),
+        ];
+
+        let product_of_inertia_deltas = vector![
+            -mass * displacement_to_com.x * displacement_to_com.y,
+            -mass * displacement_to_com.y * displacement_to_com.z,
+            -mass * displacement_to_com.z * displacement_to_com.x,
+        ];
+
+        (moment_of_inertia_deltas, product_of_inertia_deltas)
+    }
+
+    /// Uses the parallel axis theorem to compute the differences that must be
+    /// added to the center-of-mass moments and products of inertia for them
+    /// to be defined with respect to the point at the given displacement
+    /// from the center of mass.
+    pub fn compute_delta_from_com_moments_and_products_of_inertia(
+        mass: fph,
+        displacement_from_com: &Vector3<fph>,
+    ) -> (Vector3<fph>, Vector3<fph>) {
+        let (moment_of_inertia_deltas, product_of_inertia_deltas) =
+            Self::compute_delta_to_com_moments_and_products_of_inertia(mass, displacement_from_com);
+        (-moment_of_inertia_deltas, -product_of_inertia_deltas)
+    }
+
+    /// Uses the parallel axis theorem twice to compute the differences that
+    /// must be added to the moments and products of inertia for them to be
+    /// defined with respect to a point at the given displacement from the
+    /// point they are currently defined with respect to.
+    pub fn compute_delta_to_moments_and_products_of_inertia_defined_relative_to_point(
+        mass: fph,
+        displacement_to_com: &Vector3<fph>,
+        displacement_to_point: &Vector3<fph>,
+    ) -> (Vector3<fph>, Vector3<fph>) {
+        let (com_moment_of_inertia_deltas, com_product_of_inertia_deltas) =
+            Self::compute_delta_to_com_moments_and_products_of_inertia(mass, displacement_to_com);
+
+        let displacement_from_com_to_point = displacement_to_point - displacement_to_com;
+        let (com_to_point_moment_of_inertia_deltas, com_to_point_product_of_inertia_deltas) =
+            Self::compute_delta_from_com_moments_and_products_of_inertia(
+                mass,
+                &displacement_from_com_to_point,
+            );
+
+        (
+            com_moment_of_inertia_deltas + com_to_point_moment_of_inertia_deltas,
+            com_product_of_inertia_deltas + com_to_point_product_of_inertia_deltas,
+        )
     }
 
     fn from_matrix_and_inverse(matrix: Matrix3<fph>, inverse_matrix: Matrix3<fph>) -> Self {
@@ -427,6 +515,21 @@ impl AbsDiffEq for InertiaTensor {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         Matrix3::abs_diff_eq(&self.matrix, &other.matrix, epsilon)
+    }
+}
+
+impl RelativeEq for InertiaTensor {
+    fn default_max_relative() -> Self::Epsilon {
+        fph::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        Matrix3::relative_eq(&self.matrix, &other.matrix, epsilon, max_relative)
     }
 }
 
@@ -520,10 +623,7 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph
             vector![j_xx, j_xy, j_zx],
             vector![j_xy, j_yy, j_yz],
             vector![j_zx, j_yz, j_zz],
-        ]) + InertiaTensor::compute_parallel_axis_inertia_matrix_difference(
-            mass,
-            &(-center_of_mass.coords),
-        ),
+        ]) + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, &center_of_mass.coords),
     );
 
     (mass, center_of_mass, inertia_tensor)

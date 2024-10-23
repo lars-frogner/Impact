@@ -250,7 +250,10 @@ fn voxel_center_position_from_object_voxel_indices(
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
-    use crate::voxel::generation::fuzzing::ArbitrarySDFVoxelGenerator;
+    use crate::voxel::{
+        chunks::inertia::VoxelObjectInertialPropertyManager,
+        generation::fuzzing::ArbitrarySDFVoxelGenerator,
+    };
     use arbitrary::{Arbitrary, Result, Unstructured};
     use std::{collections::HashSet, mem};
 
@@ -259,7 +262,7 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for ArbitrarySphere {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let radius = 1e3 * arbitrary_norm_f64(u)?;
+            let radius = u.arbitrary_len::<usize>()?.min(1000) as f64 + arbitrary_norm_f64(u)?;
             let x = 1e3 * arbitrary_norm_f64(u)?;
             let y = 1e3 * arbitrary_norm_f64(u)?;
             let z = 1e3 * arbitrary_norm_f64(u)?;
@@ -267,7 +270,7 @@ pub mod fuzzing {
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let size = 4 * mem::size_of::<i32>();
+            let size = 5 * mem::size_of::<i32>();
             (size, Some(size))
         }
     }
@@ -298,6 +301,50 @@ pub mod fuzzing {
             );
 
             object.validate_region_count();
+        }
+    }
+
+    pub fn fuzz_test_absorbing_voxels_within_sphere(
+        (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
+    ) {
+        if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
+            let voxel_type_densities = vec![1.0; 256];
+
+            let mut inertial_property_manager =
+                VoxelObjectInertialPropertyManager::initialized_from(
+                    &object,
+                    &voxel_type_densities,
+                );
+
+            let mut inertial_property_updater = inertial_property_manager
+                .begin_update(object.voxel_extent(), &voxel_type_densities);
+
+            object.modify_voxels_within_sphere(
+                &sphere.0,
+                &mut |object_voxel_indices, squared_distance, voxel| {
+                    let was_empty = voxel.is_empty();
+
+                    let signed_distance_delta =
+                        3.0 * (1.0 - squared_distance * sphere.0.radius_squared().recip());
+
+                    voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                        if !was_empty {
+                            inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                        }
+                    });
+                },
+            );
+
+            if !object.is_effectively_empty() {
+                object.resolve_connected_regions_between_all_chunks();
+
+                object.validate_adjacencies();
+                object.validate_chunk_obscuredness();
+                object.validate_sdf();
+                object.validate_region_count();
+
+                inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
+            }
         }
     }
 
