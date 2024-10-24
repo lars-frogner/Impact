@@ -2,8 +2,6 @@
 
 ## Graphics
 
-- Add distance-based weighting for auto exposure.
-
 - Generalize tone mapping pass to dynamic range compression pass and include high-quality gamma correction.
 
 - Integrate `egui` for dev GUI.
@@ -37,5 +35,3 @@
 ## Misc
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
-
-- Investigate disconnected voxel object potentially not being rendered in the first frame after disconnection.
