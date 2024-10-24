@@ -172,7 +172,7 @@ impl<F: Float> MeshRepository<F> {
 
         self.meshes.insert(
             spherical_light_volume_mesh_id(),
-            TriangleMesh::create_spherical_light_volume(10),
+            TriangleMesh::create_spherical_light_volume(16),
         );
 
         self.meshes.insert(

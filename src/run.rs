@@ -260,7 +260,7 @@ fn init_app(window: Window) -> Result<Application> {
         // &UniformRigidBodyComp { mass_density: 1e3 },
         &PerspectiveCameraComp::new(
             vertical_field_of_view,
-            UpperExclusiveBounds::new(0.01, 500.0),
+            UpperExclusiveBounds::new(0.01, 1000.0),
         ),
         &ReferenceFrameComp::unscaled(
             // Point3::new(0.0, 7.0, -10.0),
