@@ -2,6 +2,7 @@
 
 use crate::{
     geometry::{Frustum, OrientedBox, Plane},
+    scene::RenderResourcesDesynchronized,
     voxel::chunks::{
         sdf::{surface_nets::SurfaceNetsBuffer, VoxelChunkSignedDistanceField},
         ChunkedVoxelObject, VoxelChunkFlags,
@@ -169,8 +170,9 @@ impl MeshedChunkedVoxelObject {
     /// have been invalidated (it is assumed that this is the same voxel object
     /// used for creating the mesh initially). Invalidated mesh data may be
     /// overwritten to reuse buffer space.
-    pub fn sync_mesh_with_object(&mut self) {
-        self.mesh.sync_with_voxel_object(&mut self.object);
+    pub fn sync_mesh_with_object(&mut self, desynchronized: &mut RenderResourcesDesynchronized) {
+        self.mesh
+            .sync_with_voxel_object(&mut self.object, desynchronized);
     }
 
     /// Signaling that the mesh modifications from [`Self::mesh_modifications`]
@@ -261,8 +263,17 @@ impl ChunkedVoxelObjectMesh {
     /// have been invalidated (it is assumed that this is the same voxel object
     /// used for creating the mesh initially). Invalidated mesh data may be
     /// overwritten to reuse buffer space.
-    pub fn sync_with_voxel_object(&mut self, voxel_object: &mut ChunkedVoxelObject) {
-        for chunk_indices in voxel_object.invalidated_mesh_chunk_indices() {
+    pub fn sync_with_voxel_object(
+        &mut self,
+        voxel_object: &mut ChunkedVoxelObject,
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) {
+        let invalidated_mesh_chunk_indices = voxel_object.invalidated_mesh_chunk_indices();
+        if invalidated_mesh_chunk_indices.len() > 0 {
+            desynchronized.set_yes();
+        }
+
+        for chunk_indices in invalidated_mesh_chunk_indices {
             if let Some(chunk_flags) =
                 voxel_object.fill_sdf_for_chunk_if_exposed(&mut self.sdf_buffer, *chunk_indices)
             {

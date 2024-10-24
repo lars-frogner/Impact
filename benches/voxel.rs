@@ -1,6 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use impact::{
     geometry::Sphere,
+    scene::RenderResourcesDesynchronized,
     voxel::{
         chunks::{
             inertia::VoxelObjectInertialPropertyManager, sdf::VoxelChunkSignedDistanceField,
@@ -333,7 +334,8 @@ pub fn bench_chunked_voxel_object_update_mesh(c: &mut Criterion) {
             object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
                 black_box((indices, position, voxel));
             });
-            mesh.sync_with_voxel_object(&mut object);
+            let mut desynchronized = RenderResourcesDesynchronized::No;
+            mesh.sync_with_voxel_object(&mut object, &mut desynchronized);
             black_box((&object, &mesh));
         })
     });

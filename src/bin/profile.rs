@@ -1,6 +1,7 @@
 use clap::{Parser, ValueEnum};
 use impact::{
     geometry::Sphere,
+    scene::RenderResourcesDesynchronized,
     voxel::{
         chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject},
         generation::{
@@ -391,7 +392,8 @@ fn profile_chunked_voxel_object_update_mesh(duration: Duration, delayer: Delayer
             object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
                 black_box((indices, position, voxel));
             });
-            mesh.sync_with_voxel_object(&mut object);
+            let mut desynchronized = RenderResourcesDesynchronized::No;
+            mesh.sync_with_voxel_object(&mut object, &mut desynchronized);
             black_box((&object, &mesh));
         },
         duration,

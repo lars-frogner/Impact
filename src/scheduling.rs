@@ -751,7 +751,7 @@ impl<S> TaskOrdering<S> {
             "Ordered tasks: {:?}",
             ordered_task_ids
                 .iter()
-                .map(|task_id| task_pool[task_id].id())
+                .map(|task_id| task_pool[task_id].id().string())
                 .collect::<Vec<_>>()
         );
 
