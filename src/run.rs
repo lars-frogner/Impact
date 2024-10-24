@@ -165,12 +165,12 @@ fn init_app(window: Window) -> Result<Application> {
     let mut assets = app.assets().write().unwrap();
 
     let skybox_texture_id = assets.load_cubemap_texture_from_paths(
-        "assets/ocean_skybox/right.jpg",
-        "assets/ocean_skybox/left.jpg",
-        "assets/ocean_skybox/top.jpg",
-        "assets/ocean_skybox/bottom.jpg",
-        "assets/ocean_skybox/front.jpg",
-        "assets/ocean_skybox/back.jpg",
+        "assets/space_skybox/right.png",
+        "assets/space_skybox/left.png",
+        "assets/space_skybox/top.png",
+        "assets/space_skybox/bottom.png",
+        "assets/space_skybox/front.png",
+        "assets/space_skybox/back.png",
         TextureConfig {
             color_space: ColorSpace::Srgb,
             ..Default::default()
@@ -252,7 +252,7 @@ fn init_app(window: Window) -> Result<Application> {
 
     drop(assets);
 
-    app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 1e5));
+    app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 2e3));
 
     app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
@@ -351,22 +351,24 @@ fn init_app(window: Window) -> Result<Application> {
     //     &UniformRoughnessComp(0.4),
     // ))?;
 
-    // app.create_entity((
-    //     &RectangleMeshComp::UNIT_SQUARE,
-    //     &PlanarTextureProjectionComp::for_rectangle(&
-    // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
-    //         Point3::new(0.0, -2.0, 0.0),
-    //         Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
-    //         50.0,
-    //     ),
-    //     &TexturedColorComp(wood_floor_color_texture_id),
-    //     &UniformSpecularReflectanceComp::in_range_of(
-    //         UniformSpecularReflectanceComp::LIVING_TISSUE,
-    //         100.0,
-    //     ),
-    //     &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
-    //     &NormalMapComp(wood_floor_normal_texture_id),
-    // ))?;
+    app.create_entity((
+        &RectangleMeshComp::UNIT_SQUARE,
+        // &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+        &ReferenceFrameComp::new(
+            Point3::new(0.0, -20.0, 0.0),
+            Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
+            // 50.0,
+            500.0,
+        ),
+        // &TexturedColorComp(wood_floor_color_texture_id),
+        &UniformColorComp(vector![1.0, 1.0, 1.0]),
+        &UniformSpecularReflectanceComp::in_range_of(
+            UniformSpecularReflectanceComp::LIVING_TISSUE,
+            100.0,
+        ),
+        // &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
+        // &NormalMapComp(wood_floor_normal_texture_id),
+    ))?;
 
     // app.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
@@ -432,11 +434,11 @@ fn init_app(window: Window) -> Result<Application> {
         &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
     ))?;
 
-    app.create_entity(&UnidirectionalEmissionComp::new(
-        vector![1.0, 1.0, 1.0] * 100000.0,
-        UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
-        Degrees(2.0),
-    ))?;
+    // app.create_entity(&UnidirectionalEmissionComp::new(
+    //     vector![1.0, 1.0, 1.0] * 10000.0,
+    //     UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
+    //     Degrees(2.0),
+    // ))?;
 
     app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 1000.0))?;
 
@@ -451,12 +453,12 @@ fn init_app(window: Window) -> Result<Application> {
     app.create_entity((
         // &VoxelSphereComp::new(0.25, 20.0),
         // &VoxelBoxComp::new(0.25, 4.0, 2.0, 1.0),
-        // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3, 0),
+        // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3,0),
         &VoxelSphereUnionComp::new(0.25, 10.0, 10.0, [20.0, 0.0, 0.0], 5.0),
         // &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
         &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0, 1),
-        // &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 0),
-        // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2, 1.0, 0),
+        // &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6,4.0, 0),
+        // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2,1.0, 0),
         // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
         &ReferenceFrameComp::unoriented(point![0.0, 0.0, 30.0]),
         &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(), Degrees(10.0))),

@@ -554,10 +554,12 @@ impl VoxelGeometryPipeline {
         shader_manager: &mut ShaderManager,
         render_resources: &SynchronizedRenderResources,
     ) -> Result<()> {
-        let n_voxel_types = render_resources
-            .get_voxel_material_resource_manager()
-            .ok_or_else(|| anyhow!("Missing voxel material GPU resource manager"))?
-            .n_voxel_types();
+        let Some(voxel_material_resource_manager) =
+            render_resources.get_voxel_material_resource_manager()
+        else {
+            return Ok(());
+        };
+        let n_voxel_types = voxel_material_resource_manager.n_voxel_types();
 
         let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
             graphics_device,

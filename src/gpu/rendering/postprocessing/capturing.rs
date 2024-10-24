@@ -87,7 +87,7 @@ impl Default for CameraSettings {
             sensitivity: SensorSensitivity::Auto {
                 ev_compensation: 0.0,
             },
-            max_exposure: 1e-1,
+            max_exposure: 1e-2,
         }
     }
 }
