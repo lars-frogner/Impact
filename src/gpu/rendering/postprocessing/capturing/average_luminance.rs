@@ -24,7 +24,7 @@ use crate::{
     },
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, ConstStringHash64};
 use lazy_static::lazy_static;
@@ -46,13 +46,17 @@ pub struct AverageLuminanceComputationConfig {
     /// modification, while a value of 1.0 uses the current luminance without
     /// any contribution from the previous frame.
     pub current_frame_weight: f32,
+    /// Map the computed histogram to the CPU for debugging.
+    pub fetch_histogram: bool,
 }
 
 #[derive(Debug)]
 pub(super) struct AverageLuminanceComputeCommands {
     histogram_compute_pass: ComputePass,
+    histogram_copy_command: Option<StorageBufferResultCopyCommand>,
     average_compute_pass: ComputePass,
     result_copy_command: StorageBufferResultCopyCommand,
+    config: AverageLuminanceComputationConfig,
 }
 
 /// Uniform holding parameters needed in the shader for computing the luminance
@@ -101,8 +105,9 @@ lazy_static! {
 impl Default for AverageLuminanceComputationConfig {
     fn default() -> Self {
         Self {
-            luminance_bounds: UpperExclusiveBounds::new(1e-2, 1e9),
+            luminance_bounds: UpperExclusiveBounds::new(1e2, 1e7),
             current_frame_weight: 0.02,
+            fetch_histogram: false,
         }
     }
 }
@@ -125,6 +130,14 @@ impl AverageLuminanceComputeCommands {
             &config.luminance_bounds,
         )?;
 
+        let histogram_copy_command = if config.fetch_histogram {
+            Some(StorageBufferResultCopyCommand::new(
+                *LUMINANCE_HISTOGRAM_STORAGE_BUFFER_ID,
+            ))
+        } else {
+            None
+        };
+
         let average_compute_pass = create_luminance_histogram_average_compute_pass(
             graphics_device,
             shader_manager,
@@ -140,8 +153,10 @@ impl AverageLuminanceComputeCommands {
 
         Ok(Self {
             histogram_compute_pass,
+            histogram_copy_command,
             average_compute_pass,
             result_copy_command,
+            config: config.clone(),
         })
     }
 
@@ -166,6 +181,10 @@ impl AverageLuminanceComputeCommands {
                 command_encoder,
             )?;
 
+            if let Some(command) = &self.histogram_copy_command {
+                command.record(storage_gpu_buffer_manager, command_encoder)?;
+            }
+
             self.average_compute_pass.record(
                 rendering_surface,
                 gpu_resource_group_manager,
@@ -178,6 +197,51 @@ impl AverageLuminanceComputeCommands {
             self.result_copy_command
                 .record(storage_gpu_buffer_manager, command_encoder)?;
         }
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn debug_print_luminance_histogram(
+        &self,
+        graphics_device: &GraphicsDevice,
+        storage_gpu_buffer_manager: &StorageGPUBufferManager,
+    ) -> Result<()> {
+        if self.histogram_copy_command.is_none() {
+            bail!("Use `fetch_histogram = true` in `AverageLuminanceComputationConfig` to enable debug printing of luminance histogram");
+        }
+
+        let histogram =
+            load_computed_luminance_histogram(graphics_device, storage_gpu_buffer_manager)
+                .unwrap()?;
+
+        let params = LuminanceHistogramParameters::new(&self.config.luminance_bounds);
+
+        let luminances = (0..histogram.len()).map(|bin_idx| {
+            let normalized_log2_luminance =
+                bin_idx.saturating_sub(1) as f32 / (HISTOGRAM_BIN_COUNT - 2) as f32;
+            let luminance = f32::exp2(
+                normalized_log2_luminance / params.inverse_log2_luminance_range
+                    + params.min_log2_luminance,
+            );
+            luminance
+        });
+
+        let mut weighted_sum = 0.0;
+        let mut sum = 0.0;
+
+        println!("******* Luminance histogram ******");
+        for (luminance, &count) in luminances.zip(&histogram).skip(1) {
+            weighted_sum += luminance * count as f32;
+            sum += count as f32;
+            println!("{}: {}", luminance, count);
+        }
+        let average = weighted_sum / sum;
+        println!("----------------------------------");
+        println!("Below threshold: {}", histogram[0]);
+        println!("Total count: {}", sum);
+        println!("Average: {}", average);
+        println!("**********************************");
+
         Ok(())
     }
 }
@@ -230,6 +294,21 @@ impl UniformBufferable for LuminanceHistogramAverageParameters {
     }
 }
 assert_uniform_valid!(LuminanceHistogramAverageParameters);
+
+pub(super) fn load_computed_luminance_histogram(
+    graphics_device: &GraphicsDevice,
+    storage_gpu_buffer_manager: &StorageGPUBufferManager,
+) -> Option<Result<Vec<u32>>> {
+    storage_gpu_buffer_manager
+        .get_storage_buffer(*LUMINANCE_HISTOGRAM_STORAGE_BUFFER_ID)
+        .map(|buffer| {
+            buffer
+                .load_result(graphics_device, |bytes| {
+                    bytemuck::cast_slice(bytes).to_vec()
+                })
+                .unwrap()
+        })
+}
 
 pub(super) fn load_computed_average_luminance(
     graphics_device: &GraphicsDevice,
@@ -382,7 +461,7 @@ fn get_or_create_histogram_storage_buffer<'a>(
     storage_gpu_buffer_manager
         .storage_buffer_entry(*LUMINANCE_HISTOGRAM_STORAGE_BUFFER_ID)
         .or_insert_with(|| {
-            StorageGPUBuffer::new_read_write(
+            StorageGPUBuffer::new_read_write_with_result_on_cpu(
                 graphics_device,
                 HISTOGRAM_BIN_COUNT * mem::size_of::<f32>(),
                 Cow::Borrowed("Luminance histogram buffer"),

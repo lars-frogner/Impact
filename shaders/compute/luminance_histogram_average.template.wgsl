@@ -1,7 +1,6 @@
 // Adapted from https://bruop.github.io/exposure/
 
 const BIN_COUNT: u32 = {{bin_count}};
-const BIN_COUNT_MINUS_TWO: f32 = f32(BIN_COUNT - 2u);
 
 struct Parameters {
     minLog2Luminance: f32,
@@ -23,14 +22,17 @@ fn main(
 ) {
     // Get the count from the histogram buffer
     let countForThisBin = histogram[localIndex];
+
+    // Weight the count by the index (which indicates luminance) and assign to
+    // the corresponding slot in the workgroup count buffer
     weightedCountBuffer[localIndex] = countForThisBin * localIndex;
 
     workgroupBarrier();
 
-    // Reset the count stored in the buffer for the next pass
+    // Reset the count stored in the histogram for the next pass
     histogram[localIndex] = 0u;
 
-    // This loop will perform a weighted count of the luminance range
+    // This loop will sum the weighted counts into the first slot in the buffer
     for (var cutoff: u32 = (BIN_COUNT >> 1u); cutoff > 0u; cutoff >>= 1u) {
         if (localIndex < cutoff) {
             weightedCountBuffer[localIndex] += weightedCountBuffer[localIndex + cutoff];

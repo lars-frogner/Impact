@@ -4,8 +4,6 @@ const THREADS_PER_SIDE: u32 = {{threads_per_side}};
 const BIN_COUNT: u32 = THREADS_PER_SIDE * THREADS_PER_SIDE;
 const BIN_COUNT_MINUS_TWO: f32 = f32(BIN_COUNT - 2u);
 
-const ZERO_LUMINANCE_THRESHOLD: f32 = 0.005;
-
 struct Parameters {
     minLog2Luminance: f32,
     inverseLog2LuminanceRange: f32,
@@ -31,18 +29,15 @@ fn determineBinIndexForPreExposedLuminanceColor(preExposedLuminanceColor: vec3f)
 
     let luminance = inverseExposure * preExposedLuminance;
 
-    // Count of zero-luminance pixels is stored in the zeroth bin
-    if (luminance < ZERO_LUMINANCE_THRESHOLD) {
+    let normalizedLog2Luminance = (log2(luminance) - params.minLog2Luminance) * params.inverseLog2LuminanceRange;
+
+    // Count of pixels with luminance below the minimum is stored in the zeroth bin
+    if (normalizedLog2Luminance < 0.0) {
         return 0u;
     }
 
-    let normalizedLog2Luminance = clamp(
-        (log2(luminance) - params.minLog2Luminance) * params.inverseLog2LuminanceRange,
-        0.0, 1.0
-    );
-
     // Map [0, 1] to [1, BIN_COUNT-1]
-    return 1u + u32(normalizedLog2Luminance * BIN_COUNT_MINUS_TWO);
+    return 1u + u32(clamp(normalizedLog2Luminance, 0.0, 1.0) * BIN_COUNT_MINUS_TWO);
 }
 
 @compute @workgroup_size(THREADS_PER_SIDE, THREADS_PER_SIDE, 1)
@@ -56,7 +51,7 @@ fn main(
 
     let dim = vec2u(textureDimensions(preExposedLuminanceTexture));
 
-    // Ignore threads that map to areas beyond the bounds the texture
+    // Ignore threads that map to areas beyond the bounds of the texture
     if (globalID.x < dim.x && globalID.y < dim.y) {
         let preExposedLuminanceColor = textureLoad(preExposedLuminanceTexture, vec2i(globalID.xy), 0).rgb;
         let binIndex = determineBinIndexForPreExposedLuminanceColor(preExposedLuminanceColor);
