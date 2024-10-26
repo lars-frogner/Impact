@@ -45,7 +45,8 @@ pub struct BoxMeshComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities whose mesh is a vertical cylinder centered on the origin.
+/// entities whose mesh is a vertical cylinder with the bottom centered on
+/// the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
@@ -62,7 +63,8 @@ pub struct CylinderMeshComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities whose mesh is an upward-pointing cone centered on the origin.
+/// entities whose mesh is an upward-pointing cone with the bottom centered on
+/// the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
@@ -79,7 +81,8 @@ pub struct ConeMeshComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities whose mesh is a vertical circular frustum centered on the origin.
+/// entities whose mesh is a vertical circular frustum with the bottom centered
+/// on the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.

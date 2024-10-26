@@ -86,7 +86,7 @@ impl InertialProperties {
         let radius = diameter * 0.5;
         let mass = compute_cylinder_volume(radius, length) * mass_density;
 
-        let center_of_mass = Position::origin();
+        let center_of_mass = point![0.0, length * 0.5, 0.0];
 
         let moment_of_inertia_y = 0.5 * mass * radius.powi(2);
         let moment_of_inertia_xz =
@@ -112,7 +112,7 @@ impl InertialProperties {
 
         // The center of mass is one quarter of the way up from the center of
         // the disk toward the point
-        let center_of_mass = point![0.0, -length * 0.25, 0.0];
+        let center_of_mass = point![0.0, length * 0.25, 0.0];
 
         let moment_of_inertia_y = (3.0 * 0.5 * 0.2) * mass * max_radius.powi(2);
         let moment_of_inertia_xz =

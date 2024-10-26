@@ -8,12 +8,14 @@ use crate::{
         rigid_body::components::RigidBodyComp,
         PhysicsSimulator,
     },
-    scene::components::SceneGraphParentNodeComp,
+    scene::{components::SceneGraphParentNodeComp, SceneGraph},
     voxel::{
         chunks::{
-            disconnection::DisconnectedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
+            disconnection::DisconnectedVoxelObject,
+            inertia::{VoxelObjectInertialPropertyManager, VoxelObjectInertialPropertyUpdater},
+            ChunkedVoxelObject,
         },
-        components::{VoxelAbsorbingSphereComp, VoxelObjectComp},
+        components::{VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelObjectComp},
         StagedVoxelObject, VoxelManager, VoxelObjectManager,
     },
 };
@@ -23,12 +25,14 @@ use impact_ecs::{
     query,
     world::{Entity, World as ECSWorld},
 };
-use nalgebra::Vector3;
+use nalgebra::{Similarity3, Vector3};
 
-/// Applies each voxel-absorbing sphere to the affected voxel objects.
-pub fn apply_sphere_absorption(
+/// Applies each voxel-absorbing sphere and capsule to the affected voxel
+/// objects.
+pub fn apply_absorption(
     simulator: &PhysicsSimulator,
     voxel_manager: &mut VoxelManager,
+    scene_graph: &SceneGraph<f32>,
     ecs_world: &ECSWorld,
 ) {
     query!(
@@ -58,41 +62,83 @@ pub fn apply_sphere_absorption(
                 voxel_manager.type_registry.mass_densities(),
             );
 
+            let time_step_duration = simulator.time_step_duration();
+
             query!(
                 ecs_world,
                 |absorbing_sphere: &VoxelAbsorbingSphereComp, sphere_frame: &ReferenceFrameComp| {
                     let sphere_to_world_transform =
                         sphere_frame.create_transform_to_parent_space::<f64>();
 
-                    let sphere_in_voxel_object_space = absorbing_sphere
-                        .sphere()
-                        .transformed(&sphere_to_world_transform)
-                        .transformed(&world_to_voxel_object_transform);
+                    apply_sphere_absorption(
+                        time_step_duration,
+                        &mut inertial_property_updater,
+                        object,
+                        &world_to_voxel_object_transform,
+                        absorbing_sphere,
+                        &sphere_to_world_transform,
+                    );
+                },
+                ![SceneGraphParentNodeComp]
+            );
 
-                    let inverse_radius_squared =
-                        sphere_in_voxel_object_space.radius_squared().recip();
+            query!(
+                ecs_world,
+                |absorbing_sphere: &VoxelAbsorbingSphereComp,
+                 sphere_frame: &ReferenceFrameComp,
+                 parent: &SceneGraphParentNodeComp| {
+                    let parent_node = scene_graph.group_nodes().node(parent.id);
 
-                    let absorption_rate_per_frame =
-                        absorbing_sphere.rate() * simulator.time_step_duration();
+                    let sphere_to_world_transform = parent_node.group_to_root_transform().cast()
+                        * sphere_frame.create_transform_to_parent_space::<f64>();
 
-                    object.modify_voxels_within_sphere(
-                        &sphere_in_voxel_object_space,
-                        &mut |object_voxel_indices, squared_distance, voxel| {
-                            let was_empty = voxel.is_empty();
+                    apply_sphere_absorption(
+                        time_step_duration,
+                        &mut inertial_property_updater,
+                        object,
+                        &world_to_voxel_object_transform,
+                        absorbing_sphere,
+                        &sphere_to_world_transform,
+                    );
+                }
+            );
 
-                            let signed_distance_delta = absorption_rate_per_frame
-                                * (1.0 - squared_distance * inverse_radius_squared);
+            query!(
+                ecs_world,
+                |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
+                 capsule_frame: &ReferenceFrameComp| {
+                    let capsule_to_world_transform =
+                        capsule_frame.create_transform_to_parent_space::<f64>();
 
-                            voxel.increase_signed_distance(
-                                signed_distance_delta as f32,
-                                &mut |voxel| {
-                                    if !was_empty {
-                                        inertial_property_updater
-                                            .remove_voxel(&object_voxel_indices, *voxel);
-                                    }
-                                },
-                            );
-                        },
+                    apply_capsule_absorption(
+                        time_step_duration,
+                        &mut inertial_property_updater,
+                        object,
+                        &world_to_voxel_object_transform,
+                        absorbing_capsule,
+                        &capsule_to_world_transform,
+                    );
+                },
+                ![SceneGraphParentNodeComp]
+            );
+
+            query!(
+                ecs_world,
+                |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
+                 capsule_frame: &ReferenceFrameComp,
+                 parent: &SceneGraphParentNodeComp| {
+                    let parent_node = scene_graph.group_nodes().node(parent.id);
+
+                    let capsule_to_world_transform = parent_node.group_to_root_transform().cast()
+                        * capsule_frame.create_transform_to_parent_space::<f64>();
+
+                    apply_capsule_absorption(
+                        time_step_duration,
+                        &mut inertial_property_updater,
+                        object,
+                        &world_to_voxel_object_transform,
+                        absorbing_capsule,
+                        &capsule_to_world_transform,
                     );
                 }
             );
@@ -109,6 +155,74 @@ pub fn apply_sphere_absorption(
                 );
             }
         }
+    );
+}
+
+fn apply_sphere_absorption(
+    time_step_duration: f64,
+    inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
+    voxel_object: &mut ChunkedVoxelObject,
+    world_to_voxel_object_transform: &Similarity3<f64>,
+    absorbing_sphere: &VoxelAbsorbingSphereComp,
+    sphere_to_world_transform: &Similarity3<f64>,
+) {
+    let sphere_in_voxel_object_space = absorbing_sphere
+        .sphere()
+        .transformed(sphere_to_world_transform)
+        .transformed(world_to_voxel_object_transform);
+
+    let inverse_radius_squared = sphere_in_voxel_object_space.radius_squared().recip();
+
+    let absorption_rate_per_frame = absorbing_sphere.rate() * time_step_duration;
+
+    voxel_object.modify_voxels_within_sphere(
+        &sphere_in_voxel_object_space,
+        &mut |object_voxel_indices, squared_distance, voxel| {
+            let was_empty = voxel.is_empty();
+
+            let signed_distance_delta =
+                absorption_rate_per_frame * (1.0 - squared_distance * inverse_radius_squared);
+
+            voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                if !was_empty {
+                    inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                }
+            });
+        },
+    );
+}
+
+fn apply_capsule_absorption(
+    time_step_duration: f64,
+    inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
+    voxel_object: &mut ChunkedVoxelObject,
+    world_to_voxel_object_transform: &Similarity3<f64>,
+    absorbing_capsule: &VoxelAbsorbingCapsuleComp,
+    capsule_to_world_transform: &Similarity3<f64>,
+) {
+    let capsule_in_voxel_object_space = absorbing_capsule
+        .capsule()
+        .transformed(capsule_to_world_transform)
+        .transformed(world_to_voxel_object_transform);
+
+    let inverse_radius_squared = capsule_in_voxel_object_space.radius().powi(2).recip();
+
+    let absorption_rate_per_frame = absorbing_capsule.rate() * time_step_duration;
+
+    voxel_object.modify_voxels_within_capsule(
+        &capsule_in_voxel_object_space,
+        &mut |object_voxel_indices, squared_distance, voxel| {
+            let was_empty = voxel.is_empty();
+
+            let signed_distance_delta =
+                absorption_rate_per_frame * (1.0 - squared_distance * inverse_radius_squared);
+
+            voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                if !was_empty {
+                    inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                }
+            });
+        },
     );
 }
 

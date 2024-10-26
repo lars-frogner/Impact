@@ -186,9 +186,10 @@ impl<F: Float> TriangleMesh<F> {
     }
 
     /// Creates a mesh representing a cylinder with the given length and
-    /// diameter, centered at the origin and with the length axis aligned with
-    /// the y-axis. `n_circumference_vertices` is the number of vertices to use
-    /// for representing a circular cross-section of the cylinder.
+    /// diameter, with the length axis aligned with the y-axis and with the
+    /// bottom centered at the origin. `n_circumference_vertices` is the number
+    /// of vertices to use for representing a circular cross-section of the
+    /// cylinder.
     ///
     /// The generated mesh will contain positions and normal vectors.
     ///
@@ -200,9 +201,10 @@ impl<F: Float> TriangleMesh<F> {
     }
 
     /// Creates a mesh representing a cone with the given length and maximum
-    /// diameter, centered at the origin and pointing along the positive
-    /// y-direction. `n_circumference_vertices` is the number of vertices to use
-    /// for representing a circular cross-section of the cone.
+    /// diameter, pointing along the positive y-direction and with the bottom
+    /// centered at the origin. `n_circumference_vertices` is the number of
+    /// vertices to use for representing a circular cross-section of the
+    /// cone.
     ///
     /// The generated mesh will contain positions and normal vectors.
     ///
@@ -214,9 +216,9 @@ impl<F: Float> TriangleMesh<F> {
     }
 
     /// Creates a mesh representing a y-axis aligned circular frustum with the
-    /// given length, bottom diameter and top diameter, centered at the origin.
-    /// `n_circumference_vertices` is the number of vertices to use for
-    /// representing a circular cross-section of the frustum.
+    /// given length, bottom diameter and top diameter, with the bottom centered
+    /// at the origin. `n_circumference_vertices` is the number of vertices
+    /// to use for representing a circular cross-section of the frustum.
     ///
     /// Using the same bottom and top diameter yields a cylinder, while setting
     /// either diameter to zero yields a cone.
@@ -249,7 +251,6 @@ impl<F: Float> TriangleMesh<F> {
             "Tried to create circular frustum mesh with fewer than two vertices around circumference"
         );
 
-        let half_length = length * F::ONE_HALF;
         let bottom_radius = bottom_diameter * F::ONE_HALF;
         let top_radius = top_diameter * F::ONE_HALF;
 
@@ -270,11 +271,11 @@ impl<F: Float> TriangleMesh<F> {
         let sin_slope_angle = cos_slope_angle * tan_slope_angle;
 
         // First bottom side vertex
-        let bottom_pos = pos![bottom_radius, -half_length, F::ZERO];
+        let bottom_pos = pos![bottom_radius, F::ZERO, F::ZERO];
         positions.push(bottom_pos);
 
         // First top side vertex
-        let top_pos = pos![top_radius, half_length, F::ZERO];
+        let top_pos = pos![top_radius, length, F::ZERO];
         positions.push(top_pos);
 
         // Normal direction at first side vertices
@@ -296,14 +297,14 @@ impl<F: Float> TriangleMesh<F> {
 
             let bottom_pos = pos![
                 bottom_radius * cos_polar_angle,
-                -half_length,
+                F::ZERO,
                 bottom_radius * sin_polar_angle
             ];
             positions.push(bottom_pos);
 
             let top_pos = pos![
                 top_radius * cos_polar_angle,
-                half_length,
+                length,
                 top_radius * sin_polar_angle
             ];
             positions.push(top_pos);
@@ -392,11 +393,11 @@ impl<F: Float> TriangleMesh<F> {
         };
 
         if abs_diff_ne!(bottom_diameter, F::ZERO) {
-            create_horizontal_disk(bottom_radius, -half_length, false);
+            create_horizontal_disk(bottom_radius, F::ZERO, false);
         }
 
         if abs_diff_ne!(top_diameter, F::ZERO) {
-            create_horizontal_disk(top_radius, half_length, true);
+            create_horizontal_disk(top_radius, length, true);
         }
 
         Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)

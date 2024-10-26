@@ -67,8 +67,8 @@ use crate::{
     voxel::{
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp, SameVoxelTypeComp,
-            VoxelAbsorbingSphereComp, VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp,
-            VoxelSphereUnionComp,
+            VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelBoxComp,
+            VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelSphereUnionComp,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
         VoxelManager,
@@ -254,14 +254,10 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 2e3));
 
-    app.create_entity((
+    let player_entity = app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
         // &SphereMeshComp::new(15),
         // &UniformRigidBodyComp { mass_density: 1e3 },
-        &PerspectiveCameraComp::new(
-            vertical_field_of_view,
-            UpperExclusiveBounds::new(0.01, 1000.0),
-        ),
         &ReferenceFrameComp::unscaled(
             // Point3::new(0.0, 7.0, -10.0),
             Point3::new(0.0, 0.0, 0.0),
@@ -270,8 +266,43 @@ fn init_app(window: Window) -> Result<Application> {
         &VelocityComp::stationary(),
         &MotionControlComp::new(),
         &OrientationControlComp::new(),
-        &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, -4.0], 1.0, 15.0),
         // &UniformGravityComp::downward(9.81),
+        &SceneGraphGroupComp,
+    ))?;
+
+    app.create_entity((
+        &ParentComp::new(player_entity),
+        &PerspectiveCameraComp::new(
+            vertical_field_of_view,
+            UpperExclusiveBounds::new(0.01, 1000.0),
+        ),
+    ))?;
+
+    // app.create_entity((
+    //     &ParentComp::new(player_entity),
+    //     &ReferenceFrameComp::unscaled(
+    //         Point3::new(0.15, -0.3, 0.0),
+    //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
+    //     ),
+    //     &CylinderMeshComp::new(100.0, 0.02, 16),
+    //     &UniformColorComp(vector![0.9, 0.05, 0.05]),
+    //     &UniformEmissiveLuminanceComp(1e6),
+    //     &VoxelAbsorbingCapsuleComp::new(
+    //         vector![0.0, 0.0, 0.0],
+    //         vector![0.0, 100.0, 0.0],
+    //         0.3,
+    //         200.0,
+    //     ),
+    // ))?;
+
+    app.create_entity((
+        &ParentComp::new(player_entity),
+        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 0.0, -3.0), 0.1),
+        &SphereMeshComp::new(64),
+        &UniformColorComp(vector![0.9, 0.05, 0.05]),
+        &UniformEmissiveLuminanceComp(1e6),
+        &OmnidirectionalEmissionComp::new(vector![1.0, 0.2, 0.2] * 1e5, 0.2),
+        &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, 0.0], 10.0, 15.0),
     ))?;
 
     // app.create_entity((

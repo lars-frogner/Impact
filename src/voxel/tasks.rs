@@ -5,24 +5,25 @@ use crate::{
     define_task,
     gpu::rendering::{render_command::tasks::SyncRenderCommands, tasks::RenderingTag},
     physics::tasks::{AdvanceSimulation, PhysicsTag},
-    scene::RenderResourcesDesynchronized,
+    scene::{tasks::UpdateSceneGroupToWorldTransforms, RenderResourcesDesynchronized},
     voxel,
 };
 use anyhow::Result;
 
 define_task!(
-    /// This [`Task`](crate::scheduling::Task) applies each voxel-absorbing
-    /// sphere to the affected voxel objects.
+    /// This [`Task`](crate::scheduling::Task) applies each voxel absorber
+    /// to the affected voxel objects.
     [pub] ApplySphereVoxelAbsorption,
-    depends_on = [AdvanceSimulation],
+    depends_on = [AdvanceSimulation, UpdateSceneGroupToWorldTransforms],
     execute_on = [PhysicsTag],
     |app: &Application| {
-        with_debug_logging!("Applying voxel-absorbing spheres"; {
+        with_debug_logging!("Applying voxel absorbers"; {
             let simulator = app.simulator().read().unwrap();
             let scene = app.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
+            let scene_graph = scene.scene_graph().read().unwrap();
             let ecs_world = app.ecs_world().read().unwrap();
-            voxel::systems::apply_sphere_absorption(&simulator, &mut voxel_manager, &ecs_world);
+            voxel::systems::apply_absorption(&simulator, &mut voxel_manager, &scene_graph, &ecs_world);
             Ok(())
         })
     }

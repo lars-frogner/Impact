@@ -2,7 +2,7 @@
 
 use crate::{
     component::ComponentRegistry,
-    geometry::Sphere,
+    geometry::{Capsule, Sphere},
     voxel::{
         voxel_types::{VoxelType, VoxelTypeRegistry},
         VoxelObjectID,
@@ -186,6 +186,28 @@ pub struct VoxelAbsorbingSphereComp {
     /// The radius of the sphere.
     radius: f64,
     /// The maximum rate of absorption (at the center of the sphere).
+    rate: f64,
+}
+
+/// [`Component`](impact_ecs::component::Component) for entities that have a
+/// capsule that absorbs voxels it comes in contact with. The rate of absorption
+/// is highest at the central line segment of the capsule and decreases
+/// quadratically to zero at the capsule boundary.
+///
+/// Does nothing if the entity does not have a [`ReferenceFrameComp`].
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VoxelAbsorbingCapsuleComp {
+    /// The offset of the starting point of the capsule's central line segment
+    /// in the reference frame of the entity.
+    offset_to_segment_start: Vector3<f64>,
+    /// The displacement vector from the start to the end of the capsule's
+    /// central line segment in the reference frame of the entity.
+    segment_vector: Vector3<f64>,
+    /// The radius of the capsule.
+    radius: f64,
+    /// The maximum rate of absorption (at the central line segment of the
+    /// capsule).
     rate: f64,
 }
 
@@ -437,6 +459,43 @@ impl VoxelAbsorbingSphereComp {
     }
 }
 
+impl VoxelAbsorbingCapsuleComp {
+    /// Creates a new [`VoxelAbsorbingCapsuleComp`] with the given offset to the
+    /// start of the capsule's central line segment, displacement from the start
+    /// to the end of the line segment and radius, all in the reference frame of
+    /// the entity, as well as the given maximum absorption rate (at the central
+    /// line segment).
+    pub fn new(
+        offset_to_segment_start: Vector3<f64>,
+        segment_vector: Vector3<f64>,
+        radius: f64,
+        rate: f64,
+    ) -> Self {
+        assert!(radius >= 0.0);
+        assert!(rate >= 0.0);
+        Self {
+            offset_to_segment_start,
+            segment_vector,
+            radius,
+            rate,
+        }
+    }
+
+    /// Returns the capsule in the reference frame of the entity.
+    pub fn capsule(&self) -> Capsule<f64> {
+        Capsule::new(
+            Point3::from(self.offset_to_segment_start),
+            self.segment_vector,
+            self.radius,
+        )
+    }
+
+    /// Returns the maximum absorption rate.
+    pub fn rate(&self) -> f64 {
+        self.rate
+    }
+}
+
 /// Registers all voxel [`Component`](impact_ecs::component::Component)s.
 pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, SameVoxelTypeComp)?;
@@ -447,5 +506,6 @@ pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()>
     register_setup_component!(registry, VoxelSphereUnionComp)?;
     register_setup_component!(registry, VoxelGradientNoisePatternComp)?;
     register_component!(registry, VoxelObjectComp)?;
-    register_component!(registry, VoxelAbsorbingSphereComp)
+    register_component!(registry, VoxelAbsorbingSphereComp)?;
+    register_component!(registry, VoxelAbsorbingCapsuleComp)
 }
