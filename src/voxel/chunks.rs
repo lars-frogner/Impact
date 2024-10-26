@@ -20,7 +20,7 @@ use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
-use nalgebra::{point, vector, Vector3};
+use nalgebra::{point, vector, Point3, Vector3};
 use num_traits::{NumCast, PrimInt};
 use std::{array, collections::HashSet, iter, ops::Range};
 
@@ -434,6 +434,13 @@ impl ChunkedVoxelObject {
             F::from_usize(self.occupied_voxel_ranges[2].end).unwrap() * voxel_extent
         ];
 
+        AxisAlignedBox::new(lower_corner, upper_corner)
+    }
+
+    fn compute_chunk_aabb(&self, chunk_indices: &[usize; 3]) -> AxisAlignedBox<f64> {
+        let chunk_extent = self.chunk_extent();
+        let lower_corner = Point3::from(chunk_indices.map(|index| index as f64 * chunk_extent));
+        let upper_corner = lower_corner + Vector3::from([chunk_extent; 3]);
         AxisAlignedBox::new(lower_corner, upper_corner)
     }
 

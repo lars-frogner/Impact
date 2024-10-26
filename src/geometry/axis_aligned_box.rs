@@ -3,7 +3,7 @@
 use crate::{geometry::Point, num::Float};
 use approx::AbsDiffEq;
 use na::point;
-use nalgebra::{self as na, Point3};
+use nalgebra::{self as na, Point3, Vector3};
 
 use Corner::{Lower, Upper};
 
@@ -218,6 +218,42 @@ impl<F: Float> AxisAlignedBox<F> {
             None
         } else {
             Some(Self::new(lower_corner, upper_corner))
+        }
+    }
+
+    /// Given a line segment defined by a start point and an offset to the end
+    /// point, finds the start and end segment parameter representing the
+    /// subsegment lying within the box, or returns [`None`] if the segment lies
+    /// completely outside the box.
+    pub fn find_contained_subsegment(
+        &self,
+        segment_start: Point3<F>,
+        offset_from_segment_start_to_end: Vector3<F>,
+    ) -> Option<(F, F)> {
+        let mut t_min = F::ZERO;
+        let mut t_max = F::ONE;
+
+        for dim in 0..3 {
+            if offset_from_segment_start_to_end[dim] != F::ZERO {
+                let recip = offset_from_segment_start_to_end[dim].recip();
+                let t1 = (self.lower_corner()[dim] - segment_start[dim]) * recip;
+                let t2 = (self.upper_corner()[dim] - segment_start[dim]) * recip;
+
+                let (t_entry, t_exit) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+
+                t_min = t_min.max(t_entry);
+                t_max = t_max.min(t_exit);
+            } else if segment_start[dim] < self.lower_corner()[dim]
+                || segment_start[dim] > self.upper_corner()[dim]
+            {
+                return None;
+            }
+        }
+
+        if t_min <= t_max {
+            Some((t_min, t_max))
+        } else {
+            None
         }
     }
 }

@@ -26,7 +26,7 @@
 
 - Consider using `wgpu::TextureFormat::Rg11b10Float` for appropriate attachments.
 
-- Consider reducing usage of `RwLock` in `impact_ecs`.
+- Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
 
 - Define consistent locking order for all lock-protected resources under `Application` to avoid deadlocks in parallel `Tasks` (with optional run-time verification to identify violations).
 

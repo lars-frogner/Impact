@@ -57,3 +57,17 @@ path = "fuzz_targets/voxel_object_absorbing_voxels_within_sphere.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "voxel_object_absorbing_voxels_within_capsule"
+path = "fuzz_targets/voxel_object_absorbing_voxels_within_capsule.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "voxel_object_obtaining_voxels_within_capsule"
+path = "fuzz_targets/voxel_object_obtaining_voxels_within_capsule.rs"
+test = false
+doc = false
+bench = false
