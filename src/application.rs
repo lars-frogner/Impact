@@ -22,15 +22,17 @@ use crate::{
     mesh::{components::MeshComp, texture_projection::TextureProjection, MeshRepository},
     model::{self, InstanceFeatureManager},
     physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
-    scene::Scene,
+    scene::{components::SceneEntityFlagsComp, Scene, SceneEntityFlags},
     skybox::Skybox,
     ui::UserInterface,
     voxel::{self, voxel_types::VoxelTypeRegistry, VoxelManager},
     window::Window,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use impact_ecs::{
-    archetype::ArchetypeComponentStorage, component::SingleInstance, world::World as ECSWorld,
+    archetype::ArchetypeComponentStorage,
+    component::{Component, SingleInstance},
+    world::{Entity, World as ECSWorld},
 };
 use std::{
     fmt::Debug,
@@ -510,6 +512,30 @@ impl Application {
         simulator.set_stepping_scheme(new_stepping_scheme);
     }
 
+    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    ///
+    /// # Errors
+    /// Returns an error if the entity does not exist or does not have the
+    /// [`SceneEntityFlagsComp`] component.
+    pub fn enable_scene_entity(&self, entity: &Entity) -> Result<()> {
+        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
+            flags.0.remove(SceneEntityFlags::IS_DISABLED);
+            Ok(())
+        })
+    }
+
+    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    ///
+    /// # Errors
+    /// Returns an error if the entity does not exist or does not have the
+    /// [`SceneEntityFlagsComp`] component.
+    pub fn disable_scene_entity(&self, entity: &Entity) -> Result<()> {
+        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
+            flags.0.insert(SceneEntityFlags::IS_DISABLED);
+            Ok(())
+        })
+    }
+
     /// Performs any setup required before starting the game loop.
     pub fn perform_setup_for_game_loop(&self) {
         self.simulator
@@ -526,5 +552,29 @@ impl Application {
             .read()
             .unwrap()
             .declare_render_resources_desynchronized();
+    }
+
+    fn with_component_mut<C: Component, R>(
+        &self,
+        entity: &Entity,
+        f: impl FnOnce(&mut C) -> Result<R>,
+    ) -> Result<R> {
+        let ecs_world = self.ecs_world.read().unwrap();
+
+        let entity_entry = ecs_world
+            .get_entity(entity)
+            .ok_or_else(|| anyhow!("Missing entity: {:?}", entity))?;
+
+        let mut component_entry = entity_entry.get_component_mut().ok_or_else(|| {
+            anyhow!(
+                "Missing component {:?} for entity: {:?}",
+                C::component_id(),
+                entity
+            )
+        })?;
+
+        let component: &mut C = component_entry.access();
+
+        f(component)
     }
 }
