@@ -17,21 +17,12 @@ struct UnidirectionalLights {
 }
 
 struct UnidirectionalLight {
-    cameraToLightRotationQuaternion: vec4f,
     cameraSpaceDirection: vec3f,
     perpendicularIlluminanceAndTanAngularRadius: vec4f,
-    orthographicTransforms: array<OrthographicTransform, {{cascade_count}}>,
-    partitionDepths: vec4f,
-}
-
-struct OrthographicTransform {
-    translation: vec3f,
-    scaling: vec3f,
 }
 
 struct LightQuantities {
     preExposedIncidentLuminance: vec3f,
-    lightNDCSpacePosition: vec3f,
     dots: ReflectionDotProducts,
 }
 
@@ -80,11 +71,6 @@ var materialPropertiesSampler: sampler;
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
 var<uniform> unidirectionalLights: UnidirectionalLights;
 
-@group({{shadow_map_texture_group}}) @binding({{shadow_map_texture_binding}})
-var cascadedShadowMapTexture: texture_2d_array<f32>;
-@group({{shadow_map_texture_group}}) @binding({{shadow_map_sampler_binding}})
-var cascadedShadowMapSampler: sampler;
-
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
     return framebufferPosition.xy * vec2f(pushConstants.inverseWindowWidth, pushConstants.inverseWindowHeight);
 }
@@ -124,23 +110,8 @@ fn rotateVectorWithQuaternion(quaternion: vec4f, vector: vec3f) -> vec3f {
     return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
 }
 
-fn computeScreenTextureCoordsFromNDCXYPosition(ndcXYPosition: vec2f) -> vec2f {
-    return vec2f(0.5 * (1.0 + ndcXYPosition.x), 0.5 * (1.0 - ndcXYPosition.y));
-}
-
 fn clampToZero(value: f32) -> f32 {
     return max(0.0, value);
-}
-
-fn generateRandomAngle(cameraFramebufferXYPosition: vec2f) -> f32 {
-    // Multiply noise factor with 2 * pi to get random angle
-    return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferXYPosition);
-}
-
-// Returns a random number between 0 and 1 based on the pixel coordinates
-fn generateInterleavedGradientNoiseFactor(cameraFramebufferXYPosition: vec2f) -> f32 {
-    let magic = vec3f(0.06711056, 0.00583715, 52.9829189);
-    return fract(magic.z * fract(dot(magic.xy, cameraFramebufferXYPosition)));
 }
 
 // ***** Unidirectional lights *****
@@ -150,24 +121,12 @@ fn computeAreaLightQuantities(
     directionOfLight: vec3f,
     lightPerpendicularIlluminance: vec3f,
     tanAngularLightRadius: f32,
-    orthographicTranslation: vec3f,
-    orthographicScaling: vec3f,
-    lightSpacePosition: vec3f,
-    lightSpaceNormalVector: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
-    distanceFromCamera: f32,
     roughness: f32,
     exposure: f32,
 ) -> LightQuantities {
     var output: LightQuantities;
-
-    let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector, distanceFromCamera);
-    output.lightNDCSpacePosition = applyOrthographicProjectionToPosition(
-        orthographicTranslation,
-        orthographicScaling,
-        biasedLightSpacePosition,
-    );
 
     let lightCenterDirection = -directionOfLight;
 
@@ -192,25 +151,13 @@ fn computeAreaLightQuantities(
 fn computeLightQuantities(
     directionOfLight: vec3f,
     lightPerpendicularIlluminance: vec3f,
-    orthographicTranslation: vec3f,
-    orthographicScaling: vec3f,
-    lightSpacePosition: vec3f,
-    lightSpaceNormalVector: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
-    distanceFromCamera: f32,
     exposure: f32,
 ) -> LightQuantities {
     var output: LightQuantities;
 
     output.preExposedIncidentLuminance = exposure * lightPerpendicularIlluminance;
-
-    let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector, distanceFromCamera);
-    output.lightNDCSpacePosition = applyOrthographicProjectionToPosition(
-        orthographicTranslation,
-        orthographicScaling,
-        biasedLightSpacePosition,
-    );
 
     let lightCenterDirection = -directionOfLight;
 
@@ -232,208 +179,6 @@ fn computeLightQuantities(
     return output;
 }
 #endif // emulate_area_light_reflection
-
-fn applyOrthographicProjectionToPosition(
-    orthographicTranslation: vec3f,
-    orthographicScaling: vec3f,
-    position: vec3f
-    ) -> vec3f {
-    return (position + orthographicTranslation) * orthographicScaling;
-}
-
-fn applyNormalBias(
-    lightSpacePosition: vec3f,
-    lightSpaceNormalVector: vec3f,
-    distanceFromCamera: f32,
-    ) -> vec3f {
-    let lightDirectionDotNormalVector = -lightSpaceNormalVector.z;
-    return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * max(1e-1, 1e-2 * distanceFromCamera);
-}
-
-fn determineCascadeIdxMax1(partitionDepths: vec4f, depth: f32) -> i32 {
-    return 0;
-}
-
-fn determineCascadeIdxMax2(partitionDepths: vec4f, depth: f32) -> i32 {
-    var cascadeIdx: i32;
-    if depth < partitionDepths.x {
-        cascadeIdx = 0;
-    } else {
-        cascadeIdx = 1;
-    }
-    return cascadeIdx;
-}
-
-fn determineCascadeIdxMax3(partitionDepths: vec4f, depth: f32) -> i32 {
-    var cascadeIdx: i32;
-    if depth < partitionDepths.x {
-        cascadeIdx = 0;
-    } else if depth < partitionDepths.y {
-        cascadeIdx = 1;
-    } else {
-        cascadeIdx = 2;
-    }
-    return cascadeIdx;
-}
-
-fn determineCascadeIdxMax4(partitionDepths: vec4f, depth: f32) -> i32 {
-    var cascadeIdx: i32;
-    if depth < partitionDepths.x {
-        cascadeIdx = 0;
-    } else if depth < partitionDepths.y {
-        cascadeIdx = 1;
-    } else if depth < partitionDepths.z {
-        cascadeIdx = 2;
-    } else {
-        cascadeIdx = 3;
-    }
-    return cascadeIdx;
-}
-
-fn determineCascadeIdxMax5(partitionDepths: vec4f, depth: f32) -> i32 {
-    var cascadeIdx: i32;
-    if depth < partitionDepths.x {
-        cascadeIdx = 0;
-    } else if depth < partitionDepths.y {
-        cascadeIdx = 1;
-    } else if depth < partitionDepths.z {
-        cascadeIdx = 2;
-    } else if depth < partitionDepths.w {
-        cascadeIdx = 3;
-    } else {
-        cascadeIdx = 4;
-    }
-    return cascadeIdx;
-}
-
-fn computePCSSLightAccessFactor(
-    array_index: i32,
-    tanAngularRadius: f32,
-    worldSpaceToLightNDCSpaceXYScale: f32,
-    worldSpaceToLightNDCSpaceZScale: f32,
-    cameraFramebufferXYPosition: vec2f,
-    centerTextureCoords: vec2f,
-    referenceDepth: f32,
-) -> f32 {
-    let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferXYPosition);
-
-    let shadowPenumbraExtent = computeShadowPenumbraExtent(
-        array_index,
-        tanAngularRadius,
-        vogelDiskBaseAngle,
-        worldSpaceToLightNDCSpaceXYScale,
-        worldSpaceToLightNDCSpaceZScale,
-        centerTextureCoords,
-        referenceDepth,
-    );
-
-    if shadowPenumbraExtent < 0.0 {
-        return 1.0;
-    }
-
-    return computeVogelDiskComparisonSampleAverage(
-        array_index,
-        vogelDiskBaseAngle,
-        worldSpaceToLightNDCSpaceXYScale,
-        shadowPenumbraExtent,
-        centerTextureCoords,
-        referenceDepth,
-    );
-}
-
-fn computeShadowPenumbraExtent(
-    array_index: i32,
-    tanAngularRadius: f32,
-    vogelDiskBaseAngle: f32,
-    worldSpaceToLightNDCSpaceXYScale: f32,
-    worldSpaceToLightNDCSpaceZScale: f32,
-    centerTextureCoords: vec2f,
-    referenceDepth: f32,
-) -> f32 {
-    let diskRadius: f32 = 0.4 * worldSpaceToLightNDCSpaceXYScale;
-    let sampleCount: u32 = 8u;
-
-    let inverseSqrtSampleCount = inverseSqrt(f32(sampleCount));
-
-    var averageOccludingDepth: f32 = 0.0;
-    var occludingDepthCount: f32 = 0.0;
-
-    for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-        let sampleTextureCoords = generateVogelDiskSampleCoords(
-            vogelDiskBaseAngle,
-            inverseSqrtSampleCount,
-            sampleIdx,
-        ) * diskRadius + centerTextureCoords;
-
-        let sampledDepth = textureSample(
-            cascadedShadowMapTexture,
-            cascadedShadowMapSampler,
-            sampleTextureCoords,
-            array_index,
-        ).r;
-
-        if sampledDepth < referenceDepth {
-            averageOccludingDepth += sampledDepth;
-            occludingDepthCount += 1.0;
-        }
-    }
-
-    let minPenumbraExtent = 0.01;
-
-    if occludingDepthCount > 0.0 {
-        averageOccludingDepth /= occludingDepthCount;
-        return max(minPenumbraExtent, tanAngularRadius * (referenceDepth - averageOccludingDepth) / worldSpaceToLightNDCSpaceZScale);
-    } else {
-        return -1.0;
-    }
-}
-
-fn computeVogelDiskComparisonSampleAverage(
-    array_index: i32,
-    vogelDiskBaseAngle: f32,
-    worldSpaceToLightNDCSpaceXYScale: f32,
-    worldSpaceDiskRadius: f32,
-    centerTextureCoords: vec2f,
-    referenceDepth: f32,
-) -> f32 {
-    let sample_density = 800.0;
-
-    let sampleCount = u32(clamp(worldSpaceDiskRadius * sample_density, 3.0, 64.0));
-
-    let diskRadius = worldSpaceDiskRadius * worldSpaceToLightNDCSpaceXYScale;
-
-    let invSampleCount = 1.0 / f32(sampleCount);
-    let inverseSqrtSampleCount = sqrt(invSampleCount);
-
-    var sampleAverage: f32 = 0.0;
-
-    for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-        let sampleTextureCoords = generateVogelDiskSampleCoords(
-            vogelDiskBaseAngle,
-            inverseSqrtSampleCount,
-            sampleIdx,
-        ) * diskRadius + centerTextureCoords;
-
-        let sampledDepth = textureSample(
-            cascadedShadowMapTexture,
-            cascadedShadowMapSampler,
-            sampleTextureCoords,
-            array_index,
-        ).r;
-        if (sampledDepth >= referenceDepth) {
-            sampleAverage += invSampleCount;
-        }
-    }
-
-    return sampleAverage;
-}
-
-fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2f {
-    let goldenAngle: f32 = 2.4;
-    let radius = sqrt(f32(sampleIdx) + 0.5) * inverseSqrtSampleCount;
-    let angle = baseAngle + goldenAngle * f32(sampleIdx);
-    return vec2f(radius * cos(angle), radius * sin(angle));
-}
 
 // ***** Representative point area lighting *****
 
@@ -644,7 +389,6 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).r;
     let cameraSpacePosition = computePositionFromLinearDepth(depth, input.frustumFarPlanePoint);
     let cameraSpaceViewDirection = computeCameraSpaceViewDirection(cameraSpacePosition);
-    let distanceFromCamera = -cameraSpacePosition.z;
 
     let normalColor = textureSampleLevel(normalVectorTexture, normalVectorSampler, textureCoords, 0.0).rgb;
     let cameraSpaceNormalVector = convertNormalColorToNormalizedNormalVector(normalColor);
@@ -656,37 +400,20 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let normalIncidenceSpecularReflectance = computeRGBSpecularReflectance(materialColor, materialProperties);
     let roughness = materialProperties.y;
 
-    // Note: `var` is required here instead of `let` to make the
-    // `orthographicTransforms` array indexable with a dynamic index
-    var unidirectionalLight = unidirectionalLights.lights[pushConstants.activeLightIdx];
+    let unidirectionalLight = unidirectionalLights.lights[pushConstants.activeLightIdx];
 
     let cameraSpaceLightDirection = unidirectionalLight.cameraSpaceDirection;
 
     let lightPerpendicularIlluminance = unidirectionalLight.perpendicularIlluminanceAndTanAngularRadius.xyz;
     let tanAngularLightRadius = unidirectionalLight.perpendicularIlluminanceAndTanAngularRadius.w;
 
-    let cascadeIdx = determineCascadeIdxMax{{cascade_count}}(unidirectionalLight.partitionDepths, depth);
-
-    let lightOrthographicTransform = unidirectionalLight.orthographicTransforms[cascadeIdx];
-    let lightOrthographicTranslation = lightOrthographicTransform.translation;
-    let lightOrthographicScaling = lightOrthographicTransform.scaling;
-
-    let cameraToLightSpaceRotationQuaternion = unidirectionalLight.cameraToLightRotationQuaternion;
-    let lightSpacePosition = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, cameraSpacePosition);
-    let lightSpaceNormalVector = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, cameraSpaceNormalVector);
-
 #if (emulate_area_light_reflection)
     let lightQuantities = computeAreaLightQuantities(
         cameraSpaceLightDirection,
         lightPerpendicularIlluminance,
         tanAngularLightRadius,
-        lightOrthographicTranslation,
-        lightOrthographicScaling,
-        lightSpacePosition,
-        lightSpaceNormalVector,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
-        distanceFromCamera,
         roughness,
         pushConstants.exposure,
     );
@@ -694,35 +421,18 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let lightQuantities = computeLightQuantities(
         cameraSpaceLightDirection,
         lightPerpendicularIlluminance,
-        lightOrthographicTranslation,
-        lightOrthographicScaling,
-        lightSpacePosition,
-        lightSpaceNormalVector,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
-        distanceFromCamera,
         pushConstants.exposure,
     );
 #endif
-
-    let shadowMapTextureCoords = computeScreenTextureCoordsFromNDCXYPosition(lightQuantities.lightNDCSpacePosition.xy);
-
-    let lightAccessFactor = computePCSSLightAccessFactor(
-        cascadeIdx,
-        tanAngularLightRadius,
-        lightOrthographicScaling.x,
-        -lightOrthographicScaling.z,
-        input.projectedPosition.xy,
-        shadowMapTextureCoords,
-        lightQuantities.lightNDCSpacePosition.z,
-    );
 
     let preExposedReflectedLuminance = computeGGXDiffuseGGXSpecularReflectedLuminance(
         lightQuantities.dots,
         albedo,
         normalIncidenceSpecularReflectance,
         roughness,
-        lightAccessFactor * lightQuantities.preExposedIncidentLuminance,
+        lightQuantities.preExposedIncidentLuminance,
     );
 
     output.preExposedReflectedLuminance = vec4f(preExposedReflectedLuminance, 1.0);

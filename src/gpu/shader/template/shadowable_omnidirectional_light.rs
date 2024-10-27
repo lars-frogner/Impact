@@ -1,17 +1,20 @@
-//! Shader template for the omnidirectional light pass.
+//! Shader template for the shadowable omnidirectional light pass.
 
 use crate::{
     camera::buffer::CameraProjectionUniform,
     gpu::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
-        texture::attachment::{
-            Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity::{
-                self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
+        texture::{
+            attachment::{
+                Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
+                RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+                RenderAttachmentQuantity::{
+                    self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
+                },
+                RenderAttachmentQuantitySet,
             },
-            RenderAttachmentQuantitySet,
+            shadow_map::ShadowCubemapTexture,
         },
     },
     light::buffer::LightGPUBufferManager,
@@ -20,21 +23,24 @@ use crate::{
 };
 use std::sync::LazyLock;
 
-/// Shader template for the omnidirectional light pass, which computes the
-/// reflected luminance due to an omnidirectional light and adds it to the
-/// luminance attachment.
+/// Shader template for the shadowable omnidirectional light pass, which
+/// computes the reflected luminance due to a shadowable omnidirectional light
+/// and adds it to the luminance attachment.
 #[derive(Clone, Debug)]
-pub struct OmnidirectionalLightShaderTemplate {
+pub struct ShadowableOmnidirectionalLightShaderTemplate {
     max_light_count: usize,
 }
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> = LazyLock::new(|| {
-    ShaderTemplate::new(rendering_template_source!("omnidirectional_light")).unwrap()
+    ShaderTemplate::new(rendering_template_source!(
+        "shadowable_omnidirectional_light"
+    ))
+    .unwrap()
 });
 
-impl OmnidirectionalLightShaderTemplate {
-    /// Creates a new omnidirectional light shader template for the given
-    /// maximum number of omnidirectional lights.
+impl ShadowableOmnidirectionalLightShaderTemplate {
+    /// Creates a new shadowable omnidirectional light shader template for the
+    /// given maximum number of shadowable omnidirectional lights.
     pub fn new(max_light_count: usize) -> Self {
         Self { max_light_count }
     }
@@ -86,7 +92,7 @@ impl OmnidirectionalLightShaderTemplate {
     }
 }
 
-impl SpecificShaderTemplate for OmnidirectionalLightShaderTemplate {
+impl SpecificShaderTemplate for ShadowableOmnidirectionalLightShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
@@ -109,6 +115,9 @@ impl SpecificShaderTemplate for OmnidirectionalLightShaderTemplate {
                     "material_properties_sampler_binding" => MaterialProperties.sampler_binding(),
                     "light_uniform_group" => 5,
                     "light_uniform_binding" => LightGPUBufferManager::light_binding(),
+                    "shadow_map_texture_group" => 6,
+                    "shadow_map_texture_binding" => ShadowCubemapTexture::texture_binding(),
+                    "shadow_map_sampler_binding" => ShadowCubemapTexture::sampler_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
@@ -124,6 +133,6 @@ mod tests {
 
     #[test]
     fn should_resolve_to_valid_wgsl() {
-        validate_template(&OmnidirectionalLightShaderTemplate::new(5));
+        validate_template(&ShadowableOmnidirectionalLightShaderTemplate::new(5));
     }
 }

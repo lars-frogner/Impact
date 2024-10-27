@@ -5,19 +5,16 @@ use crate::{
     gpu::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
-        texture::{
-            attachment::{
-                Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
-                RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-                RenderAttachmentQuantity::{
-                    self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
-                },
-                RenderAttachmentQuantitySet,
+        texture::attachment::{
+            Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity::{
+                self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
             },
-            shadow_map::ShadowCubemapTexture,
+            RenderAttachmentQuantitySet,
         },
     },
-    light::{buffer::LightGPUBufferManager, MAX_SHADOW_MAP_CASCADES},
+    light::buffer::LightGPUBufferManager,
     mesh::{self, buffer::MeshVertexAttributeLocation, MeshID, VertexAttributeSet},
     rendering_template_source, template_replacements,
 };
@@ -99,7 +96,6 @@ impl SpecificShaderTemplate for UnidirectionalLightShaderTemplate {
                 ["emulate_area_light_reflection"],
                 template_replacements!(
                     "max_light_count" => self.max_light_count,
-                    "cascade_count" => MAX_SHADOW_MAP_CASCADES,
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
                     "linear_depth_texture_group" => 1,
@@ -116,9 +112,6 @@ impl SpecificShaderTemplate for UnidirectionalLightShaderTemplate {
                     "material_properties_sampler_binding" => MaterialProperties.sampler_binding(),
                     "light_uniform_group" => 5,
                     "light_uniform_binding" => LightGPUBufferManager::light_binding(),
-                    "shadow_map_texture_group" => 6,
-                    "shadow_map_texture_binding" => ShadowCubemapTexture::texture_binding(),
-                    "shadow_map_sampler_binding" => ShadowCubemapTexture::sampler_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )

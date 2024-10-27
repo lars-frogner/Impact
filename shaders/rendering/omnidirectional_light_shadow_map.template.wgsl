@@ -15,7 +15,7 @@ struct OmnidirectionalLights {
 struct OmnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cubemapFaceSpacePosition: vec3f,
-    luminousIntensityAndEmissionRadius: vec4f,
+    luminousIntensityAndEmissiveRadius: vec4f,
     distanceMapping: DistanceMapping,
 }
 

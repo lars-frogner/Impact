@@ -17,12 +17,22 @@ struct OmnidirectionalLights {
 }
 
 struct OmnidirectionalLight {
-    cameraSpacePositionAndMaxReach: vec4f,
+    cameraToLightRotationQuaternion: vec4f,
+    cameraSpacePosition: vec3f,
     luminousIntensityAndEmissiveRadius: vec4f,
+    distanceMapping: DistanceMapping,
+}
+
+struct DistanceMapping {
+    nearDistance: f32,
+    inverseDistanceSpan: f32,
+    farDistance: f32,
 }
 
 struct LightQuantities {
     preExposedIncidentLuminance: vec3f,
+    lightSpaceFragmentDisplacement: vec3f,
+    normalizedDistance: f32,
     dots: ReflectionDotProducts,
 }
 
@@ -70,6 +80,11 @@ var materialPropertiesSampler: sampler;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
 var<uniform> omnidirectionalLights: OmnidirectionalLights;
+
+@group({{shadow_map_texture_group}}) @binding({{shadow_map_texture_binding}})
+var shadowMapTexture: texture_cube<f32>;
+@group({{shadow_map_texture_group}}) @binding({{shadow_map_sampler_binding}})
+var shadowMapSampler: sampler;
 
 fn transformPosition(
     rotationQuaternion: vec4f,
@@ -123,6 +138,17 @@ fn clampToZero(value: f32) -> f32 {
     return max(0.0, value);
 }
 
+fn generateRandomAngle(cameraFramebufferXYPosition: vec2f) -> f32 {
+    // Multiply noise factor with 2 * pi to get random angle
+    return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferXYPosition);
+}
+
+// Returns a random number between 0 and 1 based on the pixel coordinates
+fn generateInterleavedGradientNoiseFactor(cameraFramebufferXYPosition: vec2f) -> f32 {
+    let magic = vec3f(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(magic.xy, cameraFramebufferXYPosition)));
+}
+
 // ***** Omnidirectional lights *****
 
 #if (emulate_area_light_reflection)
@@ -130,9 +156,13 @@ fn computeAreaLightQuantities(
     lightPosition: vec3f,
     lightLuminousIntensity: vec3f,
     lightRadius: f32,
+    cameraToLightSpaceRotationQuaternion: vec4f,
+    nearDistance: f32,
+    lightInverseDistanceSpan: f32,
     fragmentPosition: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
+    distanceFromCamera: f32,
     roughness: f32,
     exposure: f32,
 ) -> LightQuantities {
@@ -148,6 +178,19 @@ fn computeAreaLightQuantities(
     let VDotN = dot(viewDirection, fragmentNormal);
     let LDotN = dot(lightCenterDirection, fragmentNormal);
     let LDotV = dot(lightCenterDirection, viewDirection);
+
+    // Add an offset to the fragment position along the fragment normal to avoid
+    // shadow acne
+    let offsetFragmentDisplacement = computeOffsetFragmentDisplacement(
+        lightCenterDisplacement,
+        fragmentNormal,
+        LDotN,
+        lightInverseDistanceSpan,
+        distanceFromCamera,
+    );
+
+    output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
+    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * lightInverseDistanceSpan;
 
     let tanAngularLightRadius = lightRadius * inverseDistance;
 
@@ -166,9 +209,13 @@ fn computeAreaLightQuantities(
 fn computeLightQuantities(
     lightPosition: vec3f,
     lightLuminousIntensity: vec3f,
+    cameraToLightSpaceRotationQuaternion: vec4f,
+    nearDistance: f32,
+    lightInverseDistanceSpan: f32,
     fragmentPosition: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
+    distanceFromCamera: f32,
     exposure: f32,
 ) -> LightQuantities {
     var output: LightQuantities;
@@ -184,6 +231,19 @@ fn computeLightQuantities(
     let LDotN = dot(lightCenterDirection, fragmentNormal);
     let LDotV = dot(lightCenterDirection, viewDirection);
 
+    // Add an offset to the fragment position along the fragment normal to avoid
+    // shadow acne
+    let offsetFragmentDisplacement = computeOffsetFragmentDisplacement(
+        lightCenterDisplacement,
+        fragmentNormal,
+        LDotN,
+        lightInverseDistanceSpan,
+        distanceFromCamera,
+    );
+
+    output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
+    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * lightInverseDistanceSpan;
+
     let onePlusLDotV = max(1.0 + LDotV, 1e-6);
     let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
     let NDotH = (LDotN + VDotN) * inverseHLength;
@@ -198,6 +258,144 @@ fn computeLightQuantities(
     return output;
 }
 #endif // emulate_area_light_reflection
+
+fn computeOffsetFragmentDisplacement(
+    lightCenterDisplacement: vec3f,
+    fragmentNormal: vec3f,
+    LDotN: f32,
+    lightInverseDistanceSpan: f32,
+    distanceFromCamera: f32,
+) -> vec3f {
+    // The offset increases as the light becomes less perpendicular to the
+    // surface.
+    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * max(4e-3, 4e-4 * distanceFromCamera) / lightInverseDistanceSpan;
+}
+
+fn computePCSSLightAccessFactor(
+    emissiveRadius: f32,
+    cameraFramebufferXYPosition: vec2f,
+    lightSpaceFragmentDisplacement: vec3f,
+    referenceDepth: f32,
+) -> f32 {
+    let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferXYPosition);
+
+    let displacementNormalDirection = normalize(findPerpendicularVector(lightSpaceFragmentDisplacement));
+    let displacementBinormalDirection = normalize(cross(lightSpaceFragmentDisplacement, displacementNormalDirection));
+
+    let shadowPenumbraExtent = computeShadowPenumbraExtent(
+        emissiveRadius,
+        vogelDiskBaseAngle,
+        lightSpaceFragmentDisplacement,
+        displacementNormalDirection,
+        displacementBinormalDirection,
+        referenceDepth,
+    );
+
+    if shadowPenumbraExtent < 0.0 {
+        return 1.0;
+    }
+
+    return computeVogelDiskComparisonSampleAverage(
+        vogelDiskBaseAngle,
+        shadowPenumbraExtent,
+        lightSpaceFragmentDisplacement,
+        displacementNormalDirection,
+        displacementBinormalDirection,
+        referenceDepth,
+    );
+}
+
+fn findPerpendicularVector(vector: vec3f) -> vec3f {
+    let shifted_signs = sign(vector) + 0.5;
+    let sign_xz = sign(shifted_signs.x * shifted_signs.z);
+    let sign_yz = sign(shifted_signs.y * shifted_signs.z);
+    return vec3f(sign_xz * vector.z, sign_yz * vector.z, -sign_xz * vector.x - sign_yz * vector.y);
+}
+
+const SHADOW_PENUMBRA_SAMPLE_COUNT: u32 = 8u;
+
+fn computeShadowPenumbraExtent(
+    emissiveRadius: f32,
+    vogelDiskBaseAngle: f32,
+    displacement: vec3f,
+    displacementNormalDirection: vec3f,
+    displacementBinormalDirection: vec3f,
+    referenceDepth: f32,
+) -> f32 {
+    let sampleDiskRadius: f32 = 0.4;
+
+    let inverseSqrtSampleCount = inverseSqrt(f32(SHADOW_PENUMBRA_SAMPLE_COUNT));
+
+    var averageOccludingDepth: f32 = 0.0;
+    var occludingDepthCount: f32 = 0.0;
+
+    for (var sampleIdx: u32 = 0u; sampleIdx < SHADOW_PENUMBRA_SAMPLE_COUNT; sampleIdx++) {
+        let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
+        let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
+
+        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement).r;
+
+        if sampledDepth < referenceDepth {
+            averageOccludingDepth += sampledDepth;
+            occludingDepthCount += 1.0;
+        }
+    }
+
+    let minPenumbraExtent = 0.01;
+
+    if occludingDepthCount > 0.0 {
+        averageOccludingDepth /= occludingDepthCount;
+        return max(minPenumbraExtent, emissiveRadius * (referenceDepth - averageOccludingDepth) / averageOccludingDepth);
+    } else {
+        return -1.0;
+    }
+}
+
+fn generateSampleDisplacement(
+    displacement: vec3f,
+    displacementNormalDirection: vec3f,
+    displacementBinormalDirection: vec3f,
+    sampleOnPerpendicularDisk: vec2f,
+) -> vec3f {
+    return displacement + sampleOnPerpendicularDisk.x * displacementNormalDirection + sampleOnPerpendicularDisk.y * displacementBinormalDirection;
+}
+
+fn computeVogelDiskComparisonSampleAverage(
+    vogelDiskBaseAngle: f32,
+    sampleDiskRadius: f32,
+    displacement: vec3f,
+    displacementNormalDirection: vec3f,
+    displacementBinormalDirection: vec3f,
+    referenceDepth: f32,
+) -> f32 {
+    let sample_density = 800.0;
+
+    let sampleCount = u32(clamp(sampleDiskRadius * sample_density, 3.0, 64.0));
+
+    let invSampleCount = 1.0 / f32(sampleCount);
+    let inverseSqrtSampleCount = sqrt(invSampleCount);
+
+    var sampleAverage: f32 = 0.0;
+
+    for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
+        let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
+        let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
+
+        let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement).r;
+        if (sampledDepth >= referenceDepth) {
+            sampleAverage += invSampleCount;
+        }
+    }
+
+    return sampleAverage;
+}
+
+fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2f {
+    let goldenAngle: f32 = 2.4;
+    let radius = sqrt(f32(sampleIdx) + 0.5) * inverseSqrtSampleCount;
+    let angle = baseAngle + goldenAngle * f32(sampleIdx);
+    return vec2f(radius * cos(angle), radius * sin(angle));
+}
 
 // ***** Representative point area lighting *****
 
@@ -398,9 +596,9 @@ fn mainVS(
 
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
 
-    let lightVolumeRadius = omnidirectionalLight.cameraSpacePositionAndMaxReach.w;
+    let lightVolumeRadius = omnidirectionalLight.distanceMapping.farDistance;
 
-    let cameraSpacePosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz + lightVolumeRadius * modelSpacePosition;
+    let cameraSpacePosition = omnidirectionalLight.cameraSpacePosition + lightVolumeRadius * modelSpacePosition;
     output.projectedPosition = projectionUniform.projectionMatrix * vec4f(cameraSpacePosition, 1.0);
     output.cameraSpacePosition = cameraSpacePosition;
 
@@ -419,6 +617,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).r;
     let cameraSpacePosition = computePositionFromLinearDepth(depth, frustumFarPlanePoint);
     let cameraSpaceViewDirection = computeCameraSpaceViewDirection(cameraSpacePosition);
+    let distanceFromCamera = -cameraSpacePosition.z;
 
     let normalColor = textureSampleLevel(normalVectorTexture, normalVectorSampler, textureCoords, 0.0).rgb;
     let cameraSpaceNormalVector = convertNormalColorToNormalizedNormalVector(normalColor);
@@ -432,38 +631,55 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let omnidirectionalLight = omnidirectionalLights.lights[pushConstants.activeLightIdx];
 
-    let lightPosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz;
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
     let lightEmissiveRadius = omnidirectionalLight.luminousIntensityAndEmissiveRadius.w;
 
+    let lightNearDistance = omnidirectionalLight.distanceMapping.nearDistance;
+    let lightInverseDistanceSpan = omnidirectionalLight.distanceMapping.inverseDistanceSpan;
+
 #if (emulate_area_light_reflection)
     let lightQuantities = computeAreaLightQuantities(
-        lightPosition,
+        omnidirectionalLight.cameraSpacePosition,
         lightLuminousIntensity,
         lightEmissiveRadius,
+        omnidirectionalLight.cameraToLightRotationQuaternion,
+        lightNearDistance,
+        lightInverseDistanceSpan,
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
+        distanceFromCamera,
         roughness,
         pushConstants.exposure,
     );
 #else
     let lightQuantities = computeLightQuantities(
-        lightPosition,
+        omnidirectionalLight.cameraSpacePosition,
         lightLuminousIntensity,
+        omnidirectionalLight.cameraToLightRotationQuaternion,
+        lightNearDistance,
+        lightInverseDistanceSpan,
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
+        distanceFromCamera,
         pushConstants.exposure,
     );
 #endif
+
+    let lightAccessFactor = computePCSSLightAccessFactor(
+        lightEmissiveRadius,
+        input.projectedPosition.xy,
+        lightQuantities.lightSpaceFragmentDisplacement,
+        lightQuantities.normalizedDistance,
+    );
 
     let preExposedReflectedLuminance = computeGGXDiffuseGGXSpecularReflectedLuminance(
         lightQuantities.dots,
         albedo,
         normalIncidenceSpecularReflectance,
         roughness,
-        lightQuantities.preExposedIncidentLuminance,
+        lightAccessFactor * lightQuantities.preExposedIncidentLuminance,
     );
 
     output.preExposedReflectedLuminance = vec4f(preExposedReflectedLuminance, 1.0);
