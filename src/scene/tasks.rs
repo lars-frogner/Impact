@@ -15,16 +15,17 @@ define_task!(
     /// each [`SceneGraph`](crate::scene::SceneGraph) node representing an
     /// entity that also has the [`ReferenceFrameComp`] component so that the
     /// translational, rotational and scaling parts match the origin offset,
-    /// position, orientation and scaling.
-    [pub] SyncSceneObjectTransforms,
+    /// position, orientation and scaling.  Also updates any flags for the node
+    /// to match the entity's [`SceneEntityFlags`].
+    [pub] SyncSceneObjectTransformsAndFlags,
     depends_on = [],
     execute_on = [RenderingTag],
     |app: &Application| {
-        with_debug_logging!("Synchronizing scene graph node transforms"; {
+        with_debug_logging!("Synchronizing scene graph node transforms and flags"; {
             let ecs_world = app.ecs_world().read().unwrap();
             let scene = app.scene().read().unwrap();
             let mut scene_graph = scene.scene_graph().write().unwrap();
-            scene::systems::sync_scene_object_transforms(&ecs_world, &mut scene_graph);
+            scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
             Ok(())
         })
     }
@@ -32,7 +33,7 @@ define_task!(
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the properties (position,
-    /// direction, emission and extent) of every light source in the
+    /// direction, emission, extent and flags) of every light source in the
     /// [`LightStorage`](crate::light::LightStorage).
     [pub] SyncLightsInStorage,
     depends_on = [
@@ -61,7 +62,7 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the group-to-world
     /// transforms of all [`SceneGraph`](crate::scene::SceneGraph) group nodes.
     [pub] UpdateSceneGroupToWorldTransforms,
-    depends_on = [SyncSceneObjectTransforms],
+    depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
     |app: &Application| {
         with_debug_logging!("Updating scene object group-to-world transforms"; {
@@ -82,7 +83,7 @@ define_task!(
     /// the scene camera.
     [pub] SyncSceneCameraViewTransform,
     depends_on = [
-        SyncSceneObjectTransforms,
+        SyncSceneObjectTransformsAndFlags,
         UpdateSceneGroupToWorldTransforms
     ],
     execute_on = [RenderingTag],
@@ -110,7 +111,7 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the bounding spheres of
     /// all [`SceneGraph`](crate::scene::SceneGraph) nodes.
     [pub] UpdateSceneObjectBoundingSpheres,
-    depends_on = [SyncSceneObjectTransforms],
+    depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
     |app: &Application| {
         with_debug_logging!("Updating scene object bounding spheres"; {
@@ -277,7 +278,7 @@ impl Scene {
 /// Registers all tasks needed for coordinate between systems in the scene in
 /// the given task scheduler.
 pub fn register_scene_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
-    task_scheduler.register_task(SyncSceneObjectTransforms)?;
+    task_scheduler.register_task(SyncSceneObjectTransformsAndFlags)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;
     task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;

@@ -19,6 +19,7 @@ use crate::{
         },
         rigid_body::components::RigidBodyComp,
     },
+    scene::components::SceneEntityFlagsComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
 
@@ -84,6 +85,27 @@ fn apply_constant_acceleration_trajectories(ecs_world: &ECSWorld, simulation_tim
             frame.position += trajectory_position.coords;
             velocity.linear += trajectory_velocity;
         },
+        ![
+            Static,
+            MotionControlComp,
+            RigidBodyComp,
+            SceneEntityFlagsComp
+        ]
+    );
+    query!(
+        ecs_world,
+        |frame: &mut ReferenceFrameComp,
+         velocity: &mut VelocityComp,
+         trajectory: &ConstantAccelerationTrajectoryComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
+            let (trajectory_position, trajectory_velocity) =
+                trajectory.compute_position_and_velocity(simulation_time);
+            frame.position += trajectory_position.coords;
+            velocity.linear += trajectory_velocity;
+        },
         ![Static, MotionControlComp, RigidBodyComp]
     );
 }
@@ -94,6 +116,27 @@ fn apply_harmonically_oscillating_trajectories(ecs_world: &ECSWorld, simulation_
         |frame: &mut ReferenceFrameComp,
          velocity: &mut VelocityComp,
          trajectory: &HarmonicOscillatorTrajectoryComp| {
+            let (trajectory_position, trajectory_velocity) =
+                trajectory.compute_position_and_velocity(simulation_time);
+            frame.position += trajectory_position.coords;
+            velocity.linear += trajectory_velocity;
+        },
+        ![
+            Static,
+            MotionControlComp,
+            RigidBodyComp,
+            SceneEntityFlagsComp
+        ]
+    );
+    query!(
+        ecs_world,
+        |frame: &mut ReferenceFrameComp,
+         velocity: &mut VelocityComp,
+         trajectory: &HarmonicOscillatorTrajectoryComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
             let (trajectory_position, trajectory_velocity) =
                 trajectory.compute_position_and_velocity(simulation_time);
             frame.position += trajectory_position.coords;
@@ -114,6 +157,27 @@ fn apply_circular_trajectories(ecs_world: &ECSWorld, simulation_time: fph) {
             frame.position += trajectory_position.coords;
             velocity.linear += trajectory_velocity;
         },
+        ![
+            Static,
+            MotionControlComp,
+            RigidBodyComp,
+            SceneEntityFlagsComp
+        ]
+    );
+    query!(
+        ecs_world,
+        |frame: &mut ReferenceFrameComp,
+         velocity: &mut VelocityComp,
+         trajectory: &CircularTrajectoryComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
+            let (trajectory_position, trajectory_velocity) =
+                trajectory.compute_position_and_velocity(simulation_time);
+            frame.position += trajectory_position.coords;
+            velocity.linear += trajectory_velocity;
+        },
         ![Static, MotionControlComp, RigidBodyComp]
     );
 }
@@ -129,6 +193,27 @@ fn apply_orbital_trajectories(ecs_world: &ECSWorld, simulation_time: fph) {
             frame.position += trajectory_position.coords;
             velocity.linear += trajectory_velocity;
         },
+        ![
+            Static,
+            MotionControlComp,
+            RigidBodyComp,
+            SceneEntityFlagsComp
+        ]
+    );
+    query!(
+        ecs_world,
+        |frame: &mut ReferenceFrameComp,
+         velocity: &mut VelocityComp,
+         trajectory: &OrbitalTrajectoryComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
+            let (trajectory_position, trajectory_velocity) =
+                trajectory.compute_position_and_velocity(simulation_time);
+            frame.position += trajectory_position.coords;
+            velocity.linear += trajectory_velocity;
+        },
         ![Static, MotionControlComp, RigidBodyComp]
     );
 }
@@ -137,6 +222,23 @@ fn apply_constant_rotations(ecs_world: &ECSWorld, simulation_time: fph) {
     query!(
         ecs_world,
         |frame: &mut ReferenceFrameComp, rotation: &ConstantRotationComp| {
+            frame.orientation = rotation.compute_orientation(simulation_time);
+        },
+        ![
+            Static,
+            OrientationControlComp,
+            RigidBodyComp,
+            SceneEntityFlagsComp
+        ]
+    );
+    query!(
+        ecs_world,
+        |frame: &mut ReferenceFrameComp,
+         rotation: &ConstantRotationComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
             frame.orientation = rotation.compute_orientation(simulation_time);
         },
         ![Static, OrientationControlComp, RigidBodyComp]

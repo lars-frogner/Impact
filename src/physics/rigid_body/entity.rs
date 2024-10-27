@@ -17,6 +17,7 @@ use crate::{
             RigidBody,
         },
     },
+    scene::components::SceneEntityFlagsComp,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use std::sync::RwLock;
@@ -32,7 +33,13 @@ pub fn setup_rigid_body_for_new_entity(
         mut inertial_properties: InertialProperties,
         frame: Option<&ReferenceFrameComp>,
         velocity: Option<&VelocityComp>,
-    ) -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+        flags: Option<&SceneEntityFlagsComp>,
+    ) -> (
+        RigidBodyComp,
+        ReferenceFrameComp,
+        VelocityComp,
+        SceneEntityFlagsComp,
+    ) {
         let mut frame = frame.cloned().unwrap_or_default();
 
         // Scale the mass to be consistent with the initial scale factor. If
@@ -55,7 +62,12 @@ pub fn setup_rigid_body_for_new_entity(
             &velocity.angular,
         );
 
-        (RigidBodyComp(rigid_body), frame, velocity)
+        (
+            RigidBodyComp(rigid_body),
+            frame,
+            velocity,
+            flags.copied().unwrap_or_default(),
+        )
     }
 
     setup!(
@@ -63,15 +75,21 @@ pub fn setup_rigid_body_for_new_entity(
         |box_mesh: &BoxMeshComp,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>|
-         -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+         velocity: Option<&VelocityComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (
+            RigidBodyComp,
+            ReferenceFrameComp,
+            VelocityComp,
+            SceneEntityFlagsComp
+        ) {
             let inertial_properties = InertialProperties::of_uniform_box(
                 fph::from(box_mesh.extent_x),
                 fph::from(box_mesh.extent_y),
                 fph::from(box_mesh.extent_z),
                 uniform_rigid_body.mass_density,
             );
-            execute_setup(inertial_properties, frame, velocity)
+            execute_setup(inertial_properties, frame, velocity, flags)
         },
         ![RigidBodyComp]
     );
@@ -81,14 +99,20 @@ pub fn setup_rigid_body_for_new_entity(
         |cylinder_mesh: &CylinderMeshComp,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>|
-         -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+         velocity: Option<&VelocityComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (
+            RigidBodyComp,
+            ReferenceFrameComp,
+            VelocityComp,
+            SceneEntityFlagsComp
+        ) {
             let inertial_properties = InertialProperties::of_uniform_cylinder(
                 fph::from(cylinder_mesh.length),
                 fph::from(cylinder_mesh.diameter),
                 uniform_rigid_body.mass_density,
             );
-            execute_setup(inertial_properties, frame, velocity)
+            execute_setup(inertial_properties, frame, velocity, flags)
         },
         ![RigidBodyComp]
     );
@@ -98,14 +122,20 @@ pub fn setup_rigid_body_for_new_entity(
         |cone_mesh: &ConeMeshComp,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>|
-         -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+         velocity: Option<&VelocityComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (
+            RigidBodyComp,
+            ReferenceFrameComp,
+            VelocityComp,
+            SceneEntityFlagsComp
+        ) {
             let inertial_properties = InertialProperties::of_uniform_cone(
                 fph::from(cone_mesh.length),
                 fph::from(cone_mesh.max_diameter),
                 uniform_rigid_body.mass_density,
             );
-            execute_setup(inertial_properties, frame, velocity)
+            execute_setup(inertial_properties, frame, velocity, flags)
         },
         ![RigidBodyComp]
     );
@@ -114,11 +144,17 @@ pub fn setup_rigid_body_for_new_entity(
         components,
         |uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>|
-         -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+         velocity: Option<&VelocityComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (
+            RigidBodyComp,
+            ReferenceFrameComp,
+            VelocityComp,
+            SceneEntityFlagsComp
+        ) {
             let inertial_properties =
                 InertialProperties::of_uniform_sphere(uniform_rigid_body.mass_density);
-            execute_setup(inertial_properties, frame, velocity)
+            execute_setup(inertial_properties, frame, velocity, flags)
         },
         [SphereMeshComp],
         ![RigidBodyComp]
@@ -128,11 +164,17 @@ pub fn setup_rigid_body_for_new_entity(
         components,
         |uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>|
-         -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+         velocity: Option<&VelocityComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (
+            RigidBodyComp,
+            ReferenceFrameComp,
+            VelocityComp,
+            SceneEntityFlagsComp
+        ) {
             let inertial_properties =
                 InertialProperties::of_uniform_hemisphere(uniform_rigid_body.mass_density);
-            execute_setup(inertial_properties, frame, velocity)
+            execute_setup(inertial_properties, frame, velocity, flags)
         },
         [HemisphereMeshComp],
         ![RigidBodyComp]
@@ -143,8 +185,14 @@ pub fn setup_rigid_body_for_new_entity(
         |mesh: &MeshComp,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>|
-         -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
+         velocity: Option<&VelocityComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (
+            RigidBodyComp,
+            ReferenceFrameComp,
+            VelocityComp,
+            SceneEntityFlagsComp
+        ) {
             let mesh_repository_readonly = mesh_repository.read().unwrap();
             let triangle_mesh = mesh_repository_readonly
                 .get_mesh(mesh.id)
@@ -153,7 +201,7 @@ pub fn setup_rigid_body_for_new_entity(
                 triangle_mesh,
                 uniform_rigid_body.mass_density,
             );
-            execute_setup(inertial_properties, frame, velocity)
+            execute_setup(inertial_properties, frame, velocity, flags)
         },
         ![RigidBodyComp]
     );

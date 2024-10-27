@@ -1,8 +1,11 @@
 //! ECS systems related to rigid body physics.
 
-use crate::physics::{
-    motion::components::{ReferenceFrameComp, Static, VelocityComp},
-    rigid_body::{components::RigidBodyComp, schemes::SchemeSubstep},
+use crate::{
+    physics::{
+        motion::components::{ReferenceFrameComp, Static, VelocityComp},
+        rigid_body::{components::RigidBodyComp, schemes::SchemeSubstep},
+    },
+    scene::components::SceneEntityFlagsComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
 
@@ -12,7 +15,11 @@ pub fn advance_rigid_body_motion<S: SchemeSubstep>(ecs_world: &ECSWorld, scheme_
         ecs_world,
         |rigid_body: &mut RigidBodyComp,
          frame: &mut ReferenceFrameComp,
-         velocity: &mut VelocityComp| {
+         velocity: &mut VelocityComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
             rigid_body.0.advance_motion(
                 scheme_substep,
                 &mut frame.position,

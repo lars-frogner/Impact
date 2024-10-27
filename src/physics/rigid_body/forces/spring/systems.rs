@@ -12,6 +12,7 @@ use crate::{
         },
         rigid_body::{components::RigidBodyComp, forces::spring::components::SpringComp},
     },
+    scene::components::SceneEntityFlagsComp,
 };
 use approx::abs_diff_eq;
 use impact_ecs::{
@@ -63,6 +64,19 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
         log::debug!("Missing spring attachment entity: spring component will be removed");
         return SpringForceApplicationOutcome::EntityMissing;
     };
+
+    let entity_1_is_disabled = entity_1
+        .get_component::<SceneEntityFlagsComp>()
+        .map_or(false, |comp| comp.access().is_disabled());
+
+    let entity_2_is_disabled = entity_2
+        .get_component::<SceneEntityFlagsComp>()
+        .map_or(false, |comp| comp.access().is_disabled());
+
+    if entity_1_is_disabled || entity_2_is_disabled {
+        // We need both entities in order to apply a force
+        return SpringForceApplicationOutcome::Ok;
+    }
 
     let entity_1_is_static = entity_1.has_component::<Static>();
     let entity_2_is_static = entity_2.has_component::<Static>();

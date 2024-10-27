@@ -14,11 +14,11 @@ use crate::{
     physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{
-            ParentComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
+            ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
             SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
             UncullableComp,
         },
-        ModelInstanceNodeID, RenderResourcesDesynchronized, Scene,
+        ModelInstanceNodeID, RenderResourcesDesynchronized, Scene, SceneEntityFlags,
     },
     voxel,
     window::Window,
@@ -214,8 +214,11 @@ impl Scene {
             |mesh: &MeshComp,
              material: &MaterialComp,
              frame: Option<&ReferenceFrameComp>,
-             parent: Option<&SceneGraphParentNodeComp>|
-             -> SceneGraphModelInstanceNodeComp {
+             parent: Option<&SceneGraphParentNodeComp>,
+             flags: Option<&SceneEntityFlagsComp>|
+             -> (SceneGraphModelInstanceNodeComp, SceneEntityFlagsComp) {
+                let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
+
                 let model_id = ModelID::for_mesh_and_material(mesh.id, *material.material_handle());
 
                 let mut feature_type_ids = Vec::with_capacity(4);
@@ -277,13 +280,17 @@ impl Scene {
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-                SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
-                    parent_node_id,
-                    model_to_parent_transform,
-                    model_id,
-                    bounding_sphere,
-                    feature_ids,
-                ))
+                (
+                    SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
+                        parent_node_id,
+                        model_to_parent_transform,
+                        model_id,
+                        bounding_sphere,
+                        feature_ids,
+                        flags.into(),
+                    )),
+                    SceneEntityFlagsComp(flags),
+                )
             },
             ![SceneGraphModelInstanceNodeComp]
         );
