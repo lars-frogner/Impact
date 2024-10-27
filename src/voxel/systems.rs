@@ -8,7 +8,10 @@ use crate::{
         rigid_body::components::RigidBodyComp,
         PhysicsSimulator,
     },
-    scene::{components::SceneGraphParentNodeComp, SceneGraph},
+    scene::{
+        components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
+        SceneGraph,
+    },
     voxel::{
         chunks::{
             disconnection::DisconnectedVoxelObject,
@@ -41,7 +44,12 @@ pub fn apply_absorption(
          voxel_object: &VoxelObjectComp,
          reference_frame: &mut ReferenceFrameComp,
          velocity: &mut VelocityComp,
-         rigid_body: &mut RigidBodyComp| {
+         rigid_body: &mut RigidBodyComp,
+         flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
+
             let (object, inertial_property_manager) = voxel_manager
                 .object_manager
                 .get_voxel_object_with_inertial_property_manager_mut(voxel_object.voxel_object_id);
@@ -66,7 +74,13 @@ pub fn apply_absorption(
 
             query!(
                 ecs_world,
-                |absorbing_sphere: &VoxelAbsorbingSphereComp, sphere_frame: &ReferenceFrameComp| {
+                |absorbing_sphere: &VoxelAbsorbingSphereComp,
+                 sphere_frame: &ReferenceFrameComp,
+                 flags: &SceneEntityFlagsComp| {
+                    if flags.is_disabled() {
+                        return;
+                    }
+
                     let sphere_to_world_transform =
                         sphere_frame.create_transform_to_parent_space::<f64>();
 
@@ -86,7 +100,12 @@ pub fn apply_absorption(
                 ecs_world,
                 |absorbing_sphere: &VoxelAbsorbingSphereComp,
                  sphere_frame: &ReferenceFrameComp,
-                 parent: &SceneGraphParentNodeComp| {
+                 parent: &SceneGraphParentNodeComp,
+                 flags: &SceneEntityFlagsComp| {
+                    if flags.is_disabled() {
+                        return;
+                    }
+
                     let parent_node = scene_graph.group_nodes().node(parent.id);
 
                     let sphere_to_world_transform = parent_node.group_to_root_transform().cast()
@@ -106,7 +125,12 @@ pub fn apply_absorption(
             query!(
                 ecs_world,
                 |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
-                 capsule_frame: &ReferenceFrameComp| {
+                 capsule_frame: &ReferenceFrameComp,
+                 flags: &SceneEntityFlagsComp| {
+                    if flags.is_disabled() {
+                        return;
+                    }
+
                     let capsule_to_world_transform =
                         capsule_frame.create_transform_to_parent_space::<f64>();
 
@@ -126,7 +150,12 @@ pub fn apply_absorption(
                 ecs_world,
                 |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
                  capsule_frame: &ReferenceFrameComp,
-                 parent: &SceneGraphParentNodeComp| {
+                 parent: &SceneGraphParentNodeComp,
+                 flags: &SceneEntityFlagsComp| {
+                    if flags.is_disabled() {
+                        return;
+                    }
+
                     let parent_node = scene_graph.group_nodes().node(parent.id);
 
                     let capsule_to_world_transform = parent_node.group_to_root_transform().cast()

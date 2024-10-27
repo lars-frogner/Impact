@@ -2,11 +2,20 @@
 
 use crate::{
     component::ComponentRegistry,
-    scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeID},
+    scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags, SceneGraphNodeID},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{world::Entity, Component};
+
+/// [`Component`](impact_ecs::component::Component) for entities that
+/// participate in a scene and have associated [`SceneEntityFlags`].
+///
+/// If not specified, this component is automatically added to any new entity
+/// that has a model, light or rigid body.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
+pub struct SceneEntityFlagsComp(pub SceneEntityFlags);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a parent entity.
@@ -72,6 +81,13 @@ pub type SceneGraphCameraNodeComp = SceneGraphNodeComp<CameraNodeID>;
 /// model instance node in the [`SceneGraph`](crate::scene::SceneGraph).
 pub type SceneGraphModelInstanceNodeComp = SceneGraphNodeComp<ModelInstanceNodeID>;
 
+impl SceneEntityFlagsComp {
+    /// Whether the [`SceneEntityFlags::IS_DISABLED`] flag is set.
+    pub fn is_disabled(&self) -> bool {
+        self.0.contains(SceneEntityFlags::IS_DISABLED)
+    }
+}
+
 impl ParentComp {
     /// Creates a new component representing a direct child of the given
     /// [`Entity`].
@@ -98,6 +114,7 @@ impl<ID: SceneGraphNodeID> SceneGraphNodeComp<ID> {
 
 /// Registers all scene graph [`Component`](impact_ecs::component::Component)s.
 pub fn register_scene_graph_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, SceneEntityFlagsComp)?;
     register_setup_component!(registry, ParentComp)?;
     register_setup_component!(registry, SceneGraphGroupComp)?;
     register_setup_component!(registry, UncullableComp)?;

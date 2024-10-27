@@ -16,10 +16,10 @@ use crate::{
     },
     scene::{
         components::{
-            SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
-            UncullableComp,
+            SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp,
+            SceneGraphParentNodeComp, UncullableComp,
         },
-        RenderResourcesDesynchronized, SceneGraph,
+        RenderResourcesDesynchronized, SceneEntityFlags, SceneGraph,
     },
     voxel::{
         chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject},
@@ -676,8 +676,11 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
         components,
         |voxel_object: &VoxelObjectComp,
          frame: Option<&ReferenceFrameComp>,
-         parent: Option<&SceneGraphParentNodeComp>|
-         -> SceneGraphModelInstanceNodeComp {
+         parent: Option<&SceneGraphParentNodeComp>,
+         flags: Option<&SceneEntityFlagsComp>|
+         -> (SceneGraphModelInstanceNodeComp, SceneEntityFlagsComp) {
+            let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
+
             let voxel_object_id = voxel_object.voxel_object_id;
 
             let voxel_object = voxel_manager
@@ -729,17 +732,21 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
-                parent_node_id,
-                model_to_parent_transform,
-                model_id,
-                bounding_sphere,
-                vec![
-                    model_view_transform_feature_id,
-                    model_light_transform_feature_id,
-                    voxel_object_id_feature_id,
-                ],
-            ))
+            (
+                SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
+                    parent_node_id,
+                    model_to_parent_transform,
+                    model_id,
+                    bounding_sphere,
+                    vec![
+                        model_view_transform_feature_id,
+                        model_light_transform_feature_id,
+                        voxel_object_id_feature_id,
+                    ],
+                    flags.into(),
+                )),
+                SceneEntityFlagsComp(flags),
+            )
         },
         ![SceneGraphModelInstanceNodeComp]
     );

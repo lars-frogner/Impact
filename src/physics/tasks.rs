@@ -4,7 +4,7 @@ use crate::{
     application::{tasks::AppTaskScheduler, Application},
     define_execution_tag, define_task,
     physics::{motion, PhysicsSimulator},
-    scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransforms},
+    scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
 };
@@ -21,7 +21,7 @@ define_task!(
     /// motion of all controlled entities.
     [pub] UpdateControlledEntities,
     depends_on = [
-        SyncSceneObjectTransforms,
+        SyncSceneObjectTransformsAndFlags,
         SyncLightsInStorage
     ],
     execute_on = [PhysicsTag],
@@ -38,7 +38,7 @@ define_task!(
     /// by one time step.
     [pub] AdvanceSimulation,
     depends_on = [
-        SyncSceneObjectTransforms,
+        SyncSceneObjectTransformsAndFlags,
         SyncLightsInStorage,
         UpdateControlledEntities
     ],
