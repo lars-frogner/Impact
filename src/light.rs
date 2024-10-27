@@ -12,8 +12,10 @@ use crate::{
     gpu::{texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
     model::InstanceFeatureBufferRangeID,
     num::Float,
+    scene::SceneEntityFlags,
     util::bounds::UpperExclusiveBounds,
 };
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
@@ -38,14 +40,6 @@ pub type Luminance = Vector3<f32>;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct LightID(u32);
 
-/// A type of light source.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum LightType {
-    AmbientLight,
-    OmnidirectionalLight,
-    UnidirectionalLight,
-}
-
 /// A spatially uniform and isotropic light field, represented by an RGB
 /// incident luminance that applies to any surface affected by the light.
 ///
@@ -61,11 +55,8 @@ pub struct AmbientLight {
 }
 
 /// An omnidirectional light source represented by a camera space position, an
-/// RGB luminous intensity and an extent. The struct also includes a rotation
-/// quaternion that defines the orientation of the light's local coordinate
-/// system with respect to camera space, and a near and far distance restricting
-/// the distance range in which the light can illuminate objects and cast
-/// shadows.
+/// RGB luminous intensity and an extent. The struct also includes a max reach
+/// restricting the distance at which the light can illuminate objects.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -78,31 +69,78 @@ pub struct AmbientLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct OmnidirectionalLight {
+    // Camera space position and far distance are treated as a single
+    // 4-component vector in the shader
+    camera_space_position: Point3<f32>,
+    max_reach: f32,
+    // Luminous intensity and emissive radius are treated as a single
+    // 4-component vector in the shader
+    luminous_intensity: LuminousIntensity,
+    emissive_radius: f32,
+    flags: LightFlags,
+    // Padding to make size multiple of 16-bytes
+    _padding: [u8; 15],
+}
+
+/// A shadowable omnidirectional light source represented by a camera space
+/// position, an RGB luminous intensity and an extent. The struct also includes
+/// a rotation quaternion that defines the orientation of the light's local
+/// coordinate system with respect to camera space, and a near and far distance
+/// restricting the distance range in which the light can illuminate objects and
+/// cast shadows.
+///
+/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// will be passed directly to the GPU in a uniform buffer. Importantly, its
+/// size is a multiple of 16 bytes as required for uniforms, and the fields that
+/// will be accessed on the GPU are aligned to 16-byte boundaries.
+///
+/// # Warning
+/// The fields must not be reordered, as this ordering is expected by the
+/// shader.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct ShadowableOmnidirectionalLight {
     camera_to_light_space_rotation: UnitQuaternion<f32>,
     camera_space_position: Point3<f32>,
     // Padding to obtain 16-byte alignment for next field
-    _padding_1: f32,
-    // Luminous intensity and emission radius are treated as a single
+    flags: LightFlags, // Use some of the padding for bitflags
+    _padding_1: [u8; 3],
+    // Luminous intensity and emissive radius are treated as a single
     // 4-component vector in the shader
     luminous_intensity: LuminousIntensity,
-    emission_radius: f32,
+    emissive_radius: f32,
     // The `near_distance` and `inverse_distance_span` fields are accessed as a
     // struct in a single field in the shader
     near_distance: f32,
     inverse_distance_span: f32,
     // Padding to make size multiple of 16-bytes
     far_distance: f32,
-    max_far_distance: f32,
+    max_reach: f32,
 }
 
-/// Maximum number of cascades supported in a cascaded shadow map for
-/// unidirectional lights.
+/// An unidirectional light source represented by a camera space direction, an
+/// RGB perpendicular illuminance and an angular extent.
+///
+/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// will be passed directly to the GPU in a uniform buffer. Importantly, its
+/// size is a multiple of 16 bytes as required for uniforms, and the fields that
+/// will be accessed on the GPU are aligned to 16-byte boundaries.
 ///
 /// # Warning
-/// Increasing this above 4 will require changes to the [`UnidirectionalLight`]
-/// struct and associated shader code to meet uniform padding requirements.
-pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
-const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
+/// The fields must not be reordered, as this ordering is expected by the
+/// shader.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct UnidirectionalLight {
+    camera_space_direction: UnitVector3<f32>,
+    // Padding to obtain 16-byte alignment for next field
+    flags: LightFlags, // Use some of the padding for bitflags
+    _padding: [u8; 3],
+    // Illuminance and angular radius are treated as a single 4-component vector
+    // in the shader
+    perpendicular_illuminance: Illumninance,
+    tan_angular_radius: f32,
+}
 
 /// An unidirectional light source represented by a camera space direction, an
 /// RGB perpendicular illuminance and an angular extent. The struct also
@@ -124,7 +162,7 @@ const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
 /// shader.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct UnidirectionalLight {
+pub struct ShadowableUnidirectionalLight {
     camera_to_light_space_rotation: UnitQuaternion<f32>,
     camera_space_direction: UnitVector3<f32>,
     // Padding to obtain 16-byte alignment for next field
@@ -137,7 +175,9 @@ pub struct UnidirectionalLight {
     partition_depths: [f32; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
     // Padding to make size multiple of 16-bytes
     far_partition_depth: f32,
-    _padding_3: [f32; 4 - MAX_SHADOW_MAP_CASCADES_USIZE],
+    flags: LightFlags, // Use some of the padding for bitflags
+    _padding_3: [u8; 3],
+    _padding_4: [f32; 7 - MAX_SHADOW_MAP_CASCADES_USIZE],
 }
 
 #[repr(C)]
@@ -145,25 +185,50 @@ pub struct UnidirectionalLight {
 struct OrthographicTranslationAndScaling {
     translation: Translation3<f32>,
     // Padding to obtain 16-byte alignment for next field
-    _padding_1: f32,
+    flags: LightFlags, // Use some of the padding for bitflags for the parent light
+    _padding_1: [u8; 3],
     scaling: Scale3<f32>,
     // Padding to make size multiple of 16-bytes
     _padding_2: f32,
 }
 
+/// Maximum number of cascades supported in a cascaded shadow map for
+/// unidirectional lights.
+///
+/// # Warning
+/// Increasing this above 4 will require changes to the [`UnidirectionalLight`]
+/// struct and associated shader code to meet uniform padding requirements.
+pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
+const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
+
+bitflags! {
+    /// Bitflags encoding a set of binary states or properties for a light.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
+    pub struct LightFlags: u8 {
+        /// The source emits no light.
+        const IS_DISABLED   = 1 << 0;
+    }
+}
+
 type LightUniformBuffer<L> = UniformBuffer<LightID, L>;
 type AmbientLightUniformBuffer = LightUniformBuffer<AmbientLight>;
 type OmnidirectionalLightUniformBuffer = LightUniformBuffer<OmnidirectionalLight>;
+type ShadowableOmnidirectionalLightUniformBuffer =
+    LightUniformBuffer<ShadowableOmnidirectionalLight>;
 type UnidirectionalLightUniformBuffer = LightUniformBuffer<UnidirectionalLight>;
+type ShadowableUnidirectionalLightUniformBuffer = LightUniformBuffer<ShadowableUnidirectionalLight>;
 
 /// Container for all light sources in a scene.
 #[derive(Debug)]
 pub struct LightStorage {
     ambient_light_buffer: AmbientLightUniformBuffer,
     omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer,
+    shadowable_omnidirectional_light_buffer: ShadowableOmnidirectionalLightUniformBuffer,
     unidirectional_light_buffer: UnidirectionalLightUniformBuffer,
+    shadowable_unidirectional_light_buffer: ShadowableUnidirectionalLightUniformBuffer,
     light_id_counter: u32,
-    total_ambient_luminance: Illumninance,
+    total_ambient_luminance: Luminance,
 }
 
 impl LightID {
@@ -189,13 +254,21 @@ impl LightStorage {
     /// Creates a new empty light storage.
     pub fn new() -> Self {
         Self {
-            ambient_light_buffer: AmbientLightUniformBuffer::with_capacity(1),
+            ambient_light_buffer: AmbientLightUniformBuffer::new(),
             omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer::with_capacity(
                 Self::INITIAL_LIGHT_CAPACITY,
             ),
+            shadowable_omnidirectional_light_buffer:
+                ShadowableOmnidirectionalLightUniformBuffer::with_capacity(
+                    Self::INITIAL_LIGHT_CAPACITY,
+                ),
             unidirectional_light_buffer: UnidirectionalLightUniformBuffer::with_capacity(
                 Self::INITIAL_LIGHT_CAPACITY,
             ),
+            shadowable_unidirectional_light_buffer:
+                ShadowableUnidirectionalLightUniformBuffer::with_capacity(
+                    Self::INITIAL_LIGHT_CAPACITY,
+                ),
             total_ambient_luminance: Luminance::zeros(),
             light_id_counter: 0,
         }
@@ -214,9 +287,25 @@ impl LightStorage {
     }
 
     /// Returns a reference to the [`UniformBuffer`] holding all
+    /// [`ShadowableOmnidirectionalLight`]s.
+    pub fn shadowable_omnidirectional_light_buffer(
+        &self,
+    ) -> &UniformBuffer<LightID, ShadowableOmnidirectionalLight> {
+        &self.shadowable_omnidirectional_light_buffer
+    }
+
+    /// Returns a reference to the [`UniformBuffer`] holding all
     /// [`UnidirectionalLight`]s.
     pub fn unidirectional_light_buffer(&self) -> &UniformBuffer<LightID, UnidirectionalLight> {
         &self.unidirectional_light_buffer
+    }
+
+    /// Returns a reference to the [`UniformBuffer`] holding all
+    /// [`ShadowableUnidirectionalLight`]s.
+    pub fn shadowable_unidirectional_light_buffer(
+        &self,
+    ) -> &UniformBuffer<LightID, ShadowableUnidirectionalLight> {
+        &self.shadowable_unidirectional_light_buffer
     }
 
     /// Adds the given [`AmbientLight`] to the storage.
@@ -229,7 +318,7 @@ impl LightStorage {
             .add_uniform(light_id, ambient_light);
 
         self.total_ambient_luminance += ambient_light.luminance;
-        self.update_max_far_distance_for_omnidirectional_lights();
+        self.update_max_reach_for_omnidirectional_lights();
 
         light_id
     }
@@ -248,6 +337,20 @@ impl LightStorage {
         light_id
     }
 
+    /// Adds the given [`ShadowableOmnidirectionalLight`] to the storage.
+    ///
+    /// # Returns
+    /// A new [`LightID`] representing the added light source.
+    pub fn add_shadowable_omnidirectional_light(
+        &mut self,
+        omnidirectional_light: ShadowableOmnidirectionalLight,
+    ) -> LightID {
+        let light_id = self.create_new_light_id();
+        self.shadowable_omnidirectional_light_buffer
+            .add_uniform(light_id, omnidirectional_light);
+        light_id
+    }
+
     /// Adds the given [`UnidirectionalLight`] to the storage.
     ///
     /// # Returns
@@ -262,6 +365,20 @@ impl LightStorage {
         light_id
     }
 
+    /// Adds the given [`ShadowableUnidirectionalLight`] to the storage.
+    ///
+    /// # Returns
+    /// A new [`LightID`] representing the added light source.
+    pub fn add_shadowable_unidirectional_light(
+        &mut self,
+        unidirectional_light: ShadowableUnidirectionalLight,
+    ) -> LightID {
+        let light_id = self.create_new_light_id();
+        self.shadowable_unidirectional_light_buffer
+            .add_uniform(light_id, unidirectional_light);
+        light_id
+    }
+
     /// Removes the [`AmbientLight`] with the given ID from the storage.
     ///
     /// # Panics
@@ -269,7 +386,7 @@ impl LightStorage {
     pub fn remove_ambient_light(&mut self, light_id: LightID) {
         self.total_ambient_luminance -= self.ambient_light_buffer.uniform(light_id).luminance;
         self.ambient_light_buffer.remove_uniform(light_id);
-        self.update_max_far_distance_for_omnidirectional_lights();
+        self.update_max_reach_for_omnidirectional_lights();
     }
 
     /// Removes the [`OmnidirectionalLight`] with the given ID from the storage.
@@ -280,12 +397,32 @@ impl LightStorage {
         self.omnidirectional_light_buffer.remove_uniform(light_id);
     }
 
+    /// Removes the [`ShadowableOmnidirectionalLight`] with the given ID from
+    /// the storage.
+    ///
+    /// # Panics
+    /// If no shadowable omnidirectional light with the given ID exists.
+    pub fn remove_shadowable_omnidirectional_light(&mut self, light_id: LightID) {
+        self.shadowable_omnidirectional_light_buffer
+            .remove_uniform(light_id);
+    }
+
     /// Removes the [`UnidirectionalLight`] with the given ID from the storage.
     ///
     /// # Panics
     /// If no unidirectional light with the given ID exists.
     pub fn remove_unidirectional_light(&mut self, light_id: LightID) {
         self.unidirectional_light_buffer.remove_uniform(light_id);
+    }
+
+    /// Removes the [`ShadowableUnidirectionalLight`] with the given ID from the
+    /// storage.
+    ///
+    /// # Panics
+    /// If no shadowable unidirectional light with the given ID exists.
+    pub fn remove_shadowable_unidirectional_light(&mut self, light_id: LightID) {
+        self.shadowable_unidirectional_light_buffer
+            .remove_uniform(light_id);
     }
 
     /// Sets the uniform illuminance of the [`AmbientLight`] with the given ID
@@ -303,7 +440,7 @@ impl LightStorage {
         light.set_illuminance(illuminance);
 
         self.total_ambient_luminance += light.luminance;
-        self.update_max_far_distance_for_omnidirectional_lights();
+        self.update_max_reach_for_omnidirectional_lights();
     }
 
     /// Returns a reference to the [`OmnidirectionalLight`] with the given ID.
@@ -327,6 +464,34 @@ impl LightStorage {
             .expect("Requested missing omnidirectional light")
     }
 
+    /// Returns a reference to the [`ShadowableOmnidirectionalLight`] with the
+    /// given ID.
+    ///
+    /// # Panics
+    /// If no shadowable omnidirectional light with the given ID exists.
+    pub fn shadowable_omnidirectional_light(
+        &self,
+        light_id: LightID,
+    ) -> &ShadowableOmnidirectionalLight {
+        self.shadowable_omnidirectional_light_buffer
+            .get_uniform(light_id)
+            .expect("Requested missing shadowable omnidirectional light")
+    }
+
+    /// Returns a mutable reference to the [`ShadowableOmnidirectionalLight`]
+    /// with the given ID.
+    ///
+    /// # Panics
+    /// If no shadowable omnidirectional light with the given ID exists.
+    pub fn shadowable_omnidirectional_light_mut(
+        &mut self,
+        light_id: LightID,
+    ) -> &mut ShadowableOmnidirectionalLight {
+        self.shadowable_omnidirectional_light_buffer
+            .get_uniform_mut(light_id)
+            .expect("Requested missing shadowable omnidirectional light")
+    }
+
     /// Returns a reference to the [`UnidirectionalLight`] with the given ID.
     ///
     /// # Panics
@@ -348,6 +513,57 @@ impl LightStorage {
             .expect("Requested missing unidirectional light")
     }
 
+    /// Returns a reference to the [`ShadowableUnidirectionalLight`] with the
+    /// given ID.
+    ///
+    /// # Panics
+    /// If no shadowable unidirectional light with the given ID exists.
+    pub fn shadowable_unidirectional_light(
+        &self,
+        light_id: LightID,
+    ) -> &ShadowableUnidirectionalLight {
+        self.shadowable_unidirectional_light_buffer
+            .get_uniform(light_id)
+            .expect("Requested missing shadowable unidirectional light")
+    }
+
+    /// Returns a mutable reference to the [`ShadowableUnidirectionalLight`]
+    /// with the given ID.
+    ///
+    /// # Panics
+    /// If no shadowable unidirectional light with the given ID exists.
+    pub fn shadowable_unidirectional_light_mut(
+        &mut self,
+        light_id: LightID,
+    ) -> &mut ShadowableUnidirectionalLight {
+        self.shadowable_unidirectional_light_buffer
+            .get_uniform_mut(light_id)
+            .expect("Requested missing shadowable unidirectional light")
+    }
+
+    /// Returns the slice of all omnidirectional lights in the storage.
+    pub fn omnidirectional_lights(&self) -> &[OmnidirectionalLight] {
+        self.omnidirectional_light_buffer.valid_uniforms()
+    }
+
+    /// Returns the slice of all shadowable omnidirectional lights in the
+    /// storage.
+    pub fn shadowable_omnidirectional_lights(&self) -> &[ShadowableOmnidirectionalLight] {
+        self.shadowable_omnidirectional_light_buffer
+            .valid_uniforms()
+    }
+
+    /// Returns the slice of all unidirectional lights in the storage.
+    pub fn unidirectional_lights(&self) -> &[UnidirectionalLight] {
+        self.unidirectional_light_buffer.valid_uniforms()
+    }
+
+    /// Returns the slice of all shadowable unidirectional lights in the
+    /// storage.
+    pub fn shadowable_unidirectional_lights(&self) -> &[ShadowableUnidirectionalLight] {
+        self.shadowable_unidirectional_light_buffer.valid_uniforms()
+    }
+
     /// Returns an iterator over the omnidirectional lights in the storage where
     /// each item contains the light ID and a mutable reference to the light.
     pub fn omnidirectional_lights_with_ids_mut(
@@ -357,12 +573,32 @@ impl LightStorage {
             .valid_uniforms_with_ids_mut()
     }
 
+    /// Returns an iterator over the shadowable omnidirectional lights in the
+    /// storage where each item contains the light ID and a mutable
+    /// reference to the light.
+    pub fn shadowable_omnidirectional_lights_with_ids_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (LightID, &mut ShadowableOmnidirectionalLight)> {
+        self.shadowable_omnidirectional_light_buffer
+            .valid_uniforms_with_ids_mut()
+    }
+
     /// Returns an iterator over the unidirectional lights in the storage where
     /// each item contains the light ID and a mutable reference to the light.
-    pub fn unidirectional_lights_with_ids_mut(
+    pub fn unidirectional_lights_with_ids_muts(
         &mut self,
     ) -> impl Iterator<Item = (LightID, &mut UnidirectionalLight)> {
         self.unidirectional_light_buffer
+            .valid_uniforms_with_ids_mut()
+    }
+
+    /// Returns an iterator over the shadowable unidirectional lights in the
+    /// storage where each item contains the light ID and a mutable
+    /// reference to the light.
+    pub fn shadowable_unidirectional_lights_with_ids_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (LightID, &mut ShadowableUnidirectionalLight)> {
+        self.shadowable_unidirectional_light_buffer
             .valid_uniforms_with_ids_mut()
     }
 
@@ -370,16 +606,20 @@ impl LightStorage {
     pub fn remove_all_lights(&mut self) {
         self.ambient_light_buffer.remove_all_uniforms();
         self.omnidirectional_light_buffer.remove_all_uniforms();
+        self.shadowable_omnidirectional_light_buffer
+            .remove_all_uniforms();
         self.unidirectional_light_buffer.remove_all_uniforms();
+        self.shadowable_unidirectional_light_buffer
+            .remove_all_uniforms();
         self.total_ambient_luminance = Luminance::zeros();
     }
 
-    /// Uses the total ambient luminance to compute the maximum far distance for
-    /// all omnidirectional lights, based on the heuristic that the maximum far
-    /// distance (where the light contribution should be insignificant) is where
-    /// the incident luminance from the light equals some fixed number times the
+    /// Uses the total ambient luminance to compute the maximum reach for all
+    /// omnidirectional lights, based on the heuristic that the maximum reach
+    /// (where the light contribution should be insignificant) is where the
+    /// incident luminance from the light equals some fixed number times the
     /// total ambient luminance.
-    fn update_max_far_distance_for_omnidirectional_lights(&mut self) {
+    fn update_max_reach_for_omnidirectional_lights(&mut self) {
         let total_ambient_luminance =
             compute_scalar_luminance_from_rgb_luminance(&self.total_ambient_luminance);
         let min_incident_luminance = f32::max(
@@ -388,7 +628,13 @@ impl LightStorage {
                 * OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO,
         );
         for light in self.omnidirectional_light_buffer.valid_uniforms_mut() {
-            light.update_max_far_distance_based_on_min_incident_luminance(min_incident_luminance);
+            light.update_max_reach_based_on_min_incident_luminance(min_incident_luminance);
+        }
+        for light in self
+            .shadowable_omnidirectional_light_buffer
+            .valid_uniforms_mut()
+        {
+            light.update_max_reach_based_on_min_incident_luminance(min_incident_luminance);
         }
     }
 
@@ -420,31 +666,117 @@ impl AmbientLight {
 }
 
 impl OmnidirectionalLight {
-    const MIN_NEAR_DISTANCE: f32 = 1e-2;
-
     const MIN_INCIDENT_LUMINANCE_FLOOR: f32 = 0.1;
     const MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO: f32 = 0.1;
 
     fn new(
         camera_space_position: Point3<f32>,
         luminous_intensity: LuminousIntensity,
-        emission_extent: f32,
+        emissive_extent: f32,
+        flags: LightFlags,
     ) -> Self {
-        let max_far_distance = Self::compute_max_far_distance_from_min_incident_luminance(
+        let max_reach = Self::compute_max_reach_from_min_incident_luminance(
             &luminous_intensity,
             Self::MIN_INCIDENT_LUMINANCE_FLOOR,
         );
         Self {
+            camera_space_position,
+            max_reach,
+            luminous_intensity,
+            emissive_radius: 0.5 * emissive_extent,
+            flags,
+            _padding: [0; 15],
+        }
+    }
+
+    /// Returns the light's flags.
+    pub fn flags(&self) -> LightFlags {
+        self.flags
+    }
+
+    /// Updates the light's flags.
+    pub fn set_flags(&mut self, flags: LightFlags) {
+        self.flags = flags;
+    }
+
+    /// Returns a reference to the camera space position of the light.
+    pub fn camera_space_position(&self) -> &Point3<f32> {
+        &self.camera_space_position
+    }
+
+    /// Sets the camera space position of the light to the given position.
+    pub fn set_camera_space_position(&mut self, camera_space_position: Point3<f32>) {
+        self.camera_space_position = camera_space_position;
+    }
+
+    /// Sets the luminous intensity of the light to the given value.
+    pub fn set_luminous_intensity(&mut self, luminous_intensity: LuminousIntensity) {
+        self.luminous_intensity = luminous_intensity;
+    }
+
+    /// Sets the emissive extent of the light to the given value.
+    pub fn set_emissive_extent(&mut self, emissive_extent: f32) {
+        self.emissive_radius = 0.5 * emissive_extent;
+    }
+
+    /// Sets `self.max_reach` to the distance at which the incident
+    /// luminance from the light equals `min_incident_luminance`.
+    fn update_max_reach_based_on_min_incident_luminance(&mut self, min_incident_luminance: f32) {
+        self.max_reach = Self::compute_max_reach_from_min_incident_luminance(
+            &self.luminous_intensity,
+            min_incident_luminance,
+        );
+    }
+
+    /// Computes the distance at which the incident scalar luminance from an
+    /// omnidirectional light with the given luminous intensity equals
+    /// `min_incident_luminance`.
+    fn compute_max_reach_from_min_incident_luminance(
+        luminous_intensity: &LuminousIntensity,
+        min_incident_luminance: f32,
+    ) -> f32 {
+        let scalar_luminuous_intensity =
+            compute_scalar_luminance_from_rgb_luminance(luminous_intensity);
+
+        f32::sqrt(scalar_luminuous_intensity / min_incident_luminance)
+    }
+}
+
+impl ShadowableOmnidirectionalLight {
+    const MIN_NEAR_DISTANCE: f32 = 1e-2;
+
+    fn new(
+        camera_space_position: Point3<f32>,
+        luminous_intensity: LuminousIntensity,
+        emissive_extent: f32,
+        flags: LightFlags,
+    ) -> Self {
+        let max_reach = OmnidirectionalLight::compute_max_reach_from_min_incident_luminance(
+            &luminous_intensity,
+            OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_FLOOR,
+        );
+        Self {
             camera_to_light_space_rotation: UnitQuaternion::identity(),
             camera_space_position,
-            _padding_1: 0.0,
+            flags,
+            _padding_1: [0; 3],
             luminous_intensity,
-            emission_radius: 0.5 * emission_extent,
+            emissive_radius: 0.5 * emissive_extent,
             near_distance: 0.0,
             inverse_distance_span: 0.0,
             far_distance: 0.0,
-            max_far_distance,
+            max_reach,
         }
+    }
+
+    /// Returns the light's flags.
+    pub fn flags(&self) -> LightFlags {
+        self.flags
+    }
+
+    /// Updates the light's flags.
+    pub fn set_flags(&mut self, flags: LightFlags) {
+        self.flags = flags;
     }
 
     /// Takes a transform into camera space and returns the corresponding
@@ -484,9 +816,9 @@ impl OmnidirectionalLight {
         self.luminous_intensity = luminous_intensity;
     }
 
-    /// Sets the emission extent of the light to the given value.
-    pub fn set_emission_extent(&mut self, emission_extent: f32) {
-        self.emission_radius = 0.5 * emission_extent;
+    /// Sets the emissive extent of the light to the given value.
+    pub fn set_emissive_extent(&mut self, emissive_extent: f32) {
+        self.emissive_radius = 0.5 * emissive_extent;
     }
 
     /// Updates the cubemap orientation and near and far distances to encompass
@@ -541,9 +873,9 @@ impl OmnidirectionalLight {
         // light source
         self.near_distance = (bounding_sphere_center_distance
             - camera_space_bounding_sphere.radius())
-        .clamp(Self::MIN_NEAR_DISTANCE, self.max_far_distance - 1e-9);
+        .clamp(Self::MIN_NEAR_DISTANCE, self.max_reach - 1e-9);
 
-        self.far_distance = far_distance.clamp(self.near_distance + 1e-9, self.max_far_distance);
+        self.far_distance = far_distance.clamp(self.near_distance + 1e-9, self.max_reach);
 
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
@@ -579,29 +911,13 @@ impl OmnidirectionalLight {
         }
     }
 
-    /// Sets `self.max_far_distance` to the distance at which the incident
+    /// Sets `self.max_reach` to the distance at which the incident
     /// luminance from the light equals `min_incident_luminance`.
-    fn update_max_far_distance_based_on_min_incident_luminance(
-        &mut self,
-        min_incident_luminance: f32,
-    ) {
-        self.max_far_distance = Self::compute_max_far_distance_from_min_incident_luminance(
+    fn update_max_reach_based_on_min_incident_luminance(&mut self, min_incident_luminance: f32) {
+        self.max_reach = OmnidirectionalLight::compute_max_reach_from_min_incident_luminance(
             &self.luminous_intensity,
             min_incident_luminance,
         );
-    }
-
-    /// Computes the distance at which the incident scalar luminance from an
-    /// omnidirectional light with the given luminous intensity equals
-    /// `min_incident_luminance`.
-    fn compute_max_far_distance_from_min_incident_luminance(
-        luminous_intensity: &LuminousIntensity,
-        min_incident_luminance: f32,
-    ) -> f32 {
-        let scalar_luminuous_intensity =
-            compute_scalar_luminance_from_rgb_luminance(luminous_intensity);
-
-        f32::sqrt(scalar_luminuous_intensity / min_incident_luminance)
     }
 
     fn create_camera_to_light_space_transform(&self) -> Similarity3<f32> {
@@ -636,6 +952,53 @@ impl UnidirectionalLight {
         camera_space_direction: UnitVector3<f32>,
         illuminance: Illumninance,
         angular_extent: impl Angle<f32>,
+        flags: LightFlags,
+    ) -> Self {
+        Self {
+            camera_space_direction,
+            flags,
+            _padding: [0; 3],
+            perpendicular_illuminance: illuminance,
+            tan_angular_radius: Self::tan_angular_radius_from_angular_extent(angular_extent),
+        }
+    }
+
+    /// Returns the light's flags.
+    pub fn flags(&self) -> LightFlags {
+        self.flags
+    }
+
+    /// Updates the light's flags.
+    pub fn set_flags(&mut self, flags: LightFlags) {
+        self.flags = flags;
+    }
+
+    /// Sets the camera space direction of the light to the given direction.
+    pub fn set_camera_space_direction(&mut self, camera_space_direction: UnitVector3<f32>) {
+        self.camera_space_direction = camera_space_direction;
+    }
+
+    /// Sets the perpendicular illuminance of the light to the given value.
+    pub fn set_perpendicular_illuminance(&mut self, illuminance: Illumninance) {
+        self.perpendicular_illuminance = illuminance;
+    }
+
+    /// Sets the angular extent of the light to the given value.
+    pub fn set_angular_extent(&mut self, angular_extent: impl Angle<f32>) {
+        self.tan_angular_radius = Self::tan_angular_radius_from_angular_extent(angular_extent);
+    }
+
+    fn tan_angular_radius_from_angular_extent(angular_extent: impl Angle<f32>) -> f32 {
+        f32::tan(0.5 * angular_extent.radians())
+    }
+}
+
+impl ShadowableUnidirectionalLight {
+    fn new(
+        camera_space_direction: UnitVector3<f32>,
+        illuminance: Illumninance,
+        angular_extent: impl Angle<f32>,
+        flags: LightFlags,
     ) -> Self {
         Self {
             camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
@@ -644,13 +1007,27 @@ impl UnidirectionalLight {
             camera_space_direction,
             near_partition_depth: 0.0,
             perpendicular_illuminance: illuminance,
-            tan_angular_radius: Self::tan_angular_radius_from_angular_extent(angular_extent),
+            tan_angular_radius: UnidirectionalLight::tan_angular_radius_from_angular_extent(
+                angular_extent,
+            ),
             orthographic_transforms: [OrthographicTranslationAndScaling::zeroed();
                 MAX_SHADOW_MAP_CASCADES_USIZE],
             partition_depths: [0.0; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
             far_partition_depth: 0.0,
-            _padding_3: [0.0; 4 - MAX_SHADOW_MAP_CASCADES_USIZE],
+            flags,
+            _padding_3: [0; 3],
+            _padding_4: [0.0; 7 - MAX_SHADOW_MAP_CASCADES_USIZE],
         }
+    }
+
+    /// Returns the light's flags.
+    pub fn flags(&self) -> LightFlags {
+        self.flags
+    }
+
+    /// Updates the light's flags.
+    pub fn set_flags(&mut self, flags: LightFlags) {
+        self.flags = flags;
     }
 
     /// Returns a reference to the quaternion that rotates camera space to light
@@ -704,7 +1081,8 @@ impl UnidirectionalLight {
 
     /// Sets the angular extent of the light to the given value.
     pub fn set_angular_extent(&mut self, angular_extent: impl Angle<f32>) {
-        self.tan_angular_radius = Self::tan_angular_radius_from_angular_extent(angular_extent);
+        self.tan_angular_radius =
+            UnidirectionalLight::tan_angular_radius_from_angular_extent(angular_extent);
     }
 
     /// Updates the partition of view frustum cascades for the light based on
@@ -854,10 +1232,6 @@ impl UnidirectionalLight {
             UnitQuaternion::look_at_rh(camera_space_direction, &Vector3::y())
         }
     }
-
-    fn tan_angular_radius_from_angular_extent(angular_extent: impl Angle<f32>) -> f32 {
-        f32::tan(0.5 * angular_extent.radians())
-    }
 }
 
 impl OrthographicTranslationAndScaling {
@@ -890,6 +1264,16 @@ impl OrthographicTranslationAndScaling {
             AxisAlignedBox::new(orthographic_lower_corner, orthographic_upper_corner);
 
         orthographic_aabb
+    }
+}
+
+impl From<SceneEntityFlags> for LightFlags {
+    fn from(scene_entity_flags: SceneEntityFlags) -> Self {
+        let mut light_flags = Self::empty();
+        if scene_entity_flags.contains(SceneEntityFlags::IS_DISABLED) {
+            light_flags |= Self::IS_DISABLED;
+        }
+        light_flags
     }
 }
 

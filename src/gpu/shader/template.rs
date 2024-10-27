@@ -15,6 +15,8 @@ pub mod omnidirectional_light;
 pub mod omnidirectional_light_shadow_map;
 pub mod passthrough;
 pub mod render_attachment_visualization;
+pub mod shadowable_omnidirectional_light;
+pub mod shadowable_unidirectional_light;
 pub mod skybox;
 pub mod temporal_anti_aliasing;
 pub mod tone_mapping;

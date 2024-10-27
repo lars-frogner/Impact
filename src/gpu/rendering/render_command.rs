@@ -21,6 +21,8 @@ use crate::{
                 model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
                 omnidirectional_light::OmnidirectionalLightShaderTemplate,
                 omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
+                shadowable_omnidirectional_light::ShadowableOmnidirectionalLightShaderTemplate,
+                shadowable_unidirectional_light::ShadowableUnidirectionalLightShaderTemplate,
                 skybox::SkyboxShaderTemplate,
                 unidirectional_light::UnidirectionalLightShaderTemplate,
                 unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
@@ -44,7 +46,7 @@ use crate::{
             LightGPUBufferManager, OmnidirectionalLightShadowMapManager,
             UnidirectionalLightShadowMapManager,
         },
-        LightStorage, MAX_SHADOW_MAP_CASCADES,
+        LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
     },
     material::{MaterialLibrary, MaterialShaderInput},
     mesh::{self, buffer::VertexBufferable, VertexAttributeSet, VertexPosition},
@@ -166,7 +168,9 @@ struct DirectionalLightPass {
     color_target_state: wgpu::ColorTargetState,
     depth_stencil_state: wgpu::DepthStencilState,
     omnidirectional_light_pipeline: OmnidirectionalLightPipeline,
+    shadowable_omnidirectional_light_pipeline: ShadowableOmnidirectionalLightPipeline,
     unidirectional_light_pipeline: UnidirectionalLightPipeline,
+    shadowable_unidirectional_light_pipeline: ShadowableUnidirectionalLightPipeline,
 }
 
 #[derive(Debug)]
@@ -177,7 +181,21 @@ struct OmnidirectionalLightPipeline {
 }
 
 #[derive(Debug)]
+struct ShadowableOmnidirectionalLightPipeline {
+    layout: wgpu::PipelineLayout,
+    pipeline: wgpu::RenderPipeline,
+    max_light_count: usize,
+}
+
+#[derive(Debug)]
 struct UnidirectionalLightPipeline {
+    layout: wgpu::PipelineLayout,
+    pipeline: wgpu::RenderPipeline,
+    max_light_count: usize,
+}
+
+#[derive(Debug)]
+struct ShadowableUnidirectionalLightPipeline {
     layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     max_light_count: usize,
@@ -439,6 +457,7 @@ impl RenderCommandManager {
 
         self.directional_light_pass.record(
             rendering_surface,
+            &light_storage,
             render_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -1306,7 +1325,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let pipeline_layout = create_render_pipeline_layout(
             graphics_device.device(),
             &[
-                LightGPUBufferManager::get_or_create_omnidirectional_light_bind_group_layout(
+                LightGPUBufferManager::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
                     graphics_device,
                 ),
             ],
@@ -1397,7 +1416,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let max_light_count = light_buffer_manager.max_omnidirectional_light_count();
+        let max_light_count = light_buffer_manager.max_shadowable_omnidirectional_light_count();
 
         if max_light_count != self.max_light_count {
             let shader_template = OmnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
@@ -1479,19 +1498,27 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let shadow_map_manager = light_buffer_manager.omnidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
 
-        let n_passes = 6 * shadow_map_textures.len();
-
-        if n_passes == 0 {
+        if shadow_map_textures.is_empty() {
             return Ok(());
         }
 
+        let mut pass_count = 0;
+        let mut draw_call_count = 0;
+
         for (light_idx, (&light_id, shadow_map_texture)) in light_buffer_manager
-            .omnidirectional_light_ids()
+            .shadowable_omnidirectional_light_ids()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
-            let omnidirectional_light = light_storage.omnidirectional_light(light_id);
+            let omnidirectional_light = light_storage.shadowable_omnidirectional_light(light_id);
+
+            if omnidirectional_light
+                .flags()
+                .contains(LightFlags::IS_DISABLED)
+            {
+                continue;
+            }
 
             let positive_z_cubemap_face_frustum =
                 omnidirectional_light.compute_light_space_frustum_for_positive_z_face();
@@ -1532,6 +1559,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                         cubemap_face, light_idx,
                     )),
                 );
+                pass_count += 1;
 
                 if !shadow_mapping_enabled {
                     // If shadow mapping is disabled, we don't do anything in the render pass,
@@ -1548,7 +1576,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                 render_pass.set_bind_group(
                     0,
-                    light_buffer_manager.omnidirectional_light_bind_group(),
+                    light_buffer_manager.shadowable_omnidirectional_light_bind_group(),
                     &[],
                 );
 
@@ -1601,6 +1629,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                         0,
                         transform_range,
                     );
+                    draw_call_count += 1;
                 }
 
                 VoxelRenderCommands::record_shadow_map_update(
@@ -1612,15 +1641,12 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        let n_passes = 6 * shadow_map_textures.len();
-        let n_draw_calls = self.models.len() * n_passes;
-
         log::debug!(
             "Recorded shadow map update passes for {} omnidirectional lights and {} models ({} passes, {} draw calls)",
             shadow_map_textures.len(),
             self.models.len(),
-            n_passes,
-            n_draw_calls
+            pass_count,
+            draw_call_count
         );
 
         Ok(())
@@ -1642,7 +1668,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let pipeline_layout = create_render_pipeline_layout(
             graphics_device.device(),
             &[
-                LightGPUBufferManager::get_or_create_unidirectional_light_bind_group_layout(
+                LightGPUBufferManager::get_or_create_shadowable_unidirectional_light_bind_group_layout(
                     graphics_device,
                 ),
             ],
@@ -1731,7 +1757,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let max_light_count = light_buffer_manager.max_unidirectional_light_count();
+        let max_light_count = light_buffer_manager.max_shadowable_unidirectional_light_count();
 
         if max_light_count != self.max_light_count {
             let shader_template = UnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
@@ -1825,19 +1851,27 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let shadow_map_manager = light_buffer_manager.unidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
 
-        let n_passes = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len();
-
-        if n_passes == 0 {
+        if shadow_map_textures.is_empty() {
             return Ok(());
         }
 
+        let mut pass_count = 0;
+        let mut draw_call_count = 0;
+
         for (light_idx, (&light_id, shadow_map_texture)) in light_buffer_manager
-            .unidirectional_light_ids()
+            .shadowable_unidirectional_light_ids()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
-            let unidirectional_light = light_storage.unidirectional_light(light_id);
+            let unidirectional_light = light_storage.shadowable_unidirectional_light(light_id);
+
+            if unidirectional_light
+                .flags()
+                .contains(LightFlags::IS_DISABLED)
+            {
+                continue;
+            }
 
             for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
                 // When updating the shadow map, we don't use model view transforms but rather
@@ -1878,6 +1912,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                         cascade_idx, light_idx,
                     )),
                 );
+                pass_count += 1;
 
                 if !shadow_mapping_enabled {
                     // If shadow mapping is disabled, we don't do anything in the render pass, which
@@ -1895,7 +1930,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                 render_pass.set_bind_group(
                     0,
-                    light_buffer_manager.unidirectional_light_bind_group(),
+                    light_buffer_manager.shadowable_unidirectional_light_bind_group(),
                     &[],
                 );
 
@@ -1948,6 +1983,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                         0,
                         transform_range,
                     );
+                    draw_call_count += 1;
                 }
 
                 VoxelRenderCommands::record_shadow_map_update(
@@ -1959,15 +1995,12 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        let n_passes = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len();
-        let n_draw_calls = self.models.len() * n_passes;
-
         log::debug!(
             "Recorded shadow map update passes for {} unidirectional lights and {} models ({} passes, {} draw calls)",
             shadow_map_textures.len(),
             self.models.len(),
-            n_passes,
-            n_draw_calls
+            pass_count,
+            draw_call_count
         );
 
         Ok(())
@@ -2279,6 +2312,18 @@ impl DirectionalLightPass {
 
         assert_eq!(
             &push_constants,
+            &ShadowableOmnidirectionalLightShaderTemplate::push_constants()
+        );
+        assert_eq!(
+            &input_render_attachments,
+            &ShadowableOmnidirectionalLightShaderTemplate::input_render_attachments()
+        );
+        assert_eq!(
+            &output_render_attachment_quantity,
+            &ShadowableOmnidirectionalLightShaderTemplate::output_render_attachment_quantity()
+        );
+        assert_eq!(
+            &push_constants,
             &UnidirectionalLightShaderTemplate::push_constants()
         );
         assert_eq!(
@@ -2288,6 +2333,18 @@ impl DirectionalLightPass {
         assert_eq!(
             &output_render_attachment_quantity,
             &UnidirectionalLightShaderTemplate::output_render_attachment_quantity()
+        );
+        assert_eq!(
+            &push_constants,
+            &ShadowableUnidirectionalLightShaderTemplate::push_constants()
+        );
+        assert_eq!(
+            &input_render_attachments,
+            &ShadowableUnidirectionalLightShaderTemplate::input_render_attachments()
+        );
+        assert_eq!(
+            &output_render_attachment_quantity,
+            &ShadowableUnidirectionalLightShaderTemplate::output_render_attachment_quantity()
         );
 
         let mut bind_group_layouts = vec![CameraGPUBufferManager::get_or_create_bind_group_layout(
@@ -2317,7 +2374,25 @@ impl DirectionalLightPass {
             Some(depth_stencil_state.clone()),
         );
 
+        let shadowable_omnidirectional_light_pipeline = ShadowableOmnidirectionalLightPipeline::new(
+            graphics_device,
+            shader_manager,
+            bind_group_layouts.clone(),
+            &push_constant_ranges,
+            &[Some(color_target_state.clone())],
+            Some(depth_stencil_state.clone()),
+        );
+
         let unidirectional_light_pipeline = UnidirectionalLightPipeline::new(
+            graphics_device,
+            shader_manager,
+            bind_group_layouts.clone(),
+            &push_constant_ranges,
+            &[Some(color_target_state.clone())],
+            Some(depth_stencil_state.clone()),
+        );
+
+        let shadowable_unidirectional_light_pipeline = ShadowableUnidirectionalLightPipeline::new(
             graphics_device,
             shader_manager,
             bind_group_layouts,
@@ -2333,7 +2408,9 @@ impl DirectionalLightPass {
             color_target_state,
             depth_stencil_state,
             omnidirectional_light_pipeline,
+            shadowable_omnidirectional_light_pipeline,
             unidirectional_light_pipeline,
+            shadowable_unidirectional_light_pipeline,
         }
     }
 
@@ -2360,6 +2437,21 @@ impl DirectionalLightPass {
                 );
         }
 
+        if light_buffer_manager.max_shadowable_omnidirectional_light_count()
+            != self
+                .shadowable_omnidirectional_light_pipeline
+                .max_light_count
+        {
+            self.shadowable_omnidirectional_light_pipeline
+                .update_shader_with_new_max_light_count(
+                    graphics_device,
+                    shader_manager,
+                    &[Some(self.color_target_state.clone())],
+                    Some(self.depth_stencil_state.clone()),
+                    light_buffer_manager.max_shadowable_omnidirectional_light_count(),
+                );
+        }
+
         if light_buffer_manager.max_unidirectional_light_count()
             != self.unidirectional_light_pipeline.max_light_count
         {
@@ -2370,6 +2462,21 @@ impl DirectionalLightPass {
                     &[Some(self.color_target_state.clone())],
                     Some(self.depth_stencil_state.clone()),
                     light_buffer_manager.max_unidirectional_light_count(),
+                );
+        }
+
+        if light_buffer_manager.max_shadowable_unidirectional_light_count()
+            != self
+                .shadowable_unidirectional_light_pipeline
+                .max_light_count
+        {
+            self.shadowable_unidirectional_light_pipeline
+                .update_shader_with_new_max_light_count(
+                    graphics_device,
+                    shader_manager,
+                    &[Some(self.color_target_state.clone())],
+                    Some(self.depth_stencil_state.clone()),
+                    light_buffer_manager.max_shadowable_unidirectional_light_count(),
                 );
         }
 
@@ -2453,21 +2560,32 @@ impl DirectionalLightPass {
     fn record(
         &self,
         rendering_surface: &RenderingSurface,
+        light_storage: &LightStorage,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        let n_omnidirectional_lights = light_storage.omnidirectional_lights().len();
+        let n_shadowable_omnidirectional_lights =
+            light_storage.shadowable_omnidirectional_lights().len();
+        let n_unidirectional_lights = light_storage.unidirectional_lights().len();
+        let n_shadowable_unidirectional_lights =
+            light_storage.shadowable_unidirectional_lights().len();
+
+        let n_lights = n_omnidirectional_lights
+            + n_shadowable_omnidirectional_lights
+            + n_unidirectional_lights
+            + n_shadowable_unidirectional_lights;
+
+        if n_lights == 0 {
+            return Ok(());
+        }
+
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
-
-        if light_buffer_manager.omnidirectional_light_ids().is_empty()
-            && light_buffer_manager.unidirectional_light_ids().is_empty()
-        {
-            return Ok(());
-        }
 
         let color_attachment = self.color_attachment(render_attachment_texture_manager);
 
@@ -2501,114 +2619,246 @@ impl DirectionalLightPass {
         let light_bind_group_index = bind_group_index;
         let shadow_map_bind_group_index = bind_group_index + 1;
 
+        let mut draw_call_count = 0;
+
         // **** Omnidirectional lights ****
 
-        render_pass.set_pipeline(&self.omnidirectional_light_pipeline.pipeline);
+        if n_omnidirectional_lights > 0 {
+            render_pass.set_pipeline(&self.omnidirectional_light_pipeline.pipeline);
 
-        self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
-
-        render_pass.set_bind_group(
-            light_bind_group_index,
-            light_buffer_manager.omnidirectional_light_bind_group(),
-            &[],
-        );
-
-        let mesh_id = OmnidirectionalLightShaderTemplate::light_volume_mesh_id();
-
-        let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
-
-        let position_buffer = mesh_buffer_manager
-            .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
-            .next()
-            .unwrap();
-
-        render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
-
-        render_pass.set_index_buffer(
-            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-            mesh_buffer_manager.index_format(),
-        );
-
-        let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
-
-        let omnidirectional_light_shadow_map_manager =
-            light_buffer_manager.omnidirectional_light_shadow_map_manager();
-        let omnidirectional_light_shadow_map_textures =
-            omnidirectional_light_shadow_map_manager.textures();
-
-        for (light_idx, shadow_map_texture) in
-            omnidirectional_light_shadow_map_textures.iter().enumerate()
-        {
-            self.set_light_idx_push_constant(&mut render_pass, u32::try_from(light_idx).unwrap());
+            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
-                shadow_map_bind_group_index,
-                shadow_map_texture.bind_group(),
+                light_bind_group_index,
+                light_buffer_manager.omnidirectional_light_bind_group(),
                 &[],
             );
 
-            render_pass.draw_indexed(0..n_indices, 0, 0..1);
+            let mesh_id = OmnidirectionalLightShaderTemplate::light_volume_mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            let position_buffer = mesh_buffer_manager
+                .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+                .next()
+                .unwrap();
+
+            render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
+
+            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+
+            for (light_idx, light) in light_storage.omnidirectional_lights().iter().enumerate() {
+                if light.flags().contains(LightFlags::IS_DISABLED) {
+                    continue;
+                }
+
+                self.set_light_idx_push_constant(
+                    &mut render_pass,
+                    u32::try_from(light_idx).unwrap(),
+                );
+
+                render_pass.draw_indexed(0..n_indices, 0, 0..1);
+                draw_call_count += 1;
+            }
+        }
+
+        // **** Shadowable omnidirectional lights ****
+        if n_shadowable_omnidirectional_lights > 0 {
+            render_pass.set_pipeline(&self.shadowable_omnidirectional_light_pipeline.pipeline);
+
+            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
+
+            render_pass.set_bind_group(
+                light_bind_group_index,
+                light_buffer_manager.shadowable_omnidirectional_light_bind_group(),
+                &[],
+            );
+
+            let mesh_id = ShadowableOmnidirectionalLightShaderTemplate::light_volume_mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            let position_buffer = mesh_buffer_manager
+                .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+                .next()
+                .unwrap();
+
+            render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
+
+            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+
+            let omnidirectional_light_shadow_map_manager =
+                light_buffer_manager.omnidirectional_light_shadow_map_manager();
+            let omnidirectional_light_shadow_map_textures =
+                omnidirectional_light_shadow_map_manager.textures();
+
+            assert_eq!(
+                omnidirectional_light_shadow_map_textures.len(),
+                n_shadowable_omnidirectional_lights
+            );
+
+            for (light_idx, (light, shadow_map_texture)) in light_storage
+                .shadowable_omnidirectional_lights()
+                .iter()
+                .zip(omnidirectional_light_shadow_map_textures)
+                .enumerate()
+            {
+                if light.flags().contains(LightFlags::IS_DISABLED) {
+                    continue;
+                }
+
+                self.set_light_idx_push_constant(
+                    &mut render_pass,
+                    u32::try_from(light_idx).unwrap(),
+                );
+
+                render_pass.set_bind_group(
+                    shadow_map_bind_group_index,
+                    shadow_map_texture.bind_group(),
+                    &[],
+                );
+
+                render_pass.draw_indexed(0..n_indices, 0, 0..1);
+                draw_call_count += 1;
+            }
         }
 
         // **** Unidirectional lights ****
+        if n_unidirectional_lights > 0 {
+            render_pass.set_pipeline(&self.unidirectional_light_pipeline.pipeline);
 
-        render_pass.set_pipeline(&self.unidirectional_light_pipeline.pipeline);
-
-        self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
-
-        render_pass.set_bind_group(
-            light_bind_group_index,
-            light_buffer_manager.unidirectional_light_bind_group(),
-            &[],
-        );
-
-        let mesh_id = UnidirectionalLightShaderTemplate::light_volume_mesh_id();
-
-        let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
-
-        let position_buffer = mesh_buffer_manager
-            .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
-            .next()
-            .unwrap();
-
-        render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
-
-        render_pass.set_index_buffer(
-            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-            mesh_buffer_manager.index_format(),
-        );
-
-        let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
-
-        let unidirectional_light_shadow_map_manager =
-            light_buffer_manager.unidirectional_light_shadow_map_manager();
-        let unidirectional_light_shadow_map_textures =
-            unidirectional_light_shadow_map_manager.textures();
-
-        for (light_idx, shadow_map_texture) in
-            unidirectional_light_shadow_map_textures.iter().enumerate()
-        {
-            self.set_light_idx_push_constant(&mut render_pass, u32::try_from(light_idx).unwrap());
+            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
-                shadow_map_bind_group_index,
-                shadow_map_texture.bind_group(),
+                light_bind_group_index,
+                light_buffer_manager.unidirectional_light_bind_group(),
                 &[],
             );
 
-            render_pass.draw_indexed(0..n_indices, 0, 0..1);
+            let mesh_id = UnidirectionalLightShaderTemplate::light_volume_mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            let position_buffer = mesh_buffer_manager
+                .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+                .next()
+                .unwrap();
+
+            render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
+
+            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+
+            for (light_idx, light) in light_storage.unidirectional_lights().iter().enumerate() {
+                if light.flags().contains(LightFlags::IS_DISABLED) {
+                    continue;
+                }
+
+                self.set_light_idx_push_constant(
+                    &mut render_pass,
+                    u32::try_from(light_idx).unwrap(),
+                );
+
+                render_pass.draw_indexed(0..n_indices, 0, 0..1);
+                draw_call_count += 1;
+            }
+        }
+
+        // **** Shadowable unidirectional lights ****
+        if n_shadowable_unidirectional_lights > 0 {
+            render_pass.set_pipeline(&self.shadowable_unidirectional_light_pipeline.pipeline);
+
+            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
+
+            render_pass.set_bind_group(
+                light_bind_group_index,
+                light_buffer_manager.shadowable_unidirectional_light_bind_group(),
+                &[],
+            );
+
+            let mesh_id = ShadowableUnidirectionalLightShaderTemplate::light_volume_mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            let position_buffer = mesh_buffer_manager
+                .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+                .next()
+                .unwrap();
+
+            render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
+
+            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+
+            let unidirectional_light_shadow_map_manager =
+                light_buffer_manager.unidirectional_light_shadow_map_manager();
+            let unidirectional_light_shadow_map_textures =
+                unidirectional_light_shadow_map_manager.textures();
+
+            assert_eq!(
+                unidirectional_light_shadow_map_textures.len(),
+                n_shadowable_unidirectional_lights
+            );
+
+            for (light_idx, (light, shadow_map_texture)) in light_storage
+                .shadowable_unidirectional_lights()
+                .iter()
+                .zip(unidirectional_light_shadow_map_textures)
+                .enumerate()
+            {
+                if light.flags().contains(LightFlags::IS_DISABLED) {
+                    continue;
+                }
+
+                self.set_light_idx_push_constant(
+                    &mut render_pass,
+                    u32::try_from(light_idx).unwrap(),
+                );
+
+                render_pass.set_bind_group(
+                    shadow_map_bind_group_index,
+                    shadow_map_texture.bind_group(),
+                    &[],
+                );
+
+                render_pass.draw_indexed(0..n_indices, 0, 0..1);
+                draw_call_count += 1;
+            }
         }
 
         log::debug!(
-            "Recorded lighting pass for {} omnidirectional lights and {} unidirectional lights ({} draw calls)",
-            omnidirectional_light_shadow_map_textures.len(),
-            unidirectional_light_shadow_map_textures.len(),
-            omnidirectional_light_shadow_map_textures.len()
-                + unidirectional_light_shadow_map_textures.len()
+            "Recorded lighting pass for {} unshadowable and {} shadowable omnidirectional lights and {} unshadowable and {} shadowable unidirectional lights ({} draw calls)",
+            n_omnidirectional_lights,
+            n_shadowable_omnidirectional_lights,
+            n_unidirectional_lights,
+            n_shadowable_unidirectional_lights,
+            draw_call_count,
         );
 
         Ok(())
@@ -2633,10 +2883,6 @@ impl OmnidirectionalLightPipeline {
             LightGPUBufferManager::get_or_create_omnidirectional_light_bind_group_layout(
                 graphics_device,
             ),
-        );
-
-        bind_group_layouts.push(
-            OmnidirectionalLightShadowMapManager::get_or_create_bind_group_layout(graphics_device),
         );
 
         let pipeline_layout = create_render_pipeline_layout(
@@ -2694,6 +2940,86 @@ impl OmnidirectionalLightPipeline {
     }
 }
 
+impl ShadowableOmnidirectionalLightPipeline {
+    fn new<'a>(
+        graphics_device: &'a GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        mut bind_group_layouts: Vec<&'a wgpu::BindGroupLayout>,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        depth_stencil_state: Option<wgpu::DepthStencilState>,
+    ) -> ShadowableOmnidirectionalLightPipeline {
+        let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
+        let shader_template = ShadowableOmnidirectionalLightShaderTemplate::new(max_light_count);
+        let (_, shader) = shader_manager
+            .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
+
+        bind_group_layouts.push(
+            LightGPUBufferManager::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
+                graphics_device,
+            ),
+        );
+
+        bind_group_layouts.push(
+            OmnidirectionalLightShadowMapManager::get_or_create_bind_group_layout(graphics_device),
+        );
+
+        let pipeline_layout = create_render_pipeline_layout(
+            graphics_device.device(),
+            &bind_group_layouts,
+            push_constant_ranges,
+            "Shadowable omnidirectional light pass render pipeline layout",
+        );
+
+        let pipeline = create_render_pipeline(
+            graphics_device.device(),
+            &pipeline_layout,
+            shader,
+            &[VertexPosition::BUFFER_LAYOUT],
+            color_target_states,
+            STANDARD_FRONT_FACE,
+            Some(wgpu::Face::Back),
+            wgpu::PolygonMode::Fill,
+            depth_stencil_state,
+            "Shadowable omnidirectional light pass render pipeline",
+        );
+
+        ShadowableOmnidirectionalLightPipeline {
+            layout: pipeline_layout,
+            pipeline,
+            max_light_count,
+        }
+    }
+
+    fn update_shader_with_new_max_light_count(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        depth_stencil_state: Option<wgpu::DepthStencilState>,
+        new_max_light_count: usize,
+    ) {
+        let shader_template =
+            ShadowableOmnidirectionalLightShaderTemplate::new(new_max_light_count);
+        let (_, shader) = shader_manager
+            .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
+
+        self.pipeline = create_render_pipeline(
+            graphics_device.device(),
+            &self.layout,
+            shader,
+            &[VertexPosition::BUFFER_LAYOUT],
+            color_target_states,
+            STANDARD_FRONT_FACE,
+            Some(wgpu::Face::Front),
+            wgpu::PolygonMode::Fill,
+            depth_stencil_state,
+            "Shadowable omnidirectional light pass render pipeline",
+        );
+        self.max_light_count = new_max_light_count;
+    }
+}
+
 impl UnidirectionalLightPipeline {
     fn new<'a>(
         graphics_device: &'a GraphicsDevice,
@@ -2712,10 +3038,6 @@ impl UnidirectionalLightPipeline {
             LightGPUBufferManager::get_or_create_unidirectional_light_bind_group_layout(
                 graphics_device,
             ),
-        );
-
-        bind_group_layouts.push(
-            UnidirectionalLightShadowMapManager::get_or_create_bind_group_layout(graphics_device),
         );
 
         let pipeline_layout = create_render_pipeline_layout(
@@ -2768,6 +3090,85 @@ impl UnidirectionalLightPipeline {
             wgpu::PolygonMode::Fill,
             depth_stencil_state,
             "Unidirectional light pass render pipeline",
+        );
+        self.max_light_count = new_max_light_count;
+    }
+}
+
+impl ShadowableUnidirectionalLightPipeline {
+    fn new<'a>(
+        graphics_device: &'a GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        mut bind_group_layouts: Vec<&'a wgpu::BindGroupLayout>,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        depth_stencil_state: Option<wgpu::DepthStencilState>,
+    ) -> ShadowableUnidirectionalLightPipeline {
+        let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
+        let shader_template = ShadowableUnidirectionalLightShaderTemplate::new(max_light_count);
+        let (_, shader) = shader_manager
+            .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
+
+        bind_group_layouts.push(
+            LightGPUBufferManager::get_or_create_shadowable_unidirectional_light_bind_group_layout(
+                graphics_device,
+            ),
+        );
+
+        bind_group_layouts.push(
+            UnidirectionalLightShadowMapManager::get_or_create_bind_group_layout(graphics_device),
+        );
+
+        let pipeline_layout = create_render_pipeline_layout(
+            graphics_device.device(),
+            &bind_group_layouts,
+            push_constant_ranges,
+            "Shadowable unidirectional light pass render pipeline layout",
+        );
+
+        let pipeline = create_render_pipeline(
+            graphics_device.device(),
+            &pipeline_layout,
+            shader,
+            &[VertexPosition::BUFFER_LAYOUT],
+            color_target_states,
+            STANDARD_FRONT_FACE,
+            Some(wgpu::Face::Back),
+            wgpu::PolygonMode::Fill,
+            depth_stencil_state,
+            "Shadowable unidirectional light pass render pipeline",
+        );
+
+        ShadowableUnidirectionalLightPipeline {
+            layout: pipeline_layout,
+            pipeline,
+            max_light_count,
+        }
+    }
+
+    fn update_shader_with_new_max_light_count(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        depth_stencil_state: Option<wgpu::DepthStencilState>,
+        new_max_light_count: usize,
+    ) {
+        let shader_template = ShadowableUnidirectionalLightShaderTemplate::new(new_max_light_count);
+        let (_, shader) = shader_manager
+            .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
+
+        self.pipeline = create_render_pipeline(
+            graphics_device.device(),
+            &self.layout,
+            shader,
+            &[VertexPosition::BUFFER_LAYOUT],
+            color_target_states,
+            STANDARD_FRONT_FACE,
+            Some(wgpu::Face::Back),
+            wgpu::PolygonMode::Fill,
+            depth_stencil_state,
+            "Shadowable unidirectional light pass render pipeline",
         );
         self.max_light_count = new_max_light_count;
     }

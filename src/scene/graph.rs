@@ -4,7 +4,10 @@ use crate::{
     camera::SceneCamera,
     geometry::{CubemapFace, Frustum, Sphere},
     gpu::texture::shadow_map::CascadeIdx,
-    light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
+    light::{
+        LightFlags, LightStorage, ShadowableOmnidirectionalLight, ShadowableUnidirectionalLight,
+        MAX_SHADOW_MAP_CASCADES,
+    },
     model::{
         transform::{
             InstanceModelLightTransform, InstanceModelViewTransform,
@@ -13,8 +16,10 @@ use crate::{
         InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
     },
     num::Float,
+    scene::SceneEntityFlags,
     voxel::{entity::VOXEL_MODEL_ID, VoxelObjectID},
 };
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::Similarity3;
@@ -110,6 +115,7 @@ pub struct ModelInstanceNode<F: Float> {
     model_to_parent_transform: NodeTransform<F>,
     model_id: ModelID,
     feature_ids: Vec<InstanceFeatureID>,
+    flags: ModelInstanceFlags,
 }
 
 /// A [`SceneGraph`] leaf node representing a [`Camera`](crate::camera::Camera).
@@ -119,6 +125,18 @@ pub struct ModelInstanceNode<F: Float> {
 pub struct CameraNode<F: Float> {
     parent_node_id: GroupNodeID,
     camera_to_parent_transform: NodeTransform<F>,
+}
+
+bitflags! {
+    /// Bitflags encoding a set of binary states or properties for a model instance.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
+    pub struct ModelInstanceFlags: u8 {
+        /// The model instance should not be rendered.
+        const IS_HIDDEN     = 1 << 0;
+        /// The model instance should not participate in shadow maps.
+        const CASTS_NO_SHADOWS = 1 << 1;
+    }
 }
 
 impl<F: Float> SceneGraph<F> {
@@ -181,9 +199,9 @@ impl<F: Float> SceneGraph<F> {
     }
 
     /// Creates a new [`ModelInstanceNode`] for an instance of the model with
-    /// the given ID, bounding sphere for frustum culling and feature IDs. It is
-    /// included in the scene graph with the given transform relative to the the
-    /// given parent node.
+    /// the given ID, bounding sphere for frustum culling, feature IDs and
+    /// flags. It is included in the scene graph with the given transform
+    /// relative to the the given parent node.
     ///
     /// If no bounding sphere is provided, the model will not be frustum culled.
     ///
@@ -206,6 +224,7 @@ impl<F: Float> SceneGraph<F> {
         model_id: ModelID,
         frustum_culling_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<InstanceFeatureID>,
+        flags: ModelInstanceFlags,
     ) -> ModelInstanceNodeID {
         assert!(
             feature_ids.len() >= 2,
@@ -236,6 +255,7 @@ impl<F: Float> SceneGraph<F> {
             model_to_parent_transform,
             model_id,
             feature_ids,
+            flags,
         );
 
         let model_instance_node_id = self.model_instance_nodes.add_node(model_instance_node);
@@ -362,6 +382,19 @@ impl<F: Float> SceneGraph<F> {
             .set_model_to_parent_transform(transform);
     }
 
+    /// Sets the given transform and flags as the model-to-parent transform and
+    /// flags for the [`ModelInstanceNode`] with the given ID.
+    pub fn set_model_to_parent_transform_and_flags(
+        &mut self,
+        model_instance_node_id: ModelInstanceNodeID,
+        transform: NodeTransform<<ModelInstanceNode<F> as SceneGraphNode>::F>,
+        flags: ModelInstanceFlags,
+    ) {
+        let node = self.model_instance_nodes.node_mut(model_instance_node_id);
+        node.set_model_to_parent_transform(transform);
+        node.set_flags(flags);
+    }
+
     /// Sets the given transform as the camera-to-parent transform for the
     /// [`CameraNode`] with the given ID.
     pub fn set_camera_to_parent_transform(
@@ -392,7 +425,8 @@ impl<F: Float> SceneGraph<F> {
         scene_camera.set_view_transform(view_transform);
     }
 
-    /// Updates the bounding spheres of all nodes in the scene graph.
+    /// Updates the bounding spheres of all nodes in the scene graph (excluding
+    /// contributions from hidden model instances).
     pub fn update_all_bounding_spheres(&mut self) {
         self.update_bounding_spheres(self.root_node_id());
     }
@@ -447,6 +481,13 @@ impl<F: Float> SceneGraph<F> {
 
         for &model_instance_node_id in root_node.child_model_instance_node_ids() {
             let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+            if model_instance_node
+                .flags()
+                .contains(ModelInstanceFlags::IS_HIDDEN)
+            {
+                continue;
+            }
 
             let model_view_transform =
                 root_to_camera_transform * model_instance_node.model_to_parent_transform();
@@ -504,8 +545,8 @@ impl<F: Float> SceneGraph<F> {
     }
 
     /// Updates the bounding sphere of the specified group node and all its
-    /// children. Each bounding sphere is defined in the local space of its
-    /// group node.
+    /// non-hidden children. Each bounding sphere is defined in the local space
+    /// of its group node.
     ///
     /// # Returns
     /// The bounding sphere of the specified group node, defined in the space of
@@ -532,11 +573,20 @@ impl<F: Float> SceneGraph<F> {
             |model_instance_node_id| {
                 let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-                model_instance_node
-                    .get_model_bounding_sphere()
-                    .map(|bounding_sphere| {
-                        bounding_sphere.transformed(model_instance_node.model_to_parent_transform())
-                    })
+                if model_instance_node
+                    .flags()
+                    .contains(ModelInstanceFlags::IS_HIDDEN)
+                {
+                    // Hidden instances don't affect the parent bounds
+                    None
+                } else {
+                    model_instance_node
+                        .get_model_bounding_sphere()
+                        .map(|bounding_sphere| {
+                            bounding_sphere
+                                .transformed(model_instance_node.model_to_parent_transform())
+                        })
+                }
             },
         ));
 
@@ -609,6 +659,13 @@ impl<F: Float> SceneGraph<F> {
         for &child_model_instance_node_id in group_node.child_model_instance_node_ids() {
             let child_model_instance_node =
                 self.model_instance_nodes.node(child_model_instance_node_id);
+
+            if child_model_instance_node
+                .flags()
+                .contains(ModelInstanceFlags::IS_HIDDEN)
+            {
+                continue;
+            }
 
             let child_model_view_transform =
                 group_to_camera_transform * child_model_instance_node.model_to_parent_transform();
@@ -733,8 +790,15 @@ impl SceneGraph<f32> {
                 world_space_bounding_sphere.transformed(view_transform);
 
             for (light_id, omnidirectional_light) in
-                light_storage.omnidirectional_lights_with_ids_mut()
+                light_storage.shadowable_omnidirectional_lights_with_ids_mut()
             {
+                if omnidirectional_light
+                    .flags()
+                    .contains(LightFlags::IS_DISABLED)
+                {
+                    continue;
+                }
+
                 let camera_space_aabb_for_visible_models = camera_space_bounding_sphere
                     .compute_aabb()
                     .union_with(&camera_space_view_frustum.compute_aabb());
@@ -765,7 +829,7 @@ impl SceneGraph<f32> {
                     let camera_space_face_frustum =
                         omnidirectional_light.compute_camera_space_frustum_for_face(face);
 
-                    if OmnidirectionalLight::camera_space_frustum_for_face_may_contain_visible_models(
+                    if ShadowableOmnidirectionalLight::camera_space_frustum_for_face_may_contain_visible_models(
                         camera_space_aabb_for_visible_models.as_ref(),
                         &camera_space_face_frustum,
                     ) {
@@ -813,8 +877,15 @@ impl SceneGraph<f32> {
                 world_space_bounding_sphere.transformed(view_transform);
 
             for (light_id, unidirectional_light) in
-                light_storage.unidirectional_lights_with_ids_mut()
+                light_storage.shadowable_unidirectional_lights_with_ids_mut()
             {
+                if unidirectional_light
+                    .flags()
+                    .contains(LightFlags::IS_DISABLED)
+                {
+                    continue;
+                }
+
                 unidirectional_light.update_cascade_partition_depths(
                     camera_space_view_frustum,
                     &camera_space_bounding_sphere,
@@ -857,7 +928,7 @@ impl SceneGraph<f32> {
     fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        omnidirectional_light: &OmnidirectionalLight,
+        omnidirectional_light: &ShadowableOmnidirectionalLight,
         face: CubemapFace,
         camera_space_face_frustum: &Frustum<f32>,
         group_node: &GroupNode<f32>,
@@ -891,6 +962,13 @@ impl SceneGraph<f32> {
 
         for &model_instance_node_id in group_node.child_model_instance_node_ids() {
             let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+            if model_instance_node
+                .flags()
+                .intersects(ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS)
+            {
+                continue;
+            }
 
             // We assume that only objects with bounding spheres will cast shadows
             if let Some(model_instance_bounding_sphere) =
@@ -936,7 +1014,7 @@ impl SceneGraph<f32> {
     fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        unidirectional_light: &UnidirectionalLight,
+        unidirectional_light: &ShadowableUnidirectionalLight,
         cascade_idx: CascadeIdx,
         group_node: &GroupNode<f32>,
         group_to_camera_transform: &NodeTransform<f32>,
@@ -969,6 +1047,13 @@ impl SceneGraph<f32> {
 
         for &model_instance_node_id in group_node.child_model_instance_node_ids() {
             let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+            if model_instance_node
+                .flags()
+                .intersects(ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS)
+            {
+                continue;
+            }
 
             // We assume that only objects with bounding spheres will cast shadows
             if let Some(model_instance_bounding_sphere) =
@@ -1197,6 +1282,7 @@ impl<F: Float> ModelInstanceNode<F> {
         model_to_parent_transform: NodeTransform<F>,
         model_id: ModelID,
         feature_ids: Vec<InstanceFeatureID>,
+        flags: ModelInstanceFlags,
     ) -> Self {
         Self {
             parent_node_id,
@@ -1204,6 +1290,7 @@ impl<F: Float> ModelInstanceNode<F> {
             model_to_parent_transform,
             model_id,
             feature_ids,
+            flags,
         }
     }
 
@@ -1249,6 +1336,11 @@ impl<F: Float> ModelInstanceNode<F> {
             .find(|feature_id| feature_id.feature_type_id() == feature_type_id)
     }
 
+    /// Returns the flags for the model instance.
+    pub fn flags(&self) -> ModelInstanceFlags {
+        self.flags
+    }
+
     /// Returns the bounding sphere of the model instance, or [`None`] if it has
     /// no bounding sphere.
     fn get_model_bounding_sphere(&self) -> Option<&Sphere<F>> {
@@ -1257,6 +1349,10 @@ impl<F: Float> ModelInstanceNode<F> {
 
     fn set_model_to_parent_transform(&mut self, transform: NodeTransform<F>) {
         self.model_to_parent_transform = transform;
+    }
+
+    fn set_flags(&mut self, flags: ModelInstanceFlags) {
+        self.flags = flags;
     }
 }
 
@@ -1335,6 +1431,19 @@ impl_node_id_idx_traits!(GroupNodeID);
 impl_node_id_idx_traits!(ModelInstanceNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
 
+impl From<SceneEntityFlags> for ModelInstanceFlags {
+    fn from(scene_entity_flags: SceneEntityFlags) -> Self {
+        let mut model_instance_flags = Self::empty();
+        if scene_entity_flags.contains(SceneEntityFlags::IS_DISABLED) {
+            model_instance_flags |= Self::IS_HIDDEN;
+        }
+        if scene_entity_flags.contains(SceneEntityFlags::CASTS_NO_SHADOWS) {
+            model_instance_flags |= Self::CASTS_NO_SHADOWS;
+        }
+        model_instance_flags
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1375,6 +1484,7 @@ mod tests {
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), F::one())),
             create_dummy_model_instance_feature_ids(),
+            ModelInstanceFlags::empty(),
         )
     }
 
@@ -1688,6 +1798,7 @@ mod tests {
             create_dummy_model_id(""),
             Some(bounding_sphere.clone()),
             create_dummy_model_instance_feature_ids(),
+            ModelInstanceFlags::empty(),
         );
 
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
@@ -1724,6 +1835,7 @@ mod tests {
             create_dummy_model_id("1"),
             Some(bounding_sphere_1.clone()),
             create_dummy_model_instance_feature_ids(),
+            ModelInstanceFlags::empty(),
         );
         scene_graph.create_model_instance_node(
             root,
@@ -1731,6 +1843,7 @@ mod tests {
             create_dummy_model_id("2"),
             Some(bounding_sphere_2.clone()),
             create_dummy_model_instance_feature_ids(),
+            ModelInstanceFlags::empty(),
         );
 
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
@@ -1771,6 +1884,7 @@ mod tests {
             create_dummy_model_id("1"),
             Some(bounding_sphere_1.clone()),
             create_dummy_model_instance_feature_ids(),
+            ModelInstanceFlags::empty(),
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_to_parent_transform);
         scene_graph.create_model_instance_node(
@@ -1779,6 +1893,7 @@ mod tests {
             create_dummy_model_id("2"),
             Some(bounding_sphere_2.clone()),
             create_dummy_model_instance_feature_ids(),
+            ModelInstanceFlags::empty(),
         );
 
         let correct_group_2_bounding_sphere =

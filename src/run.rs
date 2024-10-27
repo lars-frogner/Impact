@@ -17,7 +17,8 @@ use crate::{
         texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     },
     light::components::{
-        AmbientEmissionComp, OmnidirectionalEmissionComp, UnidirectionalEmissionComp,
+        AmbientEmissionComp, OmnidirectionalEmissionComp, ShadowableOmnidirectionalEmissionComp,
+        ShadowableUnidirectionalEmissionComp, UnidirectionalEmissionComp,
     },
     material::{
         self,
@@ -59,8 +60,8 @@ use crate::{
         PhysicsSimulator, SimulatorConfig,
     },
     scene::{
-        components::{ParentComp, SceneGraphGroupComp, UncullableComp},
-        Scene,
+        components::{ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, UncullableComp},
+        Scene, SceneEntityFlags,
     },
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
@@ -293,6 +294,7 @@ fn init_app(window: Window) -> Result<Application> {
     //         0.3,
     //         200.0,
     //     ),
+    //     &SceneEntityFlagsComp(SceneEntityFlags::CASTS_NO_SHADOWS),
     // ))?;
 
     app.create_entity((
@@ -301,7 +303,7 @@ fn init_app(window: Window) -> Result<Application> {
         &SphereMeshComp::new(64),
         &UniformColorComp(vector![0.9, 0.05, 0.05]),
         &UniformEmissiveLuminanceComp(1e6),
-        &OmnidirectionalEmissionComp::new(vector![1.0, 0.2, 0.2] * 1e5, 0.2),
+        &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 0.2, 0.2] * 1e5, 0.2),
         &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, 0.0], 10.0, 15.0),
     ))?;
 
@@ -462,10 +464,10 @@ fn init_app(window: Window) -> Result<Application> {
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
         &UniformColorComp(vector![1.0, 1.0, 1.0]),
         &UniformEmissiveLuminanceComp(1e6),
-        &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
+        &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
     ))?;
 
-    // app.create_entity(&UnidirectionalEmissionComp::new(
+    // app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
     //     vector![1.0, 1.0, 1.0] * 10000.0,
     //     UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
     //     Degrees(2.0),

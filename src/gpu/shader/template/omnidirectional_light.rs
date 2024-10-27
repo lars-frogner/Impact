@@ -5,16 +5,13 @@ use crate::{
     gpu::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
-        texture::{
-            attachment::{
-                Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
-                RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-                RenderAttachmentQuantity::{
-                    self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
-                },
-                RenderAttachmentQuantitySet,
+        texture::attachment::{
+            Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity::{
+                self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
             },
-            shadow_map::ShadowCubemapTexture,
+            RenderAttachmentQuantitySet,
         },
     },
     light::buffer::LightGPUBufferManager,
@@ -112,9 +109,6 @@ impl SpecificShaderTemplate for OmnidirectionalLightShaderTemplate {
                     "material_properties_sampler_binding" => MaterialProperties.sampler_binding(),
                     "light_uniform_group" => 5,
                     "light_uniform_binding" => LightGPUBufferManager::light_binding(),
-                    "shadow_map_texture_group" => 6,
-                    "shadow_map_texture_binding" => ShadowCubemapTexture::texture_binding(),
-                    "shadow_map_sampler_binding" => ShadowCubemapTexture::sampler_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
