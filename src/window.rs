@@ -2,7 +2,9 @@
 
 mod input;
 
-pub use input::{HandlingResult, InputHandler, KeyActionMap, MouseInputHandler};
+pub use input::{
+    HandlingResult, InputHandler, KeyActionMap, MouseButtonInputHandler, MouseMotionInputHandler,
+};
 pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
@@ -13,7 +15,7 @@ use winit::{
     dpi::PhysicalSize,
     event::{DeviceEvent, DeviceId},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::{Window as WinitWindow, WindowAttributes, WindowId},
+    window::{CursorGrabMode, Window as WinitWindow, WindowAttributes, WindowId},
 };
 
 /// Top-level entity that manages the window, event loop and game loop.
@@ -194,9 +196,24 @@ impl Window {
 
     /// Modifies the cursor's visibility.
     ///
-    /// If `false`, this will hide the cursor. If `true`, this will show the cursor.
+    /// If `false`, this will hide the cursor. If `true`, this will show the
+    /// cursor.
     pub fn set_cursor_visible(&self, visible: bool) {
         self.window.set_cursor_visible(visible);
+    }
+
+    /// Confines the cursor to the window area.
+    pub fn confine_cursor(&self) {
+        self.window
+            .set_cursor_grab(CursorGrabMode::Confined)
+            .expect("Could not confine cursor");
+    }
+
+    /// Allows the cursor to leave the window area.
+    pub fn unconfine_cursor(&self) {
+        self.window
+            .set_cursor_grab(CursorGrabMode::None)
+            .expect("Could not unconfine cursor");
     }
 
     fn request_redraw(&self) {

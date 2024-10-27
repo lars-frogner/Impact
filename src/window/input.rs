@@ -8,14 +8,15 @@ use crate::{
 use anyhow::Result;
 use std::{collections::HashMap, sync::Arc};
 use winit::{
-    event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
+    event::{DeviceEvent, ElementState, KeyEvent, MouseButton, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
 
 /// Handler for any user input events.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct InputHandler {
     key_handler: KeyInputHandler,
+    mouse_button_handler: MouseButtonInputHandler,
 }
 
 /// Whether or not an event has been handled by
@@ -26,9 +27,20 @@ pub enum HandlingResult {
     Unhandled,
 }
 
-/// Handler for mouse input events.
+/// Handler for mouse motion input events.
 #[derive(Clone, Debug)]
-pub struct MouseInputHandler;
+pub struct MouseMotionInputHandler;
+
+/// Handler for mouse button input events.
+#[derive(Default)]
+pub struct MouseButtonInputHandler {
+    pub left_pressed: Option<MouseButtonInputHandlerFn>,
+    pub left_released: Option<MouseButtonInputHandlerFn>,
+    pub right_pressed: Option<MouseButtonInputHandlerFn>,
+    pub right_released: Option<MouseButtonInputHandlerFn>,
+}
+
+pub type MouseButtonInputHandlerFn = Box<dyn Fn(&Application) -> Result<()>>;
 
 /// A map associating specific keyboard key inputs
 /// with the actions they should perform.
@@ -83,10 +95,11 @@ macro_rules! def_key_action_map {
 
 impl InputHandler {
     /// Creates a new input handler that will use the given
-    /// keyboard action map.
-    pub fn new(key_map: KeyActionMap) -> Self {
+    /// keyboard action map and mouse button input handler.
+    pub fn new(key_map: KeyActionMap, mouse_button_handler: MouseButtonInputHandler) -> Self {
         Self {
             key_handler: KeyInputHandler::new(key_map),
+            mouse_button_handler,
         }
     }
 
@@ -106,6 +119,9 @@ impl InputHandler {
                 self.key_handler
                     .handle_event(app, event_loop_controller, event)
             }
+            WindowEvent::MouseInput { button, state, .. } => {
+                self.mouse_button_handler.handle_event(app, button, state)
+            }
             _ => Ok(HandlingResult::Unhandled),
         }
     }
@@ -122,18 +138,63 @@ impl InputHandler {
     ) -> Result<HandlingResult> {
         match event {
             // Handle cursor movement events
-            DeviceEvent::MouseMotion { delta } => MouseInputHandler::handle_event(app, *delta),
+            DeviceEvent::MouseMotion { delta } => {
+                MouseMotionInputHandler::handle_event(app, *delta)
+            }
             _ => Ok(HandlingResult::Unhandled),
         }
     }
 }
 
-impl MouseInputHandler {
+impl MouseMotionInputHandler {
     fn handle_event(app: &Application, mouse_displacement: (f64, f64)) -> Result<HandlingResult> {
         if app.control_mode_active() {
             app.update_orientation_controller(mouse_displacement);
         }
         Ok(HandlingResult::Handled)
+    }
+}
+
+impl MouseButtonInputHandler {
+    fn handle_event(
+        &self,
+        app: &Application,
+        button: &MouseButton,
+        state: &ElementState,
+    ) -> Result<HandlingResult> {
+        match (button, state) {
+            (MouseButton::Left, ElementState::Pressed) => {
+                if let Some(handler) = &self.left_pressed {
+                    handler(app)?;
+                }
+                Ok(HandlingResult::Handled)
+            }
+            (MouseButton::Left, ElementState::Released) => {
+                if let Some(handler) = &self.left_released {
+                    handler(app)?;
+                }
+                Ok(HandlingResult::Handled)
+            }
+            (MouseButton::Right, ElementState::Pressed) => {
+                if let Some(handler) = &self.right_pressed {
+                    handler(app)?;
+                }
+                Ok(HandlingResult::Handled)
+            }
+            (MouseButton::Right, ElementState::Released) => {
+                if let Some(handler) = &self.right_released {
+                    handler(app)?;
+                }
+                Ok(HandlingResult::Handled)
+            }
+            _ => Ok(HandlingResult::Unhandled),
+        }
+    }
+}
+
+impl std::fmt::Debug for MouseButtonInputHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MouseButtonInputHandler").finish()
     }
 }
 

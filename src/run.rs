@@ -74,7 +74,7 @@ use crate::{
         voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
         VoxelManager,
     },
-    window::{GameHandler, InputHandler, KeyActionMap, Window},
+    window::{GameHandler, InputHandler, KeyActionMap, MouseButtonInputHandler, Window},
 };
 use anyhow::Result;
 use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
@@ -93,12 +93,12 @@ fn init_logging() -> Result<()> {
 }
 
 fn init_game_loop(window: Window) -> Result<GameLoop> {
-    let app = init_app(window)?;
-    let input_handler = InputHandler::new(KeyActionMap::default());
+    let (app, mouse_button_input_handler) = init_app(window)?;
+    let input_handler = InputHandler::new(KeyActionMap::default(), mouse_button_input_handler);
     GameLoop::new(app, input_handler, GameLoopConfig::default())
 }
 
-fn init_app(window: Window) -> Result<Application> {
+fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
     let rendering_config = RenderingConfig::default();
 
     let vertical_field_of_view = Degrees(70.0);
@@ -162,6 +162,8 @@ fn init_app(window: Window) -> Result<Application> {
         Some(Box::new(orientation_controller)),
         voxel_type_registry,
     )?;
+
+    let mut mouse_button_input_handler = MouseButtonInputHandler::default();
 
     let mut assets = app.assets().write().unwrap();
 
@@ -279,25 +281,30 @@ fn init_app(window: Window) -> Result<Application> {
         ),
     ))?;
 
-    // app.create_entity((
-    //     &ParentComp::new(player_entity),
-    //     &ReferenceFrameComp::unscaled(
-    //         Point3::new(0.15, -0.3, 0.0),
-    //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
-    //     ),
-    //     &CylinderMeshComp::new(100.0, 0.02, 16),
-    //     &UniformColorComp(vector![0.9, 0.05, 0.05]),
-    //     &UniformEmissiveLuminanceComp(1e6),
-    //     &VoxelAbsorbingCapsuleComp::new(
-    //         vector![0.0, 0.0, 0.0],
-    //         vector![0.0, 100.0, 0.0],
-    //         0.3,
-    //         200.0,
-    //     ),
-    //     &SceneEntityFlagsComp(SceneEntityFlags::CASTS_NO_SHADOWS),
-    // ))?;
+    let laser_entity = app.create_entity((
+        &ParentComp::new(player_entity),
+        &ReferenceFrameComp::unscaled(
+            Point3::new(0.15, -0.3, 0.0),
+            Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
+        ),
+        &CylinderMeshComp::new(100.0, 0.02, 16),
+        &UniformColorComp(vector![0.9, 0.05, 0.05]),
+        &UniformEmissiveLuminanceComp(1e6),
+        &VoxelAbsorbingCapsuleComp::new(
+            vector![0.0, 0.0, 0.0],
+            vector![0.0, 100.0, 0.0],
+            0.3,
+            200.0,
+        ),
+        &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED | SceneEntityFlags::CASTS_NO_SHADOWS),
+    ))?;
 
-    app.create_entity((
+    mouse_button_input_handler.left_pressed =
+        Some(Box::new(move |app| app.enable_scene_entity(&laser_entity)));
+    mouse_button_input_handler.left_released =
+        Some(Box::new(move |app| app.disable_scene_entity(&laser_entity)));
+
+    let absorbing_sphere_entity = app.create_entity((
         &ParentComp::new(player_entity),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 0.0, -3.0), 0.1),
         &SphereMeshComp::new(64),
@@ -305,7 +312,15 @@ fn init_app(window: Window) -> Result<Application> {
         &UniformEmissiveLuminanceComp(1e6),
         &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 0.2, 0.2] * 1e5, 0.2),
         &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, 0.0], 10.0, 15.0),
+        &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED),
     ))?;
+
+    mouse_button_input_handler.right_pressed = Some(Box::new(move |app| {
+        app.enable_scene_entity(&absorbing_sphere_entity)
+    }));
+    mouse_button_input_handler.right_released = Some(Box::new(move |app| {
+        app.disable_scene_entity(&absorbing_sphere_entity)
+    }));
 
     // app.create_entity((
     //     &app.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
@@ -502,7 +517,7 @@ fn init_app(window: Window) -> Result<Application> {
     // 7.0, 2.0), 5.0, 1e-3); create_drag_drop_experiment(&world,
     // Point3::new(0.0, 20.0, 4.0));
 
-    Ok(app)
+    Ok((app, mouse_button_input_handler))
 }
 
 // fn create_harmonic_oscillation_experiment(

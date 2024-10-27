@@ -50,11 +50,13 @@ impl UserInterface {
 impl InteractionMode {
     fn control(window: &Window) -> Self {
         window.set_cursor_visible(false);
+        window.confine_cursor();
         Self::Control
     }
 
     fn cursor(window: &Window) -> Self {
         window.set_cursor_visible(true);
+        window.unconfine_cursor();
         Self::Cursor
     }
 }
