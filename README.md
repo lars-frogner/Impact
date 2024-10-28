@@ -6,7 +6,7 @@ This is a highly experimental and work-in-progress game engine written in Rust. 
 
 ### Graphics
 
-The engine does physically based 3D rendering. The graphics system is built on [`wgpu`](https://github.com/gfx-rs/wgpu) and is the most featured part of the engine. Notable graphics capabilities include:
+The engine does physically based 3D rendering. The graphics system is built on [`wgpu`](https://github.com/gfx-rs/wgpu). Notable graphics capabilities include:
 
 - A general microfacet material model.
 - Area lights with soft shadows.
@@ -24,7 +24,7 @@ The engine does physically based 3D rendering. The graphics system is built on [
 
 ### Voxels
 
-First-class support for voxels is a high priority. Current voxel capabilities include sparse voxel trees with dynamic LOD.
+Voxel based objects have first-class support. The shape of these objects are defined by signed distance fields, which combined with Surface Nets-based meshing gives them a smooth appearance. An object can be comprised of voxels with many different materials, which are smoothly blended between during rendering. The objects can also be arbitrarily deformed or split up, which dynamically affects their physical behavior. See the video below for a demonstration.
 
 ### ECS
 
@@ -34,7 +34,6 @@ The engine uses its own Entity-Component-System (ECS) implementation, which also
 
 In rough order of priority (which may change):
 
-- Voxel improvements (rendering efficiency, aliasing, material support, interactivity).
 - Collision detection and resolution.
 - N-body gravity simulation.
 - Procedural voxel generation.
@@ -43,6 +42,10 @@ In rough order of priority (which may change):
 - Audio.
 - Let's see when we get here...
 
-## Screenshots
+## Showcase
 
-![screenshot](screenshots/screenshot.png "Screenshot")
+![screenshot_1](showcase/screenshot_1.png "Screenshot 1")
+
+![screenshot_2](showcase/screenshot_2.png "Screenshot 2")
+
+![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
