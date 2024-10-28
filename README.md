@@ -44,8 +44,8 @@ In rough order of priority (which may change):
 
 ## Showcase
 
+![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
+
 ![screenshot_1](showcase/screenshot_1.png "Screenshot 1")
 
 ![screenshot_2](showcase/screenshot_2.png "Screenshot 2")
-
-![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
