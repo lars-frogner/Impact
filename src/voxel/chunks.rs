@@ -40,6 +40,7 @@ pub struct ChunkedVoxelObject {
     chunk_idx_strides: [usize; 3],
     occupied_chunk_ranges: [Range<usize>; 3],
     occupied_voxel_ranges: [Range<usize>; 3],
+    origin_offset_in_root: [usize; 3],
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
     split_detector: SplitDetector,
@@ -262,6 +263,9 @@ impl ChunkedVoxelObject {
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
+        // This object has not been split off from a parent
+        let origin_offset_in_parent = [0; 3];
+
         let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
         Some(Self {
@@ -270,6 +274,7 @@ impl ChunkedVoxelObject {
             chunk_idx_strides,
             occupied_chunk_ranges,
             occupied_voxel_ranges,
+            origin_offset_in_root: origin_offset_in_parent,
             chunks,
             voxels,
             split_detector,
@@ -349,6 +354,18 @@ impl ChunkedVoxelObject {
     /// incrementing each 3D chunk index.
     pub fn chunk_idx_strides(&self) -> &[usize; 3] {
         &self.chunk_idx_strides
+    }
+
+    /// Returns the offsets of the origin of this object compared to the origin
+    /// of the original unsplit object this object was disconnected from, in the
+    /// reference frame of the original object (the disconnected object has the
+    /// same orientation as the original object after splitting, only the offset
+    /// is different). This does not account for any relative motion of the
+    /// objects after splitting. If this object has not been disconnected from a
+    /// larger object, the offsets are zero.
+    pub fn origin_offset_in_root(&self) -> [f32; 3] {
+        self.origin_offset_in_root
+            .map(|offset| self.voxel_extent as f32 * offset as f32)
     }
 
     /// Determines the exact range of indices along each axis of the object's

@@ -33,11 +33,11 @@ pub trait PropertyTransferrer {
 pub struct DisconnectedVoxelObject {
     /// The disconnected object.
     pub object: ChunkedVoxelObject,
-    /// The offset in whole voxels from the origin of the original object to the
+    /// The offset in whole voxels from the origin of the parent object to the
     /// origin of the disconnected object, in the reference frame of the
-    /// original object (the disconnected object has the same orientation as the
-    /// original object, only the offset is different).
-    pub origin_offset: [usize; 3],
+    /// parent object (the disconnected object has the same orientation as the
+    /// parent object, only the offset is different).
+    pub origin_offset_in_parent: [usize; 3],
 }
 
 /// Auxiliary data structure for finding regions of connected voxels in a
@@ -654,7 +654,7 @@ impl ChunkedVoxelObject {
 
         // Offset in number of voxels from the origin of the original object to the
         // origin of the disconnected object
-        let origin_offset = region_chunk_ranges.map(|range| range.start * CHUNK_SIZE);
+        let origin_offset_in_parent = region_chunk_ranges.map(|range| range.start * CHUNK_SIZE);
 
         Some(if region_chunk_counts.iter().all(|&count| count <= 2) {
             // If the disconnected object consists of at most 2 x 2 x 2 chunks, there is a
@@ -664,7 +664,8 @@ impl ChunkedVoxelObject {
             // multi-chunk objects.
             Self::create_disconnected_voxel_object_in_single_chunk_if_possible(
                 self.voxel_extent,
-                origin_offset,
+                &self.origin_offset_in_root,
+                origin_offset_in_parent,
                 region_chunk_counts,
                 region_uniform_chunk_count,
                 region_chunks,
@@ -674,7 +675,8 @@ impl ChunkedVoxelObject {
         } else {
             Self::create_disconnected_voxel_object(
                 self.voxel_extent,
-                origin_offset,
+                &self.origin_offset_in_root,
+                origin_offset_in_parent,
                 region_chunk_counts,
                 region_chunks,
                 region_voxels,
@@ -685,7 +687,8 @@ impl ChunkedVoxelObject {
 
     fn create_disconnected_voxel_object_in_single_chunk_if_possible(
         voxel_extent: f64,
-        origin_offset: [usize; 3],
+        parent_origin_offset_in_root: &[usize; 3],
+        origin_offset_in_parent: [usize; 3],
         chunk_counts: [usize; 3],
         uniform_chunk_count: usize,
         chunks: Vec<VoxelChunk>,
@@ -776,8 +779,9 @@ impl ChunkedVoxelObject {
                     }
                 }
 
-                let single_chunk_origin_offset =
-                    array::from_fn(|dim| origin_offset[dim] + origin_offset_within_object[dim]);
+                let single_chunk_origin_offset_in_parent = array::from_fn(|dim| {
+                    origin_offset_in_parent[dim] + origin_offset_within_object[dim]
+                });
 
                 let face_distributions = array::from_fn(|dim| {
                     let lower =
@@ -813,7 +817,8 @@ impl ChunkedVoxelObject {
 
                 return Self::create_disconnected_voxel_object(
                     voxel_extent,
-                    single_chunk_origin_offset,
+                    parent_origin_offset_in_root,
+                    single_chunk_origin_offset_in_parent,
                     [1; 3],
                     vec![VoxelChunk::NonUniform(single_chunk)],
                     single_chunk_voxels,
@@ -824,7 +829,8 @@ impl ChunkedVoxelObject {
 
         Self::create_disconnected_voxel_object(
             voxel_extent,
-            origin_offset,
+            parent_origin_offset_in_root,
+            origin_offset_in_parent,
             chunk_counts,
             chunks,
             voxels,
@@ -834,7 +840,8 @@ impl ChunkedVoxelObject {
 
     fn create_disconnected_voxel_object(
         voxel_extent: f64,
-        origin_offset: [usize; 3],
+        parent_origin_offset_in_root: &[usize; 3],
+        origin_offset_in_parent: [usize; 3],
         chunk_counts: [usize; 3],
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
@@ -849,12 +856,16 @@ impl ChunkedVoxelObject {
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
+        let origin_offset_in_root =
+            array::from_fn(|dim| parent_origin_offset_in_root[dim] + origin_offset_in_parent[dim]);
+
         let mut object = Self {
             voxel_extent,
             chunk_counts,
             chunk_idx_strides,
             occupied_chunk_ranges: offset_chunk_ranges,
             occupied_voxel_ranges: offset_voxel_ranges,
+            origin_offset_in_root,
             chunks,
             voxels,
             split_detector,
@@ -868,7 +879,7 @@ impl ChunkedVoxelObject {
 
         DisconnectedVoxelObject {
             object,
-            origin_offset,
+            origin_offset_in_parent,
         }
     }
 
@@ -2746,7 +2757,7 @@ pub mod fuzzing {
             {
                 let DisconnectedVoxelObject {
                     object: disconnected_object,
-                    origin_offset,
+                    origin_offset_in_parent: origin_offset,
                 } = disconnected_object;
 
                 assert!(original_region_count > 1);

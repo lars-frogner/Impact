@@ -23,6 +23,7 @@ pub enum PushConstantVariant {
     InstanceIdx,
     ChunkCount,
     CullingFrustum,
+    GenericVec3f32,
 }
 
 /// Specification for a push constant that can be passed to the GPU.
@@ -69,6 +70,7 @@ impl PushConstantVariant {
                 CameraGPUBufferManager::camera_rotation_quaternion_push_constant_size()
             }
             Self::CullingFrustum => mem::size_of::<CullingFrustum>() as u32,
+            Self::GenericVec3f32 => mem::size_of::<[f32; 3]>() as u32,
         }
     }
 }

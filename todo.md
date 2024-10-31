@@ -22,7 +22,7 @@
 
 - Consider replacing all `HashMap`s with `FxHashMap`s from `rustc-hash`: https://github.com/rust-lang/rustc-hash
 
-- Consider moving from `ndarray` to `glam`: https://github.com/bitshifter/glam-rs
+- Consider moving from `nalgebra` to `glam`: https://github.com/bitshifter/glam-rs
 
 - Consider using `wgpu::TextureFormat::Rg11b10Float` for appropriate attachments.
 

@@ -588,7 +588,7 @@ impl VoxelGeometryPipeline {
         Ok(())
     }
 
-    fn set_push_constants(
+    fn set_constant_push_constants(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
@@ -614,6 +614,19 @@ impl VoxelGeometryPipeline {
                 render_pass,
                 PushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
+            );
+    }
+
+    fn set_per_object_push_constants(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        voxel_object_buffer_manager: &VoxelObjectGPUBufferManager,
+    ) {
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::GenericVec3f32,
+                || voxel_object_buffer_manager.origin_offset_in_root(),
             );
     }
 
@@ -674,7 +687,12 @@ impl VoxelGeometryPipeline {
 
         render_pass.set_bind_group(1, material_gpu_resource_manager.bind_group(), &[]);
 
-        self.set_push_constants(render_pass, rendering_surface, postprocessor, frame_counter);
+        self.set_constant_push_constants(
+            render_pass,
+            rendering_surface,
+            postprocessor,
+            frame_counter,
+        );
 
         // All draw calls share the same transform buffer
         render_pass.set_vertex_buffer(
@@ -690,6 +708,8 @@ impl VoxelGeometryPipeline {
                 .ok_or_else(|| {
                     anyhow!("Missing GPU buffer for voxel object {}", voxel_object_id)
                 })?;
+
+            self.set_per_object_push_constants(render_pass, voxel_object_buffer_manager);
 
             let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
 

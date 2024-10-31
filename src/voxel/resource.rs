@@ -45,6 +45,7 @@ pub struct VoxelMaterialGPUResourceManager {
 #[derive(Debug)]
 pub struct VoxelObjectGPUBufferManager {
     chunk_extent: f64,
+    origin_offset_in_root: [f32; 3],
     position_buffer: GPUBuffer,
     normal_vector_buffer: GPUBuffer,
     index_material_buffer: GPUBuffer,
@@ -329,6 +330,7 @@ impl VoxelObjectGPUBufferManager {
 
         Self {
             chunk_extent: voxel_object.object().chunk_extent(),
+            origin_offset_in_root: voxel_object.object().origin_offset_in_root(),
             position_buffer,
             normal_vector_buffer,
             index_material_buffer,
@@ -345,6 +347,23 @@ impl VoxelObjectGPUBufferManager {
     /// Returns the extent of a single voxel chunk in the object.
     pub fn chunk_extent(&self) -> f64 {
         self.chunk_extent
+    }
+
+    /// Returns the offsets of the origin of this object compared to the origin
+    /// of the original unsplit object this object was disconnected from, in the
+    /// reference frame of the original object (the disconnected object has the
+    /// same orientation as the original object after splitting, only the offset
+    /// is different). This does not account for any relative motion of the
+    /// objects after splitting. If this object has not been disconnected from a
+    /// larger object, the offsets are zero.
+    ///
+    /// This is needed to offset the texture coordinates for triplanar texture
+    /// mapping in disconnected objects. Without this offset, their texture
+    /// coordinates would change discontinuously right after a split because the
+    /// vertices of the disconnected object are computed relative to the new
+    /// origin.
+    pub fn origin_offset_in_root(&self) -> [f32; 3] {
+        self.origin_offset_in_root
     }
 
     /// Return a reference to the [`GPUBuffer`] holding all the vertex positions
