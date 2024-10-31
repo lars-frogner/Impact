@@ -185,7 +185,6 @@ fn computeAreaLightQuantities(
         lightCenterDisplacement,
         fragmentNormal,
         LDotN,
-        lightInverseDistanceSpan,
         distanceFromCamera,
     );
 
@@ -237,7 +236,6 @@ fn computeLightQuantities(
         lightCenterDisplacement,
         fragmentNormal,
         LDotN,
-        lightInverseDistanceSpan,
         distanceFromCamera,
     );
 
@@ -263,12 +261,11 @@ fn computeOffsetFragmentDisplacement(
     lightCenterDisplacement: vec3f,
     fragmentNormal: vec3f,
     LDotN: f32,
-    lightInverseDistanceSpan: f32,
     distanceFromCamera: f32,
 ) -> vec3f {
     // The offset increases as the light becomes less perpendicular to the
     // surface.
-    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * max(4e-3, 4e-4 * distanceFromCamera) / lightInverseDistanceSpan;
+    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * max(2e-1, 1e-2 * distanceFromCamera);
 }
 
 fn computePCSSLightAccessFactor(
