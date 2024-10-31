@@ -865,7 +865,7 @@ mod tests {
             {
                 let DisconnectedVoxelObject {
                     object: disconnected_object,
-                    origin_offset,
+                    origin_offset_in_parent: origin_offset,
                 } = disconnected_object;
 
                 assert!(original_region_count > 1);

@@ -4,6 +4,9 @@ struct PushConstants {
     inverseWindowHeight: f32,
     frameCounter: u32,
     exposure: f32,
+    originOffsetInRootX: f32,
+    originOffsetInRootY: f32,
+    originOffsetInRootZ: f32,
 }
 
 struct ProjectionUniform {
@@ -32,7 +35,7 @@ struct VertexInput {
 struct FragmentInput {
     @builtin(position) projectedPosition: vec4f,
     @location(0) previousClipSpacePosition: vec4f,
-    @location(1) modelSpacePosition: vec3f,
+    @location(1) offsetModelSpacePosition: vec3f,
     @location(2) cameraSpacePosition: vec3f,
     @location(3) modelSpaceNormalVector: vec3f,
     @location(4) @interpolate(flat) modelToCameraSpaceRotationQuaternion: vec4f,
@@ -251,7 +254,7 @@ fn mainVS(
     let yCompIdx = xCompIdx + 1;
     let zCompIdx = xCompIdx + 2;
 
-    output.modelSpacePosition = vec3f(
+    let modelSpacePosition = vec3f(
         modelSpaceVertexPositions[xCompIdx],
         modelSpaceVertexPositions[yCompIdx],
         modelSpaceVertexPositions[zCompIdx],
@@ -268,7 +271,7 @@ fn mainVS(
         modelViewTransform.rotationQuaternion,
         modelViewTransform.translationAndScaling.xyz,
         modelViewTransform.translationAndScaling.w,
-        output.modelSpacePosition,
+        modelSpacePosition,
     );
     output.projectedPosition = projectionMatrix * vec4f(cameraSpacePosition, 1.0);
     output.cameraSpacePosition = cameraSpacePosition;
@@ -277,7 +280,7 @@ fn mainVS(
         previousModelViewTransform.rotationQuaternion,
         previousModelViewTransform.translationAndScaling.xyz,
         previousModelViewTransform.translationAndScaling.w,
-        output.modelSpacePosition,
+        modelSpacePosition,
     );
     output.previousClipSpacePosition = projectionMatrix * vec4f(previousCameraSpacePosition, 1.0);
 
@@ -285,6 +288,17 @@ fn mainVS(
 
     output.materialIndices = vertex.materialIndices;
     output.materialWeights = vec4f(vertex.materialWeights);
+
+    // In case the voxel object has been disconnected from another object, we
+    // need to use the model space position relative to the origin of the
+    // original object. Otherwise, the triplanar texture coordinates would
+    // shift along with the origin during splitting, causing the textures to
+    // change abruptly
+    output.offsetModelSpacePosition = vec3f(
+        pushConstants.originOffsetInRootX,
+        pushConstants.originOffsetInRootY,
+        pushConstants.originOffsetInRootZ,
+    ) + modelSpacePosition;
 
     return output;
 }
@@ -302,7 +316,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
 
     var modelSpaceNormalVector = normalize(fragment.modelSpaceNormalVector);
 
-    let modelSpaceFaceNormalVector = computeFaceNormal(fragment.modelSpacePosition);
+    let modelSpaceFaceNormalVector = computeFaceNormal(fragment.offsetModelSpacePosition);
 
     // If the normal vector deviates significantly from the face normal (which
     // can happen if adjacent triangles have very different face normals), we
@@ -319,9 +333,9 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     triplanarWeights *= triplanarWeights * triplanarWeights; // Raise to 3rd power
     triplanarWeights /= triplanarWeights.x + triplanarWeights.y + triplanarWeights.z;
 
-    let triplanarCoordsX = TEXTURE_FREQUENCY * fragment.modelSpacePosition.zy;
-    let triplanarCoordsY = TEXTURE_FREQUENCY * fragment.modelSpacePosition.xz;
-    let triplanarCoordsZ = TEXTURE_FREQUENCY * fragment.modelSpacePosition.xy;
+    let triplanarCoordsX = TEXTURE_FREQUENCY * fragment.offsetModelSpacePosition.zy;
+    let triplanarCoordsY = TEXTURE_FREQUENCY * fragment.offsetModelSpacePosition.xz;
+    let triplanarCoordsZ = TEXTURE_FREQUENCY * fragment.offsetModelSpacePosition.xy;
 
     // Normalize material weights
     var materialWeights = fragment.materialWeights;

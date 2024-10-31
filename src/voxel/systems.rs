@@ -384,7 +384,7 @@ fn handle_disconnected_voxel_object(
 
     let DisconnectedVoxelObject {
         object,
-        origin_offset,
+        origin_offset_in_parent: origin_offset,
     } = object;
 
     let origin_offset_in_voxel_object_space =

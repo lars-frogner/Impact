@@ -43,6 +43,7 @@ impl VoxelGeometryShaderTemplate {
             PushConstantVariant::InverseWindowDimensions,
             PushConstantVariant::FrameCounter,
             PushConstantVariant::Exposure,
+            PushConstantVariant::GenericVec3f32, // Offsets for texture coordinates
         ])
     }
 }
