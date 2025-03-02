@@ -8,7 +8,7 @@ use crate::{
     gpu::{buffer, GraphicsDevice},
     io,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bytemuck::Pod;
 use image::{
     self, buffer::ConvertBuffer, io::Reader as ImageReader, DynamicImage, GenericImageView,
@@ -217,7 +217,7 @@ impl Texture {
         sampler_id: Option<SamplerID>,
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
-        let image = ImageReader::open(image_path)?.decode()?;
+        let image = open_image(image_path)?.decode()?;
         Self::from_image(
             graphics_device,
             mipmapper_generator,
@@ -353,12 +353,12 @@ impl Texture {
         let front_image_path = front_image_path.as_ref();
         let back_image_path = back_image_path.as_ref();
 
-        let right_image = ImageReader::open(right_image_path)?.decode()?;
-        let left_image = ImageReader::open(left_image_path)?.decode()?;
-        let top_image = ImageReader::open(top_image_path)?.decode()?;
-        let bottom_image = ImageReader::open(bottom_image_path)?.decode()?;
-        let front_image = ImageReader::open(front_image_path)?.decode()?;
-        let back_image = ImageReader::open(back_image_path)?.decode()?;
+        let right_image = open_image(right_image_path)?.decode()?;
+        let left_image = open_image(left_image_path)?.decode()?;
+        let top_image = open_image(top_image_path)?.decode()?;
+        let bottom_image = open_image(bottom_image_path)?.decode()?;
+        let front_image = open_image(front_image_path)?.decode()?;
+        let back_image = open_image(back_image_path)?.decode()?;
 
         let label = format!(
             "Cubemap {{{}, {}, {}, {}, {}, {}}}",
@@ -515,10 +515,9 @@ impl Texture {
         I: ExactSizeIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let images = image_paths.into_iter().map(|image_path| {
-            ImageReader::open(image_path)
-                .map_err(Into::into)
-                .and_then(|image| image.decode())
+        let images = image_paths.into_iter().map(|image_path: P| {
+            open_image(image_path.as_ref())?
+                .decode()
                 .map_err(Into::into)
         });
 
@@ -1081,7 +1080,13 @@ impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
     /// Loads and returns the `MessagePack` serialized lookup table at the given
     /// path.
     pub fn read_from_file(file_path: impl AsRef<Path>) -> Result<Self> {
-        let file = File::open(file_path)?;
+        let file_path = file_path.as_ref();
+        let file = File::open(file_path).with_context(|| {
+            format!(
+                "Failed to open texture lookup table at {}",
+                file_path.display()
+            )
+        })?;
         let reader = BufReader::new(file);
         let table = from_read(reader)?;
         Ok(table)
@@ -1361,6 +1366,11 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
     }
 
     Ok(())
+}
+
+fn open_image(image_path: &Path) -> Result<image::ImageReader<BufReader<File>>> {
+    ImageReader::open(image_path)
+        .with_context(|| format!("Failed to open image at {}", image_path.display()))
 }
 
 fn extract_texture_data_and_convert<IN: Pod, OUT: From<IN>>(
