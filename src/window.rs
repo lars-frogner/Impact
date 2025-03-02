@@ -98,12 +98,15 @@ impl ApplicationHandler for GameHandler {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let game_loop = self.game_loop.as_mut().unwrap();
-        let event_loop_controller = EventLoopController(event_loop);
+        let Some(game_loop) = self.game_loop.as_mut() else {
+            return;
+        };
 
         if window_id != game_loop.window().window().id() {
             return;
         }
+
+        let event_loop_controller = EventLoopController(event_loop);
 
         match game_loop.handle_window_event(&event_loop_controller, &event) {
             Ok(HandlingResult::Handled) => {}
@@ -148,7 +151,10 @@ impl ApplicationHandler for GameHandler {
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        let game_loop = self.game_loop.as_ref().unwrap();
+        let Some(game_loop) = self.game_loop.as_mut() else {
+            return;
+        };
+
         let event_loop_controller = EventLoopController(event_loop);
 
         match game_loop.handle_device_event(&event_loop_controller, &event) {
