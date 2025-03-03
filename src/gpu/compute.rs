@@ -204,7 +204,7 @@ pub fn create_compute_pipeline(
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         layout: Some(layout),
         module: shader.compute_module(),
-        entry_point: shader.compute_entry_point_name().unwrap(),
+        entry_point: Some(shader.compute_entry_point_name().unwrap()),
         compilation_options: wgpu::PipelineCompilationOptions::default(),
         cache: None,
         label: Some(label),

@@ -36,7 +36,7 @@ image = { version = "0.25", default-features = false, features = [
 half = { version = "2.1", features = ["bytemuck"] }
 lazy_static = "1.5"
 log = "0.4"
-naga = { version = "22.1", features = ["wgsl-out"] }
+naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { version = "0.33", features = ["bytemuck"] }
 nohash-hasher = "0.2.0"
 noise = "0.9.0"
@@ -56,7 +56,7 @@ roots = "0.0.8"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.9"
 tobj = "4.0"
-wgpu = { version = "22.1", features = ["naga-ir"] }
+wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30" }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
@@ -70,7 +70,7 @@ path = "impact_utils"
 clap = { version = "4.5", features = ["derive"] }
 criterion = "0.5.1"
 pprof = { version = "0.14", features = ["criterion", "flamegraph"] }
-naga = { version = "22.1", features = ["wgsl-in", "wgsl-out"] }
+naga = { version = "24.0", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.5"
 
 [profile.release]
