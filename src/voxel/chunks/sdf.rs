@@ -485,7 +485,7 @@ impl ChunkedVoxelObject {
                     let voxel =
                         self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
 
-                    if signed_dist.is_sign_negative() && voxel.map_or(true, |voxel| voxel.is_empty()) {
+                    if signed_dist.is_sign_negative() && voxel.is_none_or(|voxel| voxel.is_empty()) {
                         panic!(
                             "SDF value ({}) is negative for empty voxel at indices {:?} (chunk starts at {:?})",
                             signed_dist, voxel_indices, lower_chunk_voxel_indices
