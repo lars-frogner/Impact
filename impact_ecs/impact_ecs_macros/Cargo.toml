@@ -9,6 +9,6 @@ proc-macro = true
 [dependencies]
 lazy_static = "1.4"
 proc-macro2 = "1.0"
-proc-macro-crate = "2.0"
+proc-macro-crate = "3.2"
 quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
