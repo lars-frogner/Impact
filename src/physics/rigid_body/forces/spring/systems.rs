@@ -67,11 +67,11 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
 
     let entity_1_is_disabled = entity_1
         .get_component::<SceneEntityFlagsComp>()
-        .map_or(false, |comp| comp.access().is_disabled());
+        .is_some_and(|comp| comp.access().is_disabled());
 
     let entity_2_is_disabled = entity_2
         .get_component::<SceneEntityFlagsComp>()
-        .map_or(false, |comp| comp.access().is_disabled());
+        .is_some_and(|comp| comp.access().is_disabled());
 
     if entity_1_is_disabled || entity_2_is_disabled {
         // We need both entities in order to apply a force

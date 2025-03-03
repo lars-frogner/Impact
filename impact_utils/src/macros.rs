@@ -1,4 +1,4 @@
-/// Utility macros.
+//! Utility macros.
 
 /// Creates a [`StringHash32`](crate::StringHash32) for
 /// the given string.

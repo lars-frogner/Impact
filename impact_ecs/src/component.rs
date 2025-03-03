@@ -145,7 +145,7 @@ pub struct SingleInstance<T> {
 
 // We can treat a reference to a component as a component array
 // and slice with a single instance
-impl<'a, C: Component> ComponentArray for &'a C {
+impl<C: Component> ComponentArray for &C {
     fn component_id(&self) -> ComponentID {
         C::component_id()
     }
@@ -187,7 +187,7 @@ impl<'a, C: Component> ComponentSlice<'a> for &'a C {
     }
 }
 
-impl<'a, C: Component> ComponentInstance for &'a C {
+impl<C: Component> ComponentInstance for &C {
     fn single_instance_view(&self) -> SingleInstance<ComponentView<'_>> {
         SingleInstance::new_unchecked(self.view())
     }
@@ -536,7 +536,7 @@ impl<'a> ComponentView<'a> {
     }
 }
 
-impl<'a> ComponentArray for ComponentView<'a> {
+impl ComponentArray for ComponentView<'_> {
     fn component_id(&self) -> ComponentID {
         self.component_id
     }
@@ -584,7 +584,7 @@ impl<'a> ComponentSlice<'a> for ComponentView<'a> {
     }
 }
 
-impl<'a, C: Component> ComponentArray for &'a [C] {
+impl<C: Component> ComponentArray for &[C] {
     fn component_id(&self) -> ComponentID {
         C::component_id()
     }
@@ -624,7 +624,7 @@ impl<'a, C: Component> ComponentSlice<'a> for &'a [C] {
     }
 }
 
-impl<'a, const N: usize, C: Component> ComponentArray for &'a [C; N] {
+impl<const N: usize, C: Component> ComponentArray for &[C; N] {
     fn component_id(&self) -> ComponentID {
         C::component_id()
     }

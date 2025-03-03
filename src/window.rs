@@ -238,7 +238,7 @@ impl Window {
     }
 }
 
-impl<'a> EventLoopController<'a> {
+impl EventLoopController<'_> {
     /// Terminates the event loop.
     pub fn exit(&self) {
         self.0.exit();

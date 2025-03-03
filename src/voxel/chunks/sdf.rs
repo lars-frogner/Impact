@@ -36,7 +36,9 @@ const SDF_GRID_SIZE: usize = ChunkedVoxelObject::chunk_size() + 2;
 pub const SDF_GRID_CELL_COUNT: usize = SDF_GRID_SIZE.pow(3);
 
 type LoopForChunkSDF = Loop3<SDF_GRID_SIZE>;
+#[cfg(any(test, feature = "fuzzing"))]
 type LoopForChunkSDFValues<'a, 'b> = DataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
+#[cfg(any(test, feature = "fuzzing"))]
 type LoopForChunkSDFVoxelTypes<'a, 'b> = DataLoop3<'a, 'b, VoxelType, SDF_GRID_SIZE>;
 type LoopForChunkSDFValuesMut<'a, 'b> = MutDataLoop3<'a, 'b, f32, SDF_GRID_SIZE>;
 type LoopForChunkSDFVoxelTypesMut<'a, 'b> = MutDataLoop3<'a, 'b, VoxelType, SDF_GRID_SIZE>;
@@ -73,6 +75,7 @@ impl VoxelChunkSignedDistanceField {
             + indices[2]
     }
 
+    #[allow(clippy::large_stack_arrays)]
     pub const fn default() -> Self {
         Self {
             values: [0.0; SDF_GRID_CELL_COUNT],
@@ -85,6 +88,7 @@ impl VoxelChunkSignedDistanceField {
         self.values.get(Self::linear_idx(&[i, j, k])).copied()
     }
 
+    #[cfg(any(test, feature = "fuzzing"))]
     fn loop_over_sdf_values<'a, 'b>(
         &'b self,
         lp: &'a LoopForChunkSDF,
@@ -92,6 +96,7 @@ impl VoxelChunkSignedDistanceField {
         LoopForChunkSDFValues::new(lp, &self.values)
     }
 
+    #[cfg(any(test, feature = "fuzzing"))]
     fn loop_over_voxel_types<'a, 'b>(
         &'b self,
         lp: &'a LoopForChunkSDF,
@@ -485,7 +490,7 @@ impl ChunkedVoxelObject {
                             "SDF value ({}) is negative for empty voxel at indices {:?} (chunk starts at {:?})",
                             signed_dist, voxel_indices, lower_chunk_voxel_indices
                         );
-                    } else if signed_dist.is_sign_positive() && voxel.map_or(false, |voxel| !voxel.is_empty()) {
+                    } else if signed_dist.is_sign_positive() && voxel.is_some_and(|voxel| !voxel.is_empty()) {
                         panic!(
                             "SDF value ({}) is non-negative for non-empty voxel at indices {:?} (chunk starts at {:?})",
                             signed_dist, voxel_indices, lower_chunk_voxel_indices

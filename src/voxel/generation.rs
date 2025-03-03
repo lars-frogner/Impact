@@ -593,7 +593,7 @@ fn mix(a: f64, b: f64, factor: f64) -> f64 {
 pub mod fuzzing {
     use super::*;
     use crate::voxel::voxel_types::VoxelTypeRegistry;
-    use arbitrary::{size_hint, Arbitrary, Result, Unstructured};
+    use arbitrary::{size_hint, Arbitrary, MaxRecursionReached, Result, Unstructured};
     use std::mem;
 
     #[allow(clippy::large_enum_variant)]
@@ -666,12 +666,16 @@ pub mod fuzzing {
         }
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {
-            size_hint::recursion_guard(depth, |depth| {
-                size_hint::and_all(&[
+            Self::try_size_hint(depth).unwrap_or_default()
+        }
+
+        fn try_size_hint(depth: usize) -> Result<(usize, Option<usize>), MaxRecursionReached> {
+            size_hint::try_recursion_guard(depth, |depth| {
+                Ok(size_hint::and_all(&[
                     (mem::size_of::<i32>(), Some(mem::size_of::<i32>())),
                     SD::size_hint(depth),
                     VT::size_hint(depth),
-                ])
+                ]))
             })
         }
     }

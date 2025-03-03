@@ -348,9 +348,7 @@ impl<'a> ConditionalBlock<'a> {
         } else if self
             .elseif_condition
             .as_ref()
-            .map_or(false, |elseif_condition| {
-                elseif_condition.is_true(set_flags)
-            })
+            .is_some_and(|elseif_condition| elseif_condition.is_true(set_flags))
         {
             self.elseif_body.unwrap()
         } else {

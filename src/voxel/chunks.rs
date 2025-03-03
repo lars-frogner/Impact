@@ -1127,6 +1127,7 @@ impl VoxelChunk {
         }
     }
 
+    #[cfg(any(test, feature = "fuzzing"))]
     fn upper_face_voxel_distribution(&self, dim: Dimension) -> FaceVoxelDistribution {
         match self {
             Self::Empty => FaceVoxelDistribution::Empty,
@@ -1137,6 +1138,7 @@ impl VoxelChunk {
         }
     }
 
+    #[cfg(any(test, feature = "fuzzing"))]
     fn lower_face_voxel_distribution(&self, dim: Dimension) -> FaceVoxelDistribution {
         match self {
             Self::Empty => FaceVoxelDistribution::Empty,
