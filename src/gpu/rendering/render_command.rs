@@ -1392,7 +1392,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             // otherwise it will not be rendered into the shadow map anyway
             if instance_feature_buffer_manager
                 .get(ModelInstanceNode::model_light_transform_feature_idx())
-                .map_or(true, |buffer| buffer.n_features() == 0)
+                .is_none_or(|buffer| buffer.n_features() == 0)
             {
                 continue;
             }
@@ -1733,7 +1733,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             // otherwise it will not be rendered into the shadow map anyway
             if instance_feature_buffer_manager
                 .get(ModelInstanceNode::model_light_transform_feature_idx())
-                .map_or(true, |buffer| buffer.n_features() == 0)
+                .is_none_or(|buffer| buffer.n_features() == 0)
             {
                 continue;
             }
