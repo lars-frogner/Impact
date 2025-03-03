@@ -3784,13 +3784,13 @@ impl RenderAttachmentTextureCopyCommand {
             .texture();
 
         command_encoder.copy_texture_to_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: source_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: destination_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -3906,7 +3906,7 @@ pub fn create_render_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader.vertex_module(),
-            entry_point: shader.vertex_entry_point_name().unwrap(),
+            entry_point: Some(shader.vertex_entry_point_name().unwrap()),
             buffers: vertex_buffer_layouts,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
@@ -3914,7 +3914,7 @@ pub fn create_render_pipeline(
             .fragment_entry_point_name()
             .map(|entry_point| wgpu::FragmentState {
                 module: shader.fragment_module(),
-                entry_point,
+                entry_point: Some(entry_point),
                 targets: color_target_states,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),

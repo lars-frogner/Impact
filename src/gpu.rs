@@ -45,6 +45,12 @@ pub fn initialize_for_rendering(
             max_bind_groups: 7,
             max_push_constant_size: 256,
             max_color_attachment_bytes_per_sample: 64,
+            // This is a workaround for a (presumably) bug introduced in
+            // wgpu 0.24 where the highest `VertexAttribute::shader_location`
+            // rather than the actual sum of the lengths of
+            // `VertexBufferLayout::attributes` is compared against
+            // `max_vertex_attributes`
+            max_vertex_attributes: 32,
             ..wgpu::Limits::default()
         },
         wgpu::MemoryHints::Performance,
@@ -58,11 +64,9 @@ pub fn initialize_for_rendering(
 
 /// Creates a new instance of `wgpu`.
 fn create_wgpu_instance() -> wgpu::Instance {
-    // Allow all backends
-    wgpu::Instance::new(wgpu::InstanceDescriptor {
+    wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         flags: wgpu::InstanceFlags::default(),
-        dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
-        gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+        backend_options: wgpu::BackendOptions::default(),
     })
 }

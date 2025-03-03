@@ -62,13 +62,13 @@ impl MipmapperGenerator {
                     layout: None,
                     vertex: wgpu::VertexState {
                         module: &shader,
-                        entry_point: "mainVS",
+                        entry_point: Some("mainVS"),
                         buffers: &[],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
-                        entry_point: "mainFS",
+                        entry_point: Some("mainFS"),
                         targets: &[Some(format.into())],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),

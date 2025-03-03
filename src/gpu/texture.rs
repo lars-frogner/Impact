@@ -870,14 +870,14 @@ impl Texture {
         texture_size: wgpu::Extent3d,
     ) {
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             byte_buffer,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(texel_description.n_bytes() * texture_size.width),
                 rows_per_image: Some(texture_size.height),
@@ -1440,15 +1440,15 @@ fn extract_texture_bytes(
     });
 
     command_encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             texture,
             mip_level,
             origin: wgpu::Origin3d::ZERO,
             aspect,
         },
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(texel_size * width),
                 rows_per_image: Some(height),
