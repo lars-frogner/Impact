@@ -893,7 +893,7 @@ impl GeometryPass {
                 // anyway
                 if instance_feature_buffer_manager
                     .get(ModelInstanceNode::model_view_transform_feature_idx())
-                    .map_or(false, |buffer| buffer.has_features_in_initial_range())
+                    .is_some_and(|buffer| buffer.has_features_in_initial_range())
                 {
                     Some(*model_id)
                 } else {

@@ -1129,7 +1129,7 @@ impl<'a> TableEntityMutEntry<'a> {
     }
 }
 
-impl<'a> TableEntityEntryInfo<'a> {
+impl TableEntityEntryInfo<'_> {
     fn n_components(&self) -> usize {
         self.archetype.n_components()
     }

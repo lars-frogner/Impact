@@ -11,8 +11,8 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use bytemuck::Pod;
 use image::{
-    self, buffer::ConvertBuffer, io::Reader as ImageReader, DynamicImage, GenericImageView,
-    ImageBuffer, Luma, Rgba,
+    self, buffer::ConvertBuffer, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma,
+    Rgba,
 };
 use impact_utils::stringhash32_newtype;
 use mipmap::MipmapperGenerator;
