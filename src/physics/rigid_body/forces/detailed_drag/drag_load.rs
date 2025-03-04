@@ -10,8 +10,8 @@ use crate::{
     },
 };
 use anyhow::Result;
-use nalgebra::{vector, UnitVector3, Vector3};
-use serde::{de::DeserializeOwned, ser::Serializer, Deserialize, Deserializer, Serialize};
+use nalgebra::{UnitVector3, Vector3, vector};
+use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned, ser::Serializer};
 use simba::scalar::SubsetOf;
 use std::ops::{Add, AddAssign, Div, Mul};
 

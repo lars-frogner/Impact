@@ -1,7 +1,7 @@
 //! Tests for the [`setup`] macro.
 
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{archetype::ArchetypeComponentStorage, archetype_of, setup, Component};
+use impact_ecs::{Component, archetype::ArchetypeComponentStorage, archetype_of, setup};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
@@ -576,11 +576,7 @@ fn setup_adding_one_comp_to_one_comp_two_instance_storage_works() {
         components,
         || -> Position {
             count += 1;
-            if count == 1 {
-                POS
-            } else {
-                POS2
-            }
+            if count == 1 { POS } else { POS2 }
         },
         [Byte]
     );
@@ -634,11 +630,7 @@ fn setup_overwriting_one_comp_in_one_comp_two_instance_storage_works() {
     let mut count = 0;
     setup!(components, || -> Byte {
         count += 1;
-        if count == 1 {
-            BYTE2
-        } else {
-            BYTE
-        }
+        if count == 1 { BYTE2 } else { BYTE }
     });
     assert_eq!(components.archetype(), &archetype_of!(Byte));
     assert_eq!(components.n_component_types(), 1);
@@ -664,11 +656,7 @@ fn setup_overwriting_one_comp_in_two_comp_two_instance_storage_works() {
     let mut count = 0;
     setup!(components, || -> Byte {
         count += 1;
-        if count == 1 {
-            BYTE2
-        } else {
-            BYTE
-        }
+        if count == 1 { BYTE2 } else { BYTE }
     });
     assert_eq!(components.archetype(), &archetype_of!(Byte, Position));
     assert_eq!(components.n_component_types(), 2);

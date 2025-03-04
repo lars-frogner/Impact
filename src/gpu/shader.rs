@@ -9,8 +9,8 @@ use naga::{Module, ShaderStage};
 use std::{
     borrow::Cow,
     collections::{
-        hash_map::{DefaultHasher, Entry},
         HashMap,
+        hash_map::{DefaultHasher, Entry},
     },
     fs,
     hash::{Hash, Hasher},

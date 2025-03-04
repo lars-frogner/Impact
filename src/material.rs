@@ -5,22 +5,22 @@ pub mod entity;
 mod features;
 
 pub use features::{
-    register_material_feature_types, MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation,
+    MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, register_material_feature_types,
 };
 
 use crate::{
     assets::Assets,
-    gpu::{resource_group::GPUResourceGroup, texture::TextureID, GraphicsDevice},
+    gpu::{GraphicsDevice, resource_group::GPUResourceGroup, texture::TextureID},
     mesh::VertexAttributeSet,
     model::{InstanceFeatureID, InstanceFeatureTypeID},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use entity::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};
-use impact_utils::{hash64, stringhash64_newtype, Hash64, StringHash64};
+use impact_utils::{Hash64, StringHash64, hash64, stringhash64_newtype};
 use nalgebra::Vector3;
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     fmt,
 };
 

@@ -1,9 +1,9 @@
 //! Tasks for physics.
 
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
+    application::{Application, tasks::AppTaskScheduler},
     define_execution_tag, define_task,
-    physics::{motion, PhysicsSimulator},
+    physics::{PhysicsSimulator, motion},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,

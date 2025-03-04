@@ -2,22 +2,24 @@
 
 use crate::{
     gpu::{
+        GraphicsDevice,
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
             render_command::{
-                additive_blend_state, create_postprocessing_render_pipeline,
-                create_postprocessing_render_pipeline_layout, RenderAttachmentTextureCopyCommand,
+                RenderAttachmentTextureCopyCommand, additive_blend_state,
+                create_postprocessing_render_pipeline,
+                create_postprocessing_render_pipeline_layout,
             },
             resource::SynchronizedRenderResources,
         },
         shader::{
+            ShaderManager,
             template::{
                 bloom_blending::BloomBlendingShaderTemplate,
                 bloom_downsampling::BloomDownsamplingShaderTemplate,
                 bloom_upsampling_blur::BloomUpsamplingBlurShaderTemplate,
             },
-            ShaderManager,
         },
         texture::attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,
@@ -25,11 +27,10 @@ use crate::{
             RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
             RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
         },
-        GraphicsDevice,
     },
     mesh::{self, VertexAttributeSet},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::{borrow::Cow, num::NonZeroU32};
 
 /// Configuration options for bloom.

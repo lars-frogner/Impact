@@ -148,18 +148,26 @@ mod tests {
 
     #[test]
     fn entity_change_tracker_merging_works() {
-        assert!(!EntityChangeTracker::new(false)
-            .merged(&EntityChangeTracker::new(false))
-            .changed());
-        assert!(EntityChangeTracker::new(true)
-            .merged(&EntityChangeTracker::new(false))
-            .changed());
-        assert!(EntityChangeTracker::new(false)
-            .merged(&EntityChangeTracker::new(true))
-            .changed());
-        assert!(EntityChangeTracker::new(true)
-            .merged(&EntityChangeTracker::new(true))
-            .changed());
+        assert!(
+            !EntityChangeTracker::new(false)
+                .merged(&EntityChangeTracker::new(false))
+                .changed()
+        );
+        assert!(
+            EntityChangeTracker::new(true)
+                .merged(&EntityChangeTracker::new(false))
+                .changed()
+        );
+        assert!(
+            EntityChangeTracker::new(false)
+                .merged(&EntityChangeTracker::new(true))
+                .changed()
+        );
+        assert!(
+            EntityChangeTracker::new(true)
+                .merged(&EntityChangeTracker::new(true))
+                .changed()
+        );
     }
 
     #[test]

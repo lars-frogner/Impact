@@ -5,7 +5,7 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
     },
-    light::{buffer::LightGPUBufferManager, MAX_SHADOW_MAP_CASCADES},
+    light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
     mesh::buffer::MeshVertexAttributeLocation,
     model::transform::InstanceModelLightTransform,
     rendering_template_source, template_replacements,

@@ -26,7 +26,7 @@ mod tests {
     use crate::{geometry::Radians, num::Float, physics::motion::Direction};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use motion::AngularVelocity;
-    use nalgebra::{vector, Vector3};
+    use nalgebra::{Vector3, vector};
     use proptest::prelude::*;
 
     prop_compose! {

@@ -5,14 +5,14 @@ use crate::{
     assets::Assets,
     gpu::GraphicsDevice,
     material::{
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+        MaterialPropertyTextureGroupID, MaterialShaderInput, MaterialSpecification,
         components::{
             MaterialComp, NormalMapComp, ParallaxMapComp, TexturedColorComp,
             TexturedEmissiveLuminanceComp, TexturedMetalnessComp, TexturedRoughnessComp,
             TexturedSpecularReflectanceComp, UniformColorComp, UniformEmissiveLuminanceComp,
             UniformMetalnessComp, UniformRoughnessComp, UniformSpecularReflectanceComp,
         },
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialShaderInput, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
     model::InstanceFeatureManager,

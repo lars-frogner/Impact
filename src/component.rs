@@ -1,8 +1,8 @@
 //! Management of [`Component`](impact_ecs::component::Component)s.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use impact_ecs::component::ComponentID;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 /// Registry for holding metadata about all
 /// [`Component`](impact_ecs::component::Component)s.

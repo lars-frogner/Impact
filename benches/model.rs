@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use impact::model::{
-    transform::InstanceModelViewTransform, DynamicInstanceFeatureBuffer, InstanceFeatureStorage,
+    DynamicInstanceFeatureBuffer, InstanceFeatureStorage, transform::InstanceModelViewTransform,
 };
 use pprof::criterion::{Output, PProfProfiler};
 

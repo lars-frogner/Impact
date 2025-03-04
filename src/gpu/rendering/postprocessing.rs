@@ -7,13 +7,13 @@ pub mod render_attachment_visualization;
 pub mod temporal_anti_aliasing;
 
 use crate::gpu::{
+    GraphicsDevice,
     query::TimestampQueryRegistry,
     rendering::{resource::SynchronizedRenderResources, surface::RenderingSurface},
     resource_group::GPUResourceGroupManager,
     shader::ShaderManager,
     storage::StorageGPUBufferManager,
     texture::attachment::RenderAttachmentTextureManager,
-    GraphicsDevice,
 };
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
 use anyhow::Result;

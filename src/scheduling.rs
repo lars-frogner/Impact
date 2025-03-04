@@ -3,7 +3,7 @@
 use crate::thread::{
     TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use impact_utils::ConstStringHash64;
 use petgraph::{
     algo::{self, DfsSpace},
@@ -15,8 +15,8 @@ use std::{
     marker::PhantomData,
     num::NonZeroUsize,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -510,7 +510,7 @@ impl<S> TaskDependencyGraph<S> {
         Ok(sorted_ids)
     }
 
-    fn find_dependent_task_ids(&self, task_id: TaskID) -> impl Iterator<Item = TaskID> + '_ {
+    fn find_dependent_task_ids(&self, task_id: TaskID) -> impl Iterator<Item = TaskID> {
         // Find outgoing edges, i.e. to tasks depending on this one
         self.graph
             .edges(task_id)
@@ -1065,12 +1065,48 @@ mod tests {
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 
         match recorded_task_ids[..] {
-            [Task1::ID, Task2::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
-            | [Task2::ID, Task1::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
-            | [Task1::ID, Task2::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID]
-            | [Task2::ID, Task1::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID]
-            | [Task1::ID, Task2::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID]
-            | [Task2::ID, Task1::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID] => {}
+            [
+                Task1::ID,
+                Task2::ID,
+                DepTask1::ID,
+                DepTask1Task2::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task2::ID,
+                Task1::ID,
+                DepTask1::ID,
+                DepTask1Task2::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task1::ID,
+                Task2::ID,
+                DepTask1Task2::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task2::ID,
+                Task1::ID,
+                DepTask1Task2::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task1::ID,
+                Task2::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+                DepTask1Task2::ID,
+            ]
+            | [
+                Task2::ID,
+                Task1::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+                DepTask1Task2::ID,
+            ] => {}
             _ => panic!("Incorrect task order"),
         }
 
@@ -1096,8 +1132,20 @@ mod tests {
         // respectively. DepDepTask1Task2 should execute last and
         // on the thread that executed DepTask1.
         match sorted_worker_ids[..] {
-            [WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0)]
-            | [WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1)] => {}
+            [
+                WorkerID(0),
+                WorkerID(1),
+                WorkerID(0),
+                WorkerID(1),
+                WorkerID(0),
+            ]
+            | [
+                WorkerID(1),
+                WorkerID(0),
+                WorkerID(1),
+                WorkerID(0),
+                WorkerID(1),
+            ] => {}
             _ => panic!("Incorrect worker contribution"),
         }
     }
@@ -1196,12 +1244,48 @@ mod tests {
         let ordered_task_ids = dependency_graph.obtain_ordered_task_ids().unwrap();
 
         match ordered_task_ids[..] {
-            [Task1::ID, Task2::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID]
-            | [Task2::ID, Task1::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID]
-            | [Task1::ID, Task2::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
-            | [Task2::ID, Task1::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
-            | [Task1::ID, Task2::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID]
-            | [Task2::ID, Task1::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] => {}
+            [
+                Task1::ID,
+                Task2::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+                DepTask1Task2::ID,
+            ]
+            | [
+                Task2::ID,
+                Task1::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+                DepTask1Task2::ID,
+            ]
+            | [
+                Task1::ID,
+                Task2::ID,
+                DepTask1::ID,
+                DepTask1Task2::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task2::ID,
+                Task1::ID,
+                DepTask1::ID,
+                DepTask1Task2::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task1::ID,
+                Task2::ID,
+                DepTask1Task2::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+            ]
+            | [
+                Task2::ID,
+                Task1::ID,
+                DepTask1Task2::ID,
+                DepTask1::ID,
+                DepDepTask1Task2::ID,
+            ] => {}
             _ => panic!("Incorrect task order"),
         }
     }

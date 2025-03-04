@@ -3,13 +3,13 @@
 pub mod surface_nets;
 
 use crate::voxel::{
+    VoxelSignedDistance,
     chunks::{
         ChunkedVoxelObject, ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk,
         UniformVoxelChunk, VoxelChunk, VoxelChunkFlags,
     },
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
-    VoxelSignedDistance,
 };
 
 /// A signed distance field for a voxel chunk in a [`ChunkedVoxelObject`].
@@ -163,10 +163,12 @@ impl ChunkedVoxelObject {
         sdf: &mut VoxelChunkSignedDistanceField,
         chunk_indices: [usize; 3],
     ) -> Option<VoxelChunkFlags> {
-        assert!(chunk_indices
-            .iter()
-            .zip(self.chunk_counts())
-            .all(|(&index, &count)| index < count));
+        assert!(
+            chunk_indices
+                .iter()
+                .zip(self.chunk_counts())
+                .all(|(&index, &count)| index < count)
+        );
 
         let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 

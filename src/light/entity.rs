@@ -4,17 +4,17 @@ use crate::{
     camera::SceneCamera,
     geometry::Degrees,
     light::{
+        AmbientLight, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
+        ShadowableUnidirectionalLight, UnidirectionalLight,
         components::{
             AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
             OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
             ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
             ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
         },
-        AmbientLight, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
-        ShadowableUnidirectionalLight, UnidirectionalLight,
     },
     physics::motion::components::ReferenceFrameComp,
-    scene::{components::SceneEntityFlagsComp, RenderResourcesDesynchronized, SceneEntityFlags},
+    scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use nalgebra::{Similarity3, UnitVector3};

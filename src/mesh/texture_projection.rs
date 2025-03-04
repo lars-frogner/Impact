@@ -4,7 +4,7 @@ pub mod components;
 
 use crate::num::Float;
 use approx::assert_abs_diff_ne;
-use nalgebra::{vector, Point3, UnitVector3, Vector2, Vector3};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector3, vector};
 
 /// Represents a projection of 3D positions into UV texture coordinates.
 pub trait TextureProjection<F: Float> {

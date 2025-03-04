@@ -1,7 +1,7 @@
 //! ECS systems related to motion control.
 
 use crate::{
-    control::{motion::components::MotionControlComp, MotionController},
+    control::{MotionController, motion::components::MotionControlComp},
     physics::{
         fph,
         motion::components::{ReferenceFrameComp, VelocityComp},

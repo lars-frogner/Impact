@@ -1,12 +1,12 @@
 //! ECS systems related to orientation control.
 
 use crate::{
-    control::{orientation::components::OrientationControlComp, OrientationController},
+    control::{OrientationController, orientation::components::OrientationControlComp},
     physics::{
         fph,
         motion::{
-            components::{ReferenceFrameComp, VelocityComp},
             AngularVelocity,
+            components::{ReferenceFrameComp, VelocityComp},
         },
         rigid_body::components::RigidBodyComp,
     },

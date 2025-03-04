@@ -2,7 +2,7 @@
 
 use crate::{geometry::Sphere, num::Float};
 use approx::AbsDiffEq;
-use nalgebra::{vector, Point3, Similarity3, UnitQuaternion, UnitVector3};
+use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -183,7 +183,7 @@ where
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::{point, vector, Vector3};
+    use nalgebra::{Vector3, point, vector};
 
     #[test]
     fn creating_plane_through_origin_gives_zero_displacement() {

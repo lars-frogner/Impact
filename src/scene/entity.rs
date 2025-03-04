@@ -3,22 +3,22 @@
 use crate::{
     assets::Assets,
     camera,
-    gpu::{rendering::RenderingSystem, GraphicsDevice},
+    gpu::{GraphicsDevice, rendering::RenderingSystem},
     light,
     material::{self, components::MaterialComp},
     mesh::{self, components::MeshComp},
     model::{
-        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
         InstanceFeature, ModelID,
+        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
     },
     physics::motion::components::ReferenceFrameComp,
     scene::{
+        ModelInstanceNodeID, RenderResourcesDesynchronized, Scene, SceneEntityFlags,
         components::{
             ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
             SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
             UncullableComp,
         },
-        ModelInstanceNodeID, RenderResourcesDesynchronized, Scene, SceneEntityFlags,
     },
     voxel,
     window::Window,

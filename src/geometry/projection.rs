@@ -8,8 +8,8 @@ use crate::{
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{
-    point, vector, Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3,
-    Translation3, UnitQuaternion, Vector3,
+    Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
+    UnitQuaternion, Vector3, point, vector,
 };
 use std::fmt::Debug;
 

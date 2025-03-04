@@ -1,7 +1,7 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
+    application::{Application, tasks::AppTaskScheduler},
     define_execution_tag_set,
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,

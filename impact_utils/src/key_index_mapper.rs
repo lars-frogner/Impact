@@ -1,9 +1,9 @@
 //! Map for keeping track of which [`HashMap`] key corresponds to which index in
 //! an underlying [`Vec`].
 
-use anyhow::{anyhow, Result};
-use std::collections::hash_map::{Entry, RandomState};
+use anyhow::{Result, anyhow};
 use std::collections::HashMap;
+use std::collections::hash_map::{Entry, RandomState};
 use std::fmt::Debug;
 use std::hash::{BuildHasher, Hash};
 use std::iter;
@@ -97,7 +97,7 @@ where
 
     /// Returns an iterator over all keys in the order in which their entries in
     /// the underlying [`Vec`] are stored.
-    pub fn key_at_each_idx(&self) -> impl Iterator<Item = K> + '_ {
+    pub fn key_at_each_idx(&self) -> impl Iterator<Item = K> {
         self.keys_at_indices.iter().copied()
     }
 

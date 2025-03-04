@@ -5,9 +5,9 @@ use crate::querying_util;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{
+    Result, Token, Type,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Result, Token, Type,
 };
 
 pub(crate) struct ArchetypeOfInput {

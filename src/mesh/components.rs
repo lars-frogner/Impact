@@ -216,7 +216,11 @@ impl BoxMeshComp {
     pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
             "Box mesh {{ extent_x = {}, extent_y = {}, extent_z = {}, front_faces_on_outside = {}, projection = {} }}",
-            self.extent_x, self.extent_y, self.extent_z, self.front_faces_on_outside, projection_label
+            self.extent_x,
+            self.extent_y,
+            self.extent_z,
+            self.front_faces_on_outside,
+            projection_label
         )))
     }
 }
@@ -285,7 +289,11 @@ impl CircularFrustumMeshComp {
     pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
             "Circular frustum mesh {{ length = {}, bottom_diameter = {}, top_diameter = {}, n_circumference_vertices = {}, projection = {} }}",
-            self.length, self.bottom_diameter, self.top_diameter, self.n_circumference_vertices, projection_label
+            self.length,
+            self.bottom_diameter,
+            self.top_diameter,
+            self.n_circumference_vertices,
+            projection_label
         )))
     }
 }

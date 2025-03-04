@@ -43,7 +43,7 @@ mod tests {
     use super::*;
     use crate::{num::Float, physics::motion::Direction};
     use approx::abs_diff_eq;
-    use nalgebra::{point, vector, Vector3};
+    use nalgebra::{Vector3, point, vector};
     use proptest::prelude::*;
 
     prop_compose! {

@@ -3,6 +3,7 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
+        GraphicsDevice,
         compute::ComputePass,
         query::TimestampQueryRegistry,
         rendering::{
@@ -11,22 +12,21 @@ use crate::{
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{
+            ShaderManager,
             template::{
                 luminance_histogram::LuminanceHistogramShaderTemplate,
                 luminance_histogram_average::LuminanceHistogramAverageShaderTemplate,
             },
-            ShaderManager,
         },
         storage::{StorageBufferID, StorageGPUBuffer, StorageGPUBufferManager},
         texture::attachment::RenderAttachmentTextureManager,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
-        GraphicsDevice,
     },
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, ConstStringHash64};
+use impact_utils::{ConstStringHash64, hash64};
 use lazy_static::lazy_static;
 use std::{borrow::Cow, mem};
 
@@ -207,7 +207,9 @@ impl AverageLuminanceComputeCommands {
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
     ) -> Result<()> {
         if self.histogram_copy_command.is_none() {
-            bail!("Use `fetch_histogram = true` in `AverageLuminanceComputationConfig` to enable debug printing of luminance histogram");
+            bail!(
+                "Use `fetch_histogram = true` in `AverageLuminanceComputationConfig` to enable debug printing of luminance histogram"
+            );
         }
 
         let histogram =

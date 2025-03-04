@@ -84,9 +84,9 @@ mod setup;
 
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span};
 use proc_macro_crate::{self, FoundCrate};
-use syn::{parse_macro_input, DeriveInput};
+use proc_macro2::{Ident, Span};
+use syn::{DeriveInput, parse_macro_input};
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {

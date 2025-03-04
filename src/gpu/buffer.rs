@@ -7,8 +7,8 @@ use std::{
     fmt::Display,
     mem,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 use wgpu::util::DeviceExt;

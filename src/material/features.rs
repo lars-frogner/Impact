@@ -3,8 +3,8 @@
 use crate::{
     impl_InstanceFeature,
     material::{
-        components::{ParallaxMapComp, UniformColorComp},
         RGBColor,
+        components::{ParallaxMapComp, UniformColorComp},
     },
     model::{InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID},
 };

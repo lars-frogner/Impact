@@ -2,7 +2,7 @@
 
 use super::DesynchronizedRenderResources;
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
+    application::{Application, tasks::AppTaskScheduler},
     define_task,
     gpu::rendering::tasks::RenderingTag,
     scene::tasks::{

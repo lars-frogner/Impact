@@ -3,17 +3,17 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
+        GraphicsDevice,
         rendering::{render_command::PostprocessingRenderPass, surface::RenderingSurface},
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{template::gaussian_blur::GaussianBlurShaderTemplate, ShaderManager},
+        shader::{ShaderManager, template::gaussian_blur::GaussianBlurShaderTemplate},
         texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
-        GraphicsDevice,
     },
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, ConstStringHash64};
+use impact_utils::{ConstStringHash64, hash64};
 use nalgebra::Vector4;
 use std::{borrow::Cow, fmt::Display};
 
@@ -135,7 +135,7 @@ impl GaussianBlurSamples {
     /// Returns an iterator over the 1D Gaussian kernel sample offsets starting
     /// at the center and proceeding along the positive offset side.
     #[cfg(test)]
-    pub fn sample_offsets(&self) -> impl Iterator<Item = f32> + '_ {
+    pub fn sample_offsets(&self) -> impl Iterator<Item = f32> {
         self.sample_offsets_and_weights
             .iter()
             .take(self.sample_count as usize)
@@ -145,7 +145,7 @@ impl GaussianBlurSamples {
     /// Returns an iterator over the 1D Gaussian kernel sample weights starting
     /// at the center and proceeding along the positive offset side.
     #[cfg(test)]
-    pub fn sample_weights(&self) -> impl Iterator<Item = f32> + '_ {
+    pub fn sample_weights(&self) -> impl Iterator<Item = f32> {
         self.sample_offsets_and_weights
             .iter()
             .take(self.sample_count as usize)

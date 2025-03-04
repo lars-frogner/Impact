@@ -11,7 +11,7 @@ use crate::{
     num::Float,
     util::tracking::{CollectionChange, CollectionChangeTracker},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -19,7 +19,7 @@ use impact_utils::{hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     fmt::Debug,
     ops::Neg,
 };
@@ -452,7 +452,7 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Returns an iterator over the mesh triangles, each item containing the
     /// three triangle indices.
-    pub fn triangle_indices(&self) -> impl Iterator<Item = [usize; 3]> + '_ {
+    pub fn triangle_indices(&self) -> impl Iterator<Item = [usize; 3]> {
         self.indices().chunks_exact(3).map(|indices| {
             [
                 indices[0] as usize,

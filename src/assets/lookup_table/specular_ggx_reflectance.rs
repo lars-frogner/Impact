@@ -3,13 +3,13 @@
 use crate::{
     assets::Assets,
     gpu::{
+        GraphicsDevice,
         rendering::brdf,
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         texture::{
             self, SamplerConfig, SamplerID, TexelDescription, TextureAddressingConfig,
             TextureFilteringConfig, TextureID,
         },
-        GraphicsDevice,
     },
 };
 use anyhow::Result;

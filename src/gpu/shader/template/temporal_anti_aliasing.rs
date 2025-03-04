@@ -6,8 +6,8 @@ use crate::{
         rendering::render_command::StencilValue,
         resource_group::GPUResourceGroupID,
         shader::{
-            template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
             ShaderID,
+            template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         },
         texture::attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,

@@ -2,11 +2,11 @@
 
 use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
+    Expr, Result, Token, Type, TypeReference,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Expr, Result, Token, Type, TypeReference,
 };
 
 pub(crate) struct QueryInput {

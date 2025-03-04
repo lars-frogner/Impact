@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use nalgebra::{point, vector, Point3, Vector3};
+use nalgebra::{Point3, Vector3, point, vector};
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that use a [`PlanarTextureProjection`].

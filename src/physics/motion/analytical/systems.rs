@@ -7,6 +7,7 @@ use crate::{
     physics::{
         fph,
         motion::{
+            Position, Velocity,
             analytical::{
                 circular::components::CircularTrajectoryComp,
                 constant_acceleration::components::ConstantAccelerationTrajectoryComp,
@@ -15,7 +16,6 @@ use crate::{
                 orbit::components::OrbitalTrajectoryComp,
             },
             components::{ReferenceFrameComp, Static, VelocityComp},
-            Position, Velocity,
         },
         rigid_body::components::RigidBodyComp,
     },

@@ -3,13 +3,13 @@
 
 use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
-    braced, parenthesized,
+    Expr, GenericArgument, PathArguments, Result, Token, Type, TypeReference, braced,
+    parenthesized,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     token::Paren,
-    Expr, GenericArgument, PathArguments, Result, Token, Type, TypeReference,
 };
 
 pub(crate) struct SetupInput {

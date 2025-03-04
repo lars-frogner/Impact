@@ -3,17 +3,17 @@
 pub mod lookup_table;
 
 use crate::gpu::{
-    texture::{
-        mipmap::MipmapperGenerator, Sampler, SamplerConfig, SamplerID, TexelType, Texture,
-        TextureConfig, TextureID, TextureLookupTable,
-    },
     GraphicsDevice,
+    texture::{
+        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
+        TextureLookupTable, mipmap::MipmapperGenerator,
+    },
 };
 use anyhow::Result;
 use impact_utils::hash32;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     path::Path,
     sync::Arc,
 };
@@ -98,12 +98,12 @@ impl Assets {
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(format!(
             "Cubemap {{{}, {}, {}, {}, {}, {}}}",
-            right_image_path.as_ref().to_string_lossy(),
-            left_image_path.as_ref().to_string_lossy(),
-            top_image_path.as_ref().to_string_lossy(),
-            bottom_image_path.as_ref().to_string_lossy(),
-            front_image_path.as_ref().to_string_lossy(),
-            back_image_path.as_ref().to_string_lossy()
+            right_image_path.as_ref().display(),
+            left_image_path.as_ref().display(),
+            top_image_path.as_ref().display(),
+            bottom_image_path.as_ref().display(),
+            front_image_path.as_ref().display(),
+            back_image_path.as_ref().display()
         )));
 
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {

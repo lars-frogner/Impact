@@ -1,13 +1,13 @@
 //! Input/output of mesh data in Polygon File Format.
 
 use crate::mesh::{
-    components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
-    TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
+    MeshID, MeshRepository, TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
+    components::MeshComp, texture_projection::TextureProjection,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::hash64;
-use nalgebra::{point, vector, UnitVector3};
+use nalgebra::{UnitVector3, point, vector};
 use ply_rs::{
     parser::Parser,
     ply::{Property, PropertyAccess},
@@ -74,7 +74,7 @@ where
 
     let mesh_id = MeshID(hash64!(format!(
         "{} (projection = {})",
-        ply_file_path.to_string_lossy(),
+        ply_file_path.display(),
         projection.identifier()
     )));
 
@@ -118,7 +118,7 @@ where
             element_name => bail!(
                 "Unexpected element `{}` in header of {}",
                 element_name,
-                ply_file_path.as_ref().to_string_lossy()
+                ply_file_path.as_ref().display()
             ),
         }
     }

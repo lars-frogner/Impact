@@ -6,7 +6,7 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
     },
-    mesh::{buffer::MeshVertexAttributeLocation, VertexAttributeSet},
+    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source, template_replacements,
 };

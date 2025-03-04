@@ -16,7 +16,7 @@ pub use entity::register_voxel_feature_types;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject};
+use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
 use mesh::MeshedChunkedVoxelObject;
 use std::{collections::HashMap, fmt};

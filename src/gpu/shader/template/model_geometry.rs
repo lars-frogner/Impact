@@ -8,13 +8,13 @@ use crate::{
         texture::attachment::{RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantitySet},
     },
     material::{
+        MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, MaterialShaderInput,
+        MaterialSpecification,
         entity::physical::{
             PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindings,
         },
-        MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, MaterialShaderInput,
-        MaterialSpecification,
     },
-    mesh::{buffer::MeshVertexAttributeLocation, VertexAttributeSet},
+    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source, template_replacements,
 };

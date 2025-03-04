@@ -1,15 +1,15 @@
 //! Management of storage buffers for GPU computation or rendering.
 
 use crate::gpu::{
-    buffer::{self, GPUBuffer, GPUBufferType},
     GraphicsDevice,
+    buffer::{self, GPUBuffer, GPUBufferType},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::stringhash64_newtype;
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     mem,
 };
 

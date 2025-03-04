@@ -2,19 +2,19 @@
 
 use crate::{
     camera::{
-        components::{OrthographicCameraComp, PerspectiveCameraComp},
         OrthographicCamera, PerspectiveCamera, SceneCamera,
+        components::{OrthographicCameraComp, PerspectiveCameraComp},
     },
     gpu::rendering::RenderingSystem,
     physics::motion::components::ReferenceFrameComp,
     scene::{
-        components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
         RenderResourcesDesynchronized, SceneGraph,
+        components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
     },
     util::bounds::UpperExclusiveBounds,
     window::Window,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use std::sync::RwLock;
 
@@ -101,9 +101,9 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 
             if camera_to_parent_transform.scaling() != 1.0 {
                 log::warn!(
-                        "Added camera component to an entity with non-unity scaling:\n\
+                    "Added camera component to an entity with non-unity scaling:\n\
                          The scaling will be ignored since the view transform is assumed to contain no scaling"
-                    );
+                );
                 camera_to_parent_transform.set_scaling(1.0);
             }
 
@@ -171,9 +171,9 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 
             if camera_to_parent_transform.scaling() != 1.0 {
                 log::warn!(
-                        "Added camera component to an entity with non-unity scaling:\n\
+                    "Added camera component to an entity with non-unity scaling:\n\
                          The scaling will be ignored since the view transform is assumed to contain no scaling"
-                    );
+                );
                 camera_to_parent_transform.set_scaling(1.0);
             }
 

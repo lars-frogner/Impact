@@ -1,8 +1,8 @@
 //! GPU queries.
 
 use crate::gpu::{
-    buffer::{self, GPUBuffer, GPUBufferType},
     GraphicsDevice,
+    buffer::{self, GPUBuffer, GPUBufferType},
 };
 use anyhow::Result;
 use std::{borrow::Cow, iter, num::NonZeroU32, time::Duration};

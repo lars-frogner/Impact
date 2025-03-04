@@ -1,13 +1,13 @@
 //! Groups of GPU data resources.
 
 use crate::gpu::{
+    GraphicsDevice,
     storage::StorageGPUBuffer,
     texture::{Sampler, Texture},
     uniform::SingleUniformGPUBuffer,
-    GraphicsDevice,
 };
 use impact_utils::stringhash64_newtype;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 stringhash64_newtype!(
     /// Identifier for a specific GPU resource group. Wraps a

@@ -1,16 +1,16 @@
 //! Management of meshes for entities.
 
 use crate::{
-    material::{components::MaterialComp, MaterialLibrary},
+    material::{MaterialLibrary, components::MaterialComp},
     mesh::{
+        MeshRepository, TriangleMesh, VertexAttributeSet,
         components::{
             BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
             HemisphereMeshComp, MeshComp, RectangleMeshComp, SphereMeshComp,
         },
         texture_projection::{
-            components::PlanarTextureProjectionComp, PlanarTextureProjection, TextureProjection,
+            PlanarTextureProjection, TextureProjection, components::PlanarTextureProjectionComp,
         },
-        MeshRepository, TriangleMesh, VertexAttributeSet,
     },
     scene::RenderResourcesDesynchronized,
 };

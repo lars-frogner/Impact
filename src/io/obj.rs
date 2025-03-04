@@ -4,29 +4,29 @@ use crate::{
     assets::Assets,
     gpu::texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     material::{
+        RGBColor,
         components::{
             NormalMapComp, TexturedColorComp, TexturedSpecularReflectanceComp, UniformColorComp,
         },
-        RGBColor,
     },
     mesh::{
-        components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
-        TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
+        MeshID, MeshRepository, TriangleMesh, VertexNormalVector, VertexPosition,
+        VertexTextureCoords, components::MeshComp, texture_projection::TextureProjection,
     },
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentStorage, SingleInstance},
 };
 use impact_utils::hash64;
-use nalgebra::{point, vector, UnitVector3};
+use nalgebra::{UnitVector3, point, vector};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     fmt::Debug,
     path::Path,
 };
-use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
+use tobj::{GPU_LOAD_OPTIONS, Material as ObjMaterial, Mesh as ObjMesh};
 
 /// Reads the Wavefront OBJ file at the given path and any associated MTL
 /// material files and returns the set of components representing the mesh and
@@ -290,10 +290,10 @@ fn create_material_components_from_tobj_material(
         log::warn!(
             "Warning: Unsupported content in MTL material referenced in {}: \
              material `{}` uses a texture for shininess ({}) - falling back to fixed value of {} instead",
-             obj_file_path,
-             &material.name,
-             shininess_texture_path,
-             material.shininess.unwrap_or(0.0)
+            obj_file_path,
+            &material.name,
+            shininess_texture_path,
+            material.shininess.unwrap_or(0.0)
         );
     }
 

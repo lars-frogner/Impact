@@ -529,27 +529,33 @@ mod tests {
     #[test]
     fn finding_index_for_stage_in_empty_group_gives_none() {
         let group = PushConstantGroup::new();
-        assert!(group
-            .find_idx_for_stage(LightIdx, PushConstantGroupStage::Vertex)
-            .is_none());
+        assert!(
+            group
+                .find_idx_for_stage(LightIdx, PushConstantGroupStage::Vertex)
+                .is_none()
+        );
     }
 
     #[test]
     fn finding_index_in_group_for_missing_stage_gives_none() {
         let group: PushConstantGroup =
             PushConstant::new(LightIdx, wgpu::ShaderStages::VERTEX).into();
-        assert!(group
-            .find_idx_for_stage(LightIdx, PushConstantGroupStage::Fragment)
-            .is_none());
+        assert!(
+            group
+                .find_idx_for_stage(LightIdx, PushConstantGroupStage::Fragment)
+                .is_none()
+        );
     }
 
     #[test]
     fn finding_index_in_group_for_missing_variant_gives_none() {
         let group: PushConstantGroup =
             PushConstant::new(LightIdx, wgpu::ShaderStages::VERTEX).into();
-        assert!(group
-            .find_idx_for_stage(ShadowMapArrayIdx, PushConstantGroupStage::Vertex)
-            .is_none());
+        assert!(
+            group
+                .find_idx_for_stage(ShadowMapArrayIdx, PushConstantGroupStage::Vertex)
+                .is_none()
+        );
     }
 
     #[test]

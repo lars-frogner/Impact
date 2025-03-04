@@ -236,10 +236,10 @@ impl Default for SemiDirectionalMotionState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
-    use std::f64::consts::SQRT_2;
     use MotionDirection::{Backwards, Down, Forwards, Left, Up};
     use MotionState::{Moving, Still};
+    use approx::assert_abs_diff_eq;
+    use std::f64::consts::SQRT_2;
 
     #[test]
     fn updating_semi_directional_motion_works() {

@@ -1,11 +1,11 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use impact::{
     geometry::Sphere,
     scene::RenderResourcesDesynchronized,
     voxel::{
         chunks::{
-            inertia::VoxelObjectInertialPropertyManager, sdf::VoxelChunkSignedDistanceField,
-            ChunkedVoxelObject,
+            ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
+            sdf::VoxelChunkSignedDistanceField,
         },
         generation::{
             BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator,
@@ -15,7 +15,7 @@ use impact::{
         voxel_types::VoxelType,
     },
 };
-use nalgebra::{vector, UnitVector3};
+use nalgebra::{UnitVector3, vector};
 use pprof::criterion::{Output, PProfProfiler};
 
 pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {

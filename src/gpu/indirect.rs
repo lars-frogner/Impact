@@ -1,8 +1,8 @@
 //! Indirect draw calls.
 
 use crate::gpu::{
-    buffer::{GPUBuffer, GPUBufferType},
     GraphicsDevice,
+    buffer::{GPUBuffer, GPUBufferType},
 };
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, mem};

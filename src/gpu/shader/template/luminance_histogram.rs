@@ -7,8 +7,8 @@ use crate::{
         rendering::surface::RenderingSurface,
         resource_group::GPUResourceGroupID,
         shader::{
-            template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
             ShaderID,
+            template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         },
         texture::attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,

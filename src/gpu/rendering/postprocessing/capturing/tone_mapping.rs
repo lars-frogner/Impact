@@ -1,15 +1,15 @@
 //! Render passes for applying tone mapping.
 
 use crate::gpu::{
+    GraphicsDevice,
     query::TimestampQueryRegistry,
     rendering::{
         postprocessing::Postprocessor, render_command::PostprocessingRenderPass,
         resource::SynchronizedRenderResources, surface::RenderingSurface,
     },
     resource_group::GPUResourceGroupManager,
-    shader::{template::tone_mapping::ToneMappingShaderTemplate, ShaderManager},
+    shader::{ShaderManager, template::tone_mapping::ToneMappingShaderTemplate},
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-    GraphicsDevice,
 };
 use anyhow::Result;
 use std::{borrow::Cow, fmt::Display};

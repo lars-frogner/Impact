@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use nalgebra::{vector, Vector2};
+use nalgebra::{Vector2, vector};
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a fixed, uniform color that is independent of lighting.

@@ -4,6 +4,7 @@ use crate::{
     assert_uniform_valid,
     assets::Assets,
     gpu::{
+        GraphicsDevice,
         buffer::{GPUBuffer, GPUBufferType},
         indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
         storage,
@@ -12,18 +13,17 @@ use crate::{
             TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
         },
         uniform::{self, UniformBufferable},
-        GraphicsDevice,
     },
     mesh::buffer::{
-        create_vertex_buffer_layout_for_vertex, MeshVertexAttributeLocation, VertexBufferable,
+        MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
     },
     voxel::{
+        VoxelObjectID,
         mesh::{
             ChunkSubmesh, MeshedChunkedVoxelObject, VoxelMeshIndex, VoxelMeshIndexMaterials,
             VoxelMeshVertexNormalVector, VoxelMeshVertexPosition,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
-        VoxelObjectID,
     },
 };
 use anyhow::Result;

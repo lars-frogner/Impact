@@ -7,9 +7,9 @@ use std::{
     fmt,
     num::NonZeroUsize,
     sync::{
+        Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, Receiver, Sender},
-        Arc, Condvar, Mutex,
     },
     thread::{self, JoinHandle},
 };
@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(comm.execution_progress().pending_task_count(), 0);
 
         comm.execution_progress().wait_for_no_pending_tasks(); // Should return
-                                                               // immediately
+        // immediately
     }
 
     #[test]

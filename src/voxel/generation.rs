@@ -1,7 +1,7 @@
 //! Generation of spatial voxel distributions.
 
-use crate::voxel::{voxel_types::VoxelType, Voxel, VoxelSignedDistance};
-use nalgebra::{point, vector, Point3, Quaternion, UnitQuaternion, Vector3};
+use crate::voxel::{Voxel, VoxelSignedDistance, voxel_types::VoxelType};
+use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3, point, vector};
 use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
 use std::array;
@@ -593,7 +593,7 @@ fn mix(a: f64, b: f64, factor: f64) -> f64 {
 pub mod fuzzing {
     use super::*;
     use crate::voxel::voxel_types::VoxelTypeRegistry;
-    use arbitrary::{size_hint, Arbitrary, MaxRecursionReached, Result, Unstructured};
+    use arbitrary::{Arbitrary, MaxRecursionReached, Result, Unstructured, size_hint};
     use std::mem;
 
     #[allow(clippy::large_enum_variant)]

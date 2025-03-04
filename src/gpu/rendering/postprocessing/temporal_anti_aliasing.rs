@@ -3,11 +3,12 @@
 use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, ConstStringHash64};
+use impact_utils::{ConstStringHash64, hash64};
 
 use crate::{
     assert_uniform_valid,
     gpu::{
+        GraphicsDevice,
         query::TimestampQueryRegistry,
         rendering::{
             postprocessing::Postprocessor,
@@ -17,11 +18,10 @@ use crate::{
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{
-            template::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate, ShaderManager,
+            ShaderManager, template::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate,
         },
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
-        GraphicsDevice,
     },
 };
 use anyhow::Result;

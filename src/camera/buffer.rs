@@ -5,9 +5,9 @@ use crate::{
     camera::SceneCamera,
     geometry::Frustum,
     gpu::{
+        GraphicsDevice,
         buffer::GPUBuffer,
         uniform::{self, UniformBufferable},
-        GraphicsDevice,
     },
 };
 use bytemuck::{Pod, Zeroable};

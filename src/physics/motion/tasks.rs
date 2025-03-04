@@ -1,7 +1,7 @@
 //! Tasks related to motion.
 
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
+    application::{Application, tasks::AppTaskScheduler},
     define_task,
     physics::{
         motion,

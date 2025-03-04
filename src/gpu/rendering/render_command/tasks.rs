@@ -1,7 +1,7 @@
 //! Tasks for synchronizing render passes.
 
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
+    application::{Application, tasks::AppTaskScheduler},
     define_task,
     gpu::rendering::{resource::tasks::SyncRenderResources, tasks::RenderingTag},
 };

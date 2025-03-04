@@ -4,21 +4,21 @@ pub mod tasks;
 
 use crate::{
     assets::Assets,
-    camera::{buffer::CameraGPUBufferManager, SceneCamera},
-    gpu::{rendering::RenderingConfig, GraphicsDevice},
-    light::{buffer::LightGPUBufferManager, LightStorage},
-    mesh::{buffer::MeshGPUBufferManager, MeshID, TriangleMesh},
-    model::{buffer::InstanceFeatureGPUBufferManager, InstanceFeatureManager, ModelID},
-    skybox::{resource::SkyboxGPUResourceManager, Skybox},
+    camera::{SceneCamera, buffer::CameraGPUBufferManager},
+    gpu::{GraphicsDevice, rendering::RenderingConfig},
+    light::{LightStorage, buffer::LightGPUBufferManager},
+    mesh::{MeshID, TriangleMesh, buffer::MeshGPUBufferManager},
+    model::{InstanceFeatureManager, ModelID, buffer::InstanceFeatureGPUBufferManager},
+    skybox::{Skybox, resource::SkyboxGPUResourceManager},
     voxel::{
-        resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
         VoxelManager, VoxelObjectID,
+        resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
     },
 };
 use anyhow::Result;
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     hash::Hash,
     sync::{Mutex, RwLock},
 };

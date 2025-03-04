@@ -17,8 +17,8 @@ use crate::{
             shadow_map::CascadedShadowMapTexture,
         },
     },
-    light::{buffer::LightGPUBufferManager, MAX_SHADOW_MAP_CASCADES},
-    mesh::{self, buffer::MeshVertexAttributeLocation, MeshID, VertexAttributeSet},
+    light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
+    mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;

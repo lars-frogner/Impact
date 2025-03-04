@@ -5,7 +5,7 @@ use crate::{
     num::Float,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
-use nalgebra::{vector, UnitVector3, Vector3};
+use nalgebra::{UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {

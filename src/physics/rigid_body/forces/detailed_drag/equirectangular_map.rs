@@ -7,8 +7,8 @@ use crate::{
     physics::fph,
 };
 use anyhow::Result;
-use rmp_serde::{from_read, Serializer as RmpSerializer};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use rmp_serde::{Serializer as RmpSerializer, from_read};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{fs::File, io::BufReader, path::Path};
 
 /// A map of values as a function of all directions. The directions are
@@ -115,7 +115,7 @@ impl<V: Clone + Default> EquirectangularMap<V> {
         center_phi: A,
         center_theta: A,
         region_half_extent: A,
-    ) -> impl Iterator<Item = (usize, usize, Radians<fph>)> {
+    ) -> impl Iterator<Item = (usize, usize, Radians<fph>)> + use<A, V> {
         let center_phi = center_phi.radians();
         let center_theta = center_theta.radians();
         let region_half_extent = region_half_extent.radians();

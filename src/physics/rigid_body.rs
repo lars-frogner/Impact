@@ -472,7 +472,7 @@ mod tests {
     use super::*;
     use crate::{geometry::Degrees, num::Float};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use nalgebra::{point, vector, Vector3};
+    use nalgebra::{Vector3, point, vector};
     use proptest::prelude::*;
     use schemes::EulerCromerStep;
 

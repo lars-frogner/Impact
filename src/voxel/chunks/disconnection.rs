@@ -1,18 +1,18 @@
 //! Detection of disconnected regions in voxel objects.
 
 use super::{
-    chunk_voxels, chunk_voxels_mut, determine_occupied_voxel_ranges, extract_slice_segments_mut,
-    FaceVoxelDistribution,
+    FaceVoxelDistribution, chunk_voxels, chunk_voxels_mut, determine_occupied_voxel_ranges,
+    extract_slice_segments_mut,
 };
 use crate::voxel::{
+    Voxel, VoxelFlags,
     chunks::{
-        chunk_start_voxel_idx, chunk_voxel_indices_from_linear_idx, linear_voxel_idx_within_chunk,
-        ChunkedVoxelObject, LoopForChunkVoxels, NonUniformVoxelChunk, UniformVoxelChunk,
-        VoxelChunk, VoxelChunkFlags, CHUNK_SIZE, CHUNK_VOXEL_COUNT, LOG2_CHUNK_SIZE,
-        NON_EMPTY_VOXEL_THRESHOLD,
+        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkedVoxelObject, LOG2_CHUNK_SIZE, LoopForChunkVoxels,
+        NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
+        VoxelChunkFlags, chunk_start_voxel_idx, chunk_voxel_indices_from_linear_idx,
+        linear_voxel_idx_within_chunk,
     },
     utils::{DataLoop3, Dimension, Side},
-    Voxel, VoxelFlags,
 };
 use cfg_if::cfg_if;
 use nalgebra::vector;

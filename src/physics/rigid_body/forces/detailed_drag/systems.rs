@@ -6,8 +6,8 @@ use crate::{
         fph,
         medium::UniformMedium,
         motion::{
-            components::{ReferenceFrameComp, Static, VelocityComp},
             Direction,
+            components::{ReferenceFrameComp, Static, VelocityComp},
         },
         rigid_body::{
             components::RigidBodyComp, forces::detailed_drag::components::DragLoadMapComp,

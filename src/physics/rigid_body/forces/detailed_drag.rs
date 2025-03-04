@@ -18,9 +18,9 @@ use crate::{
         motion::{Direction, Position},
     },
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use simba::scalar::SubsetOf;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use drag_load::AveragingDragLoad;
 use equirectangular_map::EquirectangularMap;

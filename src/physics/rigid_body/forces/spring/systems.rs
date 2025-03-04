@@ -7,8 +7,8 @@ use crate::{
     physics::{
         fph,
         motion::{
-            components::{ReferenceFrameComp, Static, VelocityComp},
             AngularVelocity, Position, Velocity,
+            components::{ReferenceFrameComp, Static, VelocityComp},
         },
         rigid_body::{components::RigidBodyComp, forces::spring::components::SpringComp},
     },

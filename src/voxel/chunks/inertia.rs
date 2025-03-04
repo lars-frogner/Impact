@@ -8,12 +8,12 @@ use crate::{
         inertia::{InertiaTensor, InertialProperties},
     },
     voxel::{
-        chunks::{disconnection, ChunkedVoxelObject, VoxelChunk, CHUNK_SIZE},
         Voxel,
+        chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
     },
 };
 use approx::{AbsDiffEq, RelativeEq};
-use nalgebra::{vector, Matrix3, Point3, Vector3};
+use nalgebra::{Matrix3, Point3, Vector3, vector};
 use std::ops::Range;
 
 /// Keeps track of the inertial properties (mass, center of mass and inertia
@@ -669,7 +669,7 @@ fn compute_inertial_property_moments_for_object(
 mod tests {
     use super::*;
     use crate::voxel::{
-        chunks::{LoopForChunkVoxels, LoopOverChunkVoxelData, CHUNK_VOXEL_COUNT},
+        chunks::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
         generation::{
             BoxSDFGenerator, GradientNoiseSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator,
         },

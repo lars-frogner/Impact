@@ -1,15 +1,15 @@
 //! GPU compute passes.
 
 use crate::gpu::{
+    GraphicsDevice,
     push_constant::{PushConstantGroup, PushConstantVariant},
     query::TimestampQueryRegistry,
     rendering::{postprocessing::Postprocessor, surface::RenderingSurface},
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
-    shader::{template::ComputeShaderTemplate, Shader, ShaderManager},
+    shader::{Shader, ShaderManager, template::ComputeShaderTemplate},
     texture::attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
-    GraphicsDevice,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::borrow::Cow;
 
 /// Helper for invoking a compute shader with specific resources.
