@@ -4,14 +4,14 @@ use crate::{
     component::ComponentRegistry,
     geometry::{Capsule, Sphere},
     voxel::{
-        voxel_types::{VoxelType, VoxelTypeRegistry},
         VoxelObjectID,
+        voxel_types::{VoxelType, VoxelTypeRegistry},
     },
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use impact_utils::{compute_hash_str_32, Hash32};
+use impact_utils::{Hash32, compute_hash_str_32};
 use nalgebra::{Point3, Vector3};
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing

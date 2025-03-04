@@ -2,7 +2,7 @@
 
 use crate::{geometry::AxisAlignedBox, num::Float};
 use approx::abs_diff_eq;
-use na::{vector, Similarity3, UnitQuaternion};
+use na::{Similarity3, UnitQuaternion, vector};
 use nalgebra::{self as na, Point3};
 
 /// A sphere represented by the center point and the radius.

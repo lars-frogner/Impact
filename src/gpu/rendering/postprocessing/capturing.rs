@@ -5,6 +5,7 @@ pub mod bloom;
 pub mod tone_mapping;
 
 use crate::gpu::{
+    GraphicsDevice,
     query::TimestampQueryRegistry,
     rendering::{
         postprocessing::Postprocessor, resource::SynchronizedRenderResources,
@@ -14,7 +15,6 @@ use crate::gpu::{
     shader::ShaderManager,
     storage::StorageGPUBufferManager,
     texture::attachment::RenderAttachmentTextureManager,
-    GraphicsDevice,
 };
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};

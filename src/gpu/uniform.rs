@@ -2,8 +2,8 @@
 
 use crate::{
     gpu::{
-        buffer::{Count, CountedGPUBuffer, GPUBuffer, GPUBufferType},
         GraphicsDevice,
+        buffer::{Count, CountedGPUBuffer, GPUBuffer, GPUBufferType},
     },
     util::tracking::{CollectionChange, CollectionChangeTracker},
 };

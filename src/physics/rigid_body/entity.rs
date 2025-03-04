@@ -2,19 +2,19 @@
 
 use crate::{
     mesh::{
+        MeshRepository,
         components::{
             BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp,
             SphereMeshComp,
         },
-        MeshRepository,
     },
     physics::{
         fph,
         inertia::InertialProperties,
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::{
-            components::{RigidBodyComp, UniformRigidBodyComp},
             RigidBody,
+            components::{RigidBodyComp, UniformRigidBodyComp},
         },
     },
     scene::components::SceneEntityFlagsComp,

@@ -5,20 +5,20 @@ pub mod mipmap;
 pub mod shadow_map;
 
 use crate::{
-    gpu::{buffer, GraphicsDevice},
+    gpu::{GraphicsDevice, buffer},
     io,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bytemuck::Pod;
 use image::{
-    self, buffer::ConvertBuffer, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma,
-    Rgba,
+    self, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma, Rgba,
+    buffer::ConvertBuffer,
 };
 use impact_utils::stringhash32_newtype;
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
-use rmp_serde::{from_read, Serializer};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use rmp_serde::{Serializer, from_read};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     borrow::Cow,
     fs::File,
@@ -362,12 +362,12 @@ impl Texture {
 
         let label = format!(
             "Cubemap {{{}, {}, {}, {}, {}, {}}}",
-            right_image_path.to_string_lossy(),
-            left_image_path.to_string_lossy(),
-            top_image_path.to_string_lossy(),
-            bottom_image_path.to_string_lossy(),
-            front_image_path.to_string_lossy(),
-            back_image_path.to_string_lossy()
+            right_image_path.display(),
+            left_image_path.display(),
+            top_image_path.display(),
+            bottom_image_path.display(),
+            front_image_path.display(),
+            back_image_path.display()
         );
 
         Self::from_cubemap_images(

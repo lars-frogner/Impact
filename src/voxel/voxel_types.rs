@@ -1,9 +1,9 @@
 //! Voxel types and their properties.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{compute_hash_str_32, Hash32};
-use nalgebra::{vector, Vector4};
+use impact_utils::{Hash32, compute_hash_str_32};
+use nalgebra::{Vector4, vector};
 use nohash_hasher::BuildNoHashHasher;
 use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 

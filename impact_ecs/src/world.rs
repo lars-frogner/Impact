@@ -7,7 +7,7 @@ use super::{
     },
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::KeyIndexMapper;
 use std::{
@@ -554,7 +554,7 @@ impl<'a> EntityEntry<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{archetype_of, Component},
+        super::{Component, archetype_of},
         *,
     };
     use bytemuck::{Pod, Zeroable};

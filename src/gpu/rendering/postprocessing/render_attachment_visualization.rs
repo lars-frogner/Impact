@@ -1,6 +1,7 @@
 //! Render passes for visualizing render attachments.
 
 use crate::gpu::{
+    GraphicsDevice,
     query::TimestampQueryRegistry,
     rendering::{
         postprocessing::Postprocessor, render_command::PostprocessingRenderPass,
@@ -8,11 +9,10 @@ use crate::gpu::{
     },
     resource_group::GPUResourceGroupManager,
     shader::{
-        template::render_attachment_visualization::RenderAttachmentVisualizationShaderTemplate,
         ShaderManager,
+        template::render_attachment_visualization::RenderAttachmentVisualizationShaderTemplate,
     },
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-    GraphicsDevice,
 };
 use anyhow::Result;
 use std::{borrow::Cow, collections::HashMap};

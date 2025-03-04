@@ -6,7 +6,7 @@ pub mod physical;
 use crate::{
     assets::Assets,
     gpu::GraphicsDevice,
-    material::{components::MaterialComp, MaterialLibrary},
+    material::{MaterialLibrary, components::MaterialComp},
     model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };

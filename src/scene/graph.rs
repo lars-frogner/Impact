@@ -5,19 +5,19 @@ use crate::{
     geometry::{CubemapFace, Frustum, Sphere},
     gpu::texture::shadow_map::CascadeIdx,
     light::{
-        LightFlags, LightStorage, ShadowableOmnidirectionalLight, ShadowableUnidirectionalLight,
-        MAX_SHADOW_MAP_CASCADES,
+        LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
+        ShadowableUnidirectionalLight,
     },
     model::{
+        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
         transform::{
             InstanceModelLightTransform, InstanceModelViewTransform,
             InstanceModelViewTransformWithPrevious,
         },
-        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
     },
     num::Float,
     scene::SceneEntityFlags,
-    voxel::{entity::VOXEL_MODEL_ID, VoxelObjectID},
+    voxel::{VoxelObjectID, entity::VOXEL_MODEL_ID},
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -1453,7 +1453,7 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use impact_utils::hash64;
-    use nalgebra::{point, Point3, Rotation3, Scale3, Translation3};
+    use nalgebra::{Point3, Rotation3, Scale3, Translation3, point};
 
     fn create_dummy_group_node<F: Float>(
         scene_graph: &mut SceneGraph<F>,
@@ -1517,9 +1517,11 @@ mod tests {
     fn creating_scene_graph_works() {
         let scene_graph = SceneGraph::<f64>::new();
 
-        assert!(scene_graph
-            .group_nodes()
-            .has_node(scene_graph.root_node_id()));
+        assert!(
+            scene_graph
+                .group_nodes()
+                .has_node(scene_graph.root_node_id())
+        );
 
         assert_eq!(scene_graph.group_nodes().n_nodes(), 1);
         assert_eq!(scene_graph.model_instance_nodes().n_nodes(), 0);
@@ -1617,9 +1619,11 @@ mod tests {
 
         assert!(!scene_graph.group_nodes().has_node(child_group_node_id));
         assert!(!scene_graph.camera_nodes().has_node(child_camera_node_id));
-        assert!(!scene_graph
-            .model_instance_nodes()
-            .has_node(child_model_instance_node_id));
+        assert!(
+            !scene_graph
+                .model_instance_nodes()
+                .has_node(child_model_instance_node_id)
+        );
 
         assert_eq!(scene_graph.group_nodes().n_nodes(), 1);
         assert_eq!(scene_graph.model_instance_nodes().n_nodes(), 0);
@@ -1939,15 +1943,19 @@ mod tests {
         let group_2 = scene_graph.create_group_node(group_1, Similarity3::identity());
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
         assert!(root_bounding_sphere.is_none());
-        assert!(scene_graph
-            .group_nodes
-            .node(group_1)
-            .get_bounding_sphere()
-            .is_none());
-        assert!(scene_graph
-            .group_nodes
-            .node(group_2)
-            .get_bounding_sphere()
-            .is_none());
+        assert!(
+            scene_graph
+                .group_nodes
+                .node(group_1)
+                .get_bounding_sphere()
+                .is_none()
+        );
+        assert!(
+            scene_graph
+                .group_nodes
+                .node(group_2)
+                .get_bounding_sphere()
+                .is_none()
+        );
     }
 }

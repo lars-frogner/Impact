@@ -1,46 +1,45 @@
 //! Render commands for voxels.
 
 use crate::{
-    camera::{buffer::CameraGPUBufferManager, SceneCamera},
+    camera::{SceneCamera, buffer::CameraGPUBufferManager},
     geometry::{Frustum, OrientedBox},
     gpu::{
-        compute,
+        GraphicsDevice, compute,
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
+            RenderingConfig,
             postprocessing::Postprocessor,
             render_command::{self, STANDARD_FRONT_FACE},
             resource::SynchronizedRenderResources,
             surface::RenderingSurface,
-            RenderingConfig,
         },
         shader::{
+            ShaderManager,
             template::{
                 voxel_chunk_culling::VoxelChunkCullingShaderTemplate,
                 voxel_geometry::VoxelGeometryShaderTemplate,
             },
-            ShaderManager,
         },
-        GraphicsDevice,
     },
     mesh::buffer::VertexBufferable,
     model::{
+        InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
+        InstanceFeatureManager,
         transform::{
             AsInstanceModelViewTransform, InstanceModelLightTransform, InstanceModelViewTransform,
             InstanceModelViewTransformWithPrevious,
         },
-        InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
-        InstanceFeatureManager,
     },
     scene::ModelInstanceNode,
     voxel::{
+        VoxelObjectID,
         entity::VOXEL_MODEL_ID,
         mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
         resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
-        VoxelObjectID,
     },
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
 

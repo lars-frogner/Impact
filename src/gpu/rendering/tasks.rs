@@ -1,8 +1,8 @@
 //! Tasks for rendering.
 
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
-    gpu::rendering::{render_command::tasks::SyncRenderCommands, RenderingSystem},
+    application::{Application, tasks::AppTaskScheduler},
+    gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,

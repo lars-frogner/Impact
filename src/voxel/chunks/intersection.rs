@@ -4,14 +4,14 @@ use super::chunk_voxels_mut;
 use crate::{
     geometry::{AxisAlignedBox, Capsule, Sphere},
     voxel::{
-        chunks::{
-            disconnection::SplitDetector, linear_voxel_idx_within_chunk_from_object_voxel_indices,
-            ChunkedVoxelObject, VoxelChunk, CHUNK_SIZE,
-        },
         Voxel,
+        chunks::{
+            CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection::SplitDetector,
+            linear_voxel_idx_within_chunk_from_object_voxel_indices,
+        },
     },
 };
-use nalgebra::{self as na, point, Point3};
+use nalgebra::{self as na, Point3, point};
 use std::{array, collections::HashSet, ops::Range};
 
 impl ChunkedVoxelObject {
@@ -657,7 +657,7 @@ mod tests {
         generation::{SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
         voxel_types::VoxelType,
     };
-    use nalgebra::{vector, UnitVector3};
+    use nalgebra::{UnitVector3, vector};
     use std::collections::HashSet;
 
     #[test]

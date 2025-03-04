@@ -2,7 +2,7 @@
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
 use crate::voxel::{
-    chunks::sdf::{VoxelChunkSignedDistanceField, SDF_GRID_CELL_COUNT},
+    chunks::sdf::{SDF_GRID_CELL_COUNT, VoxelChunkSignedDistanceField},
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
@@ -593,11 +593,7 @@ fn calculate_index_materials_for_triangle(
         let weights: [u8; 3] = array::from_fn(|i| vertex_materials[i].weights[offsets[i]]);
 
         let max_weight_idx = if weights[0] >= weights[1] {
-            if weights[0] >= weights[2] {
-                0
-            } else {
-                2
-            }
+            if weights[0] >= weights[2] { 0 } else { 2 }
         } else if weights[1] >= weights[2] {
             1
         } else {

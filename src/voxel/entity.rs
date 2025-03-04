@@ -6,23 +6,24 @@ use crate::{
     material::{MaterialHandle, MaterialID},
     mesh::MeshID,
     model::{
-        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
         InstanceFeature, InstanceFeatureManager, ModelID,
+        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
     },
     physics::{
         inertia::InertialProperties,
         motion::components::{ReferenceFrameComp, VelocityComp},
-        rigid_body::{components::RigidBodyComp, RigidBody},
+        rigid_body::{RigidBody, components::RigidBodyComp},
     },
     scene::{
+        RenderResourcesDesynchronized, SceneEntityFlags, SceneGraph,
         components::{
             SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp,
             SceneGraphParentNodeComp, UncullableComp,
         },
-        RenderResourcesDesynchronized, SceneEntityFlags, SceneGraph,
     },
     voxel::{
-        chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject},
+        VoxelManager, VoxelObjectID, VoxelObjectManager,
+        chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp,
             MultiscaleSphereModificationComp, SameVoxelTypeComp, VoxelBoxComp,
@@ -35,7 +36,6 @@ use crate::{
         },
         mesh::MeshedChunkedVoxelObject,
         voxel_types::VoxelTypeRegistry,
-        VoxelManager, VoxelObjectID, VoxelObjectManager,
     },
 };
 use anyhow::Result;

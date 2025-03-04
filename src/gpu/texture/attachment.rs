@@ -1,9 +1,9 @@
 //! Textures used as render attachments.
 
 use crate::gpu::{
+    GraphicsDevice,
     rendering::surface::RenderingSurface,
     texture::{Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig},
-    GraphicsDevice,
 };
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
@@ -627,7 +627,7 @@ where
     pub fn descriptions_for_quantity(
         &self,
         quantity: RenderAttachmentQuantity,
-    ) -> impl Iterator<Item = &D> + '_ {
+    ) -> impl Iterator<Item = &D> {
         self.descriptions
             .iter()
             .filter(move |description| description.quantity() == quantity)
@@ -720,7 +720,7 @@ impl RenderAttachmentTextureManager {
         &'a mut self,
         graphics_device: &GraphicsDevice,
         input_descriptions: &'b RenderAttachmentInputDescriptionSet,
-    ) -> impl Iterator<Item = &'a wgpu::BindGroupLayout> + 'b
+    ) -> impl Iterator<Item = &'a wgpu::BindGroupLayout> + use<'a, 'b>
     where
         'a: 'b,
     {
@@ -745,7 +745,7 @@ impl RenderAttachmentTextureManager {
     pub fn get_render_attachment_texture_bind_group_layouts<'a, 'b>(
         &'a self,
         input_descriptions: &'b RenderAttachmentInputDescriptionSet,
-    ) -> impl Iterator<Item = &'a wgpu::BindGroupLayout> + 'b
+    ) -> impl Iterator<Item = &'a wgpu::BindGroupLayout> + use<'a, 'b>
     where
         'a: 'b,
     {

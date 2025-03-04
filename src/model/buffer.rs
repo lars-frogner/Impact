@@ -1,7 +1,7 @@
 //! Buffering of model instance data for rendering.
 
 use crate::{
-    gpu::{buffer::GPUBuffer, GraphicsDevice},
+    gpu::{GraphicsDevice, buffer::GPUBuffer},
     model::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,

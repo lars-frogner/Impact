@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{world::Entity, Component};
+use impact_ecs::{Component, world::Entity};
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// participate in a scene and have associated [`SceneEntityFlags`].

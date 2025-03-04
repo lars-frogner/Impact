@@ -3,7 +3,7 @@ use impact::{
     geometry::Sphere,
     scene::RenderResourcesDesynchronized,
     voxel::{
-        chunks::{inertia::VoxelObjectInertialPropertyManager, ChunkedVoxelObject},
+        chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
         generation::{
             BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator,
             SphereSDFGenerator,
@@ -12,7 +12,7 @@ use impact::{
         voxel_types::VoxelType,
     },
 };
-use nalgebra::{vector, UnitVector3};
+use nalgebra::{UnitVector3, vector};
 use std::{
     hint::black_box,
     time::{Duration, Instant},

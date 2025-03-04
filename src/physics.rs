@@ -9,7 +9,7 @@ pub mod rigid_body;
 pub mod tasks;
 pub mod time;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;

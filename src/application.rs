@@ -5,30 +5,28 @@ pub mod entity;
 pub mod tasks;
 
 use crate::{
-    assets::{lookup_table, Assets},
+    assets::{Assets, lookup_table},
     component::ComponentRegistry,
     control::{
-        self,
+        self, MotionController, OrientationController,
         motion::{MotionDirection, MotionState},
-        MotionController, OrientationController,
     },
     gpu::{
-        self,
+        self, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, ScreenCapturer},
-        GraphicsDevice,
     },
     io,
     material::{self, MaterialLibrary},
-    mesh::{components::MeshComp, texture_projection::TextureProjection, MeshRepository},
+    mesh::{MeshRepository, components::MeshComp, texture_projection::TextureProjection},
     model::{self, InstanceFeatureManager},
-    physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
-    scene::{components::SceneEntityFlagsComp, Scene, SceneEntityFlags},
+    physics::{PhysicsSimulator, rigid_body::schemes::SteppingScheme},
+    scene::{Scene, SceneEntityFlags, components::SceneEntityFlagsComp},
     skybox::Skybox,
     ui::UserInterface,
-    voxel::{self, voxel_types::VoxelTypeRegistry, VoxelManager},
+    voxel::{self, VoxelManager, voxel_types::VoxelTypeRegistry},
     window::Window,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{Component, SingleInstance},

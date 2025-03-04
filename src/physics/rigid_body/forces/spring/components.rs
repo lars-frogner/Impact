@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to spring forces.
 
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{world::Entity, Component};
+use impact_ecs::{Component, world::Entity};
 
 use super::{Spring, SpringState};
 use crate::{component::ComponentRegistry, physics::motion::Position};

@@ -9,10 +9,10 @@ use crate::{
     geometry::{AxisAlignedBox, Sphere},
     num::Float,
     voxel::{
+        Voxel, VoxelFlags,
         generation::VoxelGenerator,
         utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
         voxel_types::{VoxelType, VoxelTypeRegistry},
-        Voxel, VoxelFlags,
     },
 };
 use bitflags::bitflags;
@@ -20,7 +20,7 @@ use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
-use nalgebra::{point, vector, Point3, Vector3};
+use nalgebra::{Point3, Vector3, point, vector};
 use num_traits::{NumCast, PrimInt};
 use std::{array, collections::HashSet, iter, ops::Range};
 
@@ -526,11 +526,7 @@ impl ChunkedVoxelObject {
                 let voxel_idx = chunk_start_voxel_idx(*data_offset)
                     + linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
                 let voxel = &self.voxels[voxel_idx];
-                if voxel.is_empty() {
-                    None
-                } else {
-                    Some(voxel)
-                }
+                if voxel.is_empty() { None } else { Some(voxel) }
             }
         }
     }
@@ -616,9 +612,7 @@ impl ChunkedVoxelObject {
     /// chunks whose (hypothetical) meshes have been invalidated by changes in
     /// the voxel object since the object was created or
     /// [`Self::mark_chunk_meshes_synchronized`] was last called.
-    pub fn invalidated_mesh_chunk_indices(
-        &self,
-    ) -> impl ExactSizeIterator<Item = &[usize; 3]> + '_ {
+    pub fn invalidated_mesh_chunk_indices(&self) -> impl ExactSizeIterator<Item = &[usize; 3]> {
         self.invalidated_mesh_chunk_indices.iter()
     }
 
@@ -2365,22 +2359,28 @@ mod tests {
 
     #[test]
     fn should_yield_none_when_generating_object_with_empty_grid() {
-        assert!(ChunkedVoxelObject::generate_without_derived_state(
-            &OffsetBoxVoxelGenerator::with_default([0; 3])
-        )
-        .is_none());
+        assert!(
+            ChunkedVoxelObject::generate_without_derived_state(
+                &OffsetBoxVoxelGenerator::with_default([0; 3])
+            )
+            .is_none()
+        );
     }
 
     #[test]
     fn should_yield_none_when_generating_object_of_empty_voxels() {
-        assert!(ChunkedVoxelObject::generate_without_derived_state(
-            &OffsetBoxVoxelGenerator::single_empty()
-        )
-        .is_none());
-        assert!(ChunkedVoxelObject::generate_without_derived_state(
-            &OffsetBoxVoxelGenerator::empty([2, 3, 4])
-        )
-        .is_none());
+        assert!(
+            ChunkedVoxelObject::generate_without_derived_state(
+                &OffsetBoxVoxelGenerator::single_empty()
+            )
+            .is_none()
+        );
+        assert!(
+            ChunkedVoxelObject::generate_without_derived_state(&OffsetBoxVoxelGenerator::empty([
+                2, 3, 4
+            ]))
+            .is_none()
+        );
     }
 
     #[test]

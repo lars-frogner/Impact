@@ -377,7 +377,7 @@ pub fn register_motion_components(registry: &mut ComponentRegistry) -> Result<()
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::{point, vector, UnitQuaternion};
+    use nalgebra::{UnitQuaternion, point, vector};
 
     #[test]
     fn updating_origin_offset_while_preserving_position_works() {

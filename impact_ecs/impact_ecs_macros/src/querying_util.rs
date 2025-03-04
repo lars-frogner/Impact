@@ -1,14 +1,13 @@
 //! Utilities useful for various macros using a querying pattern.
 
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned, IdentFragment, ToTokens};
+use quote::{IdentFragment, ToTokens, format_ident, quote, quote_spanned};
 use syn::{
-    bracketed,
+    Error, Result, Token, Type, bracketed,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Brace,
-    Error, Result, Token, Type,
 };
 
 pub(crate) struct TypeList {

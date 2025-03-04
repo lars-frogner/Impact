@@ -7,15 +7,18 @@ use crate::{
     camera::buffer::CameraGPUBufferManager,
     geometry::CubemapFace,
     gpu::{
+        GraphicsDevice,
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
-            postprocessing::Postprocessor, resource::SynchronizedRenderResources,
-            surface::RenderingSurface, RenderingConfig,
+            RenderingConfig, postprocessing::Postprocessor, resource::SynchronizedRenderResources,
+            surface::RenderingSurface,
         },
         resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
         shader::{
+            Shader, ShaderManager,
             template::{
+                PostprocessingShaderTemplate,
                 ambient_light::AmbientLightShaderTemplate,
                 model_depth_prepass::ModelDepthPrepassShaderTemplate,
                 model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
@@ -26,9 +29,7 @@ use crate::{
                 skybox::SkyboxShaderTemplate,
                 unidirectional_light::UnidirectionalLightShaderTemplate,
                 unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
-                PostprocessingShaderTemplate,
             },
-            Shader, ShaderManager,
         },
         storage::{StorageBufferID, StorageGPUBufferManager},
         texture::{
@@ -39,29 +40,28 @@ use crate::{
             },
             shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
         },
-        GraphicsDevice,
     },
     light::{
+        LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
         buffer::{
             LightGPUBufferManager, OmnidirectionalLightShadowMapManager,
             UnidirectionalLightShadowMapManager,
         },
-        LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
     },
     material::{MaterialLibrary, MaterialShaderInput},
-    mesh::{self, buffer::VertexBufferable, VertexAttributeSet, VertexPosition},
+    mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     model::{
-        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
         InstanceFeature, InstanceFeatureManager, ModelID,
+        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
     },
     scene::{ModelInstanceNode, Scene},
     skybox::Skybox,
     voxel::render_commands::{VoxelGeometryPipeline, VoxelRenderCommands},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
 };
 
 /// Manager of commands for rendering the scene. Postprocessing commands are
@@ -3758,8 +3758,7 @@ impl RenderAttachmentTextureCopyCommand {
         if source.texture_format() != destination.texture_format() {
             panic!(
                 "Tried to create render attachment texture copy command with different formats: {:?} and {:?}",
-                source,
-                destination,
+                source, destination,
             );
         }
         Self {

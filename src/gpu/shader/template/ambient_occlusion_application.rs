@@ -5,8 +5,8 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         rendering::render_command::StencilValue,
         shader::{
-            template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
             ShaderID,
+            template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         },
         texture::attachment::{
             Blending, RenderAttachmentDescription, RenderAttachmentInputDescription,

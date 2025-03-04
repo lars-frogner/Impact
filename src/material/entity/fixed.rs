@@ -5,10 +5,10 @@ use crate::{
     assets::Assets,
     gpu::GraphicsDevice,
     material::{
-        components::{FixedColorComp, FixedTextureComp, MaterialComp},
         MaterialHandle, MaterialID, MaterialInstanceFeatureFlags, MaterialLibrary,
         MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialShaderInput,
         MaterialSpecification,
+        components::{FixedColorComp, FixedTextureComp, MaterialComp},
     },
     mesh::VertexAttributeSet,
     model::{InstanceFeature, InstanceFeatureManager},

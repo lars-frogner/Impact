@@ -15,7 +15,7 @@ use crate::{
         },
     },
     light::buffer::LightGPUBufferManager,
-    mesh::{self, buffer::MeshVertexAttributeLocation, MeshID, VertexAttributeSet},
+    mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;

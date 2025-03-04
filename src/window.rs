@@ -8,7 +8,7 @@ pub use input::{
 pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::{num::NonZeroU32, sync::Arc};
 use winit::{
     application::ApplicationHandler,

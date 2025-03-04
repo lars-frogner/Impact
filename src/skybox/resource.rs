@@ -5,12 +5,12 @@ use crate::{
     assert_uniform_valid,
     assets::Assets,
     gpu::{
+        GraphicsDevice,
         resource_group::GPUResourceGroup,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
-        GraphicsDevice,
     },
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;
 use std::borrow::Cow;

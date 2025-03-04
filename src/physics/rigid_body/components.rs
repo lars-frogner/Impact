@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to rigid bodies.
 
-use super::{forces, RigidBody};
+use super::{RigidBody, forces};
 use crate::{component::ComponentRegistry, physics::fph};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};

@@ -2,24 +2,23 @@
 
 use crate::{
     physics::{
-        fph,
+        PhysicsSimulator, fph,
         inertia::InertialProperties,
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::components::RigidBodyComp,
-        PhysicsSimulator,
     },
     scene::{
-        components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
         SceneGraph,
+        components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
     },
     voxel::{
+        StagedVoxelObject, VoxelManager, VoxelObjectManager,
         chunks::{
+            ChunkedVoxelObject,
             disconnection::DisconnectedVoxelObject,
             inertia::{VoxelObjectInertialPropertyManager, VoxelObjectInertialPropertyUpdater},
-            ChunkedVoxelObject,
         },
         components::{VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelObjectComp},
-        StagedVoxelObject, VoxelManager, VoxelObjectManager,
     },
 };
 use impact_ecs::{

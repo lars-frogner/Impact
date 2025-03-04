@@ -3,6 +3,7 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
+        GraphicsDevice,
         query::TimestampQueryRegistry,
         rendering::{
             postprocessing::Postprocessor,
@@ -12,22 +13,21 @@ use crate::{
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{
+            ShaderManager,
             template::{
                 ambient_occlusion_application::AmbientOcclusionApplicationShaderTemplate,
                 ambient_occlusion_computation::AmbientOcclusionComputationShaderTemplate,
                 passthrough::PassthroughShaderTemplate,
             },
-            ShaderManager,
         },
         texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
-        GraphicsDevice,
     },
     num::Float,
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, ConstStringHash64, HaltonSequence};
+use impact_utils::{ConstStringHash64, HaltonSequence, hash64};
 use nalgebra::Vector4;
 use std::borrow::Cow;
 

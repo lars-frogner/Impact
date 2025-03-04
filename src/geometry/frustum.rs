@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::AbsDiffEq;
 use nalgebra::{
-    point, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3,
+    Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3, point, vector,
 };
 
 /// A frustum, which in general is a pyramid truncated at the
@@ -493,7 +493,7 @@ mod tests {
     use super::*;
     use crate::geometry::{Degrees, OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
-    use nalgebra::{point, Rotation3, Translation3};
+    use nalgebra::{Rotation3, Translation3, point};
 
     #[test]
     fn computing_frustum_near_and_far_distance_works() {

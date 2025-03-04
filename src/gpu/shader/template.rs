@@ -34,7 +34,7 @@ use crate::gpu::{
         RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
     },
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use regex::Regex;
 use std::{
     borrow::Cow,
@@ -169,16 +169,12 @@ macro_rules! template_source {
 
 #[macro_export]
 macro_rules! rendering_template_source {
-    ($name:expr) => {{
-        $crate::template_source!("rendering", $name)
-    }};
+    ($name:expr) => {{ $crate::template_source!("rendering", $name) }};
 }
 
 #[macro_export]
 macro_rules! compute_template_source {
-    ($name:expr) => {{
-        $crate::template_source!("compute", $name)
-    }};
+    ($name:expr) => {{ $crate::template_source!("compute", $name) }};
 }
 
 #[macro_export]
@@ -332,7 +328,7 @@ impl<'a> ConditionalBlock<'a> {
         })
     }
 
-    fn flags(&self) -> impl Iterator<Item = Flag<'a>> + '_ {
+    fn flags(&self) -> impl Iterator<Item = Flag<'a>> {
         self.if_condition.flags().chain(
             self.elseif_condition
                 .as_ref()
@@ -367,7 +363,7 @@ impl<'a> Condition<'a> {
         Self { flag }
     }
 
-    fn flags(&self) -> impl Iterator<Item = Flag<'a>> + '_ {
+    fn flags(&self) -> impl Iterator<Item = Flag<'a>> {
         iter::once(self.flag)
     }
 
@@ -426,7 +422,10 @@ fn find_replacement_labels(source_code: &str) -> Result<HashSet<&str>> {
         if let Some(label) = captures.get(1) {
             let label = label.as_str();
             if !is_valid_identifier(label) {
-                bail!("Invalid label in template (only alphanumeric characters and underscores are allowed): {}", label);
+                bail!(
+                    "Invalid label in template (only alphanumeric characters and underscores are allowed): {}",
+                    label
+                );
             }
             labels.insert(label);
         }
@@ -474,9 +473,9 @@ fn is_valid_identifier(identifier: &str) -> bool {
 mod tests {
     use super::*;
     use naga::{
+        Module,
         front::wgsl,
         valid::{Capabilities, ValidationFlags, Validator},
-        Module,
     };
 
     pub fn validate_template(template: &impl SpecificShaderTemplate) {
@@ -558,10 +557,12 @@ mod tests {
             "(flag) #endif",
             "#if #endif",
         ] {
-            assert!(ShaderTemplate::new(templ)
-                .unwrap()
-                .obtain_flags()
-                .is_empty());
+            assert!(
+                ShaderTemplate::new(templ)
+                    .unwrap()
+                    .obtain_flags()
+                    .is_empty()
+            );
         }
     }
 
@@ -775,9 +776,11 @@ mod tests {
     #[test]
     fn should_fail_to_resolve_empty_template_with_replacement() {
         let template = ShaderTemplate::new("").unwrap();
-        assert!(template
-            .resolve([], [("label", "actual".to_string())])
-            .is_err());
+        assert!(
+            template
+                .resolve([], [("label", "actual".to_string())])
+                .is_err()
+        );
     }
 
     #[test]

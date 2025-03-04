@@ -10,30 +10,30 @@ pub mod tasks;
 use crate::{
     geometry::CubemapFace,
     gpu::{
+        GraphicsDevice,
         query::{self, TimestampQueryManager},
         resource_group::GPUResourceGroupManager,
         shader::ShaderManager,
         storage::StorageGPUBufferManager,
         texture::{self, attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
-        GraphicsDevice,
     },
     light::MAX_SHADOW_MAP_CASCADES,
     scene::Scene,
     window::EventLoopController,
 };
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use chrono::Utc;
 use postprocessing::{
-    ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
-    temporal_anti_aliasing::TemporalAntiAliasingConfig, Postprocessor,
+    Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
+    temporal_anti_aliasing::TemporalAntiAliasingConfig,
 };
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
 use std::{
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, RwLock,
+        atomic::{AtomicBool, Ordering},
     },
 };
 use surface::RenderingSurface;

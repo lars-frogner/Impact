@@ -10,7 +10,7 @@ use crate::{
             RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
         },
     },
-    mesh::{buffer::MeshVertexAttributeLocation, VertexAttributeSet},
+    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
     skybox::resource::SkyboxGPUResourceManager,
     template_replacements,

@@ -1,6 +1,6 @@
 //! Graphics device.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Interface to a connected graphics device.
 #[derive(Debug)]

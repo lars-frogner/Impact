@@ -2,17 +2,17 @@
 
 use crate::{
     gpu::{
-        buffer::{GPUBuffer, GPUBufferType},
         GraphicsDevice,
+        buffer::{GPUBuffer, GPUBufferType},
     },
     mesh::{
-        MeshID, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexNormalVector,
-        VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
-        VERTEX_ATTRIBUTE_FLAGS,
+        MeshID, N_VERTEX_ATTRIBUTES, TriangleMesh, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute,
+        VertexAttributeSet, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
+        VertexTextureCoords,
     },
     util::tracking::CollectionChange,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::Pod;
 use std::{borrow::Cow, mem};
 
@@ -158,7 +158,7 @@ impl MeshGPUBufferManager {
     pub fn request_vertex_buffer_layouts(
         &self,
         requested_attributes: VertexAttributeSet,
-    ) -> Result<impl Iterator<Item = wgpu::VertexBufferLayout<'static>> + '_> {
+    ) -> Result<impl Iterator<Item = wgpu::VertexBufferLayout<'static>>> {
         if self.available_attributes.contains(requested_attributes) {
             Ok(VERTEX_ATTRIBUTE_FLAGS
                 .iter()
@@ -217,7 +217,7 @@ impl MeshGPUBufferManager {
     pub fn request_vertex_buffer_layouts_including_position(
         &self,
         requested_attributes: VertexAttributeSet,
-    ) -> Result<impl Iterator<Item = wgpu::VertexBufferLayout<'static>> + '_> {
+    ) -> Result<impl Iterator<Item = wgpu::VertexBufferLayout<'static>>> {
         self.request_vertex_buffer_layouts(requested_attributes | VertexAttributeSet::POSITION)
     }
 

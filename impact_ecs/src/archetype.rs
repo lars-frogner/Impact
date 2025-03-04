@@ -7,14 +7,14 @@ use super::{
     },
     world::{Entity, EntityID},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs_macros::archetype_of;
 use impact_utils::KeyIndexMapper;
 use paste::paste;
 use std::{
     any::TypeId,
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
     iter,
     marker::PhantomData,
@@ -370,7 +370,7 @@ where
     }
 
     /// Returns an iterator over the contained component IDs.
-    pub fn component_ids(&self) -> impl Iterator<Item = ComponentID> + '_ {
+    pub fn component_ids(&self) -> impl Iterator<Item = ComponentID> {
         self.component_index_map.key_at_each_idx()
     }
 
@@ -766,7 +766,7 @@ impl ArchetypeTable {
 
     /// Returns an iterator over all [`Entity`]s whose components
     /// are stored in the table.
-    pub fn all_entities(&self) -> impl Iterator<Item = Entity> + '_ {
+    pub fn all_entities(&self) -> impl Iterator<Item = Entity> {
         self.entity_index_mapper
             .key_at_each_idx()
             .map(|entity_id| Entity::new(entity_id, self.archetype().id()))
@@ -1404,15 +1404,19 @@ impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11));
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12));
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13));
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14));
-impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15));
-impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16));
+impl_archetype_conversion!((
+    C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15
+));
+impl_archetype_conversion!((
+    C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16
+));
 
 #[cfg(test)]
 mod tests {
     use crate::component::ComponentInstance;
 
     use super::{
-        super::{archetype_of, Component},
+        super::{Component, archetype_of},
         *,
     };
     use bytemuck::{Pod, Zeroable};
@@ -1479,8 +1483,10 @@ mod tests {
         let empty = archetype_of!();
 
         assert!(without_position.contains_none_of(&[Position::component_id()]));
-        assert!(without_position_and_byte
-            .contains_none_of(&[Position::component_id(), Byte::component_id()]));
+        assert!(
+            without_position_and_byte
+                .contains_none_of(&[Position::component_id(), Byte::component_id()])
+        );
         assert!(empty.contains_none_of(&[
             Position::component_id(),
             Byte::component_id(),

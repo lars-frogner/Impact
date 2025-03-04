@@ -7,8 +7,8 @@ use crate::{
     assets::Assets,
     camera::components::PerspectiveCameraComp,
     control::{
-        motion::{components::MotionControlComp, SemiDirectionalMotionController},
-        orientation::{components::OrientationControlComp, RollFreeCameraOrientationController},
+        motion::{SemiDirectionalMotionController, components::MotionControlComp},
+        orientation::{RollFreeCameraOrientationController, components::OrientationControlComp},
     },
     game_loop::{GameLoop, GameLoopConfig},
     gpu::{
@@ -21,64 +21,62 @@ use crate::{
         ShadowableUnidirectionalEmissionComp, UnidirectionalEmissionComp,
     },
     material::{
-        self,
+        self, MaterialLibrary,
         components::{
             NormalMapComp, ParallaxMapComp, TexturedColorComp, TexturedRoughnessComp,
             UniformColorComp, UniformEmissiveLuminanceComp, UniformMetalnessComp,
             UniformRoughnessComp, UniformSpecularReflectanceComp,
         },
-        MaterialLibrary,
     },
     mesh::{
+        FrontFaceSide, MeshRepository,
         components::{
             BoxMeshComp, ConeMeshComp, CylinderMeshComp, RectangleMeshComp, SphereMeshComp,
         },
         texture_projection::components::PlanarTextureProjectionComp,
-        FrontFaceSide, MeshRepository,
     },
     model::InstanceFeatureManager,
     num::Float,
     physics::{
-        fph,
+        PhysicsSimulator, SimulatorConfig, fph,
         medium::UniformMedium,
         motion::{
+            AngularVelocity, Orientation, Position,
             analytical::{
                 constant_rotation::components::ConstantRotationComp,
                 harmonic_oscillation::components::HarmonicOscillatorTrajectoryComp,
             },
             components::{LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, VelocityComp},
-            AngularVelocity, Orientation, Position,
         },
         rigid_body::{
             components::UniformRigidBodyComp,
             forces::{
                 detailed_drag::components::DetailedDragComp,
-                spring::{components::SpringComp, Spring},
+                spring::{Spring, components::SpringComp},
                 uniform_gravity::components::UniformGravityComp,
             },
         },
-        PhysicsSimulator, SimulatorConfig,
     },
     scene::{
-        components::{ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, UncullableComp},
         Scene, SceneEntityFlags,
+        components::{ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, UncullableComp},
     },
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
+        VoxelManager,
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp, SameVoxelTypeComp,
             VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelBoxComp,
             VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelSphereUnionComp,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
-        VoxelManager,
     },
     window::{GameHandler, InputHandler, KeyActionMap, MouseButtonInputHandler, Window},
 };
 use anyhow::Result;
-use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
-use rand::{rngs::ThreadRng, Rng, SeedableRng};
+use nalgebra::{Point3, UnitVector3, Vector3, point, vector};
+use rand::{Rng, SeedableRng, rngs::ThreadRng};
 use std::{borrow::Cow, f64::consts::PI, path::PathBuf, sync::Arc};
 
 pub fn run() -> Result<()> {

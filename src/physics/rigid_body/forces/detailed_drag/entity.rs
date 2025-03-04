@@ -2,12 +2,12 @@
 
 use super::DragLoadMapRepository;
 use crate::{
-    mesh::{components::MeshComp, MeshID, MeshRepository},
+    mesh::{MeshID, MeshRepository, components::MeshComp},
     physics::rigid_body::{
         components::RigidBodyComp,
         forces::detailed_drag::{
-            components::{DetailedDragComp, DragLoadMapComp},
             DragLoadMap, DragLoadMapConfig,
+            components::{DetailedDragComp, DragLoadMapComp},
         },
     },
 };

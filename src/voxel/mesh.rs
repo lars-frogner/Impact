@@ -4,8 +4,8 @@ use crate::{
     geometry::{Frustum, OrientedBox, Plane},
     scene::RenderResourcesDesynchronized,
     voxel::chunks::{
-        sdf::{surface_nets::SurfaceNetsBuffer, VoxelChunkSignedDistanceField},
         ChunkedVoxelObject, VoxelChunkFlags,
+        sdf::{VoxelChunkSignedDistanceField, surface_nets::SurfaceNetsBuffer},
     },
 };
 use bytemuck::{Pod, Zeroable};

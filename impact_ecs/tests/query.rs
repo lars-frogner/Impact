@@ -2,9 +2,8 @@
 
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{
-    query,
+    Component, query,
     world::{Entity, World},
-    Component,
 };
 use std::collections::HashSet;
 

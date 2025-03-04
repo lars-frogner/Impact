@@ -1,11 +1,11 @@
 //! Tasks related to voxels.
 
 use crate::{
-    application::{tasks::AppTaskScheduler, Application},
+    application::{Application, tasks::AppTaskScheduler},
     define_task,
     gpu::rendering::{render_command::tasks::SyncRenderCommands, tasks::RenderingTag},
     physics::tasks::{AdvanceSimulation, PhysicsTag},
-    scene::{tasks::UpdateSceneGroupToWorldTransforms, RenderResourcesDesynchronized},
+    scene::{RenderResourcesDesynchronized, tasks::UpdateSceneGroupToWorldTransforms},
     voxel,
 };
 use anyhow::Result;
