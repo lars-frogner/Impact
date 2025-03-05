@@ -285,14 +285,14 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
             Point3::new(0.15, -0.3, 0.0),
             Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
         ),
-        &CylinderMeshComp::new(100.0, 0.02, 16),
+        &CylinderMeshComp::new(150.0, 0.02, 16),
         &UniformColorComp(vector![0.9, 0.05, 0.05]),
         &UniformEmissiveLuminanceComp(1e6),
         &VoxelAbsorbingCapsuleComp::new(
             vector![0.0, 0.0, 0.0],
             vector![0.0, 100.0, 0.0],
             0.3,
-            200.0,
+            300.0,
         ),
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED | SceneEntityFlags::CASTS_NO_SHADOWS),
     ))?;
@@ -397,24 +397,24 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
     //     &UniformRoughnessComp(0.4),
     // ))?;
 
-    app.create_entity((
-        &RectangleMeshComp::UNIT_SQUARE,
-        // &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-        &ReferenceFrameComp::new(
-            Point3::new(0.0, -20.0, 0.0),
-            Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
-            // 50.0,
-            500.0,
-        ),
-        // &TexturedColorComp(wood_floor_color_texture_id),
-        &UniformColorComp(vector![1.0, 1.0, 1.0]),
-        &UniformSpecularReflectanceComp::in_range_of(
-            UniformSpecularReflectanceComp::LIVING_TISSUE,
-            100.0,
-        ),
-        // &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
-        // &NormalMapComp(wood_floor_normal_texture_id),
-    ))?;
+    // app.create_entity((
+    //     &RectangleMeshComp::UNIT_SQUARE,
+    //     // &PlanarTextureProjectionComp::for_rectangle(&
+    // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
+    //         Point3::new(0.0, -20.0, 0.0),
+    //         Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
+    //         // 50.0,
+    //         500.0,
+    //     ),
+    //     // &TexturedColorComp(wood_floor_color_texture_id),
+    //     &UniformColorComp(vector![1.0, 1.0, 1.0]),
+    //     &UniformSpecularReflectanceComp::in_range_of(
+    //         UniformSpecularReflectanceComp::LIVING_TISSUE,
+    //         100.0,
+    //     ),
+    //     // &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
+    //     // &NormalMapComp(wood_floor_normal_texture_id),
+    // ))?;
 
     // app.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
@@ -474,7 +474,8 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
 
     app.create_entity((
         &SphereMeshComp::new(25),
-        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
+        // &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
+        &ReferenceFrameComp::unoriented_scaled(Point3::new(20.0, 0.0, 20.0), 1.0),
         &UniformColorComp(vector![1.0, 1.0, 1.0]),
         &UniformEmissiveLuminanceComp(1e6),
         &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
@@ -496,18 +497,26 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
     //     &ReferenceFrameComp::unoriented(point![25.0, -25.0, -15.0]),
     // ))?;
 
+    // app.create_entity((
+    //     // &VoxelSphereComp::new(0.25, 20.0),
+    //     // &VoxelBoxComp::new(0.25, 4.0, 2.0, 1.0),
+    //     // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2,
+    // 0.3,0),     &VoxelSphereUnionComp::new(0.25, 10.0, 10.0, [20.0, 0.0,
+    // 0.0], 5.0),     // &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
+    //     &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0,
+    // 0),     &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0,
+    // 0),     // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2,1.0,
+    // 0),     // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
+    //     &ReferenceFrameComp::unoriented(point![0.0, 0.0, 20.0]),
+    //     &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(),
+    // Degrees(20.0))), ))?;
+
     app.create_entity((
-        // &VoxelSphereComp::new(0.25, 20.0),
-        // &VoxelBoxComp::new(0.25, 4.0, 2.0, 1.0),
-        // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2, 0.3,0),
-        &VoxelSphereUnionComp::new(0.25, 10.0, 10.0, [20.0, 0.0, 0.0], 5.0),
-        // &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
-        &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0, 1),
-        // &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6,4.0, 0),
-        // &GradientNoiseVoxelTypesComp::new(["Snow", "Rock"], 6e-2,1.0, 0),
-        // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 5.0]),
-        &ReferenceFrameComp::unoriented(point![0.0, 0.0, 30.0]),
-        &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(), Degrees(10.0))),
+        &VoxelSphereComp::new(0.25, 50.0),
+        // &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0, 1),
+        &SameVoxelTypeComp::new(VoxelType::from_idx(1)),
+        // &MultifractalNoiseModificationComp::new(8, 0.02, 2.0, 0.6, 4.0, 1),
+        &ReferenceFrameComp::unoriented(point![0.0, 0.0, 20.0]),
     ))?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0),
