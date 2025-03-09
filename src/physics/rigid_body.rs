@@ -15,7 +15,7 @@ use crate::physics::{
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Vector3;
+use nalgebra::{Matrix3, Vector3};
 use schemes::SchemeSubstep;
 
 /// The maximum number of intermediate states from the substeps of a stepping
@@ -169,6 +169,14 @@ impl RigidBody {
         );
 
         0.5 * angular_velocity.as_vector().dot(&self.angular_momentum)
+    }
+
+    /// Computes the inverse of the body's inertia tensor in world space and
+    /// returns it as a matrix.
+    pub fn compute_inverse_world_space_inertia_tensor(&self, scaling: fph) -> Matrix3<fph> {
+        self.inertial_properties
+            .inertia_tensor()
+            .inverse_rotated_matrix_with_scaled_extent(&self.orientation, scaling)
     }
 
     /// Applies the given force at the body's center of mass.

@@ -408,8 +408,8 @@ impl InertiaTensor {
     }
 
     /// Uses the parallel axis theorem to compute the difference matrix that
-    /// must be added to the inertia tensor for it to be defined with respect to
-    /// when the center of mass when the center of mass has the given
+    /// must be added to the inertia tensor for it to be defined with respect
+    /// to the center of mass when the center of mass has the given
     /// displacement from the point the current inertia tensor is defined with
     /// respect to.
     pub fn compute_delta_to_com_inertia_matrix(

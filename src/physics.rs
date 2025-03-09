@@ -1,5 +1,6 @@
 //! Simulation of physics.
 
+pub mod collision;
 pub mod components;
 pub mod entity;
 pub mod inertia;
@@ -7,7 +8,6 @@ pub mod medium;
 pub mod motion;
 pub mod rigid_body;
 pub mod tasks;
-pub mod time;
 
 use anyhow::{Result, bail};
 use impact_ecs::world::{Entity, World as ECSWorld};
