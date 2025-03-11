@@ -6,10 +6,16 @@ pub mod entity;
 pub mod spring;
 pub mod uniform_gravity;
 
-use crate::physics::UniformMedium;
+use crate::{
+    physics::{UniformMedium, motion::components::Static, rigid_body::components::RigidBodyComp},
+    scene::components::SceneEntityFlagsComp,
+};
 use anyhow::Result;
 use detailed_drag::{DragLoadMapConfig, DragLoadMapRepository};
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::{
+    query,
+    world::{Entity, World as ECSWorld},
+};
 use std::sync::RwLock;
 
 /// Manager of all systems resulting in forces and torques on rigid bodies.
@@ -49,6 +55,8 @@ impl RigidBodyForceManager {
         medium: &UniformMedium,
         entities_to_remove: &mut Vec<Entity>,
     ) {
+        reset_forces_and_torques(ecs_world);
+
         uniform_gravity::systems::apply_uniform_gravity(ecs_world);
 
         spring::systems::apply_spring_forces(ecs_world, entities_to_remove);
@@ -65,4 +73,17 @@ impl RigidBodyForceManager {
     pub fn perform_post_simulation_step_actions(&self, ecs_world: &ECSWorld) {
         spring::systems::synchronize_spring_positions_and_orientations(ecs_world);
     }
+}
+
+fn reset_forces_and_torques(ecs_world: &ECSWorld) {
+    query!(
+        ecs_world,
+        |rigid_body: &mut RigidBodyComp, flags: &SceneEntityFlagsComp| {
+            if flags.is_disabled() {
+                return;
+            }
+            rigid_body.0.reset_force_and_torque();
+        },
+        ![Static]
+    );
 }
