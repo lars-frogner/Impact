@@ -1,5 +1,6 @@
 //! Simulation of physics.
 
+pub mod collision;
 pub mod components;
 pub mod entity;
 pub mod inertia;
@@ -7,16 +8,12 @@ pub mod medium;
 pub mod motion;
 pub mod rigid_body;
 pub mod tasks;
-pub mod time;
 
 use anyhow::{Result, bail};
 use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
-use rigid_body::{
-    forces::{RigidBodyForceConfig, RigidBodyForceManager},
-    schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme},
-};
+use rigid_body::forces::{RigidBodyForceConfig, RigidBodyForceManager};
 use std::{sync::RwLock, time::Duration};
 
 /// Floating point type used for physics simulation.
@@ -37,9 +34,6 @@ pub struct PhysicsSimulator {
 /// Configuration parameters for the physics simulation.
 #[derive(Clone, Debug)]
 pub struct SimulatorConfig {
-    /// The iterative scheme to use for advancing the motion of rigid bodies
-    /// over time.
-    pub stepping_scheme: SteppingScheme,
     /// The number of substeps to perform each simulation step. Increase to
     /// improve accuracy.
     pub n_substeps: u32,
@@ -102,11 +96,6 @@ impl PhysicsSimulator {
     }
 
     /// Returns the number of substeps performed each simulation step.
-    pub fn stepping_scheme(&self) -> SteppingScheme {
-        self.config.stepping_scheme
-    }
-
-    /// Returns the number of substeps performed each simulation step.
     pub fn n_substeps(&self) -> u32 {
         self.config.n_substeps
     }
@@ -142,11 +131,6 @@ impl PhysicsSimulator {
     /// Will use the given duration as the time step duration.
     pub fn set_time_step_duration(&mut self, time_step_duration: fph) {
         self.time_step_duration = time_step_duration;
-    }
-
-    /// Will use the given stepping scheme for advancing rigid body motion.
-    pub fn set_stepping_scheme(&mut self, stepping_scheme: SteppingScheme) {
-        self.config.stepping_scheme = stepping_scheme;
     }
 
     /// Will execute the given number of substeps each simulation step.
@@ -201,26 +185,17 @@ impl PhysicsSimulator {
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
         with_timing_info_logging!(
-            "Simulation step ({}) with duration {:.2} ({:.1}x) and {} substeps",
-            self.stepping_scheme(),
-            self.scaled_time_step_duration(),
-            self.simulation_speed_multiplier,
-            self.n_substeps(); {
-
-            match self.stepping_scheme() {
-                SteppingScheme::EulerCromer => {
-                    self.advance_simulation_with_scheme::<EulerCromerStep>(ecs_world);
-                }
-                SteppingScheme::RK4 => {
-                    self.advance_simulation_with_scheme::<RungeKutta4Substep>(ecs_world);
-                }
-            }
+        "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
+        self.scaled_time_step_duration(),
+        self.simulation_speed_multiplier,
+        self.n_substeps(); {
+            self.do_advance_simulation(ecs_world);
         });
 
         log::info!("Simulation time: {:.1}", self.simulation_time);
     }
 
-    fn advance_simulation_with_scheme<S: SchemeSubstep>(&mut self, ecs_world: &RwLock<ECSWorld>) {
+    fn do_advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
         let mut entities_to_remove = Vec::new();
 
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
@@ -228,7 +203,7 @@ impl PhysicsSimulator {
 
         let substep_duration = self.compute_substep_duration();
         for _ in 0..self.n_substeps() {
-            Self::perform_step::<S>(
+            Self::perform_step(
                 &ecs_world_readonly,
                 &rigid_body_force_manager,
                 &self.medium,
@@ -249,7 +224,7 @@ impl PhysicsSimulator {
         self.scaled_time_step_duration() / fph::from_u32(self.n_substeps()).unwrap()
     }
 
-    fn perform_step<S: SchemeSubstep>(
+    fn perform_step(
         ecs_world: &ECSWorld,
         rigid_body_force_manager: &RigidBodyForceManager,
         medium: &UniformMedium,
@@ -257,19 +232,13 @@ impl PhysicsSimulator {
         step_duration: fph,
         entities_to_remove: &mut Vec<Entity>,
     ) {
-        for scheme_substep in S::all_substeps(step_duration) {
-            let new_simulation_time = scheme_substep.new_simulation_time(current_simulation_time);
+        let new_simulation_time = current_simulation_time + step_duration;
 
-            motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
+        motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
-            rigid_body::systems::advance_rigid_body_motion(ecs_world, &scheme_substep);
+        rigid_body::systems::advance_rigid_body_motion(ecs_world, step_duration);
 
-            rigid_body_force_manager.apply_forces_and_torques(
-                ecs_world,
-                medium,
-                entities_to_remove,
-            );
-        }
+        rigid_body_force_manager.apply_forces_and_torques(ecs_world, medium, entities_to_remove);
     }
 
     fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
@@ -325,7 +294,6 @@ impl SimulatorConfig {
 impl Default for SimulatorConfig {
     fn default() -> Self {
         Self {
-            stepping_scheme: SteppingScheme::RK4,
             n_substeps: 1,
             initial_time_step_duration: 0.015,
             match_frame_duration: true,
