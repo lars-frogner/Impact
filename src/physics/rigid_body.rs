@@ -41,8 +41,8 @@ impl RigidBody {
         velocity: &Velocity,
         angular_velocity: &AngularVelocity,
     ) -> Self {
-        let momentum = Self::compute_momentum(&inertial_properties, velocity);
-        let angular_momentum = Self::compute_angular_momentum(
+        let momentum = Self::compute_momentum_from_velocity(&inertial_properties, velocity);
+        let angular_momentum = Self::compute_angular_momentum_from_angular_velocity(
             &inertial_properties,
             &orientation,
             scaling,
@@ -70,24 +70,11 @@ impl RigidBody {
     }
 
     /// Returns the position (center of mass) of the body.
-    ///
-    /// # Warning
-    /// This position will be out of sync with the position in with the entity's
-    /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp)
-    /// between the first and last substep in the stepping scheme, as it is only
-    /// updated with the final orientation after the last substep.
     pub fn position(&self) -> &Position {
         &self.position
     }
 
     /// Returns the orientation of the body.
-    ///
-    /// # Warning
-    /// This orientation will be out of sync with the orientation in with the
-    /// entity's
-    /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp)
-    /// between the first and last substep in the stepping scheme, as it is only
-    /// updated with the final orientation after the last substep.
     pub fn orientation(&self) -> &Orientation {
         &self.orientation
     }
@@ -112,6 +99,21 @@ impl RigidBody {
         &self.total_torque
     }
 
+    /// Computes the linear velocity of the body.
+    pub fn compute_velocity(&self) -> Velocity {
+        Self::compute_velocity_from_momentum(&self.inertial_properties, &self.momentum)
+    }
+
+    /// Computes the angular velocity of the body.
+    pub fn compute_angular_velocity(&self, scaling: fph) -> AngularVelocity {
+        Self::compute_angular_velocity_from_angular_momentum(
+            &self.inertial_properties,
+            &self.orientation,
+            scaling,
+            &self.angular_momentum,
+        )
+    }
+
     /// Computes the total kinetic energy (translational and rotational) of the
     /// body.
     pub fn compute_kinetic_energy(&self, scaling: fph) -> fph {
@@ -121,21 +123,15 @@ impl RigidBody {
 
     /// Computes the translational kinetic energy of the body.
     pub fn compute_translational_kinetic_energy(&self) -> fph {
-        let velocity = Self::compute_velocity(&self.inertial_properties, &self.momentum);
-
-        0.5 * self.mass() * velocity.norm_squared()
+        0.5 * self.mass() * self.compute_velocity().norm_squared()
     }
 
     /// Computes the rotational kinetic energy of the body.
     pub fn compute_rotational_kinetic_energy(&self, scaling: fph) -> fph {
-        let angular_velocity = Self::compute_angular_velocity(
-            &self.inertial_properties,
-            &self.orientation,
-            scaling,
-            &self.angular_momentum,
-        );
-
-        0.5 * angular_velocity.as_vector().dot(&self.angular_momentum)
+        0.5 * self
+            .compute_angular_velocity(scaling)
+            .as_vector()
+            .dot(&self.angular_momentum)
     }
 
     /// Applies the given force at the body's center of mass.
@@ -160,9 +156,19 @@ impl RigidBody {
         self.inertial_properties = inertial_properties;
     }
 
+    /// Sets the given position for the body.
+    pub fn update_position(&mut self, position: Position) {
+        self.position = position;
+    }
+
+    /// Sets the given orientation for the body.
+    pub fn update_orientation(&mut self, orientation: Orientation) {
+        self.orientation = orientation;
+    }
+
     /// Recomputes the body's momentum according to the given velocity.
     pub fn synchronize_momentum(&mut self, velocity: &Velocity) {
-        self.momentum = Self::compute_momentum(&self.inertial_properties, velocity);
+        self.momentum = Self::compute_momentum_from_velocity(&self.inertial_properties, velocity);
     }
 
     /// Recomputes the body's angular momentum according to the given
@@ -173,7 +179,7 @@ impl RigidBody {
         scaling: fph,
         angular_velocity: &AngularVelocity,
     ) {
-        self.angular_momentum = Self::compute_angular_momentum(
+        self.angular_momentum = Self::compute_angular_momentum_from_angular_velocity(
             &self.inertial_properties,
             orientation,
             scaling,
@@ -181,76 +187,34 @@ impl RigidBody {
         );
     }
 
-    /// Executes the given substep of a stepping scheme. Updates the given
-    /// position, orientation, velocity and angular velocity with the results of
-    /// the substep. If the substep is the final one in a full step, the stored
-    /// state of the rigid body is updated to the final result.
-    ///
-    /// If the given orientation, scaling, velocity or angular velocity have
-    /// been modified after the previous call to this function, make sure to
-    /// call [`synchronize_momentum`](Self::synchronize_momentum) and/or
-    /// [`synchronize_angular_momentum`](Self::synchronize_angular_momentum)
-    /// accordingly before calling this function.
-    ///
-    /// This function resets the total force and torque.
-    pub fn advance_motion(
+    /// Advances the body's linear and angular momentum for the given duration
+    /// based on total force and torque applied to the body since
+    /// [`reset_force_and_torque`](Self::reset_force_and_torque) was called.
+    pub fn advance_momenta(&mut self, step_duration: fph) {
+        self.momentum = self.momentum() + self.total_force() * step_duration;
+
+        self.angular_momentum = self.angular_momentum() + self.total_torque() * step_duration;
+    }
+
+    /// Advances the body's position and orientation for the given duration
+    /// based on the given linear and angular velocity.
+    pub fn advance_configuration_with(
         &mut self,
         step_duration: fph,
-        position: &mut Position,
-        orientation: &mut Orientation,
-        scaling: fph,
-        velocity: &mut Velocity,
-        angular_velocity: &mut AngularVelocity,
+        advanced_velocity: &Velocity,
+        advanced_angular_velocity: &AngularVelocity,
     ) {
-        // In the first substep, we update the current position and orientation
-        // in case they have been changed after the previous full step. To avoid
-        // unnecessary calculations, we assume that momentum and angular
-        // momentum have already been updated through the appropriate methods.
-        // In later substeps, the supplied state is updated with the we values
-        // resulting from the substep, but we do not update the state stored in
-        // the rigid body until the final substep is complete.
-        self.position = *position;
-        self.orientation = *orientation;
+        self.position = self.position() + advanced_velocity * step_duration;
 
-        let advanced_momentum =
-            RigidBody::advance_momentum(self.momentum(), &self.total_force, step_duration);
-
-        let advanced_velocity =
-            RigidBody::compute_velocity(self.inertial_properties(), &advanced_momentum);
-
-        let advanced_angular_momentum = RigidBody::advance_angular_momentum(
-            self.angular_momentum(),
-            &self.total_torque,
+        self.orientation = motion::advance_orientation(
+            self.orientation(),
+            advanced_angular_velocity,
             step_duration,
         );
+    }
 
-        let advanced_angular_velocity = RigidBody::compute_angular_velocity(
-            self.inertial_properties(),
-            self.orientation(),
-            scaling,
-            &advanced_angular_momentum,
-        );
-
-        let advanced_position =
-            RigidBody::advance_position(self.position(), &advanced_velocity, step_duration);
-
-        let advanced_orientation = motion::advance_orientation(
-            self.orientation(),
-            &advanced_angular_velocity,
-            step_duration,
-        );
-
-        *position = advanced_position;
-        *orientation = advanced_orientation;
-        *velocity = advanced_velocity;
-        *angular_velocity = advanced_angular_velocity;
-
-        // We record the final state as the new state of the rigid body
-        self.position = *position;
-        self.orientation = *orientation;
-        self.momentum = advanced_momentum;
-        self.angular_momentum = advanced_angular_momentum;
-
+    /// Resets the total applied force and torque to zero.
+    pub fn reset_force_and_torque(&mut self) {
         self.reset_total_force();
         self.reset_total_torque();
     }
@@ -263,31 +227,21 @@ impl RigidBody {
         self.total_torque = Torque::zeros();
     }
 
-    fn advance_position(position: &Position, velocity: &Velocity, duration: fph) -> Position {
-        *position + velocity * duration
-    }
-
-    fn advance_momentum(momentum: &Momentum, force: &Force, duration: fph) -> Momentum {
-        *momentum + force * duration
-    }
-
-    fn advance_angular_momentum(
-        angular_momentum: &AngularMomentum,
-        torque: &Torque,
-        duration: fph,
-    ) -> AngularMomentum {
-        *angular_momentum + torque * duration
-    }
-
-    fn compute_momentum(inertial_properties: &InertialProperties, velocity: &Velocity) -> Momentum {
+    fn compute_momentum_from_velocity(
+        inertial_properties: &InertialProperties,
+        velocity: &Velocity,
+    ) -> Momentum {
         inertial_properties.mass() * velocity
     }
 
-    fn compute_velocity(inertial_properties: &InertialProperties, momentum: &Momentum) -> Velocity {
+    fn compute_velocity_from_momentum(
+        inertial_properties: &InertialProperties,
+        momentum: &Momentum,
+    ) -> Velocity {
         momentum / inertial_properties.mass()
     }
 
-    fn compute_angular_velocity(
+    fn compute_angular_velocity_from_angular_momentum(
         inertial_properties: &InertialProperties,
         orientation: &Orientation,
         scaling: fph,
@@ -300,7 +254,7 @@ impl RigidBody {
         AngularVelocity::from_vector(inverse_world_space_inertia_tensor * angular_momentum)
     }
 
-    fn compute_angular_momentum(
+    fn compute_angular_momentum_from_angular_velocity(
         inertial_properties: &InertialProperties,
         orientation: &Orientation,
         scaling: fph,
@@ -471,138 +425,134 @@ mod tests {
     }
 
     #[test]
-    fn should_reset_force_and_torque_after_advancing_motion() {
-        let mut body = dummy_rigid_body();
-
-        body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
-
-        let mut position = Position::origin();
-        let mut orientation = Orientation::identity();
-        let mut velocity = Velocity::zeros();
-        let mut angular_velocity = AngularVelocity::zero();
-
-        body.advance_motion(
-            1.0,
-            &mut position,
-            &mut orientation,
-            1.0,
-            &mut velocity,
-            &mut angular_velocity,
-        );
-
-        assert_abs_diff_eq!(body.total_force(), &Force::zeros());
-        assert_abs_diff_eq!(body.total_torque(), &Torque::zeros());
-    }
-
-    #[test]
-    fn should_retain_motion_when_advancing_for_zero_time() {
-        let original_position = Position::origin();
-        let original_orientation = Orientation::identity();
-        let original_velocity = Velocity::z();
-        let original_angular_velocity = AngularVelocity::from_vector(Vector3::x());
+    fn should_retain_momenta_when_advancing_for_zero_time() {
+        let velocity = Velocity::z();
+        let angular_velocity = AngularVelocity::from_vector(Vector3::x());
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
-            original_position,
-            original_orientation,
+            Position::origin(),
+            Orientation::identity(),
             1.0,
-            &original_velocity,
-            &original_angular_velocity,
+            &velocity,
+            &angular_velocity,
         );
 
         body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
 
-        let mut position = original_position;
-        let mut orientation = original_orientation;
-        let mut velocity = original_velocity;
-        let mut angular_velocity = original_angular_velocity;
+        body.advance_momenta(0.0);
 
-        body.advance_motion(
-            0.0,
-            &mut position,
-            &mut orientation,
-            1.0,
-            &mut velocity,
-            &mut angular_velocity,
-        );
-
-        assert_abs_diff_eq!(position, original_position);
-        assert_abs_diff_eq!(orientation, original_orientation);
-        assert_abs_diff_eq!(velocity, original_velocity);
-        assert_abs_diff_eq!(angular_velocity, original_angular_velocity);
+        assert_abs_diff_eq!(body.compute_velocity(), velocity);
+        assert_abs_diff_eq!(body.compute_angular_velocity(1.0), angular_velocity);
     }
 
     #[test]
-    fn should_retain_motion_with_zero_force_and_velocity() {
-        let original_position = Position::origin();
-        let original_orientation = Orientation::identity();
-        let original_velocity = Velocity::zeros();
-        let original_angular_velocity = AngularVelocity::zero();
+    fn should_retain_configuration_when_advancing_for_zero_time() {
+        let position = Position::origin();
+        let orientation = Orientation::identity();
+        let velocity = Velocity::z();
+        let angular_velocity = AngularVelocity::from_vector(Vector3::x());
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
-            original_position,
-            original_orientation,
+            position,
+            orientation,
             1.0,
-            &original_velocity,
-            &original_angular_velocity,
+            &velocity,
+            &angular_velocity,
         );
 
-        let mut position = original_position;
-        let mut orientation = original_orientation;
-        let mut velocity = original_velocity;
-        let mut angular_velocity = original_angular_velocity;
+        body.advance_configuration_with(0.0, &velocity, &angular_velocity);
 
-        body.advance_motion(
-            1.0,
-            &mut position,
-            &mut orientation,
-            1.0,
-            &mut velocity,
-            &mut angular_velocity,
-        );
-
-        assert_abs_diff_eq!(position, original_position);
-        assert_abs_diff_eq!(orientation, original_orientation);
-        assert_abs_diff_eq!(velocity, original_velocity);
-        assert_abs_diff_eq!(angular_velocity, original_angular_velocity);
+        assert_abs_diff_eq!(body.position(), &position);
+        assert_abs_diff_eq!(body.orientation(), &orientation);
     }
 
     #[test]
-    fn should_change_motion_with_nonzero_force_and_velocity() {
-        let original_position = Position::origin();
-        let original_orientation = Orientation::identity();
-        let original_velocity = Velocity::z();
-        let original_angular_velocity = AngularVelocity::from_vector(Vector3::x());
+    fn should_retain_momenta_with_zero_force() {
+        let velocity = Velocity::zeros();
+        let angular_velocity = AngularVelocity::zero();
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
-            original_position,
-            original_orientation,
+            Position::origin(),
+            Orientation::identity(),
             1.0,
-            &original_velocity,
-            &original_angular_velocity,
+            &velocity,
+            &angular_velocity,
+        );
+
+        body.advance_momenta(1.0);
+
+        assert_abs_diff_eq!(body.compute_velocity(), velocity);
+        assert_abs_diff_eq!(body.compute_angular_velocity(1.0), angular_velocity);
+    }
+
+    #[test]
+    fn should_retain_configuration_with_zero_velocity() {
+        let position = Position::origin();
+        let orientation = Orientation::identity();
+        let velocity = Velocity::zeros();
+        let angular_velocity = AngularVelocity::zero();
+
+        let mut body = RigidBody::new(
+            dummy_inertial_properties(),
+            position,
+            orientation,
+            1.0,
+            &velocity,
+            &angular_velocity,
+        );
+
+        body.advance_configuration_with(1.0, &velocity, &angular_velocity);
+
+        assert_abs_diff_eq!(body.position(), &position);
+        assert_abs_diff_eq!(body.orientation(), &orientation);
+    }
+
+    #[test]
+    fn should_change_momenta_with_nonzero_force() {
+        let position = Position::origin();
+        let orientation = Orientation::identity();
+        let velocity = Velocity::z();
+        let angular_velocity = AngularVelocity::from_vector(Vector3::x());
+
+        let mut body = RigidBody::new(
+            dummy_inertial_properties(),
+            position,
+            orientation,
+            1.0,
+            &velocity,
+            &angular_velocity,
         );
 
         body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
 
-        let mut position = original_position;
-        let mut orientation = original_orientation;
-        let mut velocity = original_velocity;
-        let mut angular_velocity = original_angular_velocity;
+        body.advance_momenta(1.0);
 
-        body.advance_motion(
+        assert_abs_diff_ne!(body.compute_velocity(), velocity);
+        assert_abs_diff_ne!(body.compute_angular_velocity(1.0), angular_velocity);
+    }
+
+    #[test]
+    fn should_change_configuration_with_nonzero_velocity() {
+        let position = Position::origin();
+        let orientation = Orientation::identity();
+        let velocity = Velocity::z();
+        let angular_velocity = AngularVelocity::from_vector(Vector3::x());
+
+        let mut body = RigidBody::new(
+            dummy_inertial_properties(),
+            position,
+            orientation,
             1.0,
-            &mut position,
-            &mut orientation,
-            1.0,
-            &mut velocity,
-            &mut angular_velocity,
+            &velocity,
+            &angular_velocity,
         );
 
-        assert_abs_diff_ne!(position, original_position);
-        assert_abs_diff_ne!(orientation, original_orientation);
-        assert_abs_diff_ne!(velocity, original_velocity);
-        assert_abs_diff_ne!(angular_velocity, original_angular_velocity);
+        body.advance_configuration_with(1.0, &velocity, &angular_velocity);
+
+        assert_abs_diff_ne!(body.position(), &position);
+        assert_abs_diff_ne!(body.orientation(), &orientation);
     }
 }

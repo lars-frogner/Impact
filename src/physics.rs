@@ -236,7 +236,8 @@ impl PhysicsSimulator {
 
         motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
-        rigid_body::systems::advance_rigid_body_motion(ecs_world, step_duration);
+        rigid_body::systems::advance_rigid_body_velocities(ecs_world, step_duration);
+        rigid_body::systems::advance_rigid_body_configurations(ecs_world, step_duration);
 
         rigid_body_force_manager.apply_forces_and_torques(ecs_world, medium, entities_to_remove);
     }
