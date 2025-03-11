@@ -73,7 +73,6 @@ pub enum KeyboardInputAction {
     DecrementSimulationSubstepCount,
     IncreaseSimulationSpeed,
     DecreaseSimulationSpeed,
-    CycleSimulationSteppingScheme,
     SaveScreenshot,
     SaveOmnidirectionalLightShadowMap,
     SaveUnidirectionalLightShadowMap,
@@ -333,12 +332,6 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
-                    KeyboardInputAction::CycleSimulationSteppingScheme => {
-                        if state == &ElementState::Released {
-                            app.cycle_simulation_stepping_scheme();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
                             app.screen_capturer().request_screenshot_save();
@@ -420,7 +413,6 @@ impl Default for KeyActionMap {
             DecrementSimulationSubstepCount => KeyN,
             IncreaseSimulationSpeed => Period,
             DecreaseSimulationSpeed => Comma,
-            CycleSimulationSteppingScheme => KeyL,
             SaveScreenshot => F12,
             SaveOmnidirectionalLightShadowMap => F10,
             SaveUnidirectionalLightShadowMap => F9,
