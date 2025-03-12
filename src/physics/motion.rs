@@ -7,7 +7,7 @@ pub mod tasks;
 
 use crate::{
     geometry::{Angle, Radians},
-    physics::fph,
+    physics::{fph, inertia::InertialProperties},
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
@@ -43,6 +43,9 @@ pub type AngularMomentum = Vector3<fph>;
 
 /// An acceleration in 3D space.
 pub type Acceleration = Vector3<fph>;
+
+/// An angular acceleration in 3D space.
+pub type AngularAcceleration = Vector3<fph>;
 
 /// A 3D force.
 pub type Force = Vector3<fph>;
@@ -159,6 +162,12 @@ impl AbsDiffEq for AngularVelocity {
     }
 }
 
+/// Evolves the given [`Position`] linearly with the given [`Velocity`] for the
+/// given duration.
+pub fn advance_position(position: &Position, velocity: &Velocity, duration: fph) -> Position {
+    position + velocity * duration
+}
+
 /// Evolves the given [`Orientation`] with the given [`AngularVelocity`] for the
 /// given duration.
 pub fn advance_orientation(
@@ -175,6 +184,84 @@ pub fn advance_orientation(
     );
 
     UnitQuaternion::new_normalize(rotation * orientation.into_inner())
+}
+
+/// Computes the [`AngularVelocity`] of a body with the given properties.
+pub fn compute_angular_velocity(
+    inertial_properties: &InertialProperties,
+    orientation: &Orientation,
+    scaling: fph,
+    angular_momentum: &AngularMomentum,
+) -> AngularVelocity {
+    let inverse_world_space_inertia_tensor = inertial_properties
+        .inertia_tensor()
+        .inverse_rotated_matrix_with_scaled_extent(orientation, scaling);
+
+    AngularVelocity::from_vector(inverse_world_space_inertia_tensor * angular_momentum)
+}
+
+/// Computes the [`AngularMomentum`] of a body with the given properties.
+pub fn compute_angular_momentum(
+    inertial_properties: &InertialProperties,
+    orientation: &Orientation,
+    scaling: fph,
+    angular_velocity: &AngularVelocity,
+) -> AngularMomentum {
+    inertial_properties
+        .inertia_tensor()
+        .rotated_matrix_with_scaled_extent(orientation, scaling)
+        * angular_velocity.as_vector()
+}
+
+/// Computes the [`AngularAcceleration`] of a body with the given properties
+/// when the body experiences the given [`Torque`] around its center of mass.
+pub fn compute_angular_acceleration(
+    inertial_properties: &InertialProperties,
+    orientation: &Orientation,
+    scaling: fph,
+    torque: &Torque,
+) -> AngularAcceleration {
+    inertial_properties
+        .inertia_tensor()
+        .inverse_rotated_matrix_with_scaled_extent(orientation, scaling)
+        * torque
+}
+
+/// Computes the total kinetic energy (translational and rotational) of a
+/// body with the given properties.
+pub fn compute_total_kinetic_energy(
+    inertial_properties: &InertialProperties,
+    orientation: &Orientation,
+    scaling: fph,
+    velocity: &Velocity,
+    angular_velocity: &AngularVelocity,
+) -> fph {
+    compute_translational_kinetic_energy(inertial_properties.mass(), velocity)
+        + compute_rotational_kinetic_energy(
+            inertial_properties,
+            orientation,
+            scaling,
+            angular_velocity,
+        )
+}
+
+/// Computes the translational kinetic energy of a body with the given
+/// properties.
+pub fn compute_translational_kinetic_energy(mass: fph, velocity: &Velocity) -> fph {
+    0.5 * mass * velocity.norm_squared()
+}
+
+/// Computes the rotational kinetic energy of a body with the given properties.
+pub fn compute_rotational_kinetic_energy(
+    inertial_properties: &InertialProperties,
+    orientation: &Orientation,
+    scaling: fph,
+    angular_velocity: &AngularVelocity,
+) -> fph {
+    let angular_momentum =
+        compute_angular_momentum(inertial_properties, orientation, scaling, angular_velocity);
+
+    0.5 * angular_velocity.as_vector().dot(&angular_momentum)
 }
 
 #[cfg(test)]

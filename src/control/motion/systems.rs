@@ -5,7 +5,6 @@ use crate::{
     physics::{
         fph,
         motion::components::{ReferenceFrameComp, VelocityComp},
-        rigid_body::components::RigidBodyComp,
     },
 };
 use impact_ecs::{query, world::World as ECSWorld};
@@ -28,20 +27,6 @@ pub fn update_motion_of_controlled_entities(
             motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.linear);
 
             frame.position += velocity.linear * time_step_duration;
-        },
-        ![RigidBodyComp]
-    );
-    query!(
-        ecs_world,
-        |motion_control: &mut MotionControlComp,
-         rigid_body: &mut RigidBodyComp,
-         velocity: &mut VelocityComp,
-         frame: &ReferenceFrameComp| {
-            let new_control_velocity =
-                motion_controller.compute_control_velocity(&frame.orientation);
-            motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.linear);
-
-            rigid_body.0.synchronize_momentum(&velocity.linear);
         }
     );
 }

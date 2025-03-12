@@ -122,10 +122,11 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
 
         if !entity_1_is_static {
             if let Some(mut rigid_body_1) = entity_1.get_component_mut::<RigidBodyComp>() {
-                rigid_body_1
-                    .access()
-                    .0
-                    .apply_force(&(-force_on_2), &attachment_point_1);
+                rigid_body_1.access().0.apply_force(
+                    &frame_1.position,
+                    &(-force_on_2),
+                    &attachment_point_1,
+                );
 
                 // To prevent a potential deadlock, the entry to the
                 // `RigidBodyComp` storage for entity 1 must have been dropped
@@ -135,10 +136,11 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
         }
         if !entity_2_is_static {
             if let Some(mut rigid_body_2) = entity_2.get_component_mut::<RigidBodyComp>() {
-                rigid_body_2
-                    .access()
-                    .0
-                    .apply_force(&force_on_2, &attachment_point_2);
+                rigid_body_2.access().0.apply_force(
+                    &frame_2.position,
+                    &force_on_2,
+                    &attachment_point_2,
+                );
             }
         }
     } else {

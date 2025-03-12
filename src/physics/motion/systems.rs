@@ -1,7 +1,10 @@
 //! ECS systems related to motion.
 
 use crate::physics::{
-    motion::components::{LogsKineticEnergy, ReferenceFrameComp},
+    motion::{
+        self,
+        components::{LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, VelocityComp},
+    },
     rigid_body::components::RigidBodyComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
@@ -10,18 +13,24 @@ use impact_ecs::{query, world::World as ECSWorld};
 pub fn log_kinetic_energies(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |frame: &ReferenceFrameComp, rigid_body: &RigidBodyComp| {
-            let position = rigid_body.0.position();
-            let translational_kinetic_energy = rigid_body.0.compute_translational_kinetic_energy();
-            let rotational_kinetic_energy = rigid_body
-                .0
-                .compute_rotational_kinetic_energy(frame.scaling);
+        |frame: &ReferenceFrameComp, velocity: &VelocityComp, rigid_body: &RigidBodyComp| {
+            let translational_kinetic_energy =
+                motion::compute_translational_kinetic_energy(rigid_body.0.mass(), &velocity.linear);
+
+            let rotational_kinetic_energy = motion::compute_rotational_kinetic_energy(
+                rigid_body.0.inertial_properties(),
+                &frame.orientation,
+                frame.scaling,
+                &velocity.angular,
+            );
+
             let total_kinetic_energy = translational_kinetic_energy + rotational_kinetic_energy;
+
             log::info!(
                 "Body at {{{:.1}, {:.1}, {:.1}}} has kinetic energy {:.2} ({:.2} translational, {:.2} rotational)",
-                position.x,
-                position.y,
-                position.z,
+                frame.position.x,
+                frame.position.y,
+                frame.position.z,
                 total_kinetic_energy,
                 translational_kinetic_energy,
                 rotational_kinetic_energy,
@@ -36,23 +45,23 @@ pub fn log_kinetic_energies(ecs_world: &ECSWorld) {
 pub fn log_momenta(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |frame: &ReferenceFrameComp, rigid_body: &RigidBodyComp| {
-            let position = rigid_body.0.position();
-            let translational_kinetic_energy = rigid_body.0.compute_translational_kinetic_energy();
-            let rotational_kinetic_energy = rigid_body
-                .0
-                .compute_rotational_kinetic_energy(frame.scaling);
-            let total_kinetic_energy = translational_kinetic_energy + rotational_kinetic_energy;
+        |frame: &ReferenceFrameComp, velocity: &VelocityComp, rigid_body: &RigidBodyComp| {
+            let linear_momentum = rigid_body.0.mass() * velocity.linear;
+            let angular_momentum = rigid_body.0.angular_momentum();
+
             log::info!(
-                "Body at {{{:.1}, {:.1}, {:.1}}} has kinetic energy {:.2} ({:.2} translational, {:.2} rotational)",
-                position.x,
-                position.y,
-                position.z,
-                total_kinetic_energy,
-                translational_kinetic_energy,
-                rotational_kinetic_energy,
+                "Body at {{{:.1}, {:.1}, {:.1}}} has linear momentum [{:.2}, {:.2}, {:.2}] and angular momentum [{:.2}, {:.2}, {:.2}]",
+                frame.position.x,
+                frame.position.y,
+                frame.position.z,
+                linear_momentum.x,
+                linear_momentum.y,
+                linear_momentum.z,
+                angular_momentum.x,
+                angular_momentum.y,
+                angular_momentum.z,
             );
         },
-        [LogsKineticEnergy]
+        [LogsMomentum]
     );
 }

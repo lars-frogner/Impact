@@ -3,7 +3,10 @@
 use crate::{
     physics::{
         fph,
-        motion::components::{ReferenceFrameComp, Static, VelocityComp},
+        motion::{
+            self,
+            components::{ReferenceFrameComp, Static, VelocityComp},
+        },
         rigid_body::components::RigidBodyComp,
     },
     scene::components::SceneEntityFlagsComp,
@@ -22,20 +25,16 @@ pub fn advance_rigid_body_velocities(ecs_world: &ECSWorld, step_duration: fph) {
             if flags.is_disabled() {
                 return;
             }
-            let rigid_body = &mut rigid_body.0;
 
-            // Update the current position and orientation in case they have
-            // been changed after the previous simulation step. To avoid
-            // unnecessary calculations, we assume that momentum and angular
-            // momentum have already been updated through the appropriate
-            // methods.
-            rigid_body.update_position(frame.position);
-            rigid_body.update_orientation(frame.orientation);
+            velocity.linear = rigid_body
+                .0
+                .compute_advanced_velocity(&velocity.linear, step_duration);
 
-            rigid_body.advance_momenta(step_duration);
+            rigid_body.0.advance_angular_momentum(step_duration);
 
-            velocity.linear = rigid_body.compute_velocity();
-            velocity.angular = rigid_body.compute_angular_velocity(frame.scaling);
+            velocity.angular = rigid_body
+                .0
+                .compute_angular_velocity(&frame.orientation, frame.scaling);
         },
         ![Static]
     );
@@ -46,24 +45,18 @@ pub fn advance_rigid_body_velocities(ecs_world: &ECSWorld, step_duration: fph) {
 pub fn advance_rigid_body_configurations(ecs_world: &ECSWorld, step_duration: fph) {
     query!(
         ecs_world,
-        |rigid_body: &mut RigidBodyComp,
-         frame: &mut ReferenceFrameComp,
-         velocity: &VelocityComp,
-         flags: &SceneEntityFlagsComp| {
+        |frame: &mut ReferenceFrameComp, velocity: &VelocityComp, flags: &SceneEntityFlagsComp| {
             if flags.is_disabled() {
                 return;
             }
-            let rigid_body = &mut rigid_body.0;
 
-            rigid_body.advance_configuration_with(
-                step_duration,
-                &velocity.linear,
-                &velocity.angular,
-            );
+            frame.position =
+                motion::advance_position(&frame.position, &velocity.linear, step_duration);
 
-            frame.position = *rigid_body.position();
-            frame.orientation = *rigid_body.orientation();
+            frame.orientation =
+                motion::advance_orientation(&frame.orientation, &velocity.angular, step_duration);
         },
+        [RigidBodyComp],
         ![Static]
     );
 }
