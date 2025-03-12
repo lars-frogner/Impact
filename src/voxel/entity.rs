@@ -636,10 +636,8 @@ fn setup_rigid_body_for_new_voxel_object(
 
     let rigid_body = RigidBody::new(
         inertial_properties,
-        frame.position,
         frame.orientation,
         frame.scaling,
-        &velocity.linear,
         &velocity.angular,
     );
 
