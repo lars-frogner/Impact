@@ -488,6 +488,10 @@ fn update_physics_components_after_disconnection(
         .0
         .update_inertial_properties(new_inertial_properties);
 
+    // The momentum of the rigid body must be updated to be consistent with the new
+    // mass and linear velocity
+    rigid_body.0.synchronize_momentum(&velocity.linear);
+
     // The angular momentum of the rigid body must be updated to be consistent with
     // the new inertia tensor (the angular velocity is the same for the disconnected
     // object as for the original one)

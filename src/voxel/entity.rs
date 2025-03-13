@@ -638,6 +638,7 @@ fn setup_rigid_body_for_new_voxel_object(
         inertial_properties,
         frame.orientation,
         frame.scaling,
+        &velocity.linear,
         &velocity.angular,
     );
 

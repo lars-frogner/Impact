@@ -9,39 +9,45 @@ use crate::physics::{
     fph,
     inertia::InertialProperties,
     motion::{
-        self, AngularMomentum, AngularVelocity, Force, Orientation, Position, Torque, Velocity,
+        self, AngularMomentum, AngularVelocity, Force, Momentum, Orientation, Position, Torque,
+        Velocity,
     },
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 
 /// A rigid body. It holds its [`InertialProperties`], the total [`Force`] and
-/// [`Torque`] it is subjected to as well as its [`AngularMomentum`]. To avoid
-/// replication of data, the body does not store or manage its position,
-/// orientation, velocity and angular velocity. The reason it stores its
-/// angular momentum is that this is the conserved quantity in rotational
-/// dynamics and thus should be the primary variable in the simulation, with
-/// angular velocity being derived from it. This means that the body's angular
-/// momentum has to be updated whenever something manually modifies the angular
-/// velocity.
+/// [`Torque`] it is subjected to as well as its [`Momentum`] and
+/// [`AngularMomentum`]. To avoid replication of data, the body does not store
+/// or manage its position, orientation, velocity and angular velocity. The
+/// reason it stores its linear and angular momentum is that these are the
+/// conserved quantities in free motion and thus should be the primary
+/// variables in the simulation, with linear and angular velocity being derived
+/// from them. This means that the body's linear or angular momentum has to be
+/// updated whenever something manually modifies the linear or angular
+/// velocity, respectively.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct RigidBody {
     inertial_properties: InertialProperties,
+    momentum: Momentum,
     angular_momentum: AngularMomentum,
     total_force: Force,
     total_torque: Torque,
 }
 
 impl RigidBody {
-    /// Creates a new rigid body with the given inertial properties,
-    /// orientation, scale factor and angular velocity.
+    /// Creates a new rigid body with the given inertial properties. This is
+    /// used together with the other properties to initialize the linear and
+    /// angular momentum.
     pub fn new(
         inertial_properties: InertialProperties,
         orientation: Orientation,
         scaling: fph,
+        velocity: &Velocity,
         angular_velocity: &AngularVelocity,
     ) -> Self {
+        let momentum = velocity * inertial_properties.mass();
         let angular_momentum = motion::compute_angular_momentum(
             &inertial_properties,
             &orientation,
@@ -50,6 +56,7 @@ impl RigidBody {
         );
         Self {
             inertial_properties,
+            momentum,
             angular_momentum,
             total_force: Force::zeros(),
             total_torque: Torque::zeros(),
@@ -66,9 +73,19 @@ impl RigidBody {
         self.inertial_properties.mass()
     }
 
+    /// Returns the linear momentum of the body.
+    pub fn momentum(&self) -> &Momentum {
+        &self.momentum
+    }
+
     /// Returns the angular momentum of the body.
     pub fn angular_momentum(&self) -> &AngularMomentum {
         &self.angular_momentum
+    }
+
+    /// Computes the velocity of the body based on its momentum.
+    pub fn compute_velocity(&self) -> Velocity {
+        self.momentum / self.mass()
     }
 
     /// Computes the angular velocity of the body based on its angular
@@ -123,6 +140,12 @@ impl RigidBody {
         self.inertial_properties = inertial_properties;
     }
 
+    /// Recomputes the body's linear momentum according to the given
+    /// velocity.
+    pub fn synchronize_momentum(&mut self, velocity: &Velocity) {
+        self.momentum = velocity * self.mass();
+    }
+
     /// Recomputes the body's angular momentum according to the given
     /// orientation, scaling and angular velocity.
     pub fn synchronize_angular_momentum(
@@ -139,11 +162,11 @@ impl RigidBody {
         );
     }
 
-    /// Advances the given velocity for the body based on the total force
+    /// Advances the linear momentum of the body based on the total force
     /// applied to the body since
     /// [`reset_total_force`](Self::reset_total_force) was called.
-    pub fn compute_advanced_velocity(&self, velocity: &Velocity, step_duration: fph) -> Velocity {
-        velocity + self.total_force() * (step_duration / self.mass())
+    pub fn advance_momentum(&mut self, step_duration: fph) {
+        self.momentum += self.total_force() * step_duration;
     }
 
     /// Advances the angular momentum of the body based on the total torque
@@ -244,6 +267,7 @@ mod tests {
             dummy_inertial_properties(),
             Orientation::identity(),
             1.0,
+            &Velocity::zeros(),
             &AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
         )
     }
@@ -322,12 +346,14 @@ mod tests {
             dummy_inertial_properties(),
             Orientation::identity(),
             1.0,
+            &velocity,
             &angular_velocity,
         );
 
         body.apply_force(&Position::origin(), &Force::x(), &point![0.0, 1.0, 0.0]);
 
-        assert_abs_diff_eq!(body.compute_advanced_velocity(&velocity, 0.0), velocity);
+        body.advance_momentum(0.0);
+        assert_abs_diff_eq!(body.compute_velocity(), velocity);
 
         body.advance_angular_momentum(0.0);
         assert_abs_diff_eq!(
@@ -345,10 +371,12 @@ mod tests {
             dummy_inertial_properties(),
             Orientation::identity(),
             1.0,
+            &velocity,
             &angular_velocity,
         );
 
-        assert_abs_diff_eq!(body.compute_advanced_velocity(&velocity, 1.0), velocity);
+        body.advance_momentum(1.0);
+        assert_abs_diff_eq!(body.compute_velocity(), velocity);
 
         body.advance_angular_momentum(1.0);
         assert_abs_diff_eq!(
@@ -368,12 +396,14 @@ mod tests {
             dummy_inertial_properties(),
             orientation,
             1.0,
+            &velocity,
             &angular_velocity,
         );
 
         body.apply_force(&position, &Force::x(), &point![0.0, 1.0, 0.0]);
 
-        assert_abs_diff_ne!(body.compute_advanced_velocity(&velocity, 1.0), velocity);
+        body.advance_momentum(1.0);
+        assert_abs_diff_ne!(body.compute_velocity(), velocity);
 
         body.advance_angular_momentum(1.0);
         assert_abs_diff_ne!(
