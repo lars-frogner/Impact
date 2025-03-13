@@ -57,6 +57,7 @@ pub fn setup_rigid_body_for_new_entity(
             inertial_properties,
             frame.orientation,
             frame.scaling,
+            &velocity.linear,
             &velocity.angular,
         );
 

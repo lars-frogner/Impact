@@ -25,16 +25,14 @@ pub fn advance_rigid_body_velocities(ecs_world: &ECSWorld, step_duration: fph) {
             if flags.is_disabled() {
                 return;
             }
+            let rigid_body = &mut rigid_body.0;
 
-            velocity.linear = rigid_body
-                .0
-                .compute_advanced_velocity(&velocity.linear, step_duration);
+            rigid_body.advance_momentum(step_duration);
+            rigid_body.advance_angular_momentum(step_duration);
 
-            rigid_body.0.advance_angular_momentum(step_duration);
-
-            velocity.angular = rigid_body
-                .0
-                .compute_angular_velocity(&frame.orientation, frame.scaling);
+            velocity.linear = rigid_body.compute_velocity();
+            velocity.angular =
+                rigid_body.compute_angular_velocity(&frame.orientation, frame.scaling);
         },
         ![Static]
     );

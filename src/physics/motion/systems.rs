@@ -45,8 +45,8 @@ pub fn log_kinetic_energies(ecs_world: &ECSWorld) {
 pub fn log_momenta(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |frame: &ReferenceFrameComp, velocity: &VelocityComp, rigid_body: &RigidBodyComp| {
-            let linear_momentum = rigid_body.0.mass() * velocity.linear;
+        |frame: &ReferenceFrameComp, rigid_body: &RigidBodyComp| {
+            let linear_momentum = rigid_body.0.momentum();
             let angular_momentum = rigid_body.0.angular_momentum();
 
             log::info!(
