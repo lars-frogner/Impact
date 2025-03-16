@@ -19,6 +19,7 @@ struct OmnidirectionalLights {
 struct OmnidirectionalLight {
     cameraSpacePositionAndMaxReach: vec4f,
     luminousIntensityAndEmissiveRadius: vec4f,
+    padding: vec4f,
 }
 
 struct LightQuantities {
