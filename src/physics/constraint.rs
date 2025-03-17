@@ -4,6 +4,7 @@ pub(super) mod contact;
 mod solver;
 pub mod spherical_joint;
 
+use num_traits::Zero;
 pub use solver::ConstraintSolverConfig;
 
 use crate::physics::{
@@ -20,7 +21,11 @@ use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::{Matrix3, Vector3};
 use solver::ConstraintSolver;
 use spherical_joint::SphericalJoint;
-use std::{collections::HashMap, sync::RwLock};
+use std::{
+    collections::HashMap,
+    ops::{Add, Sub},
+    sync::RwLock,
+};
 
 /// Identifier for a constraint in a [`ConstraintManager`].
 #[repr(transparent)]
@@ -48,15 +53,21 @@ trait TwoBodyConstraint {
 }
 
 trait PreparedTwoBodyConstraint {
-    fn compute_scalar_impulse(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> fph;
+    type Impulses: Copy + Zero + Add<Output = Self::Impulses> + Sub<Output = Self::Impulses>;
 
-    fn clamp_scalar_impulse(&self, scalar_impulse: fph) -> fph;
+    fn compute_impulses(
+        &self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> Self::Impulses;
 
-    fn apply_scalar_impulse_to_body_pair(
+    fn clamp_impulses(&self, impulses: Self::Impulses) -> Self::Impulses;
+
+    fn apply_impulses_to_body_pair(
         &self,
         body_a: &mut ConstrainedBody,
         body_b: &mut ConstrainedBody,
-        scalar_impulse: fph,
+        impulses: Self::Impulses,
     );
 }
 

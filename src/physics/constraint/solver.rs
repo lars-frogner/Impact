@@ -6,7 +6,6 @@ use crate::physics::{
         contact::{Contact, PreparedContact},
         spherical_joint::{PreparedSphericalJoint, SphericalJoint},
     },
-    fph,
     motion::{
         AngularVelocity,
         components::{ReferenceFrameComp, Static, VelocityComp},
@@ -15,6 +14,7 @@ use crate::physics::{
 };
 use impact_ecs::world::{Entity, World as ECSWorld};
 use impact_utils::KeyIndexMapper;
+use num_traits::Zero;
 use std::ops::Deref;
 
 #[derive(Clone, Debug)]
@@ -32,18 +32,11 @@ pub struct ConstraintSolverConfig {
 }
 
 #[derive(Clone, Debug)]
-struct SingleBodyConstraint<T> {
-    body_idx: usize,
-    accumulated_impulse: fph,
-    inner: T,
-}
-
-#[derive(Clone, Debug)]
-struct BodyPairConstraint<T> {
+struct BodyPairConstraint<C: PreparedTwoBodyConstraint> {
     body_a_idx: usize,
     body_b_idx: usize,
-    accumulated_impulse: fph,
-    inner: T,
+    constraint: C,
+    accumulated_impulses: C::Impulses,
 }
 
 impl ConstraintSolver {
@@ -129,25 +122,8 @@ impl ConstraintSolver {
         Some(BodyPairConstraint {
             body_a_idx,
             body_b_idx,
-            accumulated_impulse: 0.0,
-            inner: prepared_constraint,
-        })
-    }
-
-    fn prepare_constraint_for_body<C>(
-        &mut self,
-        ecs_world: &ECSWorld,
-        entity: Entity,
-        prepare_constraint: impl FnOnce(&ConstrainedBody) -> C,
-    ) -> Option<SingleBodyConstraint<C>> {
-        let body_idx = self.prepare_body(ecs_world, entity)?;
-
-        let constraint = prepare_constraint(&self.bodies[body_idx]);
-
-        Some(SingleBodyConstraint {
-            body_idx,
-            accumulated_impulse: 0.0,
-            inner: constraint,
+            accumulated_impulses: Zero::zero(),
+            constraint: prepared_constraint,
         })
     }
 
@@ -200,19 +176,11 @@ impl Default for ConstraintSolverConfig {
     }
 }
 
-impl<T> Deref for SingleBodyConstraint<T> {
-    type Target = T;
+impl<C: PreparedTwoBodyConstraint> Deref for BodyPairConstraint<C> {
+    type Target = C;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> Deref for BodyPairConstraint<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.constraint
     }
 }
 
@@ -224,15 +192,16 @@ fn apply_impulses_sequentially_for_body_pair_constraints<P: PreparedTwoBodyConst
         let (body_a, body_b) =
             two_mutable_elements(bodies, constraint.body_a_idx, constraint.body_b_idx);
 
-        let corrective_impulse = constraint.compute_scalar_impulse(body_a, body_b);
+        let corrective_impulses = constraint.compute_impulses(body_a, body_b);
 
-        let old_accumulated_impulse = constraint.accumulated_impulse;
-        constraint.accumulated_impulse += corrective_impulse;
-        constraint.accumulated_impulse =
-            constraint.clamp_scalar_impulse(constraint.accumulated_impulse);
-        let clamped_corrective_impulse = constraint.accumulated_impulse - old_accumulated_impulse;
+        let old_accumulated_impulses = constraint.accumulated_impulses;
+        constraint.accumulated_impulses = constraint.accumulated_impulses + corrective_impulses;
+        constraint.accumulated_impulses =
+            constraint.clamp_impulses(constraint.accumulated_impulses);
+        let clamped_corrective_impulses =
+            constraint.accumulated_impulses - old_accumulated_impulses;
 
-        constraint.apply_scalar_impulse_to_body_pair(body_a, body_b, clamped_corrective_impulse);
+        constraint.apply_impulses_to_body_pair(body_a, body_b, clamped_corrective_impulses);
     }
 }
 
