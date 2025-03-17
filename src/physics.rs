@@ -13,7 +13,7 @@ pub mod tasks;
 
 use anyhow::{Result, bail};
 use collision::CollisionWorld;
-use constraint::ConstraintManager;
+use constraint::{ConstraintManager, ConstraintSolverConfig};
 use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
@@ -57,6 +57,9 @@ pub struct SimulatorConfig {
     /// Configuration parameters for rigid body force generation. If [`None`],
     /// default parameters are used.
     pub rigid_body_force_config: Option<RigidBodyForceConfig>,
+    /// Configuration parameters for the constraint solver. If [`None`],
+    /// default parameters are used.
+    pub constraint_solver_config: Option<ConstraintSolverConfig>,
 }
 
 impl PhysicsSimulator {
@@ -69,6 +72,7 @@ impl PhysicsSimulator {
         config.validate()?;
 
         let rigid_body_force_config = config.rigid_body_force_config.take().unwrap_or_default();
+        let constraint_solver_config = config.constraint_solver_config.take().unwrap_or_default();
 
         let time_step_duration = config.initial_time_step_duration;
 
@@ -77,7 +81,7 @@ impl PhysicsSimulator {
             rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new(
                 rigid_body_force_config,
             )?),
-            constraint_manager: RwLock::new(ConstraintManager::new()),
+            constraint_manager: RwLock::new(ConstraintManager::new(constraint_solver_config)),
             collision_world: RwLock::new(CollisionWorld::new()),
             medium,
             simulation_time: 0.0,
@@ -334,6 +338,7 @@ impl Default for SimulatorConfig {
             match_frame_duration: true,
             simulation_speed_multiplier_increment_factor: 1.1,
             rigid_body_force_config: None,
+            constraint_solver_config: None,
         }
     }
 }

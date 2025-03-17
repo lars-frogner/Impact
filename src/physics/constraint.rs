@@ -4,6 +4,8 @@ pub(super) mod contact;
 mod solver;
 pub mod spherical_joint;
 
+pub use solver::ConstraintSolverConfig;
+
 use crate::physics::{
     collision::{Collision, CollisionWorld},
     fph,
@@ -76,9 +78,9 @@ struct ConstrainedBody {
 }
 
 impl ConstraintManager {
-    pub fn new() -> Self {
+    pub fn new(solver_config: ConstraintSolverConfig) -> Self {
         Self {
-            solver: RwLock::new(ConstraintSolver::new()),
+            solver: RwLock::new(ConstraintSolver::new(solver_config)),
             spherical_joints: HashMap::new(),
             constraint_id_counter: 0,
         }
@@ -130,12 +132,6 @@ impl ConstraintManager {
         let constraint_id = ConstraintID(self.constraint_id_counter);
         self.constraint_id_counter = self.constraint_id_counter.checked_add(1).unwrap();
         constraint_id
-    }
-}
-
-impl Default for ConstraintManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
