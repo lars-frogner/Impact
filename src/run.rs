@@ -45,6 +45,7 @@ use crate::{
             components::{PlaneCollidableComp, SphereCollidableComp},
         },
         fph,
+        material::{ContactResponseParameters, components::UniformContactResponseComp},
         medium::UniformMedium,
         motion::{
             AngularVelocity, Orientation, Position,
@@ -646,6 +647,10 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 3.0, 0.0), 0.5),
         &VelocityComp::linear(vector![-2.0, 1.0, 1.0]),
         &UniformRigidBodyComp { mass_density: 1.0 },
+        &UniformContactResponseComp(ContactResponseParameters {
+            restitution_coef: 0.6,
+            ..Default::default()
+        }),
         &SphereCollidableComp::new(CollidableKind::Dynamic, &Sphere::new(Point3::origin(), 0.5)),
         &UniformGravityComp::earth(),
         &TexturedColorComp(plastic_color_texture_id),
@@ -686,6 +691,10 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
         app.create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
             &ReferenceFrameComp::new(position, orientation, 10.0),
+            &UniformContactResponseComp(ContactResponseParameters {
+                restitution_coef: 0.2,
+                ..Default::default()
+            }),
             &PlaneCollidableComp::new(CollidableKind::Static, &Plane::new(Vector3::y_axis(), 0.0)),
             &TexturedColorComp(concrete_color_texture_id),
             &UniformSpecularReflectanceComp(0.01),

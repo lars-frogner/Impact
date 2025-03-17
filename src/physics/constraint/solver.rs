@@ -111,8 +111,13 @@ impl ConstraintSolver {
         let (body_a_idx, body_b_idx) =
             self.prepare_body_pair(ecs_world, body_a_entity, body_b_entity)?;
 
-        let prepared_constraint =
-            constraint.prepare(&self.bodies[body_a_idx], &self.bodies[body_b_idx]);
+        let prepared_constraint = constraint.prepare(
+            ecs_world,
+            &body_a_entity,
+            &body_b_entity,
+            &self.bodies[body_a_idx],
+            &self.bodies[body_b_idx],
+        );
 
         Some(BodyPairConstraint {
             body_a_idx,

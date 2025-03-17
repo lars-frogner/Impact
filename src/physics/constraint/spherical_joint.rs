@@ -2,7 +2,7 @@
 
 use super::{ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint};
 use crate::physics::fph;
-use impact_ecs::world::Entity;
+use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::Vector3;
 
 #[derive(Clone, Debug)]
@@ -21,7 +21,14 @@ pub struct PreparedSphericalJoint {
 impl TwoBodyConstraint for SphericalJoint {
     type Prepared = PreparedSphericalJoint;
 
-    fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared {
+    fn prepare(
+        &self,
+        _ecs_world: &ECSWorld,
+        _body_a_entity: &Entity,
+        _body_b_entity: &Entity,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> Self::Prepared {
         let body_a_attachment_point = body_a.position + body_a.orientation * self.offset_in_body_a;
         let body_b_attachment_point = body_b.position + body_b.orientation * self.offset_in_body_b;
 
