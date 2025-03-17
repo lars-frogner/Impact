@@ -44,6 +44,7 @@ use crate::{
             CollidableKind,
             components::{PlaneCollidableComp, SphereCollidableComp},
         },
+        constraint::ConstraintSolverConfig,
         fph,
         material::{ContactResponseParameters, components::UniformContactResponseComp},
         medium::UniformMedium,
@@ -537,7 +538,13 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
 
     let vertical_field_of_view = Degrees(70.0);
 
-    let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
+    let simulator = PhysicsSimulator::new(
+        SimulatorConfig {
+            constraint_solver_config: Some(ConstraintSolverConfig { n_iterations: 10 }),
+            ..SimulatorConfig::default()
+        },
+        UniformMedium::vacuum(),
+    )?;
 
     let motion_controller = SemiDirectionalMotionController::new(8.0, true);
     let orientation_controller =

@@ -19,10 +19,16 @@ use std::ops::Deref;
 
 #[derive(Clone, Debug)]
 pub struct ConstraintSolver {
+    config: ConstraintSolverConfig,
     bodies: Vec<ConstrainedBody>,
     body_index_map: KeyIndexMapper<Entity>,
     spherical_joints: Vec<BodyPairConstraint<PreparedSphericalJoint>>,
     contacts: Vec<BodyPairConstraint<PreparedContact>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ConstraintSolverConfig {
+    pub n_iterations: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -41,8 +47,9 @@ struct BodyPairConstraint<T> {
 }
 
 impl ConstraintSolver {
-    pub fn new() -> Self {
+    pub fn new(config: ConstraintSolverConfig) -> Self {
         Self {
+            config,
             bodies: Vec::new(),
             body_index_map: KeyIndexMapper::new(),
             spherical_joints: Vec::new(),
@@ -76,7 +83,7 @@ impl ConstraintSolver {
     }
 
     pub fn compute_constrained_velocities(&mut self) {
-        for _ in 0..5 {
+        for _ in 0..self.config.n_iterations {
             apply_impulses_sequentially_for_body_pair_constraints(
                 &mut self.bodies,
                 &mut self.spherical_joints,
@@ -184,6 +191,12 @@ impl ConstraintSolver {
         self.body_index_map.push_key(body_entity);
 
         Some(body_idx)
+    }
+}
+
+impl Default for ConstraintSolverConfig {
+    fn default() -> Self {
+        Self { n_iterations: 5 }
     }
 }
 
