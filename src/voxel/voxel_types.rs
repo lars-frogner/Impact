@@ -72,7 +72,6 @@ impl VoxelTypeRegistry {
     ///
     /// # Errors
     /// Returns an error if:
-    /// - The inputs are empty.
     /// - There are duplicates in the list of names.
     /// - The number of voxel types is not smaller than
     ///   [`Self::max_voxel_types`].
@@ -85,9 +84,6 @@ impl VoxelTypeRegistry {
         roughness_texture_paths: Vec<PathBuf>,
         normal_texture_paths: Vec<PathBuf>,
     ) -> Result<Self> {
-        if names.is_empty() {
-            bail!("Tried to create empty voxel type registry");
-        }
         if names.len() >= Self::max_n_voxel_types() {
             bail!("Too many voxel types for registry");
         }
@@ -186,6 +182,20 @@ impl VoxelTypeRegistry {
     /// types.
     pub fn normal_texture_paths(&self) -> &[PathBuf] {
         &self.normal_texture_paths
+    }
+}
+
+impl Default for VoxelTypeRegistry {
+    fn default() -> Self {
+        Self::new(
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap()
     }
 }
 
