@@ -7,7 +7,9 @@ use crate::physics::{
     motion::Position,
 };
 use impact_ecs::world::{Entity, World as ECSWorld};
-use nalgebra::{UnitVector3, Vector3};
+use nalgebra::{UnitVector3, Vector3, vector};
+use num_traits::Zero;
+use std::ops::{Add, Sub};
 use tinyvec::TinyVec;
 
 #[derive(Clone, Debug)]
@@ -24,11 +26,22 @@ pub struct Contact {
 
 #[derive(Clone, Debug)]
 pub struct PreparedContact {
-    n: UnitVector3<fph>,
-    r_a_cross_n: Vector3<fph>,
-    r_b_cross_n: Vector3<fph>,
-    effective_mass: fph,
+    disp_a: Vector3<fph>,
+    disp_b: Vector3<fph>,
+    normal: UnitVector3<fph>,
+    tangent_1: UnitVector3<fph>,
+    tangent_2: UnitVector3<fph>,
+    effective_mass_normal: fph,
+    effective_mass_tangent_1: fph,
+    effective_mass_tangent_2: fph,
     response_params: ContactResponseParameters,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ContactImpulses {
+    normal: fph,
+    tangent_1: fph,
+    tangent_2: fph,
 }
 
 impl ContactSet {
@@ -82,28 +95,38 @@ impl TwoBodyConstraint for Contact {
         body_a: &ConstrainedBody,
         body_b: &ConstrainedBody,
     ) -> Self::Prepared {
-        let n = self.surface_normal;
+        let disp_a = self.position - body_a.position;
+        let disp_b = self.position - body_b.position;
 
-        let r_a = self.position - body_a.position;
-        let r_b = self.position - body_b.position;
+        let normal = self.surface_normal;
+        let (tangent_1, tangent_2) = construct_tangent_vectors(&normal);
 
-        let r_a_cross_n = r_a.cross(&n);
-        let r_b_cross_n = r_b.cross(&n);
+        let compute_effective_mass = |direction: &UnitVector3<fph>| {
+            let disp_a_cross_dir = disp_a.cross(direction);
+            let disp_b_cross_dir = disp_b.cross(direction);
 
-        let effective_mass = 1.0
-            / (body_a.inverse_mass
+            1.0 / (body_a.inverse_mass
                 + body_b.inverse_mass
-                + r_a_cross_n.dot(&(body_a.inverse_inertia_tensor * r_a_cross_n))
-                + r_b_cross_n.dot(&(body_b.inverse_inertia_tensor * r_b_cross_n)));
+                + disp_a_cross_dir.dot(&(body_a.inverse_inertia_tensor * disp_a_cross_dir))
+                + disp_b_cross_dir.dot(&(body_b.inverse_inertia_tensor * disp_b_cross_dir)))
+        };
+
+        let effective_mass_normal = compute_effective_mass(&normal);
+        let effective_mass_tangent_1 = compute_effective_mass(&tangent_1);
+        let effective_mass_tangent_2 = compute_effective_mass(&tangent_2);
 
         let response_params =
             self.determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
 
         PreparedContact {
-            n,
-            r_a_cross_n,
-            r_b_cross_n,
-            effective_mass,
+            disp_a,
+            disp_b,
+            normal,
+            tangent_1,
+            tangent_2,
+            effective_mass_normal,
+            effective_mass_tangent_1,
+            effective_mass_tangent_2,
             response_params,
         }
     }
@@ -141,36 +164,120 @@ impl Contact {
 }
 
 impl PreparedTwoBodyConstraint for PreparedContact {
-    fn compute_scalar_impulse(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> fph {
-        let v_a = body_a.velocity;
-        let v_b = body_b.velocity;
-        let w_a = body_a.angular_velocity;
-        let w_b = body_b.angular_velocity;
+    type Impulses = ContactImpulses;
 
-        let separating_velocity =
-            self.n.dot(&(v_a - v_b)) + w_a.dot(&self.r_a_cross_n) - w_b.dot(&self.r_b_cross_n);
+    fn compute_impulses(
+        &self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> ContactImpulses {
+        let velocity_a = body_a.velocity + body_a.angular_velocity.cross(&self.disp_a);
+        let velocity_b = body_b.velocity + body_b.angular_velocity.cross(&self.disp_b);
 
-        -self.effective_mass
+        let relative_velocity = velocity_a - velocity_b;
+
+        let separating_velocity = self.normal.dot(&relative_velocity);
+
+        let normal_impulse = -self.effective_mass_normal
             * (1.0 + self.response_params.restitution_coef)
-            * separating_velocity.min(0.0)
+            * separating_velocity.min(0.0);
+
+        let tangent_1_impulse =
+            -self.effective_mass_tangent_1 * self.tangent_1.dot(&relative_velocity);
+        let tangent_2_impulse =
+            -self.effective_mass_tangent_2 * self.tangent_2.dot(&relative_velocity);
+
+        ContactImpulses {
+            normal: normal_impulse,
+            tangent_1: tangent_1_impulse,
+            tangent_2: tangent_2_impulse,
+        }
     }
 
-    fn clamp_scalar_impulse(&self, scalar_impulse: fph) -> fph {
-        fph::max(0.0, scalar_impulse)
+    fn clamp_impulses(&self, impulses: ContactImpulses) -> ContactImpulses {
+        ContactImpulses {
+            normal: fph::max(0.0, impulses.normal),
+            ..impulses
+        }
     }
 
-    fn apply_scalar_impulse_to_body_pair(
+    fn apply_impulses_to_body_pair(
         &self,
         body_a: &mut ConstrainedBody,
         body_b: &mut ConstrainedBody,
-        scalar_impulse: fph,
+        impulses: ContactImpulses,
     ) {
-        body_a.velocity += self.n.scale(scalar_impulse * body_a.inverse_mass);
-        body_a.angular_velocity +=
-            body_a.inverse_inertia_tensor * self.r_a_cross_n.scale(scalar_impulse);
+        let momentum_change = self.normal.scale(impulses.normal)
+            + self.tangent_1.scale(impulses.tangent_1)
+            + self.tangent_2.scale(impulses.tangent_2);
 
-        body_b.velocity += self.n.scale(-scalar_impulse * body_b.inverse_mass);
-        body_b.angular_velocity +=
-            body_b.inverse_inertia_tensor * self.r_b_cross_n.scale(-scalar_impulse);
+        body_a.velocity += body_a.inverse_mass * momentum_change;
+        body_a.angular_velocity +=
+            body_a.inverse_inertia_tensor * self.disp_a.cross(&momentum_change);
+
+        body_b.velocity -= body_b.inverse_mass * momentum_change;
+        body_b.angular_velocity -=
+            body_b.inverse_inertia_tensor * self.disp_b.cross(&momentum_change);
     }
+}
+
+impl Zero for ContactImpulses {
+    fn zero() -> Self {
+        Self {
+            normal: 0.0,
+            tangent_1: 0.0,
+            tangent_2: 0.0,
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.normal == 0.0 && self.tangent_1 == 0.0 && self.tangent_2 == 0.0
+    }
+}
+
+impl Add for ContactImpulses {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            normal: self.normal + rhs.normal,
+            tangent_1: self.tangent_1 + rhs.tangent_1,
+            tangent_2: self.tangent_2 + rhs.tangent_2,
+        }
+    }
+}
+
+impl Sub for ContactImpulses {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            normal: self.normal - rhs.normal,
+            tangent_1: self.tangent_1 - rhs.tangent_1,
+            tangent_2: self.tangent_2 - rhs.tangent_2,
+        }
+    }
+}
+
+fn construct_tangent_vectors(
+    surface_normal: &UnitVector3<fph>,
+) -> (UnitVector3<fph>, UnitVector3<fph>) {
+    const INV_SQRT_THREE: fph = 0.57735;
+
+    let tangent_1 = UnitVector3::new_normalize(if surface_normal.x.abs() < INV_SQRT_THREE {
+        // Since the normal is relatively close to lying in the yz-plane, we
+        // project it onto the yz plane, rotate it 90 degrees within the plane
+        // and use that as the (unnormalized) first tangent. This vector will
+        // be sufficiently different from the normal to avoid numerical issues.
+        vector![0.0, surface_normal.z, -surface_normal.y]
+    } else {
+        // If the normal lies far from the yz-plane, projecting it onto the
+        // yz-plane could lead to degeneracy, so we project it onto the xy-
+        // plane instead to construct the first tangent.
+        vector![surface_normal.y, -surface_normal.x, 0.0]
+    });
+
+    let tangent_2 = UnitVector3::new_unchecked(surface_normal.cross(&tangent_1));
+
+    (tangent_1, tangent_2)
 }

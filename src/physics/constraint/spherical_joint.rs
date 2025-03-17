@@ -41,19 +41,21 @@ impl TwoBodyConstraint for SphericalJoint {
 }
 
 impl PreparedTwoBodyConstraint for PreparedSphericalJoint {
-    fn compute_scalar_impulse(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> fph {
+    type Impulses = fph;
+
+    fn compute_impulses(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> fph {
         todo!()
     }
 
-    fn clamp_scalar_impulse(&self, scalar_impulse: fph) -> fph {
+    fn clamp_impulses(&self, impulse: fph) -> fph {
         todo!()
     }
 
-    fn apply_scalar_impulse_to_body_pair(
+    fn apply_impulses_to_body_pair(
         &self,
         body_a: &mut ConstrainedBody,
         body_b: &mut ConstrainedBody,
-        scalar_impulse: fph,
+        impulse: fph,
     ) {
         todo!()
     }
