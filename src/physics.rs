@@ -2,6 +2,7 @@
 
 pub mod collision;
 pub mod components;
+pub mod constraint;
 pub mod entity;
 pub mod inertia;
 pub mod medium;
@@ -10,6 +11,8 @@ pub mod rigid_body;
 pub mod tasks;
 
 use anyhow::{Result, bail};
+use collision::CollisionWorld;
+use constraint::ConstraintManager;
 use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
@@ -25,6 +28,8 @@ pub type fph = f64;
 pub struct PhysicsSimulator {
     config: SimulatorConfig,
     rigid_body_force_manager: RwLock<RigidBodyForceManager>,
+    constraint_manager: RwLock<ConstraintManager>,
+    collision_world: RwLock<CollisionWorld>,
     medium: UniformMedium,
     simulation_time: fph,
     time_step_duration: fph,
@@ -71,6 +76,8 @@ impl PhysicsSimulator {
             rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new(
                 rigid_body_force_config,
             )?),
+            constraint_manager: RwLock::new(ConstraintManager::new()),
+            collision_world: RwLock::new(CollisionWorld::new()),
             medium,
             simulation_time: 0.0,
             time_step_duration,
@@ -113,6 +120,18 @@ impl PhysicsSimulator {
     /// [`RwLock`].
     pub fn rigid_body_force_manager(&self) -> &RwLock<RigidBodyForceManager> {
         &self.rigid_body_force_manager
+    }
+
+    /// Returns a reference to the [`ConstraintManager`], guarded by a
+    /// [`RwLock`].
+    pub fn constraint_manager(&self) -> &RwLock<ConstraintManager> {
+        &self.constraint_manager
+    }
+
+    /// Returns a reference to the [`CollisionWorld`], guarded by a
+    /// [`RwLock`].
+    pub fn collision_world(&self) -> &RwLock<CollisionWorld> {
+        &self.collision_world
     }
 
     /// Sets the given medium for the physics simulation.
@@ -199,6 +218,7 @@ impl PhysicsSimulator {
         let mut entities_to_remove = Vec::new();
 
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
+        let constraint_manager = self.constraint_manager.read().unwrap();
         let ecs_world_readonly = ecs_world.read().unwrap();
 
         let substep_duration = self.compute_substep_duration();
@@ -206,6 +226,8 @@ impl PhysicsSimulator {
             Self::perform_step(
                 &ecs_world_readonly,
                 &rigid_body_force_manager,
+                &constraint_manager,
+                &self.collision_world,
                 &self.medium,
                 self.simulation_time,
                 substep_duration,
@@ -227,6 +249,8 @@ impl PhysicsSimulator {
     fn perform_step(
         ecs_world: &ECSWorld,
         rigid_body_force_manager: &RigidBodyForceManager,
+        constraint_manager: &ConstraintManager,
+        collision_world: &RwLock<CollisionWorld>,
         medium: &UniformMedium,
         current_simulation_time: fph,
         step_duration: fph,
@@ -234,9 +258,18 @@ impl PhysicsSimulator {
     ) {
         let new_simulation_time = current_simulation_time + step_duration;
 
+        collision::systems::synchronize_collision_world(
+            &mut collision_world.write().unwrap(),
+            ecs_world,
+        );
+
         motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
         rigid_body::systems::advance_rigid_body_velocities(ecs_world, step_duration);
+
+        constraint_manager.prepare_constraints(ecs_world, &collision_world.read().unwrap());
+        constraint_manager.compute_and_apply_constrained_velocities(ecs_world);
+
         rigid_body::systems::advance_rigid_body_configurations(ecs_world, step_duration);
 
         rigid_body_force_manager.apply_forces_and_torques(ecs_world, medium, entities_to_remove);

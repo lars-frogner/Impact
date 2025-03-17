@@ -1,6 +1,6 @@
 //! Management of scene data for entities.
 
-use super::rigid_body;
+use super::{collision, rigid_body};
 use crate::{mesh::MeshRepository, physics::PhysicsSimulator};
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use std::sync::RwLock;
@@ -20,6 +20,8 @@ impl PhysicsSimulator {
             .read()
             .unwrap()
             .perform_setup_for_new_entity(mesh_repository, components);
+
+        collision::entity::setup_collidable_for_new_entity(&self.collision_world, components);
     }
 
     /// Performs any modifications required to clean up the physics simulator
