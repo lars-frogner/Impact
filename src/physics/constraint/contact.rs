@@ -1,7 +1,12 @@
 //! Contact (collision) constraints.
 
 use super::{ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint};
-use crate::physics::{fph, motion::Position};
+use crate::physics::{
+    fph,
+    material::{ContactResponseParameters, components::UniformContactResponseComp},
+    motion::Position,
+};
+use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::{UnitVector3, Vector3};
 use tinyvec::TinyVec;
 
@@ -19,11 +24,11 @@ pub struct Contact {
 
 #[derive(Clone, Debug)]
 pub struct PreparedContact {
-    restitution_coef: fph,
     n: UnitVector3<fph>,
     r_a_cross_n: Vector3<fph>,
     r_b_cross_n: Vector3<fph>,
     effective_mass: fph,
+    response_params: ContactResponseParameters,
 }
 
 impl ContactSet {
@@ -69,7 +74,14 @@ impl Default for Contact {
 impl TwoBodyConstraint for Contact {
     type Prepared = PreparedContact;
 
-    fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared {
+    fn prepare(
+        &self,
+        ecs_world: &ECSWorld,
+        body_a_entity: &Entity,
+        body_b_entity: &Entity,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> Self::Prepared {
         let n = self.surface_normal;
 
         let r_a = self.position - body_a.position;
@@ -84,13 +96,47 @@ impl TwoBodyConstraint for Contact {
                 + r_a_cross_n.dot(&(body_a.inverse_inertia_tensor * r_a_cross_n))
                 + r_b_cross_n.dot(&(body_b.inverse_inertia_tensor * r_b_cross_n)));
 
+        let response_params =
+            self.determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
+
         PreparedContact {
-            restitution_coef: 0.7,
             n,
             r_a_cross_n,
             r_b_cross_n,
             effective_mass,
+            response_params,
         }
+    }
+}
+
+impl Contact {
+    fn determine_effective_response_parameters(
+        &self,
+        ecs_world: &ECSWorld,
+        body_a_entity: &Entity,
+        body_b_entity: &Entity,
+    ) -> ContactResponseParameters {
+        let body_a_response_params =
+            self.obtain_contact_response_parameters_for_body(ecs_world, body_a_entity);
+
+        let body_b_response_params =
+            self.obtain_contact_response_parameters_for_body(ecs_world, body_b_entity);
+
+        ContactResponseParameters::combined(&body_a_response_params, &body_b_response_params)
+    }
+
+    fn obtain_contact_response_parameters_for_body(
+        &self,
+        ecs_world: &ECSWorld,
+        body_entity: &Entity,
+    ) -> ContactResponseParameters {
+        let entry = ecs_world.entity(body_entity);
+
+        if let Some(params) = entry.get_component::<UniformContactResponseComp>() {
+            return params.access().0;
+        }
+
+        ContactResponseParameters::default()
     }
 }
 
@@ -104,7 +150,9 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let separating_velocity =
             self.n.dot(&(v_a - v_b)) + w_a.dot(&self.r_a_cross_n) - w_b.dot(&self.r_b_cross_n);
 
-        -self.effective_mass * (1.0 + self.restitution_coef) * separating_velocity.min(0.0)
+        -self.effective_mass
+            * (1.0 + self.response_params.restitution_coef)
+            * separating_velocity.min(0.0)
     }
 
     fn clamp_scalar_impulse(&self, scalar_impulse: fph) -> fph {
@@ -126,5 +174,3 @@ impl PreparedTwoBodyConstraint for PreparedContact {
             body_b.inverse_inertia_tensor * self.r_b_cross_n.scale(-scalar_impulse);
     }
 }
-
-impl PreparedContact {}

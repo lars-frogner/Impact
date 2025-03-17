@@ -5,6 +5,7 @@ pub mod components;
 pub mod constraint;
 pub mod entity;
 pub mod inertia;
+pub mod material;
 pub mod medium;
 pub mod motion;
 pub mod rigid_body;

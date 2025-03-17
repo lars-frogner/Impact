@@ -5,7 +5,7 @@ mod solver;
 pub mod spherical_joint;
 
 use crate::physics::{
-    collision::CollisionWorld,
+    collision::{Collision, CollisionWorld},
     fph,
     motion::{
         Orientation, Position, Velocity,
@@ -14,13 +14,11 @@ use crate::physics::{
     rigid_body::components::RigidBodyComp,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::world::World as ECSWorld;
+use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::{Matrix3, Vector3};
 use solver::ConstraintSolver;
 use spherical_joint::SphericalJoint;
 use std::{collections::HashMap, sync::RwLock};
-
-use super::collision::Collision;
 
 /// Identifier for a constraint in a [`ConstraintManager`].
 #[repr(transparent)]
@@ -37,7 +35,14 @@ pub struct ConstraintManager {
 trait TwoBodyConstraint {
     type Prepared: PreparedTwoBodyConstraint;
 
-    fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared;
+    fn prepare(
+        &self,
+        ecs_world: &ECSWorld,
+        body_a_entity: &Entity,
+        body_b_entity: &Entity,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> Self::Prepared;
 }
 
 trait PreparedTwoBodyConstraint {
