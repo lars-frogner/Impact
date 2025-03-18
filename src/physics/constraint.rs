@@ -135,6 +135,7 @@ impl ConstraintManager {
 
     pub(super) fn compute_and_apply_constrained_velocities(&self, ecs_world: &ECSWorld) {
         let mut solver = self.solver.write().unwrap();
+        solver.synchronize_prepared_body_velocities_with_entity_velocities(ecs_world);
         solver.compute_constrained_velocities();
         solver.apply_constrained_velocities(ecs_world);
     }
@@ -168,14 +169,14 @@ impl ConstrainedBody {
         }
     }
 
-    fn from_static_body_components(frame: &ReferenceFrameComp) -> Self {
+    fn from_kinematic_body_components(frame: &ReferenceFrameComp, velocity: &VelocityComp) -> Self {
         Self {
             inverse_mass: 0.0,
             inverse_inertia_tensor: Matrix3::zeros(),
             position: frame.position,
             orientation: frame.orientation,
-            velocity: Velocity::zeros(),
-            angular_velocity: Vector3::zeros(),
+            velocity: velocity.linear,
+            angular_velocity: velocity.angular.as_vector(),
         }
     }
 }

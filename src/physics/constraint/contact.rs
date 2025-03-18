@@ -34,7 +34,8 @@ pub struct PreparedContact {
     effective_mass_normal: fph,
     effective_mass_tangent_1: fph,
     effective_mass_tangent_2: fph,
-    response_params: ContactResponseParameters,
+    restitution_coef: fph,
+    friction_coef: fph,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -115,8 +116,23 @@ impl TwoBodyConstraint for Contact {
         let effective_mass_tangent_1 = compute_effective_mass(&tangent_1);
         let effective_mass_tangent_2 = compute_effective_mass(&tangent_2);
 
-        let response_params =
-            self.determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
+        let ContactResponseParameters {
+            restitution_coef,
+            static_friction_coef,
+            dynamic_friction_coef,
+        } = self.determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
+
+        let velocity_a = body_a.velocity + body_a.angular_velocity.cross(&disp_a);
+        let velocity_b = body_b.velocity + body_b.angular_velocity.cross(&disp_b);
+        let relative_velocity = velocity_a - velocity_b;
+        let slip_speed_squared =
+            relative_velocity.dot(&tangent_1).powi(2) + relative_velocity.dot(&tangent_2).powi(2);
+
+        let friction_coef = if slip_speed_squared < 1e-4 {
+            static_friction_coef
+        } else {
+            dynamic_friction_coef
+        };
 
         PreparedContact {
             disp_a,
@@ -127,7 +143,8 @@ impl TwoBodyConstraint for Contact {
             effective_mass_normal,
             effective_mass_tangent_1,
             effective_mass_tangent_2,
-            response_params,
+            restitution_coef,
+            friction_coef,
         }
     }
 }
@@ -179,7 +196,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let separating_velocity = self.normal.dot(&relative_velocity);
 
         let normal_impulse = -self.effective_mass_normal
-            * (1.0 + self.response_params.restitution_coef)
+            * (1.0 + self.restitution_coef)
             * separating_velocity.min(0.0);
 
         let tangent_1_impulse =
@@ -195,9 +212,25 @@ impl PreparedTwoBodyConstraint for PreparedContact {
     }
 
     fn clamp_impulses(&self, impulses: ContactImpulses) -> ContactImpulses {
+        let clamped_normal_impulse = fph::max(0.0, impulses.normal);
+
+        let max_tangent_impulse_magnitude = self.friction_coef * clamped_normal_impulse;
+        let tangent_impulse_magnitude =
+            fph::sqrt(impulses.tangent_1.powi(2) + impulses.tangent_2.powi(2));
+
+        let tangent_impulse_scaling = if tangent_impulse_magnitude > max_tangent_impulse_magnitude {
+            max_tangent_impulse_magnitude / tangent_impulse_magnitude
+        } else {
+            1.0
+        };
+
+        let clamped_tangent_1_impulse = impulses.tangent_1 * tangent_impulse_scaling;
+        let clamped_tangent_2_impulse = impulses.tangent_2 * tangent_impulse_scaling;
+
         ContactImpulses {
-            normal: fph::max(0.0, impulses.normal),
-            ..impulses
+            normal: clamped_normal_impulse,
+            tangent_1: clamped_tangent_1_impulse,
+            tangent_2: clamped_tangent_2_impulse,
         }
     }
 
