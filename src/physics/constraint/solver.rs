@@ -75,6 +75,15 @@ impl ConstraintSolver {
         }
     }
 
+    pub fn synchronize_prepared_body_velocities_with_entity_velocities(
+        &mut self,
+        ecs_world: &ECSWorld,
+    ) {
+        for (body_entity, body) in self.body_index_map.key_at_each_idx().zip(&mut self.bodies) {
+            set_prepared_body_velocities_to_entity_velocities(ecs_world, body_entity, body);
+        }
+    }
+
     pub fn compute_constrained_velocities(&mut self) {
         for _ in 0..self.config.n_iterations {
             apply_impulses_sequentially_for_body_pair_constraints(
@@ -90,7 +99,7 @@ impl ConstraintSolver {
 
     pub fn apply_constrained_velocities(&self, ecs_world: &ECSWorld) {
         for (body_entity, body) in self.body_index_map.key_at_each_idx().zip(&self.bodies) {
-            apply_body_velocities(ecs_world, body_entity, body);
+            apply_body_velocities_to_entities(ecs_world, body_entity, body);
         }
     }
 
@@ -147,19 +156,19 @@ impl ConstraintSolver {
 
         let frame = entry.get_component::<ReferenceFrameComp>()?;
 
+        let velocity = entry
+            .get_component::<VelocityComp>()
+            .map_or_else(VelocityComp::default, |velocity| *velocity.access());
+
         let constrained_body = match entry.get_component::<RigidBodyComp>() {
             Some(rigid_body) if !entry.has_component::<Static>() => {
-                let velocity = entry
-                    .get_component::<VelocityComp>()
-                    .map_or_else(VelocityComp::default, |velocity| *velocity.access());
-
                 ConstrainedBody::from_rigid_body_components(
                     frame.access(),
                     &velocity,
                     rigid_body.access(),
                 )
             }
-            _ => ConstrainedBody::from_static_body_components(frame.access()),
+            _ => ConstrainedBody::from_kinematic_body_components(frame.access(), &velocity),
         };
 
         let body_idx = self.bodies.len();
@@ -205,11 +214,31 @@ fn apply_impulses_sequentially_for_body_pair_constraints<P: PreparedTwoBodyConst
     }
 }
 
-fn apply_body_velocities(ecs_world: &ECSWorld, body_entity: Entity, body: &ConstrainedBody) {
+fn set_prepared_body_velocities_to_entity_velocities(
+    ecs_world: &ECSWorld,
+    body_entity: Entity,
+    body: &mut ConstrainedBody,
+) {
     let Some(entry) = ecs_world.get_entity(&body_entity) else {
         return;
     };
+    let Some(velocity) = entry.get_component::<VelocityComp>() else {
+        return;
+    };
+    let velocity = velocity.access();
 
+    body.velocity = velocity.linear;
+    body.angular_velocity = velocity.angular.as_vector();
+}
+
+fn apply_body_velocities_to_entities(
+    ecs_world: &ECSWorld,
+    body_entity: Entity,
+    body: &ConstrainedBody,
+) {
+    let Some(entry) = ecs_world.get_entity(&body_entity) else {
+        return;
+    };
     let Some(frame) = entry.get_component::<ReferenceFrameComp>() else {
         return;
     };
@@ -219,6 +248,7 @@ fn apply_body_velocities(ecs_world: &ECSWorld, body_entity: Entity, body: &Const
         return;
     };
     let velocity = velocity.access();
+
     velocity.linear = body.velocity;
     velocity.angular = AngularVelocity::from_vector(body.angular_velocity);
 
@@ -226,6 +256,7 @@ fn apply_body_velocities(ecs_world: &ECSWorld, body_entity: Entity, body: &Const
         return;
     };
     let rigid_body = rigid_body.access();
+
     rigid_body.0.synchronize_momentum(&velocity.linear);
     rigid_body
         .0

@@ -540,7 +540,9 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
 
     let simulator = PhysicsSimulator::new(
         SimulatorConfig {
-            constraint_solver_config: Some(ConstraintSolverConfig { n_iterations: 10 }),
+            n_substeps: 20,
+            match_frame_duration: false,
+            constraint_solver_config: Some(ConstraintSolverConfig { n_iterations: 100 }),
             ..SimulatorConfig::default()
         },
         UniformMedium::vacuum(),
@@ -637,7 +639,7 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
 
     app.create_entity((
         &ReferenceFrameComp::unscaled(
-            Point3::new(0.0, 2.0, -4.0),
+            Point3::new(0.0, 0.0, -5.0),
             Orientation::from_axis_angle(&Vector3::y_axis(), PI),
         ),
         &VelocityComp::stationary(),
@@ -651,12 +653,13 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
 
     app.create_entity((
         &SphereMeshComp::new(100),
-        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 3.0, 0.0), 0.5),
-        &VelocityComp::linear(vector![-2.0, 1.0, 1.0]),
+        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 0.0, 0.0), 0.5),
+        &VelocityComp::linear(vector![0.0, 0.0, 0.0]),
         &UniformRigidBodyComp { mass_density: 1.0 },
         &UniformContactResponseComp(ContactResponseParameters {
-            restitution_coef: 0.6,
-            ..Default::default()
+            restitution_coef: 0.7,
+            static_friction_coef: 0.5,
+            dynamic_friction_coef: 0.3,
         }),
         &SphereCollidableComp::new(CollidableKind::Dynamic, &Sphere::new(Point3::origin(), 0.5)),
         &UniformGravityComp::earth(),
@@ -669,38 +672,51 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
         &LogsMomentum,
     ))?;
 
+    let half_extent = 3.0;
+    let extent = 2.0 * half_extent;
+    let angular_velocity = AngularVelocity::new(Vector3::z_axis(), Degrees(40.0));
+
     for (position, orientation) in [
         (
-            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(0.0, half_extent, 0.0),
             Orientation::from_axis_angle(&Vector3::x_axis(), 0.0),
         ),
         (
-            Point3::new(0.0, 8.0, 0.0),
+            Point3::new(0.0, half_extent, 0.0),
             Orientation::from_axis_angle(&Vector3::x_axis(), PI),
         ),
         (
-            Point3::new(5.0, 3.0, 0.0),
+            Point3::new(0.0, half_extent, 0.0),
             Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
         ),
         (
-            Point3::new(-5.0, 3.0, 0.0),
+            Point3::new(0.0, half_extent, 0.0),
             Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
         ),
         (
-            Point3::new(0.0, 3.0, -5.0),
+            Point3::new(0.0, half_extent, 0.0),
             Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0),
         ),
         (
-            Point3::new(0.0, 3.0, 5.0),
+            Point3::new(0.0, half_extent, 0.0),
             Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
         ),
     ] {
-        app.create_entity((
+        let mut frame = ReferenceFrameComp::scaled_with_offset_origin(
+            position.coords / extent,
+            Point3::origin(),
+            orientation,
+            extent,
+        );
+        let wall = app.create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
-            &ReferenceFrameComp::new(position, orientation, 10.0),
+            &frame,
+            &ConstantRotationComp::new(0.0, orientation, angular_velocity),
+            &VelocityComp::angular(angular_velocity),
             &UniformContactResponseComp(ContactResponseParameters {
                 restitution_coef: 0.2,
-                ..Default::default()
+                static_friction_coef: 0.7,
+                dynamic_friction_coef: 0.5,
             }),
             &PlaneCollidableComp::new(CollidableKind::Static, &Plane::new(Vector3::y_axis(), 0.0)),
             &TexturedColorComp(concrete_color_texture_id),
@@ -708,26 +724,24 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
             &TexturedRoughnessComp::unscaled(concrete_roughness_texture_id),
             &NormalMapComp(concrete_normal_texture_id),
             &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+            &SceneGraphGroupComp,
         ))?;
-    }
 
-    for (x, y, z) in [
-        (-4.0, 1.0, -4.0),
-        (-4.0, 1.0, 4.0),
-        (-4.0, 6.0, -4.0),
-        (-4.0, 6.0, 4.0),
-        (4.0, 1.0, -4.0),
-        (4.0, 1.0, 4.0),
-        (4.0, 6.0, -4.0),
-        (4.0, 6.0, 4.0),
-    ] {
-        app.create_entity((
-            // &SphereMeshComp::new(25),
-            &ReferenceFrameComp::unoriented_scaled(Point3::new(x, y, z), 0.2),
-            // &UniformColorComp(vector![1.0, 1.0, 1.0]),
-            // &UniformEmissiveLuminanceComp(1e6),
-            &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
-        ))?;
+        for x in [-4.0, 4.0] {
+            for z in [-4.0, 4.0] {
+                app.create_entity((
+                    &ParentComp::new(wall),
+                    // &SphereMeshComp::new(25),
+                    &ReferenceFrameComp::unoriented_scaled(
+                        Point3::new(x / extent, 1.0 / extent, z / extent),
+                        0.2 / extent,
+                    ),
+                    // &UniformColorComp(vector![1.0, 1.0, 1.0]),
+                    // &UniformEmissiveLuminanceComp(1e6),
+                    &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 1e7, 0.7),
+                ))?;
+            }
+        }
     }
 
     app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
