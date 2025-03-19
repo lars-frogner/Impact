@@ -380,7 +380,7 @@ impl SphereCollidableGeometry {
     }
 
     fn determine_contact_set_with_other(&self, other: &Self, contact_set: &mut ContactSet) {
-        let center_displacement = other.sphere.center() - self.sphere.center();
+        let center_displacement = self.sphere.center() - other.sphere.center();
         let squared_center_distance = center_displacement.norm_squared();
 
         if squared_center_distance
