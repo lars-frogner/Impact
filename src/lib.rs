@@ -108,3 +108,6 @@ pub mod ui;
 pub mod util;
 pub mod voxel;
 pub mod window;
+
+#[cfg(feature = "profiling")]
+pub mod profiling;

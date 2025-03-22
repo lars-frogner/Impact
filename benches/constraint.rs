@@ -2,17 +2,16 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use impact::define_criterion_target;
 use pprof::criterion::{Output, PProfProfiler};
 
-define_criterion_target!(model, add_feature_to_dynamic_instance_buffer_from_storage);
-define_criterion_target!(
-    model,
-    add_feature_to_dynamic_instance_buffer_from_storage_repeatedly
-);
+define_criterion_target!(constraint, prepare_contacts);
+define_criterion_target!(constraint, solve_contact_velocities);
+define_criterion_target!(constraint, correct_contact_configurations);
 
 criterion_group!(
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
     targets =
-        add_feature_to_dynamic_instance_buffer_from_storage,
-        add_feature_to_dynamic_instance_buffer_from_storage_repeatedly,
+        prepare_contacts,
+        solve_contact_velocities,
+        correct_contact_configurations,
 );
 criterion_main!(benches);
