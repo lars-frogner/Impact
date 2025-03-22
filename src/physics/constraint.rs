@@ -69,6 +69,13 @@ trait PreparedTwoBodyConstraint {
         body_b: &mut ConstrainedBody,
         impulses: Self::Impulses,
     );
+
+    fn apply_positional_correction_to_body_pair(
+        &self,
+        body_a: &mut ConstrainedBody,
+        body_b: &mut ConstrainedBody,
+        correction_factor: fph,
+    );
 }
 
 /// All quantities are in world space.
@@ -137,7 +144,8 @@ impl ConstraintManager {
         let mut solver = self.solver.write().unwrap();
         solver.synchronize_prepared_body_velocities_with_entity_velocities(ecs_world);
         solver.compute_constrained_velocities();
-        solver.apply_constrained_velocities(ecs_world);
+        solver.compute_corrected_configurations();
+        solver.apply_constrained_velocities_and_corrected_configurations(ecs_world);
     }
 
     fn create_new_constraint_id(&mut self) -> ConstraintID {
@@ -178,5 +186,20 @@ impl ConstrainedBody {
             velocity: velocity.linear,
             angular_velocity: velocity.angular.as_vector(),
         }
+    }
+
+    /// Transforms the given point to world space from the coordinate system
+    /// that moves and rotates with the rigid body, with its origin at the
+    /// body's center of mass.
+    fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
+        self.orientation.transform_point(point) + self.position.coords
+    }
+
+    /// Transforms the given point from world space to the coordinate system
+    /// that moves and rotates with the rigid body, with its origin at the
+    /// body's center of mass.
+    fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
+        self.orientation
+            .inverse_transform_point(&(point - self.position.coords))
     }
 }

@@ -162,6 +162,15 @@ impl AbsDiffEq for AngularVelocity {
     }
 }
 
+/// Computes the quaternion representing the instantaneous time derivative of
+/// the given [`Orientation`] for a body with the given angular velocity.
+pub fn compute_orientation_derivative(
+    orientation: &Orientation,
+    angular_velocity_vector: &Vector3<fph>,
+) -> Quaternion<fph> {
+    Quaternion::from_imag(0.5 * angular_velocity_vector) * orientation.as_ref()
+}
+
 /// Evolves the given [`Position`] linearly with the given [`Velocity`] for the
 /// given duration.
 pub fn advance_position(position: &Position, velocity: &Velocity, duration: fph) -> Position {
@@ -183,7 +192,7 @@ pub fn advance_orientation(
         angular_velocity.axis_of_rotation().scale(sin_half_angle),
     );
 
-    UnitQuaternion::new_normalize(rotation * orientation.into_inner())
+    UnitQuaternion::new_normalize(rotation * orientation.as_ref())
 }
 
 /// Computes the [`AngularVelocity`] of a body with the given properties.
