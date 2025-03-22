@@ -6,6 +6,7 @@ use crate::physics::{
         contact::{Contact, PreparedContact},
         spherical_joint::{PreparedSphericalJoint, SphericalJoint},
     },
+    fph,
     motion::{
         AngularVelocity,
         components::{ReferenceFrameComp, Static, VelocityComp},
@@ -15,7 +16,7 @@ use crate::physics::{
 use impact_ecs::world::{Entity, World as ECSWorld};
 use impact_utils::KeyIndexMapper;
 use num_traits::Zero;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 #[derive(Clone, Debug)]
 pub struct ConstraintSolver {
@@ -29,6 +30,8 @@ pub struct ConstraintSolver {
 #[derive(Clone, Debug)]
 pub struct ConstraintSolverConfig {
     pub n_iterations: u32,
+    pub n_positional_correction_iterations: u32,
+    pub positional_correction_factor: fph,
 }
 
 #[derive(Clone, Debug)]
@@ -97,9 +100,24 @@ impl ConstraintSolver {
         }
     }
 
-    pub fn apply_constrained_velocities(&self, ecs_world: &ECSWorld) {
+    pub fn compute_corrected_configurations(&mut self) {
+        for _ in 0..self.config.n_positional_correction_iterations {
+            apply_positional_corrections_sequentially_for_body_pair_constraints(
+                &mut self.bodies,
+                &self.spherical_joints,
+                self.config.positional_correction_factor,
+            );
+            apply_positional_corrections_sequentially_for_body_pair_constraints(
+                &mut self.bodies,
+                &self.contacts,
+                self.config.positional_correction_factor,
+            );
+        }
+    }
+
+    pub fn apply_constrained_velocities_and_corrected_configurations(&self, ecs_world: &ECSWorld) {
         for (body_entity, body) in self.body_index_map.key_at_each_idx().zip(&self.bodies) {
-            apply_body_velocities_to_entities(ecs_world, body_entity, body);
+            apply_body_velocities_and_configurations_to_entities(ecs_world, body_entity, body);
         }
     }
 
@@ -181,7 +199,11 @@ impl ConstraintSolver {
 
 impl Default for ConstraintSolverConfig {
     fn default() -> Self {
-        Self { n_iterations: 5 }
+        Self {
+            n_iterations: 5,
+            n_positional_correction_iterations: 5,
+            positional_correction_factor: 0.2,
+        }
     }
 }
 
@@ -190,6 +212,12 @@ impl<C: PreparedTwoBodyConstraint> Deref for BodyPairConstraint<C> {
 
     fn deref(&self) -> &Self::Target {
         &self.constraint
+    }
+}
+
+impl<C: PreparedTwoBodyConstraint> DerefMut for BodyPairConstraint<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.constraint
     }
 }
 
@@ -214,6 +242,21 @@ fn apply_impulses_sequentially_for_body_pair_constraints<P: PreparedTwoBodyConst
     }
 }
 
+fn apply_positional_corrections_sequentially_for_body_pair_constraints<
+    P: PreparedTwoBodyConstraint,
+>(
+    bodies: &mut [ConstrainedBody],
+    constraints: &[BodyPairConstraint<P>],
+    correction_factor: fph,
+) {
+    for constraint in constraints {
+        let (body_a, body_b) =
+            two_mutable_elements(bodies, constraint.body_a_idx, constraint.body_b_idx);
+
+        constraint.apply_positional_correction_to_body_pair(body_a, body_b, correction_factor);
+    }
+}
+
 fn set_prepared_body_velocities_to_entity_velocities(
     ecs_world: &ECSWorld,
     body_entity: Entity,
@@ -231,7 +274,7 @@ fn set_prepared_body_velocities_to_entity_velocities(
     body.angular_velocity = velocity.angular.as_vector();
 }
 
-fn apply_body_velocities_to_entities(
+fn apply_body_velocities_and_configurations_to_entities(
     ecs_world: &ECSWorld,
     body_entity: Entity,
     body: &ConstrainedBody,
@@ -239,10 +282,13 @@ fn apply_body_velocities_to_entities(
     let Some(entry) = ecs_world.get_entity(&body_entity) else {
         return;
     };
-    let Some(frame) = entry.get_component::<ReferenceFrameComp>() else {
+    let Some(mut frame) = entry.get_component_mut::<ReferenceFrameComp>() else {
         return;
     };
     let frame = frame.access();
+
+    frame.position = body.position;
+    frame.orientation = body.orientation;
 
     let Some(mut velocity) = entry.get_component_mut::<VelocityComp>() else {
         return;

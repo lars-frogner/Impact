@@ -15,7 +15,7 @@ use crate::{
     gpu::{
         self,
         rendering::RenderingConfig,
-        texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
+        texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureID},
     },
     light::components::{
         AmbientEmissionComp, OmnidirectionalEmissionComp, ShadowableOmnidirectionalEmissionComp,
@@ -540,9 +540,13 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
 
     let simulator = PhysicsSimulator::new(
         SimulatorConfig {
-            n_substeps: 20,
+            n_substeps: 1,
             match_frame_duration: false,
-            constraint_solver_config: Some(ConstraintSolverConfig { n_iterations: 100 }),
+            constraint_solver_config: Some(ConstraintSolverConfig {
+                n_iterations: 5,
+                n_positional_correction_iterations: 3,
+                positional_correction_factor: 0.5,
+            }),
             ..SimulatorConfig::default()
         },
         UniformMedium::vacuum(),
@@ -651,30 +655,122 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
         ),
     ))?;
 
-    app.create_entity((
-        &SphereMeshComp::new(100),
-        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 0.0, 0.0), 0.5),
-        &VelocityComp::linear(vector![0.0, 0.0, 0.0]),
-        &UniformRigidBodyComp { mass_density: 1.0 },
-        &UniformContactResponseComp(ContactResponseParameters {
-            restitution_coef: 0.7,
-            static_friction_coef: 0.5,
-            dynamic_friction_coef: 0.3,
-        }),
-        &SphereCollidableComp::new(CollidableKind::Dynamic, &Sphere::new(Point3::origin(), 0.5)),
-        &UniformGravityComp::earth(),
-        &TexturedColorComp(plastic_color_texture_id),
-        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 0.0),
-        &TexturedRoughnessComp::unscaled(plastic_roughness_texture_id),
-        &NormalMapComp(plastic_normal_texture_id),
-        &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 0.2, 0.2),
-        &LogsKineticEnergy,
-        &LogsMomentum,
+    let sphere_radius = 0.5;
+    let n_y = 5;
+    let room_extent = 8.0;
+    let n_spheres_y = 2 * n_y + 1;
+
+    create_spheres(
+        &app,
+        sphere_radius,
+        [0, n_y, 0],
+        point![
+            0.0,
+            fph::from(n_spheres_y) * sphere_radius - room_extent,
+            0.0
+        ],
+        false,
+        plastic_color_texture_id,
+        plastic_roughness_texture_id,
+        plastic_normal_texture_id,
+    )?;
+
+    create_room(
+        &app,
+        room_extent,
+        0.0,
+        concrete_color_texture_id,
+        concrete_roughness_texture_id,
+        concrete_normal_texture_id,
+    )?;
+
+    app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
+        vector![1.0, 1.0, 1.0] * 200000.0,
+        UnitVector3::new_normalize(vector![0.0, -1.0, 0.0]),
+        Degrees(2.0),
     ))?;
 
-    let half_extent = 3.0;
-    let extent = 2.0 * half_extent;
-    let angular_velocity = AngularVelocity::new(Vector3::z_axis(), Degrees(40.0));
+    app.create_entity(&AmbientEmissionComp::new(
+        vector![1.0, 1.0, 1.0] * 2000000.0,
+    ))?;
+
+    Ok((app, mouse_button_input_handler))
+}
+
+fn create_spheres(
+    app: &Application,
+    radius: fph,
+    n: [u32; 3],
+    center: Position,
+    alternate_shift: bool,
+    color_texture_id: TextureID,
+    roughness_texture_id: TextureID,
+    normal_texture_id: TextureID,
+) -> Result<()> {
+    let mut x = center.x - fph::from(n[0]) * 2.0 * radius;
+    for i in 0..(2 * n[0] + 1) {
+        let mut y = center.y - fph::from(n[1]) * 2.0 * radius;
+        if alternate_shift && i % 2 == 0 {
+            y += radius;
+        };
+        for j in 0..(2 * n[1] + 1) {
+            let mut z = center.z - fph::from(n[2]) * 2.0 * radius;
+            if alternate_shift && j % 2 == 0 {
+                z += radius;
+            };
+            for k in 0..(2 * n[2] + 1) {
+                app.create_entity((
+                    &SphereMeshComp::new(100),
+                    &ReferenceFrameComp::unoriented_scaled(
+                        Point3::new(x * radius, y * radius, z * radius),
+                        radius,
+                    ),
+                    &VelocityComp::linear(vector![0.0, 0.0, 0.0]),
+                    &UniformRigidBodyComp { mass_density: 1.0 },
+                    &UniformContactResponseComp(ContactResponseParameters {
+                        restitution_coef: 0.7,
+                        static_friction_coef: 0.5,
+                        dynamic_friction_coef: 0.3,
+                    }),
+                    &SphereCollidableComp::new(
+                        CollidableKind::Dynamic,
+                        &Sphere::new(Point3::origin(), radius),
+                    ),
+                    &UniformGravityComp::earth(),
+                    &TexturedColorComp(color_texture_id),
+                    &UniformSpecularReflectanceComp::in_range_of(
+                        UniformSpecularReflectanceComp::PLASTIC,
+                        0.0,
+                    ),
+                    &TexturedRoughnessComp::unscaled(roughness_texture_id),
+                    &NormalMapComp(normal_texture_id),
+                    &PlanarTextureProjectionComp::for_rectangle(
+                        &RectangleMeshComp::UNIT_SQUARE,
+                        0.2,
+                        0.2,
+                    ),
+                    // &LogsKineticEnergy,
+                    // &LogsMomentum,
+                ))?;
+                z += 2.0 * radius;
+            }
+            y += 2.0 * radius;
+        }
+        x += 2.0 * radius;
+    }
+    Ok(())
+}
+
+fn create_room(
+    app: &Application,
+    extent: fph,
+    angular_speed: fph,
+    color_texture_id: TextureID,
+    roughness_texture_id: TextureID,
+    normal_texture_id: TextureID,
+) -> Result<()> {
+    let half_extent = 0.5 * extent;
+    let angular_velocity = AngularVelocity::new(Vector3::z_axis(), Degrees(angular_speed));
 
     for (position, orientation) in [
         (
@@ -719,42 +815,28 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
                 dynamic_friction_coef: 0.5,
             }),
             &PlaneCollidableComp::new(CollidableKind::Static, &Plane::new(Vector3::y_axis(), 0.0)),
-            &TexturedColorComp(concrete_color_texture_id),
+            &TexturedColorComp(color_texture_id),
             &UniformSpecularReflectanceComp(0.01),
-            &TexturedRoughnessComp::unscaled(concrete_roughness_texture_id),
-            &NormalMapComp(concrete_normal_texture_id),
+            &TexturedRoughnessComp::unscaled(roughness_texture_id),
+            &NormalMapComp(normal_texture_id),
             &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
             &SceneGraphGroupComp,
         ))?;
 
-        for x in [-4.0, 4.0] {
-            for z in [-4.0, 4.0] {
+        for x in [-0.4, 0.4] {
+            for z in [-0.4, 0.4] {
                 app.create_entity((
                     &ParentComp::new(wall),
                     // &SphereMeshComp::new(25),
-                    &ReferenceFrameComp::unoriented_scaled(
-                        Point3::new(x / extent, 1.0 / extent, z / extent),
-                        0.2 / extent,
-                    ),
+                    &ReferenceFrameComp::unoriented_scaled(Point3::new(x, 0.1, z), 0.2 / extent),
                     // &UniformColorComp(vector![1.0, 1.0, 1.0]),
                     // &UniformEmissiveLuminanceComp(1e6),
-                    &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 1e7, 0.7),
+                    &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 1e7, 0.7),
                 ))?;
             }
         }
     }
-
-    app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
-        vector![1.0, 1.0, 1.0] * 200000.0,
-        UnitVector3::new_normalize(vector![0.0, -1.0, 0.0]),
-        Degrees(2.0),
-    ))?;
-
-    app.create_entity(&AmbientEmissionComp::new(
-        vector![1.0, 1.0, 1.0] * 2000000.0,
-    ))?;
-
-    Ok((app, mouse_button_input_handler))
+    Ok(())
 }
 
 fn create_harmonic_oscillation_experiment(

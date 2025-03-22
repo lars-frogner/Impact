@@ -59,4 +59,13 @@ impl PreparedTwoBodyConstraint for PreparedSphericalJoint {
     ) {
         todo!()
     }
+
+    fn apply_positional_correction_to_body_pair(
+        &self,
+        body_a: &mut ConstrainedBody,
+        body_b: &mut ConstrainedBody,
+        correction_factor: fph,
+    ) {
+        todo!()
+    }
 }

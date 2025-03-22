@@ -270,11 +270,15 @@ impl PhysicsSimulator {
 
         motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
-        constraint_manager.prepare_constraints(ecs_world, &collision_world.read().unwrap());
+        with_timing_info_logging!("Preparing constraints"; {
+            constraint_manager.prepare_constraints(ecs_world, &collision_world.read().unwrap());
+        });
 
         rigid_body::systems::advance_rigid_body_velocities(ecs_world, step_duration);
 
-        constraint_manager.compute_and_apply_constrained_velocities(ecs_world);
+        with_timing_info_logging!("Solving constraints"; {
+            constraint_manager.compute_and_apply_constrained_velocities(ecs_world);
+        });
 
         rigid_body::systems::advance_rigid_body_configurations(ecs_world, step_duration);
 
