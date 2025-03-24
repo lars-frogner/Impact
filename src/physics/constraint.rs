@@ -1,29 +1,32 @@
-//! Hard constraints on rigid bodies.
+//! Constraints on rigid bodies.
 
-pub(super) mod contact;
-mod solver;
+pub mod contact;
+pub mod solver;
 pub mod spherical_joint;
 
-use num_traits::Zero;
-pub use solver::ConstraintSolverConfig;
-
-use crate::physics::{
-    collision::{Collision, CollisionWorld},
-    fph,
-    motion::{
-        Orientation, Position, Velocity,
-        components::{ReferenceFrameComp, VelocityComp},
+use crate::{
+    physics::{
+        collision::{Collision, CollisionWorld},
+        fph,
+        motion::{
+            Orientation, Position, Velocity,
+            components::{ReferenceFrameComp, VelocityComp},
+        },
+        rigid_body::components::RigidBodyComp,
     },
-    rigid_body::components::RigidBodyComp,
+    voxel::VoxelObjectManager,
 };
 use bytemuck::{Pod, Zeroable};
+use contact::Contact;
 use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::{Matrix3, Vector3};
-use solver::ConstraintSolver;
+use num_traits::Zero;
+use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
 use std::{
     collections::HashMap,
-    ops::{Add, Sub},
+    fmt,
+    ops::{Add, Mul, Sub},
     sync::RwLock,
 };
 
@@ -32,6 +35,7 @@ use std::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ConstraintID(u32);
 
+/// Manages all constraints in the simulation.
 #[derive(Debug)]
 pub struct ConstraintManager {
     solver: RwLock<ConstraintSolver>,
@@ -39,9 +43,12 @@ pub struct ConstraintManager {
     constraint_id_counter: u32,
 }
 
+/// Represents a constraint involving two rigid bodies.
 trait TwoBodyConstraint {
     type Prepared: PreparedTwoBodyConstraint;
 
+    /// Creates an instantiation of the constraint that has been prepared for
+    /// constraint solving in the current frame.
     fn prepare(
         &self,
         ecs_world: &ECSWorld,
@@ -52,17 +59,36 @@ trait TwoBodyConstraint {
     ) -> Self::Prepared;
 }
 
+/// Represents a [`TwoBodyConstraint`] that has been prepared for constraint
+/// solving in the current frame.
 trait PreparedTwoBodyConstraint {
-    type Impulses: Copy + Zero + Add<Output = Self::Impulses> + Sub<Output = Self::Impulses>;
+    type Impulses: fmt::Debug
+        + Copy
+        + Zero
+        + Add<Output = Self::Impulses>
+        + Sub<Output = Self::Impulses>
+        + Mul<fph, Output = Self::Impulses>;
 
+    /// Whether the accumulated [`Impulses`] from the other constraint can be
+    /// used to kick start the solution of this constraint. It should be
+    /// assumed that the given constraint involves the same entities as this
+    /// constraint.
+    fn can_use_warm_impulses_from(&self, other: &Self) -> bool;
+
+    /// Computes the corrective impulses that should be applied to the bodies
+    /// in order to satisfy the velocity constraint. This method should not
+    /// perform clamping.
     fn compute_impulses(
         &self,
         body_a: &ConstrainedBody,
         body_b: &ConstrainedBody,
     ) -> Self::Impulses;
 
+    /// Clamps the given impulses to satisfy the inequality velocity
+    /// constraints.
     fn clamp_impulses(&self, impulses: Self::Impulses) -> Self::Impulses;
 
+    /// Applies the given impulses to the velcities of the two bodies.
     fn apply_impulses_to_body_pair(
         &self,
         body_a: &mut ConstrainedBody,
@@ -70,6 +96,8 @@ trait PreparedTwoBodyConstraint {
         impulses: Self::Impulses,
     );
 
+    /// Computes and applies pseudo impulses to the position and orientation
+    /// of the bodies to satisfy the position constraint.
     fn apply_positional_correction_to_body_pair(
         &self,
         body_a: &mut ConstrainedBody,
@@ -78,7 +106,8 @@ trait PreparedTwoBodyConstraint {
     );
 }
 
-/// All quantities are in world space.
+/// The relevant properties and state of a rigid body required for constraint
+/// solving. The state is updated iteratively as constraints are being solved.
 #[derive(Clone, Debug)]
 struct ConstrainedBody {
     /// Inverse of the body's mass.
@@ -96,6 +125,8 @@ struct ConstrainedBody {
 }
 
 impl ConstraintManager {
+    /// Creates a new constraint manager with the given configuration for the
+    /// [`ConstraintSolver`].
     pub fn new(solver_config: ConstraintSolverConfig) -> Self {
         Self {
             solver: RwLock::new(ConstraintSolver::new(solver_config)),
@@ -104,31 +135,43 @@ impl ConstraintManager {
         }
     }
 
+    pub fn solver(&self) -> &RwLock<ConstraintSolver> {
+        &self.solver
+    }
+
+    /// Registers the given spherical joint constraint and returns a new ID
+    /// that can be used to refer to the constraint.
     pub fn add_spherical_joint(&mut self, joint: SphericalJoint) -> ConstraintID {
         let id = self.create_new_constraint_id();
         self.spherical_joints.insert(id, joint);
         id
     }
 
-    pub(super) fn prepare_constraints(
+    /// Prepares for solving the constraints for the current frame by gathering
+    /// all relevant rigid body state and precomputing relevant constraint
+    /// quantities. Should be called before advancing rigid body velocities or
+    /// configurations for the frame.
+    pub fn prepare_constraints(
         &self,
         ecs_world: &ECSWorld,
+        voxel_object_manager: &VoxelObjectManager,
         collision_world: &CollisionWorld,
     ) {
         let mut solver = self.solver.write().unwrap();
-        solver.clear_prepared_state();
 
-        for joint in self.spherical_joints.values() {
-            solver.prepare_spherical_joint(ecs_world, joint);
-        }
+        // The cached states of the bodies from the previous frame are stale
+        // and must be removed. Up-to-date body state will be gathered as
+        // required for the constraints of this frame.
+        solver.clear_prepared_bodies();
 
         collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
+            voxel_object_manager,
             &mut |Collision {
                       collider_a,
                       collider_b,
-                      contact_set,
+                      contact_manifold,
                   }| {
-                for contact in contact_set.contacts() {
+                for contact in contact_manifold.contacts() {
                     solver.prepare_contact(
                         ecs_world,
                         collider_a.entity(),
@@ -138,9 +181,40 @@ impl ConstraintManager {
                 }
             },
         );
+
+        for (id, joint) in &self.spherical_joints {
+            solver.prepare_spherical_joint(ecs_world, *id, joint);
+        }
+
+        // Any constraints left over from the previous frame that was not
+        // prepared again for this frame must be removed
+        solver.remove_unprepared_constraints();
     }
 
-    pub(super) fn compute_and_apply_constrained_velocities(&self, ecs_world: &ECSWorld) {
+    /// For testing and benchmarking contact resolution.
+    pub fn prepare_specific_contacts_only<'a>(
+        &self,
+        ecs_world: &ECSWorld,
+        contacts: impl IntoIterator<Item = (Entity, Entity, &'a Contact)>,
+    ) {
+        let mut solver = self.solver.write().unwrap();
+        solver.clear_prepared_bodies();
+
+        for (body_a_entity, body_b_entity, contact) in contacts {
+            solver.prepare_contact(ecs_world, body_a_entity, body_b_entity, contact);
+        }
+
+        solver.remove_unprepared_constraints();
+    }
+
+    /// Executes constraint solving. As opposed to
+    /// [`Self::prepare_constraints`], this method should be called after
+    /// advancing all rigid body velocities (but not configurations) based on
+    /// the non-constraint forces. The prepared bodies will be updated with the
+    /// advanced velocities before constraint solving. After computing the
+    /// resolved velocities and configurations, these will then be applied to
+    /// the rigid body entities.
+    pub fn compute_and_apply_constrained_state(&self, ecs_world: &ECSWorld) {
         let mut solver = self.solver.write().unwrap();
         solver.synchronize_prepared_body_velocities_with_entity_velocities(ecs_world);
         solver.compute_constrained_velocities();
@@ -177,6 +251,8 @@ impl ConstrainedBody {
         }
     }
 
+    /// These are bodies whose motion is not dictated by forces or rigid body
+    /// constraints. We can treat them as having infinite mass.
     fn from_kinematic_body_components(frame: &ReferenceFrameComp, velocity: &VelocityComp) -> Self {
         Self {
             inverse_mass: 0.0,

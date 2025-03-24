@@ -7,10 +7,10 @@ pub mod systems;
 use crate::{
     geometry::{Plane, Sphere},
     physics::{
-        constraint::contact::{Contact, ContactSet},
+        constraint::contact::{Contact, ContactGeometry, ContactID, ContactManifold},
         fph,
     },
-    voxel::VoxelObjectID,
+    voxel::{VoxelObjectID, VoxelObjectManager},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::world::Entity;
@@ -84,7 +84,7 @@ pub struct CollidableID(u32);
 pub struct Collision<'a> {
     pub collider_a: &'a CollidableDescriptor,
     pub collider_b: &'a CollidableDescriptor,
-    pub contact_set: &'a ContactSet,
+    pub contact_manifold: &'a ContactManifold,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -158,13 +158,14 @@ impl CollisionWorld {
 
     pub fn for_each_collision_with_collidable(
         &self,
+        voxel_object_manager: &VoxelObjectManager,
         collidable_id: CollidableID,
         f: &mut impl FnMut(Collision<'_>),
     ) {
         let descriptor_a = self.collidable_descriptor(collidable_id);
         let collidable_a = self.collidable_with_descriptor(descriptor_a);
 
-        let mut contact_set = ContactSet::new();
+        let mut contact_manifold = ContactManifold::new();
 
         for collidables_of_kind in &self.collidables {
             for collidable_b in collidables_of_kind {
@@ -172,9 +173,14 @@ impl CollisionWorld {
                     continue;
                 }
 
-                let order = collidable_a.determine_contact_set(collidable_b, &mut contact_set);
+                let order = generate_contact_manifold(
+                    voxel_object_manager,
+                    collidable_a,
+                    collidable_b,
+                    &mut contact_manifold,
+                );
 
-                if !contact_set.is_empty() {
+                if !contact_manifold.is_empty() {
                     let descriptor_b = self.collidable_descriptor(collidable_b.id);
 
                     let (collider_a, collider_b) =
@@ -183,10 +189,10 @@ impl CollisionWorld {
                     f(Collision {
                         collider_a,
                         collider_b,
-                        contact_set: &contact_set,
+                        contact_manifold: &contact_manifold,
                     });
 
-                    contact_set.clear();
+                    contact_manifold.clear();
                 }
             }
         }
@@ -194,12 +200,13 @@ impl CollisionWorld {
 
     pub fn for_each_non_phantom_collision_involving_dynamic_collidable(
         &self,
+        voxel_object_manager: &VoxelObjectManager,
         f: &mut impl FnMut(Collision<'_>),
     ) {
         let dynamic_collidables = self.collidables(CollidableKind::Dynamic);
         let static_collidables = self.collidables(CollidableKind::Static);
 
-        let mut contact_set = ContactSet::new();
+        let mut contact_manifold = ContactManifold::new();
 
         for (idx, collidable_a) in dynamic_collidables.iter().enumerate() {
             let descriptor_a = self.collidable_descriptor(collidable_a.id);
@@ -208,9 +215,14 @@ impl CollisionWorld {
                 .iter()
                 .chain(static_collidables)
             {
-                let order = collidable_a.determine_contact_set(collidable_b, &mut contact_set);
+                let order = generate_contact_manifold(
+                    voxel_object_manager,
+                    collidable_a,
+                    collidable_b,
+                    &mut contact_manifold,
+                );
 
-                if !contact_set.is_empty() {
+                if !contact_manifold.is_empty() {
                     let descriptor_b = self.collidable_descriptor(collidable_b.id);
 
                     let (collider_a, collider_b) =
@@ -219,10 +231,10 @@ impl CollisionWorld {
                     f(Collision {
                         collider_a,
                         collider_b,
-                        contact_set: &contact_set,
+                        contact_manifold: &contact_manifold,
                     });
 
-                    contact_set.clear();
+                    contact_manifold.clear();
                 }
             }
         }
@@ -305,11 +317,6 @@ impl Collidable {
     fn new(id: CollidableID, geometry: WorldCollidableGeometry) -> Self {
         Self { id, geometry }
     }
-
-    fn determine_contact_set(&self, other: &Self, contact_set: &mut ContactSet) -> CollidableOrder {
-        self.geometry
-            .determine_contact_set(&other.geometry, contact_set)
-    }
 }
 
 impl WorldCollidableGeometry {
@@ -329,105 +336,16 @@ impl WorldCollidableGeometry {
             ),
         }
     }
-
-    fn determine_contact_set(&self, other: &Self, contact_set: &mut ContactSet) -> CollidableOrder {
-        match (self, other) {
-            (Self::VoxelObject(this), Self::VoxelObject(other)) => {
-                this.determine_contact_set_with_other(other, contact_set);
-                CollidableOrder::Original
-            }
-            (Self::VoxelObject(voxel_object), Self::Sphere(sphere)) => {
-                voxel_object.determine_contact_set_with_sphere(sphere, contact_set);
-                CollidableOrder::Original
-            }
-            (Self::VoxelObject(voxel_object), Self::Plane(plane)) => {
-                voxel_object.determine_contact_set_with_plane(plane, contact_set);
-                CollidableOrder::Original
-            }
-            (Self::Sphere(this), Self::Sphere(other)) => {
-                this.determine_contact_set_with_other(other, contact_set);
-                CollidableOrder::Original
-            }
-            (Self::Sphere(sphere), Self::VoxelObject(voxel_object)) => {
-                voxel_object.determine_contact_set_with_sphere(sphere, contact_set);
-                CollidableOrder::Swapped
-            }
-            (Self::Sphere(sphere), Self::Plane(plane)) => {
-                sphere.determine_contact_set_with_plane(plane, contact_set);
-                CollidableOrder::Original
-            }
-            (Self::Plane(_), Self::Plane(_)) => {
-                // Not useful
-                CollidableOrder::Original
-            }
-            (Self::Plane(plane), Self::Sphere(sphere)) => {
-                sphere.determine_contact_set_with_plane(plane, contact_set);
-                CollidableOrder::Swapped
-            }
-            (Self::Plane(plane), Self::VoxelObject(voxel_object)) => {
-                voxel_object.determine_contact_set_with_plane(plane, contact_set);
-                CollidableOrder::Swapped
-            }
-        }
-    }
 }
 
 impl SphereCollidableGeometry {
+    pub fn new(sphere: Sphere<fph>) -> Self {
+        Self { sphere }
+    }
+
     fn to_world(&self, transform_to_world_space: &Similarity3<fph>) -> Self {
         Self {
             sphere: self.sphere.transformed(transform_to_world_space),
-        }
-    }
-
-    fn determine_contact_set_with_other(&self, other: &Self, contact_set: &mut ContactSet) {
-        let center_displacement = self.sphere.center() - other.sphere.center();
-        let squared_center_distance = center_displacement.norm_squared();
-
-        if squared_center_distance
-            <= self.sphere.radius_squared()
-                + other.sphere.radius_squared()
-                + 2.0 * self.sphere.radius() * other.sphere.radius()
-        {
-            let center_distance = squared_center_distance.sqrt();
-
-            let surface_normal = if center_distance > 1e-8 {
-                UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
-            } else {
-                Vector3::z_axis()
-            };
-
-            let position = other.sphere.center() + surface_normal.scale(other.sphere.radius());
-
-            let penetration_depth = fph::max(
-                0.0,
-                (self.sphere.radius() + other.sphere.radius()) - center_distance,
-            );
-
-            contact_set.add_contact(Contact {
-                position,
-                surface_normal,
-                penetration_depth,
-            });
-        }
-    }
-
-    fn determine_contact_set_with_plane(
-        &self,
-        plane: &PlaneCollidableGeometry,
-        contact_set: &mut ContactSet,
-    ) {
-        let signed_distance = plane.plane.compute_signed_distance(self.sphere.center());
-        let penetration_depth = self.sphere.radius() - signed_distance;
-
-        if penetration_depth >= 0.0 {
-            let surface_normal = *plane.plane.unit_normal();
-            let position = self.sphere.center() - surface_normal.scale(signed_distance);
-
-            contact_set.add_contact(Contact {
-                position,
-                surface_normal,
-                penetration_depth,
-            });
         }
     }
 }
@@ -447,26 +365,6 @@ impl VoxelObjectCollidableGeometry {
             transform_to_world_space,
         }
     }
-
-    fn determine_contact_set_with_other(&self, other: &Self, contact_set: &mut ContactSet) {
-        todo!()
-    }
-
-    fn determine_contact_set_with_sphere(
-        &self,
-        sphere: &SphereCollidableGeometry,
-        contact_set: &mut ContactSet,
-    ) {
-        todo!()
-    }
-
-    fn determine_contact_set_with_plane(
-        &self,
-        plane: &PlaneCollidableGeometry,
-        contact_set: &mut ContactSet,
-    ) {
-        todo!()
-    }
 }
 
 impl CollidableOrder {
@@ -476,4 +374,226 @@ impl CollidableOrder {
             Self::Swapped => (b, a),
         }
     }
+}
+
+fn generate_contact_manifold(
+    voxel_object_manager: &VoxelObjectManager,
+    collidable_a: &Collidable,
+    collidable_b: &Collidable,
+    contact_manifold: &mut ContactManifold,
+) -> CollidableOrder {
+    use WorldCollidableGeometry::{Plane, Sphere, VoxelObject};
+
+    match (&collidable_a.geometry, &collidable_b.geometry) {
+        (VoxelObject(voxel_object_a), VoxelObject(voxel_object_b)) => {
+            generate_voxel_object_voxel_object_contact_manifold(
+                voxel_object_manager,
+                voxel_object_a,
+                voxel_object_b,
+                collidable_a.id,
+                collidable_b.id,
+                contact_manifold,
+            );
+            CollidableOrder::Original
+        }
+        (VoxelObject(voxel_object), Sphere(sphere)) => {
+            generate_voxel_object_sphere_contact_manifold(
+                voxel_object_manager,
+                voxel_object,
+                sphere,
+                collidable_a.id,
+                collidable_b.id,
+                contact_manifold,
+            );
+            CollidableOrder::Original
+        }
+        (VoxelObject(voxel_object), Plane(plane)) => {
+            generate_voxel_object_plane_contact_manifold(
+                voxel_object_manager,
+                voxel_object,
+                plane,
+                collidable_a.id,
+                collidable_b.id,
+                contact_manifold,
+            );
+            CollidableOrder::Original
+        }
+        (Sphere(sphere_a), Sphere(sphere_b)) => {
+            generate_sphere_sphere_contact_manifold(
+                sphere_a,
+                sphere_b,
+                collidable_a.id,
+                collidable_b.id,
+                contact_manifold,
+            );
+            CollidableOrder::Original
+        }
+        (Sphere(sphere), VoxelObject(voxel_object)) => {
+            generate_voxel_object_sphere_contact_manifold(
+                voxel_object_manager,
+                voxel_object,
+                sphere,
+                collidable_b.id,
+                collidable_a.id,
+                contact_manifold,
+            );
+            CollidableOrder::Swapped
+        }
+        (Sphere(sphere), Plane(plane)) => {
+            generate_sphere_plane_contact_manifold(
+                sphere,
+                plane,
+                collidable_a.id,
+                collidable_b.id,
+                contact_manifold,
+            );
+            CollidableOrder::Original
+        }
+        (Plane(_), Plane(_)) => {
+            // Not useful
+            CollidableOrder::Original
+        }
+        (Plane(plane), Sphere(sphere)) => {
+            generate_sphere_plane_contact_manifold(
+                sphere,
+                plane,
+                collidable_b.id,
+                collidable_a.id,
+                contact_manifold,
+            );
+            CollidableOrder::Swapped
+        }
+        (Plane(plane), VoxelObject(voxel_object)) => {
+            generate_voxel_object_plane_contact_manifold(
+                voxel_object_manager,
+                voxel_object,
+                plane,
+                collidable_b.id,
+                collidable_a.id,
+                contact_manifold,
+            );
+            CollidableOrder::Swapped
+        }
+    }
+}
+
+fn generate_voxel_object_voxel_object_contact_manifold(
+    voxel_object_manager: &VoxelObjectManager,
+    voxel_object_a: &VoxelObjectCollidableGeometry,
+    voxel_object_b: &VoxelObjectCollidableGeometry,
+    voxel_object_a_collidable_id: CollidableID,
+    voxel_object_b_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
+) {
+    todo!()
+}
+
+fn generate_voxel_object_sphere_contact_manifold(
+    voxel_object_manager: &VoxelObjectManager,
+    voxel_object: &VoxelObjectCollidableGeometry,
+    sphere: &SphereCollidableGeometry,
+    voxel_object_collidable_id: CollidableID,
+    sphere_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
+) {
+    todo!()
+}
+
+fn generate_voxel_object_plane_contact_manifold(
+    voxel_object_manager: &VoxelObjectManager,
+    voxel_object: &VoxelObjectCollidableGeometry,
+    plane: &PlaneCollidableGeometry,
+    voxel_object_collidable_id: CollidableID,
+    plane_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
+) {
+    todo!()
+}
+
+fn generate_sphere_sphere_contact_manifold(
+    sphere_a: &SphereCollidableGeometry,
+    sphere_b: &SphereCollidableGeometry,
+    sphere_a_collidable_id: CollidableID,
+    sphere_b_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
+) {
+    if let Some(geometry) = determine_sphere_sphere_contact(&sphere_a.sphere, &sphere_b.sphere) {
+        let id = contact_id_from_collidable_ids(sphere_a_collidable_id, sphere_b_collidable_id);
+        contact_manifold.add_contact(Contact { id, geometry });
+    }
+}
+
+fn generate_sphere_plane_contact_manifold(
+    sphere: &SphereCollidableGeometry,
+    plane: &PlaneCollidableGeometry,
+    sphere_collidable_id: CollidableID,
+    plane_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
+) {
+    if let Some(geometry) = determine_sphere_plane_contact(&sphere.sphere, &plane.plane) {
+        let id = contact_id_from_collidable_ids(sphere_collidable_id, plane_collidable_id);
+        contact_manifold.add_contact(Contact { id, geometry });
+    }
+}
+
+fn contact_id_from_collidable_ids(a: CollidableID, b: CollidableID) -> ContactID {
+    ContactID::from_two_u32(a.0, b.0)
+}
+
+pub fn determine_sphere_sphere_contact(
+    sphere_a: &Sphere<fph>,
+    sphere_b: &Sphere<fph>,
+) -> Option<ContactGeometry> {
+    let center_displacement = sphere_a.center() - sphere_b.center();
+    let squared_center_distance = center_displacement.norm_squared();
+
+    if squared_center_distance
+        > sphere_a.radius_squared()
+            + sphere_b.radius_squared()
+            + 2.0 * sphere_a.radius() * sphere_b.radius()
+    {
+        return None;
+    }
+
+    let center_distance = squared_center_distance.sqrt();
+
+    let surface_normal = if center_distance > 1e-8 {
+        UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+    } else {
+        Vector3::z_axis()
+    };
+
+    let position = sphere_b.center() + surface_normal.scale(sphere_b.radius());
+
+    let penetration_depth = fph::max(
+        0.0,
+        (sphere_a.radius() + sphere_b.radius()) - center_distance,
+    );
+
+    Some(ContactGeometry {
+        position,
+        surface_normal,
+        penetration_depth,
+    })
+}
+
+pub fn determine_sphere_plane_contact(
+    sphere: &Sphere<fph>,
+    plane: &Plane<fph>,
+) -> Option<ContactGeometry> {
+    let signed_distance = plane.compute_signed_distance(sphere.center());
+    let penetration_depth = sphere.radius() - signed_distance;
+
+    if penetration_depth < 0.0 {
+        return None;
+    }
+
+    let surface_normal = *plane.unit_normal();
+    let position = sphere.center() - surface_normal.scale(signed_distance);
+
+    Some(ContactGeometry {
+        position,
+        surface_normal,
+        penetration_depth,
+    })
 }

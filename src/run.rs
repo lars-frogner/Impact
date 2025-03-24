@@ -44,7 +44,7 @@ use crate::{
             CollidableKind,
             components::{PlaneCollidableComp, SphereCollidableComp},
         },
-        constraint::ConstraintSolverConfig,
+        constraint::solver::ConstraintSolverConfig,
         fph,
         material::{ContactResponseParameters, components::UniformContactResponseComp},
         medium::UniformMedium,
@@ -543,9 +543,10 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
             n_substeps: 1,
             match_frame_duration: false,
             constraint_solver_config: Some(ConstraintSolverConfig {
-                n_iterations: 5,
+                n_iterations: 8,
+                old_impulse_weight: 0.4,
                 n_positional_correction_iterations: 3,
-                positional_correction_factor: 0.5,
+                positional_correction_factor: 0.2,
             }),
             ..SimulatorConfig::default()
         },
@@ -663,7 +664,7 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
     create_spheres(
         &app,
         sphere_radius,
-        [0, n_y, 0],
+        [5, n_y, 5],
         point![
             0.0,
             fph::from(n_spheres_y) * sphere_radius - room_extent,
@@ -678,7 +679,7 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
     create_room(
         &app,
         room_extent,
-        0.0,
+        5.0,
         concrete_color_texture_id,
         concrete_roughness_texture_id,
         concrete_normal_texture_id,

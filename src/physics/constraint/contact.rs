@@ -9,16 +9,27 @@ use crate::physics::{
 use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
 use num_traits::Zero;
-use std::ops::{Add, Sub};
+use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
 
+/// Identifier for a contact.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ContactID(u64);
+
 #[derive(Clone, Debug)]
-pub struct ContactSet {
+pub struct ContactManifold {
     contacts: TinyVec<[Contact; 4]>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Contact {
+    pub id: ContactID,
+    pub geometry: ContactGeometry,
+}
+
+#[derive(Clone, Debug)]
+pub struct ContactGeometry {
     /// The world space position of the point on body B that penetrates
     /// deepest into body A.
     pub position: Position,
@@ -51,7 +62,13 @@ pub struct ContactImpulses {
     tangent_2: fph,
 }
 
-impl ContactSet {
+impl ContactID {
+    pub fn from_two_u32(a: u32, b: u32) -> Self {
+        Self((u64::from(a) << 32) | u64::from(b))
+    }
+}
+
+impl ContactManifold {
     pub fn new() -> Self {
         Self {
             contacts: TinyVec::new(),
@@ -75,13 +92,22 @@ impl ContactSet {
     }
 }
 
-impl Default for ContactSet {
+impl Default for ContactManifold {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Contact {
+impl Default for Contact {
+    fn default() -> Self {
+        Self {
+            geometry: ContactGeometry::default(),
+            id: ContactID(u64::MAX),
+        }
+    }
+}
+
+impl ContactGeometry {
     /// Returns world space position of the point on body A that penetrates
     /// deepest into body B along the surface normal from
     /// [`Self::position_on_b`].
@@ -94,9 +120,36 @@ impl Contact {
     pub fn position_on_b(&self) -> Position {
         self.position
     }
+
+    fn determine_effective_response_parameters(
+        ecs_world: &ECSWorld,
+        body_a_entity: &Entity,
+        body_b_entity: &Entity,
+    ) -> ContactResponseParameters {
+        let body_a_response_params =
+            Self::obtain_contact_response_parameters_for_body(ecs_world, body_a_entity);
+
+        let body_b_response_params =
+            Self::obtain_contact_response_parameters_for_body(ecs_world, body_b_entity);
+
+        ContactResponseParameters::combined(&body_a_response_params, &body_b_response_params)
+    }
+
+    fn obtain_contact_response_parameters_for_body(
+        ecs_world: &ECSWorld,
+        body_entity: &Entity,
+    ) -> ContactResponseParameters {
+        let entry = ecs_world.entity(body_entity);
+
+        if let Some(params) = entry.get_component::<UniformContactResponseComp>() {
+            return params.access().0;
+        }
+
+        ContactResponseParameters::default()
+    }
 }
 
-impl Default for Contact {
+impl Default for ContactGeometry {
     fn default() -> Self {
         Self {
             position: Position::origin(),
@@ -106,7 +159,7 @@ impl Default for Contact {
     }
 }
 
-impl TwoBodyConstraint for Contact {
+impl TwoBodyConstraint for ContactGeometry {
     type Prepared = PreparedContact;
 
     fn prepare(
@@ -140,7 +193,7 @@ impl TwoBodyConstraint for Contact {
             restitution_coef,
             static_friction_coef,
             dynamic_friction_coef,
-        } = self.determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
+        } = Self::determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
 
         let velocity_a = compute_point_velocity(body_a, &disp_a);
         let velocity_b = compute_point_velocity(body_b, &disp_b);
@@ -169,39 +222,21 @@ impl TwoBodyConstraint for Contact {
     }
 }
 
-impl Contact {
-    fn determine_effective_response_parameters(
-        &self,
-        ecs_world: &ECSWorld,
-        body_a_entity: &Entity,
-        body_b_entity: &Entity,
-    ) -> ContactResponseParameters {
-        let body_a_response_params =
-            self.obtain_contact_response_parameters_for_body(ecs_world, body_a_entity);
-
-        let body_b_response_params =
-            self.obtain_contact_response_parameters_for_body(ecs_world, body_b_entity);
-
-        ContactResponseParameters::combined(&body_a_response_params, &body_b_response_params)
-    }
-
-    fn obtain_contact_response_parameters_for_body(
-        &self,
-        ecs_world: &ECSWorld,
-        body_entity: &Entity,
-    ) -> ContactResponseParameters {
-        let entry = ecs_world.entity(body_entity);
-
-        if let Some(params) = entry.get_component::<UniformContactResponseComp>() {
-            return params.access().0;
-        }
-
-        ContactResponseParameters::default()
-    }
-}
-
 impl PreparedTwoBodyConstraint for PreparedContact {
     type Impulses = ContactImpulses;
+
+    fn can_use_warm_impulses_from(&self, other: &Self) -> bool {
+        // `max_deviation_angle = acos(1 - threshold)`
+        const THRESHOLD: fph = 1e-2;
+
+        let normal_matches = self.normal.dot(&other.normal) > 1.0 - THRESHOLD;
+
+        // We also need to check one of the tangent directions in case a
+        // small deviation in the normal has caused the tangents to flip
+        let tangent_matches = self.tangent_1.dot(&other.tangent_1) > 1.0 - THRESHOLD;
+
+        normal_matches && tangent_matches
+    }
 
     fn compute_impulses(
         &self,
@@ -360,6 +395,18 @@ impl Sub for ContactImpulses {
             normal: self.normal - rhs.normal,
             tangent_1: self.tangent_1 - rhs.tangent_1,
             tangent_2: self.tangent_2 - rhs.tangent_2,
+        }
+    }
+}
+
+impl Mul<fph> for ContactImpulses {
+    type Output = Self;
+
+    fn mul(self, rhs: fph) -> Self::Output {
+        Self {
+            normal: self.normal * rhs,
+            tangent_1: self.tangent_1 * rhs,
+            tangent_2: self.tangent_2 * rhs,
         }
     }
 }

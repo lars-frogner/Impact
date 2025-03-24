@@ -43,6 +43,10 @@ impl TwoBodyConstraint for SphericalJoint {
 impl PreparedTwoBodyConstraint for PreparedSphericalJoint {
     type Impulses = fph;
 
+    fn can_use_warm_impulses_from(&self, _other: &Self) -> bool {
+        true
+    }
+
     fn compute_impulses(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> fph {
         todo!()
     }

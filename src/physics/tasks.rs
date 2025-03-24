@@ -45,7 +45,19 @@ define_task!(
     execute_on = [PhysicsTag],
     |app: &Application| {
         with_debug_logging!("Advancing simulation"; {
-            app.simulator().write().unwrap().advance_simulation(app.ecs_world());
+            app.simulator()
+                .write()
+                .unwrap()
+                .advance_simulation(
+                    app.ecs_world(),
+                    &app.scene()
+                        .read()
+                        .unwrap()
+                        .voxel_manager()
+                        .read()
+                        .unwrap()
+                        .object_manager
+                );
             Ok(())
         })
     }
