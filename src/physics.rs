@@ -13,12 +13,14 @@ pub mod tasks;
 
 use anyhow::{Result, bail};
 use collision::CollisionWorld;
-use constraint::{ConstraintManager, ConstraintSolverConfig};
+use constraint::{ConstraintManager, solver::ConstraintSolverConfig};
 use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
 use rigid_body::forces::{RigidBodyForceConfig, RigidBodyForceManager};
 use std::{sync::RwLock, time::Duration};
+
+use crate::voxel::VoxelObjectManager;
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
@@ -207,19 +209,27 @@ impl PhysicsSimulator {
     }
 
     /// Advances the physics simulation by one time step.
-    pub fn advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
+    pub fn advance_simulation(
+        &mut self,
+        ecs_world: &RwLock<ECSWorld>,
+        voxel_object_manager: &VoxelObjectManager,
+    ) {
         with_timing_info_logging!(
         "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
         self.scaled_time_step_duration(),
         self.simulation_speed_multiplier,
         self.n_substeps(); {
-            self.do_advance_simulation(ecs_world);
+            self.do_advance_simulation(ecs_world, voxel_object_manager);
         });
 
         log::info!("Simulation time: {:.1}", self.simulation_time);
     }
 
-    fn do_advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
+    fn do_advance_simulation(
+        &mut self,
+        ecs_world: &RwLock<ECSWorld>,
+        voxel_object_manager: &VoxelObjectManager,
+    ) {
         let mut entities_to_remove = Vec::new();
 
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
@@ -230,6 +240,7 @@ impl PhysicsSimulator {
         for _ in 0..self.n_substeps() {
             Self::perform_step(
                 &ecs_world_readonly,
+                voxel_object_manager,
                 &rigid_body_force_manager,
                 &constraint_manager,
                 &self.collision_world,
@@ -253,6 +264,7 @@ impl PhysicsSimulator {
 
     fn perform_step(
         ecs_world: &ECSWorld,
+        voxel_object_manager: &VoxelObjectManager,
         rigid_body_force_manager: &RigidBodyForceManager,
         constraint_manager: &ConstraintManager,
         collision_world: &RwLock<CollisionWorld>,
@@ -271,13 +283,13 @@ impl PhysicsSimulator {
         motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
         with_timing_info_logging!("Preparing constraints"; {
-            constraint_manager.prepare_constraints(ecs_world, &collision_world.read().unwrap());
+            constraint_manager.prepare_constraints(ecs_world, voxel_object_manager,&collision_world.read().unwrap());
         });
 
         rigid_body::systems::advance_rigid_body_velocities(ecs_world, step_duration);
 
         with_timing_info_logging!("Solving constraints"; {
-            constraint_manager.compute_and_apply_constrained_velocities(ecs_world);
+            constraint_manager.compute_and_apply_constrained_state(ecs_world);
         });
 
         rigid_body::systems::advance_rigid_body_configurations(ecs_world, step_duration);

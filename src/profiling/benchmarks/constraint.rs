@@ -15,6 +15,7 @@ use crate::{
         rigid_body::{RigidBody, components::RigidBodyComp},
     },
     profiling::Profiler,
+    voxel::VoxelObjectManager,
 };
 use impact_ecs::world::{Entity, World as ECSWorld};
 use nalgebra::point;
@@ -27,12 +28,13 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 
     let mut contacts = Vec::new();
     collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
+        &VoxelObjectManager::new(),
         &mut |Collision {
                   collider_a,
                   collider_b,
-                  contact_set,
+                  contact_manifold,
               }| {
-            for contact in contact_set.contacts() {
+            for contact in contact_manifold.contacts() {
                 contacts.push((collider_a.entity(), collider_b.entity(), contact.clone()));
             }
         },
@@ -60,7 +62,11 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
         n_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(&ecs_world, &collision_world);
+    constraint_manager.prepare_constraints(
+        &ecs_world,
+        &VoxelObjectManager::new(),
+        &collision_world,
+    );
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().read().unwrap().clone();
@@ -79,7 +85,11 @@ pub fn correct_contact_configurations(profiler: impl Profiler) {
         n_positional_correction_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(&ecs_world, &collision_world);
+    constraint_manager.prepare_constraints(
+        &ecs_world,
+        &VoxelObjectManager::new(),
+        &collision_world,
+    );
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().read().unwrap().clone();
