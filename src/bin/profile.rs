@@ -1,5 +1,10 @@
 #[cfg(not(feature = "profiling"))]
-compile_error!("This binary requires the 'profiling' feature to be enabled.");
+mod run {
+    pub fn run() {
+        eprintln!("This binary requires the 'profiling' feature to be enabled.");
+        std::process::exit(1);
+    }
+}
 
 #[cfg(feature = "profiling")]
 mod run {
@@ -96,6 +101,5 @@ mod run {
 }
 
 fn main() {
-    #[cfg(feature = "profiling")]
     run::run();
 }
