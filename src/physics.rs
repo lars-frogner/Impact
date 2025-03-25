@@ -233,7 +233,7 @@ impl PhysicsSimulator {
         let mut entities_to_remove = Vec::new();
 
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
-        let constraint_manager = self.constraint_manager.read().unwrap();
+        let mut constraint_manager = self.constraint_manager.write().unwrap();
         let ecs_world_readonly = ecs_world.read().unwrap();
 
         let substep_duration = self.compute_substep_duration();
@@ -242,7 +242,7 @@ impl PhysicsSimulator {
                 &ecs_world_readonly,
                 voxel_object_manager,
                 &rigid_body_force_manager,
-                &constraint_manager,
+                &mut constraint_manager,
                 &self.collision_world,
                 &self.medium,
                 self.simulation_time,
@@ -266,7 +266,7 @@ impl PhysicsSimulator {
         ecs_world: &ECSWorld,
         voxel_object_manager: &VoxelObjectManager,
         rigid_body_force_manager: &RigidBodyForceManager,
-        constraint_manager: &ConstraintManager,
+        constraint_manager: &mut ConstraintManager,
         collision_world: &RwLock<CollisionWorld>,
         medium: &UniformMedium,
         current_simulation_time: fph,
