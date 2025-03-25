@@ -12,22 +12,29 @@ use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
 
-/// Identifier for a contact.
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ContactID(u64);
-
+/// A set of contact points representing the region where two bodies are in
+/// contact.
 #[derive(Clone, Debug)]
 pub struct ContactManifold {
     contacts: TinyVec<[Contact; 4]>,
 }
 
+/// A point of contact between two bodies.
 #[derive(Clone, Debug)]
 pub struct Contact {
+    /// A globally unique identifier for the contact.
     pub id: ContactID,
+    /// The geometrical information about the contact.
     pub geometry: ContactGeometry,
 }
 
+/// Identifier for a [`Contact`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ContactID(u64);
+
+/// Geometrical information about a point of contact between two bodies
+/// A and B.
 #[derive(Clone, Debug)]
 pub struct ContactGeometry {
     /// The world space position of the point on body B that penetrates
@@ -41,31 +48,41 @@ pub struct ContactGeometry {
     pub penetration_depth: fph,
 }
 
+/// Derived information about a contact useful for solving the perpendicular
+/// (bounce) and tangential (friction) contact constraints.
 #[derive(Clone, Debug)]
 pub struct PreparedContact {
+    /// The point on body A that penetrates deepest into body B (along the
+    /// surface normal from [`Self::local_position_on_b`]), expressed in the
+    /// body frame of A.
     local_position_on_a: Position,
+    /// The point on body B that penetrates deepest into body A, expressed in
+    /// the body frame of B.
     local_position_on_b: Position,
+    /// The world space surface normal of body B at
+    /// [`Self::local_position_on_b`].
     normal: UnitVector3<fph>,
-    tangent_1: UnitVector3<fph>,
-    tangent_2: UnitVector3<fph>,
+    /// A world space tangent direction of the surface of body B at
+    /// [`Self::local_position_on_b`].
+    tangent: UnitVector3<fph>,
+    /// The world space tangent direction completing the right-handed
+    /// coordinate system defined by [`Self::normal`] and
+    /// [`Self::tangent`].
+    bitangent: UnitVector3<fph>,
     effective_mass_normal: fph,
-    effective_mass_tangent_1: fph,
-    effective_mass_tangent_2: fph,
+    effective_mass_tangent: fph,
+    effective_mass_bitangent: fph,
     restitution_coef: fph,
     friction_coef: fph,
 }
 
+/// Impulses along the three axes of a surface-aligned coordinate system for a
+/// contact.
 #[derive(Clone, Copy, Debug)]
 pub struct ContactImpulses {
     normal: fph,
-    tangent_1: fph,
-    tangent_2: fph,
-}
-
-impl ContactID {
-    pub fn from_two_u32(a: u32, b: u32) -> Self {
-        Self((u64::from(a) << 32) | u64::from(b))
-    }
+    tangent: fph,
+    bitangent: fph,
 }
 
 impl ContactManifold {
@@ -107,6 +124,12 @@ impl Default for Contact {
     }
 }
 
+impl ContactID {
+    pub fn from_two_u32(a: u32, b: u32) -> Self {
+        Self((u64::from(a) << 32) | u64::from(b))
+    }
+}
+
 impl ContactGeometry {
     /// Returns world space position of the point on body A that penetrates
     /// deepest into body B along the surface normal from
@@ -121,6 +144,9 @@ impl ContactGeometry {
         self.position
     }
 
+    /// Computes the effective restitution and friction coefficients at the
+    /// contact point by combining the coefficients obtained from each of the
+    /// two bodies.
     fn determine_effective_response_parameters(
         ecs_world: &ECSWorld,
         body_a_entity: &Entity,
@@ -175,15 +201,16 @@ impl TwoBodyConstraint for ContactGeometry {
         let local_position_on_b =
             body_b.transform_point_from_world_to_body_frame(&self.position_on_b());
 
+        // World space displacements from the center of mass of each body to
+        // the reference contact point (taken to be on body B)
         let disp_a = self.position - body_a.position;
         let disp_b = self.position - body_b.position;
 
         let normal = self.surface_normal;
         let (tangent_1, tangent_2) = construct_tangent_vectors(&normal);
 
-        let compute_effective_mass = |direction: &UnitVector3<fph>| {
-            compute_effective_mass(body_a, body_b, &disp_a, &disp_b, direction)
-        };
+        let compute_effective_mass =
+            |direction| compute_effective_mass(body_a, body_b, &disp_a, &disp_b, direction);
 
         let effective_mass_normal = compute_effective_mass(&normal);
         let effective_mass_tangent_1 = compute_effective_mass(&tangent_1);
@@ -195,8 +222,16 @@ impl TwoBodyConstraint for ContactGeometry {
             dynamic_friction_coef,
         } = Self::determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
 
+        // World space velocity of the reference contact point when considered
+        // fixed to body A and B respectively
         let velocity_a = compute_point_velocity(body_a, &disp_a);
         let velocity_b = compute_point_velocity(body_b, &disp_b);
+
+        // We need the speed at which the surfaces of the two bodies are
+        // slipping at the contact point to determine whether to apply static
+        // or dynamic friction. Note that the body velocities have not yet been
+        // advanced based on non-constraint forces for this frame, which is
+        // crucial for correctly identifying the kind of friction to use.
         let relative_velocity = velocity_a - velocity_b;
         let slip_speed_squared =
             relative_velocity.dot(&tangent_1).powi(2) + relative_velocity.dot(&tangent_2).powi(2);
@@ -211,11 +246,11 @@ impl TwoBodyConstraint for ContactGeometry {
             local_position_on_a,
             local_position_on_b,
             normal,
-            tangent_1,
-            tangent_2,
+            tangent: tangent_1,
+            bitangent: tangent_2,
             effective_mass_normal,
-            effective_mass_tangent_1,
-            effective_mass_tangent_2,
+            effective_mass_tangent: effective_mass_tangent_1,
+            effective_mass_bitangent: effective_mass_tangent_2,
             restitution_coef,
             friction_coef,
         }
@@ -233,7 +268,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         // We also need to check one of the tangent directions in case a
         // small deviation in the normal has caused the tangents to flip
-        let tangent_matches = self.tangent_1.dot(&other.tangent_1) > 1.0 - THRESHOLD;
+        let tangent_matches = self.tangent.dot(&other.tangent) > 1.0 - THRESHOLD;
 
         normal_matches && tangent_matches
     }
@@ -246,9 +281,14 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let position_on_b =
             body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b);
 
+        // These could have been cached from `ContactGeometry::prepare`, but
+        // probably not worth the extra space as they are cheap to recompute
         let disp_a = position_on_b - body_a.position;
         let disp_b = position_on_b - body_b.position;
 
+        // At this point, the body velocities have been advanced based on
+        // non-constraint forces and may also have been updated with
+        // constraint impulses
         let velocity_a = compute_point_velocity(body_a, &disp_a);
         let velocity_b = compute_point_velocity(body_b, &disp_b);
 
@@ -258,40 +298,44 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let normal_impulse = -self.effective_mass_normal
             * (1.0 + self.restitution_coef)
-            * separating_velocity.min(0.0);
+            * separating_velocity.min(0.0); // <- The impulse should be zero if the bodies are separating
 
-        let tangent_1_impulse =
-            -self.effective_mass_tangent_1 * self.tangent_1.dot(&relative_velocity);
-        let tangent_2_impulse =
-            -self.effective_mass_tangent_2 * self.tangent_2.dot(&relative_velocity);
+        let tangent_impulse = -self.effective_mass_tangent * self.tangent.dot(&relative_velocity);
+        let bitangent_impulse =
+            -self.effective_mass_bitangent * self.bitangent.dot(&relative_velocity);
 
         ContactImpulses {
             normal: normal_impulse,
-            tangent_1: tangent_1_impulse,
-            tangent_2: tangent_2_impulse,
+            tangent: tangent_impulse,
+            bitangent: bitangent_impulse,
         }
     }
 
     fn clamp_impulses(&self, impulses: ContactImpulses) -> ContactImpulses {
+        // This ensures that the total normal impulse can only push the bodies apart
         let clamped_normal_impulse = fph::max(0.0, impulses.normal);
 
+        // The impulse version of Coulomb's friction law determines the maximum
+        // frictional impulse
         let max_tangent_impulse_magnitude = self.friction_coef * clamped_normal_impulse;
-        let tangent_impulse_magnitude =
-            fph::sqrt(impulses.tangent_1.powi(2) + impulses.tangent_2.powi(2));
 
+        let tangent_impulse_magnitude =
+            fph::sqrt(impulses.tangent.powi(2) + impulses.bitangent.powi(2));
+
+        // The tangential impulse must be scaled down if it exceeds the maximum
         let tangent_impulse_scaling = if tangent_impulse_magnitude > max_tangent_impulse_magnitude {
             max_tangent_impulse_magnitude / tangent_impulse_magnitude
         } else {
             1.0
         };
 
-        let clamped_tangent_1_impulse = impulses.tangent_1 * tangent_impulse_scaling;
-        let clamped_tangent_2_impulse = impulses.tangent_2 * tangent_impulse_scaling;
+        let clamped_tangent_impulse = impulses.tangent * tangent_impulse_scaling;
+        let clamped_bitangent_impulse = impulses.bitangent * tangent_impulse_scaling;
 
         ContactImpulses {
             normal: clamped_normal_impulse,
-            tangent_1: clamped_tangent_1_impulse,
-            tangent_2: clamped_tangent_2_impulse,
+            tangent: clamped_tangent_impulse,
+            bitangent: clamped_bitangent_impulse,
         }
     }
 
@@ -302,10 +346,10 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         impulses: ContactImpulses,
     ) {
         let momentum_change = self.normal.scale(impulses.normal)
-            + self.tangent_1.scale(impulses.tangent_1)
-            + self.tangent_2.scale(impulses.tangent_2);
+            + self.tangent.scale(impulses.tangent)
+            + self.bitangent.scale(impulses.bitangent);
 
-        // TODO: maybe this should be cached
+        // TODO: maybe this should be cached from `compute_impulses`
         let position_on_b =
             body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b);
 
@@ -325,6 +369,16 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b: &mut ConstrainedBody,
         correction_factor: fph,
     ) {
+        // We are now correcting body positions and orientations iteratively.
+        // In principle, we should rerun collision detection to obtain the new
+        // contact geometry. Since that's not feasible in practice, we instead
+        // assume that the contact point on each body stays fixed on the body
+        // and that the surface normal does not change. We can then compute the
+        // world space positions of the points based on the current body
+        // positions and orientations and combine with the contact normal to
+        // estimate the current penetration depth. TODO: it's probably more
+        // accurate to fix the normal in body B space instead of world space.
+
         let position_on_a =
             body_a.transform_point_from_body_to_world_frame(&self.local_position_on_a);
         let position_on_b =
@@ -332,6 +386,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let penetration_depth = self.normal.dot(&(position_on_b - position_on_a));
 
+        // We don't want to touch the bodies if they are no longer penetrating
         if penetration_depth <= 0.0 {
             return;
         }
@@ -340,6 +395,15 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let disp_b = position_on_b - body_b.position;
 
         let effective_mass = compute_effective_mass(body_a, body_b, &disp_a, &disp_b, &self.normal);
+
+        // We are trying to compute the impulse that would yield a change in
+        // linear and angular velocity that over one time step would move the
+        // bodies so as to correct a certain fraction of the interpenetration.
+        // Instead of modifying the body velocites, which would add unphysical
+        // kinetic energy to the system, we compute the deltas in linear and
+        // angular velocity caused by the impulse and use those to update the
+        // positions and orientations directly. We don't need the time step
+        // duration as this gets cancelled out in the equations.
 
         let pseudo_impulse = effective_mass * correction_factor * penetration_depth;
 
@@ -365,13 +429,13 @@ impl Zero for ContactImpulses {
     fn zero() -> Self {
         Self {
             normal: 0.0,
-            tangent_1: 0.0,
-            tangent_2: 0.0,
+            tangent: 0.0,
+            bitangent: 0.0,
         }
     }
 
     fn is_zero(&self) -> bool {
-        self.normal == 0.0 && self.tangent_1 == 0.0 && self.tangent_2 == 0.0
+        self.normal == 0.0 && self.tangent == 0.0 && self.bitangent == 0.0
     }
 }
 
@@ -381,8 +445,8 @@ impl Add for ContactImpulses {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             normal: self.normal + rhs.normal,
-            tangent_1: self.tangent_1 + rhs.tangent_1,
-            tangent_2: self.tangent_2 + rhs.tangent_2,
+            tangent: self.tangent + rhs.tangent,
+            bitangent: self.bitangent + rhs.bitangent,
         }
     }
 }
@@ -393,8 +457,8 @@ impl Sub for ContactImpulses {
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
             normal: self.normal - rhs.normal,
-            tangent_1: self.tangent_1 - rhs.tangent_1,
-            tangent_2: self.tangent_2 - rhs.tangent_2,
+            tangent: self.tangent - rhs.tangent,
+            bitangent: self.bitangent - rhs.bitangent,
         }
     }
 }
@@ -405,8 +469,8 @@ impl Mul<fph> for ContactImpulses {
     fn mul(self, rhs: fph) -> Self::Output {
         Self {
             normal: self.normal * rhs,
-            tangent_1: self.tangent_1 * rhs,
-            tangent_2: self.tangent_2 * rhs,
+            tangent: self.tangent * rhs,
+            bitangent: self.bitangent * rhs,
         }
     }
 }

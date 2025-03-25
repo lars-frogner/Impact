@@ -93,6 +93,18 @@ impl ConstraintSolver {
         }
     }
 
+    pub fn prepared_contact_count(&self) -> usize {
+        self.contacts.constraints().len()
+    }
+
+    pub fn prepared_spherical_joint_count(&self) -> usize {
+        self.spherical_joints.constraints().len()
+    }
+
+    pub fn prepared_body_count(&self) -> usize {
+        self.bodies.len()
+    }
+
     /// Prepares the given [`Contact`] between the given bodies for solution.
     /// The states of the involved rigid bodies will be fetched and cached.
     pub fn prepare_contact(

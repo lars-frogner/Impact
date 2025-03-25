@@ -27,7 +27,6 @@ use std::{
     collections::HashMap,
     fmt,
     ops::{Add, Mul, Sub},
-    sync::RwLock,
 };
 
 /// Identifier for a constraint in a [`ConstraintManager`].
@@ -36,9 +35,9 @@ use std::{
 pub struct ConstraintID(u32);
 
 /// Manages all constraints in the simulation.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConstraintManager {
-    solver: RwLock<ConstraintSolver>,
+    solver: ConstraintSolver,
     spherical_joints: HashMap<ConstraintID, SphericalJoint>,
     constraint_id_counter: u32,
 }
@@ -129,14 +128,18 @@ impl ConstraintManager {
     /// [`ConstraintSolver`].
     pub fn new(solver_config: ConstraintSolverConfig) -> Self {
         Self {
-            solver: RwLock::new(ConstraintSolver::new(solver_config)),
+            solver: ConstraintSolver::new(solver_config),
             spherical_joints: HashMap::new(),
             constraint_id_counter: 0,
         }
     }
 
-    pub fn solver(&self) -> &RwLock<ConstraintSolver> {
+    pub fn solver(&self) -> &ConstraintSolver {
         &self.solver
+    }
+
+    pub fn solver_mut(&mut self) -> &mut ConstraintSolver {
+        &mut self.solver
     }
 
     /// Registers the given spherical joint constraint and returns a new ID
@@ -149,20 +152,18 @@ impl ConstraintManager {
 
     /// Prepares for solving the constraints for the current frame by gathering
     /// all relevant rigid body state and precomputing relevant constraint
-    /// quantities. Should be called before advancing rigid body velocities or
+    /// quantities. Should be called before advancing rigid body velocities and
     /// configurations for the frame.
     pub fn prepare_constraints(
-        &self,
+        &mut self,
         ecs_world: &ECSWorld,
         voxel_object_manager: &VoxelObjectManager,
         collision_world: &CollisionWorld,
     ) {
-        let mut solver = self.solver.write().unwrap();
-
         // The cached states of the bodies from the previous frame are stale
         // and must be removed. Up-to-date body state will be gathered as
         // required for the constraints of this frame.
-        solver.clear_prepared_bodies();
+        self.solver.clear_prepared_bodies();
 
         collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
             voxel_object_manager,
@@ -172,7 +173,7 @@ impl ConstraintManager {
                       contact_manifold,
                   }| {
                 for contact in contact_manifold.contacts() {
-                    solver.prepare_contact(
+                    self.solver.prepare_contact(
                         ecs_world,
                         collider_a.entity(),
                         collider_b.entity(),
@@ -183,28 +184,28 @@ impl ConstraintManager {
         );
 
         for (id, joint) in &self.spherical_joints {
-            solver.prepare_spherical_joint(ecs_world, *id, joint);
+            self.solver.prepare_spherical_joint(ecs_world, *id, joint);
         }
 
-        // Any constraints left over from the previous frame that was not
+        // Any constraints left over from the previous frame that were not
         // prepared again for this frame must be removed
-        solver.remove_unprepared_constraints();
+        self.solver.remove_unprepared_constraints();
     }
 
     /// For testing and benchmarking contact resolution.
     pub fn prepare_specific_contacts_only<'a>(
-        &self,
+        &mut self,
         ecs_world: &ECSWorld,
         contacts: impl IntoIterator<Item = (Entity, Entity, &'a Contact)>,
     ) {
-        let mut solver = self.solver.write().unwrap();
-        solver.clear_prepared_bodies();
+        self.solver.clear_prepared_bodies();
 
         for (body_a_entity, body_b_entity, contact) in contacts {
-            solver.prepare_contact(ecs_world, body_a_entity, body_b_entity, contact);
+            self.solver
+                .prepare_contact(ecs_world, body_a_entity, body_b_entity, contact);
         }
 
-        solver.remove_unprepared_constraints();
+        self.solver.remove_unprepared_constraints();
     }
 
     /// Executes constraint solving. As opposed to
@@ -214,12 +215,13 @@ impl ConstraintManager {
     /// advanced velocities before constraint solving. After computing the
     /// resolved velocities and configurations, these will then be applied to
     /// the rigid body entities.
-    pub fn compute_and_apply_constrained_state(&self, ecs_world: &ECSWorld) {
-        let mut solver = self.solver.write().unwrap();
-        solver.synchronize_prepared_body_velocities_with_entity_velocities(ecs_world);
-        solver.compute_constrained_velocities();
-        solver.compute_corrected_configurations();
-        solver.apply_constrained_velocities_and_corrected_configurations(ecs_world);
+    pub fn compute_and_apply_constrained_state(&mut self, ecs_world: &ECSWorld) {
+        self.solver
+            .synchronize_prepared_body_velocities_with_entity_velocities(ecs_world);
+        self.solver.compute_constrained_velocities();
+        self.solver.compute_corrected_configurations();
+        self.solver
+            .apply_constrained_velocities_and_corrected_configurations(ecs_world);
     }
 
     fn create_new_constraint_id(&mut self) -> ConstraintID {

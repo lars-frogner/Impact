@@ -40,7 +40,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
         },
     );
 
-    let constraint_manager = ConstraintManager::new(ConstraintSolverConfig::default());
+    let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig::default());
 
     profiler.profile(&mut || {
         constraint_manager.prepare_specific_contacts_only(
@@ -58,7 +58,7 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
 
     setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
 
-    let constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
+    let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_iterations: 10,
         ..Default::default()
     });
@@ -69,7 +69,7 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
     );
 
     profiler.profile(&mut || {
-        let mut solver = constraint_manager.solver().read().unwrap().clone();
+        let mut solver = constraint_manager.solver().clone();
         solver.compute_constrained_velocities();
         solver
     });
@@ -81,7 +81,7 @@ pub fn correct_contact_configurations(profiler: impl Profiler) {
 
     setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
 
-    let constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
+    let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_positional_correction_iterations: 10,
         ..Default::default()
     });
@@ -92,7 +92,7 @@ pub fn correct_contact_configurations(profiler: impl Profiler) {
     );
 
     profiler.profile(&mut || {
-        let mut solver = constraint_manager.solver().read().unwrap().clone();
+        let mut solver = constraint_manager.solver().clone();
         solver.compute_corrected_configurations();
         solver
     });
