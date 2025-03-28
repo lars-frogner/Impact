@@ -68,6 +68,19 @@ bitflags! {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoxelPlacement {
+    Interior,
+    Surface(VoxelSurfacePlacement),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoxelSurfacePlacement {
+    Face,
+    Edge,
+    Corner,
+}
+
 /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -194,6 +207,20 @@ impl VoxelFlags {
         ];
         FLAGS[2 * face_dim.idx() + face_side.idx()]
     }
+
+    const fn placement(self) -> VoxelPlacement {
+        const PLACEMENTS: [VoxelPlacement; 7] = [
+            VoxelPlacement::Surface(VoxelSurfacePlacement::Corner),
+            VoxelPlacement::Surface(VoxelSurfacePlacement::Corner),
+            VoxelPlacement::Surface(VoxelSurfacePlacement::Corner),
+            VoxelPlacement::Surface(VoxelSurfacePlacement::Corner),
+            VoxelPlacement::Surface(VoxelSurfacePlacement::Edge),
+            VoxelPlacement::Surface(VoxelSurfacePlacement::Face),
+            VoxelPlacement::Interior,
+        ];
+        let n_blocked_faces = (self.bits() & 0b11111100).count_ones();
+        PLACEMENTS[n_blocked_faces as usize]
+    }
 }
 
 impl Voxel {
@@ -211,7 +238,7 @@ impl Voxel {
         }
     }
 
-    /// Creates a new non-empty voxel of the given typewith the given signed
+    /// Creates a new non-empty voxel of the given type with the given signed
     /// distance.
     pub const fn non_empty(voxel_type: VoxelType, signed_distance: VoxelSignedDistance) -> Self {
         Self::new(voxel_type, VoxelFlags::new(), signed_distance)
@@ -259,6 +286,15 @@ impl Voxel {
     /// Returns the flags encoding the state of the voxel.
     pub fn flags(&self) -> VoxelFlags {
         self.flags
+    }
+
+    /// Returns the placement of the voxel if it is non-empty.
+    pub fn placement(&self) -> Option<VoxelPlacement> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.flags.placement())
+        }
     }
 
     /// Returns the signed distance from the center of the voxel to the

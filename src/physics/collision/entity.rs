@@ -1,8 +1,13 @@
 //! Management of collidables for entities.
 
-use crate::physics::collision::{
-    CollisionWorld,
-    components::{CollidableComp, PlaneCollidableComp, SphereCollidableComp},
+use crate::{
+    physics::collision::{
+        CollisionWorld,
+        components::{
+            CollidableComp, PlaneCollidableComp, SphereCollidableComp, VoxelObjectCollidableComp,
+        },
+    },
+    voxel::components::VoxelObjectComp,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use std::sync::RwLock;
@@ -35,6 +40,21 @@ pub fn setup_collidable_for_new_entity(
         |plane_collidable: &PlaneCollidableComp| -> CollidableComp {
             let collidable_id = collision_world
                 .add_plane_collidable(plane_collidable.kind(), plane_collidable.plane());
+
+            CollidableComp { collidable_id }
+        }
+    );
+
+    setup!(
+        {
+            let mut collision_world = collision_world.write().unwrap();
+        },
+        components,
+        |object: &VoxelObjectComp,
+         object_collidable: &VoxelObjectCollidableComp|
+         -> CollidableComp {
+            let collidable_id = collision_world
+                .add_voxel_object_collidable(object_collidable.kind(), object.voxel_object_id);
 
             CollidableComp { collidable_id }
         }

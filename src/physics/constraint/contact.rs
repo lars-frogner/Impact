@@ -128,6 +128,15 @@ impl ContactID {
     pub fn from_two_u32(a: u32, b: u32) -> Self {
         Self((u64::from(a) << 32) | u64::from(b))
     }
+
+    pub fn from_two_u32_and_three_indices(a: u32, b: u32, indices: [usize; 3]) -> Self {
+        let mut id = Self::from_two_u32(a, b).0;
+        for index in indices {
+            // Mix in indices
+            id = id.wrapping_mul(31).wrapping_add(index as u64);
+        }
+        Self(id)
+    }
 }
 
 impl ContactGeometry {

@@ -1,10 +1,10 @@
 //! Intersection of shapes with chunked voxel objects.
 
-use super::chunk_voxels_mut;
+use super::{chunk_voxels, chunk_voxels_mut};
 use crate::{
     geometry::{AxisAlignedBox, Capsule, Sphere},
     voxel::{
-        Voxel,
+        Voxel, VoxelPlacement, VoxelSurfacePlacement,
         chunks::{
             CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection::SplitDetector,
             linear_voxel_idx_within_chunk_from_object_voxel_indices,
@@ -15,6 +15,71 @@ use nalgebra::{self as na, Point3, point};
 use std::{array, collections::HashSet, ops::Range};
 
 impl ChunkedVoxelObject {
+    pub fn for_each_surface_voxel_maybe_intersecting_sphere(
+        &self,
+        sphere: &Sphere<f64>,
+        f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
+    ) {
+        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_aab(&sphere.compute_aabb());
+        self.for_each_surface_voxel_in_voxel_ranges(touched_voxel_ranges, f);
+    }
+
+    fn for_each_surface_voxel_in_voxel_ranges(
+        &self,
+        included_voxel_ranges: [Range<usize>; 3],
+        f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
+    ) {
+        if included_voxel_ranges.iter().any(Range::is_empty) {
+            return;
+        }
+
+        let included_chunk_ranges = included_voxel_ranges
+            .clone()
+            .map(chunk_range_encompassing_voxel_range);
+
+        for chunk_i in included_chunk_ranges[0].clone() {
+            for chunk_j in included_chunk_ranges[1].clone() {
+                for chunk_k in included_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    // Only non-uniform chunks can have surface voxels
+                    let VoxelChunk::NonUniform(chunk) = &self.chunks[chunk_idx] else {
+                        continue;
+                    };
+
+                    let object_voxel_ranges_in_chunk =
+                        chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
+
+                    let included_voxel_ranges_in_chunk: [_; 3] = array::from_fn(|dim| {
+                        let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
+                        let included_range = &included_voxel_ranges[dim];
+                        usize::max(range_in_chunk.start, included_range.start)
+                            ..usize::min(range_in_chunk.end, included_range.end)
+                    });
+
+                    let voxels = chunk_voxels(&self.voxels, chunk.data_offset);
+
+                    for i in included_voxel_ranges_in_chunk[0].clone() {
+                        for j in included_voxel_ranges_in_chunk[1].clone() {
+                            for k in included_voxel_ranges_in_chunk[2].clone() {
+                                let voxel_idx =
+                                    linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                        i, j, k,
+                                    );
+                                let voxel = &voxels[voxel_idx];
+                                if let Some(VoxelPlacement::Surface(placement)) = voxel.placement()
+                                {
+                                    f([i, j, k], voxel, placement);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Finds all non-empty voxels whose center fall within the given sphere and
     /// calls the given closure with the voxel's indices, squared distance
     /// between the voxel center and the center of the sphere and a mutable
@@ -282,6 +347,17 @@ impl ChunkedVoxelObject {
         );
     }
 
+    /// Returns the object space position of the center of the voxel at the
+    /// given object voxel indices.
+    pub fn voxel_center_position_from_object_voxel_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> Point3<f64> {
+        voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
+    }
+
     fn handle_chunk_voxels_modified(
         voxels: &mut [Voxel],
         split_detector: &mut SplitDetector,
@@ -359,7 +435,7 @@ impl ChunkedVoxelObject {
             for j in self.occupied_voxel_ranges[1].clone() {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
-                        voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k);
+                        self.voxel_center_position_from_object_voxel_indices(i, j, k);
                     if sphere.contains_point(&voxel_center_position) {
                         if let Some(voxel) = self.get_voxel(i, j, k) {
                             f([i, j, k], voxel);
@@ -381,7 +457,7 @@ impl ChunkedVoxelObject {
             for j in self.occupied_voxel_ranges[1].clone() {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
-                        voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k);
+                        self.voxel_center_position_from_object_voxel_indices(i, j, k);
                     if containment_tester.contains_point(&voxel_center_position) {
                         if let Some(voxel) = self.get_voxel(i, j, k) {
                             f([i, j, k], voxel);
@@ -427,7 +503,7 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
     start..end
 }
 
-fn voxel_center_position_from_object_voxel_indices(
+pub(super) fn voxel_center_position_from_object_voxel_indices(
     voxel_extent: f64,
     i: usize,
     j: usize,

@@ -42,7 +42,7 @@ use crate::{
         PhysicsSimulator, SimulatorConfig,
         collision::{
             CollidableKind,
-            components::{PlaneCollidableComp, SphereCollidableComp},
+            components::{PlaneCollidableComp, SphereCollidableComp, VoxelObjectCollidableComp},
         },
         constraint::solver::ConstraintSolverConfig,
         fph,
@@ -54,7 +54,9 @@ use crate::{
                 constant_rotation::components::ConstantRotationComp,
                 harmonic_oscillation::components::HarmonicOscillatorTrajectoryComp,
             },
-            components::{LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, VelocityComp},
+            components::{
+                LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, Static, VelocityComp,
+            },
         },
         rigid_body::{
             components::UniformRigidBodyComp,
@@ -557,13 +559,29 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
     let orientation_controller =
         RollFreeCameraOrientationController::new(vertical_field_of_view, 1.0);
 
+    let voxel_type_registry = VoxelTypeRegistry::new(
+        vec![Cow::Borrowed("Metal")],
+        vec![1e9; 1],
+        vec![FixedVoxelMaterialProperties::new(1.0, 1.0, 1.0, 0.0)],
+        vec![PathBuf::from(
+            "assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Color.jpg",
+        )],
+        vec![PathBuf::from(
+            "assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Roughness.jpg",
+        )],
+        vec![PathBuf::from(
+            "assets/Metal062C_4K-JPG/Metal062C_4K-JPG_NormalDX.jpg",
+        )],
+    )
+    .unwrap();
+
     let app = Application::new(
         Arc::new(window),
         rendering_config,
         simulator,
         Some(Box::new(motion_controller)),
         Some(Box::new(orientation_controller)),
-        VoxelTypeRegistry::default(),
+        voxel_type_registry,
     )?;
 
     let mouse_button_input_handler = MouseButtonInputHandler::default();
@@ -657,17 +675,17 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
     ))?;
 
     let sphere_radius = 0.5;
-    let n_y = 5;
+    let n_y = 4;
     let room_extent = 8.0;
     let n_spheres_y = 2 * n_y + 1;
 
     create_spheres(
         &app,
         sphere_radius,
-        [5, n_y, 5],
+        [3, n_y, 3],
         point![
             0.0,
-            fph::from(n_spheres_y) * sphere_radius - room_extent,
+            fph::from(n_spheres_y) * sphere_radius - room_extent + 2.0,
             0.0
         ],
         false,
@@ -679,11 +697,26 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
     create_room(
         &app,
         room_extent,
-        5.0,
+        20.0,
         concrete_color_texture_id,
         concrete_roughness_texture_id,
         concrete_normal_texture_id,
     )?;
+
+    let voxel_extent = 0.25;
+    let box_size = 6.0;
+    app.create_entity((
+        &VoxelBoxComp::new(voxel_extent, box_size, box_size, box_size),
+        &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
+        &ReferenceFrameComp::unoriented(point![
+            0.0,
+            0.5 * voxel_extent * box_size - 0.5 * room_extent,
+            0.0
+        ]),
+        &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(), Degrees(500.0))),
+        &VoxelObjectCollidableComp::new(CollidableKind::Static),
+        // &Static,
+    ))?;
 
     app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
         vector![1.0, 1.0, 1.0] * 200000.0,

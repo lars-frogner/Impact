@@ -72,7 +72,7 @@ pub struct PlaneCollidableGeometry {
 #[derive(Clone, Debug)]
 pub struct VoxelObjectCollidableGeometry {
     object_id: VoxelObjectID,
-    transform_to_world_space: Similarity3<fph>,
+    transform_to_object_space: Similarity3<fph>,
 }
 
 /// Identifier for a collidable in a [`CollisionWorld`].
@@ -122,6 +122,14 @@ impl CollisionWorld {
             kind,
             LocalCollidableGeometry::Plane(PlaneCollidableGeometry { plane }),
         )
+    }
+
+    pub fn add_voxel_object_collidable(
+        &mut self,
+        kind: CollidableKind,
+        object_id: VoxelObjectID,
+    ) -> CollidableID {
+        self.add_collidable(kind, LocalCollidableGeometry::VoxelObject(object_id))
     }
 
     pub fn synchronize_collidable(
@@ -362,7 +370,7 @@ impl VoxelObjectCollidableGeometry {
     fn new(object_id: VoxelObjectID, transform_to_world_space: Similarity3<fph>) -> Self {
         Self {
             object_id,
-            transform_to_world_space,
+            transform_to_object_space: transform_to_world_space.inverse(),
         }
     }
 }
@@ -396,16 +404,27 @@ fn generate_contact_manifold(
             );
             CollidableOrder::Original
         }
-        (VoxelObject(voxel_object), Sphere(sphere)) => {
-            generate_voxel_object_sphere_contact_manifold(
+        (Sphere(sphere), VoxelObject(voxel_object)) => {
+            generate_sphere_voxel_object_contact_manifold(
                 voxel_object_manager,
-                voxel_object,
                 sphere,
+                voxel_object,
                 collidable_a.id,
                 collidable_b.id,
                 contact_manifold,
             );
             CollidableOrder::Original
+        }
+        (VoxelObject(voxel_object), Sphere(sphere)) => {
+            generate_sphere_voxel_object_contact_manifold(
+                voxel_object_manager,
+                sphere,
+                voxel_object,
+                collidable_b.id,
+                collidable_a.id,
+                contact_manifold,
+            );
+            CollidableOrder::Swapped
         }
         (VoxelObject(voxel_object), Plane(plane)) => {
             generate_voxel_object_plane_contact_manifold(
@@ -418,6 +437,17 @@ fn generate_contact_manifold(
             );
             CollidableOrder::Original
         }
+        (Plane(plane), VoxelObject(voxel_object)) => {
+            generate_voxel_object_plane_contact_manifold(
+                voxel_object_manager,
+                voxel_object,
+                plane,
+                collidable_b.id,
+                collidable_a.id,
+                contact_manifold,
+            );
+            CollidableOrder::Swapped
+        }
         (Sphere(sphere_a), Sphere(sphere_b)) => {
             generate_sphere_sphere_contact_manifold(
                 sphere_a,
@@ -428,17 +458,6 @@ fn generate_contact_manifold(
             );
             CollidableOrder::Original
         }
-        (Sphere(sphere), VoxelObject(voxel_object)) => {
-            generate_voxel_object_sphere_contact_manifold(
-                voxel_object_manager,
-                voxel_object,
-                sphere,
-                collidable_b.id,
-                collidable_a.id,
-                contact_manifold,
-            );
-            CollidableOrder::Swapped
-        }
         (Sphere(sphere), Plane(plane)) => {
             generate_sphere_plane_contact_manifold(
                 sphere,
@@ -447,10 +466,6 @@ fn generate_contact_manifold(
                 collidable_b.id,
                 contact_manifold,
             );
-            CollidableOrder::Original
-        }
-        (Plane(_), Plane(_)) => {
-            // Not useful
             CollidableOrder::Original
         }
         (Plane(plane), Sphere(sphere)) => {
@@ -463,16 +478,9 @@ fn generate_contact_manifold(
             );
             CollidableOrder::Swapped
         }
-        (Plane(plane), VoxelObject(voxel_object)) => {
-            generate_voxel_object_plane_contact_manifold(
-                voxel_object_manager,
-                voxel_object,
-                plane,
-                collidable_b.id,
-                collidable_a.id,
-                contact_manifold,
-            );
-            CollidableOrder::Swapped
+        (Plane(_), Plane(_)) => {
+            // Not useful
+            CollidableOrder::Original
         }
     }
 }
@@ -488,15 +496,77 @@ fn generate_voxel_object_voxel_object_contact_manifold(
     todo!()
 }
 
-fn generate_voxel_object_sphere_contact_manifold(
+fn generate_sphere_voxel_object_contact_manifold(
     voxel_object_manager: &VoxelObjectManager,
-    voxel_object: &VoxelObjectCollidableGeometry,
     sphere: &SphereCollidableGeometry,
-    voxel_object_collidable_id: CollidableID,
+    voxel_object: &VoxelObjectCollidableGeometry,
     sphere_collidable_id: CollidableID,
+    voxel_object_collidable_id: CollidableID,
     contact_manifold: &mut ContactManifold,
 ) {
-    todo!()
+    let VoxelObjectCollidableGeometry {
+        object_id,
+        transform_to_object_space,
+    } = voxel_object;
+
+    let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
+        return;
+    };
+    let voxel_object = voxel_object.object();
+
+    let voxel_radius = 0.5 * voxel_object.voxel_extent();
+
+    let sphere = &sphere.sphere;
+    let sphere_in_object_space = sphere.transformed(transform_to_object_space);
+
+    let max_squared_center_distance =
+        sphere.radius_squared() + voxel_radius.powi(2) + 2.0 * sphere.radius() * voxel_radius;
+    let radius_sum = sphere.radius() + voxel_radius;
+
+    voxel_object.for_each_surface_voxel_maybe_intersecting_sphere(
+        &sphere_in_object_space,
+        &mut |[i, j, k], _, _| {
+            let voxel_center_in_object_space =
+                voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
+
+            let voxel_center =
+                transform_to_object_space.inverse_transform_point(&voxel_center_in_object_space);
+
+            let center_displacement = sphere.center() - voxel_center;
+            let squared_center_distance = center_displacement.norm_squared();
+
+            if squared_center_distance > max_squared_center_distance {
+                return;
+            }
+
+            let center_distance = squared_center_distance.sqrt();
+
+            let surface_normal = if center_distance > 1e-8 {
+                UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+            } else {
+                Vector3::z_axis()
+            };
+
+            let position = voxel_center + surface_normal.scale(voxel_radius);
+
+            let penetration_depth = fph::max(0.0, radius_sum - center_distance);
+
+            let id = contact_id_from_collidable_ids_and_indices(
+                sphere_collidable_id,
+                voxel_object_collidable_id,
+                [i, j, k],
+            );
+
+            contact_manifold.add_contact(Contact {
+                id,
+                geometry: ContactGeometry {
+                    position,
+                    surface_normal,
+                    penetration_depth,
+                },
+            });
+        },
+    );
 }
 
 fn generate_voxel_object_plane_contact_manifold(
@@ -538,6 +608,14 @@ fn generate_sphere_plane_contact_manifold(
 
 fn contact_id_from_collidable_ids(a: CollidableID, b: CollidableID) -> ContactID {
     ContactID::from_two_u32(a.0, b.0)
+}
+
+fn contact_id_from_collidable_ids_and_indices(
+    a: CollidableID,
+    b: CollidableID,
+    indices: [usize; 3],
+) -> ContactID {
+    ContactID::from_two_u32_and_three_indices(a.0, b.0, indices)
 }
 
 pub fn determine_sphere_sphere_contact(
