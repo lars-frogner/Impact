@@ -40,6 +40,17 @@ pub struct PlaneCollidableComp {
     displacement: fph,
 }
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a use their voxel object as a collidable.
+///
+/// The purpose of this component is to aid in constructing a [`CollidableComp`]
+/// for the entity. It is therefore not kept after entity creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VoxelObjectCollidableComp {
+    kind: u64,
+}
+
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// collidable in the [`CollisionWorld`](super::CollisionWorld).
 #[repr(C)]
@@ -85,9 +96,22 @@ impl PlaneCollidableComp {
     }
 }
 
+impl VoxelObjectCollidableComp {
+    pub fn new(kind: CollidableKind) -> Self {
+        Self {
+            kind: kind.to_u64(),
+        }
+    }
+
+    pub fn kind(&self) -> CollidableKind {
+        CollidableKind::from_u64(self.kind).unwrap()
+    }
+}
+
 /// Registers all collision [`Component`](impact_ecs::component::Component)s.
 pub fn register_collision_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, SphereCollidableComp)?;
     register_setup_component!(registry, PlaneCollidableComp)?;
+    register_setup_component!(registry, VoxelObjectCollidableComp)?;
     register_component!(registry, CollidableComp)
 }
