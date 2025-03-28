@@ -113,8 +113,9 @@ impl VoxelChunkSignedDistanceField {
     /// The scale and offset of the mesh relative to local SDF array coordinates
     /// is determined by the given voxel extent and position offset. Remember to
     /// account for the padding (subtract one voxel extent from the position of
-    /// the chunk's lower corner) when computing the offset for composing
-    /// multiple chunks.
+    /// the chunk's lower corner) as well as the fact that each voxel's SDF
+    /// value is defined at the voxel's center (add back half a voxel extent)
+    /// when computing the offset for composing multiple chunks.
     pub fn compute_surface_nets_mesh(
         &self,
         voxel_extent: f32,

@@ -439,11 +439,13 @@ impl ChunkedVoxelObjectMesh {
         // Since the `VoxelChunkSignedDistanceField` has a 1-voxel padding
         // around the chunk boundary, we need to subtract the voxel extent
         // from the position of the chunk's lower corner to get the offset
-        // of the vertices for the surface nets mesh.
+        // of the vertices for the surface nets mesh. We also need to add
+        // half a voxel extent to account for the SDF values being specified
+        // at voxel centers, at half-voxel coordinates in the voxel object.
         Vec3A::new(
-            chunk_indices[0] as f32 * chunk_extent - voxel_extent,
-            chunk_indices[1] as f32 * chunk_extent - voxel_extent,
-            chunk_indices[2] as f32 * chunk_extent - voxel_extent,
+            chunk_indices[0] as f32 * chunk_extent - 0.5 * voxel_extent,
+            chunk_indices[1] as f32 * chunk_extent - 0.5 * voxel_extent,
+            chunk_indices[2] as f32 * chunk_extent - 0.5 * voxel_extent,
         )
     }
 }
