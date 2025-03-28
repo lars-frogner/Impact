@@ -155,6 +155,9 @@ where
         // boundaries
         let grid_shape = sdf_domain_extents.map(|extent| extent.ceil() as usize + 2);
 
+        // The center here is offset by half a grid cell relative to the coordinates
+        // in the voxel object to account for the fact that we want to evaluate the
+        // SDF at the center of each voxel
         let grid_center = Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f64));
 
         Self {
