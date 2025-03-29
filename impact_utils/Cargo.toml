@@ -1,11 +1,11 @@
 [package]
 name = "impact_utils"
 version = "0.1.0"
-edition = "2024"
+edition = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-bytemuck = { version = "1.22", features = ["derive"] }
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
 const-fnv1a-hash = "1.1"
 lazy_static = "1.4"
-num-traits = "0.2"
+num-traits = { workspace = true }
