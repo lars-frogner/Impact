@@ -486,14 +486,13 @@ fn generate_contact_manifold(
 }
 
 fn generate_voxel_object_voxel_object_contact_manifold(
-    voxel_object_manager: &VoxelObjectManager,
-    voxel_object_a: &VoxelObjectCollidableGeometry,
-    voxel_object_b: &VoxelObjectCollidableGeometry,
-    voxel_object_a_collidable_id: CollidableID,
-    voxel_object_b_collidable_id: CollidableID,
-    contact_manifold: &mut ContactManifold,
+    _voxel_object_manager: &VoxelObjectManager,
+    _voxel_object_a: &VoxelObjectCollidableGeometry,
+    _voxel_object_b: &VoxelObjectCollidableGeometry,
+    _voxel_object_a_collidable_id: CollidableID,
+    _voxel_object_b_collidable_id: CollidableID,
+    _contact_manifold: &mut ContactManifold,
 ) {
-    todo!()
 }
 
 fn generate_sphere_voxel_object_contact_manifold(
@@ -570,14 +569,13 @@ fn generate_sphere_voxel_object_contact_manifold(
 }
 
 fn generate_voxel_object_plane_contact_manifold(
-    voxel_object_manager: &VoxelObjectManager,
-    voxel_object: &VoxelObjectCollidableGeometry,
-    plane: &PlaneCollidableGeometry,
-    voxel_object_collidable_id: CollidableID,
-    plane_collidable_id: CollidableID,
-    contact_manifold: &mut ContactManifold,
+    _voxel_object_manager: &VoxelObjectManager,
+    _voxel_object: &VoxelObjectCollidableGeometry,
+    _plane: &PlaneCollidableGeometry,
+    _voxel_object_collidable_id: CollidableID,
+    _plane_collidable_id: CollidableID,
+    _contact_manifold: &mut ContactManifold,
 ) {
-    todo!()
 }
 
 fn generate_sphere_sphere_contact_manifold(

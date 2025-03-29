@@ -15,7 +15,7 @@ pub struct SphericalJoint {
 
 #[derive(Clone, Debug)]
 pub struct PreparedSphericalJoint {
-    attachment_point_displacement: Vector3<fph>,
+    _attachment_point_displacement: Vector3<fph>,
 }
 
 impl TwoBodyConstraint for SphericalJoint {
@@ -35,7 +35,7 @@ impl TwoBodyConstraint for SphericalJoint {
         let attachment_point_displacement = body_a_attachment_point - body_b_attachment_point;
 
         PreparedSphericalJoint {
-            attachment_point_displacement,
+            _attachment_point_displacement: attachment_point_displacement,
         }
     }
 }
@@ -47,29 +47,27 @@ impl PreparedTwoBodyConstraint for PreparedSphericalJoint {
         true
     }
 
-    fn compute_impulses(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> fph {
-        todo!()
+    fn compute_impulses(&self, _body_a: &ConstrainedBody, _body_b: &ConstrainedBody) -> fph {
+        0.0
     }
 
     fn clamp_impulses(&self, impulse: fph) -> fph {
-        todo!()
+        impulse
     }
 
     fn apply_impulses_to_body_pair(
         &self,
-        body_a: &mut ConstrainedBody,
-        body_b: &mut ConstrainedBody,
-        impulse: fph,
+        _body_a: &mut ConstrainedBody,
+        _body_b: &mut ConstrainedBody,
+        _impulse: fph,
     ) {
-        todo!()
     }
 
     fn apply_positional_correction_to_body_pair(
         &self,
-        body_a: &mut ConstrainedBody,
-        body_b: &mut ConstrainedBody,
-        correction_factor: fph,
+        _body_a: &mut ConstrainedBody,
+        _body_b: &mut ConstrainedBody,
+        _correction_factor: fph,
     ) {
-        todo!()
     }
 }
