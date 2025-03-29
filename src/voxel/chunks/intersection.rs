@@ -15,6 +15,11 @@ use nalgebra::{self as na, Point3, point};
 use std::{array, collections::HashSet, ops::Range};
 
 impl ChunkedVoxelObject {
+    /// Finds non-empty voxels with at least one exposed face that are not
+    /// fully outside the given sphere and calls the given closure with
+    /// their indices, the voxels themselves and their placement on the
+    /// surface. For efficiency, the closure may also be called with voxels
+    /// that are fully outside the sphere.
     pub fn for_each_surface_voxel_maybe_intersecting_sphere(
         &self,
         sphere: &Sphere<f64>,
@@ -426,6 +431,31 @@ impl ChunkedVoxelObject {
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
+    fn for_each_surface_voxel_touching_sphere_brute_force(
+        &self,
+        sphere: &Sphere<f64>,
+        f: &mut impl FnMut([usize; 3], &Voxel),
+    ) {
+        for i in self.occupied_voxel_ranges[0].clone() {
+            for j in self.occupied_voxel_ranges[1].clone() {
+                for k in self.occupied_voxel_ranges[2].clone() {
+                    let voxel_center_position =
+                        self.voxel_center_position_from_object_voxel_indices(i, j, k);
+                    if na::distance(&voxel_center_position, sphere.center())
+                        <= 0.5 * self.voxel_extent + sphere.radius()
+                    {
+                        if let Some(voxel) = self.get_voxel(i, j, k) {
+                            if let Some(VoxelPlacement::Surface(_)) = voxel.placement() {
+                                f([i, j, k], voxel);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_sphere_brute_force(
         &self,
         sphere: &Sphere<f64>,
@@ -569,6 +599,35 @@ pub mod fuzzing {
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
             let size = 10 * mem::size_of::<i32>();
             (size, Some(size))
+        }
+    }
+
+    pub fn fuzz_test_obtaining_voxels_maybe_intersecting_sphere(
+        (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
+    ) {
+        if let Some(object) = ChunkedVoxelObject::generate(&generator) {
+            let mut indices_of_touched_voxels = HashSet::new();
+
+            object.for_each_surface_voxel_maybe_intersecting_sphere(
+                &sphere.0,
+                &mut |indices, voxel, placement| {
+                    assert!(!voxel.is_empty());
+                    assert!(matches!(
+                        voxel.placement(),
+                        Some(VoxelPlacement::Surface(pl)) if pl == placement
+                    ));
+                    let was_absent = indices_of_touched_voxels.insert(indices);
+                    assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+                },
+            );
+
+            object.for_each_surface_voxel_touching_sphere_brute_force(
+                &sphere.0,
+                &mut |indices, _| {
+                    let was_present = indices_of_touched_voxels.remove(&indices);
+                    assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
+                },
+            );
         }
     }
 
@@ -735,6 +794,45 @@ mod tests {
     };
     use nalgebra::{UnitVector3, vector};
     use std::collections::HashSet;
+
+    #[test]
+    fn finding_surface_voxels_intersecting_sphere_finds_correct_voxels() {
+        let object_radius = 20.0;
+        let sphere_radius = 0.2 * object_radius;
+
+        let generator = SDFVoxelGenerator::new(
+            1.0,
+            SphereSDFGenerator::new(object_radius),
+            SameVoxelTypeGenerator::new(VoxelType::default()),
+        );
+        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+
+        let sphere = Sphere::new(
+            object.compute_aabb::<f64>().center()
+                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+            sphere_radius,
+        );
+
+        let mut indices_of_touched_voxels = HashSet::new();
+
+        object.for_each_surface_voxel_maybe_intersecting_sphere(
+            &sphere,
+            &mut |indices, voxel, placement| {
+                assert!(!voxel.is_empty());
+                assert!(matches!(
+                    voxel.placement(),
+                    Some(VoxelPlacement::Surface(pl)) if pl == placement
+                ));
+                let was_absent = indices_of_touched_voxels.insert(indices);
+                assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+            },
+        );
+
+        object.for_each_surface_voxel_touching_sphere_brute_force(&sphere, &mut |indices, _| {
+            let was_present = indices_of_touched_voxels.remove(&indices);
+            assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
+        });
+    }
 
     #[test]
     fn modifying_voxels_within_sphere_finds_correct_voxels() {

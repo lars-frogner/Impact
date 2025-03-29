@@ -41,7 +41,7 @@ pub struct PlaneCollidableComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a use their voxel object as a collidable.
+/// entities that use their voxel object as a collidable.
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
