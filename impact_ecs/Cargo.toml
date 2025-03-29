@@ -1,12 +1,12 @@
 [package]
 name = "impact_ecs"
 version = "0.1.0"
-edition = "2024"
+edition = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-bytemuck = { version = "1.22", features = ["derive"] }
-paste = "1.0"
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
+paste = { workspace = true }
 
 impact_ecs_macros = { path = "impact_ecs_macros" }
 impact_utils = { path = "../impact_utils" }
