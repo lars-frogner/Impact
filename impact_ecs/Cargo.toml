@@ -10,3 +10,6 @@ paste = { workspace = true }
 
 impact_ecs_macros = { path = "impact_ecs_macros" }
 impact_utils = { path = "../impact_utils" }
+
+[lints]
+workspace = true

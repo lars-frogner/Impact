@@ -131,6 +131,7 @@ impl<V: Clone + Default> EquirectangularMap<V> {
         let start_phi = center_phi - region_half_extent + half_grid_cell_size;
         let start_theta = center_theta - region_half_extent + half_grid_cell_size;
 
+        #[allow(clippy::needless_collect)]
         let theta_values: Vec<_> = (0..n_angles_across)
             .map(|region_theta_idx| {
                 let theta = start_theta + (region_theta_idx as fph) * self.grid_cell_size;
