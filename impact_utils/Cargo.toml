@@ -9,3 +9,6 @@ bytemuck = { workspace = true }
 const-fnv1a-hash = "1.1"
 lazy_static = "1.4"
 num-traits = { workspace = true }
+
+[lints]
+workspace = true

@@ -19,7 +19,7 @@ pub fn clone_object(c: &mut Criterion) {
     c.bench_function("clone_object", |b| {
         b.iter(|| {
             black_box(object.clone());
-        })
+        });
     });
 }
 
@@ -40,7 +40,7 @@ pub fn get_each_voxel(c: &mut Criterion) {
                     }
                 }
             }
-        })
+        });
     });
 }
 
@@ -61,7 +61,7 @@ pub fn for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
                 count += 1;
             });
             black_box(count);
-        })
+        });
     });
 }
 
