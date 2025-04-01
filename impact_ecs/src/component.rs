@@ -1,8 +1,8 @@
 //! Representation and storage of ECS components.
 
-use bytemuck::Pod;
+use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment};
-use std::{any::TypeId, mem, ops::Deref};
+use std::{mem, ops::Deref};
 
 /// Represents a component.
 ///
@@ -30,9 +30,11 @@ use std::{any::TypeId, mem, ops::Deref};
 /// }
 /// ```
 pub trait Component: Pod {
+    const COMPONENT_ID: ComponentID;
+
     /// Returns a unique ID representing the component type.
     fn component_id() -> ComponentID {
-        TypeId::of::<Self>()
+        Self::COMPONENT_ID
     }
 }
 
@@ -91,8 +93,9 @@ pub trait ComponentSlice<'a>: ComponentArray {
 }
 
 /// A unique ID identifying a type implementing [`Component`].
-/// It corresponds to the [`TypeId`] of the component type.
-pub type ComponentID = TypeId;
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+pub struct ComponentID(u64);
 
 /// Container that stores instances of one type of [`Component`]
 /// contiguously in memory without exposing the underlying type
@@ -141,6 +144,16 @@ pub trait CanHaveSingleInstance {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SingleInstance<T> {
     container: T,
+}
+
+impl ComponentID {
+    pub const fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 // We can treat a reference to a component as a component array

@@ -6,7 +6,7 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
-const-fnv1a-hash = "1.1"
+const-fnv1a-hash = { workspace = true }
 lazy_static = "1.4"
 num-traits = { workspace = true }
 
