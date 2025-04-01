@@ -6,6 +6,7 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
+const-fnv1a-hash = { workspace = true }
 paste = { workspace = true }
 
 impact_ecs_macros = { path = "impact_ecs_macros" }

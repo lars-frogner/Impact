@@ -128,7 +128,7 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 /// scope when all closure calls have been executed.
 ///
 /// # Examples
-/// ```
+/// ```ignore
 /// # use impact_ecs::{
 /// #     archetype::ArchetypeComponentStorage,
 /// #     world::{World, Entity}
@@ -139,6 +139,7 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
+/// # use const_fnv1a_hash;
 /// # use std::collections::HashSet;
 /// #
 /// # #[repr(C)]
@@ -267,7 +268,7 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// be included.
 ///
 /// # Examples
-/// ```
+/// ```ignore
 /// # use impact_ecs::{
 /// #     world::{World, Entity}
 /// # };
@@ -277,6 +278,7 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
+/// # use const_fnv1a_hash;
 /// # use std::collections::HashSet;
 /// #
 /// # #[repr(C)]

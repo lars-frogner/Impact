@@ -13,7 +13,6 @@ use impact_ecs_macros::archetype_of;
 use impact_utils::KeyIndexMapper;
 use paste::paste;
 use std::{
-    any::TypeId,
     collections::{HashMap, HashSet, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
     iter,
@@ -1197,10 +1196,7 @@ where
             bail!("The number of component instances differs between component types");
         }
 
-        // Use arbitrary type ID to initialize array for component IDs
-        // (will be overwritten)
-        let dummy_type_id = TypeId::of::<u8>();
-        let mut component_ids = [dummy_type_id; N];
+        let mut component_ids = [ComponentID::from_u64(0); N];
 
         // Populate array of component IDs
         component_ids
@@ -1240,10 +1236,7 @@ where
             bail!("Tried to create empty single instance `ArchetypeComponents`");
         }
 
-        // Use arbitrary type ID to initialize array for component IDs
-        // (will be overwritten)
-        let dummy_type_id = TypeId::of::<u8>();
-        let mut component_ids = [dummy_type_id; N];
+        let mut component_ids = [ComponentID::from_u64(0); N];
 
         // Populate array of component IDs
         component_ids
