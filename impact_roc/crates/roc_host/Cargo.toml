@@ -1,0 +1,19 @@
+[package]
+name = "roc_host"
+version = { workspace = true }
+edition = { workspace = true }
+
+links = "app"
+
+[lib]
+name = "roc_host"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[dependencies]
+anyhow = { workspace = true }
+libc = { workspace = true }
+roc_impact = { workspace = true }
+roc_io_error = { workspace = true }
+roc_rosetta = { workspace = true }
+roc_std = { workspace = true }

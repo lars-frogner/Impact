@@ -1,0 +1,10 @@
+[package]
+name = "roc_rosetta"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+bytemuck = { workspace = true, features = ["derive", "extern_crate_std"] }
+impact_utils = { workspace = true }
+roc_std = { workspace = true }
