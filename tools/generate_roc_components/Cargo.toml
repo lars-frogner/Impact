@@ -1,0 +1,11 @@
+[package]
+name = "generate_roc_components"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "generate_roc_components"
+path = "src/main.rs"
+
+[dependencies]
+impact = { path = "../..", features = ["roc_definitions"] }

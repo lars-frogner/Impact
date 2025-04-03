@@ -1,6 +1,12 @@
 [workspace]
-members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
-exclude = ["impact_roc"]
+members = [
+    "impact_utils",
+    "impact_ecs",
+    "impact_ecs/impact_ecs_macros",
+    "roc_codegen",
+    "roc_codegen/roc_codegen_macros",
+]
+exclude = ["impact_roc", "tools"]
 
 [workspace.package]
 edition = "2024"
@@ -11,6 +17,7 @@ bytemuck = { version = "1.22", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
 lazy_static = "1.5"
+nalgebra = "0.33"
 num-traits = "0.2"
 paste = "1.0"
 
@@ -114,6 +121,7 @@ crate-type = ["cdylib", "rlib"]
 profiling = ["dep:clap", "dep:criterion"]
 fuzzing = ["dep:arbitrary"]
 unchecked = []
+roc_definitions = ["roc_codegen/enabled"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -138,7 +146,7 @@ half = { version = "2.1", features = ["bytemuck"] }
 lazy_static = { workspace = true }
 log = "0.4"
 naga = { version = "24.0", features = ["wgsl-out"] }
-nalgebra = { version = "0.33", features = ["bytemuck"] }
+nalgebra = { workspace = true, features = ["bytemuck"] }
 nohash-hasher = "0.2.0"
 noise = "0.9.0"
 num-derive = "0.4"
@@ -162,11 +170,9 @@ wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30" }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
-[dependencies.impact_ecs]
-path = "impact_ecs"
-
-[dependencies.impact_utils]
-path = "impact_utils"
+impact_ecs = { path = "impact_ecs" }
+impact_utils = { path = "impact_utils" }
+roc_codegen = { path = "roc_codegen" }
 
 [dev-dependencies]
 clap = { version = "4.5", features = ["derive"] }
