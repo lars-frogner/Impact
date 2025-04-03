@@ -2,8 +2,6 @@
 //! materials.
 
 use super::ContactResponseParameters;
-use crate::component::ComponentRegistry;
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -12,8 +10,3 @@ use impact_ecs::Component;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct UniformContactResponseComp(pub ContactResponseParameters);
-
-/// Registers all physics material [`Component`](impact_ecs::component::Component)s.
-pub fn register_physics_material_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, UniformContactResponseComp)
-}

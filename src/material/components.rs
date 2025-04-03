@@ -1,34 +1,34 @@
 //! [`Component`](impact_ecs::component::Component)s related to materials.
 
 use crate::{
-    component::ComponentRegistry,
     gpu::texture::TextureID,
     material::{MaterialHandle, RGBColor},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use impact_ecs::{Component, SetupComponent};
 use nalgebra::{Vector2, vector};
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a fixed, uniform color that is independent of lighting.
+/// Setup [`SetupComponent`](impact_ecs::component::SetupComponent) for
+/// initializing entities that have a fixed, uniform color that is independent
+/// of lighting.
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct FixedColorComp(pub RGBColor);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a fixed, textured color that is independent of lighting.
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
+/// entities that have a fixed, textured color that is independent
+/// of lighting.
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct FixedTextureComp(pub TextureID);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a uniform base color.
 ///
 /// The base color affects the color and amount of light reflected and emitted
@@ -42,10 +42,10 @@ pub struct FixedTextureComp(pub TextureID);
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformColorComp(pub RGBColor);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a textured base color.
 ///
 /// The base color affects the color and amount of light reflected and emitted
@@ -59,10 +59,10 @@ pub struct UniformColorComp(pub RGBColor);
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedColorComp(pub TextureID);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a uniform scalar specular reflectance at normal incidence
 /// (the proportion of incident light specularly reflected by the material when
 /// the light direction is perpendicular to the surface).
@@ -70,10 +70,10 @@ pub struct TexturedColorComp(pub TextureID);
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformSpecularReflectanceComp(pub f32);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a textured scalar specular reflectance at normal
 /// incidence (the proportion of incident light specularly reflected by the
 /// material when the light direction is perpendicular to the surface).
@@ -81,36 +81,36 @@ pub struct UniformSpecularReflectanceComp(pub f32);
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedSpecularReflectanceComp {
     pub texture_id: TextureID,
     pub scale_factor: f32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a uniform surface roughness. The roughness ranges from
 /// zero (perfectly smooth) to one (completely diffuse).
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformRoughnessComp(pub f32);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a textured surface roughness. The roughness ranges from
 /// zero (perfectly smooth) to one (completely diffuse).
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedRoughnessComp {
     pub texture_id: TextureID,
     pub scale_factor: f32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a uniform metalness.
 ///
 /// The metalness describes the conductive properties of the material. A value
@@ -129,10 +129,10 @@ pub struct TexturedRoughnessComp {
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformMetalnessComp(pub f32);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a textured metalness.
 ///
 /// The metalness describes the conductive properties of the material. A value
@@ -151,13 +151,13 @@ pub struct UniformMetalnessComp(pub f32);
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedMetalnessComp {
     pub texture_id: TextureID,
     pub scale_factor: f32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a uniform monochromatic emissive luminance.
 ///
 /// The RGB emissive luminance will be the material's base color multiplied by
@@ -166,10 +166,10 @@ pub struct TexturedMetalnessComp {
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformEmissiveLuminanceComp(pub f32);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a textured monochromatic emissive luminance.
 ///
 /// The RGB emissive luminance will be the material's base color multiplied by
@@ -178,28 +178,28 @@ pub struct UniformEmissiveLuminanceComp(pub f32);
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedEmissiveLuminanceComp {
     pub texture_id: TextureID,
     pub scale_factor: f32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose surface details are described by a normal map.
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct NormalMapComp(pub TextureID);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose surface details are described by a parallax map.
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ParallaxMapComp {
     pub height_map_texture_id: TextureID,
     pub displacement_scale: f32,
@@ -305,23 +305,4 @@ impl MaterialComp {
     pub fn material_handle(&self) -> &MaterialHandle {
         &self.material_handle
     }
-}
-
-/// Registers all material [`Component`](impact_ecs::component::Component)s.
-pub fn register_material_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, FixedColorComp)?;
-    register_setup_component!(registry, FixedTextureComp)?;
-    register_setup_component!(registry, UniformColorComp)?;
-    register_setup_component!(registry, TexturedColorComp)?;
-    register_setup_component!(registry, UniformSpecularReflectanceComp)?;
-    register_setup_component!(registry, TexturedSpecularReflectanceComp)?;
-    register_setup_component!(registry, UniformRoughnessComp)?;
-    register_setup_component!(registry, TexturedRoughnessComp)?;
-    register_setup_component!(registry, UniformMetalnessComp)?;
-    register_setup_component!(registry, TexturedMetalnessComp)?;
-    register_setup_component!(registry, UniformEmissiveLuminanceComp)?;
-    register_setup_component!(registry, TexturedEmissiveLuminanceComp)?;
-    register_setup_component!(registry, NormalMapComp)?;
-    register_setup_component!(registry, ParallaxMapComp)?;
-    register_component!(registry, MaterialComp)
 }

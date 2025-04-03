@@ -1,19 +1,15 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion.
 
 use crate::{
-    component::ComponentRegistry,
     num::Float,
     physics::{
         fph,
         motion::{AngularVelocity, Orientation, Position, Velocity},
     },
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{Similarity3, Translation3, Vector3};
-
-use super::analytical;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// reference frame defined by position, orientation and scaling.
@@ -361,16 +357,6 @@ impl Default for ReferenceFrameComp {
             scaling: 1.0,
         }
     }
-}
-
-/// Registers all motion [`Component`](impact_ecs::component::Component)s.
-pub fn register_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, ReferenceFrameComp)?;
-    register_component!(registry, VelocityComp)?;
-    register_component!(registry, Static)?;
-    register_component!(registry, LogsKineticEnergy)?;
-    register_component!(registry, LogsMomentum)?;
-    analytical::components::register_analytical_motion_components(registry)
 }
 
 #[cfg(test)]

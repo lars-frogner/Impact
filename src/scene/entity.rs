@@ -13,11 +13,10 @@ use crate::{
     },
     physics::motion::components::ReferenceFrameComp,
     scene::{
-        ModelInstanceNodeID, RenderResourcesDesynchronized, Scene, SceneEntityFlags,
+        RenderResourcesDesynchronized, Scene, SceneEntityFlags,
         components::{
             ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
-            SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
-            UncullableComp,
+            SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp, UncullableComp,
         },
     },
     voxel,
@@ -190,7 +189,7 @@ impl Scene {
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-                SceneGraphNodeComp::new(
+                SceneGraphGroupNodeComp::new(
                     scene_graph.create_group_node(parent_node_id, group_to_parent_transform),
                 )
             },
@@ -281,7 +280,7 @@ impl Scene {
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
                 (
-                    SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
+                    SceneGraphModelInstanceNodeComp::new(scene_graph.create_model_instance_node(
                         parent_node_id,
                         model_to_parent_transform,
                         model_id,
@@ -301,7 +300,7 @@ impl Scene {
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        if let Some(node) = entity.get_component::<SceneGraphNodeComp<ModelInstanceNodeID>>() {
+        if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeComp>() {
             let model_id = self
                 .scene_graph()
                 .write()

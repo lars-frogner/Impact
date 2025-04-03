@@ -1,12 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to scenes.
 
-use crate::{
-    component::ComponentRegistry,
-    scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags, SceneGraphNodeID},
-};
-use anyhow::Result;
+use crate::scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags};
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{Component, world::Entity};
+use impact_ecs::{Component, SetupComponent, world::Entity};
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// participate in a scene and have associated [`SceneEntityFlags`].
@@ -17,19 +13,19 @@ use impact_ecs::{Component, world::Entity};
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct SceneEntityFlagsComp(pub SceneEntityFlags);
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a parent entity.
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`SceneGraphParentNodeComp`] for the entity. It is therefore not kept after
 /// entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ParentComp {
     pub entity: Entity,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities representing a group node in the
 /// [`SceneGraph`](crate::scene::SceneGraph).
 ///
@@ -37,10 +33,10 @@ pub struct ParentComp {
 /// [`SceneGraphGroupNodeComp`] for the entity. It is therefore not kept after
 /// entity creation.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SceneGraphGroupComp;
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that should never be frustum culled in the
 /// [`SceneGraph`](crate::scene::SceneGraph).
 ///
@@ -48,7 +44,7 @@ pub struct SceneGraphGroupComp;
 /// [`SceneGraphModelInstanceNodeComp`] for the entity. It is therefore not kept
 /// after entity creation.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UncullableComp;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
@@ -59,27 +55,35 @@ pub struct SceneGraphParentNodeComp {
     pub id: GroupNodeID,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a node in the [`SceneGraph`](crate::scene::SceneGraph).
+/// [`Component`](impact_ecs::component::Component) for entities that have a
+/// group node in the [`SceneGraph`](crate::scene::SceneGraph).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SceneGraphNodeComp<ID: SceneGraphNodeID> {
+pub struct SceneGraphGroupNodeComp {
     /// The ID of the [`SceneGraph`](crate::scene::SceneGraph) node
     /// representing the entity.
-    pub id: ID,
+    pub id: GroupNodeID,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
-/// group node in the [`SceneGraph`](crate::scene::SceneGraph).
-pub type SceneGraphGroupNodeComp = SceneGraphNodeComp<GroupNodeID>;
-
-/// [`Component`](impact_ecs::component::Component) for entities that have a
 /// camera node in the [`SceneGraph`](crate::scene::SceneGraph).
-pub type SceneGraphCameraNodeComp = SceneGraphNodeComp<CameraNodeID>;
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct SceneGraphCameraNodeComp {
+    /// The ID of the [`SceneGraph`](crate::scene::SceneGraph) node
+    /// representing the entity.
+    pub id: CameraNodeID,
+}
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// model instance node in the [`SceneGraph`](crate::scene::SceneGraph).
-pub type SceneGraphModelInstanceNodeComp = SceneGraphNodeComp<ModelInstanceNodeID>;
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct SceneGraphModelInstanceNodeComp {
+    /// The ID of the [`SceneGraph`](crate::scene::SceneGraph) node
+    /// representing the entity.
+    pub id: ModelInstanceNodeID,
+}
 
 impl SceneEntityFlagsComp {
     /// Whether the [`SceneEntityFlags::IS_DISABLED`] flag is set.
@@ -104,22 +108,27 @@ impl SceneGraphParentNodeComp {
     }
 }
 
-impl<ID: SceneGraphNodeID> SceneGraphNodeComp<ID> {
+impl SceneGraphGroupNodeComp {
     /// Creates a new component representing a
-    /// [`SceneGraph`](crate::scene::SceneGraph) node with the given ID.
-    pub fn new(node_id: ID) -> Self {
+    /// [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+    pub fn new(node_id: GroupNodeID) -> Self {
         Self { id: node_id }
     }
 }
 
-/// Registers all scene graph [`Component`](impact_ecs::component::Component)s.
-pub fn register_scene_graph_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, SceneEntityFlagsComp)?;
-    register_setup_component!(registry, ParentComp)?;
-    register_setup_component!(registry, SceneGraphGroupComp)?;
-    register_setup_component!(registry, UncullableComp)?;
-    register_component!(registry, SceneGraphParentNodeComp)?;
-    register_component!(registry, SceneGraphGroupNodeComp)?;
-    register_component!(registry, SceneGraphCameraNodeComp)?;
-    register_component!(registry, SceneGraphModelInstanceNodeComp)
+impl SceneGraphCameraNodeComp {
+    /// Creates a new component representing a
+    /// [`SceneGraph`](crate::scene::SceneGraph) camera node with the given ID.
+    pub fn new(node_id: CameraNodeID) -> Self {
+        Self { id: node_id }
+    }
+}
+
+impl SceneGraphModelInstanceNodeComp {
+    /// Creates a new component representing a
+    /// [`SceneGraph`](crate::scene::SceneGraph) model instance node with the
+    /// given ID.
+    pub fn new(node_id: ModelInstanceNodeID) -> Self {
+        Self { id: node_id }
+    }
 }

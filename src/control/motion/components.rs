@@ -1,7 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion control.
 
-use crate::{component::ComponentRegistry, physics::motion::Velocity};
-use anyhow::Result;
+use crate::physics::motion::Velocity;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -38,10 +37,4 @@ impl Default for MotionControlComp {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Registers all motion control
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_motion_control_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, MotionControlComp)
 }

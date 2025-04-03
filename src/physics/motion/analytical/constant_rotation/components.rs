@@ -1,14 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to rotation with a
 //! constant angular velocity.
 
-use crate::{
-    component::ComponentRegistry,
-    physics::{
-        fph,
-        motion::{AngularVelocity, Orientation},
-    },
+use crate::physics::{
+    fph,
+    motion::{AngularVelocity, Orientation},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -43,12 +39,4 @@ impl ConstantRotationComp {
             angular_velocity,
         }
     }
-}
-
-/// Registers all constant rotation motion
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_constant_rotation_motion_components(
-    registry: &mut ComponentRegistry,
-) -> Result<()> {
-    register_component!(registry, ConstantRotationComp)
 }

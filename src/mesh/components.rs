@@ -1,25 +1,19 @@
 //! [`Component`](impact_ecs::component::Component)s related to meshes.
 
-use crate::{
-    component::ComponentRegistry,
-    mesh::{FrontFaceSide, MeshID},
-};
-use anyhow::Result;
+use crate::mesh::{FrontFaceSide, MeshID};
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use impact_ecs::{Component, SetupComponent};
 use impact_utils::hash64;
 use std::fmt::Display;
 
-use super::texture_projection;
-
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is an axis-aligned horizontal rectangle centered on the
 /// origin, whose front face is on the positive y side.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct RectangleMeshComp {
     /// The extent of the rectangle in the x-direction.
     pub extent_x: f32,
@@ -27,13 +21,13 @@ pub struct RectangleMeshComp {
     pub extent_z: f32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is an axis-aligned box centered on the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct BoxMeshComp {
     /// The extent of the box in the x-direction.
     pub extent_x: f32,
@@ -44,14 +38,14 @@ pub struct BoxMeshComp {
     front_faces_on_outside: u32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is a vertical cylinder with the bottom centered on
 /// the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct CylinderMeshComp {
     /// The length of the cylinder.
     pub length: f32,
@@ -62,14 +56,14 @@ pub struct CylinderMeshComp {
     pub n_circumference_vertices: u32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is an upward-pointing cone with the bottom centered on
 /// the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ConeMeshComp {
     /// The length of the cone.
     pub length: f32,
@@ -80,14 +74,14 @@ pub struct ConeMeshComp {
     pub n_circumference_vertices: u32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is a vertical circular frustum with the bottom centered
 /// on the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct CircularFrustumMeshComp {
     /// The length of the frustum.
     pub length: f32,
@@ -100,13 +94,13 @@ pub struct CircularFrustumMeshComp {
     pub n_circumference_vertices: u32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is a unit diameter sphere centered on the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereMeshComp {
     /// The number of horizontal circular cross-sections of vertices making up
     /// the sphere. The number of vertices comprising each ring is proportional
@@ -114,14 +108,14 @@ pub struct SphereMeshComp {
     pub n_rings: u32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is a unit diameter hemisphere whose disk lies in the
 /// xz-plane and is centered on the origin.
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct HemisphereMeshComp {
     /// The number of horizontal circular cross-sections of vertices making up
     /// the hemisphere. The number of vertices comprising each ring is
@@ -330,17 +324,4 @@ impl HemisphereMeshComp {
             self.n_rings, projection_label
         )))
     }
-}
-
-/// Registers all mesh [`Component`](impact_ecs::component::Component)s.
-pub fn register_mesh_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, RectangleMeshComp)?;
-    register_setup_component!(registry, BoxMeshComp)?;
-    register_setup_component!(registry, CylinderMeshComp)?;
-    register_setup_component!(registry, ConeMeshComp)?;
-    register_setup_component!(registry, CircularFrustumMeshComp)?;
-    register_setup_component!(registry, SphereMeshComp)?;
-    register_setup_component!(registry, HemisphereMeshComp)?;
-    register_component!(registry, MeshComp)?;
-    texture_projection::components::register_texture_projection_components(registry)
 }

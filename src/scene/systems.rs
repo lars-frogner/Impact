@@ -13,8 +13,11 @@ use crate::{
     },
     physics::motion::components::ReferenceFrameComp,
     scene::{
-        CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraph,
-        components::{SceneEntityFlagsComp, SceneGraphNodeComp, SceneGraphParentNodeComp},
+        SceneGraph,
+        components::{
+            SceneEntityFlagsComp, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
+            SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
+        },
     },
 };
 use impact_ecs::{query, world::World as ECSWorld};
@@ -31,14 +34,14 @@ pub fn sync_scene_object_transforms_and_flags(
 ) {
     query!(
         ecs_world,
-        |node: &SceneGraphNodeComp<GroupNodeID>, frame: &ReferenceFrameComp| {
+        |node: &SceneGraphGroupNodeComp, frame: &ReferenceFrameComp| {
             scene_graph
                 .set_group_to_parent_transform(node.id, frame.create_transform_to_parent_space());
         }
     );
     query!(
         ecs_world,
-        |node: &SceneGraphNodeComp<ModelInstanceNodeID>,
+        |node: &SceneGraphModelInstanceNodeComp,
          frame: &ReferenceFrameComp,
          flags: &SceneEntityFlagsComp| {
             scene_graph.set_model_to_parent_transform_and_flags(
@@ -50,7 +53,7 @@ pub fn sync_scene_object_transforms_and_flags(
     );
     query!(
         ecs_world,
-        |node: &SceneGraphNodeComp<CameraNodeID>, frame: &ReferenceFrameComp| {
+        |node: &SceneGraphCameraNodeComp, frame: &ReferenceFrameComp| {
             scene_graph
                 .set_camera_to_parent_transform(node.id, frame.create_transform_to_parent_space());
         }

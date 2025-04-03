@@ -1,13 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to orbital motion.
 
-use crate::{
-    component::ComponentRegistry,
-    physics::{
-        fph,
-        motion::{Orientation, Position},
-    },
+use crate::physics::{
+    fph,
+    motion::{Orientation, Position},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -59,10 +55,4 @@ impl OrbitalTrajectoryComp {
             period,
         }
     }
-}
-
-/// Registers all orbital motion
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_orbital_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, OrbitalTrajectoryComp)
 }

@@ -1,8 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to orientation
 //! control.
 
-use crate::{component::ComponentRegistry, physics::motion::AngularVelocity};
-use anyhow::Result;
+use crate::physics::motion::AngularVelocity;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -39,10 +38,4 @@ impl Default for OrientationControlComp {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Registers all orientation control
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_orientation_control_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, OrientationControlComp)
 }

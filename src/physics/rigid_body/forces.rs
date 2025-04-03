@@ -1,6 +1,5 @@
 //! Calculation of forces and torques on rigid bodies.
 
-pub mod components;
 pub mod detailed_drag;
 pub mod entity;
 pub mod spring;

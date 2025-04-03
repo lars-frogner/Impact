@@ -2,22 +2,20 @@
 //! projections.
 
 use crate::{
-    component::ComponentRegistry, mesh::components::RectangleMeshComp,
-    mesh::texture_projection::PlanarTextureProjection,
+    mesh::components::RectangleMeshComp, mesh::texture_projection::PlanarTextureProjection,
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use impact_ecs::SetupComponent;
 use nalgebra::{Point3, Vector3, point, vector};
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that use a [`PlanarTextureProjection`].
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`MeshComp`](crate::mesh::components::MeshComp) for the entity. It is
 /// therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PlanarTextureProjectionComp {
     /// The origin of the plane, where the texture coordinates will be zero.
     pub origin: Point3<f32>,
@@ -63,10 +61,4 @@ impl PlanarTextureProjectionComp {
     pub fn create_projection(&self) -> PlanarTextureProjection<f32> {
         PlanarTextureProjection::new(self.origin, self.u_vector, self.v_vector)
     }
-}
-
-/// Registers all texture projection
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_texture_projection_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, PlanarTextureProjectionComp)
 }

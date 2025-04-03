@@ -1,11 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
 use crate::{
-    component::ComponentRegistry,
     geometry::Degrees,
     light::{Illumninance, LightID, LuminousIntensity},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::UnitVector3;
@@ -210,18 +208,4 @@ impl ShadowableUnidirectionalEmissionComp {
             angular_source_extent,
         }
     }
-}
-
-/// Registers all light [`Component`](impact_ecs::component::Component)s.
-pub fn register_light_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, AmbientEmissionComp)?;
-    register_component!(registry, OmnidirectionalEmissionComp)?;
-    register_component!(registry, ShadowableOmnidirectionalEmissionComp)?;
-    register_component!(registry, UnidirectionalEmissionComp)?;
-    register_component!(registry, ShadowableUnidirectionalEmissionComp)?;
-    register_component!(registry, AmbientLightComp)?;
-    register_component!(registry, OmnidirectionalLightComp)?;
-    register_component!(registry, ShadowableOmnidirectionalLightComp)?;
-    register_component!(registry, UnidirectionalLightComp)?;
-    register_component!(registry, ShadowableUnidirectionalLightComp)
 }

@@ -1,16 +1,14 @@
 //! [`Component`](impact_ecs::component::Component)s related to cameras.
 
 use crate::{
-    component::ComponentRegistry,
     geometry::{Angle, Radians},
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
-use anyhow::Result;
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use impact_ecs::SetupComponent;
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a
 /// [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
 ///
@@ -20,14 +18,14 @@ use impact_ecs::Component;
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PerspectiveCameraComp {
     vertical_field_of_view_rad: f32,
     near_distance: f32,
     far_distance: f32,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have an
 /// [`OrthographicCamera`](crate::camera::OrthographicCamera).
 ///
@@ -37,7 +35,7 @@ pub struct PerspectiveCameraComp {
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct OrthographicCameraComp {
     vertical_field_of_view_rad: f32,
     near_distance: f32,
@@ -121,10 +119,4 @@ impl OrthographicCameraComp {
     pub fn far_distance(&self) -> f32 {
         self.far_distance
     }
-}
-
-/// Registers all camera [`Component`](impact_ecs::component::Component)s.
-pub fn register_camera_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, PerspectiveCameraComp)?;
-    register_setup_component!(registry, OrthographicCameraComp)
 }

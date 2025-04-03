@@ -1,14 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to harmonically
 //! oscillating trajectories.
 
-use crate::{
-    component::ComponentRegistry,
-    physics::{
-        fph,
-        motion::{Direction, Position},
-    },
+use crate::physics::{
+    fph,
+    motion::{Direction, Position},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -53,12 +49,4 @@ impl HarmonicOscillatorTrajectoryComp {
             period,
         }
     }
-}
-
-/// Registers all harmonic oscillation motion
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_harmonic_oscillation_motion_components(
-    registry: &mut ComponentRegistry,
-) -> Result<()> {
-    register_component!(registry, HarmonicOscillatorTrajectoryComp)
 }

@@ -27,6 +27,14 @@ pub fn derive_component_doctest(input: TokenStream) -> TokenStream {
     component::impl_component(input, &crate_root_ident_doctest()).into()
 }
 
+/// Derive macro generating an impl of the trait
+/// [`SetupComponent`](component::SetupComponent).
+#[proc_macro_derive(SetupComponent)]
+pub fn derive_setup_component(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    component::impl_setup_component(input, &crate_root_ident()).into()
+}
+
 /// Creates a new [`Archetype`](archetype::Archetype) defined by
 /// the given component types.
 ///
