@@ -17,8 +17,8 @@ use crate::{
     scene::{
         RenderResourcesDesynchronized, SceneEntityFlags, SceneGraph,
         components::{
-            SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp,
-            SceneGraphParentNodeComp, UncullableComp,
+            SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
+            UncullableComp,
         },
     },
     voxel::{
@@ -732,7 +732,7 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
             (
-                SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
+                SceneGraphModelInstanceNodeComp::new(scene_graph.create_model_instance_node(
                     parent_node_id,
                     model_to_parent_transform,
                     model_id,

@@ -1,7 +1,6 @@
 //! Simulation of physics.
 
 pub mod collision;
-pub mod components;
 pub mod constraint;
 pub mod entity;
 pub mod inertia;

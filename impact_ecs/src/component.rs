@@ -38,6 +38,10 @@ pub trait Component: Pod {
     }
 }
 
+/// Represents a temporary [`Component`] whose purpose is to initialize an
+/// entity and which will not persist after entity creation.
+pub trait SetupComponent: Component {}
+
 /// Represents a collection of instances of the same component
 /// type.
 pub trait ComponentArray: Clone {
@@ -96,6 +100,32 @@ pub trait ComponentSlice<'a>: ComponentArray {
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ComponentID(u64);
+
+/// A descriptor for a [`Component`]. Component types can register themselves
+/// in a distributed registry by evoking [`inventory::submit!`] on a static
+/// `ComponentDescriptor` value.
+#[derive(Debug)]
+pub struct ComponentDescriptor {
+    /// The ID of the component.
+    pub id: ComponentID,
+    /// The name of the component.
+    pub name: &'static str,
+    /// The category of the component.
+    pub category: ComponentCategory,
+}
+
+inventory::collect!(ComponentDescriptor);
+
+/// The category of a component.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ComponentCategory {
+    /// A persistent component whose current state is always reflected in the
+    /// world.
+    Standard,
+    /// A helper component used for creating entities, which is no longer
+    /// present in the entity after it has been created.
+    Setup,
+}
 
 /// Container that stores instances of one type of [`Component`]
 /// contiguously in memory without exposing the underlying type

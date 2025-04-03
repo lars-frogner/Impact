@@ -1,7 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to collisions.
 
 use crate::{
-    component::ComponentRegistry,
     geometry::{Plane, Sphere},
     physics::{
         collision::{CollidableID, CollidableKind},
@@ -9,44 +8,43 @@ use crate::{
         motion::Position,
     },
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use impact_ecs::{Component, SetupComponent};
 use nalgebra::UnitVector3;
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a spherical collidable.
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereCollidableComp {
     kind: u64,
     center: Position,
     radius: fph,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a planar collidable.
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PlaneCollidableComp {
     kind: u64,
     unit_normal: UnitVector3<fph>,
     displacement: fph,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that use their voxel object as a collidable.
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelObjectCollidableComp {
     kind: u64,
 }
@@ -106,12 +104,4 @@ impl VoxelObjectCollidableComp {
     pub fn kind(&self) -> CollidableKind {
         CollidableKind::from_u64(self.kind).unwrap()
     }
-}
-
-/// Registers all collision [`Component`](impact_ecs::component::Component)s.
-pub fn register_collision_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, SphereCollidableComp)?;
-    register_setup_component!(registry, PlaneCollidableComp)?;
-    register_setup_component!(registry, VoxelObjectCollidableComp)?;
-    register_component!(registry, CollidableComp)
 }

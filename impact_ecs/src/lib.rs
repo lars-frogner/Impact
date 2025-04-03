@@ -8,6 +8,10 @@ pub mod world;
 /// [`Component`](component::Component).
 pub use impact_ecs_macros::Component;
 
+/// Derive macro generating an impl of the trait
+/// [`SetupComponent`](component::SetupComponent).
+pub use impact_ecs_macros::SetupComponent;
+
 /// Creates a new [`Archetype`](archetype::Archetype) defined by
 /// the given component types.
 ///

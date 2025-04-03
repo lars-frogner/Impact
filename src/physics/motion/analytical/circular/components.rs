@@ -1,13 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to circular motion.
 
-use crate::{
-    component::ComponentRegistry,
-    physics::{
-        fph,
-        motion::{Orientation, Position},
-    },
+use crate::physics::{
+    fph,
+    motion::{Orientation, Position},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -55,10 +51,4 @@ impl CircularTrajectoryComp {
             period,
         }
     }
-}
-
-/// Registers all analytical motion
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_circular_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, CircularTrajectoryComp)
 }

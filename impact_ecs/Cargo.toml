@@ -7,6 +7,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
 const-fnv1a-hash = { workspace = true }
+inventory = { workspace = true }
 paste = { workspace = true }
 
 impact_ecs_macros = { path = "impact_ecs_macros" }

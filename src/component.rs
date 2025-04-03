@@ -1,7 +1,7 @@
 //! Management of [`Component`](impact_ecs::component::Component)s.
 
 use anyhow::{Result, bail};
-use impact_ecs::component::ComponentID;
+use impact_ecs::component::{ComponentCategory, ComponentDescriptor, ComponentID};
 use std::collections::{HashMap, hash_map::Entry};
 
 /// Registry for holding metadata about all
@@ -20,17 +20,6 @@ pub struct ComponentEntry {
     pub category: ComponentCategory,
 }
 
-/// The category of a component.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ComponentCategory {
-    /// A persistent component whose current state is always reflected in the
-    /// world.
-    Standard,
-    /// A helper component used for creating entities, which is no longer
-    /// present in the entity after it has been created.
-    Setup,
-}
-
 impl ComponentRegistry {
     /// Creates a new empty component registry.
     pub fn new() -> Self {
@@ -39,20 +28,18 @@ impl ComponentRegistry {
         }
     }
 
-    /// Adds an entry for the component with the given ID and name to the
+    /// Adds an entry for the component with the given descriptor to the
     /// registry.
     ///
     /// # Errors
     /// Returns an error if a component with the same ID is already present.
-    pub fn add_component(
-        &mut self,
-        id: ComponentID,
-        name: &'static str,
-        category: ComponentCategory,
-    ) -> Result<()> {
-        match self.components.entry(id) {
+    pub fn add_component(&mut self, descriptor: &ComponentDescriptor) -> Result<()> {
+        match self.components.entry(descriptor.id) {
             Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(ComponentEntry { name, category });
+                vacant_entry.insert(ComponentEntry {
+                    name: descriptor.name,
+                    category: descriptor.category,
+                });
             }
             Entry::Occupied(_) => {
                 bail!("Tried to add component to registry twice");

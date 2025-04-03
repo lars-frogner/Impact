@@ -1,14 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion with
 //! constant acceleration.
 
-use crate::{
-    component::ComponentRegistry,
-    physics::{
-        fph,
-        motion::{Acceleration, Position, Velocity},
-    },
+use crate::physics::{
+    fph,
+    motion::{Acceleration, Position, Velocity},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -62,12 +58,4 @@ impl ConstantAccelerationTrajectoryComp {
             Acceleration::zeros(),
         )
     }
-}
-
-/// Registers all constant acceleration motion
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_constant_acceleration_motion_components(
-    registry: &mut ComponentRegistry,
-) -> Result<()> {
-    register_component!(registry, ConstantAccelerationTrajectoryComp)
 }

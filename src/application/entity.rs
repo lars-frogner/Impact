@@ -1,11 +1,11 @@
 //! Management of entities in an application.
 
 use super::Application;
-use crate::{component::ComponentCategory, scene::RenderResourcesDesynchronized};
+use crate::scene::RenderResourcesDesynchronized;
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
-    component::{ComponentArray, ComponentID, SingleInstance},
+    component::{ComponentArray, ComponentCategory, ComponentID, SingleInstance},
     world::Entity,
 };
 

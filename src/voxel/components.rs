@@ -1,7 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to voxels.
 
 use crate::{
-    component::ComponentRegistry,
     geometry::{Capsule, Sphere},
     voxel::{
         VoxelObjectID,
@@ -10,24 +9,24 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use impact_ecs::{Component, SetupComponent};
 use impact_utils::{Hash32, compute_hash_str_32};
 use nalgebra::{Point3, Vector3};
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose voxel type is the same everywhere.
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SameVoxelTypeComp {
     /// The index of the voxel type.
     voxel_type_idx: usize,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose voxel types are distributed according to a gradient noise
 /// pattern.
 ///
@@ -35,7 +34,7 @@ pub struct SameVoxelTypeComp {
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct GradientNoiseVoxelTypesComp {
     n_voxel_types: usize,
     voxel_type_name_hashes: [Hash32; GradientNoiseVoxelTypesComp::VOXEL_TYPE_ARRAY_SIZE],
@@ -44,7 +43,7 @@ pub struct GradientNoiseVoxelTypesComp {
     pub seed: u64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose voxel signed distance field should be modified by unions
 /// with multiscale sphere grid (<https://iquilezles.org/articles/fbmsdf>/).
 ///
@@ -52,7 +51,7 @@ pub struct GradientNoiseVoxelTypesComp {
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct MultiscaleSphereModificationComp {
     pub octaves: usize,
     pub max_scale: f64,
@@ -62,7 +61,7 @@ pub struct MultiscaleSphereModificationComp {
     pub seed: u64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose voxel signed distance field should be perturbed by
 /// multifractal noise.
 ///
@@ -70,7 +69,7 @@ pub struct MultiscaleSphereModificationComp {
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct MultifractalNoiseModificationComp {
     pub octaves: usize,
     pub frequency: f64,
@@ -80,14 +79,14 @@ pub struct MultifractalNoiseModificationComp {
     pub seed: u64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities comprised of voxels in a box configuration.
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelBoxComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
@@ -99,14 +98,14 @@ pub struct VoxelBoxComp {
     pub extent_z: f64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities comprised of voxels in a spherical configuration.
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelSphereComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
@@ -114,7 +113,7 @@ pub struct VoxelSphereComp {
     pub radius: f64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities comprised of voxels in a configuration described by the smooth
 /// union of two spheres.
 ///
@@ -122,7 +121,7 @@ pub struct VoxelSphereComp {
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelSphereUnionComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
@@ -137,14 +136,14 @@ pub struct VoxelSphereUnionComp {
     pub smoothness: f64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities comprised of voxels in a gradient noise pattern.
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelGradientNoisePatternComp {
     /// The extent of a single voxel.
     pub voxel_extent: f64,
@@ -494,18 +493,4 @@ impl VoxelAbsorbingCapsuleComp {
     pub fn rate(&self) -> f64 {
         self.rate
     }
-}
-
-/// Registers all voxel [`Component`](impact_ecs::component::Component)s.
-pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_setup_component!(registry, SameVoxelTypeComp)?;
-    register_setup_component!(registry, GradientNoiseVoxelTypesComp)?;
-    register_setup_component!(registry, MultifractalNoiseModificationComp)?;
-    register_setup_component!(registry, VoxelBoxComp)?;
-    register_setup_component!(registry, VoxelSphereComp)?;
-    register_setup_component!(registry, VoxelSphereUnionComp)?;
-    register_setup_component!(registry, VoxelGradientNoisePatternComp)?;
-    register_component!(registry, VoxelObjectComp)?;
-    register_component!(registry, VoxelAbsorbingSphereComp)?;
-    register_component!(registry, VoxelAbsorbingCapsuleComp)
 }

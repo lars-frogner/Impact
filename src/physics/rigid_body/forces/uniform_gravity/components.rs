@@ -1,8 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to uniform
 //! gravitational acceleration.
 
-use crate::{component::ComponentRegistry, physics::fph};
-use anyhow::Result;
+use crate::physics::fph;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{Vector3, vector};
@@ -36,10 +35,4 @@ impl UniformGravityComp {
     pub fn earth() -> Self {
         Self::downward(Self::EARTH_DOWNWARD_ACCELERATION)
     }
-}
-
-/// Registers all uniform gravity force
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_uniform_gravity_force_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, UniformGravityComp)
 }
