@@ -364,9 +364,9 @@ pub fn print_timing_results(timings: &[(Cow<'_, str>, Duration)]) {
         let title_text = " GPU timing results ";
         let asterisks_per_side = (total_width - title_text.len()) / 2;
         let mut title = String::with_capacity(total_width);
-        title.extend(iter::repeat('*').take(asterisks_per_side));
+        title.extend(iter::repeat_n('*', asterisks_per_side));
         title.push_str(title_text);
-        title.extend(iter::repeat('*').take(asterisks_per_side));
+        title.extend(iter::repeat_n('*', asterisks_per_side));
         if title.len() < total_width {
             title.push('*');
         }
