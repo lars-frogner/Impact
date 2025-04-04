@@ -1662,7 +1662,7 @@ impl VoxelChunk {
         {
             let start_voxel_idx = voxels.len();
             voxels.reserve(CHUNK_VOXEL_COUNT);
-            voxels.extend(iter::repeat(voxel).take(CHUNK_VOXEL_COUNT));
+            voxels.extend(iter::repeat_n(voxel, CHUNK_VOXEL_COUNT));
             *self = Self::NonUniform(NonUniformVoxelChunk {
                 data_offset: chunk_data_offset_from_start_voxel_idx(start_voxel_idx),
                 face_distributions: [[FaceVoxelDistribution::Full; 2]; 3],

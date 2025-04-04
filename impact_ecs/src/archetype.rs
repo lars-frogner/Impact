@@ -405,7 +405,7 @@ where
                     .map(Some),
             )
         } else {
-            Box::new(iter::repeat(None).take(self.component_count()))
+            Box::new(iter::repeat_n(None, self.component_count()))
         }
     }
 
