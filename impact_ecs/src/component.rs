@@ -177,12 +177,13 @@ pub struct SingleInstance<T> {
 }
 
 impl ComponentID {
-    pub const fn from_u64(value: u64) -> Self {
-        Self(value)
+    pub const fn hashed_from_str(input: &str) -> Self {
+        let hash = const_fnv1a_hash::fnv1a_hash_str_64(input);
+        Self(if hash == 0 { 1 } else { hash })
     }
 
-    pub const fn as_u64(&self) -> u64 {
-        self.0
+    pub(crate) const fn dummy() -> Self {
+        Self(0)
     }
 }
 

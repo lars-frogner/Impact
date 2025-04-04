@@ -1196,7 +1196,7 @@ where
             bail!("The number of component instances differs between component types");
         }
 
-        let mut component_ids = [ComponentID::from_u64(0); N];
+        let mut component_ids = [ComponentID::dummy(); N];
 
         // Populate array of component IDs
         component_ids
@@ -1236,7 +1236,7 @@ where
             bail!("Tried to create empty single instance `ArchetypeComponents`");
         }
 
-        let mut component_ids = [ComponentID::from_u64(0); N];
+        let mut component_ids = [ComponentID::dummy(); N];
 
         // Populate array of component IDs
         component_ids
