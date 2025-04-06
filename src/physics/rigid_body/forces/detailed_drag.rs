@@ -8,6 +8,7 @@ mod equirectangular_map;
 pub mod systems;
 
 pub use drag_load::DragLoad;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     geometry::{Angle, Radians},
@@ -39,7 +40,7 @@ pub struct DragLoadMapRepository<F: Float> {
 }
 
 /// Configuration parameters for the generation of drag load maps.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DragLoadMapConfig {
     /// The number of uniformly distributed directions the aggregate drag load
     /// on the body should be computed for. More directions gives a more

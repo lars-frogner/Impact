@@ -12,10 +12,11 @@ use crate::gpu::{
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 
 /// The method to use for tone mapping.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToneMappingMethod {
     None,
     #[default]

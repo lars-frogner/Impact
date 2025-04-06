@@ -2,10 +2,11 @@
 
 #![allow(unused)]
 use crate::{
-    application::Application,
+    application::{Application, ApplicationConfig},
     assets::Assets,
     camera::components::PerspectiveCameraComp,
     control::{
+        ControllerConfig,
         motion::{SemiDirectionalMotionController, components::MotionControlComp},
         orientation::{RollFreeCameraOrientationController, components::OrientationControlComp},
     },
@@ -38,7 +39,7 @@ use crate::{
     model::InstanceFeatureManager,
     num::Float,
     physics::{
-        PhysicsSimulator, SimulatorConfig,
+        PhysicsConfig, PhysicsSimulator, SimulatorConfig,
         collision::{
             CollidableKind,
             components::{PlaneCollidableComp, SphereCollidableComp, VoxelObjectCollidableComp},
@@ -74,19 +75,22 @@ use crate::{
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
-        VoxelManager,
+        VoxelConfig, VoxelManager,
         components::{
             GradientNoiseVoxelTypesComp, MultifractalNoiseModificationComp, SameVoxelTypeComp,
             VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelBoxComp,
             VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelSphereUnionComp,
         },
-        voxel_types::{FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry},
+        voxel_types::{
+            FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry, VoxelTypeSpecifications,
+        },
     },
-    window::{GameHandler, InputHandler, KeyActionMap, MouseButtonInputHandler, Window},
+    window::{GameHandler, Window, input::InputConfig},
 };
 use anyhow::Result;
 use nalgebra::{Point3, UnitVector3, Vector3, point, vector};
 use rand::{Rng, SeedableRng, rngs::ThreadRng};
+use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     f64::consts::PI,
@@ -95,11 +99,13 @@ use std::{
 };
 
 pub fn run(
+    app_config: ApplicationConfig,
     on_app_created: impl FnOnce(Arc<Application>) + 'static,
     callbacks: Callbacks,
 ) -> Result<()> {
     init_logging()?;
-    let mut handler = GameHandler::new(|window| init_game_loop(window, on_app_created, callbacks));
+    let mut handler =
+        GameHandler::new(|window| init_game_loop(app_config, on_app_created, callbacks, window));
     handler.run()
 }
 
@@ -109,82 +115,25 @@ fn init_logging() -> Result<()> {
 }
 
 fn init_game_loop(
-    window: Window,
+    app_config: ApplicationConfig,
     on_app_created: impl FnOnce(Arc<Application>),
     callbacks: Callbacks,
+    window: Window,
 ) -> Result<GameLoop> {
-    let app = init_physics_lab(callbacks, window)?;
+    let app = init_app(app_config, callbacks, window)?;
     let game_loop = GameLoop::new(app, GameLoopConfig::default())?;
     on_app_created(game_loop.arc_app());
     Ok(game_loop)
 }
 
-fn init_app(callbacks: Callbacks, window: Window) -> Result<Application> {
-    let rendering_config = RenderingConfig::default();
-
+fn init_app(
+    app_config: ApplicationConfig,
+    callbacks: Callbacks,
+    window: Window,
+) -> Result<Application> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
-
-    let motion_controller = SemiDirectionalMotionController::new(8.0, true);
-    let orientation_controller =
-        RollFreeCameraOrientationController::new(vertical_field_of_view, 1.0);
-
-    let voxel_type_registry = VoxelTypeRegistry::new(
-        vec![
-            Cow::Borrowed("Ground"),
-            Cow::Borrowed("Metal"),
-            Cow::Borrowed("Snow"),
-            Cow::Borrowed("Rock"),
-            // Cow::Borrowed("Brick"),
-            // Cow::Borrowed("Wood"),
-        ],
-        vec![1.0; 4],
-        vec![
-            FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
-            FixedVoxelMaterialProperties::new(1.0, 1.0, 1.0, 0.0),
-            FixedVoxelMaterialProperties::new(0.04, 1.0, 0.0, 0.0),
-            FixedVoxelMaterialProperties::new(0.03, 1.0, 0.0, 0.0),
-            // FixedVoxelMaterialProperties::new(0.02, 1.0, 0.0, 0.0),
-            // FixedVoxelMaterialProperties::new(0.03, 1.0, 0.0, 0.0),
-        ],
-        vec![
-            PathBuf::from("assets/Ground029_4K-JPG/Ground029_4K-JPG_Color.jpg"),
-            PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Color.jpg"),
-            PathBuf::from("assets/Snow007A_4K-JPG/Snow007A_4K-JPG_Color.jpg"),
-            PathBuf::from("assets/Rock022_4K-JPG/Rock022_4K-JPG_Color.jpg"),
-            // PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
-            // PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
-        ],
-        vec![
-            PathBuf::from("assets/Ground029_4K-JPG/Ground029_4K-JPG_Roughness.jpg"),
-            PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Roughness.jpg"),
-            PathBuf::from("assets/Snow007A_4K-JPG/Snow007A_4K-JPG_Roughness.jpg"),
-            PathBuf::from("assets/Rock022_4K-JPG/Rock022_4K-JPG_Roughness.jpg"),
-            // PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
-            // PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
-        ],
-        vec![
-            PathBuf::from("assets/Ground029_4K-JPG/Ground029_4K-JPG_NormalDX.jpg"),
-            PathBuf::from("assets/Metal062C_4K-JPG/Metal062C_4K-JPG_NormalDX.jpg"),
-            PathBuf::from("assets/Snow007A_4K-JPG/Snow007A_4K-JPG_NormalDX.jpg"),
-            PathBuf::from("assets/Rock022_4K-JPG/Rock022_4K-JPG_NormalDX.jpg"),
-            // PathBuf::from("assets/Bricks059_4K-JPG/Bricks059_4K-JPG_NormalDX.jpg"),
-            // PathBuf::from("assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
-        ],
-    )
-    .unwrap();
-
-    let mut app = Application::new(
-        callbacks,
-        Arc::new(window),
-        InputHandler::default(),
-        rendering_config,
-        simulator,
-        Some(Box::new(motion_controller)),
-        Some(Box::new(orientation_controller)),
-        voxel_type_registry,
-    )?;
+    let mut app = Application::new(app_config, callbacks, window)?;
 
     let mut assets = app.assets().write().unwrap();
 
@@ -548,58 +497,14 @@ fn init_app(callbacks: Callbacks, window: Window) -> Result<Application> {
     Ok(app)
 }
 
-fn init_physics_lab(callbacks: Callbacks, window: Window) -> Result<Application> {
-    let rendering_config = RenderingConfig::default();
-
+fn init_physics_lab(
+    app_config: ApplicationConfig,
+    callbacks: Callbacks,
+    window: Window,
+) -> Result<Application> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let simulator = PhysicsSimulator::new(
-        SimulatorConfig {
-            n_substeps: 1,
-            match_frame_duration: false,
-            constraint_solver_config: Some(ConstraintSolverConfig {
-                n_iterations: 8,
-                old_impulse_weight: 0.4,
-                n_positional_correction_iterations: 3,
-                positional_correction_factor: 0.2,
-            }),
-            ..SimulatorConfig::default()
-        },
-        UniformMedium::vacuum(),
-    )?;
-
-    let motion_controller = SemiDirectionalMotionController::new(8.0, true);
-    let orientation_controller =
-        RollFreeCameraOrientationController::new(vertical_field_of_view, 1.0);
-
-    let voxel_type_registry = VoxelTypeRegistry::new(
-        vec![Cow::Borrowed("Metal")],
-        vec![1e9; 1],
-        vec![FixedVoxelMaterialProperties::new(1.0, 1.0, 1.0, 0.0)],
-        vec![PathBuf::from(
-            "assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Color.jpg",
-        )],
-        vec![PathBuf::from(
-            "assets/Metal062C_4K-JPG/Metal062C_4K-JPG_Roughness.jpg",
-        )],
-        vec![PathBuf::from(
-            "assets/Metal062C_4K-JPG/Metal062C_4K-JPG_NormalDX.jpg",
-        )],
-    )
-    .unwrap();
-
-    let app = Application::new(
-        callbacks,
-        Arc::new(window),
-        InputHandler::default(),
-        rendering_config,
-        simulator,
-        Some(Box::new(motion_controller)),
-        Some(Box::new(orientation_controller)),
-        voxel_type_registry,
-    )?;
-
-    let mouse_button_input_handler = MouseButtonInputHandler::default();
+    let app = Application::new(app_config, callbacks, window)?;
 
     let mut assets = app.assets().write().unwrap();
 

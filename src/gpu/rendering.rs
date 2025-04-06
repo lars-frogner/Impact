@@ -29,6 +29,7 @@ use postprocessing::{
 };
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
+use serde::{Deserialize, Serialize};
 use std::{
     num::NonZeroU32,
     sync::{
@@ -58,7 +59,7 @@ pub struct RenderingSystem {
 }
 
 /// Global rendering configuration options.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RenderingConfig {
     /// The width and height of each face of the omnidirectional light shadow
     /// cubemap in number of texels.

@@ -8,7 +8,7 @@ use crate::{
     assets::{Assets, lookup_table},
     component::ComponentRegistry,
     control::{
-        self, MotionController, OrientationController,
+        self, ControllerConfig, MotionController, OrientationController,
         motion::{MotionDirection, MotionState},
     },
     gpu::{
@@ -19,13 +19,16 @@ use crate::{
     material::{self, MaterialLibrary},
     mesh::{MeshRepository, components::MeshComp, texture_projection::TextureProjection},
     model::{self, InstanceFeatureManager},
-    physics::PhysicsSimulator,
+    physics::{PhysicsConfig, PhysicsSimulator},
     scene::{Scene, SceneEntityFlags, components::SceneEntityFlagsComp},
     scripting::Callbacks,
     skybox::Skybox,
     ui::UserInterface,
-    voxel::{self, VoxelManager, voxel_types::VoxelTypeRegistry},
-    window::{InputHandler, MouseButtonInputHandler, Window},
+    voxel::{self, VoxelConfig, VoxelManager},
+    window::{
+        Window,
+        input::{InputConfig, InputHandler, MouseButtonInputHandler},
+    },
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
@@ -33,6 +36,7 @@ use impact_ecs::{
     component::{Component, SingleInstance},
     world::{Entity, World as ECSWorld},
 };
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
     num::NonZeroU32,
@@ -44,7 +48,7 @@ use std::{
 #[derive(Debug)]
 pub struct Application {
     callbacks: Callbacks,
-    window: Arc<Window>,
+    window: Window,
     input_handler: InputHandler,
     graphics_device: Arc<GraphicsDevice>,
     user_interface: RwLock<UserInterface>,
@@ -59,27 +63,29 @@ pub struct Application {
     screen_capturer: ScreenCapturer,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ApplicationConfig {
+    pub rendering: RenderingConfig,
+    pub physics: PhysicsConfig,
+    pub voxel: VoxelConfig,
+    pub input: InputConfig,
+    pub controller: ControllerConfig,
+}
+
 impl Application {
-    /// Creates a new world data container.
-    pub fn new(
-        callbacks: Callbacks,
-        window: Arc<Window>,
-        input_handler: InputHandler,
-        rendering_config: RenderingConfig,
-        simulator: PhysicsSimulator,
-        motion_controller: Option<Box<dyn MotionController>>,
-        orientation_controller: Option<Box<dyn OrientationController>>,
-        voxel_type_registry: VoxelTypeRegistry,
-    ) -> Result<Self> {
+    /// Creates a new application.
+    pub fn new(config: ApplicationConfig, callbacks: Callbacks, window: Window) -> Result<Self> {
+        let user_interface = UserInterface::new(window.clone());
+
         let mut component_registry = ComponentRegistry::new();
-        if let Err(err) = components::register_all_components(&mut component_registry) {
-            panic!("Failed to register components: {}", err);
-        }
+        components::register_all_components(&mut component_registry)?;
+
+        let ecs_world = ECSWorld::new();
 
         let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
 
         let renderer = RenderingSystem::new(
-            rendering_config,
+            config.rendering,
             Arc::clone(&graphics_device),
             rendering_surface,
         )?;
@@ -104,7 +110,7 @@ impl Application {
         material::register_material_feature_types(&mut instance_feature_manager);
         voxel::register_voxel_feature_types(&mut instance_feature_manager);
 
-        let voxel_manager = VoxelManager::new(voxel_type_registry);
+        let voxel_manager = VoxelManager::from_config(config.voxel)?;
 
         let scene = Scene::new(
             mesh_repository,
@@ -113,14 +119,21 @@ impl Application {
             voxel_manager,
         );
 
+        let simulator = PhysicsSimulator::new(config.physics)?;
+
+        let input_handler = InputHandler::from_config(config.input)?;
+
+        let (motion_controller, orientation_controller) =
+            control::create_controllers(config.controller);
+
         Ok(Self {
             callbacks,
-            window: Arc::clone(&window),
+            window,
             input_handler,
             graphics_device,
-            user_interface: RwLock::new(UserInterface::new(window)),
+            user_interface: RwLock::new(user_interface),
             component_registry: RwLock::new(component_registry),
-            ecs_world: RwLock::new(ECSWorld::new()),
+            ecs_world: RwLock::new(ecs_world),
             renderer: RwLock::new(renderer),
             assets: RwLock::new(assets),
             scene: RwLock::new(scene),

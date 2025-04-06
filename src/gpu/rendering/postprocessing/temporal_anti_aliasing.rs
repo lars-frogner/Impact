@@ -4,6 +4,7 @@ use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{ConstStringHash64, hash64};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     assert_uniform_valid,
@@ -27,7 +28,7 @@ use crate::{
 use anyhow::Result;
 
 /// Configuration options for temporal anti-aliasing.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TemporalAntiAliasingConfig {
     /// Whether temporal anti-aliasing should be enabled when the scene loads.
     pub initially_enabled: bool,

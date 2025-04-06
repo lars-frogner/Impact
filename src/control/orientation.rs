@@ -5,12 +5,12 @@ pub mod systems;
 
 use super::OrientationController;
 use crate::{
-    geometry::{Angle, Radians},
-    num::Float,
+    geometry::{Angle, Degrees, Radians},
     physics::{fph, motion::Orientation},
     window::Window,
 };
 use nalgebra::{UnitQuaternion, Vector3};
+use serde::{Deserialize, Serialize};
 
 /// Orientation controller that updates the orientation
 /// in the way a first-person camera should respond to
@@ -39,6 +39,21 @@ pub struct RollFreeCameraOrientationController {
     pitch_change: Orientation,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum OrientationControllerConfig {
+    None,
+    Camera(CameraOrientationControllerConfig),
+    RollFreeCamera(CameraOrientationControllerConfig),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CameraOrientationControllerConfig {
+    /// The vertical field of view of the controlled first-person camera.
+    pub vertical_field_of_view: Degrees<f64>,
+    /// The sensitivity to mouse motions.
+    pub sensitivity: f64,
+}
+
 #[derive(Clone, Debug)]
 struct CameraOrientationControllerBase {
     vertical_field_of_view: Radians<f64>,
@@ -47,26 +62,27 @@ struct CameraOrientationControllerBase {
 }
 
 impl CameraOrientationController {
-    /// Creates a new orientation controller for a first-person
-    /// camera with the given vertical field of view, with the
-    /// given sensitivity to mouse motions.
-    pub fn new<A: Angle<f64>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
+    /// Creates a new first-person camera orientation controller with the given
+    /// configuration parameters.
+    pub fn new(config: CameraOrientationControllerConfig) -> Self {
         Self {
-            base: CameraOrientationControllerBase::new(vertical_field_of_view, sensitivity),
+            base: CameraOrientationControllerBase::new(
+                config.vertical_field_of_view,
+                config.sensitivity,
+            ),
             orientation_change: Orientation::identity(),
         }
     }
 }
 
 impl RollFreeCameraOrientationController {
-    /// Creates a new orientation controller for a first-person
-    /// camera with the given vertical field of view, with the
-    /// given sensitivity to mouse motions.
-    pub fn new<F: Float, A: Angle<F>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
+    /// Creates a new roll-free first-person camera orientation controller
+    /// with the given configuration parameters.
+    pub fn new(config: CameraOrientationControllerConfig) -> Self {
         Self {
             base: CameraOrientationControllerBase::new(
-                Radians(vertical_field_of_view.radians().to_f64().unwrap()),
-                sensitivity,
+                config.vertical_field_of_view,
+                config.sensitivity,
             ),
             pitch_change: Orientation::identity(),
             yaw_change: Orientation::identity(),
@@ -144,6 +160,21 @@ impl OrientationController for RollFreeCameraOrientationController {
 
     fn set_sensitivity(&mut self, sensitivity: f64) {
         self.base.set_sensitivity(sensitivity);
+    }
+}
+
+impl Default for OrientationControllerConfig {
+    fn default() -> Self {
+        Self::RollFreeCamera(CameraOrientationControllerConfig::default())
+    }
+}
+
+impl Default for CameraOrientationControllerConfig {
+    fn default() -> Self {
+        Self {
+            vertical_field_of_view: Degrees(70.0),
+            sensitivity: 1.0,
+        }
     }
 }
 

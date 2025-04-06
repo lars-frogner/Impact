@@ -1,14 +1,16 @@
 //! Lower and upper bounds.
 
+use serde::{Deserialize, Serialize};
+
 /// Inclusive lower and upper bounds.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InclusiveBounds<T> {
     lower: T,
     upper: T,
 }
 
 /// A lower inclusive and upper exlusive set of bounds.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UpperExclusiveBounds<T> {
     lower: T,
     upper: T,

@@ -31,3 +31,6 @@ pub mod window;
 
 #[cfg(feature = "profiling")]
 pub mod profiling;
+
+#[cfg(feature = "roc_codegen")]
+pub mod roc_codegen;

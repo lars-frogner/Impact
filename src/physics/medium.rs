@@ -1,9 +1,10 @@
 //! Physical media objects can interact with.
 
 use crate::physics::{fph, motion::Velocity};
+use serde::{Deserialize, Serialize};
 
 /// A physical medium with the same properties and state everywhere.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UniformMedium {
     /// The mass density of the medium.
     pub mass_density: fph,
@@ -51,5 +52,11 @@ impl UniformMedium {
     /// Creates a new medium of water with the given flow velocity.
     pub fn moving_water(velocity: Velocity) -> Self {
         Self::new(Self::WATER_MASS_DENSITY, velocity)
+    }
+}
+
+impl Default for UniformMedium {
+    fn default() -> Self {
+        Self::vacuum()
     }
 }

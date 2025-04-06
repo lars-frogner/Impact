@@ -103,7 +103,6 @@ zero_sized_map_values = "warn"
 name = "impact"
 version = "0.1.0"
 edition = { workspace = true }
-default-run = "impact"
 
 build = "build.rs"
 
@@ -111,7 +110,8 @@ build = "build.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-profiling = ["dep:clap", "dep:criterion"]
+cli = ["dep:clap"]
+profiling = ["dep:criterion"]
 fuzzing = ["dep:arbitrary"]
 unchecked = []
 
@@ -138,7 +138,7 @@ half = { version = "2.1", features = ["bytemuck"] }
 lazy_static = { workspace = true }
 log = "0.4"
 naga = { version = "24.0", features = ["wgsl-out"] }
-nalgebra = { version = "0.33", features = ["bytemuck"] }
+nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = "0.2.0"
 noise = "0.9.0"
 num-derive = "0.4"
@@ -153,20 +153,19 @@ pollster = "0.4"
 rand = "0.9"
 regex = "1.10"
 rmp-serde = "1.1"
+ron = "0.9"
 roots = "0.0.8"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.9"
 tinyvec = { version = "1.9", features = ["alloc"] }
 tobj = "4.0"
 wgpu = { version = "24.0", features = ["naga-ir"] }
-winit = { version = "0.30" }
+winit = { version = "0.30", features = ["serde"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
-[dependencies.impact_ecs]
-path = "impact_ecs"
-
-[dependencies.impact_utils]
-path = "impact_utils"
+impact_ecs = { path = "impact_ecs" }
+impact_utils = { path = "impact_utils" }
+roc_codegen = { path = "roc_codegen" }
 
 [dev-dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -180,6 +179,11 @@ workspace = true
 
 [profile.release]
 debug = "limited"
+
+[[bin]]
+name = "impact"
+path = "src/bin/impact.rs"
+required-features = ["cli"]
 
 [[bench]]
 name = "model"

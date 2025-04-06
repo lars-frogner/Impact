@@ -17,6 +17,7 @@ use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
 use rigid_body::forces::{RigidBodyForceConfig, RigidBodyForceManager};
+use serde::{Deserialize, Serialize};
 use std::{sync::RwLock, time::Duration};
 
 use crate::voxel::VoxelObjectManager;
@@ -38,8 +39,21 @@ pub struct PhysicsSimulator {
     simulation_speed_multiplier: fph,
 }
 
+/// Configuration parameters for physics.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PhysicsConfig {
+    /// Configuration parameters for the physics simulation.
+    pub simulator: SimulatorConfig,
+    /// Configuration parameters for rigid body force generation.
+    pub rigid_body_force: RigidBodyForceConfig,
+    /// Configuration parameters for the constraint solver.
+    pub constraint_solver: ConstraintSolverConfig,
+    /// The uniform medium in which physics is simulated.
+    pub medium: UniformMedium,
+}
+
 /// Configuration parameters for the physics simulation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SimulatorConfig {
     /// The number of substeps to perform each simulation step. Increase to
     /// improve accuracy.
@@ -55,25 +69,22 @@ pub struct SimulatorConfig {
     /// or
     /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
     pub simulation_speed_multiplier_increment_factor: fph,
-    /// Configuration parameters for rigid body force generation. If [`None`],
-    /// default parameters are used.
-    pub rigid_body_force_config: Option<RigidBodyForceConfig>,
-    /// Configuration parameters for the constraint solver. If [`None`],
-    /// default parameters are used.
-    pub constraint_solver_config: Option<ConstraintSolverConfig>,
 }
 
 impl PhysicsSimulator {
-    /// Creates a new physics simulator with the given configuration parameters
-    /// and uniform physical medium.
+    /// Creates a new physics simulator with the given configuration parameters.
     ///
     /// # Errors
     /// Returns an error if any of the configuration parameters are invalid.
-    pub fn new(mut config: SimulatorConfig, medium: UniformMedium) -> Result<Self> {
+    pub fn new(
+        PhysicsConfig {
+            simulator: config,
+            rigid_body_force: rigid_body_force_config,
+            constraint_solver: constraint_solver_config,
+            medium,
+        }: PhysicsConfig,
+    ) -> Result<Self> {
         config.validate()?;
-
-        let rigid_body_force_config = config.rigid_body_force_config.take().unwrap_or_default();
-        let constraint_solver_config = config.constraint_solver_config.take().unwrap_or_default();
 
         let time_step_duration = config.initial_time_step_duration;
 
@@ -353,8 +364,6 @@ impl Default for SimulatorConfig {
             initial_time_step_duration: 0.015,
             match_frame_duration: true,
             simulation_speed_multiplier_increment_factor: 1.1,
-            rigid_body_force_config: None,
-            constraint_solver_config: None,
         }
     }
 }

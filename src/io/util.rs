@@ -1,5 +1,6 @@
 //! Utilities for input/output.
 
+use anyhow::{Context, Result};
 use std::{
     fs::{self, File},
     io::{self, BufReader, Read, Write},
@@ -49,4 +50,31 @@ where
 {
     let mut file = create_file_and_required_directories(output_file_path)?;
     file.write_all(byte_buffer)
+}
+
+/// Reads the RON (Rusty Object Notation) file at the given path and
+/// deserializes the contents into an object of type `T`.
+pub fn parse_ron_file<T>(file_path: impl AsRef<Path>) -> Result<T>
+where
+    T: for<'de> serde::de::Deserialize<'de>,
+{
+    let file_path = file_path.as_ref();
+
+    let text = read_text_file(file_path)
+        .map_err(anyhow::Error::from)
+        .with_context(|| format!("Could not open {}", file_path.display()))?;
+
+    ron::from_str::<T>(&text)
+        .map_err(anyhow::Error::from)
+        .with_context(|| format!("Invalid syntax in {}", file_path.display()))
+}
+
+/// Serializes the given value of type `T` to RON (Rusty Object Notation)
+/// and writes it to the given path.
+pub fn write_ron_file<T>(value: &T, output_file_path: impl AsRef<Path>) -> Result<()>
+where
+    T: serde::ser::Serialize,
+{
+    let text = ron::ser::to_string_pretty(value, ron::ser::PrettyConfig::default())?;
+    write_text_file(&text, output_file_path).map_err(Into::into)
 }

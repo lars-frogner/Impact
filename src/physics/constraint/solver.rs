@@ -18,6 +18,7 @@ use bitflags::bitflags;
 use impact_ecs::world::{Entity, World as ECSWorld};
 use impact_utils::KeyIndexMapper;
 use num_traits::Zero;
+use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     hash::Hash,
@@ -35,7 +36,7 @@ pub struct ConstraintSolver {
 }
 
 /// Configuration parameters for the [`ConstraintSolver`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstraintSolverConfig {
     /// The number of sequential impulse iterations to perform for solving the
     /// velocity constraints.

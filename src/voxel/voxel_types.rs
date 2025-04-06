@@ -1,22 +1,42 @@
 //! Voxel types and their properties.
 
+use crate::io::util::parse_ron_file;
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{Hash32, compute_hash_str_32};
 use nalgebra::{Vector4, vector};
 use nohash_hasher::BuildNoHashHasher;
-use std::{borrow::Cow, collections::HashMap, path::PathBuf};
+use serde::{Deserialize, Serialize};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 /// A type identifier that determines all the properties of a voxel.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelType(u8);
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct VoxelTypeSpecifications(pub Vec<VoxelTypeSpecification>);
+
+/// Specifies all relevant aspects of a voxel type.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VoxelTypeSpecification {
+    pub name: Cow<'static, str>,
+    pub mass_density: f32,
+    pub fixed_material_properties: FixedVoxelMaterialProperties,
+    pub color_texture_path: PathBuf,
+    pub roughness_texture_path: PathBuf,
+    pub normal_texture_path: PathBuf,
+}
+
 /// Registry containing the names and properties of all voxel types.
 #[derive(Clone, Debug)]
 pub struct VoxelTypeRegistry {
-    names: Vec<Cow<'static, str>>,
     name_lookup_table: HashMap<u32, VoxelType, BuildNoHashHasher<u32>>,
+    names: Vec<Cow<'static, str>>,
     mass_densities: Vec<f32>,
     fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
     color_texture_paths: Vec<PathBuf>,
@@ -26,7 +46,7 @@ pub struct VoxelTypeRegistry {
 
 /// Specific properties of a voxel material that do not change with position.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize, Deserialize)]
 pub struct FixedVoxelMaterialProperties {
     properties: Vector4<f32>,
 }
@@ -67,41 +87,32 @@ impl VoxelTypeRegistry {
         255
     }
 
-    /// Creates a new voxel type registry for the voxel types with the given
-    /// names, mass densities and fixed and textured material properties.
+    /// Reads the RON (Rusty Object Notation) file at the given path and
+    /// deserializes it into a [`VoxelTypeSpecifications`] object that is used
+    /// to create a new voxel type registry.
+    pub fn from_voxel_type_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        let voxel_types = parse_ron_file(file_path)?;
+        Self::new(voxel_types)
+    }
+
+    /// Creates a new voxel type registry for the specified voxel types.
     ///
     /// # Errors
     /// Returns an error if:
-    /// - There are duplicates in the list of names.
     /// - The number of voxel types is not smaller than
     ///   [`Self::max_voxel_types`].
-    /// - The inputs have different lengths.
-    pub fn new(
-        names: Vec<Cow<'static, str>>,
-        mass_densities: Vec<f32>,
-        fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
-        color_texture_paths: Vec<PathBuf>,
-        roughness_texture_paths: Vec<PathBuf>,
-        normal_texture_paths: Vec<PathBuf>,
-    ) -> Result<Self> {
-        if names.len() >= Self::max_n_voxel_types() {
-            bail!("Too many voxel types for registry");
-        }
-        if names.len() != mass_densities.len() {
-            bail!("Mismatching number of voxel type names and mass densities");
-        }
-        if names.len() != fixed_material_properties.len() {
-            bail!("Mismatching number of voxel type names and fixed material properties");
-        }
-        if names.len() != color_texture_paths.len() {
-            bail!("Mismatching number of voxel type names and color texture paths");
-        }
-        if names.len() != roughness_texture_paths.len() {
-            bail!("Mismatching number of voxel type names and roughness texture paths");
-        }
-        if names.len() != normal_texture_paths.len() {
-            bail!("Mismatching number of voxel type names and normal texture paths");
-        }
+    /// - There are duplicate names.
+    pub fn new(voxel_types: VoxelTypeSpecifications) -> Result<Self> {
+        voxel_types.validate()?;
+
+        let (
+            names,
+            mass_densities,
+            fixed_material_properties,
+            color_texture_paths,
+            roughness_texture_paths,
+            normal_texture_paths,
+        ) = voxel_types.unzip();
 
         let name_lookup_table: HashMap<_, _, _> = names
             .iter()
@@ -114,8 +125,8 @@ impl VoxelTypeRegistry {
         }
 
         Ok(Self {
-            names,
             name_lookup_table,
+            names,
             mass_densities,
             fixed_material_properties,
             color_texture_paths,
@@ -185,17 +196,57 @@ impl VoxelTypeRegistry {
     }
 }
 
-impl Default for VoxelTypeRegistry {
-    fn default() -> Self {
-        Self::new(
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
+impl VoxelTypeSpecifications {
+    fn validate(&self) -> Result<()> {
+        if self.0.len() >= VoxelTypeRegistry::max_n_voxel_types() {
+            bail!("Too many voxel types for registry");
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn unzip(
+        self,
+    ) -> (
+        Vec<Cow<'static, str>>,
+        Vec<f32>,
+        Vec<FixedVoxelMaterialProperties>,
+        Vec<PathBuf>,
+        Vec<PathBuf>,
+        Vec<PathBuf>,
+    ) {
+        let mut names = Vec::with_capacity(self.0.len());
+        let mut mass_densities = Vec::with_capacity(self.0.len());
+        let mut fixed_material_props = Vec::with_capacity(self.0.len());
+        let mut color_texture_paths = Vec::with_capacity(self.0.len());
+        let mut roughness_texture_paths = Vec::with_capacity(self.0.len());
+        let mut normal_texture_paths = Vec::with_capacity(self.0.len());
+
+        for VoxelTypeSpecification {
+            name,
+            mass_density,
+            fixed_material_properties,
+            color_texture_path,
+            roughness_texture_path,
+            normal_texture_path,
+        } in self.0
+        {
+            names.push(name);
+            mass_densities.push(mass_density);
+            fixed_material_props.push(fixed_material_properties);
+            color_texture_paths.push(color_texture_path);
+            roughness_texture_paths.push(roughness_texture_path);
+            normal_texture_paths.push(normal_texture_path);
+        }
+
+        (
+            names,
+            mass_densities,
+            fixed_material_props,
+            color_texture_paths,
+            roughness_texture_paths,
+            normal_texture_paths,
         )
-        .unwrap()
     }
 }
 

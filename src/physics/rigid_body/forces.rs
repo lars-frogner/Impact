@@ -15,6 +15,7 @@ use impact_ecs::{
     query,
     world::{Entity, World as ECSWorld},
 };
+use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 
 /// Manager of all systems resulting in forces and torques on rigid bodies.
@@ -24,11 +25,10 @@ pub struct RigidBodyForceManager {
 }
 
 /// Configuration parameters for rigid body force generation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RigidBodyForceConfig {
-    /// Configuration parameters for the generation of drag load maps. If
-    /// [`None`], default parameters are used.
-    pub drag_load_map_config: Option<DragLoadMapConfig>,
+    /// Configuration parameters for the generation of drag load maps.
+    pub drag_load_map_config: DragLoadMapConfig,
 }
 
 impl RigidBodyForceManager {
@@ -37,12 +37,10 @@ impl RigidBodyForceManager {
     ///
     /// # Errors
     /// Returns an error if any of the configuration parameters are invalid.
-    pub fn new(mut config: RigidBodyForceConfig) -> Result<Self> {
-        let drag_load_map_config = config.drag_load_map_config.take().unwrap_or_default();
-
+    pub fn new(config: RigidBodyForceConfig) -> Result<Self> {
         Ok(Self {
             drag_load_map_repository: RwLock::new(DragLoadMapRepository::new(
-                drag_load_map_config,
+                config.drag_load_map_config,
             )?),
         })
     }
