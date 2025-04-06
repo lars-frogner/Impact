@@ -21,6 +21,7 @@ pub mod physics;
 pub mod run;
 pub mod scene;
 pub mod scheduling;
+pub mod scripting;
 pub mod skybox;
 pub mod thread;
 pub mod ui;

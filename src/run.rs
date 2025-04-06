@@ -1,7 +1,6 @@
 //! Running an event loop.
 
 #![allow(unused)]
-use super::{geometry::Degrees, gpu::rendering::RenderingSystem};
 use crate::{
     application::Application,
     assets::Assets,
@@ -11,10 +10,10 @@ use crate::{
         orientation::{RollFreeCameraOrientationController, components::OrientationControlComp},
     },
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{Plane, Sphere},
+    geometry::{Degrees, Plane, Sphere},
     gpu::{
         self,
-        rendering::RenderingConfig,
+        rendering::{RenderingConfig, RenderingSystem},
         texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureID},
     },
     light::components::{
@@ -71,6 +70,7 @@ use crate::{
         Scene, SceneEntityFlags,
         components::{ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, UncullableComp},
     },
+    scripting::Callbacks,
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
@@ -87,11 +87,19 @@ use crate::{
 use anyhow::Result;
 use nalgebra::{Point3, UnitVector3, Vector3, point, vector};
 use rand::{Rng, SeedableRng, rngs::ThreadRng};
-use std::{borrow::Cow, f64::consts::PI, path::PathBuf, sync::Arc};
+use std::{
+    borrow::Cow,
+    f64::consts::PI,
+    path::PathBuf,
+    sync::{Arc, mpsc::Sender},
+};
 
-pub fn run() -> Result<()> {
+pub fn run(
+    on_app_created: impl FnOnce(Arc<Application>) + 'static,
+    callbacks: Callbacks,
+) -> Result<()> {
     init_logging()?;
-    let mut handler = GameHandler::new(init_game_loop);
+    let mut handler = GameHandler::new(|window| init_game_loop(window, on_app_created, callbacks));
     handler.run()
 }
 
@@ -100,13 +108,18 @@ fn init_logging() -> Result<()> {
     Ok(())
 }
 
-fn init_game_loop(window: Window) -> Result<GameLoop> {
-    let (app, mouse_button_input_handler) = init_physics_lab(window)?;
-    let input_handler = InputHandler::new(KeyActionMap::default(), mouse_button_input_handler);
-    GameLoop::new(app, input_handler, GameLoopConfig::default())
+fn init_game_loop(
+    window: Window,
+    on_app_created: impl FnOnce(Arc<Application>),
+    callbacks: Callbacks,
+) -> Result<GameLoop> {
+    let app = init_physics_lab(callbacks, window)?;
+    let game_loop = GameLoop::new(app, GameLoopConfig::default())?;
+    on_app_created(game_loop.arc_app());
+    Ok(game_loop)
 }
 
-fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
+fn init_app(callbacks: Callbacks, window: Window) -> Result<Application> {
     let rendering_config = RenderingConfig::default();
 
     let vertical_field_of_view = Degrees(70.0);
@@ -162,16 +175,16 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
     )
     .unwrap();
 
-    let app = Application::new(
+    let mut app = Application::new(
+        callbacks,
         Arc::new(window),
+        InputHandler::default(),
         rendering_config,
         simulator,
         Some(Box::new(motion_controller)),
         Some(Box::new(orientation_controller)),
         voxel_type_registry,
     )?;
-
-    let mut mouse_button_input_handler = MouseButtonInputHandler::default();
 
     let mut assets = app.assets().write().unwrap();
 
@@ -307,9 +320,9 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED | SceneEntityFlags::CASTS_NO_SHADOWS),
     ))?;
 
-    mouse_button_input_handler.left_pressed =
+    app.mouse_button_input_handler_mut().left_pressed =
         Some(Box::new(move |app| app.enable_scene_entity(&laser_entity)));
-    mouse_button_input_handler.left_released =
+    app.mouse_button_input_handler_mut().left_released =
         Some(Box::new(move |app| app.disable_scene_entity(&laser_entity)));
 
     let absorbing_sphere_entity = app.create_entity((
@@ -323,10 +336,10 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED),
     ))?;
 
-    mouse_button_input_handler.right_pressed = Some(Box::new(move |app| {
+    app.mouse_button_input_handler_mut().right_pressed = Some(Box::new(move |app| {
         app.enable_scene_entity(&absorbing_sphere_entity)
     }));
-    mouse_button_input_handler.right_released = Some(Box::new(move |app| {
+    app.mouse_button_input_handler_mut().right_released = Some(Box::new(move |app| {
         app.disable_scene_entity(&absorbing_sphere_entity)
     }));
 
@@ -532,10 +545,10 @@ fn init_app(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
     create_free_rotation_experiment(&app, Point3::new(0.0, 7.0, 2.0), 5.0, 1e-3);
     // create_drag_drop_experiment(&app, Point3::new(0.0, 20.0, 4.0));
 
-    Ok((app, mouse_button_input_handler))
+    Ok(app)
 }
 
-fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHandler)> {
+fn init_physics_lab(callbacks: Callbacks, window: Window) -> Result<Application> {
     let rendering_config = RenderingConfig::default();
 
     let vertical_field_of_view = Degrees(70.0);
@@ -576,7 +589,9 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
     .unwrap();
 
     let app = Application::new(
+        callbacks,
         Arc::new(window),
+        InputHandler::default(),
         rendering_config,
         simulator,
         Some(Box::new(motion_controller)),
@@ -728,7 +743,7 @@ fn init_physics_lab(window: Window) -> Result<(Application, MouseButtonInputHand
         vector![1.0, 1.0, 1.0] * 2000000.0,
     ))?;
 
-    Ok((app, mouse_button_input_handler))
+    Ok(app)
 }
 
 fn create_spheres(

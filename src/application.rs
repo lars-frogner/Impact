@@ -21,10 +21,11 @@ use crate::{
     model::{self, InstanceFeatureManager},
     physics::PhysicsSimulator,
     scene::{Scene, SceneEntityFlags, components::SceneEntityFlagsComp},
+    scripting::Callbacks,
     skybox::Skybox,
     ui::UserInterface,
     voxel::{self, VoxelManager, voxel_types::VoxelTypeRegistry},
-    window::Window,
+    window::{InputHandler, MouseButtonInputHandler, Window},
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
@@ -42,7 +43,9 @@ use std::{
 /// Manager for all systems and data in the application.
 #[derive(Debug)]
 pub struct Application {
+    callbacks: Callbacks,
     window: Arc<Window>,
+    input_handler: InputHandler,
     graphics_device: Arc<GraphicsDevice>,
     user_interface: RwLock<UserInterface>,
     component_registry: RwLock<ComponentRegistry>,
@@ -59,7 +62,9 @@ pub struct Application {
 impl Application {
     /// Creates a new world data container.
     pub fn new(
+        callbacks: Callbacks,
         window: Arc<Window>,
+        input_handler: InputHandler,
         rendering_config: RenderingConfig,
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
@@ -109,7 +114,9 @@ impl Application {
         );
 
         Ok(Self {
+            callbacks,
             window: Arc::clone(&window),
+            input_handler,
             graphics_device,
             user_interface: RwLock::new(UserInterface::new(window)),
             component_registry: RwLock::new(component_registry),
@@ -124,9 +131,24 @@ impl Application {
         })
     }
 
+    /// Returns a reference to the [`Callbacks`].
+    pub fn callbacks(&self) -> &Callbacks {
+        &self.callbacks
+    }
+
     /// Returns a reference to the [`Window`].
     pub fn window(&self) -> &Window {
-        self.window.as_ref()
+        &self.window
+    }
+
+    /// Returns a reference to the [`InputHandler`].
+    pub fn input_handler(&self) -> &InputHandler {
+        &self.input_handler
+    }
+
+    /// Returns a mutable reference to the [`MouseButtonInputHandler`].
+    pub fn mouse_button_input_handler_mut(&mut self) -> &mut MouseButtonInputHandler {
+        self.input_handler.mouse_button_handler_mut()
     }
 
     /// Returns a reference to the [`GraphicsDevice`].
