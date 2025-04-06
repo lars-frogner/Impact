@@ -1,6 +1,6 @@
 use anyhow::Result;
-use impact::run;
+use impact::{run, scripting::Callbacks};
 
 fn main() -> Result<()> {
-    run::run()
+    run::run(|_| {}, Callbacks::default())
 }

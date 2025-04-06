@@ -13,7 +13,7 @@ use winit::{
 };
 
 /// Handler for any user input events.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct InputHandler {
     key_handler: KeyInputHandler,
     mouse_button_handler: MouseButtonInputHandler,
@@ -40,7 +40,7 @@ pub struct MouseButtonInputHandler {
     pub right_released: Option<MouseButtonInputHandlerFn>,
 }
 
-pub type MouseButtonInputHandlerFn = Box<dyn Fn(&Application) -> Result<()>>;
+pub type MouseButtonInputHandlerFn = Box<dyn Fn(&Application) -> Result<()> + Send + Sync>;
 
 /// A map associating specific keyboard key inputs
 /// with the actions they should perform.
@@ -100,6 +100,11 @@ impl InputHandler {
             key_handler: KeyInputHandler::new(key_map),
             mouse_button_handler,
         }
+    }
+
+    /// Returns a mutable reference to the [`MouseButtonInputHandler`].
+    pub fn mouse_button_handler_mut(&mut self) -> &mut MouseButtonInputHandler {
+        &mut self.mouse_button_handler
     }
 
     /// Takes a window event and possibly performs an action in the application.

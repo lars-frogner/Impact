@@ -6,7 +6,7 @@ use crate::{
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
-    window::{EventLoopController, HandlingResult, InputHandler, Window, WindowEvent},
+    window::{EventLoopController, HandlingResult, Window, WindowEvent},
 };
 use anyhow::Result;
 use std::{
@@ -22,7 +22,6 @@ use winit::event::DeviceEvent;
 pub struct GameLoop {
     app: Arc<Application>,
     task_scheduler: AppTaskScheduler,
-    input_handler: InputHandler,
     frame_rate_tracker: FrameDurationTracker,
     start_time: Instant,
     previous_iter_end_time: Instant,
@@ -47,23 +46,18 @@ struct GenericFrameDurationTracker<const N_FRAMES: usize> {
 type FrameDurationTracker = GenericFrameDurationTracker<10>;
 
 impl GameLoop {
-    pub fn new(
-        app: Application,
-        input_handler: InputHandler,
-        config: GameLoopConfig,
-    ) -> Result<Self> {
-        let (world, task_scheduler) = app.create_task_scheduler(config.n_worker_threads)?;
+    pub fn new(app: Application, config: GameLoopConfig) -> Result<Self> {
+        let (app, task_scheduler) = app.create_task_scheduler(config.n_worker_threads)?;
 
-        world.perform_setup_for_game_loop();
+        app.perform_setup_for_game_loop();
 
         let frame_rate_tracker = FrameDurationTracker::default();
         let start_time = Instant::now();
         let previous_iter_end_time = start_time;
 
         Ok(Self {
-            app: world,
+            app,
             task_scheduler,
-            input_handler,
             frame_rate_tracker,
             start_time,
             previous_iter_end_time,
@@ -75,6 +69,10 @@ impl GameLoop {
         self.app.as_ref()
     }
 
+    pub fn arc_app(&self) -> Arc<Application> {
+        Arc::clone(&self.app)
+    }
+
     pub fn window(&self) -> &Window {
         self.app().window()
     }
@@ -84,7 +82,8 @@ impl GameLoop {
         event_loop_controller: &EventLoopController<'_>,
         event: &WindowEvent,
     ) -> Result<HandlingResult> {
-        self.input_handler
+        self.app
+            .input_handler()
             .handle_window_event(&self.app, event_loop_controller, event)
     }
 
@@ -93,7 +92,8 @@ impl GameLoop {
         event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
     ) -> Result<HandlingResult> {
-        self.input_handler
+        self.app
+            .input_handler()
             .handle_device_event(&self.app, event_loop_controller, event)
     }
 

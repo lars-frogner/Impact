@@ -20,7 +20,7 @@ use winit::{
 
 /// Top-level entity that manages the window, event loop and game loop.
 pub struct GameHandler {
-    create_game_loop: Box<dyn Fn(Window) -> Result<GameLoop>>,
+    create_game_loop: Option<Box<dyn FnOnce(Window) -> Result<GameLoop>>>,
     game_loop: Option<GameLoop>,
 }
 
@@ -42,9 +42,9 @@ pub fn calculate_aspect_ratio(width: NonZeroU32, height: NonZeroU32) -> f32 {
 impl GameHandler {
     /// Creates a new `GameHandler` that will use the given function to create
     /// the game loop after [`Self::run`] has been called.
-    pub fn new(create_game_loop: impl Fn(Window) -> Result<GameLoop> + 'static) -> Self {
+    pub fn new(create_game_loop: impl FnOnce(Window) -> Result<GameLoop> + 'static) -> Self {
         Self {
-            create_game_loop: Box::new(create_game_loop),
+            create_game_loop: Some(Box::new(create_game_loop)),
             game_loop: None,
         }
     }
@@ -75,7 +75,11 @@ impl ApplicationHandler for GameHandler {
             Ok(window) => {
                 window.request_redraw();
 
-                match (self.create_game_loop)(window) {
+                match (self
+                    .create_game_loop
+                    .take()
+                    .expect("game loop should only be created once"))(window)
+                {
                     Ok(game_loop) => {
                         self.game_loop = Some(game_loop);
                     }
