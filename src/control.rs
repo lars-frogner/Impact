@@ -10,7 +10,13 @@ use crate::{
     },
     window::Window,
 };
-use motion::{MotionDirection, MotionState};
+use motion::{
+    MotionControllerConfig, MotionDirection, MotionState, SemiDirectionalMotionController,
+};
+use orientation::{
+    CameraOrientationController, OrientationControllerConfig, RollFreeCameraOrientationController,
+};
+use serde::{Deserialize, Serialize};
 
 /// Represents controllers that are used for controlling
 /// the movement of entities.
@@ -76,6 +82,12 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
     fn set_sensitivity(&mut self, sensitivity: f64);
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ControllerConfig {
+    pub motion: MotionControllerConfig,
+    pub orientation: OrientationControllerConfig,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MotionChanged {
     Yes,
@@ -86,4 +98,38 @@ impl MotionChanged {
     pub fn motion_changed(&self) -> bool {
         *self == Self::Yes
     }
+}
+
+#[allow(clippy::type_complexity)]
+pub fn create_controllers(
+    ControllerConfig {
+        motion: motion_config,
+        orientation: orientation_config,
+    }: ControllerConfig,
+) -> (
+    Option<Box<dyn MotionController>>,
+    Option<Box<dyn OrientationController>>,
+) {
+    let motion_controller: Option<Box<dyn MotionController>> = match motion_config {
+        MotionControllerConfig::None => None,
+        MotionControllerConfig::SemiDirectional(motion_controller_config) => Some(Box::new(
+            SemiDirectionalMotionController::new(motion_controller_config),
+        )),
+    };
+
+    let orientation_controller: Option<Box<dyn OrientationController>> = match orientation_config {
+        OrientationControllerConfig::None => None,
+        OrientationControllerConfig::Camera(camera_orientation_controller_config) => {
+            Some(Box::new(CameraOrientationController::new(
+                camera_orientation_controller_config,
+            )))
+        }
+        OrientationControllerConfig::RollFreeCamera(camera_orientation_controller_config) => {
+            Some(Box::new(RollFreeCameraOrientationController::new(
+                camera_orientation_controller_config,
+            )))
+        }
+    };
+
+    (motion_controller, orientation_controller)
 }

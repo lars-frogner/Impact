@@ -3,14 +3,27 @@
 use crate::{
     application::Application,
     control::motion::{MotionDirection, MotionState},
+    io::util::parse_ron_file,
     window::EventLoopController,
 };
 use anyhow::Result;
-use std::{collections::HashMap, sync::Arc};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use winit::{
     event::{DeviceEvent, ElementState, KeyEvent, MouseButton, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct InputConfig {
+    /// Path to the RON file containing the mappings from keyboard keys to
+    /// actions. If [`None`], the default mappings will be used.
+    pub key_map_path: Option<PathBuf>,
+}
 
 /// Handler for any user input events.
 #[derive(Debug, Default)]
@@ -44,11 +57,11 @@ pub type MouseButtonInputHandlerFn = Box<dyn Fn(&Application) -> Result<()> + Se
 
 /// A map associating specific keyboard key inputs
 /// with the actions they should perform.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyActionMap(HashMap<KeyCode, KeyboardInputAction>);
 
 /// Actions that can be performed with a keyboard.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum KeyboardInputAction {
     MoveForwards,
     MoveBackwards,
@@ -100,6 +113,16 @@ impl InputHandler {
             key_handler: KeyInputHandler::new(key_map),
             mouse_button_handler,
         }
+    }
+
+    /// Creates a new input handler based on the given configuration
+    /// parameters.
+    pub fn from_config(config: InputConfig) -> Result<Self> {
+        let key_map = match config.key_map_path {
+            Some(file_path) => KeyActionMap::from_ron_file(file_path)?,
+            None => KeyActionMap::default(),
+        };
+        Ok(Self::new(key_map, MouseButtonInputHandler::default()))
     }
 
     /// Returns a mutable reference to the [`MouseButtonInputHandler`].
@@ -383,6 +406,10 @@ impl KeyInputHandler {
 impl KeyActionMap {
     pub fn new(map: HashMap<KeyCode, KeyboardInputAction>) -> Self {
         Self(map)
+    }
+
+    pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        parse_ron_file(file_path)
     }
 
     fn action_for_key(&self, key: &KeyCode) -> Option<KeyboardInputAction> {

@@ -29,6 +29,7 @@ use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{ConstStringHash64, HaltonSequence, hash64};
 use nalgebra::Vector4;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// The maximum number of samples that can be used for computing ambient
@@ -36,7 +37,7 @@ use std::borrow::Cow;
 pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 16;
 
 /// Configuration options for ambient occlusion.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AmbientOcclusionConfig {
     /// Whether ambient occlusion should be enabled when the scene loads.
     pub initially_enabled: bool,

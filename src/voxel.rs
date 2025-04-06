@@ -14,14 +14,16 @@ pub mod voxel_types;
 
 pub use entity::register_voxel_feature_types;
 
+use anyhow::Result;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
 use mesh::MeshedChunkedVoxelObject;
-use std::{collections::HashMap, fmt};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fmt, path::PathBuf};
 use utils::{Dimension, Side};
-use voxel_types::{VoxelType, VoxelTypeRegistry};
+use voxel_types::{VoxelType, VoxelTypeRegistry, VoxelTypeSpecifications};
 
 /// A voxel, which may either be be empty or filled with a material with
 /// specific properties.
@@ -110,6 +112,12 @@ pub struct StagedVoxelObject {
     pub object: ChunkedVoxelObject,
     pub inertial_property_manager: Option<VoxelObjectInertialPropertyManager>,
     pub components: ArchetypeComponentStorage,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct VoxelConfig {
+    /// Path to the RON file containing the specification of each voxel type.
+    pub voxel_types_path: Option<PathBuf>,
 }
 
 impl VoxelSignedDistance {
@@ -358,6 +366,16 @@ impl VoxelManager {
             type_registry: voxel_type_registry,
             object_manager: VoxelObjectManager::new(),
         }
+    }
+
+    /// Creates a new voxel manager based on the given configuration
+    /// parameters.
+    pub fn from_config(voxel_config: VoxelConfig) -> Result<Self> {
+        let voxel_type_registry = match voxel_config.voxel_types_path {
+            Some(file_path) => VoxelTypeRegistry::from_voxel_type_ron_file(file_path)?,
+            None => VoxelTypeRegistry::new(VoxelTypeSpecifications::default())?,
+        };
+        Ok(Self::new(voxel_type_registry))
     }
 }
 

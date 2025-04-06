@@ -2,6 +2,7 @@
 
 pub mod benchmarks;
 pub mod criterion;
+pub mod profile;
 
 use std::{
     hint::black_box,

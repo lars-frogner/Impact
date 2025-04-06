@@ -1,14 +1,12 @@
 //! Window management.
 
-mod input;
+pub mod input;
 
-pub use input::{
-    HandlingResult, InputHandler, KeyActionMap, MouseButtonInputHandler, MouseMotionInputHandler,
-};
 pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
 use anyhow::{Result, anyhow};
+use input::HandlingResult;
 use std::{num::NonZeroU32, sync::Arc};
 use winit::{
     application::ApplicationHandler,
@@ -25,7 +23,7 @@ pub struct GameHandler {
 }
 
 /// Wrapper for a window.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Window {
     window: Arc<WinitWindow>,
 }

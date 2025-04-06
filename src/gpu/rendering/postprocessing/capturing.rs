@@ -19,11 +19,12 @@ use crate::gpu::{
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
 use bloom::{BloomConfig, BloomRenderCommands};
+use serde::{Deserialize, Serialize};
 use std::mem;
 use tone_mapping::{ToneMappingMethod, ToneMappingRenderCommands};
 
 /// Configuration options for a capturing camera.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CapturingCameraConfig {
     /// The initial settings for the camera.
     pub initial_settings: CameraSettings,
@@ -37,7 +38,7 @@ pub struct CapturingCameraConfig {
 }
 
 /// Capturing settings for a camera.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CameraSettings {
     /// The relative aperture of the camera, which is the ratio of the focal
     /// length to the aperture diameter.
@@ -61,7 +62,7 @@ pub struct CameraSettings {
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
 /// value or determined automatically based on the incident luminance, with
 /// optional exposure value compensation in f-stops.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum SensorSensitivity {
     Manual { iso: f32 },
     Auto { ev_compensation: f32 },

@@ -6,7 +6,7 @@ use crate::{
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
-    window::{EventLoopController, HandlingResult, Window, WindowEvent},
+    window::{EventLoopController, Window, WindowEvent, input::HandlingResult},
 };
 use anyhow::Result;
 use std::{

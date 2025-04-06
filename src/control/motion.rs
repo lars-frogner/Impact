@@ -13,6 +13,7 @@ use crate::{
 };
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use nalgebra::vector;
+use serde::{Deserialize, Serialize};
 
 /// Motion controller allowing for motion at constant
 /// speed along the axes of an entity's local coordinate
@@ -23,6 +24,20 @@ pub struct SemiDirectionalMotionController {
     vertical_control: bool,
     state: SemiDirectionalMotionState,
     local_velocity: Velocity,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MotionControllerConfig {
+    None,
+    SemiDirectional(SemiDirectionalMotionControllerConfig),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SemiDirectionalMotionControllerConfig {
+    /// The speed at which the controlled entity can move.
+    pub movement_speed: fph,
+    /// Whether the controller can move the entity in the vertical direction.
+    pub vertical_control: bool,
 }
 
 /// Whether there is motion in a certain direction.
@@ -56,14 +71,12 @@ struct SemiDirectionalMotionState {
 }
 
 impl SemiDirectionalMotionController {
-    /// Creates a new motion controller for an entity
-    /// that can move with the given `movement_speed`.
-    /// `vertical_control` specifies whether the controller
-    /// can move the entity in the vertical direction.
-    pub fn new(movement_speed: fph, vertical_control: bool) -> Self {
+    /// Creates a new motion controller with the given configuration
+    /// parameters.
+    pub fn new(config: SemiDirectionalMotionControllerConfig) -> Self {
         Self {
-            movement_speed,
-            vertical_control,
+            movement_speed: config.movement_speed,
+            vertical_control: config.vertical_control,
             state: SemiDirectionalMotionState::new(),
             local_velocity: Velocity::zeros(),
         }
@@ -165,6 +178,21 @@ impl MotionController for SemiDirectionalMotionController {
     }
 }
 
+impl Default for MotionControllerConfig {
+    fn default() -> Self {
+        Self::SemiDirectional(SemiDirectionalMotionControllerConfig::default())
+    }
+}
+
+impl Default for SemiDirectionalMotionControllerConfig {
+    fn default() -> Self {
+        Self {
+            movement_speed: 8.0,
+            vertical_control: true,
+        }
+    }
+}
+
 impl MotionState {
     pub fn is_still(&self) -> bool {
         *self == Self::Still
@@ -244,7 +272,11 @@ mod tests {
     #[test]
     fn updating_semi_directional_motion_works() {
         let speed = 1.3;
-        let mut controller = SemiDirectionalMotionController::new(speed, false);
+        let mut controller =
+            SemiDirectionalMotionController::new(SemiDirectionalMotionControllerConfig {
+                movement_speed: speed,
+                vertical_control: false,
+            });
         assert_eq!(
             controller.local_velocity,
             Velocity::zeros(),
@@ -294,7 +326,11 @@ mod tests {
     #[test]
     fn setting_semi_directional_motion_speed_works() {
         let speed = 4.2;
-        let mut controller = SemiDirectionalMotionController::new(speed, false);
+        let mut controller =
+            SemiDirectionalMotionController::new(SemiDirectionalMotionControllerConfig {
+                movement_speed: speed,
+                vertical_control: false,
+            });
 
         controller.update_motion(Moving, Down);
         assert_abs_diff_eq!(controller.local_velocity, vector![0.0, -speed, 0.0],);

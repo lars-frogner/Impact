@@ -28,10 +28,11 @@ use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{ConstStringHash64, hash64};
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, mem};
 
 /// Configuration options for computing average captured luminance.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AverageLuminanceComputationConfig {
     /// The range of luminance values that the histogram used for computing
     /// average luminance should cover (luminance values outside these bounds

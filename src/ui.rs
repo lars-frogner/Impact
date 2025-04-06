@@ -1,12 +1,11 @@
 //! User interface.
 
 use crate::window::Window;
-use std::sync::Arc;
 
 /// User interface state.
 #[derive(Debug)]
 pub struct UserInterface {
-    window: Arc<Window>,
+    window: Window,
     interaction_mode: InteractionMode,
 }
 
@@ -18,7 +17,7 @@ enum InteractionMode {
 
 impl UserInterface {
     /// Creates a new user interface state.
-    pub fn new(window: Arc<Window>) -> Self {
+    pub fn new(window: Window) -> Self {
         let interaction_mode = InteractionMode::cursor(&window);
         Self {
             window,

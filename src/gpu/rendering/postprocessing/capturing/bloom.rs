@@ -31,10 +31,11 @@ use crate::{
     mesh::{self, VertexAttributeSet},
 };
 use anyhow::{Result, anyhow};
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, num::NonZeroU32};
 
 /// Configuration options for bloom.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BloomConfig {
     /// Whether bloom should be enabled when the scene loads.
     pub initially_enabled: bool,
