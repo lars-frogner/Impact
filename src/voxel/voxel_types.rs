@@ -18,7 +18,7 @@ use std::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelType(u8);
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct VoxelTypeSpecifications(pub Vec<VoxelTypeSpecification>);
 
 /// Specifies all relevant aspects of a voxel type.
@@ -26,7 +26,10 @@ pub struct VoxelTypeSpecifications(pub Vec<VoxelTypeSpecification>);
 pub struct VoxelTypeSpecification {
     pub name: Cow<'static, str>,
     pub mass_density: f32,
-    pub fixed_material_properties: FixedVoxelMaterialProperties,
+    pub specular_reflectance: f32,
+    pub roughness_scale: f32,
+    pub metalness: f32,
+    pub emissive_luminance: f32,
     pub color_texture_path: PathBuf,
     pub roughness_texture_path: PathBuf,
     pub normal_texture_path: PathBuf,
@@ -46,7 +49,7 @@ pub struct VoxelTypeRegistry {
 
 /// Specific properties of a voxel material that do not change with position.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct FixedVoxelMaterialProperties {
     properties: Vector4<f32>,
 }
@@ -92,7 +95,7 @@ impl VoxelTypeRegistry {
     /// to create a new voxel type registry.
     pub fn from_voxel_type_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let voxel_types = parse_ron_file(file_path)?;
-        Self::new(voxel_types)
+        Self::new(VoxelTypeSpecifications(voxel_types))
     }
 
     /// Creates a new voxel type registry for the specified voxel types.
@@ -217,7 +220,7 @@ impl VoxelTypeSpecifications {
     ) {
         let mut names = Vec::with_capacity(self.0.len());
         let mut mass_densities = Vec::with_capacity(self.0.len());
-        let mut fixed_material_props = Vec::with_capacity(self.0.len());
+        let mut fixed_material_properties = Vec::with_capacity(self.0.len());
         let mut color_texture_paths = Vec::with_capacity(self.0.len());
         let mut roughness_texture_paths = Vec::with_capacity(self.0.len());
         let mut normal_texture_paths = Vec::with_capacity(self.0.len());
@@ -225,7 +228,10 @@ impl VoxelTypeSpecifications {
         for VoxelTypeSpecification {
             name,
             mass_density,
-            fixed_material_properties,
+            specular_reflectance,
+            roughness_scale,
+            metalness,
+            emissive_luminance,
             color_texture_path,
             roughness_texture_path,
             normal_texture_path,
@@ -233,7 +239,12 @@ impl VoxelTypeSpecifications {
         {
             names.push(name);
             mass_densities.push(mass_density);
-            fixed_material_props.push(fixed_material_properties);
+            fixed_material_properties.push(FixedVoxelMaterialProperties::new(
+                specular_reflectance,
+                roughness_scale,
+                metalness,
+                emissive_luminance,
+            ));
             color_texture_paths.push(color_texture_path);
             roughness_texture_paths.push(roughness_texture_path);
             normal_texture_paths.push(normal_texture_path);
@@ -242,7 +253,7 @@ impl VoxelTypeSpecifications {
         (
             names,
             mass_densities,
-            fixed_material_props,
+            fixed_material_properties,
             color_texture_paths,
             roughness_texture_paths,
             normal_texture_paths,

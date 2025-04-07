@@ -117,6 +117,7 @@ pub struct StagedVoxelObject {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct VoxelConfig {
     /// Path to the RON file containing the specification of each voxel type.
+    #[serde(default)]
     pub voxel_types_path: Option<PathBuf>,
 }
 
