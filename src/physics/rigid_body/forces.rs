@@ -26,6 +26,7 @@ pub struct RigidBodyForceManager {
 
 /// Configuration parameters for rigid body force generation.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RigidBodyForceConfig {
     /// Configuration parameters for the generation of drag load maps.
     pub drag_load_map_config: DragLoadMapConfig,

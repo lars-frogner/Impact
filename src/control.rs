@@ -83,6 +83,7 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ControllerConfig {
     pub motion: MotionControllerConfig,
     pub orientation: OrientationControllerConfig,
