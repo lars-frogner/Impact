@@ -41,6 +41,7 @@ pub struct PhysicsSimulator {
 
 /// Configuration parameters for physics.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PhysicsConfig {
     /// Configuration parameters for the physics simulation.
     pub simulator: SimulatorConfig,

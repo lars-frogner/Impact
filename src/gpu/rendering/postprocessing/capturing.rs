@@ -25,6 +25,7 @@ use tone_mapping::{ToneMappingMethod, ToneMappingRenderCommands};
 
 /// Configuration options for a capturing camera.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CapturingCameraConfig {
     /// The initial settings for the camera.
     pub initial_settings: CameraSettings,

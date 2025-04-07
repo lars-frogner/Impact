@@ -69,8 +69,11 @@ pub struct RenderingConfig {
     pub unidirectional_light_shadow_map_resolution: u32,
     /// Whether shadow mapping is enabled.
     pub shadow_mapping_enabled: bool,
+    #[serde(default)]
     pub ambient_occlusion: AmbientOcclusionConfig,
+    #[serde(default)]
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
+    #[serde(default)]
     pub capturing_camera: CapturingCameraConfig,
     pub wireframe_mode_on: bool,
     pub timings_enabled: bool,

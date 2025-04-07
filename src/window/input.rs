@@ -22,6 +22,7 @@ use winit::{
 pub struct InputConfig {
     /// Path to the RON file containing the mappings from keyboard keys to
     /// actions. If [`None`], the default mappings will be used.
+    #[serde(default)]
     pub key_map_path: Option<PathBuf>,
 }
 
