@@ -2,38 +2,88 @@
 
 pub mod lookup_table;
 
-use crate::gpu::{
-    GraphicsDevice,
-    texture::{
-        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
-        TextureLookupTable, mipmap::MipmapperGenerator,
+use crate::{
+    gpu::{
+        GraphicsDevice,
+        texture::{
+            Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
+            TextureLookupTable, mipmap::MipmapperGenerator,
+        },
     },
+    io::util::parse_ron_file,
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use impact_utils::hash32;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{HashMap, hash_map::Entry},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
 /// Container for any rendering assets that never change.
 #[derive(Debug)]
 pub struct Assets {
+    config: AssetConfig,
     graphics_device: Arc<GraphicsDevice>,
     mipmapper_generator: Arc<MipmapperGenerator>,
     pub textures: HashMap<TextureID, Texture>,
     pub samplers: HashMap<SamplerID, Sampler>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AssetConfig {
+    /// Path to the folder where automatically computed lookup tables should be
+    /// stored.
+    pub lookup_table_dir: PathBuf,
+    /// Path to a file containing an [`AssetSpecifications`] object serialized
+    /// as RON (Rusty Object Notation). The assets specified in the file will
+    /// be automatically loaded on startup.
+    pub asset_file_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AssetSpecifications {
+    pub textures: Vec<TextureSpecification>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TextureSpecification {
+    Texture {
+        name: String,
+        image_path: PathBuf,
+        texture_config: TextureConfig,
+        sampler_config: Option<SamplerConfig>,
+    },
+    Cubemap {
+        name: String,
+        right_image_path: PathBuf,
+        left_image_path: PathBuf,
+        top_image_path: PathBuf,
+        bottom_image_path: PathBuf,
+        front_image_path: PathBuf,
+        back_image_path: PathBuf,
+        texture_config: TextureConfig,
+        sampler_config: Option<SamplerConfig>,
+    },
+    TextureArray {
+        name: String,
+        image_paths: Vec<PathBuf>,
+        texture_config: TextureConfig,
+        sampler_config: Option<SamplerConfig>,
+    },
+}
+
 impl Assets {
     /// Creates a new empty asset container.
     pub fn new(
+        config: AssetConfig,
         graphics_device: Arc<GraphicsDevice>,
         mipmapper_generator: Arc<MipmapperGenerator>,
     ) -> Self {
         Self {
+            config,
             graphics_device,
             mipmapper_generator,
             textures: HashMap::new(),
@@ -41,52 +91,150 @@ impl Assets {
         }
     }
 
-    /// Loads the image file at the given path as a [`Texture`], unless it
-    /// already has been loaded.
-    ///
-    /// # Returns
-    /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
+    /// Returns the path to the folder where automatically computed lookup
+    /// tables are be stored.
+    pub fn lookup_table_dir(&self) -> &Path {
+        &self.config.lookup_table_dir
+    }
+
+    /// Parses the asset file pointed to in the [`AssetConfig`] and loads all
+    /// assets specified in the file.
     ///
     /// # Errors
-    /// See [`Texture::from_path`].
+    /// Returns an error if the asset file does not exist or is invalid.
+    /// See also [`Self::load_specified_assets`].
+    pub fn load_assets_specified_in_config(&mut self) -> Result<()> {
+        let Some(asset_file_path) = self.config.asset_file_path.as_ref() else {
+            return Ok(());
+        };
+        let specifications = parse_ron_file(asset_file_path)?;
+        self.load_specified_assets(&specifications)
+    }
+
+    /// Loads all assets in the given specifications.
+    ///
+    /// # Errors
+    /// See [`Self::load_texture_from_path`],
+    /// [`Self::load_cubemap_texture_from_paths`] and
+    /// [`Self::load_texture_array_from_paths`].
+    pub fn load_specified_assets(&mut self, specifications: &AssetSpecifications) -> Result<()> {
+        for texture_specifcation in &specifications.textures {
+            match texture_specifcation {
+                TextureSpecification::Texture {
+                    name,
+                    image_path,
+                    texture_config,
+                    sampler_config,
+                } => {
+                    self.load_texture_from_path(
+                        name,
+                        image_path,
+                        texture_config.clone(),
+                        sampler_config.clone(),
+                    )?;
+                }
+                TextureSpecification::Cubemap {
+                    name,
+                    right_image_path,
+                    left_image_path,
+                    top_image_path,
+                    bottom_image_path,
+                    front_image_path,
+                    back_image_path,
+                    texture_config,
+                    sampler_config,
+                } => {
+                    self.load_cubemap_texture_from_paths(
+                        name,
+                        right_image_path,
+                        left_image_path,
+                        top_image_path,
+                        bottom_image_path,
+                        front_image_path,
+                        back_image_path,
+                        texture_config.clone(),
+                        sampler_config.clone(),
+                    )?;
+                }
+                TextureSpecification::TextureArray {
+                    name,
+                    image_paths,
+                    texture_config,
+                    sampler_config,
+                } => {
+                    self.load_texture_array_from_paths(
+                        name,
+                        image_paths,
+                        texture_config.clone(),
+                        sampler_config.clone(),
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Loads the image file at the given path as a [`Texture`] and stores it
+    /// under the given name.
+    ///
+    /// # Returns
+    /// A [`Result`] with the [`TextureID`] (hashed from the name) assigned to
+    /// the loaded texture.
+    ///
+    /// # Errors
+    /// - Returns an error if a texture with the same name already has been
+    ///   loaded.
+    /// - See also [`Texture::from_path`].
     pub fn load_texture_from_path(
         &mut self,
+        texture_name: impl ToString,
         image_path: impl AsRef<Path>,
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
     ) -> Result<TextureID> {
-        let texture_id = TextureID(hash32!(image_path.as_ref().to_string_lossy()));
-        if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            let sampler_id = sampler_config.as_ref().map(Into::into);
+        let texture_id = TextureID(hash32!(texture_name));
 
-            let texture = entry.insert(Texture::from_path(
-                &self.graphics_device,
-                &self.mipmapper_generator,
-                image_path,
-                texture_config,
-                sampler_id,
-            )?);
+        match self.textures.entry(texture_id) {
+            Entry::Vacant(entry) => {
+                let sampler_id = sampler_config.as_ref().map(Into::into);
 
-            if let (Some(sampler_id), Some(sampler_config)) = (texture.sampler_id(), sampler_config)
-            {
-                self.samplers
-                    .entry(sampler_id)
-                    .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+                let texture = entry.insert(Texture::from_path(
+                    &self.graphics_device,
+                    &self.mipmapper_generator,
+                    image_path,
+                    texture_config,
+                    sampler_id,
+                )?);
+
+                if let (Some(sampler_id), Some(sampler_config)) =
+                    (texture.sampler_id(), sampler_config)
+                {
+                    self.samplers
+                        .entry(sampler_id)
+                        .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+                }
+                Ok(texture_id)
+            }
+            Entry::Occupied(_) => {
+                bail!("A texture named `{}` is already loaded", texture_id);
             }
         }
-        Ok(texture_id)
     }
 
     /// Loads the cubemap face image files at the given paths as a cubemap
-    /// [`Texture`], unless it already has been loaded.
+    /// [`Texture`] and stores it under the given name.
     ///
     /// # Returns
-    /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
+    /// A [`Result`] with the [`TextureID`] (hashed from the name) assigned to
+    /// the loaded texture.
     ///
     /// # Errors
-    /// See [`Texture::from_cubemap_image_paths`].
+    /// - Returns an error if a texture with the same name already has been
+    ///   loaded.
+    /// - See also [`Texture::from_cubemap_image_paths`].
     pub fn load_cubemap_texture_from_paths<P: AsRef<Path>>(
         &mut self,
+        texture_name: impl ToString,
         right_image_path: P,
         left_image_path: P,
         top_image_path: P,
@@ -96,52 +244,53 @@ impl Assets {
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
     ) -> Result<TextureID> {
-        let texture_id = TextureID(hash32!(format!(
-            "Cubemap {{{}, {}, {}, {}, {}, {}}}",
-            right_image_path.as_ref().display(),
-            left_image_path.as_ref().display(),
-            top_image_path.as_ref().display(),
-            bottom_image_path.as_ref().display(),
-            front_image_path.as_ref().display(),
-            back_image_path.as_ref().display()
-        )));
+        let texture_id = TextureID(hash32!(texture_name));
 
-        if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            let sampler_id = sampler_config.as_ref().map(Into::into);
+        match self.textures.entry(texture_id) {
+            Entry::Vacant(entry) => {
+                let sampler_id = sampler_config.as_ref().map(Into::into);
 
-            let texture = entry.insert(Texture::from_cubemap_image_paths(
-                &self.graphics_device,
-                right_image_path,
-                left_image_path,
-                top_image_path,
-                bottom_image_path,
-                front_image_path,
-                back_image_path,
-                texture_config,
-                sampler_id,
-            )?);
+                let texture = entry.insert(Texture::from_cubemap_image_paths(
+                    &self.graphics_device,
+                    right_image_path,
+                    left_image_path,
+                    top_image_path,
+                    bottom_image_path,
+                    front_image_path,
+                    back_image_path,
+                    texture_config,
+                    sampler_id,
+                )?);
 
-            if let (Some(sampler_id), Some(sampler_config)) = (texture.sampler_id(), sampler_config)
-            {
-                self.samplers
-                    .entry(sampler_id)
-                    .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+                if let (Some(sampler_id), Some(sampler_config)) =
+                    (texture.sampler_id(), sampler_config)
+                {
+                    self.samplers
+                        .entry(sampler_id)
+                        .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+                }
+                Ok(texture_id)
+            }
+            Entry::Occupied(_) => {
+                bail!("A texture named `{}` is already loaded", texture_id);
             }
         }
-
-        Ok(texture_id)
     }
 
-    /// Loads the image files at the given paths as an arrayed [`Texture`],
-    /// unless it already has been loaded.
+    /// Loads the image files at the given paths as an arrayed [`Texture`]
+    /// and stores it under the given name.
     ///
     /// # Returns
-    /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
+    /// A [`Result`] with the [`TextureID`] (hashed from the name) assigned to
+    /// the loaded texture.
     ///
     /// # Errors
-    /// See [`Texture::array_from_image_paths`].
+    /// - Returns an error if a texture with the same name already has been
+    ///   loaded.
+    /// - See also [`Texture::array_from_image_paths`].
     pub fn load_texture_array_from_paths<I, P>(
         &mut self,
+        texture_name: impl AsRef<str>,
         image_paths: impl IntoIterator<IntoIter = I>,
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
@@ -150,92 +299,99 @@ impl Assets {
         I: ExactSizeIterator<Item = P> + Clone,
         P: AsRef<Path>,
     {
-        let image_paths = image_paths.into_iter();
+        let texture_name = texture_name.as_ref();
+        let texture_id = TextureID(hash32!(texture_name));
 
-        let mut label = "Texture array {{".to_string();
-        for (idx, path) in image_paths.clone().enumerate() {
-            label.push_str(&path.as_ref().to_string_lossy());
-            if idx < image_paths.len() - 1 {
-                label.push_str(", ");
+        match self.textures.entry(texture_id) {
+            Entry::Vacant(entry) => {
+                let sampler_id = sampler_config.as_ref().map(Into::into);
+
+                let texture = entry.insert(Texture::array_from_image_paths(
+                    &self.graphics_device,
+                    &self.mipmapper_generator,
+                    image_paths,
+                    texture_config,
+                    sampler_id,
+                    texture_name,
+                )?);
+
+                if let (Some(sampler_id), Some(sampler_config)) =
+                    (texture.sampler_id(), sampler_config)
+                {
+                    self.samplers
+                        .entry(sampler_id)
+                        .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+                }
+                Ok(texture_id)
+            }
+            Entry::Occupied(_) => {
+                bail!("A texture named `{}` is already loaded", texture_id);
             }
         }
-        label.push_str("}}");
+    }
 
-        let texture_id = TextureID(hash32!(&label));
+    /// Loads the lookup table generated by the given function as a [`Texture`]
+    /// and stores it under the given name. Also creates a sampler for the
+    /// texture using the given sampler configuration.
+    ///
+    /// # Returns
+    /// A [`Result`] with the [`TextureID`] (hashed from the name) assigned to
+    /// the loaded texture.
+    ///
+    /// # Errors
+    /// - Returns an error if a texture with the same name already has been
+    ///   loaded.
+    /// - See also [`Texture::from_lookup_table`].
+    pub fn load_texture_from_generated_lookup_table<T: TexelType>(
+        &mut self,
+        texture_name: impl AsRef<str>,
+        generate_table: impl Fn() -> Result<TextureLookupTable<T>>,
+        sampler_config: SamplerConfig,
+    ) -> Result<TextureID> {
+        let texture_name = texture_name.as_ref();
+        let texture_id = TextureID(hash32!(texture_name));
 
-        if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            let sampler_id = sampler_config.as_ref().map(Into::into);
+        match self.textures.entry(texture_id) {
+            Entry::Vacant(entry) => {
+                let sampler_id = (&sampler_config).into();
 
-            let texture = entry.insert(Texture::array_from_image_paths(
-                &self.graphics_device,
-                &self.mipmapper_generator,
-                image_paths,
-                texture_config,
-                sampler_id,
-                &label,
-            )?);
+                entry.insert(Texture::from_lookup_table(
+                    &self.graphics_device,
+                    &generate_table()?,
+                    texture_name,
+                    Some(sampler_id),
+                )?);
 
-            if let (Some(sampler_id), Some(sampler_config)) = (texture.sampler_id(), sampler_config)
-            {
                 self.samplers
                     .entry(sampler_id)
                     .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+
+                Ok(texture_id)
+            }
+            Entry::Occupied(_) => {
+                bail!("A texture named `{}` is already loaded", texture_id);
             }
         }
-
-        Ok(texture_id)
     }
 
-    /// Unless a texture with the given label has already been loaded, this
-    /// function loads the lookup table generated by the given function as a
-    /// [`Texture`]. Also creates a sampler for the texture using the given
-    /// sampler configuration.
+    /// Loads as a [`Texture`] the lookup table that is either taken from the
+    /// file at the given path if it exists, otherwise it is computed with the
+    /// given function and saved at the given path. The loaded texture is
+    /// stored under the given name.  Also creates a sampler for the texture
+    /// using the given sampler configuration.
     ///
     /// # Returns
-    /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
+    /// A [`Result`] with the [`TextureID`] (hashed from the name) assigned to
+    /// the loaded texture.
     ///
     /// # Errors
-    /// See [`Texture::from_lookup_table`].
-    pub fn load_texture_from_generated_lookup_table<T: TexelType>(
-        &mut self,
-        generate_table: impl Fn() -> Result<TextureLookupTable<T>>,
-        sampler_config: SamplerConfig,
-        label: impl AsRef<str>,
-    ) -> Result<TextureID> {
-        let label = label.as_ref();
-        let texture_id = TextureID(hash32!(label));
-        if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            let sampler_id = (&sampler_config).into();
-
-            entry.insert(Texture::from_lookup_table(
-                &self.graphics_device,
-                &generate_table()?,
-                label,
-                Some(sampler_id),
-            )?);
-
-            self.samplers
-                .entry(sampler_id)
-                .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
-        }
-        Ok(texture_id)
-    }
-
-    /// Unless a texture with ID corresponding to the given path has already
-    /// been loaded, this function loads as a [`Texture`] the lookup table that
-    /// is either taken from the file at the given path if it exists, otherwise
-    /// it is computed with the given function and saved at the given path.
-    /// Also creates a sampler for the texture using the given
-    /// sampler configuration.
-    ///
-    /// # Returns
-    /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
-    ///
-    /// # Errors
-    /// Returns an error if the computed table can not be saved to file.
-    /// Additionally, see [`Texture::from_lookup_table`].
+    /// Returns an error if:
+    /// - A texture with the same name already has been loaded.
+    /// - The computed table can not be saved to file.
+    /// - See also [`Texture::from_lookup_table`].
     pub fn load_texture_from_stored_or_computed_lookup_table<T>(
         &mut self,
+        texture_name: impl AsRef<str>,
         table_file_path: impl AsRef<Path>,
         compute_table: impl Fn() -> TextureLookupTable<T>,
         sampler_config: SamplerConfig,
@@ -246,6 +402,7 @@ impl Assets {
         let table_file_path = table_file_path.as_ref();
 
         self.load_texture_from_generated_lookup_table(
+            texture_name,
             || {
                 TextureLookupTable::<T>::read_from_file(table_file_path).or_else(|_| {
                     let table = compute_table();
@@ -254,7 +411,15 @@ impl Assets {
                 })
             },
             sampler_config,
-            table_file_path.to_string_lossy(),
         )
+    }
+}
+
+impl Default for AssetConfig {
+    fn default() -> Self {
+        Self {
+            lookup_table_dir: PathBuf::from("assets/lookup_tables"),
+            asset_file_path: None,
+        }
     }
 }

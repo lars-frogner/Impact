@@ -302,12 +302,13 @@ fn create_material_components_from_tobj_material(
     if let Some(albedo_texture_path) = &material.diffuse_texture {
         let albedo_texture_id = assets.load_texture_from_path(
             albedo_texture_path,
+            albedo_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 ..Default::default()
             },
             Some(SamplerConfig {
-                addressing: TextureAddressingConfig::REPEATING,
+                addressing: TextureAddressingConfig::Repeating,
                 ..Default::default()
             }),
         )?;
@@ -326,12 +327,13 @@ fn create_material_components_from_tobj_material(
     if let Some(specular_reflectance_path) = &material.specular_texture {
         let specular_reflectance_id = assets.load_texture_from_path(
             specular_reflectance_path,
+            specular_reflectance_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 ..Default::default()
             },
             Some(SamplerConfig {
-                addressing: TextureAddressingConfig::REPEATING,
+                addressing: TextureAddressingConfig::Repeating,
                 ..Default::default()
             }),
         )?;
@@ -344,12 +346,13 @@ fn create_material_components_from_tobj_material(
     if let Some(normal_texture_path) = &material.normal_texture {
         let normal_texture_id = assets.load_texture_from_path(
             normal_texture_path,
+            normal_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Linear,
                 ..Default::default()
             },
             Some(SamplerConfig {
-                addressing: TextureAddressingConfig::REPEATING,
+                addressing: TextureAddressingConfig::Repeating,
                 ..Default::default()
             }),
         )?;

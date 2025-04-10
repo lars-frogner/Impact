@@ -16,16 +16,16 @@ use anyhow::Result;
 use impact_utils::{hash32, hash64};
 use std::sync::{LazyLock, OnceLock};
 
-const TEXTURE_PATH: &str = "assets/specular_ggx_reflectance_lookup_table.mpk";
+const TEXTURE_NAME: &str = "specular_ggx_reflectance_lookup_table";
 
 const SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
-    addressing: TextureAddressingConfig::CLAMPED,
-    filtering: TextureFilteringConfig::NONE,
+    addressing: TextureAddressingConfig::Clamped,
+    filtering: TextureFilteringConfig::None,
 };
 
 const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::FRAGMENT;
 
-static TEXTURE_ID: LazyLock<TextureID> = LazyLock::new(|| TextureID(hash32!(TEXTURE_PATH)));
+static TEXTURE_ID: LazyLock<TextureID> = LazyLock::new(|| TextureID(hash32!(TEXTURE_NAME)));
 
 static SAMPLER_ID: LazyLock<SamplerID> = LazyLock::new(|| (&SAMPLER_CONFIG).into());
 
@@ -47,8 +47,14 @@ pub fn resource_group_id() -> GPUResourceGroupID {
 /// Returns an error if a computed table can not be saved to file.
 /// Additionally, see [`Texture::from_lookup_table`].
 pub(super) fn load_lookup_table_into_assets(assets: &mut Assets) -> Result<()> {
+    let file_path = assets
+        .lookup_table_dir()
+        .join(TEXTURE_NAME)
+        .with_extension("mpk");
+
     assets.load_texture_from_stored_or_computed_lookup_table(
-        TEXTURE_PATH,
+        TEXTURE_NAME,
+        file_path,
         || brdf::create_specular_ggx_reflectance_lookup_tables(1024, 512),
         SAMPLER_CONFIG,
     )?;

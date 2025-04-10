@@ -159,7 +159,7 @@ serde = { version = "1.0", features = ["derive"] }
 simba = "0.9"
 tinyvec = { version = "1.9", features = ["alloc"] }
 tobj = "4.0"
-wgpu = { version = "24.0", features = ["naga-ir"] }
+wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30", features = ["serde"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
