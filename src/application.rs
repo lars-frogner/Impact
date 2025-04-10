@@ -5,7 +5,7 @@ pub mod entity;
 pub mod tasks;
 
 use crate::{
-    assets::{Assets, lookup_table},
+    assets::{AssetConfig, Assets, lookup_table},
     component::ComponentRegistry,
     control::{
         self, ControllerConfig, MotionController, OrientationController,
@@ -64,7 +64,9 @@ pub struct Application {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ApplicationConfig {
+    pub assets: AssetConfig,
     pub rendering: RenderingConfig,
     pub physics: PhysicsConfig,
     pub voxel: VoxelConfig,
@@ -91,9 +93,12 @@ impl Application {
         )?;
 
         let mut assets = Assets::new(
+            config.assets,
             Arc::clone(&graphics_device),
             Arc::clone(renderer.mipmapper_generator()),
         );
+
+        assets.load_assets_specified_in_config()?;
 
         lookup_table::initialize_default_lookup_tables(
             &mut assets,

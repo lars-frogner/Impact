@@ -88,6 +88,7 @@ use crate::{
     window::{GameHandler, Window, input::InputConfig},
 };
 use anyhow::Result;
+use impact_utils::hash32;
 use nalgebra::{Point3, UnitVector3, Vector3, point, vector};
 use rand::{Rng, SeedableRng, rngs::ThreadRng};
 use serde::{Deserialize, Serialize};
@@ -135,97 +136,7 @@ fn init_app(
 
     let mut app = Application::new(app_config, callbacks, window)?;
 
-    let mut assets = app.assets().write().unwrap();
-
-    let skybox_texture_id = assets.load_cubemap_texture_from_paths(
-        "assets/space_skybox/right.png",
-        "assets/space_skybox/left.png",
-        "assets/space_skybox/top.png",
-        "assets/space_skybox/bottom.png",
-        "assets/space_skybox/front.png",
-        "assets/space_skybox/back.png",
-        TextureConfig {
-            color_space: ColorSpace::Srgb,
-            ..Default::default()
-        },
-        Some(SamplerConfig::default()),
-    )?;
-
-    // let bricks_color_texture_id = assets.load_texture_from_path(
-    //     "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
-    //     TextureConfig {
-    //         color_space: ColorSpace::Srgb,
-    //         ..Default::default()
-    //     },
-    //     Some(SamplerConfig {
-    //         addressing: TextureAddressingConfig::REPEATING,
-    //         ..Default::default()
-    //     }),
-    // )?;
-
-    // let bricks_roughness_texture_id = assets.load_texture_from_path(
-    //     "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
-    //     TextureConfig {
-    //         color_space: ColorSpace::Linear,
-    //         ..Default::default()
-    //     },
-    //     Some(SamplerConfig {
-    //         addressing: TextureAddressingConfig::REPEATING,
-    //         ..Default::default()
-    //     }),
-    // )?;
-
-    // let bricks_height_texture_id = assets.load_texture_from_path(
-    //     "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
-    //     TextureConfig {
-    //         color_space: ColorSpace::Linear,
-    //         ..Default::default()
-    //     },
-    //     Some(SamplerConfig {
-    //         addressing: TextureAddressingConfig::REPEATING,
-    //         ..Default::default()
-    //     }),
-    // )?;
-
-    // let wood_floor_color_texture_id = assets.load_texture_from_path(
-    //     "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
-    //     TextureConfig {
-    //         color_space: ColorSpace::Srgb,
-    //         ..Default::default()
-    //     },
-    //     Some(SamplerConfig {
-    //         addressing: TextureAddressingConfig::REPEATING,
-    //         ..Default::default()
-    //     }),
-    // )?;
-
-    // let wood_floor_roughness_texture_id = assets.load_texture_from_path(
-    //     "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
-    //     TextureConfig {
-    //         color_space: ColorSpace::Linear,
-    //         ..Default::default()
-    //     },
-    //     Some(SamplerConfig {
-    //         addressing: TextureAddressingConfig::REPEATING,
-    //         ..Default::default()
-    //     }),
-    // )?;
-
-    // let wood_floor_normal_texture_id = assets.load_texture_from_path(
-    //     "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
-    //     TextureConfig {
-    //         color_space: ColorSpace::Linear,
-    //         ..Default::default()
-    //     },
-    //     Some(SamplerConfig {
-    //         addressing: TextureAddressingConfig::REPEATING,
-    //         ..Default::default()
-    //     }),
-    // )?;
-
-    drop(assets);
-
-    app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 2e3));
+    app.set_skybox_for_current_scene(Skybox::new(TextureID(hash32!("space_skybox")), 2e3));
 
     let player_entity = app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
@@ -378,14 +289,14 @@ fn init_app(
     //         // 50.0,
     //         500.0,
     //     ),
-    //     // &TexturedColorComp(wood_floor_color_texture_id),
+    //     // &TexturedColorComp(TextureID(hash32!("wood_floor_color_texture"))),
     //     &UniformColorComp(vector![1.0, 1.0, 1.0]),
     //     &UniformSpecularReflectanceComp::in_range_of(
     //         UniformSpecularReflectanceComp::LIVING_TISSUE,
     //         100.0,
     //     ),
-    //     // &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
-    //     // &NormalMapComp(wood_floor_normal_texture_id),
+    //     // &TexturedRoughnessComp::unscaled(TextureID(hash32!("wood_floor_roughness_texture"))),
+    //     // &NormalMapComp(TextureID(hash32!("wood_floor_normal_texture"))),
     // ))?;
 
     // app.create_entity((
@@ -397,11 +308,11 @@ fn init_app(
     //             * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
     //         50.0,
     //     ),
-    //     &TexturedColorComp(bricks_color_texture_id),
+    //     &TexturedColorComp(TextureID(hash32!("bricks_color_texture"))),
     //     &UniformSpecularReflectanceComp(0.02),
-    //     &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
+    //     &TexturedRoughnessComp::unscaled(TextureID(hash32!("bricks_roughness_texture"))),
     //     &ParallaxMapComp::new(
-    //         bricks_height_texture_id,
+    //         TextureID(hash32!("bricks_height_texture")),
     //         0.02,
     //         vector![1.0 / 25.0, 1.0 / 25.0],
     //     ),
@@ -416,11 +327,11 @@ fn init_app(
     //             * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
     //         50.0,
     //     ),
-    //     &TexturedColorComp(bricks_color_texture_id),
+    //     &TexturedColorComp(TextureID(hash32!("bricks_color_texture"))),
     //     &UniformSpecularReflectanceComp(0.02),
-    //     &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
+    //     &TexturedRoughnessComp::unscaled(TextureID(hash32!("bricks_roughness_texture"))),
     //     &ParallaxMapComp::new(
-    //         bricks_height_texture_id,
+    //         TextureID(hash32!("bricks_height_texture")),
     //         0.02,
     //         vector![1.0 / 25.0, 1.0 / 25.0],
     //     ),
@@ -434,9 +345,9 @@ fn init_app(
     //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
     //         50.0,
     //     ),
-    //     &TexturedColorComp(bricks_color_texture_id),
+    //     &TexturedColorComp(TextureID(hash32!("bricks_color_texture"))),
     //     &UniformSpecularReflectanceComp(0.02),
-    //     &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
+    //     &TexturedRoughnessComp::unscaled(TextureID(hash32!("bricks_roughness_texture"))),
     //     &ParallaxMapComp::new(
     //         bricks_height_texture_id,
     //         0.02,
@@ -506,80 +417,6 @@ fn init_physics_lab(
 
     let app = Application::new(app_config, callbacks, window)?;
 
-    let mut assets = app.assets().write().unwrap();
-
-    let concrete_color_texture_id = assets.load_texture_from_path(
-        "assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Srgb,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
-    let concrete_roughness_texture_id = assets.load_texture_from_path(
-        "assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
-    let concrete_normal_texture_id = assets.load_texture_from_path(
-        "assets/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
-
-    let plastic_color_texture_id = assets.load_texture_from_path(
-        "assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Srgb,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
-
-    let plastic_roughness_texture_id = assets.load_texture_from_path(
-        "assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
-
-    let plastic_normal_texture_id = assets.load_texture_from_path(
-        "assets/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg",
-        TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        },
-        Some(SamplerConfig {
-            addressing: TextureAddressingConfig::REPEATING,
-            ..Default::default()
-        }),
-    )?;
-
-    drop(assets);
-
     app.create_entity((
         &ReferenceFrameComp::unscaled(
             Point3::new(0.0, 0.0, -5.0),
@@ -609,18 +446,18 @@ fn init_physics_lab(
             0.0
         ],
         false,
-        plastic_color_texture_id,
-        plastic_roughness_texture_id,
-        plastic_normal_texture_id,
+        TextureID(hash32!("plastic_color_texture")),
+        TextureID(hash32!("plastic_roughness_texture")),
+        TextureID(hash32!("plastic_normal_texture")),
     )?;
 
     create_room(
         &app,
         room_extent,
         20.0,
-        concrete_color_texture_id,
-        concrete_roughness_texture_id,
-        concrete_normal_texture_id,
+        TextureID(hash32!("concrete_color_texture")),
+        TextureID(hash32!("concrete_roughness_texture")),
+        TextureID(hash32!("concrete_normal_texture")),
     )?;
 
     let voxel_extent = 0.25;

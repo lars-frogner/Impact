@@ -379,12 +379,12 @@ impl RenderAttachmentSampler {
     pub fn config(&self) -> SamplerConfig {
         match self {
             Self::NonFiltering => SamplerConfig {
-                addressing: TextureAddressingConfig::CLAMPED,
-                filtering: TextureFilteringConfig::NONE,
+                addressing: TextureAddressingConfig::Clamped,
+                filtering: TextureFilteringConfig::None,
             },
             Self::Filtering => SamplerConfig {
-                addressing: TextureAddressingConfig::CLAMPED,
-                filtering: TextureFilteringConfig::BASIC,
+                addressing: TextureAddressingConfig::Clamped,
+                filtering: TextureFilteringConfig::Basic,
             },
         }
     }

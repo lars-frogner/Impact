@@ -114,18 +114,20 @@ impl VoxelMaterialGPUResourceManager {
         );
 
         let color_texture_array_id = assets.load_texture_array_from_paths(
+            "voxel_color_texture_array",
             voxel_type_registry.color_texture_paths(),
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 max_mip_level_count: None,
             },
             Some(SamplerConfig {
-                addressing: TextureAddressingConfig::REPEATING,
-                filtering: TextureFilteringConfig::BASIC,
+                addressing: TextureAddressingConfig::Repeating,
+                filtering: TextureFilteringConfig::Basic,
             }),
         )?;
 
         let roughness_texture_array_id = assets.load_texture_array_from_paths(
+            "voxel_roughness_texture_array",
             voxel_type_registry.roughness_texture_paths(),
             TextureConfig {
                 color_space: ColorSpace::Linear,
@@ -135,6 +137,7 @@ impl VoxelMaterialGPUResourceManager {
         )?;
 
         let normal_texture_array_id = assets.load_texture_array_from_paths(
+            "voxel_normal_texture_array",
             voxel_type_registry.normal_texture_paths(),
             TextureConfig {
                 color_space: ColorSpace::Linear,

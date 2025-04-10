@@ -54,8 +54,9 @@ pub enum TexelDescription {
 }
 
 /// A color space for pixel/texel values.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ColorSpace {
+    #[default]
     Linear,
     Srgb,
 }
@@ -77,7 +78,8 @@ pub struct Sampler {
 }
 
 /// Configuration parameters for [`Texture`]s.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TextureConfig {
     /// The color space that the texel data values should be assumed to be
     /// stored in.
@@ -88,18 +90,30 @@ pub struct TextureConfig {
 }
 
 /// Configuration parameters for [`Sampler`]s.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SamplerConfig {
-    /// Configuration for how the sampler should address into textures.
+    /// How the sampler should address into textures.
     pub addressing: TextureAddressingConfig,
-    /// Configuration for how the sampler should filter textures.
+    /// How the sampler should filter textures.
     pub filtering: TextureFilteringConfig,
+}
+
+/// How a [`Sampler`] should address into [`Texture`]s.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TextureAddressingConfig {
+    /// Equivalent to [`DetailedTextureAddressingConfig::CLAMPED`].
+    #[default]
+    Clamped,
+    /// Equivalent to [`DetailedTextureAddressingConfig::REPEATING`].
+    Repeating,
+    Detailed(DetailedTextureAddressingConfig),
 }
 
 /// Configuration parameters for how a [`Sampler`] should address into
 /// [`Texture`]s.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextureAddressingConfig {
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DetailedTextureAddressingConfig {
     /// How addressing outside the [0, 1] range for the U texture coordinate
     /// should be handled.
     pub address_mode_u: wgpu::AddressMode,
@@ -111,9 +125,28 @@ pub struct TextureAddressingConfig {
     pub address_mode_w: wgpu::AddressMode,
 }
 
+/// How a [`Sampler`] should filter [`Texture`]s.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub enum TextureFilteringConfig {
+    /// Equivalent to [`DetailedTextureFilteringConfig::NONE`].
+    None,
+    /// Equivalent to [`DetailedTextureFilteringConfig::BASIC`].
+    #[default]
+    Basic,
+    /// Equivalent to [`DetailedTextureFilteringConfig::ANISOTROPIC_2X`].
+    Anisotropic2x,
+    /// Equivalent to [`DetailedTextureFilteringConfig::ANISOTROPIC_4X`].
+    Anisotropic4x,
+    /// Equivalent to [`DetailedTextureFilteringConfig::ANISOTROPIC_8X`].
+    Anisotropic8x,
+    /// Equivalent to [`DetailedTextureFilteringConfig::ANISOTROPIC_16X`].
+    Anisotropic16x,
+    Detailed(DetailedTextureFilteringConfig),
+}
+
 /// Configuration parameters for how a [`Sampler`] should filter [`Texture`]s.
-#[derive(Clone, Debug, PartialEq)]
-pub struct TextureFilteringConfig {
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DetailedTextureFilteringConfig {
     /// Whether filtering will be enabled when sampling the texture.
     pub filtering_enabled: bool,
     /// How to filter the texture when it needs to be magnified.
@@ -149,22 +182,19 @@ pub enum DepthOrArrayLayers {
 
 impl From<&SamplerConfig> for SamplerID {
     fn from(config: &SamplerConfig) -> Self {
-        let mut hasher = DefaultHasher::new();
-        config.addressing.hash(&mut hasher);
-        config.filtering.filtering_enabled.hash(&mut hasher);
-        config.filtering.mag_filter.hash(&mut hasher);
-        config.filtering.min_filter.hash(&mut hasher);
-        config.filtering.mipmap_filter.hash(&mut hasher);
-        OrderedFloat(config.filtering.lod_min_clamp).hash(&mut hasher);
-        OrderedFloat(config.filtering.lod_max_clamp).hash(&mut hasher);
-        config.filtering.anisotropy_clamp.hash(&mut hasher);
-        SamplerID(hasher.finish())
-    }
-}
+        let addressing: DetailedTextureAddressingConfig = config.addressing.clone().into();
+        let filtering: DetailedTextureFilteringConfig = config.filtering.clone().into();
 
-impl Default for ColorSpace {
-    fn default() -> Self {
-        Self::Linear
+        let mut hasher = DefaultHasher::new();
+        addressing.hash(&mut hasher);
+        filtering.filtering_enabled.hash(&mut hasher);
+        filtering.mag_filter.hash(&mut hasher);
+        filtering.min_filter.hash(&mut hasher);
+        filtering.mipmap_filter.hash(&mut hasher);
+        OrderedFloat(filtering.lod_min_clamp).hash(&mut hasher);
+        OrderedFloat(filtering.lod_max_clamp).hash(&mut hasher);
+        filtering.anisotropy_clamp.hash(&mut hasher);
+        SamplerID(hasher.finish())
     }
 }
 
@@ -900,22 +930,25 @@ impl Texture {
 impl Sampler {
     /// Creates a new sampler with the given configuration.
     pub fn create(graphics_device: &GraphicsDevice, config: SamplerConfig) -> Self {
+        let addressing: DetailedTextureAddressingConfig = config.addressing.into();
+        let filtering: DetailedTextureFilteringConfig = config.filtering.into();
+
         let sampler = graphics_device
             .device()
             .create_sampler(&wgpu::SamplerDescriptor {
-                address_mode_u: config.addressing.address_mode_u,
-                address_mode_v: config.addressing.address_mode_v,
-                address_mode_w: config.addressing.address_mode_w,
-                mag_filter: config.filtering.mag_filter,
-                min_filter: config.filtering.min_filter,
-                mipmap_filter: config.filtering.mipmap_filter,
-                lod_min_clamp: config.filtering.lod_min_clamp,
-                lod_max_clamp: config.filtering.lod_max_clamp,
-                anisotropy_clamp: config.filtering.anisotropy_clamp,
+                address_mode_u: addressing.address_mode_u,
+                address_mode_v: addressing.address_mode_v,
+                address_mode_w: addressing.address_mode_w,
+                mag_filter: filtering.mag_filter,
+                min_filter: filtering.min_filter,
+                mipmap_filter: filtering.mipmap_filter,
+                lod_min_clamp: filtering.lod_min_clamp,
+                lod_max_clamp: filtering.lod_max_clamp,
+                anisotropy_clamp: filtering.anisotropy_clamp,
                 ..Default::default()
             });
 
-        let binding_type = if config.filtering.filtering_enabled {
+        let binding_type = if filtering.filtering_enabled {
             wgpu::SamplerBindingType::Filtering
         } else {
             wgpu::SamplerBindingType::NonFiltering
@@ -952,7 +985,7 @@ impl Sampler {
     }
 }
 
-impl TextureAddressingConfig {
+impl DetailedTextureAddressingConfig {
     pub const CLAMPED: Self = Self {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -966,13 +999,23 @@ impl TextureAddressingConfig {
     };
 }
 
-impl Default for TextureAddressingConfig {
+impl Default for DetailedTextureAddressingConfig {
     fn default() -> Self {
         Self::CLAMPED
     }
 }
 
-impl TextureFilteringConfig {
+impl From<TextureAddressingConfig> for DetailedTextureAddressingConfig {
+    fn from(config: TextureAddressingConfig) -> Self {
+        match config {
+            TextureAddressingConfig::Clamped => Self::CLAMPED,
+            TextureAddressingConfig::Repeating => Self::REPEATING,
+            TextureAddressingConfig::Detailed(config) => config,
+        }
+    }
+}
+
+impl DetailedTextureFilteringConfig {
     pub const BASIC: Self = Self {
         filtering_enabled: true,
         mag_filter: wgpu::FilterMode::Linear,
@@ -1019,9 +1062,23 @@ impl TextureFilteringConfig {
     };
 }
 
-impl Default for TextureFilteringConfig {
+impl Default for DetailedTextureFilteringConfig {
     fn default() -> Self {
         Self::BASIC
+    }
+}
+
+impl From<TextureFilteringConfig> for DetailedTextureFilteringConfig {
+    fn from(config: TextureFilteringConfig) -> Self {
+        match config {
+            TextureFilteringConfig::None => Self::NONE,
+            TextureFilteringConfig::Basic => Self::BASIC,
+            TextureFilteringConfig::Anisotropic2x => Self::ANISOTROPIC_2X,
+            TextureFilteringConfig::Anisotropic4x => Self::ANISOTROPIC_4X,
+            TextureFilteringConfig::Anisotropic8x => Self::ANISOTROPIC_8X,
+            TextureFilteringConfig::Anisotropic16x => Self::ANISOTROPIC_16X,
+            TextureFilteringConfig::Detailed(config) => config,
+        }
     }
 }
 
