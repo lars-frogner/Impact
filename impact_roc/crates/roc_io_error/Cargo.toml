@@ -1,8 +1,0 @@
-[package]
-name = "roc_io_error"
-version = { workspace = true }
-edition = { workspace = true }
-description = "Common functionality for Roc to interface with std::io::Error"
-
-[dependencies]
-roc_std = { workspace = true }

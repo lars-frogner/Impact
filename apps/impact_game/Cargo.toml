@@ -1,0 +1,12 @@
+[package]
+name = "impact_game"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+roc_codegen = ["impact/roc_codegen"]
+
+[dependencies]
+anyhow = "1.0"
+impact = { path = "../../engine" }
+inventory = "0.3"

@@ -1,0 +1,93 @@
+(
+    assets: (
+        asset_file_path: Some("config/assets.ron"),
+    ),
+    rendering: (
+        omnidirectional_light_shadow_map_resolution: 1024,
+        unidirectional_light_shadow_map_resolution: 1024,
+        shadow_mapping_enabled: true,
+        ambient_occlusion: (
+            initially_enabled: true,
+            sample_count: 4,
+            sample_radius: 1.0,
+            intensity: 2.0,
+            contrast: 0.75,
+        ),
+        temporal_anti_aliasing: (
+            initially_enabled: true,
+            current_frame_weight: 0.1,
+            variance_clipping_threshold: 1.0,
+        ),
+        capturing_camera: (
+            initial_settings: (
+                relative_aperture: 0.25,
+                shutter_speed: 0.005,
+                sensitivity: Auto(
+                    ev_compensation: 0.0,
+                ),
+                max_exposure: 0.01,
+            ),
+            bloom: (
+                initially_enabled: true,
+                n_downsamplings: 4,
+                blur_filter_radius: 0.005,
+                blurred_luminance_weight: 0.04,
+            ),
+            average_luminance_computation: (
+                luminance_bounds: (
+                    lower: 100.0,
+                    upper: 10000000.0,
+                ),
+                current_frame_weight: 0.02,
+                fetch_histogram: false,
+            ),
+            initial_tone_mapping: ACES,
+        ),
+        wireframe_mode_on: false,
+        timings_enabled: false,
+    ),
+    physics: (
+        simulator: (
+            n_substeps: 1,
+            initial_time_step_duration: 0.015,
+            match_frame_duration: true,
+            simulation_speed_multiplier_increment_factor: 1.1,
+        ),
+        rigid_body_force: (
+            drag_load_map_config: (
+                n_direction_samples: 5000,
+                n_theta_coords: 64,
+                smoothness: 2.0,
+                save_generated_maps: true,
+                overwrite_existing_map_files: false,
+                use_saved_maps: true,
+            ),
+        ),
+        constraint_solver: (
+            n_iterations: 8,
+            old_impulse_weight: 0.4,
+            n_positional_correction_iterations: 3,
+            positional_correction_factor: 0.2,
+        ),
+        medium: (
+            mass_density: 0.0,
+            velocity: (0.0, 0.0, 0.0),
+        ),
+    ),
+    voxel: (
+        voxel_types_path: Some("config/voxel_types.ron"),
+    ),
+    input: (
+        key_map_path: Some("config/keymap.ron"),
+    ),
+    controller: (
+        motion: SemiDirectional((
+            movement_speed: 8.0,
+            vertical_control: true,
+        )),
+        orientation: RollFreeCamera((
+            vertical_field_of_view: (70.0),
+            sensitivity: 1.0,
+        )),
+    ),
+)

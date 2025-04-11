@@ -1,0 +1,20 @@
+[package]
+name = "roc_codegen"
+version = "0.1.0"
+edition = { workspace = true }
+
+[features]
+enabled = ["roc_codegen_macros/enabled"]
+
+[dependencies]
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
+const-fnv1a-hash = { workspace = true }
+inventory = { workspace = true }
+nalgebra = { workspace = true, features = ["bytemuck"] }
+quote = "1.0"
+
+roc_codegen_macros = { path = "roc_codegen_macros" }
+
+[lints]
+workspace = true

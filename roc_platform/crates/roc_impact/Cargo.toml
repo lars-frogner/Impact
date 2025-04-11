@@ -1,0 +1,12 @@
+[package]
+name = "roc_impact"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+impact = { workspace = true }
+roc_std = { workspace = true }
+
+[lints]
+workspace = true
