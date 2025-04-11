@@ -1,0 +1,593 @@
+//!
+
+use super::{RocGenerateOptions, field_descriptor};
+use crate::meta::{
+    NamedRocTypeField, RocTypeComposition, RocTypeDescriptor, RocTypeFields, RocTypeID,
+    UnnamedRocTypeField,
+};
+use anyhow::Result;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Write,
+};
+
+pub(super) fn generate_module(
+    options: &RocGenerateOptions,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    descriptor: &RocTypeDescriptor,
+) -> Result<Option<String>> {
+    if let RocTypeComposition::Primitive(_) = descriptor.composition {
+        return Ok(None);
+    }
+
+    let mut module = String::new();
+
+    write_module_header(options, &mut module, descriptor)?;
+    module.push('\n');
+
+    write_imports(options, &mut module, descriptors, descriptor)?;
+    module.push('\n');
+
+    write_type_declaration(&mut module, descriptors, descriptor)?;
+    module.push('\n');
+
+    write_write_bytes_function(&mut module, descriptors, descriptor)?;
+    module.push('\n');
+
+    write_from_bytes_function(&mut module, descriptors, descriptor)?;
+
+    if options.include_roundtrip_test {
+        module.push('\n');
+        write_roundtrip_test_function(&mut module, descriptor)?;
+    }
+
+    Ok(Some(module))
+}
+
+pub(super) fn generate_roundtrip_test(
+    options: &RocGenerateOptions,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+) -> Result<String> {
+    let mut names: Vec<_> = descriptors
+        .values()
+        .filter_map(|descriptor| {
+            if let RocTypeComposition::Primitive(_) = descriptor.composition {
+                None
+            } else {
+                Some(descriptor.roc_name)
+            }
+        })
+        .collect();
+    names.sort();
+
+    let mut roc_code = String::from("module [test_roundtrip!]\n\n");
+
+    for name in &names {
+        writeln!(
+            &mut roc_code,
+            "import {}{name} as {name}",
+            &options.module_prefix
+        )?;
+    }
+
+    roc_code.push_str("\ntest_roundtrip! = |{}|\n");
+
+    for name in &names {
+        writeln!(&mut roc_code,
+            "    \
+            when {name}.test_roundtrip!({{}}) is\n        \
+                Err(error) -> crash \"Roundtrip failed for {name}: ${{Inspect.to_str(error)}}\"\n        \
+                _ -> {{}}
+            "
+        )?;
+    }
+
+    Ok(roc_code)
+}
+
+fn write_module_header(
+    options: &RocGenerateOptions,
+    roc_code: &mut String,
+    descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    writeln!(
+        roc_code,
+        "\
+        module [\n    \
+            {},\n    \
+            write_bytes!,\n    \
+            from_bytes!,\n{}\
+        ]\
+        ",
+        descriptor.roc_name,
+        if options.include_roundtrip_test {
+            "    test_roundtrip!,\n"
+        } else {
+            ""
+        }
+    )?;
+    Ok(())
+}
+
+fn write_imports(
+    options: &RocGenerateOptions,
+    roc_code: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    let mut imports = Vec::from_iter(determine_imports(options, descriptors, descriptor));
+    imports.sort();
+    for import in imports {
+        writeln!(roc_code, "import {import}")?;
+    }
+    Ok(())
+}
+
+fn determine_imports(
+    options: &RocGenerateOptions,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    descriptor: &RocTypeDescriptor,
+) -> HashSet<String> {
+    let mut imports = HashSet::new();
+
+    match &descriptor.composition {
+        RocTypeComposition::Primitive(_) => {}
+        RocTypeComposition::Struct(fields) => {
+            add_imports_for_fields(options, &mut imports, descriptors, fields);
+        }
+        RocTypeComposition::Enum(variants) => {
+            for variant in &variants.0 {
+                add_imports_for_fields(options, &mut imports, descriptors, &variant.fields);
+            }
+        }
+    }
+    imports
+}
+
+fn add_imports_for_fields<const N: usize>(
+    options: &RocGenerateOptions,
+    imports: &mut HashSet<String>,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    fields: &RocTypeFields<N>,
+) {
+    match fields {
+        RocTypeFields::None => {}
+        RocTypeFields::Named(fields) => {
+            for NamedRocTypeField { type_id, .. } in fields {
+                if let Some(field_descriptor) = descriptors.get(type_id) {
+                    imports.insert(
+                        field_descriptor
+                            .import_module(&options.module_prefix, &options.core_prefix),
+                    );
+                }
+            }
+        }
+        RocTypeFields::Unnamed(fields) => {
+            for UnnamedRocTypeField { type_id } in fields {
+                if let Some(field_descriptor) = descriptors.get(type_id) {
+                    imports.insert(
+                        field_descriptor
+                            .import_module(&options.module_prefix, &options.core_prefix),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn write_type_declaration(
+    roc_code: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    match &descriptor.composition {
+        RocTypeComposition::Primitive(_) => Ok(()),
+        RocTypeComposition::Struct(fields) => {
+            write!(roc_code, "{} : ", descriptor.roc_name)?;
+            write_fields_declaration(roc_code, descriptors, fields, 0, false, &|| {
+                format!("struct type {}", descriptor.roc_name)
+            })?;
+            roc_code.push('\n');
+            Ok(())
+        }
+        RocTypeComposition::Enum(variants) => {
+            write!(roc_code, "{} : [", descriptor.roc_name)?;
+            let mut variant_count = 0;
+            for variant in &variants.0 {
+                write!(roc_code, "\n    {}", variant.ident)?;
+                if !matches!(variant.fields, RocTypeFields::None) {
+                    roc_code.push(' ');
+                    write_fields_declaration(
+                        roc_code,
+                        descriptors,
+                        &variant.fields,
+                        2, // 1 looks more right, but 2 is consistent with Roc autoformatting
+                        true,
+                        &|| format!("variant {} of enum {}", variant.ident, descriptor.roc_name),
+                    )?;
+                }
+                roc_code.push(',');
+                variant_count += 1;
+            }
+            if variant_count > 0 {
+                roc_code.push('\n');
+            }
+            roc_code.push_str("]\n");
+            Ok(())
+        }
+    }
+}
+
+fn write_fields_declaration<const N: usize>(
+    declaration: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    fields: &RocTypeFields<N>,
+    indentation_level: usize,
+    undelimited_tuple: bool,
+    parent_name: &impl Fn() -> String,
+) -> Result<()> {
+    let indentation = "    ".repeat(indentation_level);
+    match fields {
+        RocTypeFields::None => {
+            declaration.push_str("{}");
+        }
+        RocTypeFields::Named(fields) => {
+            declaration.push('{');
+            let mut field_count = 0;
+            for NamedRocTypeField { ident, type_id } in fields {
+                let roc_name =
+                    field_descriptor(descriptors, type_id, ident, parent_name)?.concrete_roc_name();
+                write!(declaration, "\n{indentation}    {ident} : {roc_name},",)?;
+                field_count += 1;
+            }
+            if field_count > 0 {
+                declaration.push('\n');
+            }
+            write!(declaration, "{indentation}}}")?;
+        }
+        RocTypeFields::Unnamed(fields) => {
+            if !undelimited_tuple {
+                declaration.push('(');
+            }
+            for (field_idx, UnnamedRocTypeField { type_id }) in fields.iter().enumerate() {
+                let roc_name = field_descriptor(descriptors, type_id, field_idx, parent_name)?
+                    .concrete_roc_name();
+                if field_idx > 0 {
+                    if !undelimited_tuple {
+                        declaration.push(',');
+                    }
+                    declaration.push(' ');
+                }
+                declaration.push_str(&roc_name);
+            }
+            if !undelimited_tuple {
+                declaration.push(')');
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_write_bytes_function(
+    roc_code: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    if matches!(descriptor.composition, RocTypeComposition::Primitive(_)) {
+        return Ok(());
+    }
+
+    write!(
+        roc_code,
+        "\
+        write_bytes! : List U8, {} => List U8\n\
+        write_bytes! = |bytes, value|\n\
+        ",
+        descriptor.roc_name,
+    )?;
+
+    match &descriptor.composition {
+        RocTypeComposition::Struct(fields) => {
+            write!(
+                roc_code,
+                "    \
+                    bytes\n    \
+                    |> List.reserve({size})\n\
+                ",
+                size = descriptor.serialized_size,
+            )?;
+            write_calls_to_write_bytes(
+                roc_code,
+                descriptors,
+                fields,
+                1,
+                |def, field| write!(def, "value.{field}"),
+                |def, idx| write!(def, "value.{idx}"),
+                &|| format!("struct type {}", descriptor.roc_name),
+            )?;
+        }
+        RocTypeComposition::Enum(variants) => {
+            writeln!(roc_code, "    when value is")?;
+            for (variant_idx, variant) in variants.0.iter().enumerate() {
+                if variant_idx > 0 {
+                    roc_code.push('\n');
+                }
+                match &variant.fields {
+                    RocTypeFields::None => {
+                        writeln!(roc_code, "        {} ->", variant.ident)?;
+                    }
+                    RocTypeFields::Named(fields) => {
+                        write!(roc_code, "        {} {{", variant.ident)?;
+                        let mut has_fields = false;
+                        for (field_idx, field) in fields.iter().enumerate() {
+                            if field_idx > 0 {
+                                roc_code.push(',');
+                            }
+                            write!(roc_code, " {}", field.ident)?;
+                            has_fields = true;
+                        }
+                        if has_fields {
+                            roc_code.push(' ');
+                        }
+                        roc_code.push_str("} ->\n");
+                    }
+                    RocTypeFields::Unnamed(fields) => {
+                        write!(roc_code, "        {}(", variant.ident)?;
+                        for (field_idx, _) in fields.iter().enumerate() {
+                            if field_idx > 0 {
+                                roc_code.push_str(", ");
+                            }
+                            write!(roc_code, "x{}", field_idx)?;
+                        }
+                        roc_code.push_str(") ->\n");
+                    }
+                }
+                write!(
+                    roc_code,
+                    "            \
+                    bytes\n            \
+                    |> List.reserve({})\n            \
+                    |> List.append({})\n\
+                    ",
+                    variant.size + 1,
+                    variant_idx,
+                )?;
+                write_calls_to_write_bytes(
+                    roc_code,
+                    descriptors,
+                    &variant.fields,
+                    3,
+                    |def, field| write!(def, "{field}"),
+                    |def, idx| write!(def, "x{idx}"),
+                    &|| format!("variant {} of enum {}", variant.ident, descriptor.roc_name),
+                )?;
+            }
+        }
+        RocTypeComposition::Primitive(_) => {
+            unreachable!()
+        }
+    }
+    Ok(())
+}
+
+fn write_calls_to_write_bytes<const N: usize>(
+    write_bytes_definition: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    fields: &RocTypeFields<N>,
+    indentation_level: usize,
+    mut write_struct_value_access: impl FnMut(&mut String, &str) -> std::fmt::Result,
+    mut write_tuple_value_access: impl FnMut(&mut String, &str) -> std::fmt::Result,
+    parent_name: &impl Fn() -> String,
+) -> Result<()> {
+    let indentation = "    ".repeat(indentation_level);
+    match fields {
+        RocTypeFields::None => {}
+        RocTypeFields::Named(fields) => {
+            for NamedRocTypeField { ident, type_id } in fields {
+                let field_descriptor = field_descriptor(descriptors, type_id, ident, parent_name)?;
+                write!(
+                    write_bytes_definition,
+                    "{indentation}|> {}(",
+                    field_descriptor.write_bytes_func_name(),
+                )?;
+                write_struct_value_access(write_bytes_definition, ident)?;
+                writeln!(write_bytes_definition, ")")?;
+            }
+        }
+        RocTypeFields::Unnamed(fields) => {
+            for (field_idx, UnnamedRocTypeField { type_id }) in fields.iter().enumerate() {
+                let field_descriptor =
+                    field_descriptor(descriptors, type_id, field_idx, parent_name)?;
+                write!(
+                    write_bytes_definition,
+                    "{indentation}|> {}(",
+                    field_descriptor.write_bytes_func_name(),
+                )?;
+                write_tuple_value_access(write_bytes_definition, &field_idx.to_string())?;
+                writeln!(write_bytes_definition, ")")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_from_bytes_function(
+    roc_code: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    if matches!(descriptor.composition, RocTypeComposition::Primitive(_)) {
+        return Ok(());
+    }
+
+    write!(
+        roc_code,
+        "\
+        from_bytes! : List U8 => Result {} Builtin.DecodeErr\n\
+        from_bytes! = |bytes|\n\
+        ",
+        descriptor.roc_name,
+    )?;
+
+    match &descriptor.composition {
+        RocTypeComposition::Struct(RocTypeFields::None) => {
+            writeln!(roc_code, "    {}", descriptor.roc_name)?;
+        }
+        RocTypeComposition::Struct(fields) => {
+            roc_code.push_str("    Ok(\n        ");
+            write_calls_to_from_bytes(roc_code, descriptors, fields, 2, "bytes", &|| {
+                format!("struct type {}", descriptor.roc_name)
+            })?;
+            writeln!(roc_code, "    )")?;
+        }
+        RocTypeComposition::Enum(variants) => {
+            writeln!(roc_code, "    when bytes is")?;
+            for (variant_idx, variant) in variants.0.iter().enumerate() {
+                match &variant.fields {
+                    RocTypeFields::None => {
+                        writeln!(
+                            roc_code,
+                            "        \
+                            [{variant_idx}] -> Ok({})\n        \
+                            [{variant_idx}, ..] -> Err(InvalidNumberOfBytes)\
+                            ",
+                            variant.ident
+                        )?;
+                    }
+                    RocTypeFields::Named(_) => {
+                        write!(
+                            roc_code,
+                            "        \
+                            [{variant_idx}, .. as data_bytes] ->\n            \
+                                Ok(\n                \
+                                    {} \
+                            ",
+                            variant.ident
+                        )?;
+                        write_calls_to_from_bytes(
+                            roc_code,
+                            descriptors,
+                            &variant.fields,
+                            4,
+                            "data_bytes",
+                            &|| {
+                                format!("variant {} of enum {}", variant.ident, descriptor.roc_name)
+                            },
+                        )?;
+                        roc_code.push_str(
+                            "            \
+                                )\n\n\
+                            ",
+                        );
+                        if variant_idx > 0 {
+                            roc_code.push('\n');
+                        }
+                    }
+                    RocTypeFields::Unnamed(_) => {
+                        write!(
+                            roc_code,
+                            "        \
+                            [{variant_idx}, .. as data_bytes] ->\n            \
+                                Ok(\n                \
+                                    {}\
+                            ",
+                            variant.ident
+                        )?;
+                        write_calls_to_from_bytes(
+                            roc_code,
+                            descriptors,
+                            &variant.fields,
+                            4,
+                            "data_bytes",
+                            &|| {
+                                format!("variant {} of enum {}", variant.ident, descriptor.roc_name)
+                            },
+                        )?;
+                        roc_code.push_str(
+                            "            \
+                                )\n\n\
+                            ",
+                        );
+                    }
+                }
+            }
+            roc_code.push_str(
+                "        \
+                [] -> Err(MissingDiscriminant)\n        \
+                _ -> Err(InvalidDiscriminant)\n\
+                ",
+            );
+        }
+        RocTypeComposition::Primitive(_) => {
+            unreachable!()
+        }
+    }
+    Ok(())
+}
+
+fn write_calls_to_from_bytes<const N: usize>(
+    from_bytes_definition: &mut String,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    fields: &RocTypeFields<N>,
+    indentation_level: usize,
+    bytes_name: &str,
+    parent_name: &impl Fn() -> String,
+) -> Result<()> {
+    let indentation = "    ".repeat(indentation_level);
+    let mut byte_offset = 0;
+    match fields {
+        RocTypeFields::None => {}
+        RocTypeFields::Named(fields) => {
+            from_bytes_definition.push_str("{\n");
+            for NamedRocTypeField { ident, type_id } in fields {
+                let field_descriptor = field_descriptor(descriptors, type_id, ident, parent_name)?;
+                writeln!(
+                    from_bytes_definition,
+                    "{indentation}    {ident}: {bytes_name} |> List.sublist({{ start: {byte_offset}, len: {size} }}) |> {from_bytes}?,",
+                    size = field_descriptor.serialized_size,
+                    from_bytes = field_descriptor.from_bytes_func_name(),
+                )?;
+                byte_offset += field_descriptor.serialized_size;
+            }
+            writeln!(from_bytes_definition, "{indentation}}},")?;
+        }
+        RocTypeFields::Unnamed(fields) => {
+            from_bytes_definition.push_str("(\n");
+            for (field_idx, UnnamedRocTypeField { type_id }) in fields.iter().enumerate() {
+                let field_descriptor =
+                    field_descriptor(descriptors, type_id, field_idx, parent_name)?;
+                writeln!(
+                    from_bytes_definition,
+                    "{indentation}    {bytes_name} |> List.sublist({{ start: {byte_offset}, len: {size} }}) |> {from_bytes}?,",
+                    size = field_descriptor.serialized_size,
+                    from_bytes = field_descriptor.from_bytes_func_name(),
+                )?;
+                byte_offset += field_descriptor.serialized_size;
+            }
+            writeln!(from_bytes_definition, "{indentation}),")?;
+        }
+    }
+    Ok(())
+}
+
+fn write_roundtrip_test_function(
+    roc_code: &mut String,
+    descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    writeln!(
+        roc_code,
+        "\
+        test_roundtrip! : {{}} => Result {{}} _\n\
+        test_roundtrip! = |{{}}|\n    \
+            bytes = List.range({{ start: At 0, end: Length {} }})\n    \
+            decoded = from_bytes!(bytes)?\n    \
+            encoded = write_bytes!([], decoded)\n    \
+            if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then\n        \
+                Ok({{}})\n    \
+            else\n        \
+                Err(NotEqual)\
+        ",
+        descriptor.serialized_size,
+    )?;
+    Ok(())
+}
