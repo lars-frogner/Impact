@@ -1,11 +1,12 @@
-//!
+//! Generation of Roc code for types deriving the
+//! [`Roc`](crate::meta::Roc) or [`RocPod`](crate::meta::RocPod) trait.
 
 use super::{RocGenerateOptions, field_descriptor};
 use crate::meta::{
-    NamedRocTypeField, RocTypeComposition, RocTypeDescriptor, RocTypeFields, RocTypeID,
-    UnnamedRocTypeField,
+    NamedRocTypeField, RocTypeComposition, RocTypeDescriptor, RocTypeFields, RocTypeFlags,
+    RocTypeID, UnnamedRocTypeField,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
@@ -22,7 +23,7 @@ pub(super) fn generate_module(
 
     let mut module = String::new();
 
-    write_module_header(options, &mut module, descriptor)?;
+    write_module_header(&mut module, descriptor)?;
     module.push('\n');
 
     write_imports(options, &mut module, descriptors, descriptor)?;
@@ -31,79 +32,42 @@ pub(super) fn generate_module(
     write_type_declaration(&mut module, descriptors, descriptor)?;
     module.push('\n');
 
+    write_component_functions(&mut module, descriptor)?;
+    module.push('\n');
+
     write_write_bytes_function(&mut module, descriptors, descriptor)?;
     module.push('\n');
 
     write_from_bytes_function(&mut module, descriptors, descriptor)?;
+    module.push('\n');
 
-    if options.include_roundtrip_test {
-        module.push('\n');
-        write_roundtrip_test_function(&mut module, descriptor)?;
-    }
+    write_roundtrip_test(&mut module, descriptor)?;
 
     Ok(Some(module))
 }
 
-pub(super) fn generate_roundtrip_test(
-    options: &RocGenerateOptions,
-    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
-) -> Result<String> {
-    let mut names: Vec<_> = descriptors
-        .values()
-        .filter_map(|descriptor| {
-            if let RocTypeComposition::Primitive(_) = descriptor.composition {
-                None
-            } else {
-                Some(descriptor.roc_name)
-            }
-        })
-        .collect();
-    names.sort();
-
-    let mut roc_code = String::from("module [test_roundtrip!]\n\n");
-
-    for name in &names {
-        writeln!(
-            &mut roc_code,
-            "import {}{name} as {name}",
-            &options.module_prefix
-        )?;
-    }
-
-    roc_code.push_str("\ntest_roundtrip! = |{}|\n");
-
-    for name in &names {
-        writeln!(&mut roc_code,
-            "    \
-            when {name}.test_roundtrip!({{}}) is\n        \
-                Err(error) -> crash \"Roundtrip failed for {name}: ${{Inspect.to_str(error)}}\"\n        \
-                _ -> {{}}
-            "
-        )?;
-    }
-
-    Ok(roc_code)
-}
-
-fn write_module_header(
-    options: &RocGenerateOptions,
-    roc_code: &mut String,
-    descriptor: &RocTypeDescriptor,
-) -> Result<()> {
+fn write_module_header(roc_code: &mut String, descriptor: &RocTypeDescriptor) -> Result<()> {
     writeln!(
         roc_code,
         "\
         module [\n    \
             {},\n    \
-            write_bytes!,\n    \
-            from_bytes!,\n{}\
+            {}\
         ]\
         ",
         descriptor.roc_name,
-        if options.include_roundtrip_test {
-            "    test_roundtrip!,\n"
+        if descriptor.is_component() {
+            "\
+            add_to_entity,\n    \
+            add_to_entities,\n\
+            "
         } else {
-            ""
+            "\
+            write_packet,\n    \
+            write_multi_packet,\n    \
+            write_bytes,\n    \
+            from_bytes,\n\
+            "
         }
     )?;
     Ok(())
@@ -130,9 +94,18 @@ fn determine_imports(
 ) -> HashSet<String> {
     let mut imports = HashSet::new();
 
+    if descriptor.is_component() {
+        // ECS components will need these imports
+        imports.insert(format!("{}.Builtin as Builtin", &options.core_package_name));
+        imports.insert(format!(
+            "{}.Entity as Entity",
+            &options.platform_package_name
+        ));
+    }
+
     match &descriptor.composition {
         RocTypeComposition::Primitive(_) => {}
-        RocTypeComposition::Struct(fields) => {
+        RocTypeComposition::Struct { fields, .. } => {
             add_imports_for_fields(options, &mut imports, descriptors, fields);
         }
         RocTypeComposition::Enum(variants) => {
@@ -157,7 +130,7 @@ fn add_imports_for_fields<const N: usize>(
                 if let Some(field_descriptor) = descriptors.get(type_id) {
                     imports.insert(
                         field_descriptor
-                            .import_module(&options.module_prefix, &options.core_prefix),
+                            .import_module(&options.import_prefix, &options.core_package_name),
                     );
                 }
             }
@@ -167,7 +140,7 @@ fn add_imports_for_fields<const N: usize>(
                 if let Some(field_descriptor) = descriptors.get(type_id) {
                     imports.insert(
                         field_descriptor
-                            .import_module(&options.module_prefix, &options.core_prefix),
+                            .import_module(&options.import_prefix, &options.core_package_name),
                     );
                 }
             }
@@ -180,9 +153,13 @@ fn write_type_declaration(
     descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
     descriptor: &RocTypeDescriptor,
 ) -> Result<()> {
+    if !descriptor.docstring.is_empty() {
+        roc_code.push_str(descriptor.docstring);
+    }
     match &descriptor.composition {
+        // We don't generate code for primitive types
         RocTypeComposition::Primitive(_) => Ok(()),
-        RocTypeComposition::Struct(fields) => {
+        RocTypeComposition::Struct { fields, .. } => {
             write!(roc_code, "{} : ", descriptor.roc_name)?;
             write_fields_declaration(roc_code, descriptors, fields, 0, false, &|| {
                 format!("struct type {}", descriptor.roc_name)
@@ -194,6 +171,11 @@ fn write_type_declaration(
             write!(roc_code, "{} : [", descriptor.roc_name)?;
             let mut variant_count = 0;
             for variant in &variants.0 {
+                if !variant.docstring.is_empty() {
+                    for line in variant.docstring.lines() {
+                        write!(roc_code, "\n    {line}")?;
+                    }
+                }
                 write!(roc_code, "\n    {}", variant.ident)?;
                 if !matches!(variant.fields, RocTypeFields::None) {
                     roc_code.push(' ');
@@ -234,10 +216,23 @@ fn write_fields_declaration<const N: usize>(
         RocTypeFields::Named(fields) => {
             declaration.push('{');
             let mut field_count = 0;
-            for NamedRocTypeField { ident, type_id } in fields {
+            for NamedRocTypeField {
+                docstring,
+                ident,
+                type_id,
+            } in fields
+            {
+                if !docstring.is_empty() {
+                    for line in docstring.lines() {
+                        write!(declaration, "\n{indentation}    {line}")?;
+                    }
+                }
+
                 let roc_name =
                     field_descriptor(descriptors, type_id, ident, parent_name)?.concrete_roc_name();
-                write!(declaration, "\n{indentation}    {ident} : {roc_name},",)?;
+
+                write!(declaration, "\n{indentation}    {ident} : {roc_name},")?;
+
                 field_count += 1;
             }
             if field_count > 0 {
@@ -245,6 +240,7 @@ fn write_fields_declaration<const N: usize>(
             }
             write!(declaration, "{indentation}}}")?;
         }
+
         RocTypeFields::Unnamed(fields) => {
             if !undelimited_tuple {
                 declaration.push('(');
@@ -273,6 +269,7 @@ fn write_write_bytes_function(
     descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
     descriptor: &RocTypeDescriptor,
 ) -> Result<()> {
+    // We don't generate code for primitive types
     if matches!(descriptor.composition, RocTypeComposition::Primitive(_)) {
         return Ok(());
     }
@@ -280,14 +277,16 @@ fn write_write_bytes_function(
     write!(
         roc_code,
         "\
-        write_bytes! : List U8, {} => List U8\n\
-        write_bytes! = |bytes, value|\n\
+        ## Serializes a [{name}] value into the binary representation\n\
+        ## expected by the engine and appends the bytes to the list.\n\
+        write_bytes : List U8, {name} -> List U8\n\
+        write_bytes = |bytes, value|\n\
         ",
-        descriptor.roc_name,
+        name = descriptor.roc_name,
     )?;
 
     match &descriptor.composition {
-        RocTypeComposition::Struct(fields) => {
+        RocTypeComposition::Struct { fields, .. } => {
             write!(
                 roc_code,
                 "    \
@@ -383,7 +382,7 @@ fn write_calls_to_write_bytes<const N: usize>(
     match fields {
         RocTypeFields::None => {}
         RocTypeFields::Named(fields) => {
-            for NamedRocTypeField { ident, type_id } in fields {
+            for NamedRocTypeField { ident, type_id, .. } in fields {
                 let field_descriptor = field_descriptor(descriptors, type_id, ident, parent_name)?;
                 write!(
                     write_bytes_definition,
@@ -423,17 +422,22 @@ fn write_from_bytes_function(
     write!(
         roc_code,
         "\
-        from_bytes! : List U8 => Result {} Builtin.DecodeErr\n\
-        from_bytes! = |bytes|\n\
+        ## Deserializes a [{name}] value from its bytes in the\n\
+        ## representation used by the engine.\n\
+        from_bytes : List U8 -> Result {name} Builtin.DecodeErr\n\
+        from_bytes = |bytes|\n\
         ",
-        descriptor.roc_name,
+        name = descriptor.roc_name,
     )?;
 
     match &descriptor.composition {
-        RocTypeComposition::Struct(RocTypeFields::None) => {
+        RocTypeComposition::Struct {
+            fields: RocTypeFields::None,
+            ..
+        } => {
             writeln!(roc_code, "    {}", descriptor.roc_name)?;
         }
-        RocTypeComposition::Struct(fields) => {
+        RocTypeComposition::Struct { fields, .. } => {
             roc_code.push_str("    Ok(\n        ");
             write_calls_to_from_bytes(roc_code, descriptors, fields, 2, "bytes", &|| {
                 format!("struct type {}", descriptor.roc_name)
@@ -539,7 +543,7 @@ fn write_calls_to_from_bytes<const N: usize>(
         RocTypeFields::None => {}
         RocTypeFields::Named(fields) => {
             from_bytes_definition.push_str("{\n");
-            for NamedRocTypeField { ident, type_id } in fields {
+            for NamedRocTypeField { ident, type_id, .. } in fields {
                 let field_descriptor = field_descriptor(descriptors, type_id, ident, parent_name)?;
                 writeln!(
                     from_bytes_definition,
@@ -570,22 +574,97 @@ fn write_calls_to_from_bytes<const N: usize>(
     Ok(())
 }
 
-fn write_roundtrip_test_function(
-    roc_code: &mut String,
-    descriptor: &RocTypeDescriptor,
-) -> Result<()> {
+fn write_component_functions(roc_code: &mut String, descriptor: &RocTypeDescriptor) -> Result<()> {
+    if !descriptor.flags.contains(RocTypeFlags::IS_COMPONENT) {
+        return Ok(());
+    }
+
+    let alignment = descriptor.alignment_as_pod_struct().ok_or_else(|| {
+        anyhow!(
+            "\
+            Component type {} is not registered as POD: \
+            make sure to derive the `RocPod` trait rather \
+            than the `Roc` trait for component types\
+            ",
+            descriptor.roc_name,
+        )
+    })?;
+
     writeln!(
         roc_code,
         "\
-        test_roundtrip! : {{}} => Result {{}} _\n\
-        test_roundtrip! = |{{}}|\n    \
+        ## Adds a value of the [{name}] component to an entity's data.\n\
+        ## Note that an entity never should have more than a single value of\n\
+        ## the same component type.\n\
+        add_to_entity : Entity.Data, {name} -> Entity.Data\n\
+        add_to_entity = |data, value|\n    \
+            data |> Entity.append_component(write_packet, value)\n\
+        \n\
+        ## Adds multiple values of the [{name}] component to the data of\n\
+        ## a set of entities of the same archetype's data.\n\
+        ## Note that the number of values should match the number of entities\n\
+        ## in the set and that an entity never should have more than a single\n\
+        ## value of the same component type.\n\
+        add_to_entities : Entity.MultiData, List {name} -> Entity.MultiData\n\
+        add_to_entities = |data, values|\n    \
+            data |> Entity.append_components(write_multi_packet, values)\n
+        \n\
+        write_packet : List U8, {name} -> List U8\n\
+        write_packet = |bytes, value|\n    \
+            type_id = {type_id}\n    \
+            size = {size}\n    \
+            alignment = {alignment}\n    \
+            bytes\n    \
+            |> List.reserve(24 + size)\n    \
+            |> Builtin.write_bytes_u64(type_id)\n    \
+            |> Builtin.write_bytes_u64(size)\n    \
+            |> Builtin.write_bytes_u64(alignment)\n    \
+            |> write_bytes(value)\n\
+        \n\
+        write_multi_packet : List U8, List {name} -> List U8\n\
+        write_multi_packet = |bytes, values|\n    \
+            type_id = {type_id}\n    \
+            size = {size}\n    \
+            alignment = {alignment}\n    \
+            count = List.len(values)\n    \
+            bytes_with_header =\n        \
+                bytes\n        \
+                |> List.reserve(32 + size * count)\n        \
+                |> Builtin.write_bytes_u64(type_id)\n        \
+                |> Builtin.write_bytes_u64(size)\n        \
+                |> Builtin.write_bytes_u64(alignment)\n        \
+                |> Builtin.write_bytes_u64(count)\n    \
+            values\n    \
+            |> List.walk(\n        \
+                bytes_with_header,\n        \
+                |bts, value| bts |> write_bytes(value),\n    \
+            )\
+        ",
+        type_id = descriptor.id.as_u64(),
+        size = descriptor.serialized_size,
+        name = descriptor.roc_name,
+    )?;
+
+    Ok(())
+}
+
+fn write_roundtrip_test(roc_code: &mut String, descriptor: &RocTypeDescriptor) -> Result<()> {
+    writeln!(
+        roc_code,
+        "\
+        test_roundtrip : {{}} -> Result {{}} _\n\
+        test_roundtrip = |{{}}|\n    \
             bytes = List.range({{ start: At 0, end: Length {} }})\n    \
-            decoded = from_bytes!(bytes)?\n    \
-            encoded = write_bytes!([], decoded)\n    \
+            decoded = from_bytes(bytes)?\n    \
+            encoded = write_bytes([], decoded)\n    \
             if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then\n        \
                 Ok({{}})\n    \
             else\n        \
-                Err(NotEqual)\
+                Err(NotEqual(encoded, bytes))\n\
+        \n\
+        expect\n    \
+            result = test_roundtrip({{}})\n    \
+            result |> Result.is_ok\
         ",
         descriptor.serialized_size,
     )?;

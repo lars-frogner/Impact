@@ -2,10 +2,10 @@
 
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use std::iter;
+use std::{fmt::Write, iter};
 use syn::{
-    Data, DataEnum, DataStruct, DeriveInput, Error, Field, Fields, FieldsNamed, FieldsUnnamed,
-    Result,
+    Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Expr, Field, Fields, FieldsNamed,
+    FieldsUnnamed, Lit, Meta, Result,
 };
 
 // These need to match the corresponding constants in `roc_codegen::meta`.
@@ -41,20 +41,44 @@ pub(super) fn impl_roc(_input: DeriveInput, _crate_root: &TokenStream) -> Result
     Ok(quote! {})
 }
 
+#[cfg(feature = "enabled")]
+pub(super) fn impl_roc_pod(input: DeriveInput, crate_root: &TokenStream) -> Result<TokenStream> {
+    let type_name = &input.ident;
+
+    let roc_impl = generate_roc_impl(type_name, &input, crate_root)?;
+    let pod_roc_impl = generate_roc_pod_impl(type_name, crate_root)?;
+
+    let mut static_assertions = Vec::new();
+    let descriptor_submit = generate_roc_descriptor_submit(
+        type_name,
+        &input,
+        crate_root,
+        true,
+        &mut static_assertions,
+    )?;
+
+    Ok(quote! {
+        #roc_impl
+        #pod_roc_impl
+        #descriptor_submit
+        #(#static_assertions)*
+    })
+}
+
+#[cfg(not(feature = "enabled"))]
+pub(super) fn impl_roc_pod(_input: DeriveInput, _crate_root: &TokenStream) -> Result<TokenStream> {
+    Ok(quote! {})
+}
+
 fn generate_roc_impl(
     type_name: &Ident,
     input: &DeriveInput,
     crate_root: &TokenStream,
 ) -> Result<TokenStream> {
-    let type_path_tail = format!("::{}", type_name);
-    let roc_type_id = quote!(
-        #crate_root::meta::RocTypeID::hashed_from_str(concat!(
-            module_path!(),
-            #type_path_tail
-        ))
-    );
+    let roc_type_id = generate_roc_type_id(type_name, crate_root);
     let size = generate_size_expr(input, crate_root)?;
     Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
         impl #crate_root::meta::Roc for #type_name {
             const ROC_TYPE_ID: #crate_root::meta::RocTypeID = #roc_type_id;
             const SERIALIZED_SIZE: usize = #size;
@@ -62,54 +86,92 @@ fn generate_roc_impl(
     })
 }
 
+fn generate_roc_pod_impl(type_name: &Ident, crate_root: &TokenStream) -> Result<TokenStream> {
+    Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
+        impl #crate_root::meta::RocPod for #type_name {}
+    })
+}
+
+fn generate_roc_type_id(type_name: &Ident, crate_root: &TokenStream) -> TokenStream {
+    // WARNING: If changing this, make sure to change the generation of
+    // component IDs in `impact_ecs_macros` accordingly, since we guarantee
+    // that the Roc type ID of any component matches the component ID
+    let type_path_tail = format!("::{}", type_name);
+    quote!(
+        #crate_root::meta::RocTypeID::hashed_from_str(concat!(
+            module_path!(),
+            #type_path_tail
+        ))
+    )
+}
+
 fn generate_roc_descriptor_submit(
     type_name: &Ident,
     input: &DeriveInput,
     crate_root: &TokenStream,
-    require_pod_enum_variants: bool,
+    require_pod: bool,
     static_assertions: &mut Vec<TokenStream>,
 ) -> Result<TokenStream> {
     let roc_name = type_name.to_string();
-    let composition = generate_composition(
-        input,
-        crate_root,
-        require_pod_enum_variants,
-        static_assertions,
-    )?;
+    let flags = generate_flags(crate_root, require_pod);
+    let composition = generate_composition(input, crate_root, require_pod, static_assertions)?;
+    let docstring = extract_and_process_docstring(&input.attrs);
     Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
         inventory::submit! {
             #crate_root::meta::RocTypeDescriptor {
                 id: <#type_name as #crate_root::meta::Roc>::ROC_TYPE_ID,
                 roc_name: #roc_name,
                 serialized_size: <#type_name as #crate_root::meta::Roc>::SERIALIZED_SIZE,
+                flags: #flags,
                 composition: #composition,
+                docstring: #docstring,
             }
         }
     })
 }
 
+fn generate_flags(crate_root: &TokenStream, require_pod: bool) -> TokenStream {
+    if require_pod {
+        quote! { #crate_root::meta::RocTypeFlags::IS_POD }
+    } else {
+        quote! { #crate_root::meta::RocTypeFlags::empty() }
+    }
+}
+
 fn generate_composition(
     input: &DeriveInput,
     crate_root: &TokenStream,
-    require_pod_enum_variants: bool,
+    require_pod: bool,
     static_assertions: &mut Vec<TokenStream>,
 ) -> Result<TokenStream> {
     match &input.data {
         Data::Struct(data) => {
+            let type_name = &input.ident;
+
             let fields =
                 generate_fields(input, &data.fields, crate_root, MAX_ROC_TYPE_STRUCT_FIELDS)?;
+
+            if require_pod {
+                static_assertions.push(quote! {
+                    const _: () = {
+                        const fn __assert_impl_pod<T: ::bytemuck::Pod>() {}
+                        __assert_impl_pod::<#type_name>();
+                    };
+                });
+            }
+
             Ok(quote! {
-                #crate_root::meta::RocTypeComposition::Struct(#fields)
+                #crate_root::meta::RocTypeComposition::Struct{
+                    alignment: ::std::mem::align_of::<#type_name>(),
+                    fields: #fields
+                }
             })
         }
         Data::Enum(data) => {
-            let variants = generate_variants(
-                input,
-                data,
-                crate_root,
-                require_pod_enum_variants,
-                static_assertions,
-            )?;
+            let variants =
+                generate_variants(input, data, crate_root, require_pod, static_assertions)?;
             Ok(quote! {
                 #crate_root::meta::RocTypeComposition::Enum(#variants)
             })
@@ -177,10 +239,12 @@ fn generate_named_field_list(
         .named
         .iter()
         .map(|field| {
+            let docstring = extract_and_process_docstring(&field.attrs);
             let ident = field.ident.as_ref().unwrap().to_string();
             let ty = field.ty.to_token_stream();
             quote! {
                 Some(#crate_root::meta::NamedRocTypeField {
+                    docstring: #docstring,
                     ident: #ident,
                     type_id: <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
                 }),
@@ -242,7 +306,7 @@ fn generate_variants(
         ));
     }
 
-    let variant_checks_module_ident = format_ident!("__enum_{}_variant_checks", &input.ident);
+    let variant_checks_module_ident = format_ident!("__{}_variant_is_pod", &input.ident);
     let mut local_static_assertions = Vec::new();
 
     let variants = data
@@ -274,13 +338,16 @@ fn generate_variants(
                 MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
             )?;
 
+            let docstring = extract_and_process_docstring(&variant.attrs);
             let ident = &variant.ident;
             let ident_str = ident.to_string();
 
             Ok(quote! {
                 Some(#crate_root::meta::RocTypeVariant {
+                    docstring: #docstring,
                     ident: #ident_str,
                     size: ::std::mem::size_of::<#variant_checks_module_ident::#ident>(),
+                    alignment: ::std::mem::align_of::<#variant_checks_module_ident::#ident>(),
                     fields: #fields,
                 }),
             })
@@ -369,4 +436,34 @@ fn generate_summed_field_size_expr_from_field_iter<'a>(
         });
     }
     summed_fields
+}
+
+fn extract_and_process_docstring(attributes: &[Attribute]) -> String {
+    process_docstrings(extract_docstrings(attributes))
+}
+
+fn extract_docstrings(attributes: &[Attribute]) -> impl Iterator<Item = String> {
+    attributes.iter().filter_map(|attribute| {
+        if !attribute.path().is_ident("doc") {
+            return None;
+        }
+        let Meta::NameValue(meta) = &attribute.meta else {
+            return None;
+        };
+        let Expr::Lit(expr_lit) = &meta.value else {
+            return None;
+        };
+        let Lit::Str(lit_str) = &expr_lit.lit else {
+            return None;
+        };
+        Some(lit_str.value())
+    })
+}
+
+fn process_docstrings(lines: impl IntoIterator<Item = String>) -> String {
+    let mut docstring = String::new();
+    for line in lines {
+        writeln!(&mut docstring, "##{}", line).unwrap();
+    }
+    docstring
 }

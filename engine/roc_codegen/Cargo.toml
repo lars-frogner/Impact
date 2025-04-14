@@ -8,6 +8,7 @@ enabled = ["roc_codegen_macros/enabled"]
 
 [dependencies]
 anyhow = { workspace = true }
+bitflags = { workspace = true }
 bytemuck = { workspace = true }
 const-fnv1a-hash = { workspace = true }
 inventory = { workspace = true }

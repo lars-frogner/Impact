@@ -32,8 +32,8 @@ pub mod window;
 #[cfg(feature = "profiling")]
 pub mod profiling;
 
-/// If a dependency performs generation through this re-export, all Roc type
-/// descriptors from this crate will be included. If it instead uses its own
-/// import of `roc_codegen`, the type descriptors from this crate will not be
-/// included.
+pub use impact_ecs;
+pub use impact_utils;
+
+#[cfg(feature = "roc_codegen")]
 pub use roc_codegen;
