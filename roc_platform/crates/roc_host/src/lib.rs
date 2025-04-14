@@ -5,7 +5,7 @@
 
 use core::ffi::c_void;
 use roc_io_error::IOErr;
-use roc_std::{RocResult, RocStr};
+use roc_std::{RocList, RocResult, RocStr};
 use std::io::Write;
 
 /// # Safety
@@ -113,10 +113,8 @@ pub fn init() {
         roc_memset as _,
         roc_fx_stdout_line as _,
         roc_fx_impact_run as _,
-        roc_fx_f32_to_bits as _,
-        roc_fx_f64_to_bits as _,
-        roc_fx_f32_from_bits as _,
-        roc_fx_f64_from_bits as _,
+        roc_fx_create_entity as _,
+        roc_fx_create_entities as _,
     ];
     #[allow(forgetting_references)]
     std::mem::forget(std::hint::black_box(funcs));
@@ -170,23 +168,15 @@ pub extern "C" fn roc_fx_impact_run() -> RocResult<(), RocStr> {
 }
 
 #[no_mangle]
-pub extern "C" fn roc_fx_f32_to_bits(value: f32) -> u32 {
-    roc_core::f32_to_bits(value)
+pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResult<u64, RocStr> {
+    to_roc_result(roc_impact::create_entity(component_bytes))
 }
 
 #[no_mangle]
-pub extern "C" fn roc_fx_f64_to_bits(value: f64) -> u64 {
-    roc_core::f64_to_bits(value)
-}
-
-#[no_mangle]
-pub extern "C" fn roc_fx_f32_from_bits(bits: u32) -> f32 {
-    roc_core::f32_from_bits(bits)
-}
-
-#[no_mangle]
-pub extern "C" fn roc_fx_f64_from_bits(bits: u64) -> f64 {
-    roc_core::f64_from_bits(bits)
+pub extern "C" fn roc_fx_create_entities(
+    component_bytes: &RocList<u8>,
+) -> RocResult<RocList<u64>, RocStr> {
+    to_roc_result(roc_impact::create_entities(component_bytes))
 }
 
 fn to_roc_result<T>(res: anyhow::Result<T>) -> RocResult<T, RocStr> {

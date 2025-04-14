@@ -5,6 +5,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+bytemuck = { workspace = true }
 impact = { workspace = true }
 roc_std = { workspace = true }
 

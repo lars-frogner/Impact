@@ -1,10 +1,8 @@
 hosted [
     stdout_line!,
     impact_run!,
-    f32_to_bits!,
-    f64_to_bits!,
-    f32_from_bits!,
-    f64_from_bits!,
+    create_entity!,
+    create_entities!,
 ]
 
 import InternalIOErr
@@ -14,9 +12,5 @@ stdout_line! : Str => Result {} InternalIOErr.IOErrFromHost
 
 # Impact
 impact_run! : {} => Result {} Str
-
-# Core
-f32_to_bits! : F32 => U32
-f64_to_bits! : F64 => U64
-f32_from_bits! : U32 => F32
-f64_from_bits! : U64 => F64
+create_entity! : List U8 => Result U64 Str
+create_entities! : List U8 => Result (List U64) Str
