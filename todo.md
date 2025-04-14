@@ -12,6 +12,8 @@
 
 - Implement collision resolution.
 
+- Implement Voronoi fracturing.
+
 ## Performance
 
 - Use single bind group for G-buffer attachments.
@@ -31,6 +33,12 @@
 - Define consistent locking order for all lock-protected resources under `Application` to avoid deadlocks in parallel `Tasks` (with optional run-time verification to identify violations).
 
 - Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
+
+## ECS
+
+- Be smarter about entity representation and management to increase max number of entities without exceeding 64 bits.
+
+- Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
 
 ## Misc
 
