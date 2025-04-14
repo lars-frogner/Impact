@@ -349,6 +349,70 @@ where
         }
     }
 
+    /// Convert the given array of component arrays into an
+    /// [`ArchetypeComponents`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The same component type occurs more than once in the array.
+    /// - The component arrays do not have the same component count.
+    pub fn try_from_array_of_component_arrays<const N: usize>(
+        component_arrays: [A; N],
+    ) -> Result<Self> {
+        // Find the number of component instances and check that this is the
+        // same for all the component types
+        let mut component_iter = component_arrays.iter();
+        let component_count = component_iter.next().map_or(0, A::component_count);
+        if component_iter.any(|array| array.component_count() != component_count) {
+            bail!("The number of component instances differs between component types");
+        }
+
+        let mut component_ids = [ComponentID::dummy(); N];
+
+        // Populate array of component IDs
+        component_ids
+            .iter_mut()
+            .zip(component_arrays.iter())
+            .for_each(|(id, array)| *id = array.component_id());
+
+        // Make sure components IDs are sorted before determining archetype
+        component_ids.sort();
+
+        let archetype = Archetype::new_from_sorted_component_id_arr(component_ids)?;
+
+        Ok(Self::new(
+            archetype,
+            component_arrays.to_vec(),
+            component_count,
+        ))
+    }
+
+    /// Convert the given [`Vec`] of component arrays into an
+    /// [`ArchetypeComponents`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The same component type occurs more than once in the array.
+    /// - The component arrays do not have the same component count.
+    pub fn try_from_vec_of_component_arrays(component_arrays: Vec<A>) -> Result<Self> {
+        // Find the number of component instances and check that this is the
+        // same for all the component types
+        let mut component_iter = component_arrays.iter();
+        let component_count = component_iter.next().map_or(0, A::component_count);
+        if component_iter.any(|array| array.component_count() != component_count) {
+            bail!("The number of component instances differs between component types");
+        }
+
+        let mut component_ids: Vec<_> = component_arrays.iter().map(A::component_id).collect();
+
+        // Make sure components IDs are sorted before determining archetype
+        component_ids.sort();
+
+        let archetype = Archetype::new_from_sorted_component_ids(&component_ids)?;
+
+        Ok(Self::new(archetype, component_arrays, component_count))
+    }
+
     /// Creates a new empty [`ArchetypeComponents`] value.
     pub fn empty() -> Self {
         Self {
@@ -608,6 +672,128 @@ where
 {
     fn instance_count(&self) -> usize {
         self.component_count()
+    }
+}
+
+impl<A, const N: usize> TryFrom<[A; N]> for ArchetypeComponents<A>
+where
+    A: ComponentArray,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(component_arrays: [A; N]) -> Result<Self> {
+        Self::try_from_array_of_component_arrays(component_arrays)
+    }
+}
+
+impl<A> TryFrom<Vec<A>> for ArchetypeComponents<A>
+where
+    A: ComponentArray,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(component_arrays: Vec<A>) -> Result<Self> {
+        Self::try_from_vec_of_component_arrays(component_arrays)
+    }
+}
+
+impl<A> SingleInstance<ArchetypeComponents<A>>
+where
+    A: ComponentArray,
+{
+    /// Converts the given array of [`SingleInstance`] wrapped
+    /// [`ComponentArray`]s into a `SingleInstance` wrapped
+    /// [`ArchetypeComponents`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The given array is empty.
+    /// - The same component type occurs more than once in the array.
+    pub fn try_from_array_of_single_instances<const N: usize>(
+        component_arrays: [SingleInstance<A>; N],
+    ) -> Result<Self> {
+        if component_arrays.is_empty() {
+            bail!("Tried to create empty single instance `ArchetypeComponents`");
+        }
+
+        let mut component_ids = [ComponentID::dummy(); N];
+
+        // Populate array of component IDs
+        component_ids
+            .iter_mut()
+            .zip(component_arrays.iter())
+            .for_each(|(id, array)| *id = array.component_id());
+
+        // Make sure components IDs are sorted before determining archetype
+        component_ids.sort();
+
+        let archetype = Archetype::new_from_sorted_component_id_arr(component_ids)?;
+
+        Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
+            archetype,
+            component_arrays
+                .into_iter()
+                .map(SingleInstance::into_inner)
+                .collect(),
+            1,
+        )))
+    }
+
+    /// Converts the given [`Vec`] of [`SingleInstance`] wrapped
+    /// [`ComponentArray`]s into a `SingleInstance` wrapped
+    /// [`ArchetypeComponents`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The given vector is empty.
+    /// - The same component type occurs more than once in the vector.
+    pub fn try_from_vec_of_single_instances(
+        component_arrays: Vec<SingleInstance<A>>,
+    ) -> Result<Self> {
+        if component_arrays.is_empty() {
+            bail!("Tried to create empty single instance `ArchetypeComponents`");
+        }
+
+        let mut component_ids: Vec<_> = component_arrays
+            .iter()
+            .map(|array| array.component_id())
+            .collect();
+
+        // Make sure components IDs are sorted before determining archetype
+        component_ids.sort();
+
+        let archetype = Archetype::new_from_sorted_component_ids(&component_ids)?;
+
+        Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
+            archetype,
+            component_arrays
+                .into_iter()
+                .map(SingleInstance::into_inner)
+                .collect(),
+            1,
+        )))
+    }
+}
+
+impl<A, const N: usize> TryFrom<[SingleInstance<A>; N]> for SingleInstance<ArchetypeComponents<A>>
+where
+    A: ComponentArray,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(component_arrays: [SingleInstance<A>; N]) -> Result<Self> {
+        Self::try_from_array_of_single_instances(component_arrays)
+    }
+}
+
+impl<A> TryFrom<Vec<SingleInstance<A>>> for SingleInstance<ArchetypeComponents<A>>
+where
+    A: ComponentArray,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(component_arrays: Vec<SingleInstance<A>>) -> Result<Self> {
+        Self::try_from_vec_of_single_instances(component_arrays)
     }
 }
 
@@ -1192,122 +1378,6 @@ where
     }
 }
 
-// Implement `TryFrom` so that an array of `ComponentArray`s can
-// be converted into an `ArchetypeComponents`.
-impl<A, const N: usize> TryFrom<[A; N]> for ArchetypeComponents<A>
-where
-    A: ComponentArray,
-{
-    type Error = anyhow::Error;
-
-    fn try_from(component_arrays: [A; N]) -> Result<Self> {
-        // Find the number of component instances and check that this is the
-        // same for all the component types
-        let mut component_iter = component_arrays.iter();
-        let component_count = component_iter.next().map_or(0, A::component_count);
-        if component_iter.any(|array| array.component_count() != component_count) {
-            bail!("The number of component instances differs between component types");
-        }
-
-        let mut component_ids = [ComponentID::dummy(); N];
-
-        // Populate array of component IDs
-        component_ids
-            .iter_mut()
-            .zip(component_arrays.iter())
-            .for_each(|(id, array)| *id = array.component_id());
-
-        // Make sure components IDs are sorted before determining archetype
-        component_ids.sort();
-
-        let archetype = Archetype::new_from_sorted_component_id_arr(component_ids)?;
-
-        Ok(Self::new(
-            archetype,
-            component_arrays.to_vec(),
-            component_count,
-        ))
-    }
-}
-
-impl<A> SingleInstance<ArchetypeComponents<A>>
-where
-    A: ComponentArray,
-{
-    /// Converts the given array of [`SingleInstance`] wrapped
-    /// [`ComponentArray`]s into a `SingleInstance` wrapped
-    /// [`ArchetypeComponents`].
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - The given array is empty.
-    /// - The same component type occurs more than once in the array.
-    pub fn try_from_array_of_single_instances<const N: usize>(
-        component_arrays: [SingleInstance<A>; N],
-    ) -> Result<Self> {
-        if component_arrays.is_empty() {
-            bail!("Tried to create empty single instance `ArchetypeComponents`");
-        }
-
-        let mut component_ids = [ComponentID::dummy(); N];
-
-        // Populate array of component IDs
-        component_ids
-            .iter_mut()
-            .zip(component_arrays.iter())
-            .for_each(|(id, array)| *id = array.component_id());
-
-        // Make sure components IDs are sorted before determining archetype
-        component_ids.sort();
-
-        let archetype = Archetype::new_from_sorted_component_id_arr(component_ids)?;
-
-        Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
-            archetype,
-            component_arrays
-                .into_iter()
-                .map(SingleInstance::into_inner)
-                .collect(),
-            1,
-        )))
-    }
-
-    /// Converts the given [`Vec`] of [`SingleInstance`] wrapped
-    /// [`ComponentArray`]s into a `SingleInstance` wrapped
-    /// [`ArchetypeComponents`].
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - The given vector is empty.
-    /// - The same component type occurs more than once in the vector.
-    pub fn try_from_vec_of_single_instances(
-        component_arrays: Vec<SingleInstance<A>>,
-    ) -> Result<Self> {
-        if component_arrays.is_empty() {
-            bail!("Tried to create empty single instance `ArchetypeComponents`");
-        }
-
-        let mut component_ids: Vec<_> = component_arrays
-            .iter()
-            .map(|array| array.component_id())
-            .collect();
-
-        // Make sure components IDs are sorted before determining archetype
-        component_ids.sort();
-
-        let archetype = Archetype::new_from_sorted_component_ids(&component_ids)?;
-
-        Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
-            archetype,
-            component_arrays
-                .into_iter()
-                .map(SingleInstance::into_inner)
-                .collect(),
-            1,
-        )))
-    }
-}
-
 /// Macro for implementing [`From<C>`] or [`TryFrom<C>`] for
 /// [`ArchetypeComponentView`], where `C` respectively is a single
 /// [`Component`] reference/slice or tuple of references/slices.
@@ -1690,6 +1760,56 @@ mod tests {
         assert_eq!(view.components_of_type::<Position>(), &[POS]);
 
         let view: ArchetypeComponentView<'_> = [(&[BYTE, BYTE2]).view(), (&[POS, POS2]).view()]
+            .try_into()
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+    }
+
+    #[test]
+    fn valid_conversions_of_comp_slice_view_vecs_to_archetype_views_succeed() {
+        let view: ArchetypeComponentView<'_> = vec![(&[Marked]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Marked>());
+
+        let view: ArchetypeComponentView<'_> = vec![(&[Marked, Marked]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Marked>());
+
+        let view: ArchetypeComponentView<'_> = vec![(&[BYTE]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+
+        let view: ArchetypeComponentView<'_> = vec![(&[BYTE, BYTE2]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+
+        let view: ArchetypeComponentView<'_> =
+            vec![(&[BYTE]).view(), (&[POS]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
+        let view: ArchetypeComponentView<'_> = vec![(&[BYTE, BYTE2]).view(), (&[POS, POS2]).view()]
             .try_into()
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
