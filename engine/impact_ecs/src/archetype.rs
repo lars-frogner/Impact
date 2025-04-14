@@ -35,7 +35,7 @@ pub struct Archetype {
 /// the sorted list of component IDs defining the archetype.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct ArchetypeID(u64);
+pub struct ArchetypeID(u32);
 
 /// Container holding [`ComponentArray`]s for a set
 /// of components making up a specific [`Archetype`].
@@ -219,6 +219,19 @@ enum InclusionResult {
     Overwritten,
 }
 
+impl ArchetypeID {
+    /// Converts the given `u32` into an archetype ID. Should only be called
+    /// with values returned from [`Self::as_u32`].
+    pub const fn from_u32(value: u32) -> Self {
+        Self(value)
+    }
+
+    /// Returns the `u32` value corresponding to the archetype ID.
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
+}
+
 impl Archetype {
     /// Creates a new archetype defined by the component IDs
     /// in the given array. The order of the component IDs
@@ -310,7 +323,7 @@ impl Archetype {
     fn create_id_from_sorted_component_ids(component_ids: &[ComponentID]) -> ArchetypeID {
         let mut hasher = DefaultHasher::new();
         component_ids.hash(&mut hasher);
-        ArchetypeID(hasher.finish())
+        ArchetypeID(hasher.finish() as u32)
     }
 }
 
