@@ -21,6 +21,11 @@ use std::{
 /// type of object that has certain specific [`Component`]s
 /// that define its properties. An entity can be created
 /// using a [`World`].
+///
+/// Since the [`EntityId`] is currently a 32-bit count, the total number of
+/// created entities may not exceed [`u32::MAX`]. The reason we do not use
+/// a 64-bit count is that passing an [`Entity`] across an FFI boundary gets
+/// messy when it does not fit in a `u64` (`u128` is not FFI-safe).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct Entity {
@@ -32,12 +37,12 @@ pub struct Entity {
 #[cfg(not(test))]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct EntityID(u64);
+pub struct EntityID(u32);
 
 #[cfg(test)]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct EntityID(pub(crate) u64);
+pub struct EntityID(pub(crate) u32);
 
 /// Overall manager for [`Entity`]s in the world and
 /// their [`Component`] data.
@@ -47,7 +52,7 @@ pub struct World {
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_index_mapper: KeyIndexMapper<ArchetypeID>,
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
-    entity_id_counter: u64,
+    entity_id_counter: u32,
     n_removed_entities: usize,
 }
 
@@ -61,20 +66,46 @@ pub struct EntityEntry<'a> {
 impl Entity {
     /// Creates a new entity with the given ID and archetype
     /// ID.
-    pub(crate) fn new(id: EntityID, archetype_id: ArchetypeID) -> Self {
+    pub(crate) const fn new(id: EntityID, archetype_id: ArchetypeID) -> Self {
         Self { id, archetype_id }
     }
 
+    /// Converts the given `u64` into an entity. Should only be called with
+    /// values returned from [`Self::as_u64`].
+    pub const fn from_u64(value: u64) -> Self {
+        let id = (value >> 32) as u32;
+        let archetype_id = value as u32;
+        Self::new(EntityID::from_u32(id), ArchetypeID::from_u32(archetype_id))
+    }
+
+    /// Returns the `u64` value corresponding to the entity.
+    pub const fn as_u64(&self) -> u64 {
+        ((self.id.as_u32() as u64) << 32) | (self.archetype_id.as_u32() as u64)
+    }
+
     /// Returns the ID that uniquely identifies this entity.
-    pub fn id(&self) -> EntityID {
+    pub const fn id(&self) -> EntityID {
         self.id
     }
 
     /// Returns the ID that uniquely identifies the
     /// [`Archetype`](super::archetype::Archetype)
     /// this entity belongs to.
-    pub fn archetype_id(&self) -> ArchetypeID {
+    pub const fn archetype_id(&self) -> ArchetypeID {
         self.archetype_id
+    }
+}
+
+impl EntityID {
+    /// Converts the given `u32` into an entity ID. Should only be called
+    /// with values returned from [`Self::as_u32`].
+    pub const fn from_u32(value: u32) -> Self {
+        Self(value)
+    }
+
+    /// Returns the `u32` value corresponding to the entity ID.
+    pub const fn as_u32(&self) -> u32 {
+        self.0
     }
 }
 
@@ -126,6 +157,12 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
+    ///
+    /// # Note
+    /// Since the [`EntityId`] is currently a 32-bit count, the total number of
+    /// created entities may not exceed [`u32::MAX`]. The reason we do not use
+    /// a 64-bit count is that passing an [`Entity`] across an FFI boundary gets
+    /// messy when it does not fit in a `u64` (`u128` is not FFI-safe).
     pub fn create_entity<A, E>(
         &mut self,
         components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
@@ -182,6 +219,12 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
+    ///
+    /// # Note
+    /// Since the [`EntityId`] is currently a 32-bit count, the total number of
+    /// created entities may not exceed [`u32::MAX`]. The reason we do not use
+    /// a 64-bit count is that passing an [`Entity`] across an FFI boundary gets
+    /// messy when it does not fit in a `u64` (`u128` is not FFI-safe).
     pub fn create_entities<A, E>(
         &mut self,
         components: impl TryInto<ArchetypeComponents<A>, Error = E>,
@@ -460,7 +503,10 @@ impl World {
 
     fn create_entity_id(&mut self) -> EntityID {
         let id = self.entity_id_counter;
-        self.entity_id_counter += 1;
+        self.entity_id_counter = self
+            .entity_id_counter
+            .checked_add(1)
+            .expect("Exceeded max number of created entities");
         EntityID(id)
     }
 }
@@ -574,6 +620,13 @@ mod tests {
     const LIKEPOS: LikePosition = Position(5.5, 5.1, 52.0);
     const TEMP: Temperature = Temperature(-40.0);
     const TEMP2: Temperature = Temperature(140.0);
+
+    #[test]
+    fn converting_between_entity_and_u64_works() {
+        let value = 0x134569abcdeffdcb;
+        let entity = Entity::from_u64(value);
+        assert_eq!(entity.as_u64(), value);
+    }
 
     #[test]
     fn creating_world_works() {
