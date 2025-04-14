@@ -1,6 +1,6 @@
 platform "impact"
     requires {} { main! : {} => Result {} [Exit I32 Str]_ }
-    exposes [Stdout, Impact, Core]
+    exposes [Stdout, Impact, Entity]
     packages {}
     imports []
     provides [main_for_host!]

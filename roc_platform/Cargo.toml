@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/roc_core",
     "crates/roc_host",
     "crates/roc_host_lib",
     "crates/roc_host_bin",
     "crates/roc_impact",
     "crates/roc_io_error",
 ]
+exclude = ["tools"]
 
 [workspace.package]
 version = "0.1.0"
@@ -103,7 +103,6 @@ anyhow = "1.0"
 bytemuck = "1.22"
 impact = { path = "../engine" }
 impact_utils = { path = "../engine/impact_utils" }
-roc_core = { path = "crates/roc_core" }
 roc_host = { path = "crates/roc_host" }
 roc_impact = { path = "crates/roc_impact" }
 roc_io_error = { path = "crates/roc_io_error" }

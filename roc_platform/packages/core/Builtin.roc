@@ -8,16 +8,8 @@ module [
     write_bytes_i32,
     write_bytes_i64,
     write_bytes_i128,
-    write_bytes_u16!,
-    write_bytes_u32!,
-    write_bytes_u64!,
-    write_bytes_u128!,
-    write_bytes_i16!,
-    write_bytes_i32!,
-    write_bytes_i64!,
-    write_bytes_i128!,
-    write_bytes_f32!,
-    write_bytes_f64!,
+    write_bytes_f32,
+    write_bytes_f64,
     from_bytes_u16,
     from_bytes_u32,
     from_bytes_u64,
@@ -26,24 +18,9 @@ module [
     from_bytes_i32,
     from_bytes_i64,
     from_bytes_i128,
-    from_bytes_u16!,
-    from_bytes_u32!,
-    from_bytes_u64!,
-    from_bytes_u128!,
-    from_bytes_i16!,
-    from_bytes_i32!,
-    from_bytes_i64!,
-    from_bytes_i128!,
-    from_bytes_f32!,
-    from_bytes_f64!,
+    from_bytes_f32,
+    from_bytes_f64,
 ]
-
-import Host
-
-# Note: Although the integer serialization and deserialization functions are
-# not effectful, we provide effectful wrappers since this simpifies codegen.
-# When we can convert between floats and bytes without an FFI call, we can make
-# all the functions pure.
 
 # Encoding
 
@@ -101,41 +78,15 @@ write_bytes_i128 : List U8, I128 -> List U8
 write_bytes_i128 = |bytes, value|
     bytes |> write_bytes_u128(Num.to_u128(value))
 
-# IEEE 754 floating-point numbers (need to use FFI for now)
+# IEEE 754 floating-point numbers
 
-write_bytes_f32! : List U8, F32 => List U8
-write_bytes_f32! = |bytes, value|
-    bytes |> write_bytes_u32(Host.f32_to_bits!(value))
+write_bytes_f32 : List U8, F32 -> List U8
+write_bytes_f32 = |bytes, value|
+    bytes |> write_bytes_u32(Num.f32_to_bits(value))
 
-write_bytes_f64! : List U8, F64 => List U8
-write_bytes_f64! = |bytes, value|
-    bytes |> write_bytes_u64(Host.f64_to_bits!(value))
-
-# Effectful wrappers for integer serialization
-
-write_bytes_u16! : List U8, U16 => List U8
-write_bytes_u16! = write_bytes_u16
-
-write_bytes_u32! : List U8, U32 => List U8
-write_bytes_u32! = write_bytes_u32
-
-write_bytes_u64! : List U8, U64 => List U8
-write_bytes_u64! = write_bytes_u64
-
-write_bytes_u128! : List U8, U128 => List U8
-write_bytes_u128! = write_bytes_u128
-
-write_bytes_i16! : List U8, I16 => List U8
-write_bytes_i16! = write_bytes_i16
-
-write_bytes_i32! : List U8, I32 => List U8
-write_bytes_i32! = write_bytes_i32
-
-write_bytes_i64! : List U8, I64 => List U8
-write_bytes_i64! = write_bytes_i64
-
-write_bytes_i128! : List U8, I128 => List U8
-write_bytes_i128! = write_bytes_i128
+write_bytes_f64 : List U8, F64 -> List U8
+write_bytes_f64 = |bytes, value|
+    bytes |> write_bytes_u64(Num.f64_to_bits(value))
 
 # Decoding
 
@@ -234,40 +185,28 @@ expect
     |> from_bytes_i128
     == Ok(-0x123456789abcdef987654321fedcba89)
 
-# IEEE 754 floating-point numbers (need to use FFI for now)
+# IEEE 754 floating-point numbers
 
-from_bytes_f32! : List U8 => Result F32 DecodeErr
-from_bytes_f32! = |bytes|
+from_bytes_f32 : List U8 -> Result F32 DecodeErr
+from_bytes_f32 = |bytes|
     bits = from_bytes_u32(bytes)?
-    Ok(Host.f32_from_bits!(bits))
+    Ok(Num.f32_from_bits(bits))
 
-from_bytes_f64! : List U8 => Result F64 DecodeErr
-from_bytes_f64! = |bytes|
+expect
+    input = 3.14
+    output = [] |> write_bytes_f32(input) |> from_bytes_f32
+    when output is
+        Ok(out) if Num.is_approx_eq(out, input, {}) -> Bool.true
+        _ -> Bool.false
+
+from_bytes_f64 : List U8 -> Result F64 DecodeErr
+from_bytes_f64 = |bytes|
     bits = from_bytes_u64(bytes)?
-    Ok(Host.f64_from_bits!(bits))
+    Ok(Num.f64_from_bits(bits))
 
-# Effectful wrappers for integer deserialization
-
-from_bytes_u16! : List U8 => Result U16 DecodeErr
-from_bytes_u16! = from_bytes_u16
-
-from_bytes_u32! : List U8 => Result U32 DecodeErr
-from_bytes_u32! = from_bytes_u32
-
-from_bytes_u64! : List U8 => Result U64 DecodeErr
-from_bytes_u64! = from_bytes_u64
-
-from_bytes_u128! : List U8 => Result U128 DecodeErr
-from_bytes_u128! = from_bytes_u128
-
-from_bytes_i16! : List U8 => Result I16 DecodeErr
-from_bytes_i16! = from_bytes_i16
-
-from_bytes_i32! : List U8 => Result I32 DecodeErr
-from_bytes_i32! = from_bytes_i32
-
-from_bytes_i64! : List U8 => Result I64 DecodeErr
-from_bytes_i64! = from_bytes_i64
-
-from_bytes_i128! : List U8 => Result I128 DecodeErr
-from_bytes_i128! = from_bytes_i128
+expect
+    input = 3.14
+    output = [] |> write_bytes_f64(input) |> from_bytes_f64
+    when output is
+        Ok(out) if Num.is_approx_eq(out, input, {}) -> Bool.true
+        _ -> Bool.false
