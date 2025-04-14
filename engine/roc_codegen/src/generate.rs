@@ -1,29 +1,36 @@
-//!
+//! Generation of code for working with types deriving the
+//! [`Roc`](crate::meta::Roc) or [`RocPod`](crate::meta::RocPod) trait.
 
 mod roc;
-mod rust;
 
-use crate::meta::{RocTypeDescriptor, RocTypeID};
+use crate::meta::{RocTypeDescriptor, RocTypeFlags, RocTypeID};
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Display,
     fs::{self, OpenOptions},
     io::Write,
     path::Path,
 };
 
+/// General code generation options.
 #[derive(Clone, Debug)]
 pub struct GenerateOptions {
+    /// Whether to print progress and status messages.
     pub verbose: bool,
+    /// Whether to automatically overwrite existing files.
     pub overwrite: bool,
 }
 
+/// Roc-specific code generation options.
 #[derive(Clone, Debug)]
 pub struct RocGenerateOptions {
-    pub module_prefix: String,
-    pub core_prefix: String,
-    pub include_roundtrip_test: bool,
+    /// String to prepend to imports from generated modules.
+    pub import_prefix: String,
+    /// Name to use for the platform package in imports.
+    pub platform_package_name: String,
+    /// Name to use for the `packages/core` package in imports.
+    pub core_package_name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -32,16 +39,20 @@ struct Module {
     content: String,
 }
 
+/// Generates Roc source files in the target directory for all Rust types in
+/// linked crates deriving the [`Roc`](crate::meta::Roc) or
+/// [`RocPod`](crate::meta::RocPod) trait.
 pub fn generate_roc(
     target_dir: impl AsRef<Path>,
     options: &GenerateOptions,
     roc_options: &RocGenerateOptions,
+    component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
     let descriptors = inventory::iter::<RocTypeDescriptor>();
 
     let target_dir = target_dir.as_ref();
 
-    let modules = generate_roc_modules(roc_options, descriptors)?;
+    let modules = generate_roc_modules(roc_options, descriptors, component_type_ids)?;
 
     if !target_dir.exists() {
         fs::create_dir_all(target_dir)?;
@@ -79,10 +90,11 @@ pub fn generate_roc(
 fn generate_roc_modules<'a>(
     options: &RocGenerateOptions,
     descriptors: impl IntoIterator<Item = &'a RocTypeDescriptor>,
+    component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<Module>> {
-    let descriptors = gather_descriptors(descriptors)?;
+    let descriptors = gather_descriptors(descriptors, component_type_ids)?;
 
-    let mut modules = descriptors
+    descriptors
         .values()
         .filter_map(
             |descriptor| match roc::generate_module(options, &descriptors, descriptor) {
@@ -94,24 +106,20 @@ fn generate_roc_modules<'a>(
                 Err(err) => Some(Err(err)),
             },
         )
-        .collect::<Result<Vec<_>>>()?;
-
-    if options.include_roundtrip_test {
-        modules.push(Module {
-            name: "RoundtripTest",
-            content: roc::generate_roundtrip_test(options, &descriptors)?,
-        });
-    }
-
-    Ok(modules)
+        .collect::<Result<Vec<_>>>()
 }
 
 fn gather_descriptors<'a>(
     descriptor_iter: impl IntoIterator<Item = &'a RocTypeDescriptor>,
+    component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<HashMap<RocTypeID, RocTypeDescriptor>> {
     let mut descriptors = HashMap::new();
 
     for descriptor in descriptor_iter {
+        let mut descriptor = descriptor.clone();
+        if component_type_ids.contains(&descriptor.id) {
+            descriptor.flags |= RocTypeFlags::IS_COMPONENT;
+        }
         if let Some(existing) = descriptors.insert(descriptor.id, descriptor.clone()) {
             bail!(
                 "Found two Roc types with the same ID:\n{:?}\n{:?}",

@@ -1,1 +1,1 @@
-pub use impact::roc_codegen::generate::*;
+pub use impact::{component::gather_roc_type_ids_for_all_components, roc_codegen::generate::*};

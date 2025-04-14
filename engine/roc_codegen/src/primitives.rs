@@ -1,4 +1,5 @@
-//!
+//! Implementation of the [`Roc`](crate::meta::Roc) trait for primitive types
+//! (as considered by the engine).
 
 use super::meta::RocLibraryPrimitivePrecision::{Double, Single};
 use nalgebra::{Matrix3, Matrix4, Point3, UnitQuaternion, UnitVector3, Vector3, Vector4};
@@ -16,7 +17,9 @@ macro_rules! impl_roc_for_primitive {
                 id: <$t as $crate::meta::Roc>::ROC_TYPE_ID,
                 roc_name: $roc_name,
                 serialized_size: <$t as $crate::meta::Roc>::SERIALIZED_SIZE,
+                flags: $crate::meta::RocTypeFlags::IS_POD,
                 composition: $crate::meta::RocTypeComposition::Primitive($kind),
+                docstring: "",
             }
         }
     };
@@ -44,6 +47,7 @@ macro_rules! impl_roc_for_library_provided_primitives {
     };
 }
 
+// Roc's builtin primitive types
 impl_roc_for_builtin_primitives! {
     u8 => "U8",
     u16 => "U16",
@@ -59,6 +63,8 @@ impl_roc_for_builtin_primitives! {
     f64 => "F64",
 }
 
+// The Roc definitions and impementations of these types are hand-coded in a
+// Roc library rather than generated.
 impl_roc_for_library_provided_primitives! {
     Vector3<f32> => "Vector3", Some(Single),
     Vector3<f64> => "Vector3", Some(Double),
