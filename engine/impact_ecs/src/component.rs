@@ -177,9 +177,21 @@ pub struct SingleInstance<T> {
 }
 
 impl ComponentID {
+    /// Hashes the given string into a component ID.
     pub const fn hashed_from_str(input: &str) -> Self {
         let hash = const_fnv1a_hash::fnv1a_hash_str_64(input);
         Self(if hash == 0 { 1 } else { hash })
+    }
+
+    /// Converts the given `u64` into a component ID. Should only be called
+    /// with values returned from [`Self::as_u64`].
+    pub const fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
+
+    /// Returns the `u64` value corresponding to the component ID.
+    pub const fn as_u64(&self) -> u64 {
+        self.0
     }
 
     pub(crate) const fn dummy() -> Self {
@@ -241,7 +253,7 @@ impl ComponentStorage {
     /// Initializes a new storage for component instances with
     /// the given ID and size, and stores the given bytes representing
     /// a set of component instances with the given count.
-    fn new(
+    pub fn new(
         component_id: ComponentID,
         component_count: usize,
         component_size: usize,
@@ -262,18 +274,17 @@ impl ComponentStorage {
     /// Initializes a new storage for component instances with
     /// the given ID and size, and stores the given bytes representing
     /// a single component instance.
-    fn new_for_single_instance(
+    pub fn new_for_single_instance(
         component_id: ComponentID,
-        component_size: usize,
         bytes: AlignedByteVec,
     ) -> SingleInstance<Self> {
-        SingleInstance::new_unchecked(Self::new(component_id, 1, component_size, bytes))
+        SingleInstance::new_unchecked(Self::new(component_id, 1, bytes.len(), bytes))
     }
 
     /// Initializes a new storage for a single instance of a zero-sized
     /// component with the given ID.
     fn new_for_single_zero_sized_instance(component_id: ComponentID) -> SingleInstance<Self> {
-        Self::new_for_single_instance(component_id, 0, AlignedByteVec::new(Alignment::new(1)))
+        Self::new_for_single_instance(component_id, AlignedByteVec::new(Alignment::new(1)))
     }
 
     /// Initializes an empty storage with preallocated capacity for
@@ -407,7 +418,6 @@ impl ComponentStorage {
 
             let removed_component_data = Self::new_for_single_instance(
                 self.component_id,
-                self.component_size,
                 AlignedByteVec::copied_from_slice(
                     self.bytes.alignment(),
                     &self.bytes[component_to_remove_start
