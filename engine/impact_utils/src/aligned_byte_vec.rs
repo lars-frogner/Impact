@@ -1,5 +1,6 @@
 //! A byte vector that ensures a specified alignment.
 
+use anyhow::{Result, bail};
 use std::{
     alloc::{self, Layout},
     cmp, mem,
@@ -35,17 +36,24 @@ impl Alignment {
     pub const EIGHT: Self = Self(8);
     pub const SIXTEEN: Self = Self(16);
 
-    /// Wraps the given alignment in an [`Alignment`], returning an
-    /// error if the alignment is invalid.
+    /// Wraps the given alignment in an [`Alignment`].
+    ///
+    /// # Errors
+    /// Returns an error if `alignment` is zero or not a power of two.
+    pub fn try_new(alignment: usize) -> Result<Self> {
+        if alignment == 0 || (alignment & (alignment - 1)) != 0 {
+            bail!("`Alignment` created with invalid alignment: {}", alignment)
+        } else {
+            Ok(Self(alignment))
+        }
+    }
+
+    /// Wraps the given alignment in an [`Alignment`].
     ///
     /// # Panics
     /// If `alignment` is zero or not a power of two.
     pub fn new(alignment: usize) -> Self {
-        if alignment == 0 || (alignment & (alignment - 1)) != 0 {
-            panic!("`Alignment` created with invalid alignment: {}", alignment)
-        } else {
-            Self(alignment)
-        }
+        Self::try_new(alignment).unwrap_or_else(|err| panic!("{}", err))
     }
 
     /// Creates a new [`Alignment`] corresponding to the alignment of
