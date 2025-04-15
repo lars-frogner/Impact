@@ -1,6 +1,7 @@
 (
     assets: (
-        asset_file_path: Some("config/assets.ron"),
+        lookup_table_dir: "../assets/lookup_tables",
+        asset_file_path: Some("assets.ron"),
     ),
     rendering: (
         omnidirectional_light_shadow_map_resolution: 1024,
@@ -75,10 +76,10 @@
         ),
     ),
     voxel: (
-        voxel_types_path: Some("config/voxel_types.ron"),
+        voxel_types_path: Some("voxel_types.ron"),
     ),
     input: (
-        key_map_path: Some("config/keymap.ron"),
+        key_map_path: Some("keymap.ron"),
     ),
     controller: (
         motion: SemiDirectional((

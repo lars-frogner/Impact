@@ -2,12 +2,12 @@
     textures: [
         Cubemap(
             name: "space_skybox",
-            right_image_path: "assets/space_skybox/right.png",
-            left_image_path: "assets/space_skybox/left.png",
-            top_image_path: "assets/space_skybox/top.png",
-            bottom_image_path: "assets/space_skybox/bottom.png",
-            front_image_path: "assets/space_skybox/front.png",
-            back_image_path: "assets/space_skybox/back.png",
+            right_image_path: "../assets/space_skybox/right.png",
+            left_image_path: "../assets/space_skybox/left.png",
+            top_image_path: "../assets/space_skybox/top.png",
+            bottom_image_path: "../assets/space_skybox/bottom.png",
+            front_image_path: "../assets/space_skybox/front.png",
+            back_image_path: "../assets/space_skybox/back.png",
             texture_config: (
                 color_space: Srgb,
             ),
@@ -15,7 +15,7 @@
         ),
         // Texture(
         //     name: "concrete_color_texture",
-        //     image_path: "assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg",
+        //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg",
         //     texture_config: (
         //         color_space: Srgb,
         //     ),
@@ -25,7 +25,7 @@
         // ),
         // Texture(
         //     name: "concrete_roughness_texture",
-        //     image_path: "assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg",
+        //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg",
         //     texture_config: (
         //         color_space: Linear,
         //     ),
@@ -35,7 +35,7 @@
         // ),
         // Texture(
         //     name: "concrete_normal_texture",
-        //     image_path: "assets/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg",
+        //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg",
         //     texture_config: (
         //         color_space: Linear,
         //     ),
@@ -45,7 +45,7 @@
         // ),
         // Texture(
         //     name: "plastic_color_texture",
-        //     image_path: "assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg",
+        //     image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg",
         //     texture_config: (
         //         color_space: Srgb,
         //     ),
@@ -55,7 +55,7 @@
         // ),
         // Texture(
         //     name: "plastic_roughness_texture",
-        //     image_path: "assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg",
+        //     image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg",
         //     texture_config: (
         //         color_space: Linear,
         //     ),
@@ -65,7 +65,7 @@
         // ),
         // Texture(
         //     name: "plastic_normal_texture",
-        //     image_path: "assets/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg",
+        //     image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg",
         //     texture_config: (
         //         color_space: Linear,
         //     ),
@@ -75,7 +75,7 @@
         // ),
         Texture(
             name: "bricks_color_texture",
-            image_path: "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
+            image_path: "../assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
             texture_config: (
                 color_space: Srgb,
             ),
@@ -85,7 +85,7 @@
         ),
         Texture(
             name: "bricks_roughness_texture",
-            image_path: "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
+            image_path: "../assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
             texture_config: (
                 color_space: Linear,
             ),
@@ -95,7 +95,7 @@
         ),
         Texture(
             name: "bricks_height_texture",
-            image_path: "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
+            image_path: "../assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
             texture_config: (
                 color_space: Linear,
             ),
@@ -105,7 +105,7 @@
         ),
         Texture(
             name: "wood_floor_color_texture",
-            image_path: "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
+            image_path: "../assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
             texture_config: (
                 color_space: Srgb,
             ),
@@ -115,7 +115,7 @@
         ),
         Texture(
             name: "wood_floor_roughness_texture",
-            image_path: "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
+            image_path: "../assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
             texture_config: (
                 color_space: Linear,
             ),
@@ -125,7 +125,7 @@
         ),
         Texture(
             name: "wood_floor_normal_texture",
-            image_path: "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
+            image_path: "../assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
             texture_config: (
                 color_space: Linear,
             ),

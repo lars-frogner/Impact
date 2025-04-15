@@ -17,7 +17,7 @@ use crate::{
         self, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, ScreenCapturer},
     },
-    io,
+    io::{self, util::parse_ron_file},
     material::{self, MaterialLibrary},
     mesh::{MeshRepository, components::MeshComp, texture_projection::TextureProjection},
     model::{self, InstanceFeatureManager},
@@ -607,5 +607,26 @@ impl Engine {
         let component: &mut C = component_entry.access();
 
         f(component)
+    }
+}
+
+impl EngineConfig {
+    /// Parses the configuration from the RON file at the given path and
+    /// resolves any specified paths.
+    pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        let file_path = file_path.as_ref();
+        let mut config: Self = parse_ron_file(file_path)?;
+        if let Some(root_path) = file_path.parent() {
+            config.resolve_paths(root_path);
+        }
+        Ok(config)
+    }
+
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    fn resolve_paths(&mut self, root_path: &Path) {
+        self.assets.resolve_paths(root_path);
+        self.voxel.resolve_paths(root_path);
+        self.input.resolve_paths(root_path);
     }
 }

@@ -107,7 +107,7 @@ impl Assets {
         let Some(asset_file_path) = self.config.asset_file_path.as_ref() else {
             return Ok(());
         };
-        let specifications = parse_ron_file(asset_file_path)?;
+        let specifications = AssetSpecifications::from_ron_file(asset_file_path)?;
         self.load_specified_assets(&specifications)
     }
 
@@ -415,11 +415,77 @@ impl Assets {
     }
 }
 
+impl AssetConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        self.lookup_table_dir = root_path.join(&self.lookup_table_dir);
+
+        if let Some(asset_file_path) = self.asset_file_path.as_mut() {
+            *asset_file_path = root_path.join(&asset_file_path);
+        }
+    }
+}
+
 impl Default for AssetConfig {
     fn default() -> Self {
         Self {
             lookup_table_dir: PathBuf::from("assets/lookup_tables"),
             asset_file_path: None,
+        }
+    }
+}
+
+impl AssetSpecifications {
+    /// Parses the specifications from the RON file at the given path and
+    /// resolves any specified paths.
+    pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        let file_path = file_path.as_ref();
+        let mut specs: Self = parse_ron_file(file_path)?;
+        if let Some(root_path) = file_path.parent() {
+            specs.resolve_paths(root_path);
+        }
+        Ok(specs)
+    }
+
+    /// Resolves all paths in the specifications by prepending the given root
+    /// path to all paths.
+    fn resolve_paths(&mut self, root_path: &Path) {
+        for specification in &mut self.textures {
+            specification.resolve_paths(root_path);
+        }
+    }
+}
+
+impl TextureSpecification {
+    /// Resolves all paths in the specification by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        match self {
+            Self::Texture { image_path, .. } => {
+                *image_path = root_path.join(&image_path);
+            }
+            Self::Cubemap {
+                right_image_path,
+                left_image_path,
+                top_image_path,
+                bottom_image_path,
+                front_image_path,
+                back_image_path,
+                ..
+            } => {
+                *right_image_path = root_path.join(&right_image_path);
+                *left_image_path = root_path.join(&left_image_path);
+                *top_image_path = root_path.join(&top_image_path);
+                *bottom_image_path = root_path.join(&bottom_image_path);
+                *front_image_path = root_path.join(&front_image_path);
+                *back_image_path = root_path.join(&back_image_path);
+            }
+            Self::TextureArray { image_paths, .. } => {
+                for image_path in image_paths {
+                    *image_path = root_path.join(&image_path);
+                }
+            }
         }
     }
 }

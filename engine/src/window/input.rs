@@ -1,8 +1,8 @@
 //! Input handling.
 
 use crate::{
-    engine::Engine,
     control::motion::{MotionDirection, MotionState},
+    engine::Engine,
     io::util::parse_ron_file,
     window::EventLoopController,
 };
@@ -478,6 +478,16 @@ impl MotionDirection {
             KeyboardInputAction::MoveUp => Some(Self::Up),
             KeyboardInputAction::MoveDown => Some(Self::Down),
             _ => None,
+        }
+    }
+}
+
+impl InputConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        if let Some(key_map_path) = self.key_map_path.as_mut() {
+            *key_map_path = root_path.join(&key_map_path);
         }
     }
 }
