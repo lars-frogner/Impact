@@ -76,8 +76,10 @@ pub struct EngineConfig {
 }
 
 impl Engine {
-    /// Creates a new engine instance.
-    pub fn new(config: EngineConfig, app: Arc<dyn Application>, window: Window) -> Result<Self> {
+    /// Creates a new instance of the engine.
+    pub fn new(app: Arc<dyn Application>, window: Window) -> Result<Self> {
+        let config = app.engine_config();
+
         let user_interface = UserInterface::new(window.clone());
 
         let mut component_registry = ComponentRegistry::new();
