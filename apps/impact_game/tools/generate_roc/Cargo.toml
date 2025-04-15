@@ -10,4 +10,6 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-impact_game = { path = "../..", features = ["roc_codegen"] }
+target_crate = { package = "impact_game", path = "../..", features = [
+    "roc_codegen",
+] }

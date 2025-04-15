@@ -3,6 +3,7 @@
 pub mod components;
 pub mod entity;
 pub mod tasks;
+pub mod ffi;
 
 use crate::{
     assets::{AssetConfig, Assets, lookup_table},
@@ -21,7 +22,6 @@ use crate::{
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::{Scene, SceneEntityFlags, components::SceneEntityFlagsComp},
-    scripting::Callbacks,
     skybox::Skybox,
     ui::UserInterface,
     voxel::{self, VoxelConfig, VoxelManager},
@@ -36,6 +36,7 @@ use impact_ecs::{
     component::{Component, SingleInstance},
     world::{Entity, World as ECSWorld},
 };
+use impact_script_interface::Script;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
@@ -47,7 +48,7 @@ use std::{
 /// Manager for all systems and data in the application.
 #[derive(Debug)]
 pub struct Application {
-    callbacks: Callbacks,
+    script: Arc<dyn Script>,
     window: Window,
     input_handler: InputHandler,
     graphics_device: Arc<GraphicsDevice>,
@@ -76,7 +77,7 @@ pub struct ApplicationConfig {
 
 impl Application {
     /// Creates a new application.
-    pub fn new(config: ApplicationConfig, callbacks: Callbacks, window: Window) -> Result<Self> {
+    pub fn new(config: ApplicationConfig, script: Arc<dyn Script>, window: Window) -> Result<Self> {
         let user_interface = UserInterface::new(window.clone());
 
         let mut component_registry = ComponentRegistry::new();
@@ -132,7 +133,7 @@ impl Application {
             control::create_controllers(config.controller);
 
         Ok(Self {
-            callbacks,
+            script,
             window,
             input_handler,
             graphics_device,
@@ -149,9 +150,9 @@ impl Application {
         })
     }
 
-    /// Returns a reference to the [`Callbacks`].
-    pub fn callbacks(&self) -> &Callbacks {
-        &self.callbacks
+    /// Returns a reference to the [`ScriptPlugin`].
+    pub fn script(&self) -> &dyn Script {
+        self.script.as_ref()
     }
 
     /// Returns a reference to the [`Window`].

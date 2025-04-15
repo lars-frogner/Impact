@@ -1,0 +1,1 @@
+../../../../templates/roc_platform/api/Stdout.roc

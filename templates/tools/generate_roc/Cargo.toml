@@ -1,0 +1,15 @@
+[package]
+name = "generate_roc"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "generate_roc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+target_crate = { package = "<target package name>", path = "<target package path>", features = [
+    "roc_codegen",
+] }
