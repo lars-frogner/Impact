@@ -5,13 +5,8 @@ mod main {
     use super::*;
     use anyhow::bail;
     use clap::{Parser, Subcommand};
-    use impact::{
-        application::DummyApp,
-        engine::EngineConfig,
-        io::util::{parse_ron_file, write_ron_file},
-        run,
-    };
-    use std::{path::PathBuf, sync::Arc};
+    use impact::{engine::EngineConfig, io::util::write_ron_file};
+    use std::path::PathBuf;
 
     #[derive(Debug, Parser)]
     #[command(about = "The Impact game engine", long_about = None)]
@@ -22,13 +17,7 @@ mod main {
 
     #[derive(Debug, Subcommand)]
     enum Command {
-        /// Run the engine
-        Run {
-            /// Path to RON configuration file to use
-            #[arg(short, long)]
-            config: Option<PathBuf>,
-        },
-        /// Generate the default ROC configuration file
+        /// Generate the default RON configuration file
         GenerateConfig {
             /// Path where the file should be written
             #[arg(short, long)]
@@ -63,14 +52,6 @@ mod main {
         let cli = Cli::parse();
 
         match cli.command {
-            Command::Run { config } => {
-                let config = match config {
-                    Some(file_path) => parse_ron_file(file_path)?,
-                    None => EngineConfig::default(),
-                };
-
-                run::run(config, |_| {}, Arc::new(DummyApp))
-            }
             Command::GenerateConfig {
                 output_path,
                 force_overwrite,
