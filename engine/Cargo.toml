@@ -1,11 +1,5 @@
 [workspace]
-members = [
-    "impact_utils",
-    "impact_ecs",
-    "impact_ecs/impact_ecs_macros",
-    "roc_codegen",
-    "roc_codegen/roc_codegen_macros",
-]
+members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 
 [workspace.package]
 edition = "2024"
@@ -113,9 +107,6 @@ edition = { workspace = true }
 
 build = "build.rs"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [features]
 cli = ["dep:clap"]
 profiling = ["dep:criterion"]
@@ -173,7 +164,7 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 impact_ecs = { path = "impact_ecs" }
 impact_utils = { path = "impact_utils" }
-roc_codegen = { path = "roc_codegen" }
+roc_codegen = { path = "../roc_codegen" }
 
 [dev-dependencies]
 clap = { version = "4.5", features = ["derive"] }

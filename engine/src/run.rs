@@ -71,7 +71,7 @@ use crate::{
         Scene, SceneEntityFlags,
         components::{ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, UncullableComp},
     },
-    scripting::Callbacks,
+    scripting::Script,
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
@@ -102,11 +102,11 @@ use std::{
 pub fn run(
     app_config: ApplicationConfig,
     on_app_created: impl FnOnce(Arc<Application>) + 'static,
-    callbacks: Callbacks,
+    script: Arc<dyn Script>,
 ) -> Result<()> {
     init_logging()?;
     let mut handler =
-        GameHandler::new(|window| init_game_loop(app_config, on_app_created, callbacks, window));
+        GameHandler::new(|window| init_game_loop(app_config, on_app_created, script, window));
     handler.run()
 }
 
@@ -118,23 +118,24 @@ fn init_logging() -> Result<()> {
 fn init_game_loop(
     app_config: ApplicationConfig,
     on_app_created: impl FnOnce(Arc<Application>),
-    callbacks: Callbacks,
+    script: Arc<dyn Script>,
     window: Window,
 ) -> Result<GameLoop> {
-    let app = init_app(app_config, callbacks, window)?;
+    let app = init_app(app_config, script, window)?;
     let game_loop = GameLoop::new(app, GameLoopConfig::default())?;
     on_app_created(game_loop.arc_app());
+    game_loop.app().script().setup_scene()?;
     Ok(game_loop)
 }
 
 fn init_app(
     app_config: ApplicationConfig,
-    callbacks: Callbacks,
+    script: Arc<dyn Script>,
     window: Window,
 ) -> Result<Application> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let mut app = Application::new(app_config, callbacks, window)?;
+    let mut app = Application::new(app_config, script, window)?;
 
     app.set_skybox_for_current_scene(Skybox::new(TextureID(hash32!("space_skybox")), 2e3));
 
@@ -410,12 +411,12 @@ fn init_app(
 
 fn init_physics_lab(
     app_config: ApplicationConfig,
-    callbacks: Callbacks,
+    script: Arc<dyn Script>,
     window: Window,
 ) -> Result<Application> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let app = Application::new(app_config, callbacks, window)?;
+    let app = Application::new(app_config, script, window)?;
 
     app.create_entity((
         &ReferenceFrameComp::unscaled(

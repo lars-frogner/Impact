@@ -1,7 +1,10 @@
 [workspace]
 resolver = "2"
-members = []
-ignore = ["tools", "roc_platform"]
+members = ["roc_platform_core", "roc_io_error"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
 
 [workspace.lints.rust]
 future_incompatible = "warn"
@@ -88,21 +91,29 @@ useless_transmute = "warn"
 verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
 
+[workspace.dependencies]
+roc_std = { git = "https://github.com/roc-lang/roc.git" }
+
 [package]
-name = "impact_game"
-version = "0.1.0"
-edition = "2024"
+name = "roc_platform_core"
+version = { workspace = true }
+edition = { workspace = true }
 
 [lib]
-crate-type = ["cdylib"]
-
-[features]
-roc_codegen = ["impact/roc_codegen"]
+crate-type = ["rlib"]
 
 [dependencies]
 anyhow = "1.0"
-impact = { path = "../../engine" }
-inventory = "0.3"
+libc = "=0.2.155"
+roc_io_error = { path = "roc_io_error" }
+roc_std = { workspace = true }
 
 [lints]
 workspace = true
+
+[profile.release]
+# lto = true
+# strip = "debuginfo"
+# You can comment this out if you hit a segmentation fault similar to the one in see issue github.com/roc-lang/roc/issues/6121
+# Setting this to 1 should improve execution speed by making things easier to optimize for LLVM.
+# codegen-units = 1

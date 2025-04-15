@@ -1,7 +1,8 @@
 [workspace]
-resolver = "2"
-members = []
-ignore = ["tools", "roc_platform"]
+members = ["roc_codegen/roc_codegen_macros"]
+
+[workspace.package]
+edition = "2024"
 
 [workspace.lints.rust]
 future_incompatible = "warn"
@@ -89,20 +90,22 @@ verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
 
 [package]
-name = "impact_game"
+name = "roc_codegen"
 version = "0.1.0"
-edition = "2024"
-
-[lib]
-crate-type = ["cdylib"]
+edition = { workspace = true }
 
 [features]
-roc_codegen = ["impact/roc_codegen"]
+enabled = ["roc_codegen_macros/enabled"]
 
 [dependencies]
 anyhow = "1.0"
-impact = { path = "../../engine" }
+bitflags = "2.6"
+bytemuck = { version = "1.22", features = ["derive"] }
+const-fnv1a-hash = "1.1"
 inventory = "0.3"
+nalgebra = "0.33"
+
+roc_codegen_macros = { path = "roc_codegen_macros" }
 
 [lints]
 workspace = true

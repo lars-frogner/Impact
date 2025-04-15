@@ -1,12 +1,23 @@
-//! Interaction with scripts.
+//! Interfacing with scripts.
 
-#[derive(Debug)]
-pub struct Callbacks {
-    pub setup_scene: fn(),
+use anyhow::Result;
+use std::path::PathBuf;
+
+pub trait Script: Send + Sync + std::fmt::Debug {
+    fn app_config_path(&self) -> PathBuf;
+
+    fn setup_scene(&self) -> Result<()>;
 }
 
-impl Default for Callbacks {
-    fn default() -> Self {
-        Self { setup_scene: || {} }
+#[derive(Clone, Copy, Debug)]
+pub struct DummyScript;
+
+impl Script for DummyScript {
+    fn app_config_path(&self) -> PathBuf {
+        "".into()
+    }
+
+    fn setup_scene(&self) -> Result<()> {
+        Ok(())
     }
 }

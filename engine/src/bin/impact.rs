@@ -9,9 +9,9 @@ mod main {
         application::ApplicationConfig,
         io::util::{parse_ron_file, write_ron_file},
         run,
-        scripting::Callbacks,
+        scripting::DummyScript,
     };
-    use std::path::PathBuf;
+    use std::{path::PathBuf, sync::Arc};
 
     #[derive(Debug, Parser)]
     #[command(about = "The Impact game engine", long_about = None)]
@@ -69,7 +69,7 @@ mod main {
                     None => ApplicationConfig::default(),
                 };
 
-                run::run(config, |_| {}, Callbacks::default())
+                run::run(config, |_| {}, Arc::new(DummyScript))
             }
             Command::GenerateConfig {
                 output_path,
