@@ -2,7 +2,7 @@
 
 #![allow(unused)]
 use crate::{
-    application::{Application, ApplicationConfig},
+    application::Application,
     assets::Assets,
     camera::components::PerspectiveCameraComp,
     control::{
@@ -10,6 +10,7 @@ use crate::{
         motion::{SemiDirectionalMotionController, components::MotionControlComp},
         orientation::{RollFreeCameraOrientationController, components::OrientationControlComp},
     },
+    engine::{Engine, EngineConfig},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{Degrees, Plane, Sphere},
     gpu::{
@@ -71,7 +72,6 @@ use crate::{
         Scene, SceneEntityFlags,
         components::{ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, UncullableComp},
     },
-    scripting::Script,
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
@@ -100,13 +100,13 @@ use std::{
 };
 
 pub fn run(
-    app_config: ApplicationConfig,
-    on_app_created: impl FnOnce(Arc<Application>) + 'static,
-    script: Arc<dyn Script>,
+    engine_config: EngineConfig,
+    on_app_created: impl FnOnce(Arc<Engine>) + 'static,
+    app: Arc<dyn Application>,
 ) -> Result<()> {
     init_logging()?;
     let mut handler =
-        GameHandler::new(|window| init_game_loop(app_config, on_app_created, script, window));
+        GameHandler::new(|window| init_game_loop(engine_config, on_app_created, app, window));
     handler.run()
 }
 
@@ -116,30 +116,30 @@ fn init_logging() -> Result<()> {
 }
 
 fn init_game_loop(
-    app_config: ApplicationConfig,
-    on_app_created: impl FnOnce(Arc<Application>),
-    script: Arc<dyn Script>,
+    engine_config: EngineConfig,
+    on_app_created: impl FnOnce(Arc<Engine>),
+    app: Arc<dyn Application>,
     window: Window,
 ) -> Result<GameLoop> {
-    let app = init_app(app_config, script, window)?;
-    let game_loop = GameLoop::new(app, GameLoopConfig::default())?;
-    on_app_created(game_loop.arc_app());
-    game_loop.app().script().setup_scene()?;
+    let engine = init_app(engine_config, app, window)?;
+    let game_loop = GameLoop::new(engine, GameLoopConfig::default())?;
+    on_app_created(game_loop.arc_engine());
+    game_loop.engine().app().setup_scene()?;
     Ok(game_loop)
 }
 
 fn init_app(
-    app_config: ApplicationConfig,
-    script: Arc<dyn Script>,
+    engine_config: EngineConfig,
+    app: Arc<dyn Application>,
     window: Window,
-) -> Result<Application> {
+) -> Result<Engine> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let mut app = Application::new(app_config, script, window)?;
+    let mut engine = Engine::new(engine_config, app, window)?;
 
-    app.set_skybox_for_current_scene(Skybox::new(TextureID(hash32!("space_skybox")), 2e3));
+    engine.set_skybox_for_current_scene(Skybox::new(TextureID(hash32!("space_skybox")), 2e3));
 
-    let player_entity = app.create_entity((
+    let player_entity = engine.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
         // &SphereMeshComp::new(15),
         // &UniformRigidBodyComp { mass_density: 1e3 },
@@ -155,7 +155,7 @@ fn init_app(
         &SceneGraphGroupComp,
     ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &ParentComp::new(player_entity),
         &PerspectiveCameraComp::new(
             vertical_field_of_view,
@@ -163,7 +163,7 @@ fn init_app(
         ),
     ))?;
 
-    let laser_entity = app.create_entity((
+    let laser_entity = engine.create_entity((
         &ParentComp::new(player_entity),
         &ReferenceFrameComp::unscaled(
             Point3::new(0.15, -0.3, 0.0),
@@ -181,12 +181,14 @@ fn init_app(
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED | SceneEntityFlags::CASTS_NO_SHADOWS),
     ))?;
 
-    app.mouse_button_input_handler_mut().left_pressed =
-        Some(Box::new(move |app| app.enable_scene_entity(&laser_entity)));
-    app.mouse_button_input_handler_mut().left_released =
-        Some(Box::new(move |app| app.disable_scene_entity(&laser_entity)));
+    engine.mouse_button_input_handler_mut().left_pressed = Some(Box::new(move |engine| {
+        engine.enable_scene_entity(&laser_entity)
+    }));
+    engine.mouse_button_input_handler_mut().left_released = Some(Box::new(move |engine| {
+        engine.disable_scene_entity(&laser_entity)
+    }));
 
-    let absorbing_sphere_entity = app.create_entity((
+    let absorbing_sphere_entity = engine.create_entity((
         &ParentComp::new(player_entity),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 0.0, -3.0), 0.1),
         &SphereMeshComp::new(64),
@@ -197,15 +199,15 @@ fn init_app(
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED),
     ))?;
 
-    app.mouse_button_input_handler_mut().right_pressed = Some(Box::new(move |app| {
-        app.enable_scene_entity(&absorbing_sphere_entity)
+    engine.mouse_button_input_handler_mut().right_pressed = Some(Box::new(move |engine| {
+        engine.enable_scene_entity(&absorbing_sphere_entity)
     }));
-    app.mouse_button_input_handler_mut().right_released = Some(Box::new(move |app| {
-        app.disable_scene_entity(&absorbing_sphere_entity)
+    engine.mouse_button_input_handler_mut().right_released = Some(Box::new(move |engine| {
+        engine.disable_scene_entity(&absorbing_sphere_entity)
     }));
 
-    // app.create_entity((
-    //     &app.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
+    // engine.create_entity((
+    //     &engine.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
     //     &ReferenceFrameComp::new(
     //         Point3::new(0.0, 1.5, 11.0),
     //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
@@ -216,7 +218,7 @@ fn init_app(
     //     &UniformRoughnessComp(0.4),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &CylinderMeshComp::new(10.0, 0.6, 100),
     //     &ReferenceFrameComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
     //     &UniformColorComp::IRON,
@@ -225,8 +227,8 @@ fn init_app(
     //     &UniformRoughnessComp(0.5),
     // ))?;
 
-    // app.create_entity((
-    //     &app.load_mesh_from_obj_file("assets/abstract_object.obj")?,
+    // engine.create_entity((
+    //     &engine.load_mesh_from_obj_file("assets/abstract_object.obj")?,
     //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(7.0, 7.7,
     // 5.0), 0.02),     &ConstantRotationComp::new(
     //         0.0,
@@ -239,8 +241,8 @@ fn init_app(
     //     &UniformRoughnessComp(0.35),
     // ))?;
 
-    // app.create_entity((
-    //     &app.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
+    // engine.create_entity((
+    //     &engine.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
     //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-1.0, 9.0,
     // 9.0), 0.035),     &ConstantRotationComp::new(
     //         0.0,
@@ -251,7 +253,7 @@ fn init_app(
     //     &UniformRoughnessComp(0.95),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &BoxMeshComp::UNIT_CUBE,
     //     &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0),
     // 2.0),     &UniformColorComp(vector![0.1, 0.7, 0.3]),
@@ -259,7 +261,7 @@ fn init_app(
     //     &UniformRoughnessComp(0.55),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &SphereMeshComp::new(100),
     //     &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, 2.0, 5.0), 4.0),
     //     &UniformColorComp(vector![0.3, 0.2, 0.7]),
@@ -267,8 +269,8 @@ fn init_app(
     //     &UniformRoughnessComp(0.7),
     // ))?;
 
-    // app.create_entity((
-    //     &app.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
+    // engine.create_entity((
+    //     &engine.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
     //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8,
     // 5.0), 0.016),     &ConstantRotationComp::new(
     //         0.0,
@@ -281,7 +283,7 @@ fn init_app(
     //     &UniformRoughnessComp(0.4),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
     //     // &PlanarTextureProjectionComp::for_rectangle(&
     // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
@@ -300,7 +302,7 @@ fn init_app(
     //     // &NormalMapComp(TextureID(hash32!("wood_floor_normal_texture"))),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
     //     &PlanarTextureProjectionComp::for_rectangle(&
     // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
@@ -319,7 +321,7 @@ fn init_app(
     //     ),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
     //     &PlanarTextureProjectionComp::for_rectangle(&
     // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
@@ -338,7 +340,7 @@ fn init_app(
     //     ),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &RectangleMeshComp::UNIT_SQUARE,
     //     &PlanarTextureProjectionComp::for_rectangle(&
     // RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),     &ReferenceFrameComp::new(
@@ -356,7 +358,7 @@ fn init_app(
     //     ),
     // ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &SphereMeshComp::new(25),
         // &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(20.0, 0.0, 20.0), 1.0),
@@ -365,23 +367,23 @@ fn init_app(
         &ShadowableOmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
     ))?;
 
-    // app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
+    // engine.create_entity(&ShadowableUnidirectionalEmissionComp::new(
     //     vector![1.0, 1.0, 1.0] * 10000.0,
     //     UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
     //     Degrees(2.0),
     // ))?;
 
-    app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 1000.0))?;
+    engine.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 1000.0))?;
 
     // TODO: Check why this crashes
-    // app.create_entity((
+    // engine.create_entity((
     //     &VoxelSphereComp::new(800),
     //     // &VoxelGradientNoisePatternComp::new(500, 500, 500, 3.0, 0.3, 1),
     //     &VoxelTypeComp::new(VoxelType::Default, 0.1),
     //     &ReferenceFrameComp::unoriented(point![25.0, -25.0, -15.0]),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     // &VoxelSphereComp::new(0.25, 20.0),
     //     // &VoxelBoxComp::new(0.25, 4.0, 2.0, 1.0),
     //     // &VoxelGradientNoisePatternComp::new(0.5, 50.0, 50.0, 50.0, 2e-2,0.3,0),
@@ -394,7 +396,7 @@ fn init_app(
     //     &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(), Degrees(20.0))),
     // ))?;
 
-    // app.create_entity((
+    // engine.create_entity((
     //     &VoxelSphereComp::new(0.25, 50.0),
     //     // &GradientNoiseVoxelTypesComp::new(["Ground", "Rock", "Metal"], 6e-2, 1.0, 1),
     //     &SameVoxelTypeComp::new(VoxelType::from_idx(1)),
@@ -402,23 +404,23 @@ fn init_app(
     //     &ReferenceFrameComp::unoriented(point![0.0, 0.0, 20.0]),
     // ))?;
 
-    // create_harmonic_oscillation_experiment(&app, Point3::new(0.0, 10.0, 2.0), 1.0, 10.0, 3.0);
-    create_free_rotation_experiment(&app, Point3::new(0.0, 7.0, 2.0), 5.0, 1e-3);
-    // create_drag_drop_experiment(&app, Point3::new(0.0, 20.0, 4.0));
+    // create_harmonic_oscillation_experiment(&engine, Point3::new(0.0, 10.0, 2.0), 1.0, 10.0, 3.0);
+    create_free_rotation_experiment(&engine, Point3::new(0.0, 7.0, 2.0), 5.0, 1e-3);
+    // create_drag_drop_experiment(&engine, Point3::new(0.0, 20.0, 4.0));
 
-    Ok(app)
+    Ok(engine)
 }
 
 fn init_physics_lab(
-    app_config: ApplicationConfig,
-    script: Arc<dyn Script>,
+    engine_config: EngineConfig,
+    app: Arc<dyn Application>,
     window: Window,
-) -> Result<Application> {
+) -> Result<Engine> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let app = Application::new(app_config, script, window)?;
+    let engine = Engine::new(engine_config, app, window)?;
 
-    app.create_entity((
+    engine.create_entity((
         &ReferenceFrameComp::unscaled(
             Point3::new(0.0, 0.0, -5.0),
             Orientation::from_axis_angle(&Vector3::y_axis(), PI),
@@ -438,7 +440,7 @@ fn init_physics_lab(
     let n_spheres_y = 2 * n_y + 1;
 
     create_spheres(
-        &app,
+        &engine,
         sphere_radius,
         [3, n_y, 3],
         point![
@@ -453,7 +455,7 @@ fn init_physics_lab(
     )?;
 
     create_room(
-        &app,
+        &engine,
         room_extent,
         20.0,
         TextureID(hash32!("concrete_color_texture")),
@@ -463,7 +465,7 @@ fn init_physics_lab(
 
     let voxel_extent = 0.25;
     let box_size = 6.0;
-    app.create_entity((
+    engine.create_entity((
         &VoxelBoxComp::new(voxel_extent, box_size, box_size, box_size),
         &SameVoxelTypeComp::new(VoxelType::from_idx(0)),
         &ReferenceFrameComp::unoriented(point![
@@ -476,21 +478,21 @@ fn init_physics_lab(
         // &Static,
     ))?;
 
-    app.create_entity(&ShadowableUnidirectionalEmissionComp::new(
+    engine.create_entity(&ShadowableUnidirectionalEmissionComp::new(
         vector![1.0, 1.0, 1.0] * 200000.0,
         UnitVector3::new_normalize(vector![0.0, -1.0, 0.0]),
         Degrees(2.0),
     ))?;
 
-    app.create_entity(&AmbientEmissionComp::new(
+    engine.create_entity(&AmbientEmissionComp::new(
         vector![1.0, 1.0, 1.0] * 2000000.0,
     ))?;
 
-    Ok(app)
+    Ok(engine)
 }
 
 fn create_spheres(
-    app: &Application,
+    engine: &Engine,
     radius: fph,
     n: [u32; 3],
     center: Position,
@@ -511,7 +513,7 @@ fn create_spheres(
                 z += radius;
             };
             for k in 0..(2 * n[2] + 1) {
-                app.create_entity((
+                engine.create_entity((
                     &SphereMeshComp::new(100),
                     &ReferenceFrameComp::unoriented_scaled(
                         Point3::new(x * radius, y * radius, z * radius),
@@ -554,7 +556,7 @@ fn create_spheres(
 }
 
 fn create_room(
-    app: &Application,
+    engine: &Engine,
     extent: fph,
     angular_speed: fph,
     color_texture_id: TextureID,
@@ -596,7 +598,7 @@ fn create_room(
             orientation,
             extent,
         );
-        let wall = app.create_entity((
+        let wall = engine.create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
             &frame,
             &ConstantRotationComp::new(0.0, orientation, angular_velocity),
@@ -617,7 +619,7 @@ fn create_room(
 
         for x in [-0.4, 0.4] {
             for z in [-0.4, 0.4] {
-                app.create_entity((
+                engine.create_entity((
                     &ParentComp::new(wall),
                     // &SphereMeshComp::new(25),
                     &ReferenceFrameComp::unoriented_scaled(Point3::new(x, 0.1, z), 0.2 / extent),
@@ -632,7 +634,7 @@ fn create_room(
 }
 
 fn create_harmonic_oscillation_experiment(
-    app: &Application,
+    engine: &Engine,
     position: Position,
     mass: fph,
     spring_constant: fph,
@@ -646,13 +648,13 @@ fn create_harmonic_oscillation_experiment(
 
     let reference_position = attachment_position + vector![-2.0, -amplitude - 0.5, 0.0];
 
-    let attachment_point_entity = app.create_entity((
+    let attachment_point_entity = engine.create_entity((
         &SphereMeshComp::new(15),
         &ReferenceFrameComp::unoriented_scaled(attachment_position, 0.2),
         &UniformColorComp(vector![0.8, 0.1, 0.1]),
     ))?;
 
-    let cube_body_entity = app.create_entity((
+    let cube_body_entity = engine.create_entity((
         &BoxMeshComp::UNIT_CUBE,
         &UniformRigidBodyComp { mass_density: mass },
         &ReferenceFrameComp::for_unoriented_rigid_body(mass_position),
@@ -663,7 +665,7 @@ fn create_harmonic_oscillation_experiment(
         &LogsMomentum,
     ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &ReferenceFrameComp::default(),
         &SpringComp::new(
             attachment_point_entity,
@@ -674,7 +676,7 @@ fn create_harmonic_oscillation_experiment(
         ),
     ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &BoxMeshComp::UNIT_CUBE,
         &ReferenceFrameComp::for_driven_trajectory(Orientation::identity()),
         &VelocityComp::stationary(),
@@ -693,7 +695,7 @@ fn create_harmonic_oscillation_experiment(
 }
 
 fn create_free_rotation_experiment(
-    app: &Application,
+    engine: &Engine,
     position: Position,
     angular_speed: fph,
     angular_velocity_perturbation_fraction: fph,
@@ -704,7 +706,7 @@ fn create_free_rotation_experiment(
 
     let angular_velocity_perturbation = angular_speed * angular_velocity_perturbation_fraction;
 
-    app.create_entity((
+    engine.create_entity((
         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
         &UniformRigidBodyComp {
             mass_density: 1.0 / 6.0,
@@ -721,7 +723,7 @@ fn create_free_rotation_experiment(
         &LogsMomentum,
     ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
         &UniformRigidBodyComp {
             mass_density: 1.0 / 6.0,
@@ -738,7 +740,7 @@ fn create_free_rotation_experiment(
         &LogsMomentum,
     ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
         &UniformRigidBodyComp {
             mass_density: 1.0 / 6.0,
@@ -758,13 +760,14 @@ fn create_free_rotation_experiment(
     Ok(())
 }
 
-fn create_drag_drop_experiment(app: &Application, position: Position) -> Result<()> {
-    app.simulator()
+fn create_drag_drop_experiment(engine: &Engine, position: Position) -> Result<()> {
+    engine
+        .simulator()
         .write()
         .unwrap()
         .set_medium(UniformMedium::moving_air(vector![0.0, 3.0, 0.0]));
 
-    app.create_entity((
+    engine.create_entity((
         // &SphereMeshComp::new(100),
         &ConeMeshComp::new(2.0, 1.0, 100),
         // &BoxMeshComp::new(3.0, 0.4, 1.0, FrontFaceSide::Outside),
@@ -782,7 +785,7 @@ fn create_drag_drop_experiment(app: &Application, position: Position) -> Result<
         &LogsMomentum,
     ))?;
 
-    app.create_entity((
+    engine.create_entity((
         &ConeMeshComp::new(2.0, 1.0, 100),
         &UniformRigidBodyComp { mass_density: 10.0 },
         &ReferenceFrameComp::for_rigid_body(

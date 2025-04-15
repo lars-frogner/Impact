@@ -1,5 +1,5 @@
-//! Management of [`Component`](impact_ecs::component::Component)s in an
-//! application.
+//! Management of [`Component`](impact_ecs::component::Component)s in the
+//! engine.
 
 use crate::component::ComponentRegistry;
 use anyhow::Result;

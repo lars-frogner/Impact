@@ -1,6 +1,6 @@
-//! Management of entities in an application.
+//! Management of entities in the engine.
 
-use super::Application;
+use super::Engine;
 use crate::scene::RenderResourcesDesynchronized;
 use anyhow::Result;
 use impact_ecs::{
@@ -9,7 +9,7 @@ use impact_ecs::{
     world::Entity,
 };
 
-impl Application {
+impl Engine {
     pub fn create_entity<A, E>(
         &self,
         components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,

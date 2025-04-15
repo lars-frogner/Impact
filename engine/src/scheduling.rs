@@ -146,9 +146,9 @@ enum TaskReady {
 /// # use impact::{define_execution_tag, define_task, scheduling::TaskScheduler};
 /// # use std::{num::NonZeroUsize, sync::Arc};
 /// #
-/// # struct Application;
+/// # struct Engine;
 /// #
-/// # impl Application {
+/// # impl Engine {
 /// #     fn new() -> Self {Self}
 /// #     fn compute_forces(&self) {}
 /// #     fn update_trajectories(&self) {}
@@ -165,8 +165,8 @@ enum TaskReady {
 ///     // Include this task in executions tagged with any of these tags
 ///     execute_on = [Physics],
 ///     // Closure executing the task, modifying the input object
-///     |app: &Application| {
-///         app.update_trajectories();
+///     |engine: &Engine| {
+///         engine.update_trajectories();
 ///         // The closure must return a `Result<(), TaskError>`
 ///         Ok(())
 ///     }
@@ -177,8 +177,8 @@ enum TaskReady {
 ///     ComputeForces,
 ///     depends_on = [],
 ///     execute_on = [Physics],
-///     |app: &Application| {
-///         app.compute_forces();
+///     |engine: &Engine| {
+///         engine.compute_forces();
 ///         Ok(())
 ///     }
 /// );
@@ -186,10 +186,10 @@ enum TaskReady {
 /// // Define the tag that will trigger execution of the tasks
 /// define_execution_tag!(Physics);
 ///
-/// let app = Arc::new(Application::new());
+/// let engine = Arc::new(Engine::new());
 /// let n_workers = NonZeroUsize::new(2).unwrap();
 ///
-/// let mut scheduler = TaskScheduler::new(n_workers, app);
+/// let mut scheduler = TaskScheduler::new(n_workers, engine);
 ///
 /// // Add newly defined tasks to scheduler
 /// scheduler.register_task(ComputeForces).unwrap();
@@ -203,7 +203,7 @@ macro_rules! define_task {
         $([$pub:ident])? $name:ident,
         depends_on = [$($dep:ident),*],
         execute_on = [$($tag:ident),*],
-        |$app:ident: &$app_ty:ty| $execute:expr
+        |$engine:ident: &$engine_ty:ty| $execute:expr
     ) => {
         $(#[$attributes])*
         #[derive(Copy, Clone, Debug)]
@@ -219,7 +219,7 @@ macro_rules! define_task {
             const EXECUTION_TAGS: [$crate::scheduling::ExecutionTag; Self::N_EXECUTION_TAGS] = [$($tag::EXECUTION_TAG),*];
         }
 
-        impl $crate::scheduling::Task<$app_ty> for $name {
+        impl $crate::scheduling::Task<$engine_ty> for $name {
             fn id(&self) -> $crate::thread::TaskID {
                 Self::TASK_ID
             }
@@ -228,7 +228,7 @@ macro_rules! define_task {
                 &Self::DEPENDENCY_IDS
             }
 
-            fn execute(&self, $app: &$app_ty) -> anyhow::Result<()> {
+            fn execute(&self, $engine: &$engine_ty) -> anyhow::Result<()> {
                 $execute
             }
 

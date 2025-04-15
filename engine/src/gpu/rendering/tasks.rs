@@ -1,7 +1,7 @@
 //! Tasks for rendering.
 
 use crate::{
-    application::{Application, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::AppTaskScheduler},
     gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
@@ -24,11 +24,11 @@ define_task!(
     [pub] Render,
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Rendering"; {
-            let scene = app.scene().read().unwrap();
-            app.renderer().write().unwrap().render_to_surface(&scene)?;
-            app.capture_screenshots()
+            let scene = engine.scene().read().unwrap();
+            engine.renderer().write().unwrap().render_to_surface(&scene)?;
+            engine.capture_screenshots()
         })
     }
 );

@@ -1,7 +1,7 @@
 //! Management of voxels for entities.
 
 use crate::{
-    application::Application,
+    engine::Engine,
     impl_InstanceFeature,
     material::{MaterialHandle, MaterialID},
     mesh::MeshID,
@@ -771,9 +771,9 @@ pub fn cleanup_voxel_object_for_removed_entity(
     }
 }
 
-pub fn handle_staged_voxel_objects(app: &Application) -> Result<()> {
+pub fn handle_staged_voxel_objects(engine: &Engine) -> Result<()> {
     loop {
-        let scene = app.scene().read().unwrap();
+        let scene = engine.scene().read().unwrap();
         let mut voxel_manager = scene.voxel_manager().write().unwrap();
 
         if let Some(StagedVoxelObject {
@@ -805,7 +805,7 @@ pub fn handle_staged_voxel_objects(app: &Application) -> Result<()> {
             drop(voxel_manager);
             drop(scene);
 
-            app.create_entity(SingleInstance::new(components))?;
+            engine.create_entity(SingleInstance::new(components))?;
         } else {
             break;
         }
@@ -813,9 +813,9 @@ pub fn handle_staged_voxel_objects(app: &Application) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_emptied_voxel_objects(app: &Application) -> Result<()> {
+pub fn handle_emptied_voxel_objects(engine: &Engine) -> Result<()> {
     loop {
-        let scene = app.scene().read().unwrap();
+        let scene = engine.scene().read().unwrap();
         let mut voxel_manager = scene.voxel_manager().write().unwrap();
 
         if let Some(entity) = voxel_manager.object_manager.pop_empty_voxel_object_entity() {
@@ -825,7 +825,7 @@ pub fn handle_emptied_voxel_objects(app: &Application) -> Result<()> {
             drop(scene);
 
             log::debug!("Removing entity for emptied voxel object");
-            app.remove_entity(&entity)?;
+            engine.remove_entity(&entity)?;
         } else {
             break;
         }

@@ -1,7 +1,7 @@
 //! Tasks related to motion.
 
 use crate::{
-    application::{Application, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::AppTaskScheduler},
     define_task,
     physics::{
         motion,
@@ -16,9 +16,9 @@ define_task!(
     [pub] LogKineticEnergy,
     depends_on = [AdvanceSimulation],
     execute_on = [PhysicsTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Logging kinetic energy"; {
-            let ecs_world = app.ecs_world().read().unwrap();
+            let ecs_world = engine.ecs_world().read().unwrap();
             motion::systems::log_kinetic_energies(&ecs_world);
             Ok(())
         })
@@ -31,9 +31,9 @@ define_task!(
     [pub] LogMomentum,
     depends_on = [AdvanceSimulation],
     execute_on = [PhysicsTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Logging momentum"; {
-            let ecs_world = app.ecs_world().read().unwrap();
+            let ecs_world = engine.ecs_world().read().unwrap();
             motion::systems::log_momenta(&ecs_world);
             Ok(())
         })

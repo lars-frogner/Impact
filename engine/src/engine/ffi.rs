@@ -1,13 +1,13 @@
 //! Methods with FFI safe inputs and outputs for scripts.
 
 use crate::{
-    application::Application,
+    engine::Engine,
     impact_ecs::component::{ComponentID, ComponentStorage},
     impact_utils::{AlignedByteVec, Alignment},
 };
 use anyhow::{Result, anyhow};
 
-impl Application {
+impl Engine {
     /// The expected layout is a packed sequence of component structures of the
     /// following form:
     /// ```
