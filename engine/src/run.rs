@@ -100,13 +100,11 @@ use std::{
 };
 
 pub fn run(
-    engine_config: EngineConfig,
-    on_app_created: impl FnOnce(Arc<Engine>) + 'static,
     app: Arc<dyn Application>,
+    on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
 ) -> Result<()> {
     init_logging()?;
-    let mut handler =
-        GameHandler::new(|window| init_game_loop(engine_config, on_app_created, app, window));
+    let mut handler = GameHandler::new(|window| init_game_loop(app, window, on_engine_created));
     handler.run()
 }
 
@@ -116,26 +114,21 @@ fn init_logging() -> Result<()> {
 }
 
 fn init_game_loop(
-    engine_config: EngineConfig,
-    on_app_created: impl FnOnce(Arc<Engine>),
     app: Arc<dyn Application>,
     window: Window,
+    on_engine_created: impl FnOnce(Arc<Engine>),
 ) -> Result<GameLoop> {
-    let engine = init_app(engine_config, app, window)?;
+    let engine = init_app(app, window)?;
     let game_loop = GameLoop::new(engine, GameLoopConfig::default())?;
-    on_app_created(game_loop.arc_engine());
+    on_engine_created(game_loop.arc_engine());
     game_loop.engine().app().setup_scene()?;
     Ok(game_loop)
 }
 
-fn init_app(
-    engine_config: EngineConfig,
-    app: Arc<dyn Application>,
-    window: Window,
-) -> Result<Engine> {
+fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let mut engine = Engine::new(engine_config, app, window)?;
+    let mut engine = Engine::new(app, window)?;
 
     engine.set_skybox_for_current_scene(Skybox::new(TextureID(hash32!("space_skybox")), 2e3));
 
@@ -411,14 +404,10 @@ fn init_app(
     Ok(engine)
 }
 
-fn init_physics_lab(
-    engine_config: EngineConfig,
-    app: Arc<dyn Application>,
-    window: Window,
-) -> Result<Engine> {
+fn init_physics_lab(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
     let vertical_field_of_view = Degrees(70.0);
 
-    let engine = Engine::new(engine_config, app, window)?;
+    let engine = Engine::new(app, window)?;
 
     engine.create_entity((
         &ReferenceFrameComp::unscaled(
