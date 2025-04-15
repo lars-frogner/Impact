@@ -1,7 +1,7 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
-    application::{Application, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::AppTaskScheduler},
     define_execution_tag_set,
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
@@ -17,10 +17,10 @@ use std::{
 };
 use winit::event::DeviceEvent;
 
-/// A loop driving simulation and rendering in an [`Application`].
+/// A loop driving simulation and rendering in an [`Engine`].
 #[derive(Debug)]
 pub struct GameLoop {
-    app: Arc<Application>,
+    engine: Arc<Engine>,
     task_scheduler: AppTaskScheduler,
     frame_rate_tracker: FrameDurationTracker,
     start_time: Instant,
@@ -46,17 +46,17 @@ struct GenericFrameDurationTracker<const N_FRAMES: usize> {
 type FrameDurationTracker = GenericFrameDurationTracker<10>;
 
 impl GameLoop {
-    pub fn new(app: Application, config: GameLoopConfig) -> Result<Self> {
-        let (app, task_scheduler) = app.create_task_scheduler(config.n_worker_threads)?;
+    pub fn new(engine: Engine, config: GameLoopConfig) -> Result<Self> {
+        let (engine, task_scheduler) = engine.create_task_scheduler(config.n_worker_threads)?;
 
-        app.perform_setup_for_game_loop();
+        engine.perform_setup_for_game_loop();
 
         let frame_rate_tracker = FrameDurationTracker::default();
         let start_time = Instant::now();
         let previous_iter_end_time = start_time;
 
         Ok(Self {
-            app,
+            engine,
             task_scheduler,
             frame_rate_tracker,
             start_time,
@@ -65,16 +65,16 @@ impl GameLoop {
         })
     }
 
-    pub fn app(&self) -> &Application {
-        self.app.as_ref()
+    pub fn engine(&self) -> &Engine {
+        self.engine.as_ref()
     }
 
-    pub fn arc_app(&self) -> Arc<Application> {
-        Arc::clone(&self.app)
+    pub fn arc_engine(&self) -> Arc<Engine> {
+        Arc::clone(&self.engine)
     }
 
     pub fn window(&self) -> &Window {
-        self.app().window()
+        self.engine().window()
     }
 
     pub fn handle_window_event(
@@ -82,9 +82,9 @@ impl GameLoop {
         event_loop_controller: &EventLoopController<'_>,
         event: &WindowEvent,
     ) -> Result<HandlingResult> {
-        self.app
+        self.engine
             .input_handler()
-            .handle_window_event(&self.app, event_loop_controller, event)
+            .handle_window_event(&self.engine, event_loop_controller, event)
     }
 
     pub fn handle_device_event(
@@ -92,20 +92,20 @@ impl GameLoop {
         event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
     ) -> Result<HandlingResult> {
-        self.app
+        self.engine
             .input_handler()
-            .handle_device_event(&self.app, event_loop_controller, event)
+            .handle_device_event(&self.engine, event_loop_controller, event)
     }
 
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
-        self.app.resize_rendering_surface(new_width, new_height);
+        self.engine.resize_rendering_surface(new_width, new_height);
     }
 
     pub fn perform_iteration(
         &mut self,
         event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
-        if self.app.is_paused() {
+        if self.engine.is_paused() {
             let iter_end_time = self.wait_for_target_frame_duration();
             self.previous_iter_end_time = iter_end_time;
             return Ok(());
@@ -117,7 +117,7 @@ impl GameLoop {
         });
 
         if let Err(mut task_errors) = execution_result {
-            self.app
+            self.engine
                 .handle_task_errors(&mut task_errors, event_loop_controller);
 
             // Pass any unhandled errors to caller
@@ -126,7 +126,7 @@ impl GameLoop {
             }
         }
 
-        self.app.renderer().write().unwrap().present();
+        self.engine.renderer().write().unwrap().present();
 
         let iter_end_time = self.wait_for_target_frame_duration();
 
@@ -136,7 +136,7 @@ impl GameLoop {
 
         let smooth_frame_duration = self.frame_rate_tracker.compute_smooth_frame_duration();
 
-        self.app
+        self.engine
             .simulator()
             .write()
             .unwrap()

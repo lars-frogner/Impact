@@ -1,15 +1,15 @@
-//! Management of tasks in an application.
+//! Management of tasks in the engine.
 
 use crate::{
-    application::Application, gpu, physics, scene, scheduling::TaskScheduler,
-    thread::ThreadPoolTaskErrors, voxel, window::EventLoopController,
+    engine::Engine, gpu, physics, scene, scheduling::TaskScheduler, thread::ThreadPoolTaskErrors,
+    voxel, window::EventLoopController,
 };
 use anyhow::Result;
 use std::{num::NonZeroUsize, sync::Arc};
 
-pub type AppTaskScheduler = TaskScheduler<Application>;
+pub type AppTaskScheduler = TaskScheduler<Engine>;
 
-impl Application {
+impl Engine {
     /// Creates a new task scheduler with the given number of workers and
     /// registers all tasks in it.
     ///

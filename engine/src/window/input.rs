@@ -1,7 +1,7 @@
 //! Input handling.
 
 use crate::{
-    application::Application,
+    engine::Engine,
     control::motion::{MotionDirection, MotionState},
     io::util::parse_ron_file,
     window::EventLoopController,
@@ -54,7 +54,7 @@ pub struct MouseButtonInputHandler {
     pub right_released: Option<MouseButtonInputHandlerFn>,
 }
 
-pub type MouseButtonInputHandlerFn = Box<dyn Fn(&Application) -> Result<()> + Send + Sync>;
+pub type MouseButtonInputHandlerFn = Box<dyn Fn(&Engine) -> Result<()> + Send + Sync>;
 
 /// A map associating specific keyboard key inputs
 /// with the actions they should perform.
@@ -131,13 +131,13 @@ impl InputHandler {
         &mut self.mouse_button_handler
     }
 
-    /// Takes a window event and possibly performs an action in the application.
+    /// Takes a window event and possibly performs an action in the engine.
     ///
     /// If no errors occur, returns a [`HandlingResult`] that signals whether
     /// the event should be handled by some other system instead.
     pub fn handle_window_event(
         &self,
-        app: &Arc<Application>,
+        engine: &Arc<Engine>,
         event_loop_controller: &EventLoopController<'_>,
         event: &WindowEvent,
     ) -> Result<HandlingResult> {
@@ -145,29 +145,29 @@ impl InputHandler {
             // Handle keyboard input events
             WindowEvent::KeyboardInput { event, .. } => {
                 self.key_handler
-                    .handle_event(app, event_loop_controller, event)
+                    .handle_event(engine, event_loop_controller, event)
             }
-            WindowEvent::MouseInput { button, state, .. } => {
-                self.mouse_button_handler.handle_event(app, button, state)
-            }
+            WindowEvent::MouseInput { button, state, .. } => self
+                .mouse_button_handler
+                .handle_event(engine, button, state),
             _ => Ok(HandlingResult::Unhandled),
         }
     }
 
-    /// Takes a device event and possibly performs an action in the application.
+    /// Takes a device event and possibly performs an action in the engine.
     ///
     /// If no errors occur, returns a [`HandlingResult`] that signals whether
     /// the event should be handled by some other system instead.
     pub fn handle_device_event(
         &self,
-        app: &Arc<Application>,
+        engine: &Arc<Engine>,
         _event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
     ) -> Result<HandlingResult> {
         match event {
             // Handle cursor movement events
             DeviceEvent::MouseMotion { delta } => {
-                MouseMotionInputHandler::handle_event(app, *delta)
+                MouseMotionInputHandler::handle_event(engine, *delta)
             }
             _ => Ok(HandlingResult::Unhandled),
         }
@@ -175,9 +175,9 @@ impl InputHandler {
 }
 
 impl MouseMotionInputHandler {
-    fn handle_event(app: &Application, mouse_displacement: (f64, f64)) -> Result<HandlingResult> {
-        if app.control_mode_active() {
-            app.update_orientation_controller(mouse_displacement);
+    fn handle_event(engine: &Engine, mouse_displacement: (f64, f64)) -> Result<HandlingResult> {
+        if engine.control_mode_active() {
+            engine.update_orientation_controller(mouse_displacement);
         }
         Ok(HandlingResult::Handled)
     }
@@ -186,32 +186,32 @@ impl MouseMotionInputHandler {
 impl MouseButtonInputHandler {
     fn handle_event(
         &self,
-        app: &Application,
+        engine: &Engine,
         button: &MouseButton,
         state: &ElementState,
     ) -> Result<HandlingResult> {
         match (button, state) {
             (MouseButton::Left, ElementState::Pressed) => {
                 if let Some(handler) = &self.left_pressed {
-                    handler(app)?;
+                    handler(engine)?;
                 }
                 Ok(HandlingResult::Handled)
             }
             (MouseButton::Left, ElementState::Released) => {
                 if let Some(handler) = &self.left_released {
-                    handler(app)?;
+                    handler(engine)?;
                 }
                 Ok(HandlingResult::Handled)
             }
             (MouseButton::Right, ElementState::Pressed) => {
                 if let Some(handler) = &self.right_pressed {
-                    handler(app)?;
+                    handler(engine)?;
                 }
                 Ok(HandlingResult::Handled)
             }
             (MouseButton::Right, ElementState::Released) => {
                 if let Some(handler) = &self.right_released {
-                    handler(app)?;
+                    handler(engine)?;
                 }
                 Ok(HandlingResult::Handled)
             }
@@ -233,7 +233,7 @@ impl KeyInputHandler {
 
     fn handle_event(
         &self,
-        app: &Application,
+        engine: &Engine,
         event_loop_controller: &EventLoopController<'_>,
         key_input_event: &KeyEvent,
     ) -> Result<HandlingResult> {
@@ -250,61 +250,62 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::ToggleInteractionMode => {
                         if state == &ElementState::Released {
-                            app.toggle_interaction_mode();
+                            engine.toggle_interaction_mode();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleWireframeMode => {
                         if state == &ElementState::Released {
-                            app.toggle_wireframe_mode();
+                            engine.toggle_wireframe_mode();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleShadowMapping => {
                         if state == &ElementState::Released {
-                            app.renderer().write().unwrap().toggle_shadow_mapping();
+                            engine.renderer().write().unwrap().toggle_shadow_mapping();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleAmbientOcclusion => {
                         if state == &ElementState::Released {
-                            app.renderer().read().unwrap().toggle_ambient_occlusion();
+                            engine.renderer().read().unwrap().toggle_ambient_occlusion();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleTemporalAntiAliasing => {
                         if state == &ElementState::Released {
-                            app.toggle_temporal_anti_aliasing();
+                            engine.toggle_temporal_anti_aliasing();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleBloom => {
                         if state == &ElementState::Released {
-                            app.renderer().read().unwrap().toggle_bloom();
+                            engine.renderer().read().unwrap().toggle_bloom();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::CycleToneMapping => {
                         if state == &ElementState::Released {
-                            app.renderer().read().unwrap().cycle_tone_mapping();
+                            engine.renderer().read().unwrap().cycle_tone_mapping();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::IncreaseExposure => {
                         if state == &ElementState::Released {
-                            app.increase_camera_sensitivity();
+                            engine.increase_camera_sensitivity();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::DecreaseExposure => {
                         if state == &ElementState::Released {
-                            app.decrease_camera_sensitivity();
+                            engine.decrease_camera_sensitivity();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleRenderAttachmentVisualization => {
                         if state == &ElementState::Released {
-                            app.renderer()
+                            engine
+                                .renderer()
                                 .read()
                                 .unwrap()
                                 .toggle_render_attachment_visualization();
@@ -313,7 +314,8 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::CycleVisualizedRenderAttachmentQuantityForward => {
                         if state == &ElementState::Released {
-                            app.renderer()
+                            engine
+                                .renderer()
                                 .read()
                                 .unwrap()
                                 .cycle_visualized_render_attachment_quantity_forward();
@@ -322,7 +324,8 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::CycleVisualizedRenderAttachmentQuantityBackward => {
                         if state == &ElementState::Released {
-                            app.renderer()
+                            engine
+                                .renderer()
                                 .read()
                                 .unwrap()
                                 .cycle_visualized_render_attachment_quantity_backward();
@@ -331,62 +334,64 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::ToggleRenderPassTimings => {
                         if state == &ElementState::Released {
-                            app.renderer().write().unwrap().toggle_timings();
+                            engine.renderer().write().unwrap().toggle_timings();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::IncrementSimulationSubstepCount => {
                         if state == &ElementState::Released {
-                            app.simulator().write().unwrap().increment_n_substeps();
+                            engine.simulator().write().unwrap().increment_n_substeps();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::DecrementSimulationSubstepCount => {
                         if state == &ElementState::Released {
-                            app.simulator().write().unwrap().decrement_n_substeps();
+                            engine.simulator().write().unwrap().decrement_n_substeps();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::IncreaseSimulationSpeed => {
                         if state == &ElementState::Released {
-                            app
+                            engine
                                 .increment_simulation_speed_multiplier_and_compensate_controller_speed();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::DecreaseSimulationSpeed => {
                         if state == &ElementState::Released {
-                            app
+                            engine
                                 .decrement_simulation_speed_multiplier_and_compensate_controller_speed();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
-                            app.screen_capturer().request_screenshot_save();
+                            engine.screen_capturer().request_screenshot_save();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::SaveOmnidirectionalLightShadowMap => {
                         if state == &ElementState::Released {
-                            app.screen_capturer()
+                            engine
+                                .screen_capturer()
                                 .request_omnidirectional_light_shadow_map_save();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::SaveUnidirectionalLightShadowMap => {
                         if state == &ElementState::Released {
-                            app.screen_capturer()
+                            engine
+                                .screen_capturer()
                                 .request_unidirectional_light_shadow_map_save();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     // Check if the input is for the motion controller,
                     // and if so, performed the required motion update
-                    action if app.control_mode_active() => {
+                    action if engine.control_mode_active() => {
                         match MotionDirection::try_from_input_action(action) {
                             Some(direction) => {
-                                app.update_motion_controller(
+                                engine.update_motion_controller(
                                     MotionState::from_key_state(*state),
                                     direction,
                                 );

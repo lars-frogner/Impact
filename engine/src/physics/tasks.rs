@@ -1,7 +1,7 @@
 //! Tasks for physics.
 
 use crate::{
-    application::{Application, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::AppTaskScheduler},
     define_execution_tag, define_task,
     physics::{PhysicsSimulator, motion},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
@@ -25,9 +25,9 @@ define_task!(
         SyncLightsInStorage
     ],
     execute_on = [PhysicsTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Updating controlled entities"; {
-            app.update_controlled_entities();
+            engine.update_controlled_entities();
             Ok(())
         })
     }
@@ -43,14 +43,14 @@ define_task!(
         UpdateControlledEntities
     ],
     execute_on = [PhysicsTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Advancing simulation"; {
-            app.simulator()
+            engine.simulator()
                 .write()
                 .unwrap()
                 .advance_simulation(
-                    app.ecs_world(),
-                    &app.scene()
+                    engine.ecs_world(),
+                    &engine.scene()
                         .read()
                         .unwrap()
                         .voxel_manager()

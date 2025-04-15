@@ -1,8 +1,8 @@
 //! Tasks related to voxels.
 
 use crate::{
-    application::{Application, tasks::AppTaskScheduler},
     define_task,
+    engine::{Engine, tasks::AppTaskScheduler},
     gpu::rendering::{render_command::tasks::SyncRenderCommands, tasks::RenderingTag},
     physics::tasks::{AdvanceSimulation, PhysicsTag},
     scene::{RenderResourcesDesynchronized, tasks::UpdateSceneGroupToWorldTransforms},
@@ -16,13 +16,13 @@ define_task!(
     [pub] ApplySphereVoxelAbsorption,
     depends_on = [AdvanceSimulation, UpdateSceneGroupToWorldTransforms],
     execute_on = [PhysicsTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Applying voxel absorbers"; {
-            let simulator = app.simulator().read().unwrap();
-            let scene = app.scene().read().unwrap();
+            let simulator = engine.simulator().read().unwrap();
+            let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
-            let ecs_world = app.ecs_world().read().unwrap();
+            let ecs_world = engine.ecs_world().read().unwrap();
             voxel::systems::apply_absorption(&simulator, &mut voxel_manager, &scene_graph, &ecs_world);
             Ok(())
         })
@@ -35,9 +35,9 @@ define_task!(
     [pub] SyncVoxelObjectMeshes,
     depends_on = [],
     execute_on = [RenderingTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Synchronizing voxel object meshes"; {
-            let scene = app.scene().read().unwrap();
+            let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
 
             let mut desynchronized = RenderResourcesDesynchronized::No;
@@ -47,7 +47,7 @@ define_task!(
             }
 
             if desynchronized.is_yes() {
-                app
+                engine
                     .renderer()
                     .read()
                     .unwrap()
@@ -64,9 +64,9 @@ define_task!(
     [pub] HandleStagedVoxelObjects,
     depends_on = [SyncRenderCommands, ApplySphereVoxelAbsorption],
     execute_on = [PhysicsTag, RenderingTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Handling staged voxel objects"; {
-            voxel::entity::handle_staged_voxel_objects(app)
+            voxel::entity::handle_staged_voxel_objects(engine)
         })
     }
 );
@@ -77,9 +77,9 @@ define_task!(
     [pub] HandleEmptiedVoxelObjects,
     depends_on = [SyncRenderCommands, ApplySphereVoxelAbsorption],
     execute_on = [PhysicsTag, RenderingTag],
-    |app: &Application| {
+    |engine: &Engine| {
         with_debug_logging!("Handling emptied voxel objects"; {
-            voxel::entity::handle_emptied_voxel_objects(app)
+            voxel::entity::handle_emptied_voxel_objects(engine)
         })
     }
 );

@@ -6,10 +6,10 @@ mod main {
     use anyhow::bail;
     use clap::{Parser, Subcommand};
     use impact::{
-        application::ApplicationConfig,
+        application::DummyApp,
+        engine::EngineConfig,
         io::util::{parse_ron_file, write_ron_file},
         run,
-        scripting::DummyScript,
     };
     use std::{path::PathBuf, sync::Arc};
 
@@ -66,10 +66,10 @@ mod main {
             Command::Run { config } => {
                 let config = match config {
                     Some(file_path) => parse_ron_file(file_path)?,
-                    None => ApplicationConfig::default(),
+                    None => EngineConfig::default(),
                 };
 
-                run::run(config, |_| {}, Arc::new(DummyScript))
+                run::run(config, |_| {}, Arc::new(DummyApp))
             }
             Command::GenerateConfig {
                 output_path,
@@ -78,7 +78,7 @@ mod main {
                 if !force_overwrite && output_path.exists() {
                     bail!("File {} already exists", output_path.display());
                 }
-                let config = ApplicationConfig::default();
+                let config = EngineConfig::default();
                 write_ron_file(&config, output_path)
             }
             #[cfg(feature = "profiling")]

@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow};
 use input::HandlingResult;
 use std::{num::NonZeroU32, sync::Arc};
 use winit::{
-    application::ApplicationHandler,
+    application::ApplicationHandler as EngineHandler,
     dpi::PhysicalSize,
     event::{DeviceEvent, DeviceId},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
@@ -56,7 +56,7 @@ impl GameHandler {
     }
 }
 
-impl ApplicationHandler for GameHandler {
+impl EngineHandler for GameHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(game_loop) = &self.game_loop {
             // `game_loop` is already initialized
