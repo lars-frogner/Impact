@@ -94,8 +94,8 @@ impl VoxelTypeRegistry {
     /// deserializes it into a [`VoxelTypeSpecifications`] object that is used
     /// to create a new voxel type registry.
     pub fn from_voxel_type_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
-        let voxel_types = parse_ron_file(file_path)?;
-        Self::new(VoxelTypeSpecifications(voxel_types))
+        let voxel_types = VoxelTypeSpecifications::from_ron_file(file_path)?;
+        Self::new(voxel_types)
     }
 
     /// Creates a new voxel type registry for the specified voxel types.
@@ -283,5 +283,36 @@ impl FixedVoxelMaterialProperties {
 impl Default for FixedVoxelMaterialProperties {
     fn default() -> Self {
         Self::new(0.5, 0.5, 0.0, 0.0)
+    }
+}
+
+impl VoxelTypeSpecifications {
+    /// Parses the specifications from the RON file at the given path and
+    /// resolves any specified paths.
+    pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        let file_path = file_path.as_ref();
+        let mut specs = Self(parse_ron_file(file_path)?);
+        if let Some(root_path) = file_path.parent() {
+            specs.resolve_paths(root_path);
+        }
+        Ok(specs)
+    }
+
+    /// Resolves all paths in the specifications by prepending the given root
+    /// path to all paths.
+    fn resolve_paths(&mut self, root_path: &Path) {
+        for specification in &mut self.0 {
+            specification.resolve_paths(root_path);
+        }
+    }
+}
+
+impl VoxelTypeSpecification {
+    /// Resolves all paths in the specification by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        self.color_texture_path = root_path.join(&self.color_texture_path);
+        self.roughness_texture_path = root_path.join(&self.roughness_texture_path);
+        self.normal_texture_path = root_path.join(&self.normal_texture_path);
     }
 }

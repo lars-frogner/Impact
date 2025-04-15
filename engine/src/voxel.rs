@@ -21,7 +21,11 @@ use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
 use mesh::MeshedChunkedVoxelObject;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+};
 use utils::{Dimension, Side};
 use voxel_types::{VoxelType, VoxelTypeRegistry, VoxelTypeSpecifications};
 
@@ -507,5 +511,15 @@ impl VoxelObjectManager {
 impl Default for VoxelObjectManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl VoxelConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        if let Some(voxel_types_path) = self.voxel_types_path.as_mut() {
+            *voxel_types_path = root_path.join(&voxel_types_path);
+        }
     }
 }
