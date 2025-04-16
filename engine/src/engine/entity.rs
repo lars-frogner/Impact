@@ -1,7 +1,9 @@
 //! Management of entities in the engine.
 
 use super::Engine;
-use crate::scene::RenderResourcesDesynchronized;
+use crate::scene::{
+    RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp,
+};
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
@@ -108,6 +110,30 @@ impl Engine {
         }
 
         ecs_world.remove_entity(entity)
+    }
+
+    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    ///
+    /// # Errors
+    /// Returns an error if the entity does not exist or does not have the
+    /// [`SceneEntityFlagsComp`] component.
+    pub fn enable_scene_entity(&self, entity: &Entity) -> Result<()> {
+        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
+            flags.0.remove(SceneEntityFlags::IS_DISABLED);
+            Ok(())
+        })
+    }
+
+    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    ///
+    /// # Errors
+    /// Returns an error if the entity does not exist or does not have the
+    /// [`SceneEntityFlagsComp`] component.
+    pub fn disable_scene_entity(&self, entity: &Entity) -> Result<()> {
+        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
+            flags.0.insert(SceneEntityFlags::IS_DISABLED);
+            Ok(())
+        })
     }
 
     fn extract_component_metadata(
