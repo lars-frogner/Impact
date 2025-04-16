@@ -3,9 +3,11 @@
 //! Roc app with functions to allocate memory and execute effects such as
 //! writing to stdio.
 
+pub use roc_std;
+
 use core::ffi::c_void;
 use roc_io_error::IOErr;
-use roc_std::{RocList, RocResult, RocStr};
+use roc_std::{RocResult, RocStr};
 use std::io::Write;
 
 // Protect our functions from the vicious GC.
@@ -33,49 +35,51 @@ pub fn init() {
 
 /// # Safety
 /// This function delegates to [`libc::malloc`], and so is equally unsafe.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_alloc(size: usize, _alignment: u32) -> *mut c_void {
-    libc::malloc(size)
+    unsafe { libc::malloc(size) }
 }
 
 /// # Safety
 /// This function delegates to [`libc::realloc`], and so is equally unsafe.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_realloc(
     c_ptr: *mut c_void,
     new_size: usize,
     _old_size: usize,
     _alignment: u32,
 ) -> *mut c_void {
-    libc::realloc(c_ptr, new_size)
+    unsafe { libc::realloc(c_ptr, new_size) }
 }
 
 /// # Safety
 /// This function delegates to [`libc::dealloc`], and so is equally unsafe.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_dealloc(c_ptr: *mut c_void, _alignment: u32) {
-    libc::free(c_ptr);
+    unsafe {
+        libc::free(c_ptr);
+    }
 }
 
 /// # Safety
 /// This function delegates to [`libc::memset`], and so is equally unsafe.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_memset(dst: *mut c_void, c: i32, n: usize) -> *mut c_void {
-    libc::memset(dst, c, n)
+    unsafe { libc::memset(dst, c, n) }
 }
 
 /// # Safety
 /// This function delegates to [`libc::getppid`], and so is equally unsafe.
 #[cfg(unix)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_getppid() -> libc::pid_t {
-    libc::getppid()
+    unsafe { libc::getppid() }
 }
 
 /// # Safety
 /// This function delegates to [`libc::mmap`], and so is equally unsafe.
 #[cfg(unix)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_mmap(
     addr: *mut libc::c_void,
     len: libc::size_t,
@@ -84,32 +88,32 @@ pub unsafe extern "C" fn roc_mmap(
     fd: libc::c_int,
     offset: libc::off_t,
 ) -> *mut libc::c_void {
-    libc::mmap(addr, len, prot, flags, fd, offset)
+    unsafe { libc::mmap(addr, len, prot, flags, fd, offset) }
 }
 
 /// # Safety
 /// This function delegates to [`libc::shm_open`], and so is equally unsafe.
 #[cfg(unix)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_shm_open(
     name: *const libc::c_char,
     oflag: libc::c_int,
     mode: libc::mode_t,
 ) -> libc::c_int {
-    libc::shm_open(name, oflag, mode as libc::c_uint)
+    unsafe { libc::shm_open(name, oflag, mode as libc::c_uint) }
 }
 
 /// # Safety
 /// ??
 #[allow(clippy::exit)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_panic(msg: *mut RocStr, tag_id: u32) {
     match tag_id {
         0 => {
-            eprintln!("Roc standard library hit a panic: {}", &*msg);
+            eprintln!("Roc standard library hit a panic: {}", unsafe { &*msg });
         }
         1 => {
-            eprintln!("Application hit a panic: {}", &*msg);
+            eprintln!("Application hit a panic: {}", unsafe { &*msg });
         }
         _ => unreachable!(),
     }
@@ -118,12 +122,12 @@ pub unsafe extern "C" fn roc_panic(msg: *mut RocStr, tag_id: u32) {
 
 /// # Safety
 /// ??
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_dbg(loc: *mut RocStr, msg: *mut RocStr, src: *mut RocStr) {
-    eprintln!("[{}] {} = {}", &*loc, &*src, &*msg);
+    unsafe { eprintln!("[{}] {} = {}", &*loc, &*src, &*msg) };
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn roc_fx_stdout_line(line: &RocStr) -> RocResult<(), IOErr> {
     let stdout = std::io::stdout();
 
