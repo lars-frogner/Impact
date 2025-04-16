@@ -1,7 +1,9 @@
 [workspace]
-resolver = "2"
-members = []
-ignore = ["tools", "roc_platform"]
+exclude = ["cli", "tools", "roc_platform"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
 
 [workspace.lints.rust]
 future_incompatible = "warn"
@@ -90,8 +92,8 @@ zero_sized_map_values = "warn"
 
 [package]
 name = "impact_game"
-version = "0.1.0"
-edition = "2024"
+version = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
@@ -101,8 +103,17 @@ roc_codegen = ["impact/roc_codegen"]
 
 [dependencies]
 anyhow = "1.0"
+env_logger = "0.11"
+ffi_utils = { path = "../../ffi_utils" }
 impact = { path = "../../engine" }
+impact_ecs = { path = "../../engine/impact_ecs" }
 inventory = "0.3"
+libloading = "0.8"
+log = "0.4"
+roc_platform_core = { path = "../../roc_platform/core" }
 
 [lints]
 workspace = true
+
+[profile.release]
+# lto = true
