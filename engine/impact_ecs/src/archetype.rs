@@ -138,6 +138,11 @@ pub type ArchetypeComponentView<'a> = ArchetypeComponents<ComponentView<'a>>;
 /// of components making up a specific [`Archetype`].
 pub type ArchetypeComponentStorage = ArchetypeComponents<ComponentStorage>;
 
+/// Container holding [`SingleInstance`] [`ComponentStorage`]s for a set
+/// of components making up a specific [`Archetype`].
+pub type SingleInstanceArchetypeComponentStorage =
+    ArchetypeComponents<SingleInstance<ComponentStorage>>;
+
 /// A table holding the component data belonging to all entities
 /// with a specific archetype.
 ///
