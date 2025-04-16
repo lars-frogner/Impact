@@ -22,7 +22,7 @@ use crate::{
     mesh::{MeshRepository, components::MeshComp, texture_projection::TextureProjection},
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
-    scene::{Scene, SceneEntityFlags, components::SceneEntityFlagsComp},
+    scene::Scene,
     skybox::Skybox,
     ui::UserInterface,
     voxel::{self, VoxelConfig, VoxelManager},
@@ -541,30 +541,6 @@ impl Engine {
                 * simulator.simulation_speed_multiplier_increment_factor();
             motion_controller.set_movement_speed(new_movement_speed);
         }
-    }
-
-    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
-    ///
-    /// # Errors
-    /// Returns an error if the entity does not exist or does not have the
-    /// [`SceneEntityFlagsComp`] component.
-    pub fn enable_scene_entity(&self, entity: &Entity) -> Result<()> {
-        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
-            flags.0.remove(SceneEntityFlags::IS_DISABLED);
-            Ok(())
-        })
-    }
-
-    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
-    ///
-    /// # Errors
-    /// Returns an error if the entity does not exist or does not have the
-    /// [`SceneEntityFlagsComp`] component.
-    pub fn disable_scene_entity(&self, entity: &Entity) -> Result<()> {
-        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
-            flags.0.insert(SceneEntityFlags::IS_DISABLED);
-            Ok(())
-        })
     }
 
     /// Performs any setup required before starting the game loop.
