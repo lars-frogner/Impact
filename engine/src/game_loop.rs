@@ -1,14 +1,15 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
-    engine::{Engine, tasks::AppTaskScheduler},
     define_execution_tag_set,
+    engine::{Engine, tasks::AppTaskScheduler},
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
     window::{EventLoopController, Window, WindowEvent, input::HandlingResult},
 };
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroUsize},
     sync::Arc,
@@ -28,7 +29,7 @@ pub struct GameLoop {
     config: GameLoopConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GameLoopConfig {
     n_worker_threads: NonZeroUsize,
     max_fps: Option<NonZeroU32>,
