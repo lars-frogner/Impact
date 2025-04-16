@@ -103,14 +103,8 @@ pub fn run(
     app: Arc<dyn Application>,
     on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
 ) -> Result<()> {
-    init_logging()?;
     let mut handler = GameHandler::new(|window| init_game_loop(app, window, on_engine_created));
     handler.run()
-}
-
-fn init_logging() -> Result<()> {
-    env_logger::init();
-    Ok(())
 }
 
 fn init_game_loop(
