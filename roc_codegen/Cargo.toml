@@ -1,7 +1,8 @@
 [workspace]
-members = ["roc_codegen/roc_codegen_macros"]
+members = ["roc_codegen_macros"]
 
 [workspace.package]
+version = "0.1.0"
 edition = "2024"
 
 [workspace.lints.rust]
@@ -91,7 +92,7 @@ zero_sized_map_values = "warn"
 
 [package]
 name = "roc_codegen"
-version = "0.1.0"
+version = { workspace = true }
 edition = { workspace = true }
 
 [features]

@@ -2,6 +2,7 @@
 members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 
 [workspace.package]
+version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
@@ -102,7 +103,7 @@ zero_sized_map_values = "warn"
 
 [package]
 name = "impact"
-version = "0.1.0"
+version = { workspace = true }
 edition = { workspace = true }
 
 build = "build.rs"
