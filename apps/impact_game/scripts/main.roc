@@ -1,5 +1,4 @@
 app [
-    app_config_path!,
     setup_scene!,
 ] {
     pf: platform "../roc_platform/api/main.roc",
@@ -7,11 +6,6 @@ app [
 }
 
 import pf.Stdout as Stdout
-
-app_config_path! : {} => Str
-app_config_path! = |_|
-    _ = Stdout.line!("app_config_path! called")
-    "config/config.ron"
 
 setup_scene! : {} => Result {} Str
 setup_scene! = |_|
