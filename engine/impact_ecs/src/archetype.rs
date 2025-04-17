@@ -9,8 +9,8 @@ use super::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
+use impact_containers::KeyIndexMapper;
 use impact_ecs_macros::archetype_of;
-use impact_utils::KeyIndexMapper;
 use paste::paste;
 use std::{
     collections::{HashMap, HashSet, hash_map::DefaultHasher},

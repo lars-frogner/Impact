@@ -19,7 +19,7 @@ use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentStorage, SingleInstance},
 };
-use impact_utils::hash64;
+use impact_math::hash64;
 use nalgebra::{UnitVector3, point, vector};
 use std::{
     collections::{HashMap, hash_map::Entry},

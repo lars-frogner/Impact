@@ -88,7 +88,7 @@ use crate::{
     window::{GameHandler, Window, input::InputConfig},
 };
 use anyhow::Result;
-use impact_utils::hash32;
+use impact_math::hash32;
 use nalgebra::{Point3, UnitVector3, Vector3, point, vector};
 use rand::{Rng, SeedableRng, rngs::ThreadRng};
 use serde::{Deserialize, Serialize};

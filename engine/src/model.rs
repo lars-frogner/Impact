@@ -8,7 +8,8 @@ pub use transform::register_model_feature_types;
 use crate::{gpu::GraphicsDevice, material::MaterialHandle, mesh::MeshID};
 use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{self, AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
+use impact_containers::{AlignedByteVec, Alignment, KeyIndexMapper};
+use impact_math::{self, Hash64};
 use nohash_hasher::BuildNoHashHasher;
 use std::{
     borrow::Cow,
@@ -55,7 +56,7 @@ macro_rules! impl_InstanceFeature {
     ($ty:ty, $vertex_attr_array:expr) => {
         impl $crate::model::InstanceFeature for $ty {
             const FEATURE_TYPE_ID: $crate::model::InstanceFeatureTypeID =
-                impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
+                impact_math::ConstStringHash64::new(stringify!($ty)).into_hash();
 
             const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
                 $crate::mesh::buffer::create_vertex_buffer_layout_for_instance::<Self>(
@@ -180,7 +181,7 @@ impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the given mesh and
     /// material.
     pub fn for_mesh_and_material(mesh_id: MeshID, material_handle: MaterialHandle) -> Self {
-        let hash = impact_utils::compute_hash_64_of_two_hash_64(
+        let hash = impact_math::compute_hash_64_of_two_hash_64(
             mesh_id.0.hash(),
             material_handle.compute_hash(),
         );
@@ -1466,7 +1467,7 @@ mod tests {
             material::{MaterialHandle, MaterialID},
             mesh::MeshID,
         };
-        use impact_utils::hash64;
+        use impact_math::hash64;
 
         fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
             ModelID::for_mesh_and_material(

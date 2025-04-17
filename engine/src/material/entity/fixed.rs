@@ -15,7 +15,7 @@ use crate::{
     scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_utils::hash64;
+use impact_math::hash64;
 use lazy_static::lazy_static;
 use std::sync::RwLock;
 

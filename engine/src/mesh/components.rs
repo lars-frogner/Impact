@@ -3,7 +3,7 @@
 use crate::mesh::{FrontFaceSide, MeshID};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
-use impact_utils::hash64;
+use impact_math::hash64;
 use std::fmt::Display;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing

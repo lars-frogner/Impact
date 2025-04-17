@@ -1,0 +1,11 @@
+[package]
+name = "impact_containers"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
+
+[lints]
+workspace = true

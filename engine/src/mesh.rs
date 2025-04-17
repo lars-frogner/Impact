@@ -15,7 +15,7 @@ use anyhow::{Result, anyhow};
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, stringhash64_newtype};
+use impact_math::{hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use std::{
@@ -27,7 +27,7 @@ use texture_projection::TextureProjection;
 
 stringhash64_newtype!(
     /// Identifier for specific meshes.
-    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
+    /// Wraps a [`StringHash64`](impact_math::StringHash64).
     [pub] MeshID
 );
 

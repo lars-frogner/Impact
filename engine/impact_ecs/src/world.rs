@@ -9,7 +9,7 @@ use super::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::KeyIndexMapper;
+use impact_containers::KeyIndexMapper;
 use std::{
     hash::Hash,
     sync::{RwLock, RwLockReadGuard},

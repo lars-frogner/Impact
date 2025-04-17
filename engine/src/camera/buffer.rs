@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{ConstStringHash64, HaltonSequence};
+use impact_math::{ConstStringHash64, HaltonSequence};
 use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
 use std::{
     borrow::Cow,

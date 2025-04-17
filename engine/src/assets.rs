@@ -13,7 +13,7 @@ use crate::{
     io::util::parse_ron_file,
 };
 use anyhow::{Result, bail};
-use impact_utils::hash32;
+use impact_math::hash32;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{HashMap, hash_map::Entry},

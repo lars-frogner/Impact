@@ -1,8 +1,8 @@
 //! Utilities for FFI.
 
 use anyhow::{Result, anyhow};
+use impact_containers::{AlignedByteVec, Alignment};
 use impact_ecs::component::{ComponentID, ComponentStorage, SingleInstance};
-use impact_utils::{AlignedByteVec, Alignment};
 
 /// The expected layout is a packed sequence of component structures of the
 /// following form:

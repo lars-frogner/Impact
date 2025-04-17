@@ -17,7 +17,7 @@ use crate::{
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use entity::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};
-use impact_utils::{Hash64, StringHash64, hash64, stringhash64_newtype};
+use impact_math::{Hash64, StringHash64, hash64, stringhash64_newtype};
 use nalgebra::Vector3;
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
@@ -29,13 +29,13 @@ pub type RGBColor = Vector3<f32>;
 
 stringhash64_newtype!(
     /// Identifier for specific material types.
-    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
+    /// Wraps a [`StringHash64`](impact_math::StringHash64).
     [pub] MaterialID
 );
 
 stringhash64_newtype!(
     /// Identifier for group of textures used for material properties. Wraps a
-    /// [`StringHash64`](impact_utils::StringHash64).
+    /// [`StringHash64`](impact_math::StringHash64).
     [pub] MaterialPropertyTextureGroupID
 );
 
@@ -464,7 +464,7 @@ impl MaterialHandle {
         let mut hash = self.material_id.0.hash();
 
         if !self.material_property_texture_group_id.is_empty() {
-            hash = impact_utils::compute_hash_64_of_two_hash_64(
+            hash = impact_math::compute_hash_64_of_two_hash_64(
                 hash,
                 self.material_property_texture_group_id.0.hash(),
             );

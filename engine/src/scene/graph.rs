@@ -21,7 +21,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{GenerationalIdx, GenerationalReusingVec};
+use impact_containers::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::Similarity3;
 use std::collections::HashSet;
 
@@ -1452,7 +1452,7 @@ mod tests {
         mesh::MeshID,
     };
     use approx::assert_abs_diff_eq;
-    use impact_utils::hash64;
+    use impact_math::hash64;
     use nalgebra::{Point3, Rotation3, Scale3, Translation3, point};
 
     fn create_dummy_group_node<F: Float>(

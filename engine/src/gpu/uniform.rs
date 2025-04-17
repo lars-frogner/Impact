@@ -8,7 +8,8 @@ use crate::{
     util::tracking::{CollectionChange, CollectionChangeTracker},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{Alignment, ConstStringHash64, KeyIndexMapper};
+use impact_containers::{Alignment, KeyIndexMapper};
+use impact_math::ConstStringHash64;
 use std::{
     borrow::Cow,
     fmt::Debug,
@@ -74,7 +75,7 @@ macro_rules! assert_uniform_valid {
         paste::item! {
             #[allow(non_upper_case_globals)]
             const  [<_ $uniform _valid>]: () = const {
-                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform<$( $inner ),+>>()))
+                assert!(impact_containers::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform<$( $inner ),+>>()))
             };
         }
     };
@@ -82,7 +83,7 @@ macro_rules! assert_uniform_valid {
         paste::item! {
             #[allow(non_upper_case_globals)]
             const  [<_ $uniform _valid>]: () = const {
-                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform>()))
+                assert!(impact_containers::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform>()))
             };
         }
     };
