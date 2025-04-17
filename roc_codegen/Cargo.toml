@@ -104,7 +104,7 @@ bitflags = "2.6"
 bytemuck = { version = "1.22", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
-nalgebra = "0.33"
+nalgebra = { version = "0.33", features = ["bytemuck"] }
 
 roc_codegen_macros = { path = "roc_codegen_macros" }
 

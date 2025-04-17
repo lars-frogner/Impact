@@ -6,21 +6,16 @@ use std::{
     fmt::{self, Display},
 };
 
-/// Represents types that should have a Roc equivalent. Implementing this
-/// trait through the [`Roc`](crate::Roc) derive macro enables a corresponding
-/// [`RocTypeDescriptor`] to be registered and later used to
-/// [`generate`](crate::generate) Roc code.
+/// Represents types that have a Roc equivalent. This should never be
+/// implemented directly. Instead, annotate types using the
+/// [`roc`](crate::roc) attribute macro.
 pub trait Roc {
     const ROC_TYPE_ID: RocTypeID;
     const SERIALIZED_SIZE: usize;
 }
 
-/// Represents [`Roc`] types consisting of Plain Old Data (POD). Use this trait
-/// rather that the [`Roc`] trait for types implementing
-/// [`Pod`](bytemuck::Pod), as this will unlock more use cases for the
-/// generated Roc code. In particular, ECS components, which are always POD,
-/// should always derive this trait rather than [`Roc`].
-pub trait RocPod: Roc {}
+/// Helper trait to enforce that certain Roc types are POD.
+pub trait RocPod: Roc + bytemuck::Pod {}
 
 /// A unique ID identifying a type implementing [`Roc`].
 #[repr(transparent)]
@@ -45,8 +40,8 @@ pub struct RocTypeDescriptor {
     pub docstring: &'static str,
 }
 
-// Whenever a type derives the [`Roc`] or [`RocPod`] trait, the macro infers a
-// [`RocTypeDescriptor`] and registers it using [`inventory::submit!`]
+// Whenever a type is annotated with the `roc` attribute macro, the macro
+// infers a [`RocTypeDescriptor`] and registers it using [`inventory::submit!`]
 // (provided that the `enabled` feature is active). This
 // [`inventory::collect!`] allows all type descriptors registered in any crate
 // linked with this one to be gathered using [`inventory::iter`] when we are to
@@ -57,7 +52,7 @@ inventory::collect!(RocTypeDescriptor);
 bitflags! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
     pub struct RocTypeFlags: u8 {
-        /// Whether the type derives [`RocPod`].
+        /// Whether the type is Plain Old Data (POD).
         const IS_POD       = 1 << 0;
         /// Whether the type is an ECS component. Note that this flag is
         /// determined at generation time (by comparing against registered
@@ -66,7 +61,7 @@ bitflags! {
     }
 }
 
-// These need to match the corresponding constants in `roc_codegen_macros::roc`.
+// These need to match the corresponding constants in `roc_codegen_macros::roc_attr`.
 // We can't use dynamically sized collections for this information, since the
 // [`RocTypeDescriptor`]s must allow us to define them statically.
 pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
@@ -96,12 +91,13 @@ pub enum RocPrimitiveKind {
     LibraryProvided {
         /// If the library-provided primitive has single- and double-precision
         /// versions, this specifies which one this instance of the type uses.
-        precision: Option<RocLibraryPrimitivePrecision>,
+        precision: RocLibraryPrimitivePrecision,
     },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RocLibraryPrimitivePrecision {
+    None,
     Single,
     Double,
 }
@@ -206,12 +202,14 @@ impl RocTypeDescriptor {
     /// `Vector3 Binary32` as opposed to just `Vector3` (which could have
     /// either 32- or 64-bit precision).
     pub fn concrete_roc_name(&self) -> Cow<'static, str> {
-        if let Some(precision) = self.precision() {
-            Cow::Owned(format!(
-                "{} {}",
-                self.roc_name,
-                precision.roc_type_variable()
-            ))
+        if let RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
+            precision, ..
+        }) = &self.composition
+        {
+            match precision.roc_type_variable() {
+                Some(type_variable) => Cow::Owned(format!("{} {}", self.roc_name, type_variable)),
+                None => Cow::Borrowed(self.roc_name),
+            }
         } else {
             Cow::Borrowed(self.roc_name)
         }
@@ -235,15 +233,15 @@ impl RocTypeDescriptor {
                 format!("Builtin.{}_{}", func_base, self.roc_name.to_lowercase())
             }
             RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
-                precision: Some(precision),
-            }) => {
-                format!(
-                    "{}.{}_{}",
-                    self.roc_name,
-                    func_base,
-                    precision.bit_count_str()
-                )
-            }
+                precision, ..
+            }) => match precision.bit_count_str() {
+                Some(bit_count) => {
+                    format!("{}.{}_{}", self.roc_name, func_base, bit_count)
+                }
+                None => {
+                    format!("{}.{}", self.roc_name, func_base)
+                }
+            },
             _ => {
                 format!("{}.{}", self.roc_name, func_base)
             }
@@ -264,32 +262,22 @@ impl RocTypeDescriptor {
     pub fn is_component(&self) -> bool {
         self.flags.contains(RocTypeFlags::IS_COMPONENT)
     }
-
-    fn precision(&self) -> Option<RocLibraryPrimitivePrecision> {
-        if let RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
-            precision: Some(precision),
-            ..
-        }) = &self.composition
-        {
-            Some(*precision)
-        } else {
-            None
-        }
-    }
 }
 
 impl RocLibraryPrimitivePrecision {
-    const fn roc_type_variable(self) -> &'static str {
+    const fn roc_type_variable(self) -> Option<&'static str> {
         match self {
-            Self::Single => "Binary32",
-            Self::Double => "Binary64",
+            Self::None => None,
+            Self::Single => Some("Binary32"),
+            Self::Double => Some("Binary64"),
         }
     }
 
-    const fn bit_count_str(self) -> &'static str {
+    const fn bit_count_str(self) -> Option<&'static str> {
         match self {
-            Self::Single => "32",
-            Self::Double => "64",
+            Self::None => None,
+            Self::Single => Some("32"),
+            Self::Double => Some("64"),
         }
     }
 }

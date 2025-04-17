@@ -3,14 +3,14 @@
 
 pub mod meta;
 
-#[cfg(feature = "enabled")]
+#[macro_use]
 mod primitives;
 
 #[cfg(feature = "enabled")]
 pub mod generate;
 
-/// Derive macro generating an implementation of the [`Roc`](crate::meta::Roc)
-/// trait. The macro will infer and register a
+/// Attribute macro for annotating Rust types that should be available in Roc.
+/// The macro will infer and register a
 /// [`RocTypeDescriptor`](crate::meta::RocTypeDescriptor) for the target type,
 /// which is used to [`generate`](crate::generate) the associated Roc code.
 ///
@@ -18,27 +18,27 @@ pub mod generate;
 /// target type has an active feature named `roc_codegen` and the `enabled`
 /// feature is active for the [`roc_codegen`] crate.
 ///
-/// Deriving the `Roc` trait will only work for types whose constituent types
-/// all implement `Roc` or [`RocPod`](crate::meta::RocPod).
-pub use roc_codegen_macros::Roc;
-
-/// Derive macro generating an implementation of the
-/// [`RocPod`](crate::meta::RocPod) trait. The macro will infer and register a
-/// [`RocTypeDescriptor`](crate::meta::RocTypeDescriptor) for the target type,
-/// which is used to [`generate`](crate::generate) the associated Roc code.
-///
-/// Note that this registration is only performed when the crate hosting the
-/// target type has an active feature named `roc_codegen` and the `enabled`
-/// feature is active for the [`roc_codegen`] crate.
-///
-/// The `RocPod` trait represents [`Roc`](crate::meta::Roc) types consisting
-/// of Plain Old Data (POD). Derive this trait rather that the `Roc` trait
-/// for types implementing [`Pod`](bytemuck::Pod), as this will unlock more
-/// use cases for the generated Roc code. In particular, ECS components, which
-/// are always POD, should always derive this trait rather than plain `Roc`.
-///
-/// Deriving the `RocPod` trait will only work for types whose constituent
-/// types are all POD and implement `Roc` or `RocPod`.
-pub use roc_codegen_macros::RocPod;
+/// Three categories of types can be annotated with `roc`, and the requested
+/// category can be specified as an argument to the macro:
+/// `#[roc(<category>)]`. The available categories are:
+/// - `pod`: The type is Plain Old Data (POD) and, to prove it, implements the
+///   [`bytemuck::Pod`] trait. This allows it to be passed more efficiently
+///   between Rust and Roc. This is the inferred category when it is not
+///   specified and the type derives `Pod`. Types of this category can only
+///   contain other `roc`-annotated types with the `primitive` or `pod`
+///   category.
+/// - `inline`: This category is more flexible than `pod`, as it also supports
+///   enums and types with padding. However, the type is not allowed to contain
+///   pointers or references to heap-allocated memory; all the data must be
+///   "inline". This is the inferred category when it is not specified and the
+///   type does not derive `Pod`. Types of this category can only contain other
+///   `roc`-annotated types (but of any category).
+/// - `primitive`: These are the building blocks of `pod` and `inline` types.
+///   No Roc code will be generated for any `primitive` type. Instead, it is
+///   assumed that a Roc implementation already exists. This category is never
+///   inferred when it is not specified explicitly. Types of this category can
+///   contain types that are not `roc`-annotated, but it is a requirement that
+///   `primitive` types are POD.
+pub use roc_codegen_macros::roc;
 
 pub use meta::RocTypeID;

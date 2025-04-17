@@ -1,17 +1,24 @@
 //! Procedural macros for generating equivalents of Rust types in Roc.
 
-mod roc;
-
-use std::str::FromStr;
+mod roc_attr;
 
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use proc_macro_crate::{self, FoundCrate};
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{DeriveInput, parse_macro_input};
+use std::str::FromStr;
 
-/// Derive macro generating an implementation of the
-/// [`Roc`](roc_codegen::meta::Roc) trait. The macro will infer and register a
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RocAttributeArg {
+    None,
+    Auto,
+    Primitive,
+    Pod,
+    Inline,
+}
+
+/// Attribute macro for annotating Rust types that should be available in Roc.
+/// The macro will infer and register a
 /// [`RocTypeDescriptor`](roc_codegen::meta::RocTypeDescriptor) for the target
 /// type, which is used to [`generate`](roc_codegen::generate) the associated
 /// Roc code.
@@ -20,41 +27,42 @@ use syn::{DeriveInput, parse_macro_input};
 /// target type has an active feature named `roc_codegen` and the `enabled`
 /// feature is active for the [`roc_codegen`] crate.
 ///
-/// Deriving the `Roc` trait will only work for types whose constituent types
-/// all implement `Roc` or [`RocPod`](roc_codegen::meta::RocPod).
-#[proc_macro_derive(Roc)]
-pub fn derive_roc(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    roc::impl_roc(input, &crate_root_tokens())
+/// Three categories of types can be annotated with `roc`, and the requested
+/// category can be specified as an argument to the macro:
+/// `#[roc(<category>)]`. The available categories are:
+/// - `pod`: The type is Plain Old Data (POD) and, to prove it, implements the
+///   [`bytemuck::Pod`] trait. This allows it to be passed more efficiently
+///   between Rust and Roc. This is the inferred category when it is not
+///   specified and the type derives `Pod`. Types of this category can only
+///   contain other `roc`-annotated types with the `primitive` or `pod`
+///   category.
+/// - `inline`: This category is more flexible than `pod`, as it also supports
+///   enums and types with padding. However, the type is not allowed to contain
+///   pointers or references to heap-allocated memory; all the data must be
+///   "inline". This is the inferred category when it is not specified and the
+///   type does not derive `Pod`. Types of this category can only contain other
+///   `roc`-annotated types (but of any category).
+/// - `primitive`: These are the building blocks of `pod` and `inline` types.
+///   No Roc code will be generated for any `primitive` type. Instead, it is
+///   assumed that a Roc implementation already exists. This category is never
+///   inferred when it is not specified explicitly. Types of this category can
+///   contain types that are not `roc`-annotated, but it is a requirement that
+///   `primitive` types are POD.
+#[cfg(feature = "enabled")]
+#[proc_macro_attribute]
+pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let arg = syn::parse_macro_input!(attr as RocAttributeArg);
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
+    roc_attr::apply_roc_attribute(arg, input, &crate_root_tokens())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
 
-/// Derive macro generating an implementation of the
-/// [`RocPod`](roc_codegen::meta::RocPod) trait. The macro will infer and
-/// register a [`RocTypeDescriptor`](roc_codegen::meta::RocTypeDescriptor)
-/// for the target type, which is used to [`generate`](roc_codegen::generate)
-/// the associated Roc code.
-///
-/// Note that this registration is only performed when the crate hosting the
-/// target type has an active feature named `roc_codegen` and the `enabled`
-/// feature is active for the [`roc_codegen`] crate.
-///
-/// The `RocPod` trait represents [`Roc`](roc_codegen::meta::Roc) types
-/// consisting of Plain Old Data (POD). Derive this trait rather that the `Roc`
-/// trait for types implementing [`Pod`](bytemuck::Pod), as this will unlock
-/// more use cases for the generated Roc code. In particular, ECS components,
-/// which are always POD, should always derive this trait rather than plain
-/// `Roc`.
-///
-/// Deriving the `RocPod` trait will only work for types whose constituent
-/// types are all POD and implement `Roc` or `RocPod`.
-#[proc_macro_derive(RocPod)]
-pub fn derive_roc_pod(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    roc::impl_roc_pod(input, &crate_root_tokens())
-        .unwrap_or_else(syn::Error::into_compile_error)
-        .into()
+#[cfg(not(feature = "enabled"))]
+#[proc_macro_attribute]
+pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
+    syn::parse_macro_input!(attr as RocAttributeArgs);
+    item
 }
 
 const CRATE_NAME: &str = "roc_codegen";
@@ -79,4 +87,26 @@ fn determine_crate_import_root() -> String {
 
 fn crate_root_tokens() -> TokenStream2 {
     TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
+}
+
+impl syn::parse::Parse for RocAttributeArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        if input.is_empty() {
+            return Ok(RocAttributeArg::None);
+        }
+
+        let ident: proc_macro2::Ident = input.parse()?;
+        match ident.to_string().as_str() {
+            "auto" => Ok(RocAttributeArg::Auto),
+            "primitive" => Ok(RocAttributeArg::Primitive),
+            "pod" => Ok(RocAttributeArg::Pod),
+            "inline" => Ok(RocAttributeArg::Inline),
+            other => Err(syn::Error::new(
+                ident.span(),
+                format!(
+                    "unknown argument '{other}', must be one of 'pod', 'inline', 'primitive' and 'auto'"
+                ),
+            )),
+        }
+    }
 }
