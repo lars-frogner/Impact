@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::ConstStringHash64;
+use impact_math::ConstStringHash64;
 use std::borrow::Cow;
 
 /// Manager for GPU resources used for a skybox.

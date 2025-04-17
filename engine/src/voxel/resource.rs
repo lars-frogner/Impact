@@ -28,7 +28,7 @@ use crate::{
 };
 use anyhow::Result;
 use bytemuck::Pod;
-use impact_utils::ConstStringHash64;
+use impact_math::ConstStringHash64;
 use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
 
 use super::mesh::VoxelMeshModifications;

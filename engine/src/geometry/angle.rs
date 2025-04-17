@@ -329,6 +329,14 @@ where
     }
 }
 
+#[cfg(feature = "roc_codegen")]
+roc_codegen::impl_roc_for_library_provided_primitives! {
+    Radians<f32> => "Radians", Single,
+    Radians<f64> => "Radians", Double,
+    Degrees<f32> => "Degrees", Single,
+    Degrees<f64> => "Degrees", Double,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

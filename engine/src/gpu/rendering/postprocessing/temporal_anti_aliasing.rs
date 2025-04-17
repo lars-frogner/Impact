@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{ConstStringHash64, hash64};
+use impact_math::{ConstStringHash64, hash64};
 use serde::{Deserialize, Serialize};
 
 use crate::{

@@ -15,8 +15,8 @@ use crate::physics::{
     rigid_body::components::RigidBodyComp,
 };
 use bitflags::bitflags;
+use impact_containers::KeyIndexMapper;
 use impact_ecs::world::{Entity, World as ECSWorld};
-use impact_utils::KeyIndexMapper;
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::{

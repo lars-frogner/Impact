@@ -16,7 +16,7 @@ use crate::{
     },
     util::tracking::CollectionChange,
 };
-use impact_utils::ConstStringHash64;
+use impact_math::ConstStringHash64;
 use std::sync::OnceLock;
 
 /// Manager of the set of uniform GPU buffers holding light source render

@@ -26,7 +26,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{ConstStringHash64, hash64};
+use impact_math::{ConstStringHash64, hash64};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, mem};

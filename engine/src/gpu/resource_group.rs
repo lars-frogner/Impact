@@ -6,12 +6,12 @@ use crate::gpu::{
     texture::{Sampler, Texture},
     uniform::SingleUniformGPUBuffer,
 };
-use impact_utils::stringhash64_newtype;
+use impact_math::stringhash64_newtype;
 use std::collections::{HashMap, hash_map::Entry};
 
 stringhash64_newtype!(
     /// Identifier for a specific GPU resource group. Wraps a
-    /// [`StringHash64`](impact_utils::StringHash64).
+    /// [`StringHash64`](impact_math::StringHash64).
     [pub] GPUResourceGroupID
 );
 

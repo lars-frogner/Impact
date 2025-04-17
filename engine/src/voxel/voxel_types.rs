@@ -3,7 +3,7 @@
 use crate::io::util::parse_ron_file;
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{Hash32, compute_hash_str_32};
+use impact_math::{Hash32, compute_hash_str_32};
 use nalgebra::{Vector4, vector};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};

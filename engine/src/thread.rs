@@ -1,7 +1,7 @@
 //! Utilities for multithreading.
 
 use anyhow::Error;
-use impact_utils::ConstStringHash64;
+use impact_math::ConstStringHash64;
 use std::{
     collections::HashMap,
     fmt,

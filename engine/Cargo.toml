@@ -1,5 +1,10 @@
 [workspace]
-members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
+members = [
+    "impact_containers",
+    "impact_ecs",
+    "impact_ecs/impact_ecs_macros",
+    "impact_math",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -113,7 +118,7 @@ cli = ["dep:clap"]
 profiling = ["dep:criterion"]
 fuzzing = ["dep:arbitrary"]
 unchecked = []
-roc_codegen = ["roc_codegen/enabled"]
+roc_codegen = ["impact_math/roc_codegen", "roc_codegen/enabled"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -162,8 +167,9 @@ wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30", features = ["serde"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
+impact_containers = { path = "impact_containers" }
 impact_ecs = { path = "impact_ecs" }
-impact_utils = { path = "impact_utils" }
+impact_math = { path = "impact_math" }
 roc_codegen = { path = "../roc_codegen" }
 
 [dev-dependencies]

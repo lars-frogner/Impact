@@ -19,7 +19,7 @@ use crate::{
     scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_utils::hash64;
+use impact_math::hash64;
 use std::sync::RwLock;
 
 /// Binding locations for textures used in a physical material.

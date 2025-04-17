@@ -27,7 +27,7 @@ use crate::{
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{ConstStringHash64, HaltonSequence, hash64};
+use impact_math::{ConstStringHash64, HaltonSequence, hash64};
 use nalgebra::Vector4;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

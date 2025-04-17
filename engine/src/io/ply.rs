@@ -6,7 +6,7 @@ use crate::mesh::{
 };
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::hash64;
+use impact_math::hash64;
 use nalgebra::{UnitVector3, point, vector};
 use ply_rs::{
     parser::Parser,

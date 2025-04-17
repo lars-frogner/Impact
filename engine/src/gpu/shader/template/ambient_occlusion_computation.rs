@@ -126,7 +126,7 @@ impl PostprocessingShaderTemplate for AmbientOcclusionComputationShaderTemplate 
 mod tests {
     use super::super::tests::validate_template;
     use super::*;
-    use impact_utils::hash64;
+    use impact_math::hash64;
 
     #[test]
     fn should_resolve_to_valid_wgsl() {

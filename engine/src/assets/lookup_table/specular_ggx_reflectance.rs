@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use anyhow::Result;
-use impact_utils::{hash32, hash64};
+use impact_math::{hash32, hash64};
 use std::sync::{LazyLock, OnceLock};
 
 const TEXTURE_NAME: &str = "specular_ggx_reflectance_lookup_table";

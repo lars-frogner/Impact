@@ -1,7 +1,7 @@
 //! Representation and storage of ECS components.
 
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{AlignedByteVec, Alignment};
+use impact_containers::{AlignedByteVec, Alignment};
 use std::{mem, ops::Deref};
 
 /// Represents a component.

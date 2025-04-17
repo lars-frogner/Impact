@@ -10,7 +10,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
-use impact_utils::KeyIndexMapper;
+use impact_containers::KeyIndexMapper;
 use nalgebra::{Point3, Similarity3, UnitVector3};
 use std::{array, collections::BTreeSet, ops::Range};
 

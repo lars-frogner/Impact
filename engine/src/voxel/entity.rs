@@ -45,7 +45,7 @@ use impact_ecs::{
     setup,
     world::EntityEntry,
 };
-use impact_utils::hash64;
+use impact_math::hash64;
 use std::sync::{LazyLock, RwLock};
 
 use super::StagedVoxelObject;
