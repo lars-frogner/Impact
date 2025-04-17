@@ -1,14 +1,17 @@
-//! Derive macro for the `Component` trait.
+//! Attribute macro for Roc code generation.
 
-#![allow(dead_code)]
-
+use crate::RocAttributeArg;
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use std::{fmt::Write, iter};
-use syn::{
-    Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Expr, Field, Fields, FieldsNamed,
-    FieldsUnnamed, Lit, Meta, Result,
-};
+use syn::parse::Parser;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RocTypeCategory {
+    Primitive,
+    Pod,
+    Inline,
+}
 
 // These need to match the corresponding constants in `roc_codegen::meta`.
 pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
@@ -16,69 +19,91 @@ pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
 pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
 
-#[cfg(feature = "enabled")]
-pub(super) fn impl_roc(input: DeriveInput, crate_root: &TokenStream) -> Result<TokenStream> {
+pub(super) fn apply_roc_attribute(
+    arg: RocAttributeArg,
+    input: syn::DeriveInput,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    if !input.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &input.generics,
+            "the `roc` attribute does not support generic types",
+        ));
+    }
+
+    let type_category = determine_type_category(arg, &input);
+
     let type_name = &input.ident;
 
-    let roc_impl = generate_roc_impl(type_name, &input, crate_root)?;
+    let roc_impl = generate_roc_impl(type_name, &input, crate_root, type_category)?;
+    let roc_pod_impl = generate_roc_pod_impl(type_name, crate_root, type_category);
 
     let mut static_assertions = Vec::new();
     let descriptor_submit = generate_roc_descriptor_submit(
         type_name,
         &input,
         crate_root,
-        false,
+        type_category,
         &mut static_assertions,
     )?;
 
     Ok(quote! {
+        #input
         #roc_impl
+        #roc_pod_impl
         #descriptor_submit
         #(#static_assertions)*
     })
 }
 
-#[cfg(not(feature = "enabled"))]
-pub(super) fn impl_roc(_input: DeriveInput, _crate_root: &TokenStream) -> Result<TokenStream> {
-    Ok(quote! {})
+fn determine_type_category(arg: RocAttributeArg, input: &syn::DeriveInput) -> RocTypeCategory {
+    match arg {
+        RocAttributeArg::Primitive => RocTypeCategory::Primitive,
+        RocAttributeArg::Pod => RocTypeCategory::Pod,
+        RocAttributeArg::Inline => RocTypeCategory::Inline,
+        RocAttributeArg::None | RocAttributeArg::Auto => {
+            if derives_trait(input, "Pod") {
+                RocTypeCategory::Pod
+            } else {
+                RocTypeCategory::Inline
+            }
+        }
+    }
 }
 
-#[cfg(feature = "enabled")]
-pub(super) fn impl_roc_pod(input: DeriveInput, crate_root: &TokenStream) -> Result<TokenStream> {
-    let type_name = &input.ident;
-
-    let roc_impl = generate_roc_impl(type_name, &input, crate_root)?;
-    let pod_roc_impl = generate_roc_pod_impl(type_name, crate_root)?;
-
-    let mut static_assertions = Vec::new();
-    let descriptor_submit = generate_roc_descriptor_submit(
-        type_name,
-        &input,
-        crate_root,
-        true,
-        &mut static_assertions,
-    )?;
-
-    Ok(quote! {
-        #roc_impl
-        #pod_roc_impl
-        #descriptor_submit
-        #(#static_assertions)*
-    })
-}
-
-#[cfg(not(feature = "enabled"))]
-pub(super) fn impl_roc_pod(_input: DeriveInput, _crate_root: &TokenStream) -> Result<TokenStream> {
-    Ok(quote! {})
+fn derives_trait(input: &syn::DeriveInput, trait_name: &str) -> bool {
+    for attribute in &input.attrs {
+        if !attribute.path().is_ident("derive") {
+            continue;
+        }
+        let Ok(derives) = attribute.meta.require_list() else {
+            continue;
+        };
+        let Ok(paths) = syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated
+            .parse2(derives.tokens.clone())
+        else {
+            continue;
+        };
+        for path in paths {
+            let Some(last) = path.segments.last() else {
+                continue;
+            };
+            if last.ident == trait_name {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn generate_roc_impl(
     type_name: &Ident,
-    input: &DeriveInput,
+    input: &syn::DeriveInput,
     crate_root: &TokenStream,
-) -> Result<TokenStream> {
+    type_category: RocTypeCategory,
+) -> syn::Result<TokenStream> {
     let roc_type_id = generate_roc_type_id(type_name, crate_root);
-    let size = generate_size_expr(input, crate_root)?;
+    let size = generate_size_expr(input, crate_root, type_category)?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         impl #crate_root::meta::Roc for #type_name {
@@ -88,11 +113,23 @@ fn generate_roc_impl(
     })
 }
 
-fn generate_roc_pod_impl(type_name: &Ident, crate_root: &TokenStream) -> Result<TokenStream> {
-    Ok(quote! {
-        #[cfg(feature = "roc_codegen")]
-        impl #crate_root::meta::RocPod for #type_name {}
-    })
+fn generate_roc_pod_impl(
+    type_name: &Ident,
+    crate_root: &TokenStream,
+    type_category: RocTypeCategory,
+) -> TokenStream {
+    if matches!(
+        type_category,
+        RocTypeCategory::Primitive | RocTypeCategory::Pod
+    ) {
+        // This impl ensures that we get an error if the type doesn't implement `Pod`
+        quote! {
+            #[cfg(feature = "roc_codegen")]
+            impl #crate_root::meta::RocPod for #type_name {}
+        }
+    } else {
+        quote! {}
+    }
 }
 
 fn generate_roc_type_id(type_name: &Ident, crate_root: &TokenStream) -> TokenStream {
@@ -110,14 +147,14 @@ fn generate_roc_type_id(type_name: &Ident, crate_root: &TokenStream) -> TokenStr
 
 fn generate_roc_descriptor_submit(
     type_name: &Ident,
-    input: &DeriveInput,
+    input: &syn::DeriveInput,
     crate_root: &TokenStream,
-    require_pod: bool,
+    type_category: RocTypeCategory,
     static_assertions: &mut Vec<TokenStream>,
-) -> Result<TokenStream> {
+) -> syn::Result<TokenStream> {
     let roc_name = type_name.to_string();
-    let flags = generate_flags(crate_root, require_pod);
-    let composition = generate_composition(input, crate_root, require_pod, static_assertions)?;
+    let flags = generate_flags(crate_root, type_category);
+    let composition = generate_composition(input, crate_root, type_category, static_assertions)?;
     let docstring = extract_and_process_docstring(&input.attrs);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
@@ -134,35 +171,39 @@ fn generate_roc_descriptor_submit(
     })
 }
 
-fn generate_flags(crate_root: &TokenStream, require_pod: bool) -> TokenStream {
-    if require_pod {
-        quote! { #crate_root::meta::RocTypeFlags::IS_POD }
-    } else {
-        quote! { #crate_root::meta::RocTypeFlags::empty() }
+fn generate_flags(crate_root: &TokenStream, type_category: RocTypeCategory) -> TokenStream {
+    match type_category {
+        // All primitives are required to be POD
+        RocTypeCategory::Primitive | RocTypeCategory::Pod => {
+            quote! { #crate_root::meta::RocTypeFlags::IS_POD }
+        }
+        RocTypeCategory::Inline => {
+            quote! { #crate_root::meta::RocTypeFlags::empty() }
+        }
     }
 }
 
 fn generate_composition(
-    input: &DeriveInput,
+    input: &syn::DeriveInput,
     crate_root: &TokenStream,
-    require_pod: bool,
+    type_category: RocTypeCategory,
     static_assertions: &mut Vec<TokenStream>,
-) -> Result<TokenStream> {
+) -> syn::Result<TokenStream> {
+    if type_category == RocTypeCategory::Primitive {
+        return Ok(quote! {
+            #crate_root::meta::RocTypeComposition::Primitive(
+                #crate_root::meta::RocPrimitiveKind::LibraryProvided{
+                    precision: #crate_root::meta::RocLibraryPrimitivePrecision::None,
+               }
+            )
+        });
+    }
     match &input.data {
-        Data::Struct(data) => {
+        syn::Data::Struct(data) => {
             let type_name = &input.ident;
 
             let fields =
                 generate_fields(input, &data.fields, crate_root, MAX_ROC_TYPE_STRUCT_FIELDS)?;
-
-            if require_pod {
-                static_assertions.push(quote! {
-                    const _: () = {
-                        const fn __assert_impl_pod<T: ::bytemuck::Pod>() {}
-                        __assert_impl_pod::<#type_name>();
-                    };
-                });
-            }
 
             Ok(quote! {
                 #crate_root::meta::RocTypeComposition::Struct{
@@ -171,14 +212,13 @@ fn generate_composition(
                 }
             })
         }
-        Data::Enum(data) => {
-            let variants =
-                generate_variants(input, data, crate_root, require_pod, static_assertions)?;
+        syn::Data::Enum(data) => {
+            let variants = generate_variants(input, data, crate_root, false, static_assertions)?;
             Ok(quote! {
                 #crate_root::meta::RocTypeComposition::Enum(#variants)
             })
         }
-        Data::Union(_) => Err(Error::new_spanned(
+        syn::Data::Union(_) => Err(syn::Error::new_spanned(
             input,
             "the `Roc` trait can not be derived for unions",
         )),
@@ -187,17 +227,17 @@ fn generate_composition(
 
 fn generate_fields(
     span: impl ToTokens,
-    fields: &Fields,
+    fields: &syn::Fields,
     crate_root: &TokenStream,
     max_fields: usize,
-) -> Result<TokenStream> {
+) -> syn::Result<TokenStream> {
     Ok(match fields {
-        Fields::Unit => quote! {
+        syn::Fields::Unit => quote! {
             #crate_root::meta::RocTypeFields::None
         },
-        Fields::Named(fields) => {
+        syn::Fields::Named(fields) => {
             if fields.named.len() > max_fields {
-                return Err(Error::new_spanned(
+                return Err(syn::Error::new_spanned(
                     span,
                     format!(
                         "too many fields to implement `Roc` ({}/{})",
@@ -211,9 +251,9 @@ fn generate_fields(
                 #crate_root::meta::RocTypeFields::Named(#fields)
             }
         }
-        Fields::Unnamed(fields) => {
+        syn::Fields::Unnamed(fields) => {
             if fields.unnamed.len() > max_fields {
-                return Err(Error::new_spanned(
+                return Err(syn::Error::new_spanned(
                     span,
                     format!(
                         "too many fields to implement `Roc` ({}/{})",
@@ -231,7 +271,7 @@ fn generate_fields(
 }
 
 fn generate_named_field_list(
-    fields: &FieldsNamed,
+    fields: &syn::FieldsNamed,
     crate_root: &TokenStream,
     max_fields: usize,
 ) -> TokenStream {
@@ -263,7 +303,7 @@ fn generate_named_field_list(
 }
 
 fn generate_unnamed_field_list(
-    fields: &FieldsUnnamed,
+    fields: &syn::FieldsUnnamed,
     crate_root: &TokenStream,
     max_fields: usize,
 ) -> TokenStream {
@@ -291,14 +331,14 @@ fn generate_unnamed_field_list(
 }
 
 fn generate_variants(
-    input: &DeriveInput,
-    data: &DataEnum,
+    input: &syn::DeriveInput,
+    data: &syn::DataEnum,
     crate_root: &TokenStream,
     require_pod: bool,
     static_assertions: &mut Vec<TokenStream>,
-) -> Result<TokenStream> {
+) -> syn::Result<TokenStream> {
     if data.variants.len() > MAX_ROC_TYPE_ENUM_VARIANTS {
-        return Err(Error::new_spanned(
+        return Err(syn::Error::new_spanned(
             input,
             format!(
                 "too many variants to implement `Roc` ({}/{})",
@@ -323,7 +363,7 @@ fn generate_variants(
             } else {
                 quote! {}
             };
-            let punct = if let Fields::Named(_) = &variant.fields {
+            let punct = if let syn::Fields::Named(_) = &variant.fields {
                 quote! {}
             } else {
                 quote! {;}
@@ -358,7 +398,7 @@ fn generate_variants(
             Ok(quote! {None,}),
             MAX_ROC_TYPE_ENUM_VARIANTS - data.variants.len(),
         ))
-        .collect::<Result<Vec<TokenStream>>>()?;
+        .collect::<syn::Result<Vec<TokenStream>>>()?;
 
     static_assertions.push(quote! {
         #[allow(non_snake_case, dead_code, missing_debug_implementations)]
@@ -373,22 +413,34 @@ fn generate_variants(
     })
 }
 
-fn generate_size_expr(input: &DeriveInput, crate_root: &TokenStream) -> Result<TokenStream> {
+fn generate_size_expr(
+    input: &syn::DeriveInput,
+    crate_root: &TokenStream,
+    type_category: RocTypeCategory,
+) -> syn::Result<TokenStream> {
+    if type_category == RocTypeCategory::Primitive {
+        // Since primitives are always POD, their serialized size
+        // will always match their in-memory size
+        let type_name = &input.ident;
+        return Ok(quote! {
+            ::std::mem::size_of::<#type_name>()
+        });
+    }
     match &input.data {
-        Data::Struct(data) => Ok(generate_struct_size_expr(data, crate_root)),
-        Data::Enum(data) => Ok(generate_enum_size_expr(data, crate_root)),
-        Data::Union(_) => Err(Error::new_spanned(
+        syn::Data::Struct(data) => Ok(generate_struct_size_expr(data, crate_root)),
+        syn::Data::Enum(data) => Ok(generate_enum_size_expr(data, crate_root)),
+        syn::Data::Union(_) => Err(syn::Error::new_spanned(
             input,
-            "the `Roc` trait can not be derived for unions",
+            "the `roc` attribute does not support unions",
         )),
     }
 }
 
-fn generate_struct_size_expr(data: &DataStruct, crate_root: &TokenStream) -> TokenStream {
+fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &TokenStream) -> TokenStream {
     generate_summed_field_size_expr(&data.fields, crate_root)
 }
 
-fn generate_enum_size_expr(data: &DataEnum, crate_root: &TokenStream) -> TokenStream {
+fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> TokenStream {
     let mut variants = data.variants.iter();
     let Some(variant) = variants.next() else {
         return quote! {1};
@@ -405,22 +457,22 @@ fn generate_enum_size_expr(data: &DataEnum, crate_root: &TokenStream) -> TokenSt
     }
 }
 
-fn generate_summed_field_size_expr(fields: &Fields, crate_root: &TokenStream) -> TokenStream {
+fn generate_summed_field_size_expr(fields: &syn::Fields, crate_root: &TokenStream) -> TokenStream {
     match fields {
-        Fields::Unit => {
+        syn::Fields::Unit => {
             quote! {0}
         }
-        Fields::Named(fields) => {
+        syn::Fields::Named(fields) => {
             generate_summed_field_size_expr_from_field_iter(&fields.named, crate_root)
         }
-        Fields::Unnamed(fields) => {
+        syn::Fields::Unnamed(fields) => {
             generate_summed_field_size_expr_from_field_iter(&fields.unnamed, crate_root)
         }
     }
 }
 
 fn generate_summed_field_size_expr_from_field_iter<'a>(
-    fields: impl IntoIterator<Item = &'a Field>,
+    fields: impl IntoIterator<Item = &'a syn::Field>,
     crate_root: &TokenStream,
 ) -> TokenStream {
     let mut fields = fields.into_iter();
@@ -440,22 +492,22 @@ fn generate_summed_field_size_expr_from_field_iter<'a>(
     summed_fields
 }
 
-fn extract_and_process_docstring(attributes: &[Attribute]) -> String {
+fn extract_and_process_docstring(attributes: &[syn::Attribute]) -> String {
     process_docstrings(extract_docstrings(attributes))
 }
 
-fn extract_docstrings(attributes: &[Attribute]) -> impl Iterator<Item = String> {
+fn extract_docstrings(attributes: &[syn::Attribute]) -> impl Iterator<Item = String> {
     attributes.iter().filter_map(|attribute| {
         if !attribute.path().is_ident("doc") {
             return None;
         }
-        let Meta::NameValue(meta) = &attribute.meta else {
+        let syn::Meta::NameValue(meta) = &attribute.meta else {
             return None;
         };
-        let Expr::Lit(expr_lit) = &meta.value else {
+        let syn::Expr::Lit(expr_lit) = &meta.value else {
             return None;
         };
-        let Lit::Str(lit_str) = &expr_lit.lit else {
+        let syn::Lit::Str(lit_str) = &expr_lit.lit else {
             return None;
         };
         Some(lit_str.value())

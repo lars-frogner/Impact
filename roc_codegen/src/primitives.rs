@@ -1,16 +1,15 @@
-//! Implementation of the [`Roc`](crate::meta::Roc) trait for primitive types
-//! (as considered by the engine).
+//! Registration of foreign types as Roc primitive types (as considered by the
+//! engine).
 
-use super::meta::RocLibraryPrimitivePrecision::{Double, Single};
-use nalgebra::{Matrix3, Matrix4, Point3, UnitQuaternion, UnitVector3, Vector3, Vector4};
-
-macro_rules! impl_roc_for_primitive {
+#[macro_export]
+macro_rules! impl_roc_for_existing_primitive {
     ($t:ty, $roc_name:expr, $kind:expr) => {
         impl $crate::meta::Roc for $t {
             const ROC_TYPE_ID: $crate::meta::RocTypeID =
                 $crate::meta::RocTypeID::hashed_from_str(stringify!($t));
             const SERIALIZED_SIZE: usize = ::std::mem::size_of::<$t>();
         }
+        impl $crate::meta::RocPod for $t {}
 
         inventory::submit! {
             $crate::meta::RocTypeDescriptor {
@@ -25,22 +24,24 @@ macro_rules! impl_roc_for_primitive {
     };
 }
 
+#[macro_export]
 macro_rules! impl_roc_for_builtin_primitives {
     ($($t:ty => $roc_name:expr),+ $(,)?) => {
         $(
-            impl_roc_for_primitive!($t, $roc_name, $crate::meta::RocPrimitiveKind::Builtin);
+            $crate::impl_roc_for_existing_primitive!($t, $roc_name, $crate::meta::RocPrimitiveKind::Builtin);
         )*
     };
 }
 
+#[macro_export]
 macro_rules! impl_roc_for_library_provided_primitives {
-    ($($t:ty => $roc_name:expr, $precision:expr),+ $(,)?) => {
+    ($($t:ty => $roc_name:expr, $precision:ident),+ $(,)?) => {
         $(
-            impl_roc_for_primitive!(
+            $crate::impl_roc_for_existing_primitive!(
                 $t,
                 $roc_name,
                 $crate::meta::RocPrimitiveKind::LibraryProvided {
-                    precision: $precision,
+                    precision: $crate::meta::RocLibraryPrimitivePrecision::$precision,
                 }
             );
         )*
@@ -48,6 +49,7 @@ macro_rules! impl_roc_for_library_provided_primitives {
 }
 
 // Roc's builtin primitive types
+#[cfg(feature = "enabled")]
 impl_roc_for_builtin_primitives! {
     u8 => "U8",
     u16 => "U16",
@@ -65,19 +67,23 @@ impl_roc_for_builtin_primitives! {
 
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.
+#[cfg(feature = "enabled")]
 impl_roc_for_library_provided_primitives! {
-    Vector3<f32> => "Vector3", Some(Single),
-    Vector3<f64> => "Vector3", Some(Double),
-    Vector4<f32> => "Vector4", Some(Single),
-    Vector4<f64> => "Vector4", Some(Double),
-    Matrix3<f32> => "Matrix3", Some(Single),
-    Matrix3<f64> => "Matrix3", Some(Double),
-    Matrix4<f32> => "Matrix4", Some(Single),
-    Matrix4<f64> => "Matrix4", Some(Double),
-    UnitVector3<f32> => "UnitVector3", Some(Single),
-    UnitVector3<f64> => "UnitVector3", Some(Double),
-    UnitQuaternion<f32> => "UnitQuaternion", Some(Single),
-    UnitQuaternion<f64> => "UnitQuaternion", Some(Double),
-    Point3<f32> => "Point3", Some(Single),
-    Point3<f64> => "Point3", Some(Double),
+    usize => "Usize", None,
+    nalgebra::Vector2<f32> => "Vector2", Single,
+    nalgebra::Vector2<f64> => "Vector2", Double,
+    nalgebra::Vector3<f32> => "Vector3", Single,
+    nalgebra::Vector3<f64> => "Vector3", Double,
+    nalgebra::Vector4<f32> => "Vector4", Single,
+    nalgebra::Vector4<f64> => "Vector4", Double,
+    nalgebra::Matrix3<f32> => "Matrix3", Single,
+    nalgebra::Matrix3<f64> => "Matrix3", Double,
+    nalgebra::Matrix4<f32> => "Matrix4", Single,
+    nalgebra::Matrix4<f64> => "Matrix4", Double,
+    nalgebra::UnitVector3<f32> => "UnitVector3", Single,
+    nalgebra::UnitVector3<f64> => "UnitVector3", Double,
+    nalgebra::UnitQuaternion<f32> => "UnitQuaternion", Single,
+    nalgebra::UnitQuaternion<f64> => "UnitQuaternion", Double,
+    nalgebra::Point3<f32> => "Point3", Single,
+    nalgebra::Point3<f64> => "Point3", Double,
 }
