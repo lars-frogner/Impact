@@ -3,10 +3,15 @@
 //! `Cargo.toml` to depend on the crate in question. All registered Roc
 //! types in all crates linked to this binary will be included.
 
+// Make sure the target crate is linked in even if we don't use it.
+pub use target_crate;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use roc_codegen::generate::{
+    self, GenerateOptions, ListOptions, ListedRocTypeCategory, RocGenerateOptions,
+};
 use std::path::PathBuf;
-use target_crate::roc_codegen::generate::{self, GenerateOptions, RocGenerateOptions};
 
 #[derive(Debug, Parser)]
 #[command(about = "Generation of Roc code for the Impact game engine", long_about = None)]
@@ -17,8 +22,13 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// List types annotated with the `roc` attribute
+    ListTypes {
+        #[arg(short, long, value_delimiter=' ', num_args=1.., required = true)]
+        categories: Vec<ListedRocTypeCategory>,
+    },
     /// Generate Roc modules
-    RocModules {
+    GenerateModules {
         /// Path to directory in which to put the modules
         #[arg(short, long)]
         target_dir: PathBuf,
@@ -44,7 +54,14 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::RocModules {
+        Command::ListTypes { categories } => {
+            let options = ListOptions {
+                categories: categories.into_iter().collect(),
+            };
+            let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
+            generate::list_types(&options, &component_type_ids)?;
+        }
+        Command::GenerateModules {
             target_dir,
             verbose,
             overwrite,

@@ -96,7 +96,7 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 roc_codegen = ["impact/roc_codegen"]
