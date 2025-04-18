@@ -7,12 +7,14 @@ use crate::physics::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that rotate
 /// with a constant angular velocity over time.
 ///
 /// For this component to have an effect, the entity also needs a
 /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ConstantRotationComp {

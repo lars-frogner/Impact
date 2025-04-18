@@ -2,6 +2,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use lazy_static::lazy_static;
+use roc_codegen::roc;
 use std::{
     cmp,
     collections::HashMap,
@@ -11,11 +12,13 @@ use std::{
 };
 
 /// A 32-bit hash.
+#[roc(primitive)]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct Hash32(u32);
 
 /// A 64-bit hash.
+#[roc(primitive)]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct Hash64(u64);
@@ -25,6 +28,7 @@ pub struct Hash64(u64);
 /// This object stores the string in a global registry and can
 /// be formatted into it by means of the [`Display`](fmt::Display)
 /// trait.
+#[roc(primitive)]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct StringHash32(Hash32);
@@ -34,6 +38,7 @@ pub struct StringHash32(Hash32);
 /// This object stores the string in a global registry and can
 /// be formatted into it by means of the [`Display`](fmt::Display)
 /// trait.
+#[roc(primitive)]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct StringHash64(Hash64);

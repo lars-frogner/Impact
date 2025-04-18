@@ -3,6 +3,9 @@ name = "impact_ecs"
 version = { workspace = true }
 edition = { workspace = true }
 
+[features]
+roc_codegen = ["roc_codegen/enabled"]
+
 [dependencies]
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
@@ -12,6 +15,7 @@ paste = { workspace = true }
 
 impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }
+roc_codegen = { path = "../../roc_codegen" }
 
 [lints]
 workspace = true

@@ -7,9 +7,11 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::UnitVector3;
+use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that produce a
 /// spatially uniform and isotropic (ambient) light field.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct AmbientEmissionComp {
@@ -24,6 +26,7 @@ pub struct AmbientEmissionComp {
 /// [`Component`](impact_ecs::component::Component) for entities that emit light
 /// uniformly in all directions. The light can not be shadowed (use
 /// [`ShadowableOmnidirectionalEmissionComp`] for light with shadows).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OmnidirectionalEmissionComp {
@@ -43,6 +46,7 @@ pub struct OmnidirectionalEmissionComp {
 /// [`Component`](impact_ecs::component::Component) for entities that emit light
 /// uniformly in all directions. The light can be shadowed (use
 /// [`OmnidirectionalEmissionComp`] for light without shadows).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ShadowableOmnidirectionalEmissionComp {
@@ -62,6 +66,7 @@ pub struct ShadowableOmnidirectionalEmissionComp {
 /// [`Component`](impact_ecs::component::Component) for entities that emit light
 /// in a single direction. The light can not be shadowed (use
 /// [`ShadowableUnidirectionalEmissionComp`] for light with shadows).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct UnidirectionalEmissionComp {
@@ -81,6 +86,7 @@ pub struct UnidirectionalEmissionComp {
 /// [`Component`](impact_ecs::component::Component) for entities that emit light
 /// in a single direction. The light can be shadowed (use
 /// [`UnidirectionalEmissionComp`] for light without shadows).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ShadowableUnidirectionalEmissionComp {
@@ -99,6 +105,7 @@ pub struct ShadowableUnidirectionalEmissionComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
 /// [`AmbientLight`](crate::light::AmbientLight).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct AmbientLightComp {
@@ -108,6 +115,7 @@ pub struct AmbientLightComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
 /// [`OmnidirectionalLight`](crate::light::OmnidirectionalLight).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OmnidirectionalLightComp {
@@ -118,6 +126,7 @@ pub struct OmnidirectionalLightComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
 /// [`ShadowableOmnidirectionalLight`](crate::light::ShadowableOmnidirectionalLight).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ShadowableOmnidirectionalLightComp {
@@ -128,6 +137,7 @@ pub struct ShadowableOmnidirectionalLightComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a [`UnidirectionalLight`](crate::light::UnidirectionalLight).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct UnidirectionalLightComp {
@@ -138,6 +148,7 @@ pub struct UnidirectionalLightComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a [`ShadowableUnidirectionalLight`](crate::light::ShadowableUnidirectionalLight).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ShadowableUnidirectionalLightComp {

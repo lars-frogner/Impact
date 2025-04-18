@@ -15,6 +15,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::world::Entity;
 use nalgebra::{Similarity3, UnitVector3, Vector3};
+use roc_codegen::roc;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -76,6 +77,7 @@ pub struct VoxelObjectCollidableGeometry {
 }
 
 /// Identifier for a collidable in a [`CollisionWorld`].
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CollidableID(u32);

@@ -23,6 +23,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::Similarity3;
+use roc_codegen::roc;
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
@@ -63,16 +64,19 @@ pub trait SceneGraphNode {
 pub trait SceneGraphNodeID: NodeIDToIdx + IdxToNodeID + Pod {}
 
 /// Identifier for a [`GroupNode`] in a [`SceneGraph`].
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct GroupNodeID(GenerationalIdx);
 
 /// Identifier for a [`ModelInstanceNode`] in a [`SceneGraph`].
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ModelInstanceNodeID(GenerationalIdx);
 
 /// Identifier for a [`CameraNode`] in a [`SceneGraph`].
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CameraNodeID(GenerationalIdx);

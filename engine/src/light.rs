@@ -20,6 +20,7 @@ use bytemuck::{Pod, Zeroable};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };
+use roc_codegen::roc;
 use std::iter;
 
 /// The luminous intensity of a light source, which is the visible power
@@ -36,6 +37,7 @@ pub type Illumninance = Vector3<f32>;
 pub type Luminance = Vector3<f32>;
 
 /// Identifier for a light in a [`LightStorage`].
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct LightID(u32);

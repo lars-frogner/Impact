@@ -7,6 +7,7 @@ mod features;
 pub use features::{
     MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, register_material_feature_types,
 };
+use roc_codegen::roc;
 
 use crate::{
     assets::Assets,
@@ -30,17 +31,20 @@ pub type RGBColor = Vector3<f32>;
 stringhash64_newtype!(
     /// Identifier for specific material types.
     /// Wraps a [`StringHash64`](impact_math::StringHash64).
+    #[roc]
     [pub] MaterialID
 );
 
 stringhash64_newtype!(
     /// Identifier for group of textures used for material properties. Wraps a
     /// [`StringHash64`](impact_math::StringHash64).
+    #[roc]
     [pub] MaterialPropertyTextureGroupID
 );
 
 /// A handle for a material, containing the IDs for the pieces of data holding
 /// information about the material.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct MaterialHandle {

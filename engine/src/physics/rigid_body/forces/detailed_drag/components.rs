@@ -4,6 +4,7 @@
 use crate::{mesh::MeshID, physics::fph};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
+use roc_codegen::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that should be affected by a drag force and torque computed from
@@ -12,6 +13,7 @@ use impact_ecs::{Component, SetupComponent};
 /// The purpose of this component is to aid in constructing a
 /// [`DragLoadMapComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct DetailedDragComp {
@@ -22,6 +24,7 @@ pub struct DetailedDragComp {
 /// [`Component`](impact_ecs::component::Component) for entities that have an
 /// associated [`DragLoadMap`](crate::physics::DragLoadMap) in the
 /// [`DragLoadMapRepository`](crate::physics::rigid_body::forces::DragLoadMapRepository).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DragLoadMapComp {

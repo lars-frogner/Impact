@@ -3,9 +3,15 @@ name = "impact_containers"
 version = { workspace = true }
 edition = { workspace = true }
 
+[features]
+roc_codegen = ["dep:inventory", "roc_codegen/enabled"]
+
 [dependencies]
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
+inventory = { workspace = true, optional = true }
+
+roc_codegen = { path = "../../roc_codegen" }
 
 [lints]
 workspace = true

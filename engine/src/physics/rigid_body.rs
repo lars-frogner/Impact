@@ -15,6 +15,7 @@ use crate::physics::{
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
+use roc_codegen::roc;
 
 /// A rigid body. It holds its [`InertialProperties`], the total [`Force`] and
 /// [`Torque`] it is subjected to as well as its [`Momentum`] and
@@ -26,6 +27,7 @@ use bytemuck::{Pod, Zeroable};
 /// from them. This means that the body's linear or angular momentum has to be
 /// updated whenever something manually modifies the linear or angular
 /// velocity, respectively.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct RigidBody {

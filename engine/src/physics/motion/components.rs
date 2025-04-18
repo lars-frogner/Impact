@@ -10,9 +10,11 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{Similarity3, Translation3, Vector3};
+use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// reference frame defined by position, orientation and scaling.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ReferenceFrameComp {
@@ -32,6 +34,7 @@ pub struct ReferenceFrameComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// linear and/or angular velocity.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct VelocityComp {
@@ -44,6 +47,7 @@ pub struct VelocityComp {
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// position and orientation are not supposed to change.
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct Static;
@@ -51,12 +55,14 @@ pub struct Static;
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// translational and rotational kinetic energy should be written to the log at
 /// each time step.
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct LogsKineticEnergy;
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// linear and angular momentum should be written to the log at each time step.
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct LogsMomentum;

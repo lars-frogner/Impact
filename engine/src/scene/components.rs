@@ -3,12 +3,14 @@
 use crate::scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent, world::Entity};
+use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// participate in a scene and have associated [`SceneEntityFlags`].
 ///
 /// If not specified, this component is automatically added to any new entity
 /// that has a model, light or rigid body.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct SceneEntityFlagsComp(pub SceneEntityFlags);
@@ -19,6 +21,7 @@ pub struct SceneEntityFlagsComp(pub SceneEntityFlags);
 /// The purpose of this component is to aid in constructing a
 /// [`SceneGraphParentNodeComp`] for the entity. It is therefore not kept after
 /// entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ParentComp {
@@ -32,6 +35,7 @@ pub struct ParentComp {
 /// The purpose of this component is to aid in constructing a
 /// [`SceneGraphGroupNodeComp`] for the entity. It is therefore not kept after
 /// entity creation.
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SceneGraphGroupComp;
@@ -43,12 +47,14 @@ pub struct SceneGraphGroupComp;
 /// The purpose of this component is to aid in constructing a
 /// [`SceneGraphModelInstanceNodeComp`] for the entity. It is therefore not kept
 /// after entity creation.
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UncullableComp;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// parent group node in the [`SceneGraph`](crate::scene::SceneGraph).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SceneGraphParentNodeComp {
@@ -57,6 +63,7 @@ pub struct SceneGraphParentNodeComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// group node in the [`SceneGraph`](crate::scene::SceneGraph).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SceneGraphGroupNodeComp {
@@ -67,6 +74,7 @@ pub struct SceneGraphGroupNodeComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// camera node in the [`SceneGraph`](crate::scene::SceneGraph).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SceneGraphCameraNodeComp {
@@ -77,6 +85,7 @@ pub struct SceneGraphCameraNodeComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// model instance node in the [`SceneGraph`](crate::scene::SceneGraph).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SceneGraphModelInstanceNodeComp {

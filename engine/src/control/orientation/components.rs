@@ -4,9 +4,11 @@
 use crate::physics::motion::AngularVelocity;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose
 /// orientation that can be controlled by a user.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OrientationControlComp {

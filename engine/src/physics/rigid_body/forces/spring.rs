@@ -9,8 +9,10 @@ use crate::physics::{
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
+use roc_codegen::roc;
 
 /// A spring or elastic band.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct Spring {
@@ -25,6 +27,7 @@ pub struct Spring {
 }
 
 /// The current state of a spring.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct SpringState {

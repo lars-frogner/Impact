@@ -7,6 +7,7 @@ use crate::{
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::SetupComponent;
+use roc_codegen::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a
@@ -17,6 +18,7 @@ use impact_ecs::SetupComponent;
 /// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PerspectiveCameraComp {
@@ -34,6 +36,7 @@ pub struct PerspectiveCameraComp {
 /// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct OrthographicCameraComp {
