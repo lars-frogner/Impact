@@ -193,7 +193,7 @@ fn generate_composition(
         return Ok(quote! {
             #crate_root::meta::RocTypeComposition::Primitive(
                 #crate_root::meta::RocPrimitiveKind::LibraryProvided{
-                    precision: #crate_root::meta::RocLibraryPrimitivePrecision::None,
+                    precision: #crate_root::meta::RocLibraryPrimitivePrecision::PrecisionIrrelevant,
                }
             )
         });
@@ -220,7 +220,7 @@ fn generate_composition(
         }
         syn::Data::Union(_) => Err(syn::Error::new_spanned(
             input,
-            "the `Roc` trait can not be derived for unions",
+            "the `roc` attribute does not support unions",
         )),
     }
 }
@@ -240,7 +240,7 @@ fn generate_fields(
                 return Err(syn::Error::new_spanned(
                     span,
                     format!(
-                        "too many fields to implement `Roc` ({}/{})",
+                        "the `roc` attribute does not support this many fields ({}/{})",
                         fields.named.len(),
                         max_fields
                     ),
@@ -256,7 +256,7 @@ fn generate_fields(
                 return Err(syn::Error::new_spanned(
                     span,
                     format!(
-                        "too many fields to implement `Roc` ({}/{})",
+                        "the `roc` attribute does not support this many fields ({}/{})",
                         fields.unnamed.len(),
                         max_fields
                     ),
@@ -283,12 +283,12 @@ fn generate_named_field_list(
         .map(|field| {
             let docstring = extract_and_process_docstring(&field.attrs);
             let ident = field.ident.as_ref().unwrap().to_string();
-            let ty = field.ty.to_token_stream();
+            let ty = generate_field_type(field, crate_root);
             quote! {
                 Some(#crate_root::meta::NamedRocTypeField {
                     docstring: #docstring,
                     ident: #ident,
-                    type_id: <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                    ty: #ty,
                 }),
             }
         })
@@ -313,10 +313,10 @@ fn generate_unnamed_field_list(
         .unnamed
         .iter()
         .map(|field| {
-            let ty = field.ty.to_token_stream();
+            let ty = generate_field_type(field, crate_root);
             quote! {
                 Some(#crate_root::meta::UnnamedRocTypeField {
-                    type_id: <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                    ty: #ty,
                 }),
             }
         })
@@ -330,6 +330,26 @@ fn generate_unnamed_field_list(
     }
 }
 
+fn generate_field_type(field: &syn::Field, crate_root: &TokenStream) -> TokenStream {
+    if let syn::Type::Array(array) = &field.ty {
+        let elem_ty = &array.elem;
+        let len = &array.len;
+        quote! {
+            #crate_root::meta::RocFieldType::Array {
+                elem_type_id: <#elem_ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                len: #len,
+            }
+        }
+    } else {
+        let ty = &field.ty;
+        quote! {
+            #crate_root::meta::RocFieldType::Single {
+                type_id: <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
+            }
+        }
+    }
+}
+
 fn generate_variants(
     input: &syn::DeriveInput,
     data: &syn::DataEnum,
@@ -337,11 +357,18 @@ fn generate_variants(
     require_pod: bool,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
+    if data.variants.is_empty() {
+        return Err(syn::Error::new_spanned(
+            input,
+            "the `roc` attribute does not support zero-sized enums",
+        ));
+    }
+
     if data.variants.len() > MAX_ROC_TYPE_ENUM_VARIANTS {
         return Err(syn::Error::new_spanned(
             input,
             format!(
-                "too many variants to implement `Roc` ({}/{})",
+                "the `roc` attribute does not support this many variants ({}/{})",
                 data.variants.len(),
                 MAX_ROC_TYPE_ENUM_VARIANTS
             ),
@@ -443,7 +470,7 @@ fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &TokenStream) -
 fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> TokenStream {
     let mut variants = data.variants.iter();
     let Some(variant) = variants.next() else {
-        return quote! {1};
+        return quote! {1}; // 1 byte for the discriminant
     };
     let mut max_variant_size = generate_summed_field_size_expr(&variant.fields, crate_root);
     for variant in variants {
@@ -453,7 +480,7 @@ fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> To
         };
     }
     quote! {
-        1 + #max_variant_size
+        1 + #max_variant_size // 1 extra byte for the discriminant
     }
 }
 
@@ -480,16 +507,28 @@ fn generate_summed_field_size_expr_from_field_iter<'a>(
         return quote! {0};
     };
     let ty = &field.ty;
-    let mut summed_fields = quote! {
-        <#ty as #crate_root::meta::Roc>::SERIALIZED_SIZE
-    };
+    let mut summed_fields = serialized_size_of_type(ty, crate_root);
     for field in fields {
-        let ty = &field.ty;
+        let size = serialized_size_of_type(&field.ty, crate_root);
         summed_fields.extend(quote! {
-            + <#ty as #crate_root::meta::Roc>::SERIALIZED_SIZE
+            + #size
         });
     }
     summed_fields
+}
+
+fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
+    if let syn::Type::Array(array) = ty {
+        let elem_ty = &array.elem;
+        let len = &array.len;
+        quote! {
+            (<#elem_ty as #crate_root::meta::Roc>::SERIALIZED_SIZE * #len)
+        }
+    } else {
+        quote! {
+            <#ty as #crate_root::meta::Roc>::SERIALIZED_SIZE
+        }
+    }
 }
 
 fn extract_and_process_docstring(attributes: &[syn::Attribute]) -> String {

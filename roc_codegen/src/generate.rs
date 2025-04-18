@@ -1,9 +1,9 @@
-//! Generation of code for working with types deriving the
-//! [`Roc`](crate::meta::Roc) or [`RocPod`](crate::meta::RocPod) trait.
+//! Generation of code for working with types annotated with the
+//! [`roc`](crate::roc) attribute.
 
 mod roc;
 
-use crate::meta::{RocTypeDescriptor, RocTypeFlags, RocTypeID};
+use crate::meta::{RocTypeComposition, RocTypeDescriptor, RocTypeFlags, RocTypeID};
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
     collections::{HashMap, HashSet},
@@ -12,6 +12,22 @@ use std::{
     io::Write,
     path::Path,
 };
+
+/// Options for listing types.
+#[derive(Clone, Debug)]
+pub struct ListOptions {
+    pub categories: HashSet<ListedRocTypeCategory>,
+}
+
+/// The categories of `roc`-annotated types that can be listed.
+#[cfg_attr(feature = "cli", derive(::clap::ValueEnum))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ListedRocTypeCategory {
+    Primitive,
+    Pod,
+    Component,
+    Inline,
+}
 
 /// General code generation options.
 #[derive(Clone, Debug)]
@@ -37,6 +53,83 @@ pub struct RocGenerateOptions {
 struct Module {
     name: &'static str,
     content: String,
+}
+
+pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>) -> Result<()> {
+    let descriptors =
+        gather_descriptors(inventory::iter::<RocTypeDescriptor>(), component_type_ids)?;
+
+    let mut descriptor_list = Vec::with_capacity(descriptors.len());
+
+    let print_list = |descriptor_list: &mut Vec<String>, header: &str| {
+        descriptor_list.sort();
+
+        println!("{header}");
+        for name in &*descriptor_list {
+            println!("{name}");
+        }
+        if descriptor_list.is_empty() {
+            println!("<None>");
+        }
+        println!();
+
+        descriptor_list.clear();
+    };
+
+    if options
+        .categories
+        .contains(&ListedRocTypeCategory::Primitive)
+    {
+        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
+            if matches!(descriptor.composition, RocTypeComposition::Primitive(_)) {
+                Some(descriptor.description())
+            } else {
+                None
+            }
+        }));
+        print_list(&mut descriptor_list, "****** Primitives ******");
+    }
+
+    if options.categories.contains(&ListedRocTypeCategory::Pod) {
+        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
+            if descriptor.is_pod()
+                && !descriptor.is_component()
+                && !matches!(descriptor.composition, RocTypeComposition::Primitive(_))
+            {
+                Some(descriptor.description())
+            } else {
+                None
+            }
+        }));
+        print_list(&mut descriptor_list, "****** Plain Old Data ******");
+    }
+
+    if options
+        .categories
+        .contains(&ListedRocTypeCategory::Component)
+    {
+        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
+            if descriptor.is_component() {
+                Some(descriptor.description())
+            } else {
+                None
+            }
+        }));
+        print_list(&mut descriptor_list, "****** ECS Components ******");
+    }
+
+    if options.categories.contains(&ListedRocTypeCategory::Inline) {
+        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
+            if !descriptor.is_pod() {
+                Some(descriptor.description())
+            } else {
+                None
+            }
+        }));
+        print_list(&mut descriptor_list, "****** Inline ******");
+    }
+
+    Ok(())
 }
 
 /// Generates Roc source files in the target directory for all Rust types in

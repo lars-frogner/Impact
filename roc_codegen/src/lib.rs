@@ -26,13 +26,14 @@ pub mod generate;
 ///   between Rust and Roc. This is the inferred category when it is not
 ///   specified and the type derives `Pod`. Types of this category can only
 ///   contain other `roc`-annotated types with the `primitive` or `pod`
-///   category.
+///   category, as well as arrays of such types.
 /// - `inline`: This category is more flexible than `pod`, as it also supports
 ///   enums and types with padding. However, the type is not allowed to contain
 ///   pointers or references to heap-allocated memory; all the data must be
 ///   "inline". This is the inferred category when it is not specified and the
 ///   type does not derive `Pod`. Types of this category can only contain other
-///   `roc`-annotated types (but of any category).
+///   `roc`-annotated types (but of any category), as well as arrays of such
+///   types.
 /// - `primitive`: These are the building blocks of `pod` and `inline` types.
 ///   No Roc code will be generated for any `primitive` type. Instead, it is
 ///   assumed that a Roc implementation already exists. This category is never

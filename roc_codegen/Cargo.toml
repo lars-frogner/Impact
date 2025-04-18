@@ -96,12 +96,14 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [features]
+cli = ["dep:clap"]
 enabled = ["roc_codegen_macros/enabled"]
 
 [dependencies]
 anyhow = "1.0"
 bitflags = "2.6"
 bytemuck = { version = "1.22", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"], optional = true }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
 nalgebra = { version = "0.33", features = ["bytemuck"] }
