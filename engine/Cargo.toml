@@ -118,7 +118,12 @@ cli = ["dep:clap"]
 profiling = ["dep:criterion"]
 fuzzing = ["dep:arbitrary"]
 unchecked = []
-roc_codegen = ["impact_math/roc_codegen", "roc_codegen/enabled"]
+roc_codegen = [
+    "impact_containers/roc_codegen",
+    "impact_ecs/roc_codegen",
+    "impact_math/roc_codegen",
+    "roc_codegen/enabled",
+]
 
 [dependencies]
 anyhow = { workspace = true }

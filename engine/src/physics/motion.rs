@@ -12,6 +12,7 @@ use crate::{
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, UnitVector3, Vector3};
+use roc_codegen::roc;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A unit vector in 3D space.
@@ -28,6 +29,7 @@ pub type Orientation = UnitQuaternion<fph>;
 
 /// An angular velocity in 3D space, represented by an axis of rotation and an
 /// angular speed.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct AngularVelocity {

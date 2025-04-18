@@ -10,6 +10,7 @@ pub use graph::{
     CameraNodeID, GroupNodeID, ModelInstanceNode, ModelInstanceNodeID, NodeStorage, NodeTransform,
     SceneGraph, SceneGraphNodeID,
 };
+use roc_codegen::roc;
 
 use crate::{
     camera::SceneCamera,
@@ -42,6 +43,7 @@ pub struct Scene {
 
 bitflags! {
     /// Bitflags encoding a set of binary states or properties for an entity in a scene.
+    #[roc(primitive)]
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct SceneEntityFlags: u8 {

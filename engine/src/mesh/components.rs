@@ -4,6 +4,7 @@ use crate::mesh::{FrontFaceSide, MeshID};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use impact_math::hash64;
+use roc_codegen::roc;
 use std::fmt::Display;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -12,6 +13,7 @@ use std::fmt::Display;
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct RectangleMeshComp {
@@ -26,6 +28,7 @@ pub struct RectangleMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct BoxMeshComp {
@@ -44,6 +47,7 @@ pub struct BoxMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct CylinderMeshComp {
@@ -62,6 +66,7 @@ pub struct CylinderMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ConeMeshComp {
@@ -80,6 +85,7 @@ pub struct ConeMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct CircularFrustumMeshComp {
@@ -99,6 +105,7 @@ pub struct CircularFrustumMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereMeshComp {
@@ -114,6 +121,7 @@ pub struct SphereMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct HemisphereMeshComp {
@@ -126,6 +134,7 @@ pub struct HemisphereMeshComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// [`TriangleMesh`](crate::mesh::TriangleMesh).
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MeshComp {

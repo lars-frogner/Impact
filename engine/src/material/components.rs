@@ -7,6 +7,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use nalgebra::{Vector2, vector};
+use roc_codegen::roc;
 
 /// Setup [`SetupComponent`](impact_ecs::component::SetupComponent) for
 /// initializing entities that have a fixed, uniform color that is independent
@@ -14,6 +15,7 @@ use nalgebra::{Vector2, vector};
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct FixedColorComp(pub RGBColor);
@@ -24,6 +26,7 @@ pub struct FixedColorComp(pub RGBColor);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct FixedTextureComp(pub TextureID);
@@ -41,6 +44,7 @@ pub struct FixedTextureComp(pub TextureID);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformColorComp(pub RGBColor);
@@ -58,6 +62,7 @@ pub struct UniformColorComp(pub RGBColor);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedColorComp(pub TextureID);
@@ -69,6 +74,7 @@ pub struct TexturedColorComp(pub TextureID);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformSpecularReflectanceComp(pub f32);
@@ -80,6 +86,7 @@ pub struct UniformSpecularReflectanceComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedSpecularReflectanceComp {
@@ -93,6 +100,7 @@ pub struct TexturedSpecularReflectanceComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformRoughnessComp(pub f32);
@@ -103,6 +111,7 @@ pub struct UniformRoughnessComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedRoughnessComp {
@@ -128,6 +137,7 @@ pub struct TexturedRoughnessComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformMetalnessComp(pub f32);
@@ -150,6 +160,7 @@ pub struct UniformMetalnessComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedMetalnessComp {
@@ -165,6 +176,7 @@ pub struct TexturedMetalnessComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformEmissiveLuminanceComp(pub f32);
@@ -177,6 +189,7 @@ pub struct UniformEmissiveLuminanceComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedEmissiveLuminanceComp {
@@ -189,6 +202,7 @@ pub struct TexturedEmissiveLuminanceComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct NormalMapComp(pub TextureID);
@@ -198,6 +212,7 @@ pub struct NormalMapComp(pub TextureID);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ParallaxMapComp {
@@ -208,6 +223,7 @@ pub struct ParallaxMapComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a material.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MaterialComp {

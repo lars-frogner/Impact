@@ -3,6 +3,7 @@
 //! when adding new items.
 
 use bytemuck::{Pod, Zeroable};
+use roc_codegen::roc;
 use std::{cmp, collections::VecDeque};
 
 /// A [`Vec`] that maintains a list of each index where
@@ -24,6 +25,7 @@ pub struct GenerationalReusingVec<T> {
 }
 
 /// An index into a [`GenerationalReusingVec`].
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct GenerationalIdx {

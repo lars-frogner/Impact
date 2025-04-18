@@ -20,6 +20,7 @@ use bytemuck::{Pod, Zeroable};
 use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
 use mesh::MeshedChunkedVoxelObject;
+use roc_codegen::roc;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -88,6 +89,7 @@ pub enum VoxelSurfacePlacement {
 }
 
 /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
+#[roc]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct VoxelObjectID(u32);

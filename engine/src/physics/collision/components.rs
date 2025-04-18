@@ -11,12 +11,14 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use nalgebra::UnitVector3;
+use roc_codegen::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a spherical collidable.
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereCollidableComp {
@@ -30,6 +32,7 @@ pub struct SphereCollidableComp {
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PlaneCollidableComp {
@@ -43,6 +46,7 @@ pub struct PlaneCollidableComp {
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelObjectCollidableComp {
@@ -51,6 +55,7 @@ pub struct VoxelObjectCollidableComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// collidable in the [`CollisionWorld`](super::CollisionWorld).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CollidableComp {

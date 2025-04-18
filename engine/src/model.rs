@@ -3,6 +3,7 @@
 pub mod buffer;
 pub mod transform;
 
+use roc_codegen::roc;
 pub use transform::register_model_feature_types;
 
 use crate::{gpu::GraphicsDevice, material::MaterialHandle, mesh::MeshID};
@@ -109,11 +110,12 @@ pub struct ModelInstanceBuffer {
 pub type InstanceFeatureTypeID = Hash64;
 
 /// Identifier for an instance feature value.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
 pub struct InstanceFeatureID {
     feature_type_id: InstanceFeatureTypeID,
-    idx: usize,
+    idx: u64,
 }
 
 /// Container for instance feature values of the same type.
@@ -726,8 +728,12 @@ impl InstanceFeatureID {
     pub fn not_applicable() -> Self {
         Self {
             feature_type_id: Hash64::zeroed(),
-            idx: usize::MAX,
+            idx: u64::MAX,
         }
+    }
+
+    pub const fn idx(&self) -> usize {
+        self.idx as usize
     }
 
     /// Returns the ID of the type of feature this ID identifies.
@@ -737,7 +743,7 @@ impl InstanceFeatureID {
 
     /// Returns `true` if this ID does not represent a valid feature.
     pub fn is_not_applicable(&self) -> bool {
-        self.feature_type_id == Hash64::zeroed() && self.idx == usize::MAX
+        self.feature_type_id == Hash64::zeroed() && self.idx == u64::MAX
     }
 }
 
@@ -797,7 +803,7 @@ impl InstanceFeatureStorage {
     pub fn has_feature(&self, feature_id: InstanceFeatureID) -> bool {
         self.type_descriptor
             .validate_feature_type_id(feature_id.feature_type_id);
-        self.index_map.contains_key(feature_id.idx)
+        self.index_map.contains_key(feature_id.idx())
     }
 
     /// Returns a reference to the value of the feature stored under the given
@@ -847,7 +853,7 @@ impl InstanceFeatureStorage {
         self.type_descriptor.validate_feature::<Fe>();
         self.bytes.extend_from_slice(bytemuck::bytes_of(feature));
         let feature_id = self.create_new_feature_id();
-        self.index_map.push_key(feature_id.idx);
+        self.index_map.push_key(feature_id.idx());
         feature_id
     }
 
@@ -862,7 +868,7 @@ impl InstanceFeatureStorage {
             .validate_feature_type_id(feature_id.feature_type_id);
 
         let feature_size = self.feature_size();
-        let feature_idx = self.index_map.swap_remove_key(feature_id.idx);
+        let feature_idx = self.index_map.swap_remove_key(feature_id.idx());
 
         if feature_size > 0 {
             let feature_to_remove_start = feature_idx.checked_mul(feature_size).unwrap();
@@ -902,7 +908,7 @@ impl InstanceFeatureStorage {
     fn feature_bytes(&self, feature_id: InstanceFeatureID) -> &[u8] {
         self.type_descriptor
             .validate_feature_type_id(feature_id.feature_type_id);
-        let feature_idx = self.index_map.idx(feature_id.idx);
+        let feature_idx = self.index_map.idx(feature_id.idx());
         let byte_range = self.feature_byte_range(feature_idx);
         &self.bytes[byte_range]
     }
@@ -910,7 +916,7 @@ impl InstanceFeatureStorage {
     fn feature_bytes_mut(&mut self, feature_id: InstanceFeatureID) -> &mut [u8] {
         self.type_descriptor
             .validate_feature_type_id(feature_id.feature_type_id);
-        let feature_idx = self.index_map.idx(feature_id.idx);
+        let feature_idx = self.index_map.idx(feature_id.idx());
         let byte_range = self.feature_byte_range(feature_idx);
         &mut self.bytes[byte_range]
     }
@@ -923,7 +929,7 @@ impl InstanceFeatureStorage {
     fn create_new_feature_id(&mut self) -> InstanceFeatureID {
         let feature_id = InstanceFeatureID {
             feature_type_id: self.feature_type_id(),
-            idx: self.feature_id_count,
+            idx: self.feature_id_count as u64,
         };
         self.feature_id_count += 1;
         feature_id

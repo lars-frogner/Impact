@@ -6,6 +6,7 @@ use crate::physics::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that follow a
 /// circular trajectory over time with constant speed.
@@ -13,6 +14,7 @@ use impact_ecs::Component;
 /// For this component to have an effect, the entity also needs a
 /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
 /// [`VelocityComp`](crate::physics::VelocityComp).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CircularTrajectoryComp {

@@ -4,9 +4,11 @@ pub mod components;
 
 use crate::physics::fph;
 use bytemuck::{Pod, Zeroable};
+use roc_codegen::roc;
 
 /// Parameters quantifying the physical response of a body in contact with
 /// another body.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct ContactResponseParameters {

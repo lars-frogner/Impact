@@ -12,6 +12,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use impact_math::{Hash32, compute_hash_str_32};
 use nalgebra::{Point3, Vector3};
+use roc_codegen::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose voxel type is the same everywhere.
@@ -19,6 +20,7 @@ use nalgebra::{Point3, Vector3};
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SameVoxelTypeComp {
@@ -33,6 +35,7 @@ pub struct SameVoxelTypeComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct GradientNoiseVoxelTypesComp {
@@ -50,6 +53,7 @@ pub struct GradientNoiseVoxelTypesComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct MultiscaleSphereModificationComp {
@@ -68,6 +72,7 @@ pub struct MultiscaleSphereModificationComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct MultifractalNoiseModificationComp {
@@ -85,6 +90,7 @@ pub struct MultifractalNoiseModificationComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelBoxComp {
@@ -104,6 +110,7 @@ pub struct VoxelBoxComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelSphereComp {
@@ -120,6 +127,7 @@ pub struct VoxelSphereComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelSphereUnionComp {
@@ -142,6 +150,7 @@ pub struct VoxelSphereUnionComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelGradientNoisePatternComp {
@@ -163,6 +172,7 @@ pub struct VoxelGradientNoisePatternComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// [`ChunkedVoxelObject`](crate::voxel::ChunkedVoxelObject).
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelObjectComp {
@@ -177,6 +187,7 @@ pub struct VoxelObjectComp {
 /// at the full radius.
 ///
 /// Does nothing if the entity does not have a [`ReferenceFrameComp`].
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelAbsorbingSphereComp {
@@ -194,6 +205,7 @@ pub struct VoxelAbsorbingSphereComp {
 /// quadratically to zero at the capsule boundary.
 ///
 /// Does nothing if the entity does not have a [`ReferenceFrameComp`].
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelAbsorbingCapsuleComp {

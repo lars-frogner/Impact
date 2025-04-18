@@ -2,12 +2,14 @@
 
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, world::Entity};
+use roc_codegen::roc;
 
 use super::{Spring, SpringState};
 use crate::physics::motion::Position;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// spring connecting two other entities.
+#[roc]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SpringComp {
