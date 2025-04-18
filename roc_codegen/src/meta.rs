@@ -97,9 +97,9 @@ pub enum RocPrimitiveKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RocLibraryPrimitivePrecision {
-    None,
-    Single,
-    Double,
+    PrecisionIrrelevant,
+    SinglePrecision,
+    DoublePrecision,
 }
 
 /// Struct fields, either in an explicit struct or in enum variants.
@@ -138,15 +138,22 @@ pub struct NamedRocTypeField {
     pub docstring: &'static str,
     /// The identifier (name) of the struct field.
     pub ident: &'static str,
-    /// The ID of this struct field's Roc type.
-    pub type_id: RocTypeID,
+    /// This struct field's Roc type.
+    pub ty: RocFieldType,
 }
 
 /// Unnamed (tuple) struct fields.
 #[derive(Clone, Debug)]
 pub struct UnnamedRocTypeField {
-    /// The ID of this tuple field's Roc type.
-    pub type_id: RocTypeID,
+    /// This tuple field's Roc type.
+    pub ty: RocFieldType,
+}
+
+/// A field that is either a single concrete type or an array of such types.
+#[derive(Clone, Debug)]
+pub enum RocFieldType {
+    Single { type_id: RocTypeID },
+    Array { elem_type_id: RocTypeID, len: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -198,20 +205,55 @@ impl RocTypeDescriptor {
         }
     }
 
+    /// Returns a string describing the type.
+    pub fn description(&self) -> String {
+        format!(
+            "{} ({})",
+            self.concrete_roc_name(false),
+            self.composition_description()
+        )
+    }
+
     /// The name of this Roc type without any unspecified type variables, e.g.
     /// `Vector3 Binary32` as opposed to just `Vector3` (which could have
     /// either 32- or 64-bit precision).
-    pub fn concrete_roc_name(&self) -> Cow<'static, str> {
+    pub fn concrete_roc_name(&self, use_parenthesis: bool) -> Cow<'static, str> {
         if let RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
             precision, ..
         }) = &self.composition
         {
             match precision.roc_type_variable() {
+                Some(type_variable) if use_parenthesis => {
+                    Cow::Owned(format!("({} {})", self.roc_name, type_variable))
+                }
                 Some(type_variable) => Cow::Owned(format!("{} {}", self.roc_name, type_variable)),
                 None => Cow::Borrowed(self.roc_name),
             }
         } else {
             Cow::Borrowed(self.roc_name)
+        }
+    }
+
+    /// Returns a label describing the composition of the type.
+    pub fn composition_description(&self) -> &'static str {
+        match &self.composition {
+            RocTypeComposition::Primitive(RocPrimitiveKind::Builtin) => "builtin",
+            RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided { .. }) => {
+                "from library"
+            }
+            RocTypeComposition::Struct {
+                fields: RocTypeFields::None,
+                ..
+            } => "unit struct",
+            RocTypeComposition::Struct {
+                fields: RocTypeFields::Named(..),
+                ..
+            } => "struct",
+            RocTypeComposition::Struct {
+                fields: RocTypeFields::Unnamed(..),
+                ..
+            } => "tuple struct",
+            RocTypeComposition::Enum(_) => "enum",
         }
     }
 
@@ -258,6 +300,11 @@ impl RocTypeDescriptor {
         None
     }
 
+    /// Whether this type is POD.
+    pub fn is_pod(&self) -> bool {
+        self.flags.contains(RocTypeFlags::IS_POD)
+    }
+
     /// Whether this type is an ECS component.
     pub fn is_component(&self) -> bool {
         self.flags.contains(RocTypeFlags::IS_COMPONENT)
@@ -267,17 +314,17 @@ impl RocTypeDescriptor {
 impl RocLibraryPrimitivePrecision {
     const fn roc_type_variable(self) -> Option<&'static str> {
         match self {
-            Self::None => None,
-            Self::Single => Some("Binary32"),
-            Self::Double => Some("Binary64"),
+            Self::PrecisionIrrelevant => None,
+            Self::SinglePrecision => Some("Binary32"),
+            Self::DoublePrecision => Some("Binary64"),
         }
     }
 
     const fn bit_count_str(self) -> Option<&'static str> {
         match self {
-            Self::None => None,
-            Self::Single => Some("32"),
-            Self::Double => Some("64"),
+            Self::PrecisionIrrelevant => None,
+            Self::SinglePrecision => Some("32"),
+            Self::DoublePrecision => Some("64"),
         }
     }
 }
