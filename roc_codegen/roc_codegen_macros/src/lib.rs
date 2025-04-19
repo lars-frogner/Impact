@@ -8,13 +8,26 @@ use proc_macro_crate::{self, FoundCrate};
 use proc_macro2::TokenStream as TokenStream2;
 use std::str::FromStr;
 
+#[derive(Clone, Debug)]
+struct RocAttributeArgs {
+    category: RocTypeCategory,
+    package_name: Option<String>,
+    module_name: Option<String>,
+    type_name: Option<String>,
+    function_postfix: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RocAttributeArg {
-    None,
-    Auto,
+enum RocTypeCategory {
     Primitive,
     Pod,
     Inline,
+}
+
+struct MetaEntry {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    value: syn::LitStr,
 }
 
 /// Attribute macro for annotating Rust types that should be available in Roc.
@@ -52,9 +65,13 @@ enum RocAttributeArg {
 #[cfg(feature = "enabled")]
 #[proc_macro_attribute]
 pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let arg = syn::parse_macro_input!(attr as RocAttributeArg);
+    let args = if attr.is_empty() {
+        None
+    } else {
+        Some(syn::parse_macro_input!(attr as RocAttributeArgs))
+    };
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
-    roc_attr::apply_roc_attribute(arg, input, &crate_root_tokens())
+    roc_attr::apply_roc_attribute(args, input, &crate_root_tokens())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -62,7 +79,9 @@ pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[cfg(not(feature = "enabled"))]
 #[proc_macro_attribute]
 pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
-    syn::parse_macro_input!(attr as RocAttributeArgs);
+    if !attr.is_empty() {
+        syn::parse_macro_input!(attr as RocAttributeArgs);
+    }
     item
 }
 
@@ -90,24 +109,105 @@ fn crate_root_tokens() -> TokenStream2 {
     TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
 }
 
-impl syn::parse::Parse for RocAttributeArg {
+impl syn::parse::Parse for RocAttributeArgs {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let category: syn::Ident = input.parse()?;
+
+        let category = if category == "primitive" {
+            RocTypeCategory::Primitive
+        } else if category == "pod" {
+            RocTypeCategory::Pod
+        } else if category == "inline" {
+            RocTypeCategory::Inline
+        } else {
+            return Err(syn::Error::new_spanned(
+                category.clone(),
+                format!(
+                    "invalid category `{}`, must be one of `pod`, `inline`, `primitive`",
+                    category
+                ),
+            ));
+        };
+
+        let mut package_name = None;
+        let mut module_name = None;
+        let mut type_name = None;
+        let mut function_postfix = None;
+
         if input.is_empty() {
-            return Ok(RocAttributeArg::None);
+            return Ok(RocAttributeArgs {
+                category,
+                package_name,
+                module_name,
+                type_name,
+                function_postfix,
+            });
         }
 
-        let ident: proc_macro2::Ident = input.parse()?;
-        match ident.to_string().as_str() {
-            "auto" => Ok(RocAttributeArg::Auto),
-            "primitive" => Ok(RocAttributeArg::Primitive),
-            "pod" => Ok(RocAttributeArg::Pod),
-            "inline" => Ok(RocAttributeArg::Inline),
-            other => Err(syn::Error::new(
-                ident.span(),
-                format!(
-                    "unknown argument '{other}', must be one of 'pod', 'inline', 'primitive' and 'auto'"
-                ),
-            )),
+        input.parse::<syn::token::Comma>()?;
+
+        let args =
+            syn::punctuated::Punctuated::<MetaEntry, syn::token::Comma>::parse_terminated(input)?;
+
+        for arg in args {
+            match arg.key.to_string().as_str() {
+                "package" => {
+                    if package_name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `package`",
+                        ));
+                    }
+                }
+                "module" => {
+                    if module_name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `module`",
+                        ));
+                    }
+                }
+                "name" => {
+                    if type_name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(arg.key, "repeated argument `name`"));
+                    }
+                }
+                "postfix" => {
+                    if function_postfix.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `postfix`",
+                        ));
+                    }
+                }
+                other => {
+                    return Err(syn::Error::new_spanned(
+                        arg.key,
+                        format!(
+                            "invalid argument `{}`, must be one of `package`, `module`, `name`, `postfix`",
+                            other
+                        ),
+                    ));
+                }
+            }
         }
+
+        Ok(RocAttributeArgs {
+            category,
+            package_name,
+            module_name,
+            type_name,
+            function_postfix,
+        })
+    }
+}
+
+impl syn::parse::Parse for MetaEntry {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Ok(MetaEntry {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            value: input.parse()?,
+        })
     }
 }

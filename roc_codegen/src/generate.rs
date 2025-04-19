@@ -192,7 +192,7 @@ fn generate_roc_modules<'a>(
         .filter_map(
             |descriptor| match roc::generate_module(options, &descriptors, descriptor) {
                 Ok(Some(content)) => Some(Ok(Module {
-                    name: descriptor.roc_name,
+                    name: descriptor.type_name,
                     content,
                 })),
                 Ok(None) => None,

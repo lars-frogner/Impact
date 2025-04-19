@@ -331,10 +331,10 @@ where
 
 #[cfg(feature = "roc_codegen")]
 roc_codegen::impl_roc_for_library_provided_primitives! {
-    Radians<f32> => "Radians", SinglePrecision,
-    Radians<f64> => "Radians", DoublePrecision,
-    Degrees<f32> => "Degrees", SinglePrecision,
-    Degrees<f64> => "Degrees", DoublePrecision,
+    Radians<f32> => core, Angle, Radians, "_radians_32", SinglePrecision,
+    Radians<f64> => core, Angle, Radians, "_radians_64", DoublePrecision,
+    Degrees<f32> => core, Angle, Degrees, "_degrees_32", SinglePrecision,
+    Degrees<f64> => core, Angle, Degrees, "_degrees_64", DoublePrecision,
 }
 
 #[cfg(test)]

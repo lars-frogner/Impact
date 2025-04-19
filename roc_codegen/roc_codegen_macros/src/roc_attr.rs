@@ -1,16 +1,18 @@
 //! Attribute macro for Roc code generation.
 
-use crate::RocAttributeArg;
+use crate::{RocAttributeArgs, RocTypeCategory};
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use std::{fmt::Write, iter};
 use syn::parse::Parser;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RocTypeCategory {
-    Primitive,
-    Pod,
-    Inline,
+#[derive(Clone, Debug)]
+struct ResolvedAttributeArgs {
+    type_category: RocTypeCategory,
+    package_name: String,
+    module_name: String,
+    type_name: String,
+    function_postfix: String,
 }
 
 // These need to match the corresponding constants in `roc_codegen::meta`.
@@ -20,7 +22,7 @@ pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
 
 pub(super) fn apply_roc_attribute(
-    arg: RocAttributeArg,
+    args: Option<RocAttributeArgs>,
     input: syn::DeriveInput,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -31,19 +33,19 @@ pub(super) fn apply_roc_attribute(
         ));
     }
 
-    let type_category = determine_type_category(arg, &input);
+    let args = resolve_attribute_args(args, &input);
 
-    let type_name = &input.ident;
+    let rust_type_name = &input.ident;
 
-    let roc_impl = generate_roc_impl(type_name, &input, crate_root, type_category)?;
-    let roc_pod_impl = generate_roc_pod_impl(type_name, crate_root, type_category);
+    let roc_impl = generate_roc_impl(rust_type_name, &input, crate_root, args.type_category)?;
+    let roc_pod_impl = generate_roc_pod_impl(rust_type_name, crate_root, args.type_category);
 
     let mut static_assertions = Vec::new();
     let descriptor_submit = generate_roc_descriptor_submit(
-        type_name,
+        &args,
+        rust_type_name,
         &input,
         crate_root,
-        type_category,
         &mut static_assertions,
     )?;
 
@@ -56,16 +58,50 @@ pub(super) fn apply_roc_attribute(
     })
 }
 
-fn determine_type_category(arg: RocAttributeArg, input: &syn::DeriveInput) -> RocTypeCategory {
-    match arg {
-        RocAttributeArg::Primitive => RocTypeCategory::Primitive,
-        RocAttributeArg::Pod => RocTypeCategory::Pod,
-        RocAttributeArg::Inline => RocTypeCategory::Inline,
-        RocAttributeArg::None | RocAttributeArg::Auto => {
-            if derives_trait(input, "Pod") {
+fn resolve_attribute_args(
+    args: Option<RocAttributeArgs>,
+    input: &syn::DeriveInput,
+) -> ResolvedAttributeArgs {
+    match args {
+        None => {
+            let category = if derives_trait(input, "Pod") {
                 RocTypeCategory::Pod
             } else {
                 RocTypeCategory::Inline
+            };
+            let type_name = input.ident.to_string();
+            let module_name = type_name.clone();
+            let package_name = String::new();
+            let function_postfix = String::new();
+            ResolvedAttributeArgs {
+                type_category: category,
+                package_name,
+                module_name,
+                type_name,
+                function_postfix,
+            }
+        }
+        Some(RocAttributeArgs {
+            category,
+            package_name,
+            module_name,
+            type_name,
+            function_postfix,
+        }) => {
+            let type_name = type_name.unwrap_or_else(|| input.ident.to_string());
+            let module_name = module_name.unwrap_or_else(|| type_name.clone());
+            let package_name = if category == RocTypeCategory::Primitive {
+                package_name.unwrap_or_else(|| String::from("core"))
+            } else {
+                package_name.unwrap_or_default()
+            };
+            let function_postfix = function_postfix.unwrap_or_default();
+            ResolvedAttributeArgs {
+                type_category: category,
+                package_name,
+                module_name,
+                type_name,
+                function_postfix,
             }
         }
     }
@@ -97,16 +133,16 @@ fn derives_trait(input: &syn::DeriveInput, trait_name: &str) -> bool {
 }
 
 fn generate_roc_impl(
-    type_name: &Ident,
+    rust_type_name: &Ident,
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
     type_category: RocTypeCategory,
 ) -> syn::Result<TokenStream> {
-    let roc_type_id = generate_roc_type_id(type_name, crate_root);
+    let roc_type_id = generate_roc_type_id(rust_type_name, crate_root);
     let size = generate_size_expr(input, crate_root, type_category)?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
-        impl #crate_root::meta::Roc for #type_name {
+        impl #crate_root::meta::Roc for #rust_type_name {
             const ROC_TYPE_ID: #crate_root::meta::RocTypeID = #roc_type_id;
             const SERIALIZED_SIZE: usize = #size;
         }
@@ -114,7 +150,7 @@ fn generate_roc_impl(
 }
 
 fn generate_roc_pod_impl(
-    type_name: &Ident,
+    rust_type_name: &Ident,
     crate_root: &TokenStream,
     type_category: RocTypeCategory,
 ) -> TokenStream {
@@ -125,18 +161,18 @@ fn generate_roc_pod_impl(
         // This impl ensures that we get an error if the type doesn't implement `Pod`
         quote! {
             #[cfg(feature = "roc_codegen")]
-            impl #crate_root::meta::RocPod for #type_name {}
+            impl #crate_root::meta::RocPod for #rust_type_name {}
         }
     } else {
         quote! {}
     }
 }
 
-fn generate_roc_type_id(type_name: &Ident, crate_root: &TokenStream) -> TokenStream {
+fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> TokenStream {
     // WARNING: If changing this, make sure to change the generation of
     // component IDs in `impact_ecs_macros` accordingly, since we guarantee
     // that the Roc type ID of any component matches the component ID
-    let type_path_tail = format!("::{}", type_name);
+    let type_path_tail = format!("::{}", rust_type_name);
     quote!(
         #crate_root::meta::RocTypeID::hashed_from_str(concat!(
             module_path!(),
@@ -146,23 +182,30 @@ fn generate_roc_type_id(type_name: &Ident, crate_root: &TokenStream) -> TokenStr
 }
 
 fn generate_roc_descriptor_submit(
-    type_name: &Ident,
+    args: &ResolvedAttributeArgs,
+    rust_type_name: &Ident,
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
-    type_category: RocTypeCategory,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
-    let roc_name = type_name.to_string();
-    let flags = generate_flags(crate_root, type_category);
-    let composition = generate_composition(input, crate_root, type_category, static_assertions)?;
+    let package_name = &args.package_name;
+    let module_name = &args.module_name;
+    let type_name = &args.type_name;
+    let function_postfix = &args.function_postfix;
+    let flags = generate_flags(crate_root, args.type_category);
+    let composition =
+        generate_composition(input, crate_root, args.type_category, static_assertions)?;
     let docstring = extract_and_process_docstring(&input.attrs);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
             #crate_root::meta::RocTypeDescriptor {
-                id: <#type_name as #crate_root::meta::Roc>::ROC_TYPE_ID,
-                roc_name: #roc_name,
-                serialized_size: <#type_name as #crate_root::meta::Roc>::SERIALIZED_SIZE,
+                id: <#rust_type_name as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                package_name: #package_name,
+                module_name: #module_name,
+                type_name: #type_name,
+                function_postfix: #function_postfix,
+                serialized_size: <#rust_type_name as #crate_root::meta::Roc>::SERIALIZED_SIZE,
                 flags: #flags,
                 composition: #composition,
                 docstring: #docstring,
@@ -193,7 +236,7 @@ fn generate_composition(
         return Ok(quote! {
             #crate_root::meta::RocTypeComposition::Primitive(
                 #crate_root::meta::RocPrimitiveKind::LibraryProvided{
-                    precision: #crate_root::meta::RocLibraryPrimitivePrecision::PrecisionIrrelevant,
+                    precision: #crate_root::meta::RocPrimitivePrecision::PrecisionIrrelevant,
                }
             )
         });
