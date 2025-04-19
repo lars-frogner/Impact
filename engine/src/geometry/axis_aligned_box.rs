@@ -1,6 +1,9 @@
 //! Representation of axis-aligned boxes.
 
-use crate::{geometry::Point, num::Float};
+use crate::{
+    geometry::{Plane, Point},
+    num::Float,
+};
 use approx::AbsDiffEq;
 use na::point;
 use nalgebra::{self as na, Point3, Vector3};
@@ -255,6 +258,36 @@ impl<F: Float> AxisAlignedBox<F> {
         } else {
             None
         }
+    }
+
+    /// Returns a version of this AAB that extrudes as little as possible
+    /// into the positive halfspace of the given plane without changing the
+    /// volume of the box lying within the negative halfspace.
+    pub fn projected_onto_negative_halfspace(&self, plane: &Plane<F>) -> Self {
+        let tolerance = F::from_f64(1e-8).unwrap();
+        let normal = plane.unit_normal();
+
+        let mut fitted = self.clone();
+
+        for (i, j, k) in [(0, 1, 2), (1, 2, 0), (2, 0, 1)] {
+            if normal[k].abs() > tolerance {
+                let a = normal[i] * self.corners[0][i] + normal[j] * self.corners[0][j];
+                let b = normal[i] * self.corners[0][i] + normal[j] * self.corners[1][j];
+                let c = normal[i] * self.corners[1][i] + normal[j] * self.corners[0][j];
+                let d = normal[i] * self.corners[1][i] + normal[j] * self.corners[1][j];
+
+                let extremal = (plane.displacement() - a.min(b).min(c).min(d)) / normal[k];
+
+                if normal[k].is_sign_positive() {
+                    fitted.corners[0][k] = F::min(fitted.corners[0][k], extremal);
+                    fitted.corners[1][k] = F::min(fitted.corners[1][k], extremal);
+                } else {
+                    fitted.corners[0][k] = F::max(fitted.corners[0][k], extremal);
+                    fitted.corners[1][k] = F::max(fitted.corners[1][k], extremal);
+                }
+            }
+        }
+        fitted
     }
 }
 

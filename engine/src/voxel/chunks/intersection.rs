@@ -2,7 +2,7 @@
 
 use super::{chunk_voxels, chunk_voxels_mut};
 use crate::{
-    geometry::{AxisAlignedBox, Capsule, Sphere},
+    geometry::{AxisAlignedBox, Capsule, Plane, Sphere},
     voxel::{
         Voxel, VoxelPlacement, VoxelSurfacePlacement,
         chunks::{
@@ -15,6 +15,64 @@ use nalgebra::{self as na, Point3, point};
 use std::{array, collections::HashSet, ops::Range};
 
 impl ChunkedVoxelObject {
+    pub fn for_each_surface_voxel_maybe_intersecting_plane(
+        &self,
+        plane: &Plane<f64>,
+        f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
+    ) {
+        let included_voxel_ranges = self.voxel_ranges_in_object_within_plane(plane);
+
+        if included_voxel_ranges.iter().any(Range::is_empty) {
+            return;
+        }
+
+        let included_chunk_ranges = included_voxel_ranges
+            .clone()
+            .map(chunk_range_encompassing_voxel_range);
+
+        for chunk_i in included_chunk_ranges[0].clone() {
+            for chunk_j in included_chunk_ranges[1].clone() {
+                for chunk_k in included_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    // Only non-uniform chunks can have surface voxels
+                    let VoxelChunk::NonUniform(chunk) = &self.chunks[chunk_idx] else {
+                        continue;
+                    };
+
+                    let object_voxel_ranges_in_chunk =
+                        chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
+
+                    let included_voxel_ranges_in_chunk: [_; 3] = array::from_fn(|dim| {
+                        let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
+                        let included_range = &included_voxel_ranges[dim];
+                        usize::max(range_in_chunk.start, included_range.start)
+                            ..usize::min(range_in_chunk.end, included_range.end)
+                    });
+
+                    let voxels = chunk_voxels(&self.voxels, chunk.data_offset);
+
+                    for i in included_voxel_ranges_in_chunk[0].clone() {
+                        for j in included_voxel_ranges_in_chunk[1].clone() {
+                            for k in included_voxel_ranges_in_chunk[2].clone() {
+                                let voxel_idx =
+                                    linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                        i, j, k,
+                                    );
+                                let voxel = &voxels[voxel_idx];
+                                if let Some(VoxelPlacement::Surface(placement)) = voxel.placement()
+                                {
+                                    f([i, j, k], voxel, placement);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Finds non-empty voxels with at least one exposed face that are not
     /// fully outside the given sphere and calls the given closure with
     /// their indices, the voxels themselves and their placement on the
@@ -524,6 +582,18 @@ impl ChunkedVoxelObject {
         }
 
         touched_voxel_ranges
+    }
+
+    fn voxel_ranges_in_object_within_plane(&self, plane: &Plane<f64>) -> [Range<usize>; 3] {
+        self.voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), plane)
+    }
+
+    fn voxel_ranges_within_plane(
+        &self,
+        max_voxel_ranges: [Range<usize>; 3],
+        plane: &Plane<f64>,
+    ) -> [Range<usize>; 3] {
+        todo!()
     }
 }
 
