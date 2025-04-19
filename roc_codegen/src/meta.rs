@@ -27,8 +27,14 @@ pub struct RocTypeID(u64);
 pub struct RocTypeDescriptor {
     /// A unique ID for the type.
     pub id: RocTypeID,
+    /// The name of the Roc package where the type will be defined.
+    pub package_name: &'static str,
+    /// The name of the Roc module where the type will be defined.
+    pub module_name: &'static str,
     /// The name of the type in Roc.
-    pub roc_name: &'static str,
+    pub type_name: &'static str,
+    /// Postfix for the functions operating on this type.
+    pub function_postfix: &'static str,
     /// The size in bytes of an object of this type when serialized to match
     /// the ABI used for FFI between the engine and Roc.
     pub serialized_size: usize,
@@ -91,12 +97,12 @@ pub enum RocPrimitiveKind {
     LibraryProvided {
         /// If the library-provided primitive has single- and double-precision
         /// versions, this specifies which one this instance of the type uses.
-        precision: RocLibraryPrimitivePrecision,
+        precision: RocPrimitivePrecision,
     },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RocLibraryPrimitivePrecision {
+pub enum RocPrimitivePrecision {
     PrecisionIrrelevant,
     SinglePrecision,
     DoublePrecision,
@@ -185,21 +191,28 @@ impl fmt::Display for RocTypeID {
 impl RocTypeDescriptor {
     /// Returns the fully qualified Roc import statement required for using
     /// this type in Roc.
-    pub fn import_module(&self, import_prefix: &str, core_package_name: &str) -> String {
+    pub fn import_module(
+        &self,
+        import_prefix: &str,
+        core_package_name: &str,
+        platform_package_name: &str,
+    ) -> String {
         match &self.composition {
-            RocTypeComposition::Primitive(RocPrimitiveKind::Builtin) => {
-                format!("{core_package_name}.Builtin as Builtin")
-            }
-            RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided { .. }) => {
+            RocTypeComposition::Primitive(_) => {
+                let package_name = match self.package_name {
+                    "pf" => platform_package_name,
+                    "core" => core_package_name,
+                    name => name,
+                };
                 format!(
-                    "{core_package_name}.{name} as {name} exposing [{name}]",
-                    name = self.roc_name
+                    "{package_name}.{module_name} as {module_name}",
+                    module_name = self.module_name
                 )
             }
             RocTypeComposition::Struct { .. } | RocTypeComposition::Enum(_) => {
                 format!(
-                    "{import_prefix}{name} as {name} exposing [{name}]",
-                    name = self.roc_name
+                    "{import_prefix}{module_name} as {module_name}",
+                    module_name = self.module_name
                 )
             }
         }
@@ -209,85 +222,80 @@ impl RocTypeDescriptor {
     pub fn description(&self) -> String {
         format!(
             "{} ({})",
-            self.concrete_roc_name(false),
+            self.resolved_type_name(false),
             self.composition_description()
         )
     }
 
     /// The name of this Roc type without any unspecified type variables, e.g.
     /// `Vector3 Binary32` as opposed to just `Vector3` (which could have
-    /// either 32- or 64-bit precision).
-    pub fn concrete_roc_name(&self, use_parenthesis: bool) -> Cow<'static, str> {
-        if let RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
-            precision, ..
-        }) = &self.composition
-        {
-            match precision.roc_type_variable() {
-                Some(type_variable) if use_parenthesis => {
-                    Cow::Owned(format!("({} {})", self.roc_name, type_variable))
-                }
-                Some(type_variable) => Cow::Owned(format!("{} {}", self.roc_name, type_variable)),
-                None => Cow::Borrowed(self.roc_name),
-            }
+    /// either 32- or 64-bit precision). The name may also be prefixed by its
+    /// module path if required to fully specify the type based on how it was
+    /// imported.
+    pub fn resolved_type_name(&self, use_parenthesis: bool) -> Cow<'static, str> {
+        if let Some(type_variable) = self.roc_type_variable() {
+            Cow::Owned(format!(
+                "{open_paren}{module_name}.{type_name} {type_variable}{close_paren}",
+                module_name = self.module_name,
+                type_name = self.type_name,
+                open_paren = if use_parenthesis { "(" } else { "" },
+                close_paren = if use_parenthesis { ")" } else { "" }
+            ))
+        } else if matches!(
+            &self.composition,
+            RocTypeComposition::Primitive(RocPrimitiveKind::Builtin)
+        ) {
+            Cow::Borrowed(self.type_name)
         } else {
-            Cow::Borrowed(self.roc_name)
+            Cow::Owned(format!(
+                "{module_name}.{type_name}",
+                module_name = self.module_name,
+                type_name = self.type_name
+            ))
         }
     }
 
     /// Returns a label describing the composition of the type.
-    pub fn composition_description(&self) -> &'static str {
+    pub fn composition_description(&self) -> Cow<'static, str> {
         match &self.composition {
-            RocTypeComposition::Primitive(RocPrimitiveKind::Builtin) => "builtin",
+            RocTypeComposition::Primitive(RocPrimitiveKind::Builtin) => Cow::Borrowed("builtin"),
             RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided { .. }) => {
-                "from library"
+                Cow::Owned(format!("from package {}", self.package_name))
             }
             RocTypeComposition::Struct {
                 fields: RocTypeFields::None,
                 ..
-            } => "unit struct",
+            } => Cow::Borrowed("unit struct"),
             RocTypeComposition::Struct {
                 fields: RocTypeFields::Named(..),
                 ..
-            } => "struct",
+            } => Cow::Borrowed("struct"),
             RocTypeComposition::Struct {
                 fields: RocTypeFields::Unnamed(..),
                 ..
-            } => "tuple struct",
-            RocTypeComposition::Enum(_) => "enum",
+            } => Cow::Borrowed("tuple struct"),
+            RocTypeComposition::Enum(_) => Cow::Borrowed("enum"),
         }
     }
 
     /// The qualified function name to use when evoking this type's standard
     /// (always generated or pre-implemented) `write_bytes` function in Roc.
     pub fn write_bytes_func_name(&self) -> String {
-        self.serialization_func_name("write_bytes")
+        self.resolved_func_name("write_bytes")
     }
 
     /// The qualified function name to use when evoking this type's standard
     /// (always generated or pre-implemented) `from_bytes` function in Roc.
     pub fn from_bytes_func_name(&self) -> String {
-        self.serialization_func_name("from_bytes")
+        self.resolved_func_name("from_bytes")
     }
 
-    fn serialization_func_name(&self, func_base: impl Display) -> String {
-        match &self.composition {
-            RocTypeComposition::Primitive(RocPrimitiveKind::Builtin) => {
-                format!("Builtin.{}_{}", func_base, self.roc_name.to_lowercase())
-            }
-            RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
-                precision, ..
-            }) => match precision.bit_count_str() {
-                Some(bit_count) => {
-                    format!("{}.{}_{}", self.roc_name, func_base, bit_count)
-                }
-                None => {
-                    format!("{}.{}", self.roc_name, func_base)
-                }
-            },
-            _ => {
-                format!("{}.{}", self.roc_name, func_base)
-            }
-        }
+    fn resolved_func_name(&self, func_base: impl Display) -> String {
+        format!(
+            "{module_name}.{func_base}{postfix}",
+            module_name = self.module_name,
+            postfix = self.function_postfix
+        )
     }
 
     /// The alignment of this type if it is a POD struct.
@@ -309,9 +317,20 @@ impl RocTypeDescriptor {
     pub fn is_component(&self) -> bool {
         self.flags.contains(RocTypeFlags::IS_COMPONENT)
     }
+
+    fn roc_type_variable(&self) -> Option<&'static str> {
+        if let RocTypeComposition::Primitive(RocPrimitiveKind::LibraryProvided {
+            precision, ..
+        }) = &self.composition
+        {
+            precision.roc_type_variable()
+        } else {
+            None
+        }
+    }
 }
 
-impl RocLibraryPrimitivePrecision {
+impl RocPrimitivePrecision {
     const fn roc_type_variable(self) -> Option<&'static str> {
         match self {
             Self::PrecisionIrrelevant => None,
@@ -319,17 +338,17 @@ impl RocLibraryPrimitivePrecision {
             Self::DoublePrecision => Some("Binary64"),
         }
     }
-
-    const fn bit_count_str(self) -> Option<&'static str> {
-        match self {
-            Self::PrecisionIrrelevant => None,
-            Self::SinglePrecision => Some("32"),
-            Self::DoublePrecision => Some("64"),
-        }
-    }
 }
 
 impl<T, const N: usize> StaticList<T, N> {
+    pub fn len(&self) -> usize {
+        self.iter().count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.first().is_none_or(|first| first.is_none())
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.into_iter()
     }

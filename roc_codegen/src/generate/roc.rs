@@ -55,7 +55,7 @@ fn write_module_header(roc_code: &mut String, descriptor: &RocTypeDescriptor) ->
             {}\
         ]\
         ",
-        descriptor.roc_name,
+        descriptor.type_name,
         if descriptor.is_component() {
             "\
             add_to_entity,\n    \
@@ -93,13 +93,16 @@ fn determine_imports(
     let mut imports = HashSet::new();
 
     // All modules needs this import
-    imports.insert(format!("{}.Builtin as Builtin", &options.core_package_name));
+    imports.insert(format!(
+        "{core}.Builtin as Builtin",
+        core = &options.core_package_name
+    ));
 
     if descriptor.is_component() {
-        // ECS components will need this import
+        // ECS components need this import
         imports.insert(format!(
-            "{}.Entity as Entity",
-            &options.platform_package_name
+            "{pf}.Entity as Entity",
+            pf = &options.platform_package_name
         ));
     }
 
@@ -132,10 +135,11 @@ fn add_imports_for_fields<const N: usize>(
                     RocFieldType::Array { elem_type_id, .. } => elem_type_id,
                 };
                 if let Some(field_descriptor) = descriptors.get(type_id) {
-                    imports.insert(
-                        field_descriptor
-                            .import_module(&options.import_prefix, &options.core_package_name),
-                    );
+                    imports.insert(field_descriptor.import_module(
+                        &options.import_prefix,
+                        &options.core_package_name,
+                        &options.platform_package_name,
+                    ));
                 }
             }
         }
@@ -146,10 +150,11 @@ fn add_imports_for_fields<const N: usize>(
                     RocFieldType::Array { elem_type_id, .. } => elem_type_id,
                 };
                 if let Some(field_descriptor) = descriptors.get(type_id) {
-                    imports.insert(
-                        field_descriptor
-                            .import_module(&options.import_prefix, &options.core_package_name),
-                    );
+                    imports.insert(field_descriptor.import_module(
+                        &options.import_prefix,
+                        &options.core_package_name,
+                        &options.platform_package_name,
+                    ));
                 }
             }
         }
@@ -168,15 +173,15 @@ fn write_type_declaration(
         // We don't generate code for primitive types
         RocTypeComposition::Primitive(_) => Ok(()),
         RocTypeComposition::Struct { fields, .. } => {
-            write!(roc_code, "{} : ", descriptor.roc_name)?;
+            write!(roc_code, "{} : ", descriptor.type_name)?;
             write_fields_declaration(roc_code, descriptors, fields, 0, false, &|| {
-                format!("struct type {}", descriptor.roc_name)
+                format!("struct type {}", descriptor.type_name)
             })?;
             roc_code.push('\n');
             Ok(())
         }
         RocTypeComposition::Enum(variants) => {
-            write!(roc_code, "{} : [", descriptor.roc_name)?;
+            write!(roc_code, "{} : [", descriptor.type_name)?;
             let mut variant_count = 0;
             for variant in &variants.0 {
                 if !variant.docstring.is_empty() {
@@ -193,7 +198,7 @@ fn write_type_declaration(
                         &variant.fields,
                         2, // 1 looks more right, but 2 is consistent with Roc autoformatting
                         true,
-                        &|| format!("variant {} of enum {}", variant.ident, descriptor.roc_name),
+                        &|| format!("variant {} of enum {}", variant.ident, descriptor.type_name),
                     )?;
                 }
                 roc_code.push(',');
@@ -236,8 +241,8 @@ fn write_fields_declaration<const N: usize>(
                     }
                 }
 
-                let roc_name = concrete_roc_name_for_field(descriptors, ty, ident, parent_name)?;
-                write!(declaration, "\n{indentation}    {ident} : {roc_name},")?;
+                let type_name = resolved_type_name_for_field(descriptors, ty, ident, parent_name)?;
+                write!(declaration, "\n{indentation}    {ident} : {type_name},")?;
 
                 field_count += 1;
             }
@@ -248,21 +253,21 @@ fn write_fields_declaration<const N: usize>(
         }
 
         RocTypeFields::Unnamed(fields) => {
-            if !undelimited_tuple {
+            if !undelimited_tuple && fields.len() > 1 {
                 declaration.push('(');
             }
             for (field_idx, UnnamedRocTypeField { ty }) in fields.iter().enumerate() {
-                let roc_name =
-                    concrete_roc_name_for_field(descriptors, ty, field_idx, parent_name)?;
+                let type_name =
+                    resolved_type_name_for_field(descriptors, ty, field_idx, parent_name)?;
                 if field_idx > 0 {
                     if !undelimited_tuple {
                         declaration.push(',');
                     }
                     declaration.push(' ');
                 }
-                declaration.push_str(&roc_name);
+                declaration.push_str(&type_name);
             }
-            if !undelimited_tuple {
+            if !undelimited_tuple && fields.len() > 1 {
                 declaration.push(')');
             }
         }
@@ -288,7 +293,7 @@ fn write_write_bytes_function(
         write_bytes : List U8, {name} -> List U8\n\
         write_bytes = |bytes, {underscore}value|\n\
         ",
-        name = descriptor.roc_name,
+        name = descriptor.type_name,
         underscore = if descriptor.serialized_size == 0 {
             "_"
         } else {
@@ -313,7 +318,10 @@ fn write_write_bytes_function(
                 1,
                 |def, field| write!(def, "value.{field}"),
                 |def, idx| write!(def, "value.{idx}"),
-                &|| format!("struct type {}", descriptor.roc_name),
+                |def| {
+                    def.push_str("value");
+                },
+                &|| format!("struct type {}", descriptor.type_name),
             )?;
         }
         RocTypeComposition::Enum(variants) => {
@@ -343,11 +351,15 @@ fn write_write_bytes_function(
                     }
                     RocTypeFields::Unnamed(fields) => {
                         write!(roc_code, "        {}(", variant.ident)?;
-                        for (field_idx, _) in fields.iter().enumerate() {
-                            if field_idx > 0 {
-                                roc_code.push_str(", ");
+                        if fields.len() == 1 {
+                            roc_code.push_str("val");
+                        } else {
+                            for (field_idx, _) in fields.iter().enumerate() {
+                                if field_idx > 0 {
+                                    roc_code.push_str(", ");
+                                }
+                                write!(roc_code, "x{}", field_idx)?;
                             }
-                            write!(roc_code, "x{}", field_idx)?;
                         }
                         roc_code.push_str(") ->\n");
                     }
@@ -369,7 +381,10 @@ fn write_write_bytes_function(
                     3,
                     |def, field| write!(def, "{field}"),
                     |def, idx| write!(def, "x{idx}"),
-                    &|| format!("variant {} of enum {}", variant.ident, descriptor.roc_name),
+                    |def| {
+                        def.push_str("val");
+                    },
+                    &|| format!("variant {} of enum {}", variant.ident, descriptor.type_name),
                 )?;
             }
         }
@@ -387,6 +402,7 @@ fn write_calls_to_write_bytes<const N: usize>(
     indentation_level: usize,
     mut write_struct_value_access: impl FnMut(&mut String, &str) -> std::fmt::Result,
     mut write_tuple_value_access: impl FnMut(&mut String, &str) -> std::fmt::Result,
+    mut write_whole_value_access: impl FnMut(&mut String),
     parent_name: &impl Fn() -> String,
 ) -> Result<()> {
     let indentation = "    ".repeat(indentation_level);
@@ -429,10 +445,15 @@ fn write_calls_to_write_bytes<const N: usize>(
             }
         }
         RocTypeFields::Unnamed(fields) => {
+            let is_single = fields.len() == 1;
             for (field_idx, UnnamedRocTypeField { ty }) in fields.iter().enumerate() {
                 let ident = field_idx.to_string();
                 write_until_value_access(write_bytes_definition, ty, &ident)?;
-                write_tuple_value_access(write_bytes_definition, &ident)?;
+                if is_single {
+                    write_whole_value_access(write_bytes_definition);
+                } else {
+                    write_tuple_value_access(write_bytes_definition, &ident)?;
+                }
                 writeln!(write_bytes_definition, ")")?;
             }
         }
@@ -457,7 +478,7 @@ fn write_from_bytes_function(
         from_bytes : List U8 -> Result {name} Builtin.DecodeErr\n\
         from_bytes = |{underscore}bytes|\n\
         ",
-        name = descriptor.roc_name,
+        name = descriptor.type_name,
         underscore = if descriptor.serialized_size == 0 {
             "_"
         } else {
@@ -470,12 +491,12 @@ fn write_from_bytes_function(
             fields: RocTypeFields::None,
             ..
         } => {
-            roc_code.push_str("    Ok({{}})\n");
+            roc_code.push_str("    Ok({})\n");
         }
         RocTypeComposition::Struct { fields, .. } => {
             roc_code.push_str("    Ok(\n        ");
             write_calls_to_from_bytes(roc_code, descriptors, fields, 2, "bytes", &|| {
-                format!("struct type {}", descriptor.roc_name)
+                format!("struct type {}", descriptor.type_name)
             })?;
             writeln!(roc_code, "    )")?;
         }
@@ -510,7 +531,10 @@ fn write_from_bytes_function(
                             4,
                             "data_bytes",
                             &|| {
-                                format!("variant {} of enum {}", variant.ident, descriptor.roc_name)
+                                format!(
+                                    "variant {} of enum {}",
+                                    variant.ident, descriptor.type_name
+                                )
                             },
                         )?;
                         roc_code.push_str(
@@ -539,7 +563,10 @@ fn write_from_bytes_function(
                             4,
                             "data_bytes",
                             &|| {
-                                format!("variant {} of enum {}", variant.ident, descriptor.roc_name)
+                                format!(
+                                    "variant {} of enum {}",
+                                    variant.ident, descriptor.type_name
+                                )
                             },
                         )?;
                         roc_code.push_str(
@@ -697,7 +724,7 @@ fn write_component_functions(roc_code: &mut String, descriptor: &RocTypeDescript
             make sure to derive the `RocPod` trait rather \
             than the `Roc` trait for component types\
             ",
-            descriptor.roc_name,
+            descriptor.type_name,
         )
     })?;
 
@@ -753,7 +780,7 @@ fn write_component_functions(roc_code: &mut String, descriptor: &RocTypeDescript
         ",
         type_id = descriptor.id.as_u64(),
         size = descriptor.serialized_size,
-        name = descriptor.roc_name,
+        name = descriptor.type_name,
     )?;
 
     Ok(())
@@ -765,7 +792,7 @@ fn write_roundtrip_test(roc_code: &mut String, descriptor: &RocTypeDescriptor) -
         "\
         test_roundtrip : {{}} -> Result {{}} _\n\
         test_roundtrip = |{{}}|\n    \
-            bytes = List.range({{ start: At 0, end: Length {} }})\n    \
+            bytes = List.range({{ start: At 0, end: Length {} }}) |> List.map(|b| Num.to_u8(b))\n    \
             decoded = from_bytes(bytes)?\n    \
             encoded = write_bytes([], decoded)\n    \
             if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then\n        \
@@ -782,7 +809,7 @@ fn write_roundtrip_test(roc_code: &mut String, descriptor: &RocTypeDescriptor) -
     Ok(())
 }
 
-fn concrete_roc_name_for_field(
+fn resolved_type_name_for_field(
     descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
     ty: &RocFieldType,
     field: impl Display,
@@ -790,14 +817,14 @@ fn concrete_roc_name_for_field(
 ) -> Result<Cow<'static, str>> {
     Ok(match ty {
         RocFieldType::Single { type_id } => {
-            field_descriptor(descriptors, type_id, field, parent_name)?.concrete_roc_name(false)
+            field_descriptor(descriptors, type_id, field, parent_name)?.resolved_type_name(false)
         }
         RocFieldType::Array { elem_type_id, .. } => {
-            let mut roc_name = String::from("List ");
-            let elem_roc_name = field_descriptor(descriptors, elem_type_id, field, parent_name)?
-                .concrete_roc_name(true);
-            write!(&mut roc_name, "{}", elem_roc_name)?;
-            Cow::Owned(roc_name)
+            let mut type_name = String::from("List ");
+            let elem_type_name = field_descriptor(descriptors, elem_type_id, field, parent_name)?
+                .resolved_type_name(true);
+            write!(&mut type_name, "{}", elem_type_name)?;
+            Cow::Owned(type_name)
         }
     })
 }

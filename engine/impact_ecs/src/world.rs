@@ -7,7 +7,7 @@ use super::{
     },
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use roc_codegen::roc;
@@ -27,7 +27,13 @@ use std::{
 /// created entities may not exceed [`u32::MAX`]. The reason we do not use
 /// a 64-bit count is that passing an [`Entity`] across an FFI boundary gets
 /// messy when it does not fit in a `u64` (`u128` is not FFI-safe).
-#[roc(primitive)]
+#[roc(
+    primitive,
+    package = "pf",
+    module = "Entity",
+    name = "Id",
+    postfix = "_id"
+)]
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct Entity {
@@ -602,7 +608,7 @@ impl<'a> EntityEntry<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{archetype_of, Component},
+        super::{Component, archetype_of},
         *,
     };
     use bytemuck::{Pod, Zeroable};
