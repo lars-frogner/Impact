@@ -8,8 +8,11 @@ module [
     append_components,
     create!,
     create_multiple!,
+    write_bytes_id,
+    from_bytes_id,
 ]
 
+import Builtin
 import Platform
 
 Id := U64
@@ -36,3 +39,11 @@ create! = |@Data(bytes)|
 create_multiple! : MultiData => Result (List Id) Str
 create_multiple! = |@MultiData(component_bytes)|
     Ok(Platform.create_entities!(component_bytes)? |> List.map(@Id))
+
+write_bytes_id : List U8, Id -> List U8
+write_bytes_id = |bytes, @Id(id)|
+    Builtin.write_bytes_u64(bytes, id)
+
+from_bytes_id : List U8 -> Result Id Builtin.DecodeErr
+from_bytes_id = |bytes|
+    Builtin.from_bytes_u64(bytes) |> Result.map_ok(@Id)
