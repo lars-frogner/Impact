@@ -2,9 +2,13 @@ module [
     Matrix3,
     Matrix3F32,
     Matrix3F64,
+    map,
+    map2,
+    add,
+    sub,
+    scale,
+    unscale,
     is_approx_eq,
-    map_to_f32,
-    map_to_f64,
     write_bytes_32,
     write_bytes_64,
     from_bytes_32,
@@ -19,13 +23,19 @@ Matrix3 a : (Vector3 a, Vector3 a, Vector3 a)
 Matrix3F32 : Matrix3 Binary32
 Matrix3F64 : Matrix3 Binary64
 
-map_to_f32 : Matrix3 a -> Matrix3F32
-map_to_f32 = |cols|
-    (Vector3.map_to_f32(cols.0), Vector3.map_to_f32(cols.1), Vector3.map_to_f32(cols.2))
+map : Matrix3 a, (Frac a -> Frac b) -> Matrix3 b
+map = |mat, f|
+    (Vector3.map(mat.0, f), Vector3.map(mat.1, f), Vector3.map(mat.2, f))
 
-map_to_f64 : Matrix3 a -> Matrix3F64
-map_to_f64 = |cols|
-    (Vector3.map_to_f64(cols.0), Vector3.map_to_f64(cols.1), Vector3.map_to_f64(cols.2))
+map2 : Matrix3 a, Matrix3 b, (Frac a, Frac b -> Frac c) -> Matrix3 c
+map2 = |a, b, f|
+    (Vector3.map2(a.0, b.0, f), Vector3.map2(a.1, b.1, f), Vector3.map2(a.2, b.2, f))
+
+add = |a, b| map2(a, b, Num.add)
+sub = |a, b| map2(a, b, Num.sub)
+
+scale = |mat, s| map(mat, |elem| Num.mul(elem, s))
+unscale = |mat, s| scale(mat, 1.0 / s)
 
 is_approx_eq : Matrix3 a, Matrix3 a, { atol ?? Frac a, rtol ?? Frac a } -> Bool
 is_approx_eq = |a, b, tol|

@@ -2,9 +2,15 @@ module [
     Vector4,
     Vector4F32,
     Vector4F64,
+    map,
+    map2,
+    reduce,
+    add,
+    sub,
+    scale,
+    unscale,
+    dot,
     is_approx_eq,
-    map_to_f32,
-    map_to_f64,
     write_bytes_32,
     write_bytes_64,
     from_bytes_32,
@@ -18,13 +24,25 @@ Vector4 a : (Frac a, Frac a, Frac a, Frac a)
 Vector4F32 : Vector4 Binary32
 Vector4F64 : Vector4 Binary64
 
-map_to_f32 : Vector4 a -> Vector4F32
-map_to_f32 = |vec|
-    (Num.to_f32(vec.0), Num.to_f32(vec.1), Num.to_f32(vec.2), Num.to_f32(vec.3))
+map : Vector4 a, (Frac a -> Frac b) -> Vector4 b
+map = |vec, f|
+    (f(vec.0), f(vec.1), f(vec.2), f(vec.3))
 
-map_to_f64 : Vector4 a -> Vector4F64
-map_to_f64 = |vec|
-    (Num.to_f64(vec.0), Num.to_f64(vec.1), Num.to_f64(vec.2), Num.to_f64(vec.3))
+map2 : Vector4 a, Vector4 b, (Frac a, Frac b -> Frac c) -> Vector4 c
+map2 = |a, b, f|
+    (f(a.0, b.0), f(a.1, b.1), f(a.2, b.2), f(a.3, b.3))
+
+reduce : Vector4 a, (Frac a, Frac a -> Frac a) -> Frac a
+reduce = |vec, f|
+    vec.0 |> f(vec.1) |> f(vec.2) |> f(vec.3)
+
+add = |a, b| map2(a, b, Num.add)
+sub = |a, b| map2(a, b, Num.sub)
+
+scale = |vec, s| map(vec, |elem| Num.mul(elem, s))
+unscale = |vec, s| scale(vec, 1.0 / s)
+
+dot = |a, b| map2(a, b, Num.mul) |> reduce(Num.add)
 
 is_approx_eq : Vector4 a, Vector4 a, { atol ?? Frac a, rtol ?? Frac a } -> Bool
 is_approx_eq = |a, b, tol|
