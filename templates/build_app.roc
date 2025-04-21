@@ -132,8 +132,13 @@ roc_build_script! = |app_dir, debug_mode|
         when debug_mode is
             Debug -> []
             Release -> ["--optimize"]
-    Cmd.exec!("roc", List.concat(base_args, opt_args))
-    |> Result.map_err(ErrBuildingScriptLibrary)
+
+    result = Cmd.exec!("roc", List.concat(base_args, opt_args))
+
+    when result is
+        Ok(_) -> Ok({})
+        Err(CmdStatusErr(Other("Non-zero exit code: 2"))) -> Ok({}) # Build warnings
+        err -> err
 
 link_script_with_platform! : Str, Str => Result {} _
 link_script_with_platform! = |platform_dir, app_dir|
@@ -145,6 +150,7 @@ link_script_with_platform! = |platform_dir, app_dir|
             "${app_dir}/lib/libscript",
             "${app_dir}/lib/script.o",
             "${platform_dir}/lib/libroc_platform.a",
+            "-lm", # Some Roc builtins require `libm`
         ],
     )
     |> Result.map_err(ErrLinkingScriptWithPlatform)
