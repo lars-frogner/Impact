@@ -1,6 +1,6 @@
 //! Attribute macro for Roc code generation.
 
-use crate::{RocAttributeArgs, RocTypeCategory};
+use crate::{RocTypeAttributeArgs, RocTypeCategory};
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use std::{fmt::Write, iter};
@@ -21,8 +21,10 @@ pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
 pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
 
-pub(super) fn apply_roc_attribute(
-    args: Option<RocAttributeArgs>,
+pub const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
+
+pub(super) fn apply_roc_type_attribute(
+    args: Option<RocTypeAttributeArgs>,
     input: syn::DeriveInput,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -33,7 +35,7 @@ pub(super) fn apply_roc_attribute(
         ));
     }
 
-    let args = resolve_attribute_args(args, &input);
+    let args = resolve_type_attribute_args(args, &input);
 
     let rust_type_name = &input.ident;
 
@@ -41,7 +43,7 @@ pub(super) fn apply_roc_attribute(
     let roc_pod_impl = generate_roc_pod_impl(rust_type_name, crate_root, args.type_category);
 
     let mut static_assertions = Vec::new();
-    let descriptor_submit = generate_roc_descriptor_submit(
+    let descriptor_submit = generate_roc_type_descriptor_submit(
         &args,
         rust_type_name,
         &input,
@@ -58,8 +60,80 @@ pub(super) fn apply_roc_attribute(
     })
 }
 
-fn resolve_attribute_args(
-    args: Option<RocAttributeArgs>,
+pub(super) fn apply_roc_impl_attribute(
+    block: syn::ItemImpl,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    if !block.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &block.generics,
+            "the `roc` attribute does not support generic impl blocks",
+        ));
+    }
+    if let Some((_, trait_, _)) = block.trait_.as_ref() {
+        return Err(syn::Error::new_spanned(
+            trait_,
+            "the `roc` attribute does not support trait impl blocks",
+        ));
+    }
+
+    let for_type = &block.self_ty;
+
+    let mut descriptor_submits = Vec::with_capacity(block.items.len());
+    for item in &block.items {
+        if let syn::ImplItem::Fn(func) = item {
+            if returns_self(&func.sig.output) {
+                let sequence_number = descriptor_submits.len();
+
+                let Some(roc_body) = extract_roc_body(func) else {
+                    continue;
+                };
+
+                descriptor_submits.push(generate_roc_constructor_descriptor_submit(
+                    sequence_number,
+                    for_type,
+                    func,
+                    crate_root,
+                    roc_body,
+                )?);
+            }
+        }
+    }
+
+    Ok(quote! {
+        #block
+        #(#descriptor_submits)*
+    })
+}
+
+pub(super) fn apply_roc_body_attribute(
+    body: syn::Expr,
+    func: syn::ImplItemFn,
+) -> syn::Result<TokenStream> {
+    if !matches!(
+        body,
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(_),
+            ..
+        })
+    ) {
+        return Err(syn::Error::new_spanned(body, "expected a string literal"));
+    }
+
+    if !returns_self(&func.sig.output) {
+        return Err(syn::Error::new_spanned(
+            func,
+            "the `roc_body` attribute only supports associated functions returning `Self`",
+        ));
+    }
+
+    Ok(quote! {
+        #func
+    })
+}
+
+fn resolve_type_attribute_args(
+    args: Option<RocTypeAttributeArgs>,
     input: &syn::DeriveInput,
 ) -> ResolvedAttributeArgs {
     match args {
@@ -81,7 +155,7 @@ fn resolve_attribute_args(
                 function_postfix,
             }
         }
-        Some(RocAttributeArgs {
+        Some(RocTypeAttributeArgs {
             category,
             package_name,
             module_name,
@@ -181,7 +255,7 @@ fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> Tok
     )
 }
 
-fn generate_roc_descriptor_submit(
+fn generate_roc_type_descriptor_submit(
     args: &ResolvedAttributeArgs,
     rust_type_name: &Ident,
     input: &syn::DeriveInput,
@@ -192,9 +266,9 @@ fn generate_roc_descriptor_submit(
     let module_name = &args.module_name;
     let type_name = &args.type_name;
     let function_postfix = &args.function_postfix;
-    let flags = generate_flags(crate_root, args.type_category);
+    let flags = generate_type_flags(crate_root, args.type_category);
     let composition =
-        generate_composition(input, crate_root, args.type_category, static_assertions)?;
+        generate_type_composition(input, crate_root, args.type_category, static_assertions)?;
     let docstring = extract_and_process_docstring(&input.attrs);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
@@ -214,7 +288,46 @@ fn generate_roc_descriptor_submit(
     })
 }
 
-fn generate_flags(crate_root: &TokenStream, type_category: RocTypeCategory) -> TokenStream {
+fn returns_self(return_type: &syn::ReturnType) -> bool {
+    match return_type {
+        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
+            syn::Type::Path(type_path) => {
+                type_path.qself.is_none()
+                    && type_path.path.segments.len() == 1
+                    && type_path.path.segments[0].ident == "Self"
+            }
+            _ => false,
+        },
+        syn::ReturnType::Default => false,
+    }
+}
+
+fn generate_roc_constructor_descriptor_submit(
+    sequence_number: usize,
+    for_type: &syn::Type,
+    func: &syn::ImplItemFn,
+    crate_root: &TokenStream,
+    roc_body: String,
+) -> syn::Result<TokenStream> {
+    let function_name = func.sig.ident.to_string();
+    let arguments = generate_function_arguments::<MAX_ROC_CONSTRUCTOR_ARGS>(&func.sig, crate_root)?;
+    let docstring = extract_and_process_docstring(&func.attrs);
+    Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
+        inventory::submit! {
+            #crate_root::meta::RocConstructorDescriptor {
+                sequence_number: #sequence_number,
+                for_type_id: <#for_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                function_name: #function_name,
+                arguments: #arguments,
+                roc_body: #roc_body,
+                docstring: #docstring,
+            }
+        }
+    })
+}
+
+fn generate_type_flags(crate_root: &TokenStream, type_category: RocTypeCategory) -> TokenStream {
     match type_category {
         // All primitives are required to be POD
         RocTypeCategory::Primitive | RocTypeCategory::Pod => {
@@ -226,7 +339,7 @@ fn generate_flags(crate_root: &TokenStream, type_category: RocTypeCategory) -> T
     }
 }
 
-fn generate_composition(
+fn generate_type_composition(
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
     type_category: RocTypeCategory,
@@ -574,6 +687,62 @@ fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStr
     }
 }
 
+fn generate_function_arguments<const MAX_ARGS: usize>(
+    sig: &syn::Signature,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    if !sig.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &sig.generics,
+            "the `roc` attribute does not support generic functions",
+        ));
+    }
+    if sig.inputs.len() > MAX_ARGS {
+        return Err(syn::Error::new_spanned(
+            &sig.inputs,
+            format!(
+                "the `roc` attribute does not support this many arguments ({}/{})",
+                sig.inputs.len(),
+                MAX_ARGS
+            ),
+        ));
+    }
+
+    let args = sig
+        .inputs
+        .iter()
+        .map(|input| {
+            let syn::FnArg::Typed(arg) = input else {
+                panic!("Found `self` argument in supposedly associated method or function");
+            };
+            let ident_str = match arg.pat.as_ref() {
+                syn::Pat::Ident(ident) => ident.ident.to_string(),
+                pat => {
+                    return Err(syn::Error::new_spanned(
+                        pat,
+                        "the `roc` attribute does not support this argument pattern",
+                    ));
+                }
+            };
+            let arg_type = &arg.ty;
+            Ok(quote! {
+                Some(#crate_root::meta::RocFunctionArgument {
+                    ident: #ident_str,
+                    type_id: <#arg_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                }),
+            })
+        })
+        .chain(iter::repeat_n(
+            Ok(quote! {None,}),
+            MAX_ARGS - sig.inputs.len(),
+        ))
+        .collect::<syn::Result<Vec<TokenStream>>>()?;
+
+    Ok(quote! {
+        #crate_root::meta::RocFunctionArguments(#crate_root::meta::StaticList([#(#args)*]))
+    })
+}
+
 fn extract_and_process_docstring(attributes: &[syn::Attribute]) -> String {
     process_docstrings(extract_docstrings(attributes))
 }
@@ -602,4 +771,33 @@ fn process_docstrings(lines: impl IntoIterator<Item = String>) -> String {
         writeln!(&mut docstring, "##{}", line).unwrap();
     }
     docstring
+}
+
+fn extract_roc_body(func: &syn::ImplItemFn) -> Option<String> {
+    for attribute in &func.attrs {
+        if let syn::Meta::List(syn::MetaList { path, tokens, .. }) = &attribute.meta {
+            let Some(last) = path.segments.last() else {
+                continue;
+            };
+            if last.ident != "roc_body" {
+                continue;
+            }
+            return extract_roc_body_string(tokens.clone()).ok();
+        }
+    }
+    None
+}
+
+fn extract_roc_body_string(attr: TokenStream) -> syn::Result<String> {
+    let expr: syn::Expr = syn::parse2(attr)?;
+
+    if let syn::Expr::Lit(syn::ExprLit {
+        lit: syn::Lit::Str(lit_str),
+        ..
+    }) = expr
+    {
+        Ok(lit_str.value())
+    } else {
+        Err(syn::Error::new_spanned(expr, "expected a string literal"))
+    }
 }

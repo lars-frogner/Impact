@@ -27,6 +27,8 @@ enum Command {
         #[arg(short, long, value_delimiter=' ', num_args=1.., required = true)]
         categories: Vec<ListedRocTypeCategory>,
     },
+    /// List constructors in impl blocks annotated with the `roc` attribute
+    ListConstructors,
     /// Generate Roc modules
     GenerateModules {
         /// Path to directory in which to put the modules
@@ -60,6 +62,9 @@ fn main() -> Result<()> {
             };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
             generate::list_types(&options, &component_type_ids)?;
+        }
+        Command::ListConstructors => {
+            generate::list_constructors()?;
         }
         Command::GenerateModules {
             target_dir,
