@@ -46,6 +46,23 @@ pub struct RocTypeDescriptor {
     pub docstring: &'static str,
 }
 
+#[derive(Clone, Debug)]
+pub struct RocConstructorDescriptor {
+    /// The position of this constructor in the sequence of constructors for
+    /// the type.
+    pub sequence_number: usize,
+    /// The type that this is a constructor for.
+    pub for_type_id: RocTypeID,
+    /// The name of the constructor function.
+    pub function_name: &'static str,
+    /// The arguments of the constructor function.
+    pub arguments: RocFunctionArguments<MAX_ROC_CONSTRUCTOR_ARGS>,
+    /// The Roc source code for the body of the constructor function.
+    pub roc_body: &'static str,
+    /// The docstring (in Roc format) for the method.
+    pub docstring: &'static str,
+}
+
 // Whenever a type is annotated with the `roc` attribute macro, the macro
 // infers a [`RocTypeDescriptor`] and registers it using [`inventory::submit!`]
 // (provided that the `enabled` feature is active). This
@@ -54,6 +71,9 @@ pub struct RocTypeDescriptor {
 // [`generate`](crate::generate) the Roc code.
 #[cfg(feature = "enabled")]
 inventory::collect!(RocTypeDescriptor);
+
+#[cfg(feature = "enabled")]
+inventory::collect!(RocConstructorDescriptor);
 
 bitflags! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -74,6 +94,8 @@ pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
 pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
 pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
+
+pub const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
@@ -160,6 +182,19 @@ pub struct UnnamedRocTypeField {
 pub enum RocFieldType {
     Single { type_id: RocTypeID },
     Array { elem_type_id: RocTypeID, len: usize },
+}
+
+/// The list of arguments for a function.
+#[derive(Clone, Debug)]
+pub struct RocFunctionArguments<const N_ARGS: usize>(pub StaticList<RocFunctionArgument, N_ARGS>);
+
+/// A function argument.
+#[derive(Clone, Debug)]
+pub struct RocFunctionArgument {
+    /// The argument name.
+    pub ident: &'static str,
+    /// The argument type.
+    pub type_id: RocTypeID,
 }
 
 #[derive(Clone, Debug)]
@@ -361,5 +396,11 @@ impl<'a, T, const N: usize> IntoIterator for &'a StaticList<T, N> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.as_slice().iter().filter_map(Option::as_ref)
+    }
+}
+
+impl<T, const N: usize> Default for StaticList<T, N> {
+    fn default() -> Self {
+        Self(std::array::from_fn(|_| None))
     }
 }

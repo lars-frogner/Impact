@@ -3,9 +3,12 @@
 
 mod roc;
 
-use crate::meta::{RocTypeComposition, RocTypeDescriptor, RocTypeFlags, RocTypeID};
+use crate::meta::{
+    RocConstructorDescriptor, RocTypeComposition, RocTypeDescriptor, RocTypeFlags, RocTypeID,
+};
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Display,
     fs::{self, OpenOptions},
@@ -57,7 +60,7 @@ struct Module {
 
 pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>) -> Result<()> {
     let descriptors =
-        gather_descriptors(inventory::iter::<RocTypeDescriptor>(), component_type_ids)?;
+        gather_type_descriptors(inventory::iter::<RocTypeDescriptor>(), component_type_ids)?;
 
     let mut descriptor_list = Vec::with_capacity(descriptors.len());
 
@@ -132,6 +135,37 @@ pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>
     Ok(())
 }
 
+pub fn list_constructors() -> Result<()> {
+    let type_descriptors =
+        gather_type_descriptors(inventory::iter::<RocTypeDescriptor>(), &HashSet::new())?;
+
+    let constructor_descriptors =
+        gather_constructor_descriptors(inventory::iter::<RocConstructorDescriptor>());
+
+    let mut type_descriptor_list: Vec<_> = type_descriptors
+        .iter()
+        .map(|(type_id, desc)| (type_id, desc.type_name))
+        .collect();
+    type_descriptor_list.sort_by_key(|(_, name)| *name);
+
+    for (type_id, type_name) in type_descriptor_list {
+        let Some(type_descriptor) = type_descriptors.get(type_id) else {
+            continue;
+        };
+        let Some(descriptors) = constructor_descriptors.get(type_id) else {
+            continue;
+        };
+        println!("****** {type_name} ******");
+        for desc in descriptors {
+            let mut text = String::new();
+            roc::write_constructor(&mut text, &type_descriptors, type_descriptor, desc)?;
+            println!("{text}");
+        }
+    }
+
+    Ok(())
+}
+
 /// Generates Roc source files in the target directory for all Rust types in
 /// linked crates deriving the [`Roc`](crate::meta::Roc) or
 /// [`RocPod`](crate::meta::RocPod) trait.
@@ -141,11 +175,17 @@ pub fn generate_roc(
     roc_options: &RocGenerateOptions,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
-    let descriptors = inventory::iter::<RocTypeDescriptor>();
+    let type_descriptors = inventory::iter::<RocTypeDescriptor>();
+    let constructor_descriptors = inventory::iter::<RocConstructorDescriptor>();
 
     let target_dir = target_dir.as_ref();
 
-    let modules = generate_roc_modules(roc_options, descriptors, component_type_ids)?;
+    let modules = generate_roc_modules(
+        roc_options,
+        type_descriptors,
+        constructor_descriptors,
+        component_type_ids,
+    )?;
 
     if !target_dir.exists() {
         fs::create_dir_all(target_dir)?;
@@ -182,27 +222,38 @@ pub fn generate_roc(
 
 fn generate_roc_modules<'a>(
     options: &RocGenerateOptions,
-    descriptors: impl IntoIterator<Item = &'a RocTypeDescriptor>,
+    type_descriptors: impl IntoIterator<Item = &'a RocTypeDescriptor>,
+    constructor_descriptors: impl IntoIterator<Item = &'a RocConstructorDescriptor>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<Module>> {
-    let descriptors = gather_descriptors(descriptors, component_type_ids)?;
+    let type_descriptors = gather_type_descriptors(type_descriptors, component_type_ids)?;
 
-    descriptors
+    let constructor_descriptors = gather_constructor_descriptors(constructor_descriptors);
+
+    type_descriptors
         .values()
-        .filter_map(
-            |descriptor| match roc::generate_module(options, &descriptors, descriptor) {
+        .filter_map(|type_descriptor| {
+            let constructor_descriptors = constructor_descriptors
+                .get(&type_descriptor.id)
+                .map_or_else(Cow::default, Cow::Borrowed);
+            match roc::generate_module(
+                options,
+                &type_descriptors,
+                type_descriptor,
+                constructor_descriptors.as_ref(),
+            ) {
                 Ok(Some(content)) => Some(Ok(Module {
-                    name: descriptor.type_name,
+                    name: type_descriptor.type_name,
                     content,
                 })),
                 Ok(None) => None,
                 Err(err) => Some(Err(err)),
-            },
-        )
+            }
+        })
         .collect::<Result<Vec<_>>>()
 }
 
-fn gather_descriptors<'a>(
+fn gather_type_descriptors<'a>(
     descriptor_iter: impl IntoIterator<Item = &'a RocTypeDescriptor>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<HashMap<RocTypeID, RocTypeDescriptor>> {
@@ -224,7 +275,7 @@ fn gather_descriptors<'a>(
     Ok(descriptors)
 }
 
-fn field_descriptor<'a>(
+fn field_type_descriptor<'a>(
     descriptors: &'a HashMap<RocTypeID, RocTypeDescriptor>,
     type_id: &RocTypeID,
     field: impl Display,
@@ -238,4 +289,20 @@ fn field_descriptor<'a>(
             parent_name(),
         )
     })
+}
+
+fn gather_constructor_descriptors<'a>(
+    descriptor_iter: impl IntoIterator<Item = &'a RocConstructorDescriptor>,
+) -> HashMap<RocTypeID, Vec<RocConstructorDescriptor>> {
+    let mut descriptors = HashMap::new();
+    for descriptor in descriptor_iter {
+        descriptors
+            .entry(descriptor.for_type_id)
+            .or_insert_with(Vec::new)
+            .push(descriptor.clone());
+    }
+    for constructor_descriptors in descriptors.values_mut() {
+        constructor_descriptors.sort_by_key(|desc| desc.sequence_number);
+    }
+    descriptors
 }

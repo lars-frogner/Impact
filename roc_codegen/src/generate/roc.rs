@@ -1,10 +1,10 @@
 //! Generation of Roc code for working with types annotated with the
 //! [`roc`](crate::roc) attribute.
 
-use super::{RocGenerateOptions, field_descriptor};
+use super::{RocGenerateOptions, field_type_descriptor};
 use crate::meta::{
-    NamedRocTypeField, RocFieldType, RocTypeComposition, RocTypeDescriptor, RocTypeFields,
-    RocTypeFlags, RocTypeID, UnnamedRocTypeField,
+    NamedRocTypeField, RocConstructorDescriptor, RocFieldType, RocTypeComposition,
+    RocTypeDescriptor, RocTypeFields, RocTypeFlags, RocTypeID, UnnamedRocTypeField,
 };
 use anyhow::{Result, anyhow};
 use std::{
@@ -15,69 +15,99 @@ use std::{
 
 pub(super) fn generate_module(
     options: &RocGenerateOptions,
-    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
-    descriptor: &RocTypeDescriptor,
+    type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    type_descriptor: &RocTypeDescriptor,
+    constructor_descriptors: &[RocConstructorDescriptor],
 ) -> Result<Option<String>> {
-    if let RocTypeComposition::Primitive(_) = descriptor.composition {
+    if let RocTypeComposition::Primitive(_) = type_descriptor.composition {
         return Ok(None);
     }
 
     let mut module = String::new();
 
-    write_module_header(&mut module, descriptor)?;
+    write_module_header(&mut module, constructor_descriptors, type_descriptor)?;
     module.push('\n');
 
-    write_imports(options, &mut module, descriptors, descriptor)?;
+    write_imports(options, &mut module, type_descriptors, type_descriptor)?;
     module.push('\n');
 
-    write_type_declaration(&mut module, descriptors, descriptor)?;
+    write_type_declaration(&mut module, type_descriptors, type_descriptor)?;
     module.push('\n');
 
-    write_component_functions(&mut module, descriptor)?;
+    write_constructors(
+        &mut module,
+        type_descriptors,
+        type_descriptor,
+        constructor_descriptors,
+    )?;
 
-    write_write_bytes_function(&mut module, descriptors, descriptor)?;
+    write_component_functions(&mut module, type_descriptor)?;
+
+    write_write_bytes_function(&mut module, type_descriptors, type_descriptor)?;
     module.push('\n');
 
-    write_from_bytes_function(&mut module, descriptors, descriptor)?;
+    write_from_bytes_function(&mut module, type_descriptors, type_descriptor)?;
     module.push('\n');
 
-    write_roundtrip_test(&mut module, descriptor)?;
+    write_roundtrip_test(&mut module, type_descriptor)?;
 
     Ok(Some(module))
 }
 
-fn write_module_header(roc_code: &mut String, descriptor: &RocTypeDescriptor) -> Result<()> {
-    writeln!(
+fn write_module_header(
+    roc_code: &mut String,
+    constructor_descriptors: &[RocConstructorDescriptor],
+    type_descriptor: &RocTypeDescriptor,
+) -> Result<()> {
+    write!(
         roc_code,
         "\
         module [\n    \
-            {},\n    \
-            {}\
-        ]\
+            {},\n\
         ",
-        descriptor.type_name,
-        if descriptor.is_component() {
-            "\
-            add_to_entity,\n    \
-            add_to_entities,\n\
-            "
-        } else {
-            "\
-            write_bytes,\n    \
-            from_bytes,\n\
-            "
-        }
+        type_descriptor.type_name,
     )?;
+
+    for descriptor in constructor_descriptors {
+        writeln!(roc_code, "    {},", descriptor.function_name)?;
+    }
+
+    if type_descriptor.is_component() {
+        for descriptor in constructor_descriptors {
+            writeln!(roc_code, "    add_{},", descriptor.function_name)?;
+        }
+
+        roc_code.push_str(
+            "    \
+                add_to_entity,\n    \
+                add_to_entities,\n\
+            ]\n\
+            ",
+        );
+    } else {
+        roc_code.push_str(
+            "    \
+                write_bytes,\n    \
+                from_bytes,\n\
+            ]\n\
+            ",
+        );
+    }
+
     Ok(())
 }
 
 fn write_imports(
     options: &RocGenerateOptions,
     roc_code: &mut String,
-    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
-    descriptor: &RocTypeDescriptor,
+    type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    type_descriptor: &RocTypeDescriptor,
 ) -> Result<()> {
-    let mut imports = Vec::from_iter(determine_imports(options, descriptors, descriptor));
+    let mut imports = Vec::from_iter(determine_imports(
+        options,
+        type_descriptors,
+        type_descriptor,
+    ));
     imports.sort();
     for import in imports {
         writeln!(roc_code, "import {import}")?;
@@ -87,8 +117,8 @@ fn write_imports(
 
 fn determine_imports(
     options: &RocGenerateOptions,
-    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
-    descriptor: &RocTypeDescriptor,
+    type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    type_descriptor: &RocTypeDescriptor,
 ) -> HashSet<String> {
     let mut imports = HashSet::new();
 
@@ -98,7 +128,7 @@ fn determine_imports(
         core = &options.core_package_name
     ));
 
-    if descriptor.is_component() {
+    if type_descriptor.is_component() {
         // ECS components need this import
         imports.insert(format!(
             "{pf}.Entity as Entity",
@@ -106,14 +136,14 @@ fn determine_imports(
         ));
     }
 
-    match &descriptor.composition {
+    match &type_descriptor.composition {
         RocTypeComposition::Primitive(_) => {}
         RocTypeComposition::Struct { fields, .. } => {
-            add_imports_for_fields(options, &mut imports, descriptors, fields);
+            add_imports_for_fields(options, &mut imports, type_descriptors, fields);
         }
         RocTypeComposition::Enum(variants) => {
             for variant in &variants.0 {
-                add_imports_for_fields(options, &mut imports, descriptors, &variant.fields);
+                add_imports_for_fields(options, &mut imports, type_descriptors, &variant.fields);
             }
         }
     }
@@ -413,7 +443,8 @@ fn write_calls_to_write_bytes<const N: usize>(
      -> Result<()> {
         match ty {
             RocFieldType::Single { type_id } => {
-                let field_descriptor = field_descriptor(descriptors, type_id, field, parent_name)?;
+                let field_descriptor =
+                    field_type_descriptor(descriptors, type_id, field, parent_name)?;
                 write!(
                     write_bytes_definition,
                     "{indentation}|> {}(",
@@ -422,7 +453,7 @@ fn write_calls_to_write_bytes<const N: usize>(
             }
             RocFieldType::Array { elem_type_id, .. } => {
                 let elem_field_descriptor =
-                    field_descriptor(descriptors, elem_type_id, field, parent_name)?;
+                    field_type_descriptor(descriptors, elem_type_id, field, parent_name)?;
                 write!(
                     write_bytes_definition,
                     "\
@@ -607,7 +638,7 @@ fn write_calls_to_from_bytes<const N: usize>(
                         write_ident: bool,
                         byte_offset: &mut usize|
      -> Result<()> {
-        let field_descriptor = field_descriptor(descriptors, type_id, field, parent_name)?;
+        let field_descriptor = field_type_descriptor(descriptors, type_id, field, parent_name)?;
         write!(from_bytes_definition, "{indentation}    ")?;
         if write_ident {
             write!(from_bytes_definition, "{field}: ")?;
@@ -630,7 +661,7 @@ fn write_calls_to_from_bytes<const N: usize>(
                        byte_offset: &mut usize|
      -> Result<()> {
         let elem_field_descriptor =
-            field_descriptor(descriptors, elem_type_id, field, parent_name)?;
+            field_type_descriptor(descriptors, elem_type_id, field, parent_name)?;
         write!(from_bytes_definition, "{indentation}    ")?;
         if write_ident {
             write!(from_bytes_definition, "{field}: ")?;
@@ -709,6 +740,115 @@ fn write_calls_to_from_bytes<const N: usize>(
             writeln!(from_bytes_definition, "{indentation}),")?;
         }
     }
+    Ok(())
+}
+
+fn write_constructors(
+    roc_code: &mut String,
+    type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    type_descriptor: &RocTypeDescriptor,
+    constructor_descriptors: &[RocConstructorDescriptor],
+) -> Result<()> {
+    for constructor_descriptor in constructor_descriptors {
+        write_constructor(
+            roc_code,
+            type_descriptors,
+            type_descriptor,
+            constructor_descriptor,
+        )?;
+        roc_code.push('\n');
+    }
+    Ok(())
+}
+
+pub(super) fn write_constructor(
+    roc_code: &mut String,
+    type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    type_descriptor: &RocTypeDescriptor,
+    constructor_descriptor: &RocConstructorDescriptor,
+) -> Result<()> {
+    let docstring = if constructor_descriptor.docstring.is_empty() {
+        ""
+    } else {
+        constructor_descriptor.docstring
+    };
+
+    let arg_types = constructor_descriptor
+        .arguments
+        .0
+        .iter()
+        .map(|arg| {
+            type_descriptors
+                .get(&arg.type_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Missing type descriptor for argument {} to constructor {}",
+                        arg.ident,
+                        constructor_descriptor.function_name
+                    )
+                })
+                .map(|desc| desc.resolved_type_name(false))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let non_empty_arg_types = if arg_types.is_empty() {
+        "{}"
+    } else {
+        &arg_types
+    };
+
+    let arg_names = constructor_descriptor
+        .arguments
+        .0
+        .iter()
+        .map(|arg| arg.ident)
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let non_empty_arg_names = if arg_names.is_empty() {
+        "{}"
+    } else {
+        &arg_names
+    };
+
+    let body = constructor_descriptor.roc_body.replace("\n", "\n    ");
+
+    writeln!(
+        roc_code,
+        "\
+        {docstring}\
+        {name} : {non_empty_arg_types} -> {type_name}\n\
+        {name} = |{non_empty_arg_names}|\n    \
+            {body}\
+        ",
+        name = constructor_descriptor.function_name,
+        type_name = type_descriptor.type_name,
+    )?;
+
+    if type_descriptor.is_component() {
+        writeln!(
+            roc_code,
+            "\n\
+            {docstring}## Adds the component to the given entity's data.\n\
+            add_{name} : Entity.Data{arg_types} -> Entity.Data\n\
+            add_{name} = |data{arg_names}|\n    \
+                add_to_entity(data, {name}({non_empty_arg_names}))\
+            ",
+            arg_types = if arg_types.is_empty() {
+                String::new()
+            } else {
+                format!(", {arg_types}")
+            },
+            arg_names = if arg_names.is_empty() {
+                String::new()
+            } else {
+                format!(", {arg_names}")
+            },
+            name = constructor_descriptor.function_name,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -817,12 +957,14 @@ fn resolved_type_name_for_field(
 ) -> Result<Cow<'static, str>> {
     Ok(match ty {
         RocFieldType::Single { type_id } => {
-            field_descriptor(descriptors, type_id, field, parent_name)?.resolved_type_name(false)
+            field_type_descriptor(descriptors, type_id, field, parent_name)?
+                .resolved_type_name(false)
         }
         RocFieldType::Array { elem_type_id, .. } => {
             let mut type_name = String::from("List ");
-            let elem_type_name = field_descriptor(descriptors, elem_type_id, field, parent_name)?
-                .resolved_type_name(true);
+            let elem_type_name =
+                field_type_descriptor(descriptors, elem_type_id, field, parent_name)?
+                    .resolved_type_name(true);
             write!(&mut type_name, "{}", elem_type_name)?;
             Cow::Owned(type_name)
         }

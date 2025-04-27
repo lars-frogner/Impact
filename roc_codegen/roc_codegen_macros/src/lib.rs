@@ -6,10 +6,11 @@ use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use proc_macro_crate::{self, FoundCrate};
 use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 use std::str::FromStr;
 
 #[derive(Clone, Debug)]
-struct RocAttributeArgs {
+struct RocTypeAttributeArgs {
     category: RocTypeCategory,
     package_name: Option<String>,
     module_name: Option<String>,
@@ -65,23 +66,67 @@ struct MetaEntry {
 #[cfg(feature = "enabled")]
 #[proc_macro_attribute]
 pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = if attr.is_empty() {
-        None
+    if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
+        if attr.is_empty() {
+            roc_attr::apply_roc_type_attribute(None, input, &crate_root_tokens())
+        } else {
+            syn::parse::<RocTypeAttributeArgs>(attr).and_then(|args| {
+                roc_attr::apply_roc_type_attribute(Some(args), input, &crate_root_tokens())
+            })
+        }
+    } else if let Ok(block) = syn::parse::<syn::ItemImpl>(item.clone()) {
+        if attr.is_empty() {
+            roc_attr::apply_roc_impl_attribute(block, &crate_root_tokens())
+        } else {
+            Err(syn::Error::new_spanned(
+                TokenStream2::from(attr),
+                "the `roc` attribute supports no arguments when applied to impl blocks",
+            ))
+        }
     } else {
-        Some(syn::parse_macro_input!(attr as RocAttributeArgs))
-    };
-    let input = syn::parse_macro_input!(item as syn::DeriveInput);
-    roc_attr::apply_roc_attribute(args, input, &crate_root_tokens())
-        .unwrap_or_else(syn::Error::into_compile_error)
+        Err(syn::Error::new_spanned(
+            TokenStream2::from(item.clone()),
+            "the `roc` attribute can only be applied to type definitions and impl blocks",
+        ))
+    }
+    .unwrap_or_else(|err| {
+        let item = TokenStream2::from(item);
+        let error = err.to_compile_error();
+        quote! {
+            #item
+            #error
+        }
+    })
+    .into()
+}
+
+#[cfg(not(feature = "enabled"))]
+#[proc_macro_attribute]
+pub fn roc(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+#[proc_macro_attribute]
+pub fn roc_body(attr: TokenStream, item: TokenStream) -> TokenStream {
+    syn::parse::<syn::ImplItemFn>(item.clone())
+        .and_then(|func| {
+            let body = syn::parse(attr)?;
+            roc_attr::apply_roc_body_attribute(body, func)
+        })
+        .unwrap_or_else(|err| {
+            let item = TokenStream2::from(item);
+            let error = err.to_compile_error();
+            quote! {
+                #item
+                #error
+            }
+        })
         .into()
 }
 
 #[cfg(not(feature = "enabled"))]
 #[proc_macro_attribute]
-pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
-    if !attr.is_empty() {
-        syn::parse_macro_input!(attr as RocAttributeArgs);
-    }
+pub fn roc_body(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
@@ -109,7 +154,7 @@ fn crate_root_tokens() -> TokenStream2 {
     TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
 }
 
-impl syn::parse::Parse for RocAttributeArgs {
+impl syn::parse::Parse for RocTypeAttributeArgs {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         let category: syn::Ident = input.parse()?;
 
@@ -135,7 +180,7 @@ impl syn::parse::Parse for RocAttributeArgs {
         let mut function_postfix = None;
 
         if input.is_empty() {
-            return Ok(RocAttributeArgs {
+            return Ok(RocTypeAttributeArgs {
                 category,
                 package_name,
                 module_name,
@@ -192,7 +237,7 @@ impl syn::parse::Parse for RocAttributeArgs {
             }
         }
 
-        Ok(RocAttributeArgs {
+        Ok(RocTypeAttributeArgs {
             category,
             package_name,
             module_name,
