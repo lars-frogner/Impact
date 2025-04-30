@@ -1,19 +1,23 @@
 module [
     DecodeErr,
+    write_bytes_u8,
     write_bytes_u16,
     write_bytes_u32,
     write_bytes_u64,
     write_bytes_u128,
+    write_bytes_i8,
     write_bytes_i16,
     write_bytes_i32,
     write_bytes_i64,
     write_bytes_i128,
     write_bytes_f32,
     write_bytes_f64,
+    from_bytes_u8,
     from_bytes_u16,
     from_bytes_u32,
     from_bytes_u64,
     from_bytes_u128,
+    from_bytes_i8,
     from_bytes_i16,
     from_bytes_i32,
     from_bytes_i64,
@@ -44,6 +48,10 @@ write_bytes_uint = |bytes, value, n_bytes|
 
 # Unsigned integers
 
+write_bytes_u8 : List U8, U8 -> List U8
+write_bytes_u8 = |bytes, value|
+    bytes |> List.append(value)
+
 write_bytes_u16 : List U8, U16 -> List U8
 write_bytes_u16 = |bytes, value|
     bytes |> write_bytes_uint(value, 2)
@@ -61,6 +69,10 @@ write_bytes_u128 = |bytes, value|
     bytes |> write_bytes_uint(value, 16)
 
 # Signed integers
+
+write_bytes_u8 : List U8, I8 -> List U8
+write_bytes_u8 = |bytes, value|
+    bytes |> write_bytes_u8(Num.to_u8(value))
 
 write_bytes_i16 : List U8, I16 -> List U8
 write_bytes_i16 = |bytes, value|
@@ -107,6 +119,15 @@ from_bytes_uint = |bytes, cast_byte_to_target|
 
 # Unsigned integers
 
+from_bytes_u8 : List U8 -> Result U8 DecodeErr
+from_bytes_u8 = |bytes|
+    if List.len(bytes) == 1 then
+        Ok(from_bytes_uint(bytes, Num.to_u8))
+    else
+        Err(InvalidNumberOfBytes)
+
+expect [] |> write_bytes_u8(0x12) |> from_bytes_u8 == Ok(0x12)
+
 from_bytes_u16 : List U8 -> Result U16 DecodeErr
 from_bytes_u16 = |bytes|
     if List.len(bytes) == 2 then
@@ -148,6 +169,13 @@ expect
     == Ok(0x123456789abcdef987654321fedcba89)
 
 # Signed integers
+
+from_bytes_i8 : List U8 -> Result I8 DecodeErr
+from_bytes_i8 = |bytes|
+    bytes |> from_bytes_u8 |> Result.map_ok(Num.to_i8)
+
+expect [] |> write_bytes_i8(0x12) |> from_bytes_i8 == Ok(0x12)
+expect [] |> write_bytes_i8(-0x12) |> from_bytes_i8 == Ok(-0x12)
 
 from_bytes_i16 : List U8 -> Result I16 DecodeErr
 from_bytes_i16 = |bytes|
