@@ -35,7 +35,7 @@ impl<F: Float> Frustum<F> {
         let planes = Self::planes_from_transform_matrix(transform.matrix());
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes.clone());
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes);
 
         Self {
             planes,
@@ -54,7 +54,7 @@ impl<F: Float> Frustum<F> {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes.clone());
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes);
 
         Self {
             planes,
@@ -311,9 +311,7 @@ impl<F: Float> Frustum<F> {
         ];
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(
-                rotated_planes.clone(),
-            );
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(rotated_planes);
 
         let rotated_inverse_transform_matrix =
             rotation.to_homogeneous() * self.inverse_transform_matrix;
@@ -336,7 +334,7 @@ impl<F: Float> Frustum<F> {
 
         let largest_signed_dist_aab_corner_indices_for_planes =
             Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(
-                transformed_planes.clone(),
+                transformed_planes,
             );
 
         let transformed_inverse_transform_matrix =
@@ -423,7 +421,7 @@ impl<F: Float> Frustum<F> {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes.clone());
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(planes);
 
         Self {
             planes,

@@ -1804,7 +1804,7 @@ mod tests {
             root,
             model_to_parent_transform,
             create_dummy_model_id(""),
-            Some(bounding_sphere.clone()),
+            Some(bounding_sphere),
             create_dummy_model_instance_feature_ids(),
             ModelInstanceFlags::empty(),
         );
@@ -1841,7 +1841,7 @@ mod tests {
             root,
             Similarity3::identity(),
             create_dummy_model_id("1"),
-            Some(bounding_sphere_1.clone()),
+            Some(bounding_sphere_1),
             create_dummy_model_instance_feature_ids(),
             ModelInstanceFlags::empty(),
         );
@@ -1849,7 +1849,7 @@ mod tests {
             root,
             Similarity3::identity(),
             create_dummy_model_id("2"),
-            Some(bounding_sphere_2.clone()),
+            Some(bounding_sphere_2),
             create_dummy_model_instance_feature_ids(),
             ModelInstanceFlags::empty(),
         );
@@ -1890,7 +1890,7 @@ mod tests {
             group_1,
             Similarity3::identity(),
             create_dummy_model_id("1"),
-            Some(bounding_sphere_1.clone()),
+            Some(bounding_sphere_1),
             create_dummy_model_instance_feature_ids(),
             ModelInstanceFlags::empty(),
         );
@@ -1899,7 +1899,7 @@ mod tests {
             group_2,
             model_instance_2_to_parent_transform,
             create_dummy_model_id("2"),
-            Some(bounding_sphere_2.clone()),
+            Some(bounding_sphere_2),
             create_dummy_model_instance_feature_ids(),
             ModelInstanceFlags::empty(),
         );

@@ -512,7 +512,7 @@ fn create_spheres(
                     }),
                     &SphereCollidableComp::new(
                         CollidableKind::Dynamic,
-                        &Sphere::new(Point3::origin(), radius),
+                        Sphere::new(Point3::origin(), radius),
                     ),
                     &UniformGravityComp::earth(),
                     &TexturedColorComp(color_texture_id),
@@ -592,7 +592,7 @@ fn create_room(
                 static_friction_coef: 0.7,
                 dynamic_friction_coef: 0.5,
             }),
-            &PlaneCollidableComp::new(CollidableKind::Static, &Plane::new(Vector3::y_axis(), 0.0)),
+            &PlaneCollidableComp::new(CollidableKind::Static, Plane::new(Vector3::y_axis(), 0.0)),
             &TexturedColorComp(color_texture_id),
             &UniformSpecularReflectanceComp(0.01),
             &TexturedRoughnessComp::unscaled(roughness_texture_id),

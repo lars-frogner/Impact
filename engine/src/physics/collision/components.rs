@@ -5,12 +5,10 @@ use crate::{
     physics::{
         collision::{CollidableID, CollidableKind},
         fph,
-        motion::Position,
     },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
-use nalgebra::UnitVector3;
 use roc_codegen::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -23,8 +21,7 @@ use roc_codegen::roc;
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereCollidableComp {
     kind: u64,
-    center: Position,
-    radius: fph,
+    sphere: Sphere<fph>,
 }
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -37,8 +34,7 @@ pub struct SphereCollidableComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PlaneCollidableComp {
     kind: u64,
-    unit_normal: UnitVector3<fph>,
-    displacement: fph,
+    plane: Plane<fph>,
 }
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -64,11 +60,10 @@ pub struct CollidableComp {
 }
 
 impl SphereCollidableComp {
-    pub fn new(kind: CollidableKind, sphere: &Sphere<fph>) -> Self {
+    pub fn new(kind: CollidableKind, sphere: Sphere<fph>) -> Self {
         Self {
             kind: kind.to_u64(),
-            center: *sphere.center(),
-            radius: sphere.radius(),
+            sphere,
         }
     }
 
@@ -76,17 +71,16 @@ impl SphereCollidableComp {
         CollidableKind::from_u64(self.kind).unwrap()
     }
 
-    pub fn sphere(&self) -> Sphere<fph> {
-        Sphere::new(self.center, self.radius)
+    pub fn sphere(&self) -> &Sphere<fph> {
+        &self.sphere
     }
 }
 
 impl PlaneCollidableComp {
-    pub fn new(kind: CollidableKind, plane: &Plane<fph>) -> Self {
+    pub fn new(kind: CollidableKind, plane: Plane<fph>) -> Self {
         Self {
             kind: kind.to_u64(),
-            unit_normal: *plane.unit_normal(),
-            displacement: plane.displacement(),
+            plane,
         }
     }
 
@@ -94,8 +88,8 @@ impl PlaneCollidableComp {
         CollidableKind::from_u64(self.kind).unwrap()
     }
 
-    pub fn plane(&self) -> Plane<fph> {
-        Plane::new(self.unit_normal, self.displacement)
+    pub fn plane(&self) -> &Plane<fph> {
+        &self.plane
     }
 }
 

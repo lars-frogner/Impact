@@ -511,7 +511,7 @@ impl CullingFrustum {
         planes: [Plane<f32>; 6],
         apex_position: Point3<f32>,
     ) -> Self {
-        let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
+        let largest_signed_dist_aab_corner_indices_for_planes = planes.map(|plane| {
             u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
                 .unwrap()
         });
