@@ -3,7 +3,7 @@
 
 use super::{RocGenerateOptions, field_type_descriptor};
 use crate::meta::{
-    NamedRocTypeField, RocConstructorDescriptor, RocFieldType, RocTypeComposition,
+    NamedRocTypeField, RocConstructorDescriptor, RocDependencies, RocFieldType, RocTypeComposition,
     RocTypeDescriptor, RocTypeFields, RocTypeFlags, RocTypeID, UnnamedRocTypeField,
 };
 use anyhow::{Result, anyhow};
@@ -18,6 +18,7 @@ pub(super) fn generate_module(
     type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
     type_descriptor: &RocTypeDescriptor,
     constructor_descriptors: &[RocConstructorDescriptor],
+    explicit_dependencies: &[RocDependencies],
 ) -> Result<Option<String>> {
     if let RocTypeComposition::Primitive(_) = type_descriptor.composition {
         return Ok(None);
@@ -28,7 +29,13 @@ pub(super) fn generate_module(
     write_module_header(&mut module, constructor_descriptors, type_descriptor)?;
     module.push('\n');
 
-    write_imports(options, &mut module, type_descriptors, type_descriptor)?;
+    write_imports(
+        options,
+        &mut module,
+        type_descriptors,
+        explicit_dependencies,
+        type_descriptor,
+    )?;
     module.push('\n');
 
     write_type_declaration(&mut module, type_descriptors, type_descriptor)?;
@@ -101,11 +108,13 @@ fn write_imports(
     options: &RocGenerateOptions,
     roc_code: &mut String,
     type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    explicit_dependencies: &[RocDependencies],
     type_descriptor: &RocTypeDescriptor,
 ) -> Result<()> {
     let mut imports = Vec::from_iter(determine_imports(
         options,
         type_descriptors,
+        explicit_dependencies,
         type_descriptor,
     ));
     imports.sort();
@@ -118,6 +127,7 @@ fn write_imports(
 fn determine_imports(
     options: &RocGenerateOptions,
     type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    explicit_dependencies: &[RocDependencies],
     type_descriptor: &RocTypeDescriptor,
 ) -> HashSet<String> {
     let mut imports = HashSet::new();
@@ -136,6 +146,10 @@ fn determine_imports(
         ));
     }
 
+    for dependencies in explicit_dependencies {
+        add_imports_for_dependencies(options, &mut imports, type_descriptors, dependencies);
+    }
+
     match &type_descriptor.composition {
         RocTypeComposition::Primitive(_) => {}
         RocTypeComposition::Struct { fields, .. } => {
@@ -148,6 +162,23 @@ fn determine_imports(
         }
     }
     imports
+}
+
+fn add_imports_for_dependencies(
+    options: &RocGenerateOptions,
+    imports: &mut HashSet<String>,
+    descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    dependencies: &RocDependencies,
+) {
+    for dependency_id in &dependencies.dependencies {
+        if let Some(dependency) = descriptors.get(dependency_id) {
+            imports.insert(dependency.import_module(
+                &options.import_prefix,
+                &options.core_package_name,
+                &options.platform_package_name,
+            ));
+        }
+    }
 }
 
 fn add_imports_for_fields<const N: usize>(
@@ -812,8 +843,6 @@ pub(super) fn write_constructor(
         &arg_names
     };
 
-    let body = constructor_descriptor.roc_body.replace("\n", "\n    ");
-
     writeln!(
         roc_code,
         "\
@@ -824,6 +853,7 @@ pub(super) fn write_constructor(
         ",
         name = constructor_descriptor.function_name,
         type_name = type_descriptor.type_name,
+        body = constructor_descriptor.roc_body.trim(),
     )?;
 
     if type_descriptor.is_component() {

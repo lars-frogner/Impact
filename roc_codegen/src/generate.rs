@@ -4,7 +4,8 @@
 mod roc;
 
 use crate::meta::{
-    RocConstructorDescriptor, RocTypeComposition, RocTypeDescriptor, RocTypeFlags, RocTypeID,
+    RocConstructorDescriptor, RocDependencies, RocTypeComposition, RocTypeDescriptor, RocTypeFlags,
+    RocTypeID,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
@@ -177,6 +178,7 @@ pub fn generate_roc(
 ) -> Result<()> {
     let type_descriptors = inventory::iter::<RocTypeDescriptor>();
     let constructor_descriptors = inventory::iter::<RocConstructorDescriptor>();
+    let explicit_dependencies = inventory::iter::<RocDependencies>();
 
     let target_dir = target_dir.as_ref();
 
@@ -184,6 +186,7 @@ pub fn generate_roc(
         roc_options,
         type_descriptors,
         constructor_descriptors,
+        explicit_dependencies,
         component_type_ids,
     )?;
 
@@ -224,11 +227,14 @@ fn generate_roc_modules<'a>(
     options: &RocGenerateOptions,
     type_descriptors: impl IntoIterator<Item = &'a RocTypeDescriptor>,
     constructor_descriptors: impl IntoIterator<Item = &'a RocConstructorDescriptor>,
+    explicit_dependencies: impl IntoIterator<Item = &'a RocDependencies>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<Module>> {
     let type_descriptors = gather_type_descriptors(type_descriptors, component_type_ids)?;
 
     let constructor_descriptors = gather_constructor_descriptors(constructor_descriptors);
+
+    let explicit_dependencies = gather_explicit_dependencies(explicit_dependencies);
 
     type_descriptors
         .values()
@@ -236,11 +242,17 @@ fn generate_roc_modules<'a>(
             let constructor_descriptors = constructor_descriptors
                 .get(&type_descriptor.id)
                 .map_or_else(Cow::default, Cow::Borrowed);
+
+            let explicit_dependencies = explicit_dependencies
+                .get(&type_descriptor.id)
+                .map_or_else(Cow::default, Cow::Borrowed);
+
             match roc::generate_module(
                 options,
                 &type_descriptors,
                 type_descriptor,
                 constructor_descriptors.as_ref(),
+                explicit_dependencies.as_ref(),
             ) {
                 Ok(Some(content)) => Some(Ok(Module {
                     name: type_descriptor.type_name,
@@ -305,4 +317,17 @@ fn gather_constructor_descriptors<'a>(
         constructor_descriptors.sort_by_key(|desc| desc.sequence_number);
     }
     descriptors
+}
+
+fn gather_explicit_dependencies<'a>(
+    dependencies_iter: impl IntoIterator<Item = &'a RocDependencies>,
+) -> HashMap<RocTypeID, Vec<RocDependencies>> {
+    let mut dependencies = HashMap::new();
+    for deps in dependencies_iter {
+        dependencies
+            .entry(deps.for_type_id)
+            .or_insert_with(Vec::new)
+            .push(deps.clone());
+    }
+    dependencies
 }

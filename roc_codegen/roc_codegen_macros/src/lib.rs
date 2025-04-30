@@ -25,11 +25,33 @@ enum RocTypeCategory {
     Inline,
 }
 
-struct MetaEntry {
+#[derive(Clone)]
+struct RocImplAttributeArgs {
+    dependency_types: Vec<syn::Type>,
+}
+
+struct KeyStringValueArg {
     key: syn::Ident,
     _eq_token: syn::Token![=],
     value: syn::LitStr,
 }
+
+struct KeyTypeListValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    _bracket_token: syn::token::Bracket,
+    types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
+}
+
+// These need to match the corresponding constants in `roc_codegen::meta`.
+const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
+const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
+const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
+    MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
+
+const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
+
+const MAX_ROC_DEPENDENCIES: usize = 16;
 
 /// Attribute macro for annotating Rust types that should be available in Roc.
 /// The macro will infer and register a
@@ -76,12 +98,11 @@ pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     } else if let Ok(block) = syn::parse::<syn::ItemImpl>(item.clone()) {
         if attr.is_empty() {
-            roc_attr::apply_roc_impl_attribute(block, &crate_root_tokens())
+            roc_attr::apply_roc_impl_attribute(None, block, &crate_root_tokens())
         } else {
-            Err(syn::Error::new_spanned(
-                TokenStream2::from(attr),
-                "the `roc` attribute supports no arguments when applied to impl blocks",
-            ))
+            syn::parse::<RocImplAttributeArgs>(attr).and_then(|args| {
+                roc_attr::apply_roc_impl_attribute(Some(args), block, &crate_root_tokens())
+            })
         }
     } else {
         Err(syn::Error::new_spanned(
@@ -180,7 +201,7 @@ impl syn::parse::Parse for RocTypeAttributeArgs {
         let mut function_postfix = None;
 
         if input.is_empty() {
-            return Ok(RocTypeAttributeArgs {
+            return Ok(Self {
                 category,
                 package_name,
                 module_name,
@@ -192,7 +213,9 @@ impl syn::parse::Parse for RocTypeAttributeArgs {
         input.parse::<syn::token::Comma>()?;
 
         let args =
-            syn::punctuated::Punctuated::<MetaEntry, syn::token::Comma>::parse_terminated(input)?;
+            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+                input,
+            )?;
 
         for arg in args {
             match arg.key.to_string().as_str() {
@@ -237,7 +260,7 @@ impl syn::parse::Parse for RocTypeAttributeArgs {
             }
         }
 
-        Ok(RocTypeAttributeArgs {
+        Ok(Self {
             category,
             package_name,
             module_name,
@@ -247,12 +270,53 @@ impl syn::parse::Parse for RocTypeAttributeArgs {
     }
 }
 
-impl syn::parse::Parse for MetaEntry {
+impl syn::parse::Parse for RocImplAttributeArgs {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-        Ok(MetaEntry {
+        let arg: KeyTypeListValueArg = input.parse()?;
+
+        let dependency_types: Vec<_> = match arg.key.to_string().as_str() {
+            "dependencies" => arg.types.iter().cloned().collect(),
+            other => {
+                return Err(syn::Error::new_spanned(
+                    arg.key,
+                    format!("invalid argument `{}`, must be `dependencies`", other),
+                ));
+            }
+        };
+
+        if dependency_types.len() > MAX_ROC_DEPENDENCIES {
+            return Err(syn::Error::new_spanned(
+                arg.types,
+                format!(
+                    "the `roc` attribute does not support this many dependencies ({}/{})",
+                    dependency_types.len(),
+                    MAX_ROC_DEPENDENCIES
+                ),
+            ));
+        }
+
+        Ok(Self { dependency_types })
+    }
+}
+
+impl syn::parse::Parse for KeyStringValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Self {
             key: input.parse()?,
             _eq_token: input.parse()?,
             value: input.parse()?,
+        })
+    }
+}
+
+impl syn::parse::Parse for KeyTypeListValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            _bracket_token: syn::bracketed!(content in input),
+            types: content.parse_terminated(syn::Type::parse, syn::Token![,])?,
         })
     }
 }

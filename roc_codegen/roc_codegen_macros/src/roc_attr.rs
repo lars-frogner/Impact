@@ -1,6 +1,10 @@
 //! Attribute macro for Roc code generation.
 
-use crate::{RocTypeAttributeArgs, RocTypeCategory};
+use crate::{
+    MAX_ROC_CONSTRUCTOR_ARGS, MAX_ROC_DEPENDENCIES, MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
+    MAX_ROC_TYPE_ENUM_VARIANTS, MAX_ROC_TYPE_STRUCT_FIELDS, RocImplAttributeArgs,
+    RocTypeAttributeArgs, RocTypeCategory,
+};
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use std::{fmt::Write, iter};
@@ -14,14 +18,6 @@ struct ResolvedAttributeArgs {
     type_name: String,
     function_postfix: String,
 }
-
-// These need to match the corresponding constants in `roc_codegen::meta`.
-pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
-pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
-pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
-    MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
-
-pub const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
 
 pub(super) fn apply_roc_type_attribute(
     args: Option<RocTypeAttributeArgs>,
@@ -61,6 +57,7 @@ pub(super) fn apply_roc_type_attribute(
 }
 
 pub(super) fn apply_roc_impl_attribute(
+    args: Option<RocImplAttributeArgs>,
     block: syn::ItemImpl,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -100,9 +97,16 @@ pub(super) fn apply_roc_impl_attribute(
         }
     }
 
+    let dependencies_submit = if let Some(args) = args {
+        generate_roc_dependencies_submit(for_type, &args.dependency_types, crate_root)?
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #block
         #(#descriptor_submits)*
+        #dependencies_submit
     })
 }
 
@@ -322,6 +326,23 @@ fn generate_roc_constructor_descriptor_submit(
                 arguments: #arguments,
                 roc_body: #roc_body,
                 docstring: #docstring,
+            }
+        }
+    })
+}
+
+fn generate_roc_dependencies_submit(
+    for_type: &syn::Type,
+    dependency_types: &[syn::Type],
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    let dependencies = generate_type_id_list(dependency_types, crate_root, MAX_ROC_DEPENDENCIES);
+    Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
+        inventory::submit! {
+            #crate_root::meta::RocDependencies {
+                for_type_id: <#for_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                dependencies: #dependencies,
             }
         }
     })
@@ -741,6 +762,27 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
     Ok(quote! {
         #crate_root::meta::RocFunctionArguments(#crate_root::meta::StaticList([#(#args)*]))
     })
+}
+
+fn generate_type_id_list(
+    types: &[syn::Type],
+    crate_root: &TokenStream,
+    max_types: usize,
+) -> TokenStream {
+    assert!(max_types >= types.len());
+
+    let ids = types
+        .iter()
+        .map(|ty| {
+            quote! {
+                Some(<#ty as #crate_root::meta::Roc>::ROC_TYPE_ID),
+            }
+        })
+        .chain(iter::repeat_n(quote! {None,}, max_types - types.len()));
+
+    quote! {
+        #crate_root::meta::StaticList([#(#ids)*])
+    }
 }
 
 fn extract_and_process_docstring(attributes: &[syn::Attribute]) -> String {
