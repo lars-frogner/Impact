@@ -63,6 +63,14 @@ pub struct RocConstructorDescriptor {
     pub docstring: &'static str,
 }
 
+#[derive(Clone, Debug)]
+pub struct RocDependencies {
+    /// The type having these dependencies.
+    pub for_type_id: RocTypeID,
+    /// The types being depended on.
+    pub dependencies: StaticList<RocTypeID, MAX_ROC_DEPENDENCIES>,
+}
+
 // Whenever a type is annotated with the `roc` attribute macro, the macro
 // infers a [`RocTypeDescriptor`] and registers it using [`inventory::submit!`]
 // (provided that the `enabled` feature is active). This
@@ -74,6 +82,9 @@ inventory::collect!(RocTypeDescriptor);
 
 #[cfg(feature = "enabled")]
 inventory::collect!(RocConstructorDescriptor);
+
+#[cfg(feature = "enabled")]
+inventory::collect!(RocDependencies);
 
 bitflags! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -87,7 +98,7 @@ bitflags! {
     }
 }
 
-// These need to match the corresponding constants in `roc_codegen_macros::roc_attr`.
+// These need to match the corresponding constants in `roc_codegen_macros`.
 // We can't use dynamically sized collections for this information, since the
 // [`RocTypeDescriptor`]s must allow us to define them statically.
 pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
@@ -96,6 +107,8 @@ pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
 
 pub const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
+
+pub const MAX_ROC_DEPENDENCIES: usize = 16;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
