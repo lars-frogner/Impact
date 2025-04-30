@@ -559,23 +559,27 @@ fn generate_variants(
         .variants
         .iter()
         .map(|variant| {
-            let attributes = if require_pod {
-                quote! {
-                    #[repr(C)]
-                    #[derive(Clone, Copy, ::bytemuck::Zeroable, ::bytemuck::Pod)]
-                }
-            } else {
-                quote! {}
-            };
-            let punct = if let syn::Fields::Named(_) = &variant.fields {
-                quote! {}
-            } else {
-                quote! {;}
-            };
-            local_static_assertions.push(quote! {
-                #attributes
-                pub(super) struct #variant #punct
-            });
+            {
+                let syn::Variant { ident, fields, .. } = variant;
+
+                let attributes = if require_pod {
+                    quote! {
+                        #[repr(C)]
+                        #[derive(Clone, Copy, ::bytemuck::Zeroable, ::bytemuck::Pod)]
+                    }
+                } else {
+                    quote! {}
+                };
+                let punct = if let syn::Fields::Named(_) = fields {
+                    quote! {}
+                } else {
+                    quote! {;}
+                };
+                local_static_assertions.push(quote! {
+                    #attributes
+                    pub(super) struct #ident #fields #punct
+                });
+            }
 
             let fields = generate_fields(
                 variant,
