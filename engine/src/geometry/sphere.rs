@@ -2,16 +2,24 @@
 
 use crate::{geometry::AxisAlignedBox, num::Float};
 use approx::abs_diff_eq;
+use bytemuck::{Pod, Zeroable};
 use na::{Similarity3, UnitQuaternion, vector};
 use nalgebra::{self as na, Point3};
 
 /// A sphere represented by the center point and the radius.
-#[derive(Clone, Debug)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
 pub struct Sphere<F: Float> {
     center: Point3<F>,
     radius: F,
-    radius_squared: F,
 }
+
+// WARNING: Do not change `Sphere` without ensuring that `Sphere<f32>` and
+// `Sphere<f64>` are still `Pod`
+unsafe impl Zeroable for Sphere<f32> {}
+unsafe impl Zeroable for Sphere<f64> {}
+unsafe impl Pod for Sphere<f32> {}
+unsafe impl Pod for Sphere<f64> {}
 
 impl<F: Float> Sphere<F> {
     /// Creates a new sphere with the given center and radius.
@@ -20,11 +28,7 @@ impl<F: Float> Sphere<F> {
     /// If `radius` is negative.
     pub fn new(center: Point3<F>, radius: F) -> Self {
         assert!(radius >= F::zero());
-        Self {
-            center,
-            radius,
-            radius_squared: radius * radius,
-        }
+        Self { center, radius }
     }
 
     /// Finds the smallest sphere that fully encloses the two
@@ -38,13 +42,13 @@ impl<F: Float> Sphere<F> {
             sphere_2.radius(),
             distance_between_centra,
         ) {
-            return sphere_1.clone();
+            return *sphere_1;
         } else if Self::first_sphere_encloses_second_sphere(
             sphere_2.radius(),
             sphere_1.radius(),
             distance_between_centra,
         ) {
-            return sphere_2.clone();
+            return *sphere_2;
         }
 
         let bounding_radius =
@@ -87,7 +91,7 @@ impl<F: Float> Sphere<F> {
 
     /// Returns the square of the radius of the sphere.
     pub fn radius_squared(&self) -> F {
-        self.radius_squared
+        self.radius.powi(2)
     }
 
     /// Whether the given sphere is fully inside this sphere.

@@ -2,6 +2,7 @@
 
 use crate::{geometry::Sphere, num::Float};
 use approx::AbsDiffEq;
+use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
 use num_traits::Signed;
 
@@ -18,11 +19,19 @@ use num_traits::Signed;
 /// positive and negative halfspace. The positive one
 /// is defined as the halfspace the unit normal is
 /// pointing into.
-#[derive(Clone, Debug, PartialEq)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Plane<F: Float> {
     unit_normal: UnitVector3<F>,
     displacement: F,
 }
+
+// WARNING: Do not change `Plane` without ensuring that `Plane<f32>` and
+// `Plane<f64>` are still `Pod`
+unsafe impl Zeroable for Plane<f32> {}
+unsafe impl Zeroable for Plane<f64> {}
+unsafe impl Pod for Plane<f32> {}
+unsafe impl Pod for Plane<f64> {}
 
 /// How a sphere is positioned relative to a plane.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

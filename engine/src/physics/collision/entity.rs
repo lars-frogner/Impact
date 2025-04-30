@@ -26,7 +26,7 @@ pub fn setup_collidable_for_new_entity(
         components,
         |sphere_collidable: &SphereCollidableComp| -> CollidableComp {
             let collidable_id = collision_world
-                .add_sphere_collidable(sphere_collidable.kind(), sphere_collidable.sphere());
+                .add_sphere_collidable(sphere_collidable.kind(), *sphere_collidable.sphere());
 
             CollidableComp { collidable_id }
         }
@@ -39,7 +39,7 @@ pub fn setup_collidable_for_new_entity(
         components,
         |plane_collidable: &PlaneCollidableComp| -> CollidableComp {
             let collidable_id = collision_world
-                .add_plane_collidable(plane_collidable.kind(), plane_collidable.plane());
+                .add_plane_collidable(plane_collidable.kind(), *plane_collidable.plane());
 
             CollidableComp { collidable_id }
         }
