@@ -4,8 +4,7 @@
 mod roc;
 
 use crate::meta::{
-    RocConstructorDescriptor, RocDependencies, RocTypeComposition, RocTypeDescriptor, RocTypeFlags,
-    RocTypeID,
+    RocConstructorDescriptor, RocDependencies, RocType, RocTypeComposition, RocTypeFlags, RocTypeID,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
@@ -60,97 +59,95 @@ struct Module {
 }
 
 pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>) -> Result<()> {
-    let descriptors =
-        gather_type_descriptors(inventory::iter::<RocTypeDescriptor>(), component_type_ids)?;
+    let type_map = gather_type_map(inventory::iter::<RocType>(), component_type_ids)?;
 
-    let mut descriptor_list = Vec::with_capacity(descriptors.len());
+    let mut type_description_list = Vec::with_capacity(type_map.len());
 
-    let print_list = |descriptor_list: &mut Vec<String>, header: &str| {
-        descriptor_list.sort();
+    let print_list = |type_description_list: &mut Vec<String>, header: &str| {
+        type_description_list.sort();
 
         println!("{header}");
-        for name in &*descriptor_list {
-            println!("{name}");
+        for description in &*type_description_list {
+            println!("{description}");
         }
-        if descriptor_list.is_empty() {
+        if type_description_list.is_empty() {
             println!("<None>");
         }
         println!();
 
-        descriptor_list.clear();
+        type_description_list.clear();
     };
 
     if options
         .categories
         .contains(&ListedRocTypeCategory::Primitive)
     {
-        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
-            if matches!(descriptor.composition, RocTypeComposition::Primitive(_)) {
-                Some(descriptor.description())
+        type_description_list.extend(type_map.values().filter_map(|ty| {
+            if matches!(ty.composition, RocTypeComposition::Primitive(_)) {
+                Some(ty.description())
             } else {
                 None
             }
         }));
-        print_list(&mut descriptor_list, "****** Primitives ******");
+        print_list(&mut type_description_list, "****** Primitives ******");
     }
 
     if options.categories.contains(&ListedRocTypeCategory::Pod) {
-        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
-            if descriptor.is_pod()
-                && !descriptor.is_component()
-                && !matches!(descriptor.composition, RocTypeComposition::Primitive(_))
+        type_description_list.extend(type_map.values().filter_map(|ty| {
+            if ty.is_pod()
+                && !ty.is_component()
+                && !matches!(ty.composition, RocTypeComposition::Primitive(_))
             {
-                Some(descriptor.description())
+                Some(ty.description())
             } else {
                 None
             }
         }));
-        print_list(&mut descriptor_list, "****** Plain Old Data ******");
+        print_list(&mut type_description_list, "****** Plain Old Data ******");
     }
 
     if options
         .categories
         .contains(&ListedRocTypeCategory::Component)
     {
-        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
-            if descriptor.is_component() {
-                Some(descriptor.description())
+        type_description_list.extend(type_map.values().filter_map(|ty| {
+            if ty.is_component() {
+                Some(ty.description())
             } else {
                 None
             }
         }));
-        print_list(&mut descriptor_list, "****** ECS Components ******");
+        print_list(&mut type_description_list, "****** ECS Components ******");
     }
 
     if options.categories.contains(&ListedRocTypeCategory::Inline) {
-        descriptor_list.extend(descriptors.values().filter_map(|descriptor| {
-            if !descriptor.is_pod() {
-                Some(descriptor.description())
+        type_description_list.extend(type_map.values().filter_map(|ty| {
+            if !ty.is_pod() {
+                Some(ty.description())
             } else {
                 None
             }
         }));
-        print_list(&mut descriptor_list, "****** Inline ******");
+        print_list(&mut type_description_list, "****** Inline ******");
     }
 
     Ok(())
 }
 
 pub fn list_constructors() -> Result<()> {
-    let type_descriptors =
-        gather_type_descriptors(inventory::iter::<RocTypeDescriptor>(), &HashSet::new())?;
+    let type_map = gather_type_map(inventory::iter::<RocType>(), &HashSet::new())?;
 
     let constructor_descriptors =
         gather_constructor_descriptors(inventory::iter::<RocConstructorDescriptor>());
 
-    let mut type_descriptor_list: Vec<_> = type_descriptors
+    let mut type_list: Vec<_> = type_map
         .iter()
         .map(|(type_id, desc)| (type_id, desc.type_name))
         .collect();
-    type_descriptor_list.sort_by_key(|(_, name)| *name);
+    type_list.sort_by_key(|(_, name)| *name);
 
-    for (type_id, type_name) in type_descriptor_list {
-        let Some(type_descriptor) = type_descriptors.get(type_id) else {
+    for (type_id, type_name) in type_list {
+        let Some(ty) = type_map.get(type_id) else {
             continue;
         };
         let Some(descriptors) = constructor_descriptors.get(type_id) else {
@@ -159,7 +156,7 @@ pub fn list_constructors() -> Result<()> {
         println!("****** {type_name} ******");
         for desc in descriptors {
             let mut text = String::new();
-            roc::write_constructor(&mut text, &type_descriptors, type_descriptor, desc)?;
+            roc::write_constructor(&mut text, &type_map, ty, desc)?;
             println!("{text}");
         }
     }
@@ -176,7 +173,7 @@ pub fn generate_roc(
     roc_options: &RocGenerateOptions,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
-    let type_descriptors = inventory::iter::<RocTypeDescriptor>();
+    let type_iter = inventory::iter::<RocType>();
     let constructor_descriptors = inventory::iter::<RocConstructorDescriptor>();
     let explicit_dependencies = inventory::iter::<RocDependencies>();
 
@@ -184,7 +181,7 @@ pub fn generate_roc(
 
     let modules = generate_roc_modules(
         roc_options,
-        type_descriptors,
+        type_iter,
         constructor_descriptors,
         explicit_dependencies,
         component_type_ids,
@@ -225,37 +222,37 @@ pub fn generate_roc(
 
 fn generate_roc_modules<'a>(
     options: &RocGenerateOptions,
-    type_descriptors: impl IntoIterator<Item = &'a RocTypeDescriptor>,
+    type_iter: impl IntoIterator<Item = &'a RocType>,
     constructor_descriptors: impl IntoIterator<Item = &'a RocConstructorDescriptor>,
     explicit_dependencies: impl IntoIterator<Item = &'a RocDependencies>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<Module>> {
-    let type_descriptors = gather_type_descriptors(type_descriptors, component_type_ids)?;
+    let type_map = gather_type_map(type_iter, component_type_ids)?;
 
     let constructor_descriptors = gather_constructor_descriptors(constructor_descriptors);
 
-    let explicit_dependencies = gather_explicit_dependencies(explicit_dependencies);
+    let explicit_dependencies_map = gather_explicit_dependencies(explicit_dependencies);
 
-    type_descriptors
+    type_map
         .values()
-        .filter_map(|type_descriptor| {
+        .filter_map(|ty| {
             let constructor_descriptors = constructor_descriptors
-                .get(&type_descriptor.id)
+                .get(&ty.id)
                 .map_or_else(Cow::default, Cow::Borrowed);
 
-            let explicit_dependencies = explicit_dependencies
-                .get(&type_descriptor.id)
+            let explicit_dependencies = explicit_dependencies_map
+                .get(&ty.id)
                 .map_or_else(Cow::default, Cow::Borrowed);
 
             match roc::generate_module(
                 options,
-                &type_descriptors,
-                type_descriptor,
+                &type_map,
+                ty,
                 constructor_descriptors.as_ref(),
                 explicit_dependencies.as_ref(),
             ) {
                 Ok(Some(content)) => Some(Ok(Module {
-                    name: type_descriptor.type_name,
+                    name: ty.type_name,
                     content,
                 })),
                 Ok(None) => None,
@@ -265,35 +262,35 @@ fn generate_roc_modules<'a>(
         .collect::<Result<Vec<_>>>()
 }
 
-fn gather_type_descriptors<'a>(
-    descriptor_iter: impl IntoIterator<Item = &'a RocTypeDescriptor>,
+fn gather_type_map<'a>(
+    type_iter: impl IntoIterator<Item = &'a RocType>,
     component_type_ids: &HashSet<RocTypeID>,
-) -> Result<HashMap<RocTypeID, RocTypeDescriptor>> {
-    let mut descriptors = HashMap::new();
+) -> Result<HashMap<RocTypeID, RocType>> {
+    let mut type_map = HashMap::new();
 
-    for descriptor in descriptor_iter {
-        let mut descriptor = descriptor.clone();
-        if component_type_ids.contains(&descriptor.id) {
-            descriptor.flags |= RocTypeFlags::IS_COMPONENT;
+    for ty in type_iter {
+        let mut ty = ty.clone();
+        if component_type_ids.contains(&ty.id) {
+            ty.flags |= RocTypeFlags::IS_COMPONENT;
         }
-        if let Some(existing) = descriptors.insert(descriptor.id, descriptor.clone()) {
+        if let Some(existing) = type_map.insert(ty.id, ty.clone()) {
             bail!(
                 "Found two Roc types with the same ID:\n{:?}\n{:?}",
                 existing,
-                descriptor
+                ty
             );
         }
     }
-    Ok(descriptors)
+    Ok(type_map)
 }
 
-fn field_type_descriptor<'a>(
-    descriptors: &'a HashMap<RocTypeID, RocTypeDescriptor>,
+fn get_field_type<'a>(
+    type_map: &'a HashMap<RocTypeID, RocType>,
     type_id: &RocTypeID,
     field: impl Display,
     parent_name: &impl Fn() -> String,
-) -> Result<&'a RocTypeDescriptor> {
-    descriptors.get(type_id).ok_or_else(|| {
+) -> Result<&'a RocType> {
+    type_map.get(type_id).ok_or_else(|| {
         anyhow!(
             "Missing Roc type declaration for field {} with type ID {} in {}",
             field,

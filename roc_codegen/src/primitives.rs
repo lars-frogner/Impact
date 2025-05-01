@@ -12,7 +12,7 @@ macro_rules! impl_roc_for_existing_primitive {
         impl $crate::meta::RocPod for $t {}
 
         inventory::submit! {
-            $crate::meta::RocTypeDescriptor {
+            $crate::meta::RocType {
                 id: <$t as $crate::meta::Roc>::ROC_TYPE_ID,
                 package_name: stringify!($package),
                 module_name: stringify!($module),

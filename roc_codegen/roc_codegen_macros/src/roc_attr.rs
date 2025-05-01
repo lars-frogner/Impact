@@ -39,7 +39,7 @@ pub(super) fn apply_roc_type_attribute(
     let roc_pod_impl = generate_roc_pod_impl(rust_type_name, crate_root, args.type_category);
 
     let mut static_assertions = Vec::new();
-    let descriptor_submit = generate_roc_type_descriptor_submit(
+    let type_submit = generate_roc_type_submit(
         &args,
         rust_type_name,
         &input,
@@ -51,7 +51,7 @@ pub(super) fn apply_roc_type_attribute(
         #input
         #roc_impl
         #roc_pod_impl
-        #descriptor_submit
+        #type_submit
         #(#static_assertions)*
     })
 }
@@ -259,7 +259,7 @@ fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> Tok
     )
 }
 
-fn generate_roc_type_descriptor_submit(
+fn generate_roc_type_submit(
     args: &ResolvedAttributeArgs,
     rust_type_name: &Ident,
     input: &syn::DeriveInput,
@@ -277,7 +277,7 @@ fn generate_roc_type_descriptor_submit(
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
-            #crate_root::meta::RocTypeDescriptor {
+            #crate_root::meta::RocType {
                 id: <#rust_type_name as #crate_root::meta::Roc>::ROC_TYPE_ID,
                 package_name: #package_name,
                 module_name: #module_name,
