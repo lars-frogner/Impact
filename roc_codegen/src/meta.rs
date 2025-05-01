@@ -32,7 +32,7 @@ pub struct RocType {
     /// The name of the Roc module where the type will be defined.
     pub module_name: &'static str,
     /// The name of the type in Roc.
-    pub type_name: &'static str,
+    pub name: &'static str,
     /// Postfix for the functions operating on this type.
     pub function_postfix: &'static str,
     /// The size in bytes of an object of this type when serialized to match
@@ -46,18 +46,21 @@ pub struct RocType {
     pub docstring: &'static str,
 }
 
+/// A method that can be represented in Roc.
 #[derive(Clone, Debug)]
-pub struct RocConstructorDescriptor {
-    /// The position of this constructor in the sequence of constructors for
-    /// the type.
+pub struct RocMethod {
+    /// The position of this method in the sequence of methods for
+    /// the type (to preserve ordering).
     pub sequence_number: usize,
-    /// The type that this is a constructor for.
+    /// The type this method belongs to.
     pub for_type_id: RocTypeID,
-    /// The name of the constructor function.
-    pub function_name: &'static str,
-    /// The arguments of the constructor function.
-    pub arguments: RocFunctionArguments<MAX_ROC_CONSTRUCTOR_ARGS>,
-    /// The Roc source code for the body of the constructor function.
+    /// The name of the method.
+    pub name: &'static str,
+    /// The arguments of the method.
+    pub arguments: RocFunctionArguments<MAX_ROC_FUNCTION_ARGS>,
+    /// The return type of the method.
+    pub return_type: RocMethodReturnType,
+    /// The Roc source code for the body of the method.
     pub roc_body: &'static str,
     /// The docstring (in Roc format) for the method.
     pub docstring: &'static str,
@@ -81,7 +84,7 @@ pub struct RocDependencies {
 inventory::collect!(RocType);
 
 #[cfg(feature = "enabled")]
-inventory::collect!(RocConstructorDescriptor);
+inventory::collect!(RocMethod);
 
 #[cfg(feature = "enabled")]
 inventory::collect!(RocDependencies);
@@ -106,7 +109,7 @@ pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
 pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
 
-pub const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
+pub const MAX_ROC_FUNCTION_ARGS: usize = 16;
 
 pub const MAX_ROC_DEPENDENCIES: usize = 16;
 
@@ -201,19 +204,41 @@ pub enum RocFieldType {
 #[derive(Clone, Debug)]
 pub struct RocFunctionArguments<const N_ARGS: usize>(pub StaticList<RocFunctionArgument, N_ARGS>);
 
-/// A function argument.
+/// A function or method argument.
 #[derive(Clone, Debug)]
-pub struct RocFunctionArgument {
+pub enum RocFunctionArgument {
+    Receiver(RocMethodReceiver),
+    Typed(TypedRocFunctionArgument),
+}
+
+/// The receiver of a method, which is some form of `self`, like `&self`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RocMethodReceiver {
+    RefSelf,
+    OwnedSelf,
+}
+
+/// An explicitly typed function argument.
+#[derive(Clone, Debug)]
+pub struct TypedRocFunctionArgument {
     /// The argument name.
     pub ident: &'static str,
     /// The argument type.
-    pub ty: RocFunctionArgumentType,
+    pub ty: RocFunctionSignatureType,
 }
 
-/// A function argument that is either a single concrete type or a list (array
-/// or slice) of such types.
+/// A method return type, which may be `Self` or a specific type.
 #[derive(Clone, Debug)]
-pub enum RocFunctionArgumentType {
+pub enum RocMethodReturnType {
+    SelfType,
+    Specific(RocFunctionSignatureType),
+}
+
+/// A type appearing in a function signature (argument or return value), which
+/// may be either a single concrete type or a list (array or slice) of such
+/// types.
+#[derive(Clone, Debug)]
+pub enum RocFunctionSignatureType {
     Single(MaybeUnregisteredRocType),
     List(MaybeUnregisteredRocType),
 }
@@ -301,7 +326,7 @@ impl RocType {
             Cow::Owned(format!(
                 "{open_paren}{module_name}.{type_name} {type_variable}{close_paren}",
                 module_name = self.module_name,
-                type_name = self.type_name,
+                type_name = self.name,
                 open_paren = if use_parenthesis { "(" } else { "" },
                 close_paren = if use_parenthesis { ")" } else { "" }
             ))
@@ -309,12 +334,12 @@ impl RocType {
             &self.composition,
             RocTypeComposition::Primitive(RocPrimitiveKind::Builtin)
         ) {
-            Cow::Borrowed(self.type_name)
+            Cow::Borrowed(self.name)
         } else {
             Cow::Owned(format!(
                 "{module_name}.{type_name}",
                 module_name = self.module_name,
-                type_name = self.type_name
+                type_name = self.name
             ))
         }
     }

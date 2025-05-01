@@ -1,7 +1,7 @@
 //! Attribute macro for Roc code generation.
 
 use crate::{
-    MAX_ROC_CONSTRUCTOR_ARGS, MAX_ROC_DEPENDENCIES, MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
+    MAX_ROC_DEPENDENCIES, MAX_ROC_FUNCTION_ARGS, MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
     MAX_ROC_TYPE_ENUM_VARIANTS, MAX_ROC_TYPE_STRUCT_FIELDS, RocImplAttributeArgs,
     RocTypeAttributeArgs, RocTypeCategory,
 };
@@ -76,24 +76,22 @@ pub(super) fn apply_roc_impl_attribute(
 
     let for_type = &block.self_ty;
 
-    let mut descriptor_submits = Vec::with_capacity(block.items.len());
+    let mut method_submits = Vec::with_capacity(block.items.len());
     for item in &block.items {
         if let syn::ImplItem::Fn(func) = item {
-            if returns_self(&func.sig.output) {
-                let sequence_number = descriptor_submits.len();
+            let sequence_number = method_submits.len();
 
-                let Some(roc_body) = extract_roc_body(func) else {
-                    continue;
-                };
+            let Some(roc_body) = extract_roc_body(func) else {
+                continue;
+            };
 
-                descriptor_submits.push(generate_roc_constructor_descriptor_submit(
-                    sequence_number,
-                    for_type,
-                    func,
-                    crate_root,
-                    roc_body,
-                )?);
-            }
+            method_submits.push(generate_roc_method_submit(
+                sequence_number,
+                for_type,
+                func,
+                crate_root,
+                roc_body,
+            )?);
         }
     }
 
@@ -105,7 +103,7 @@ pub(super) fn apply_roc_impl_attribute(
 
     Ok(quote! {
         #block
-        #(#descriptor_submits)*
+        #(#method_submits)*
         #dependencies_submit
     })
 }
@@ -122,13 +120,6 @@ pub(super) fn apply_roc_body_attribute(
         })
     ) {
         return Err(syn::Error::new_spanned(body, "expected a string literal"));
-    }
-
-    if !returns_self(&func.sig.output) {
-        return Err(syn::Error::new_spanned(
-            func,
-            "the `roc_body` attribute only supports associated functions returning `Self`",
-        ));
     }
 
     Ok(quote! {
@@ -281,7 +272,7 @@ fn generate_roc_type_submit(
                 id: <#rust_type_name as #crate_root::meta::Roc>::ROC_TYPE_ID,
                 package_name: #package_name,
                 module_name: #module_name,
-                type_name: #type_name,
+                name: #type_name,
                 function_postfix: #function_postfix,
                 serialized_size: <#rust_type_name as #crate_root::meta::Roc>::SERIALIZED_SIZE,
                 flags: #flags,
@@ -292,38 +283,26 @@ fn generate_roc_type_submit(
     })
 }
 
-fn returns_self(return_type: &syn::ReturnType) -> bool {
-    match return_type {
-        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
-            syn::Type::Path(type_path) => {
-                type_path.qself.is_none()
-                    && type_path.path.segments.len() == 1
-                    && type_path.path.segments[0].ident == "Self"
-            }
-            _ => false,
-        },
-        syn::ReturnType::Default => false,
-    }
-}
-
-fn generate_roc_constructor_descriptor_submit(
+fn generate_roc_method_submit(
     sequence_number: usize,
     for_type: &syn::Type,
     func: &syn::ImplItemFn,
     crate_root: &TokenStream,
     roc_body: String,
 ) -> syn::Result<TokenStream> {
-    let function_name = func.sig.ident.to_string();
-    let arguments = generate_function_arguments::<MAX_ROC_CONSTRUCTOR_ARGS>(&func.sig, crate_root)?;
+    let name = func.sig.ident.to_string();
+    let arguments = generate_function_arguments::<MAX_ROC_FUNCTION_ARGS>(&func.sig, crate_root)?;
+    let return_type = generate_method_return_type(&func.sig.output, crate_root)?;
     let docstring = extract_and_process_docstring(&func.attrs);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
-            #crate_root::meta::RocConstructorDescriptor {
+            #crate_root::meta::RocMethod {
                 sequence_number: #sequence_number,
                 for_type_id: <#for_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
-                function_name: #function_name,
+                name: #name,
                 arguments: #arguments,
+                return_type: #return_type,
                 roc_body: #roc_body,
                 docstring: #docstring,
             }
@@ -736,26 +715,54 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
     let args = sig
         .inputs
         .iter()
-        .map(|input| {
-            let syn::FnArg::Typed(arg) = input else {
-                panic!("Found `self` argument in supposedly associated method or function");
-            };
-            let ident_str = match arg.pat.as_ref() {
-                syn::Pat::Ident(ident) => ident.ident.to_string(),
-                pat => {
+        .map(|input| match input {
+            syn::FnArg::Receiver(syn::Receiver {
+                reference,
+                mutability,
+                colon_token,
+                ..
+            }) => {
+                if colon_token.is_some() {
                     return Err(syn::Error::new_spanned(
-                        pat,
-                        "the `roc` attribute does not support this argument pattern",
+                        colon_token,
+                        "the `roc` attribute does not support receivers with explicit types",
                     ));
                 }
-            };
-            let ty = generate_function_argument_type(arg.ty.clone(), crate_root);
-            Ok(quote! {
-                Some(#crate_root::meta::RocFunctionArgument {
-                    ident: #ident_str,
-                    ty: #ty,
-                }),
-            })
+                if mutability.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        mutability,
+                        "the `roc` attribute does not support mutable methods",
+                    ));
+                }
+                let receiver = if reference.is_some() {
+                    quote! { #crate_root::meta::RocMethodReceiver::RefSelf }
+                } else {
+                    quote! { #crate_root::meta::RocMethodReceiver::OwnedSelf }
+                };
+                Ok(quote! {
+                    Some(#crate_root::meta::RocFunctionArgument::Receiver(#receiver)),
+                })
+            }
+            syn::FnArg::Typed(arg) => {
+                let ident_str = match arg.pat.as_ref() {
+                    syn::Pat::Ident(ident) => ident.ident.to_string(),
+                    pat => {
+                        return Err(syn::Error::new_spanned(
+                            pat,
+                            "the `roc` attribute does not support this argument pattern",
+                        ));
+                    }
+                };
+                let ty = generate_function_signature_type(arg.ty.clone(), crate_root)?;
+                Ok(quote! {
+                    Some(#crate_root::meta::RocFunctionArgument::Typed(
+                        #crate_root::meta::TypedRocFunctionArgument {
+                            ident: #ident_str,
+                            ty: #ty,
+                        }
+                    )),
+                })
+            }
         })
         .chain(iter::repeat_n(
             Ok(quote! {None,}),
@@ -768,34 +775,72 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
     })
 }
 
-fn generate_function_argument_type(
+fn generate_method_return_type(
+    return_type: &syn::ReturnType,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    match return_type {
+        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
+            syn::Type::Path(type_path)
+                if type_path.qself.is_none()
+                    && type_path.path.segments.len() == 1
+                    && type_path.path.segments[0].ident == "Self" =>
+            {
+                Ok(quote! {
+                    #crate_root::meta::RocMethodReturnType::SelfType
+                })
+            }
+            _ => {
+                let ty = generate_function_signature_type(ty.clone(), crate_root)?;
+                Ok(quote! {
+                    #crate_root::meta::RocMethodReturnType::Specific(#ty)
+                })
+            }
+        },
+        syn::ReturnType::Default => Err(syn::Error::new_spanned(
+            return_type,
+            "the `roc` attribute does not support functions returning nothing",
+        )),
+    }
+}
+
+fn generate_function_signature_type(
     mut arg_ty: Box<syn::Type>,
     crate_root: &TokenStream,
-) -> TokenStream {
-    arg_ty = unwrap_references(arg_ty);
+) -> syn::Result<TokenStream> {
+    arg_ty = unwrap_function_signature_references(arg_ty)?;
     match arg_ty.as_ref() {
         syn::Type::Array(syn::TypeArray { elem, .. })
         | syn::Type::Slice(syn::TypeSlice { elem, .. }) => {
-            let elem_ty = unwrap_references(elem.clone());
+            let elem_ty = unwrap_function_signature_references(elem.clone())?;
             let ty = generate_maybe_unregistered_type(&elem_ty, crate_root);
-            quote! {
-                #crate_root::meta::RocFunctionArgumentType::List(#ty)
-            }
+            Ok(quote! {
+                #crate_root::meta::RocFunctionSignatureType::List(#ty)
+            })
         }
         arg_ty => {
             let ty = generate_maybe_unregistered_type(arg_ty, crate_root);
-            quote! {
-                #crate_root::meta::RocFunctionArgumentType::Single(#ty)
-            }
+            Ok(quote! {
+                #crate_root::meta::RocFunctionSignatureType::Single(#ty)
+            })
         }
     }
 }
 
-fn unwrap_references(mut ty: Box<syn::Type>) -> Box<syn::Type> {
-    while let syn::Type::Reference(syn::TypeReference { elem, .. }) = *ty {
+fn unwrap_function_signature_references(mut ty: Box<syn::Type>) -> syn::Result<Box<syn::Type>> {
+    while let syn::Type::Reference(syn::TypeReference {
+        elem, mutability, ..
+    }) = *ty
+    {
+        if mutability.is_some() {
+            return Err(syn::Error::new_spanned(
+                elem,
+                "the `roc` attribute does not support function signatures with mutable references",
+            ));
+        }
         ty = elem;
     }
-    ty
+    Ok(ty)
 }
 
 fn generate_maybe_unregistered_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {

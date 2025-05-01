@@ -16,7 +16,7 @@ macro_rules! impl_roc_for_existing_primitive {
                 id: <$t as $crate::meta::Roc>::ROC_TYPE_ID,
                 package_name: stringify!($package),
                 module_name: stringify!($module),
-                type_name: stringify!($name),
+                name: stringify!($name),
                 function_postfix: $postfix,
                 serialized_size: <$t as $crate::meta::Roc>::SERIALIZED_SIZE,
                 flags: $crate::meta::RocTypeFlags::IS_POD,
