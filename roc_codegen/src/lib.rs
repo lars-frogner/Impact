@@ -42,6 +42,4 @@ pub mod generate;
 ///   `primitive` types are POD.
 pub use roc_codegen_macros::roc;
 
-pub use roc_codegen_macros::roc_body;
-
 pub use meta::RocTypeID;

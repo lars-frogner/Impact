@@ -3,7 +3,7 @@
 use crate::inner::{
     MAX_ROC_DEPENDENCIES, MAX_ROC_FUNCTION_ARGS, MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
     MAX_ROC_TYPE_ENUM_VARIANTS, MAX_ROC_TYPE_STRUCT_FIELDS, RocImplAttributeArgs,
-    RocTypeAttributeArgs, RocTypeCategory,
+    RocMethodAttributeArgs, RocTypeAttributeArgs, RocTypeCategory,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
@@ -81,16 +81,19 @@ pub(super) fn apply_roc_impl_attribute(
         if let syn::ImplItem::Fn(func) = item {
             let sequence_number = method_submits.len();
 
-            let Some(roc_body) = extract_roc_body(func) else {
+            let Some(RocMethodAttributeArgs { body, method_name }) =
+                extract_roc_method_attribute_args(func)
+            else {
                 continue;
             };
 
             method_submits.push(generate_roc_method_submit(
                 sequence_number,
                 for_type,
+                method_name,
                 func,
                 crate_root,
-                roc_body,
+                body,
             )?);
         }
     }
@@ -108,20 +111,14 @@ pub(super) fn apply_roc_impl_attribute(
     })
 }
 
-pub(super) fn apply_roc_body_attribute(
-    body: syn::Expr,
+pub(super) fn apply_roc_method_attribute(
+    _args: RocMethodAttributeArgs,
     func: syn::ImplItemFn,
 ) -> syn::Result<TokenStream> {
-    if !matches!(
-        body,
-        syn::Expr::Lit(syn::ExprLit {
-            lit: syn::Lit::Str(_),
-            ..
-        })
-    ) {
-        return Err(syn::Error::new_spanned(body, "expected a string literal"));
-    }
-
+    // When the `roc` macro is applied to a method, it doesn't actually do
+    // anything other than validating the macro arguments. It is the `roc`
+    // macro applied to the surrounding `impl` block that actually uses the
+    // arguments for code generation.
     Ok(quote! {
         #func
     })
@@ -286,11 +283,12 @@ fn generate_roc_type_submit(
 fn generate_roc_method_submit(
     sequence_number: usize,
     for_type: &syn::Type,
+    specified_name: Option<String>,
     func: &syn::ImplItemFn,
     crate_root: &TokenStream,
     roc_body: String,
 ) -> syn::Result<TokenStream> {
-    let name = func.sig.ident.to_string();
+    let name = specified_name.unwrap_or_else(|| func.sig.ident.to_string());
     let arguments = generate_function_arguments::<MAX_ROC_FUNCTION_ARGS>(&func.sig, crate_root)?;
     let return_type = generate_method_return_type(&func.sig.output, crate_root)?;
     let docstring = extract_and_process_docstring(&func.attrs);
@@ -922,31 +920,17 @@ fn process_docstrings(lines: impl IntoIterator<Item = String>) -> String {
     docstring
 }
 
-fn extract_roc_body(func: &syn::ImplItemFn) -> Option<String> {
+fn extract_roc_method_attribute_args(func: &syn::ImplItemFn) -> Option<RocMethodAttributeArgs> {
     for attribute in &func.attrs {
         if let syn::Meta::List(syn::MetaList { path, tokens, .. }) = &attribute.meta {
             let Some(last) = path.segments.last() else {
                 continue;
             };
-            if last.ident != "roc_body" {
+            if last.ident != "roc" {
                 continue;
             }
-            return extract_roc_body_string(tokens.clone()).ok();
+            return syn::parse2(tokens.clone()).ok();
         }
     }
     None
-}
-
-fn extract_roc_body_string(attr: TokenStream) -> syn::Result<String> {
-    let expr: syn::Expr = syn::parse2(attr)?;
-
-    if let syn::Expr::Lit(syn::ExprLit {
-        lit: syn::Lit::Str(lit_str),
-        ..
-    }) = expr
-    {
-        Ok(lit_str.value())
-    } else {
-        Err(syn::Error::new_spanned(expr, "expected a string literal"))
-    }
 }
