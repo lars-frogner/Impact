@@ -44,14 +44,6 @@ pub fn roc(
     inner::roc(attr, item)
 }
 
-#[proc_macro_attribute]
-pub fn roc_body(
-    attr: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    inner::roc_body(attr, item)
-}
-
 #[cfg(feature = "enabled")]
 mod inner {
     use super::roc_attr;
@@ -79,10 +71,12 @@ mod inner {
                     roc_attr::apply_roc_impl_attribute(Some(args), block, &crate_root_tokens())
                 })
             }
+        } else if let Ok(func) = syn::parse::<syn::ImplItemFn>(item.clone()) {
+            syn::parse::<RocMethodAttributeArgs>(attr).and_then(|args| roc_attr::apply_roc_method_attribute(args, func))
         } else {
             Err(syn::Error::new_spanned(
                 TokenStream2::from(item.clone()),
-                "the `roc` attribute can only be applied to type definitions and impl blocks",
+                "the `roc` attribute can only be applied to type definitions, impl blocks and methods",
             ))
         }
         .unwrap_or_else(|err| {
@@ -94,23 +88,6 @@ mod inner {
             }
         })
         .into()
-    }
-
-    pub fn roc_body(attr: TokenStream, item: TokenStream) -> TokenStream {
-        syn::parse::<syn::ImplItemFn>(item.clone())
-            .and_then(|func| {
-                let body = syn::parse(attr)?;
-                roc_attr::apply_roc_body_attribute(body, func)
-            })
-            .unwrap_or_else(|err| {
-                let item = TokenStream2::from(item);
-                let error = err.to_compile_error();
-                quote! {
-                    #item
-                    #error
-                }
-            })
-            .into()
     }
 
     // These need to match the corresponding constants in `roc_codegen::meta`.
@@ -142,6 +119,12 @@ mod inner {
     #[derive(Clone)]
     pub struct RocImplAttributeArgs {
         pub dependency_types: Vec<syn::Type>,
+    }
+
+    #[derive(Clone)]
+    pub struct RocMethodAttributeArgs {
+        pub body: String,
+        pub method_name: Option<String>,
     }
 
     struct KeyStringValueArg {
@@ -308,6 +291,57 @@ mod inner {
         }
     }
 
+    impl syn::parse::Parse for RocMethodAttributeArgs {
+        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+            let args =
+                syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+                    input,
+                )?;
+
+            let mut body = None;
+            let mut method_name = None;
+
+            for arg in &args {
+                match arg.key.to_string().as_str() {
+                    "body" => {
+                        if body.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `body`",
+                            ));
+                        }
+                    }
+                    "name" => {
+                        if method_name.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `name`",
+                            ));
+                        }
+                    }
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            arg.key.clone(),
+                            format!(
+                                "invalid argument `{}`, must be one of `body`, `name`",
+                                other
+                            ),
+                        ));
+                    }
+                }
+            }
+
+            let Some(body) = body else {
+                let span = args
+                    .first()
+                    .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
+                return Err(syn::Error::new(span, "missing required argument `body`"));
+            };
+
+            Ok(Self { body, method_name })
+        }
+    }
+
     impl syn::parse::Parse for KeyStringValueArg {
         fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
             Ok(Self {
@@ -334,13 +368,6 @@ mod inner {
 #[cfg(not(feature = "enabled"))]
 mod inner {
     pub fn roc(
-        _attr: proc_macro::TokenStream,
-        item: proc_macro::TokenStream,
-    ) -> proc_macro::TokenStream {
-        item
-    }
-
-    pub fn roc_body(
         _attr: proc_macro::TokenStream,
         item: proc_macro::TokenStream,
     ) -> proc_macro::TokenStream {
