@@ -749,11 +749,11 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
                     ));
                 }
             };
-            let arg_type = &arg.ty;
+            let ty = generate_function_argument_type(arg.ty.clone(), crate_root);
             Ok(quote! {
                 Some(#crate_root::meta::RocFunctionArgument {
                     ident: #ident_str,
-                    type_id: <#arg_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
+                    ty: #ty,
                 }),
             })
         })
@@ -766,6 +766,64 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
     Ok(quote! {
         #crate_root::meta::RocFunctionArguments(#crate_root::meta::StaticList([#(#args)*]))
     })
+}
+
+fn generate_function_argument_type(
+    mut arg_ty: Box<syn::Type>,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    arg_ty = unwrap_references(arg_ty);
+    match arg_ty.as_ref() {
+        syn::Type::Array(syn::TypeArray { elem, .. })
+        | syn::Type::Slice(syn::TypeSlice { elem, .. }) => {
+            let elem_ty = unwrap_references(elem.clone());
+            let ty = generate_maybe_unregistered_type(&elem_ty, crate_root);
+            quote! {
+                #crate_root::meta::RocFunctionArgumentType::List(#ty)
+            }
+        }
+        arg_ty => {
+            let ty = generate_maybe_unregistered_type(arg_ty, crate_root);
+            quote! {
+                #crate_root::meta::RocFunctionArgumentType::Single(#ty)
+            }
+        }
+    }
+}
+
+fn unwrap_references(mut ty: Box<syn::Type>) -> Box<syn::Type> {
+    while let syn::Type::Reference(syn::TypeReference { elem, .. }) = *ty {
+        ty = elem;
+    }
+    ty
+}
+
+fn generate_maybe_unregistered_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
+    if type_is_string(ty) {
+        quote! {
+            #crate_root::meta::MaybeUnregisteredRocType::String
+        }
+    } else {
+        quote! {
+            #crate_root::meta::MaybeUnregisteredRocType::Registered(
+                <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID
+            )
+        }
+    }
+}
+
+fn type_is_string(ty: &syn::Type) -> bool {
+    matches!(
+        ty,
+        syn::Type::Path(syn::TypePath { path, .. })
+            if path.segments.last().is_some_and(|segment| {
+                matches!(segment.arguments, syn::PathArguments::None)
+                    && (
+                        segment.ident == "String"
+                        || (path.segments.len() == 1 && segment.ident == "str")
+                    )
+            })
+    )
 }
 
 fn generate_type_id_list(
