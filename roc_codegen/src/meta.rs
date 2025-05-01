@@ -22,9 +22,9 @@ pub trait RocPod: Roc + bytemuck::Pod {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RocTypeID(u64);
 
-/// Metadata for types that can be converted to Roc.
+/// A type that can be represented in Roc.
 #[derive(Clone, Debug)]
-pub struct RocTypeDescriptor {
+pub struct RocType {
     /// A unique ID for the type.
     pub id: RocTypeID,
     /// The name of the Roc package where the type will be defined.
@@ -72,13 +72,13 @@ pub struct RocDependencies {
 }
 
 // Whenever a type is annotated with the `roc` attribute macro, the macro
-// infers a [`RocTypeDescriptor`] and registers it using [`inventory::submit!`]
+// infers a [`RocType`] and registers it using [`inventory::submit!`]
 // (provided that the `enabled` feature is active). This
-// [`inventory::collect!`] allows all type descriptors registered in any crate
+// [`inventory::collect!`] allows all type types registered in any crate
 // linked with this one to be gathered using [`inventory::iter`] when we are to
 // [`generate`](crate::generate) the Roc code.
 #[cfg(feature = "enabled")]
-inventory::collect!(RocTypeDescriptor);
+inventory::collect!(RocType);
 
 #[cfg(feature = "enabled")]
 inventory::collect!(RocConstructorDescriptor);
@@ -100,7 +100,7 @@ bitflags! {
 
 // These need to match the corresponding constants in `roc_codegen_macros`.
 // We can't use dynamically sized collections for this information, since the
-// [`RocTypeDescriptor`]s must allow us to define them statically.
+// [`RocType`]s must allow us to define them statically.
 pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
 pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
 pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
@@ -252,7 +252,7 @@ impl fmt::Display for RocTypeID {
     }
 }
 
-impl RocTypeDescriptor {
+impl RocType {
     /// Returns the fully qualified Roc import statement required for using
     /// this type in Roc.
     pub fn import_module(
