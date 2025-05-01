@@ -4,7 +4,7 @@
 mod roc;
 
 use crate::meta::{
-    RocConstructorDescriptor, RocDependencies, RocType, RocTypeComposition, RocTypeFlags, RocTypeID,
+    RocDependencies, RocMethod, RocType, RocTypeComposition, RocTypeFlags, RocTypeID,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
@@ -137,12 +137,11 @@ pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>
 pub fn list_constructors() -> Result<()> {
     let type_map = gather_type_map(inventory::iter::<RocType>(), &HashSet::new())?;
 
-    let constructor_descriptors =
-        gather_constructor_descriptors(inventory::iter::<RocConstructorDescriptor>());
+    let method_map = gather_method_map(inventory::iter::<RocMethod>());
 
     let mut type_list: Vec<_> = type_map
         .iter()
-        .map(|(type_id, desc)| (type_id, desc.type_name))
+        .map(|(type_id, desc)| (type_id, desc.name))
         .collect();
     type_list.sort_by_key(|(_, name)| *name);
 
@@ -150,13 +149,13 @@ pub fn list_constructors() -> Result<()> {
         let Some(ty) = type_map.get(type_id) else {
             continue;
         };
-        let Some(descriptors) = constructor_descriptors.get(type_id) else {
+        let Some(methods) = method_map.get(type_id) else {
             continue;
         };
         println!("****** {type_name} ******");
-        for desc in descriptors {
+        for method in methods {
             let mut text = String::new();
-            roc::write_constructor(&mut text, &type_map, ty, desc)?;
+            roc::write_method(&mut text, &type_map, ty, method)?;
             println!("{text}");
         }
     }
@@ -174,16 +173,16 @@ pub fn generate_roc(
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
     let type_iter = inventory::iter::<RocType>();
-    let constructor_descriptors = inventory::iter::<RocConstructorDescriptor>();
-    let explicit_dependencies = inventory::iter::<RocDependencies>();
+    let method_iter = inventory::iter::<RocMethod>();
+    let dependencies_iter = inventory::iter::<RocDependencies>();
 
     let target_dir = target_dir.as_ref();
 
     let modules = generate_roc_modules(
         roc_options,
         type_iter,
-        constructor_descriptors,
-        explicit_dependencies,
+        method_iter,
+        dependencies_iter,
         component_type_ids,
     )?;
 
@@ -223,24 +222,24 @@ pub fn generate_roc(
 fn generate_roc_modules<'a>(
     options: &RocGenerateOptions,
     type_iter: impl IntoIterator<Item = &'a RocType>,
-    constructor_descriptors: impl IntoIterator<Item = &'a RocConstructorDescriptor>,
-    explicit_dependencies: impl IntoIterator<Item = &'a RocDependencies>,
+    method_iter: impl IntoIterator<Item = &'a RocMethod>,
+    dependencies_iter: impl IntoIterator<Item = &'a RocDependencies>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<Module>> {
     let type_map = gather_type_map(type_iter, component_type_ids)?;
 
-    let constructor_descriptors = gather_constructor_descriptors(constructor_descriptors);
+    let method_map = gather_method_map(method_iter);
 
-    let explicit_dependencies_map = gather_explicit_dependencies(explicit_dependencies);
+    let dependencies_map = gather_dependencies_map(dependencies_iter);
 
     type_map
         .values()
         .filter_map(|ty| {
-            let constructor_descriptors = constructor_descriptors
+            let methods = method_map
                 .get(&ty.id)
                 .map_or_else(Cow::default, Cow::Borrowed);
 
-            let explicit_dependencies = explicit_dependencies_map
+            let dependencies = dependencies_map
                 .get(&ty.id)
                 .map_or_else(Cow::default, Cow::Borrowed);
 
@@ -248,11 +247,11 @@ fn generate_roc_modules<'a>(
                 options,
                 &type_map,
                 ty,
-                constructor_descriptors.as_ref(),
-                explicit_dependencies.as_ref(),
+                methods.as_ref(),
+                dependencies.as_ref(),
             ) {
                 Ok(Some(content)) => Some(Ok(Module {
-                    name: ty.type_name,
+                    name: ty.name,
                     content,
                 })),
                 Ok(None) => None,
@@ -300,31 +299,31 @@ fn get_field_type<'a>(
     })
 }
 
-fn gather_constructor_descriptors<'a>(
-    descriptor_iter: impl IntoIterator<Item = &'a RocConstructorDescriptor>,
-) -> HashMap<RocTypeID, Vec<RocConstructorDescriptor>> {
-    let mut descriptors = HashMap::new();
-    for descriptor in descriptor_iter {
-        descriptors
-            .entry(descriptor.for_type_id)
+fn gather_method_map<'a>(
+    method_iter: impl IntoIterator<Item = &'a RocMethod>,
+) -> HashMap<RocTypeID, Vec<RocMethod>> {
+    let mut method_map = HashMap::new();
+    for method in method_iter {
+        method_map
+            .entry(method.for_type_id)
             .or_insert_with(Vec::new)
-            .push(descriptor.clone());
+            .push(method.clone());
     }
-    for constructor_descriptors in descriptors.values_mut() {
-        constructor_descriptors.sort_by_key(|desc| desc.sequence_number);
+    for methods in method_map.values_mut() {
+        methods.sort_by_key(|desc| desc.sequence_number);
     }
-    descriptors
+    method_map
 }
 
-fn gather_explicit_dependencies<'a>(
+fn gather_dependencies_map<'a>(
     dependencies_iter: impl IntoIterator<Item = &'a RocDependencies>,
 ) -> HashMap<RocTypeID, Vec<RocDependencies>> {
-    let mut dependencies = HashMap::new();
-    for deps in dependencies_iter {
-        dependencies
-            .entry(deps.for_type_id)
+    let mut dependencies_map = HashMap::new();
+    for dependencies in dependencies_iter {
+        dependencies_map
+            .entry(dependencies.for_type_id)
             .or_insert_with(Vec::new)
-            .push(deps.clone());
+            .push(dependencies.clone());
     }
-    dependencies
+    dependencies_map
 }

@@ -49,13 +49,13 @@ const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
 const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
     MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
 
-const MAX_ROC_CONSTRUCTOR_ARGS: usize = 16;
+const MAX_ROC_FUNCTION_ARGS: usize = 16;
 
 const MAX_ROC_DEPENDENCIES: usize = 16;
 
 /// Attribute macro for annotating Rust types that should be available in Roc.
 /// The macro will infer and register a
-/// [`RocTypeDescriptor`](roc_codegen::meta::RocTypeDescriptor) for the target
+/// [`RocType`](roc_codegen::meta::RocType) for the target
 /// type, which is used to [`generate`](roc_codegen::generate) the associated
 /// Roc code.
 ///

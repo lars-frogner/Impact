@@ -1,11 +1,12 @@
-//! Generation of Roc code for working with types annotated with the
-//! [`roc`](crate::roc) attribute.
+//! Generation of Roc code for working with types and methods annotated with
+//! the [`roc`](crate::roc) attribute.
 
 use super::{RocGenerateOptions, get_field_type};
 use crate::meta::{
-    MaybeUnregisteredRocType, NamedRocTypeField, RocConstructorDescriptor, RocDependencies,
-    RocFieldType, RocFunctionArgument, RocFunctionArgumentType, RocType, RocTypeComposition,
-    RocTypeFields, RocTypeFlags, RocTypeID, UnnamedRocTypeField,
+    MaybeUnregisteredRocType, NamedRocTypeField, RocDependencies, RocFieldType,
+    RocFunctionArgument, RocFunctionSignatureType, RocMethod, RocMethodReceiver,
+    RocMethodReturnType, RocType, RocTypeComposition, RocTypeFields, RocTypeFlags, RocTypeID,
+    UnnamedRocTypeField,
 };
 use anyhow::{Result, anyhow};
 use std::{
@@ -18,7 +19,7 @@ pub(super) fn generate_module(
     options: &RocGenerateOptions,
     type_map: &HashMap<RocTypeID, RocType>,
     ty: &RocType,
-    constructor_descriptors: &[RocConstructorDescriptor],
+    methods: &[RocMethod],
     explicit_dependencies: &[RocDependencies],
 ) -> Result<Option<String>> {
     if let RocTypeComposition::Primitive(_) = ty.composition {
@@ -27,7 +28,7 @@ pub(super) fn generate_module(
 
     let mut module = String::new();
 
-    write_module_header(&mut module, constructor_descriptors, ty)?;
+    write_module_header(&mut module, methods, ty)?;
     module.push('\n');
 
     write_imports(options, &mut module, type_map, explicit_dependencies, ty)?;
@@ -36,7 +37,7 @@ pub(super) fn generate_module(
     write_type_declaration(&mut module, type_map, ty)?;
     module.push('\n');
 
-    write_constructors(&mut module, type_map, ty, constructor_descriptors)?;
+    write_methods(&mut module, type_map, ty, methods)?;
 
     write_component_functions(&mut module, ty)?;
 
@@ -51,27 +52,23 @@ pub(super) fn generate_module(
     Ok(Some(module))
 }
 
-fn write_module_header(
-    roc_code: &mut String,
-    constructor_descriptors: &[RocConstructorDescriptor],
-    ty: &RocType,
-) -> Result<()> {
+fn write_module_header(roc_code: &mut String, methods: &[RocMethod], ty: &RocType) -> Result<()> {
     write!(
         roc_code,
         "\
         module [\n    \
             {},\n\
         ",
-        ty.type_name,
+        ty.name,
     )?;
 
-    for descriptor in constructor_descriptors {
-        writeln!(roc_code, "    {},", descriptor.function_name)?;
+    for method in methods {
+        writeln!(roc_code, "    {},", method.name)?;
     }
 
     if ty.is_component() {
-        for descriptor in constructor_descriptors {
-            writeln!(roc_code, "    add_{},", descriptor.function_name)?;
+        for method in methods {
+            writeln!(roc_code, "    add_{},", method.name)?;
         }
 
         roc_code.push_str(
@@ -224,15 +221,15 @@ fn write_type_declaration(
         // We don't generate code for primitive types
         RocTypeComposition::Primitive(_) => Ok(()),
         RocTypeComposition::Struct { fields, .. } => {
-            write!(roc_code, "{} : ", ty.type_name)?;
+            write!(roc_code, "{} : ", ty.name)?;
             write_fields_declaration(roc_code, type_map, fields, 0, false, &|| {
-                format!("struct type {}", ty.type_name)
+                format!("struct type {}", ty.name)
             })?;
             roc_code.push('\n');
             Ok(())
         }
         RocTypeComposition::Enum(variants) => {
-            write!(roc_code, "{} : [", ty.type_name)?;
+            write!(roc_code, "{} : [", ty.name)?;
             let mut variant_count = 0;
             for variant in &variants.0 {
                 if !variant.docstring.is_empty() {
@@ -249,7 +246,7 @@ fn write_type_declaration(
                         &variant.fields,
                         2, // 1 looks more right, but 2 is consistent with Roc autoformatting
                         true,
-                        &|| format!("variant {} of enum {}", variant.ident, ty.type_name),
+                        &|| format!("variant {} of enum {}", variant.ident, ty.name),
                     )?;
                 }
                 roc_code.push(',');
@@ -343,7 +340,7 @@ fn write_write_bytes_function(
         write_bytes : List U8, {name} -> List U8\n\
         write_bytes = |bytes, {underscore}value|\n\
         ",
-        name = ty.type_name,
+        name = ty.name,
         underscore = if ty.serialized_size == 0 { "_" } else { "" }
     )?;
 
@@ -367,7 +364,7 @@ fn write_write_bytes_function(
                 |def| {
                     def.push_str("value");
                 },
-                &|| format!("struct type {}", ty.type_name),
+                &|| format!("struct type {}", ty.name),
             )?;
         }
         RocTypeComposition::Enum(variants) => {
@@ -430,7 +427,7 @@ fn write_write_bytes_function(
                     |def| {
                         def.push_str("val");
                     },
-                    &|| format!("variant {} of enum {}", variant.ident, ty.type_name),
+                    &|| format!("variant {} of enum {}", variant.ident, ty.name),
                 )?;
             }
         }
@@ -523,7 +520,7 @@ fn write_from_bytes_function(
         from_bytes : List U8 -> Result {name} Builtin.DecodeErr\n\
         from_bytes = |{underscore}bytes|\n\
         ",
-        name = ty.type_name,
+        name = ty.name,
         underscore = if ty.serialized_size == 0 { "_" } else { "" }
     )?;
 
@@ -537,7 +534,7 @@ fn write_from_bytes_function(
         RocTypeComposition::Struct { fields, .. } => {
             roc_code.push_str("    Ok(\n        ");
             write_calls_to_from_bytes(roc_code, type_map, fields, 2, "bytes", &|| {
-                format!("struct type {}", ty.type_name)
+                format!("struct type {}", ty.name)
             })?;
             writeln!(roc_code, "    )")?;
         }
@@ -571,7 +568,7 @@ fn write_from_bytes_function(
                             &variant.fields,
                             4,
                             "data_bytes",
-                            &|| format!("variant {} of enum {}", variant.ident, ty.type_name),
+                            &|| format!("variant {} of enum {}", variant.ident, ty.name),
                         )?;
                         roc_code.push_str(
                             "            \
@@ -598,7 +595,7 @@ fn write_from_bytes_function(
                             &variant.fields,
                             4,
                             "data_bytes",
-                            &|| format!("variant {} of enum {}", variant.ident, ty.type_name),
+                            &|| format!("variant {} of enum {}", variant.ident, ty.name),
                         )?;
                         roc_code.push_str(
                             "            \
@@ -742,79 +739,84 @@ fn write_calls_to_from_bytes<const N: usize>(
     Ok(())
 }
 
-fn write_constructors(
+fn write_methods(
     roc_code: &mut String,
     type_map: &HashMap<RocTypeID, RocType>,
     ty: &RocType,
-    constructor_descriptors: &[RocConstructorDescriptor],
+    methods: &[RocMethod],
 ) -> Result<()> {
-    for constructor_descriptor in constructor_descriptors {
-        write_constructor(roc_code, type_map, ty, constructor_descriptor)?;
+    for method in methods {
+        write_method(roc_code, type_map, ty, method)?;
         roc_code.push('\n');
     }
     Ok(())
 }
 
-pub(super) fn write_constructor(
+pub(super) fn write_method(
     roc_code: &mut String,
     type_map: &HashMap<RocTypeID, RocType>,
     ty: &RocType,
-    constructor_descriptor: &RocConstructorDescriptor,
+    method: &RocMethod,
 ) -> Result<()> {
-    let docstring = if constructor_descriptor.docstring.is_empty() {
+    let docstring = if method.docstring.is_empty() {
         ""
     } else {
-        constructor_descriptor.docstring
+        method.docstring
     };
 
-    let arg_types = constructor_descriptor
-        .arguments
-        .0
-        .iter()
-        .map(|arg| {
-            resolved_type_name_for_function_argument(
-                type_map,
-                arg,
-                constructor_descriptor.function_name,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?
-        .join(", ");
+    let mut arg_name_list = Vec::with_capacity(method.arguments.0.len());
+    let mut arg_type_list = Vec::with_capacity(arg_name_list.capacity());
 
-    let non_empty_arg_types = if arg_types.is_empty() {
-        "{}"
+    for arg in &method.arguments.0 {
+        match arg {
+            RocFunctionArgument::Receiver(
+                RocMethodReceiver::RefSelf | RocMethodReceiver::OwnedSelf,
+            ) => {
+                arg_name_list.push("self");
+                arg_type_list.push(Cow::Borrowed(ty.name));
+            }
+            RocFunctionArgument::Typed(arg) => {
+                arg_name_list.push(arg.ident);
+                arg_type_list.push(resolved_type_name_for_function_signature_type(
+                    type_map,
+                    &arg.ty,
+                    &|| format!("argument {} to function {}", arg.ident, method.name),
+                )?);
+            }
+        }
+    }
+
+    let arg_names = arg_name_list.join(", ");
+    let arg_types = arg_type_list.join(", ");
+
+    let (non_empty_arg_names, non_empty_arg_types) = if arg_names.is_empty() {
+        ("{}", "{}")
     } else {
-        &arg_types
+        (arg_names.as_str(), arg_types.as_str())
     };
 
-    let arg_names = constructor_descriptor
-        .arguments
-        .0
-        .iter()
-        .map(|arg| arg.ident)
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let non_empty_arg_names = if arg_names.is_empty() {
-        "{}"
-    } else {
-        &arg_names
+    let return_type = match method.return_type {
+        RocMethodReturnType::SelfType => Cow::Borrowed(ty.name),
+        RocMethodReturnType::Specific(ref return_type) => {
+            resolved_type_name_for_function_signature_type(type_map, return_type, &|| {
+                format!("return type of function {}", method.name)
+            })?
+        }
     };
 
     writeln!(
         roc_code,
         "\
         {docstring}\
-        {name} : {non_empty_arg_types} -> {type_name}\n\
+        {name} : {non_empty_arg_types} -> {return_type}\n\
         {name} = |{non_empty_arg_names}|\n    \
             {body}\
         ",
-        name = constructor_descriptor.function_name,
-        type_name = ty.type_name,
-        body = constructor_descriptor.roc_body.trim(),
+        name = method.name,
+        body = method.roc_body.trim(),
     )?;
 
-    if ty.is_component() {
+    if ty.is_component() && matches!(method.return_type, RocMethodReturnType::SelfType) {
         writeln!(
             roc_code,
             "\n\
@@ -833,7 +835,7 @@ pub(super) fn write_constructor(
             } else {
                 format!(", {arg_names}")
             },
-            name = constructor_descriptor.function_name,
+            name = method.name,
         )?;
     }
 
@@ -852,7 +854,7 @@ fn write_component_functions(roc_code: &mut String, ty: &RocType) -> Result<()> 
             make sure to derive the `RocPod` trait rather \
             than the `Roc` trait for component types\
             ",
-            ty.type_name,
+            ty.name,
         )
     })?;
 
@@ -908,7 +910,7 @@ fn write_component_functions(roc_code: &mut String, ty: &RocType) -> Result<()> 
         ",
         type_id = ty.id.as_u64(),
         size = ty.serialized_size,
-        name = ty.type_name,
+        name = ty.name,
     )?;
 
     Ok(())
@@ -957,38 +959,31 @@ fn resolved_type_name_for_field(
     })
 }
 
-fn resolved_type_name_for_function_argument(
+fn resolved_type_name_for_function_signature_type(
     type_map: &HashMap<RocTypeID, RocType>,
-    arg: &RocFunctionArgument,
-    function_name: &str,
+    ty: &RocFunctionSignatureType,
+    parent_name: &impl Fn() -> String,
 ) -> Result<Cow<'static, str>> {
-    match &arg.ty {
-        RocFunctionArgumentType::Single(MaybeUnregisteredRocType::Registered(type_id)) => type_map
+    match ty {
+        RocFunctionSignatureType::Single(MaybeUnregisteredRocType::Registered(type_id)) => type_map
             .get(type_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "The type for argument {} to function {} has not been registered",
-                    arg.ident,
-                    function_name
-                )
-            })
+            .ok_or_else(|| anyhow!("The type for {} has not been registered", parent_name()))
             .map(|desc| desc.resolved_type_name(false)),
-        RocFunctionArgumentType::List(MaybeUnregisteredRocType::Registered(elem_type_id)) => {
+        RocFunctionSignatureType::List(MaybeUnregisteredRocType::Registered(elem_type_id)) => {
             type_map
                 .get(elem_type_id)
                 .ok_or_else(|| {
                     anyhow!(
-                        "The element type for list argument {} to function {} has not been registered",
-                        arg.ident,
-                        function_name
+                        "The element type for list {} has not been registered",
+                        parent_name()
                     )
                 })
                 .map(|desc| Cow::Owned(format!("List {}", desc.resolved_type_name(true))))
         }
-        RocFunctionArgumentType::Single(MaybeUnregisteredRocType::String) => {
+        RocFunctionSignatureType::Single(MaybeUnregisteredRocType::String) => {
             Ok(Cow::Borrowed("Str"))
         }
-        RocFunctionArgumentType::List(MaybeUnregisteredRocType::String) => {
+        RocFunctionSignatureType::List(MaybeUnregisteredRocType::String) => {
             Ok(Cow::Borrowed("List Str"))
         }
     }
