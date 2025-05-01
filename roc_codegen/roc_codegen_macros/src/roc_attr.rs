@@ -1,6 +1,6 @@
 //! Attribute macro for Roc code generation.
 
-use crate::{
+use crate::inner::{
     MAX_ROC_DEPENDENCIES, MAX_ROC_FUNCTION_ARGS, MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
     MAX_ROC_TYPE_ENUM_VARIANTS, MAX_ROC_TYPE_STRUCT_FIELDS, RocImplAttributeArgs,
     RocTypeAttributeArgs, RocTypeCategory,
