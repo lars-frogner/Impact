@@ -207,7 +207,23 @@ pub struct RocFunctionArgument {
     /// The argument name.
     pub ident: &'static str,
     /// The argument type.
-    pub type_id: RocTypeID,
+    pub ty: RocFunctionArgumentType,
+}
+
+/// A function argument that is either a single concrete type or a list (array
+/// or slice) of such types.
+#[derive(Clone, Debug)]
+pub enum RocFunctionArgumentType {
+    Single(MaybeUnregisteredRocType),
+    List(MaybeUnregisteredRocType),
+}
+
+/// Identifier for a Roc type that has either been registered (in which case it
+/// has a `RocTypeID`), or is a special type that is handled explicitly.
+#[derive(Clone, Debug)]
+pub enum MaybeUnregisteredRocType {
+    String,
+    Registered(RocTypeID),
 }
 
 #[derive(Clone, Debug)]

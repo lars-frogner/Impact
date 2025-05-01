@@ -3,7 +3,8 @@
 
 use super::{RocGenerateOptions, field_type_descriptor};
 use crate::meta::{
-    NamedRocTypeField, RocConstructorDescriptor, RocDependencies, RocFieldType, RocTypeComposition,
+    MaybeUnregisteredRocType, NamedRocTypeField, RocConstructorDescriptor, RocDependencies,
+    RocFieldType, RocFunctionArgument, RocFunctionArgumentType, RocTypeComposition,
     RocTypeDescriptor, RocTypeFields, RocTypeFlags, RocTypeID, UnnamedRocTypeField,
 };
 use anyhow::{Result, anyhow};
@@ -809,16 +810,11 @@ pub(super) fn write_constructor(
         .0
         .iter()
         .map(|arg| {
-            type_descriptors
-                .get(&arg.type_id)
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Missing type descriptor for argument {} to constructor {}",
-                        arg.ident,
-                        constructor_descriptor.function_name
-                    )
-                })
-                .map(|desc| desc.resolved_type_name(false))
+            resolved_type_name_for_function_argument(
+                type_descriptors,
+                arg,
+                constructor_descriptor.function_name,
+            )
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -999,4 +995,43 @@ fn resolved_type_name_for_field(
             Cow::Owned(type_name)
         }
     })
+}
+
+fn resolved_type_name_for_function_argument(
+    type_descriptors: &HashMap<RocTypeID, RocTypeDescriptor>,
+    arg: &RocFunctionArgument,
+    function_name: &str,
+) -> Result<Cow<'static, str>> {
+    match &arg.ty {
+        RocFunctionArgumentType::Single(MaybeUnregisteredRocType::Registered(type_id)) => {
+            type_descriptors
+                .get(type_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Missing type descriptor for argument {} to function {}",
+                        arg.ident,
+                        function_name
+                    )
+                })
+                .map(|desc| desc.resolved_type_name(false))
+        }
+        RocFunctionArgumentType::List(MaybeUnregisteredRocType::Registered(elem_type_id)) => {
+            type_descriptors
+                .get(elem_type_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Missing type descriptor for element type of argument {} to function {}",
+                        arg.ident,
+                        function_name
+                    )
+                })
+                .map(|desc| Cow::Owned(format!("List {}", desc.resolved_type_name(true))))
+        }
+        RocFunctionArgumentType::Single(MaybeUnregisteredRocType::String) => {
+            Ok(Cow::Borrowed("Str"))
+        }
+        RocFunctionArgumentType::List(MaybeUnregisteredRocType::String) => {
+            Ok(Cow::Borrowed("List Str"))
+        }
+    }
 }
