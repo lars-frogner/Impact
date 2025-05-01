@@ -68,7 +68,9 @@ fn write_module_header(roc_code: &mut String, methods: &[RocMethod], ty: &RocTyp
 
     if ty.is_component() {
         for method in methods {
-            writeln!(roc_code, "    add_{},", method.name)?;
+            if matches!(method.return_type, RocMethodReturnType::SelfType) {
+                writeln!(roc_code, "    add_{},", method.name)?;
+            }
         }
 
         roc_code.push_str(
