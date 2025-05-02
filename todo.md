@@ -40,6 +40,12 @@
 
 - Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
 
+## Roc
+
+- Implement FNV-1a hash function.
+
+- Add support for bitflags.
+
 ## Misc
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
