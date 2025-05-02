@@ -12,7 +12,7 @@ use crate::{
     },
     engine::{Engine, EngineConfig},
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{Degrees, Plane, Sphere},
+    geometry::{Angle, Degrees, Plane, Sphere},
     gpu::{
         self,
         rendering::{RenderingConfig, RenderingSystem},
@@ -113,11 +113,53 @@ fn init_game_loop(
     on_engine_created: impl FnOnce(Arc<Engine>),
 ) -> Result<GameLoop> {
     let game_loop_config = app.game_loop_config();
-    let engine = init_app(app, window)?;
+    let engine = init_blank(app, window)?;
     let game_loop = GameLoop::new(engine, game_loop_config)?;
     on_engine_created(game_loop.arc_engine());
     game_loop.engine().app().setup_scene()?;
     Ok(game_loop)
+}
+
+fn init_blank(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
+    let vertical_field_of_view = Degrees(70.0);
+
+    let engine = Engine::new(app, window)?;
+
+    // engine.create_entity((
+    //     &ReferenceFrameComp::unscaled(
+    //         Point3::new(0.0, 2.0, 0.0),
+    //         Orientation::from_axis_angle(&Vector3::y_axis(), PI),
+    //     ),
+    //     &VelocityComp::stationary(),
+    //     &MotionControlComp::new(),
+    //     &OrientationControlComp::new(),
+    //     &PerspectiveCameraComp::new(
+    //         vertical_field_of_view,
+    //         UpperExclusiveBounds::new(0.01, 1000.0),
+    //     ),
+    // ))?;
+
+    engine.create_entity((
+        &RectangleMeshComp::UNIT_SQUARE,
+        &ReferenceFrameComp::unoriented_scaled(Point3::origin(), 1000.0),
+        &UniformContactResponseComp(ContactResponseParameters::default()),
+        &PlaneCollidableComp::new(CollidableKind::Static, Plane::new(Vector3::y_axis(), 0.0)),
+        &UniformColorComp(vector![0.9, 0.9, 0.9]),
+        &UniformSpecularReflectanceComp(0.01),
+        &UniformRoughnessComp(0.5),
+    ))?;
+
+    engine.create_entity(&ShadowableUnidirectionalEmissionComp::new(
+        vector![1.0, 1.0, 1.0] * 200000.0,
+        UnitVector3::new_normalize(vector![0.0, -1.0, 0.0]),
+        Degrees(2.0),
+    ))?;
+
+    engine.create_entity(&AmbientEmissionComp::new(
+        vector![1.0, 1.0, 1.0] * 2000000.0,
+    ))?;
+
+    Ok(engine)
 }
 
 fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
@@ -145,10 +187,7 @@ fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
 
     engine.create_entity((
         &ParentComp::new(player_entity),
-        &PerspectiveCameraComp::new(
-            vertical_field_of_view,
-            UpperExclusiveBounds::new(0.01, 1000.0),
-        ),
+        &PerspectiveCameraComp::new(vertical_field_of_view.as_degrees(), 0.01, 1000.0),
     ))?;
 
     let laser_entity = engine.create_entity((
@@ -412,10 +451,7 @@ fn init_physics_lab(app: Arc<dyn Application>, window: Window) -> Result<Engine>
         &VelocityComp::stationary(),
         &MotionControlComp::new(),
         &OrientationControlComp::new(),
-        &PerspectiveCameraComp::new(
-            vertical_field_of_view,
-            UpperExclusiveBounds::new(0.01, 1000.0),
-        ),
+        &PerspectiveCameraComp::new(vertical_field_of_view.as_degrees(), 0.01, 1000.0),
     ))?;
 
     let sphere_radius = 0.5;
@@ -523,7 +559,7 @@ fn create_spheres(
                     &TexturedRoughnessComp::unscaled(roughness_texture_id),
                     &NormalMapComp(normal_texture_id),
                     &PlanarTextureProjectionComp::for_rectangle(
-                        &RectangleMeshComp::UNIT_SQUARE,
+                        RectangleMeshComp::UNIT_SQUARE,
                         0.2,
                         0.2,
                     ),
@@ -597,7 +633,7 @@ fn create_room(
             &UniformSpecularReflectanceComp(0.01),
             &TexturedRoughnessComp::unscaled(roughness_texture_id),
             &NormalMapComp(normal_texture_id),
-            &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+            &PlanarTextureProjectionComp::for_rectangle(RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
             &SceneGraphGroupComp,
         ))?;
 

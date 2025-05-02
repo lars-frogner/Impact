@@ -157,17 +157,21 @@ pub struct ShadowableUnidirectionalLightComp {
     pub id: LightID,
 }
 
+#[roc]
 impl AmbientEmissionComp {
     /// Creates a new ambient light emission component with the given
     /// illuminance (in lux).
+    #[roc(body = "{ illuminance }")]
     pub fn new(illuminance: Illumninance) -> Self {
         Self { illuminance }
     }
 }
 
+#[roc]
 impl OmnidirectionalEmissionComp {
     /// Creates a new omnidirectional emission component with the given
     /// luminous intensity (in candela) and source extent.
+    #[roc(body = "{ luminous_intensity, source_extent }")]
     pub fn new(luminous_intensity: LuminousIntensity, source_extent: f32) -> Self {
         Self {
             luminous_intensity,
@@ -176,9 +180,11 @@ impl OmnidirectionalEmissionComp {
     }
 }
 
+#[roc]
 impl ShadowableOmnidirectionalEmissionComp {
     /// Creates a new shadowable omnidirectional emission component with
     /// the given luminous intensity (in candela) and source extent.
+    #[roc(body = "{ luminous_intensity, source_extent }")]
     pub fn new(luminous_intensity: LuminousIntensity, source_extent: f32) -> Self {
         Self {
             luminous_intensity,
@@ -187,10 +193,12 @@ impl ShadowableOmnidirectionalEmissionComp {
     }
 }
 
+#[roc]
 impl UnidirectionalEmissionComp {
     /// Creates a new unidirectional emission component with the given
     /// perpendicular illuminance (in lux), direction, and angular
     /// source extent.
+    #[roc(body = "{ perpendicular_illuminance, direction, angular_source_extent }")]
     pub fn new(
         perpendicular_illuminance: Illumninance,
         direction: UnitVector3<f32>,
@@ -204,10 +212,12 @@ impl UnidirectionalEmissionComp {
     }
 }
 
+#[roc]
 impl ShadowableUnidirectionalEmissionComp {
     /// Creates a new shadowable unidirectional emission component with the
     /// given perpendicular illuminance (in lux), direction, and angular
     /// source extent.
+    #[roc(body = "{ perpendicular_illuminance, direction, angular_source_extent }")]
     pub fn new(
         perpendicular_illuminance: Illumninance,
         direction: UnitVector3<f32>,

@@ -33,9 +33,19 @@ pub struct HarmonicOscillatorTrajectoryComp {
     pub period: fph,
 }
 
+#[roc]
 impl HarmonicOscillatorTrajectoryComp {
     /// Creates a new component for an harmonically oscillating trajectory with
     /// the given properties.
+    #[roc(body = r#"
+    {
+        center_time,
+        center_position,
+        direction,
+        amplitude,
+        period,
+    }
+    "#)]
     pub fn new(
         center_time: fph,
         center_position: Position,

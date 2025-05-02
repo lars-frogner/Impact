@@ -15,8 +15,10 @@ pub struct OrientationControlComp {
     control_angular_velocity: AngularVelocity,
 }
 
+#[roc]
 impl OrientationControlComp {
     /// Creates a new component for orientation control.
+    #[roc(body = "{ control_angular_velocity: AngularVelocity.zero({}) }")]
     pub fn new() -> Self {
         Self {
             control_angular_velocity: AngularVelocity::zero(),

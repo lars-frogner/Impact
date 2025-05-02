@@ -142,14 +142,17 @@ pub struct MeshComp {
     pub id: MeshID,
 }
 
+#[roc]
 impl MeshComp {
     /// Creates a new component representing a
     /// [`TriangleMesh`](crate::mesh::TriangleMesh) with the given ID.
+    #[roc(body = "{ id: mesh_id }")]
     pub fn new(mesh_id: MeshID) -> Self {
         Self { id: mesh_id }
     }
 }
 
+#[roc]
 impl RectangleMeshComp {
     pub const UNIT_SQUARE: Self = Self {
         extent_x: 1.0,
@@ -158,6 +161,7 @@ impl RectangleMeshComp {
 
     /// Creates a new component for a rectangle mesh with the given horizontal
     /// extents.
+    #[roc(body = "{ extent_x, extent_z }")]
     pub fn new(extent_x: f32, extent_z: f32) -> Self {
         Self { extent_x, extent_z }
     }
@@ -172,6 +176,7 @@ impl RectangleMeshComp {
     }
 }
 
+#[roc]
 impl BoxMeshComp {
     pub const UNIT_CUBE: Self = Self {
         extent_x: 1.0,
@@ -228,9 +233,11 @@ impl BoxMeshComp {
     }
 }
 
+#[roc]
 impl CylinderMeshComp {
     /// Creates a new component for a cylinder mesh with the given length,
     /// diameter and number of circumeference vertices.
+    #[roc(body = "{ length, diameter, n_circumference_vertices }")]
     pub fn new(length: f32, diameter: f32, n_circumference_vertices: u32) -> Self {
         Self {
             length,
@@ -249,9 +256,11 @@ impl CylinderMeshComp {
     }
 }
 
+#[roc]
 impl ConeMeshComp {
     /// Creates a new component for a cone mesh with the given length, maximum
     /// diameter and number of circumeference vertices.
+    #[roc(body = "{ length, max_diameter, n_circumference_vertices }")]
     pub fn new(length: f32, max_diameter: f32, n_circumference_vertices: u32) -> Self {
         Self {
             length,
@@ -270,9 +279,17 @@ impl ConeMeshComp {
     }
 }
 
+#[roc]
 impl CircularFrustumMeshComp {
     /// Creates a new component for a circular frustum mesh with the given
     /// length, bottom and top diameter and number of circumeference vertices.
+    #[roc(body = r#"
+    {
+        length,
+        bottom_diameter,
+        top_diameter,
+        n_circumference_vertices,
+    }"#)]
     pub fn new(
         length: f32,
         bottom_diameter: f32,
@@ -301,9 +318,11 @@ impl CircularFrustumMeshComp {
     }
 }
 
+#[roc]
 impl SphereMeshComp {
     /// Creates a new component for a sphere mesh with the given number of
     /// rings.
+    #[roc(body = "{ n_rings }")]
     pub fn new(n_rings: u32) -> Self {
         Self { n_rings }
     }
@@ -318,9 +337,11 @@ impl SphereMeshComp {
     }
 }
 
+#[roc]
 impl HemisphereMeshComp {
     /// Creates a new component for a hemisphere mesh with the given number of
     /// rings.
+    #[roc(body = "{ n_rings }")]
     pub fn new(n_rings: u32) -> Self {
         Self { n_rings }
     }

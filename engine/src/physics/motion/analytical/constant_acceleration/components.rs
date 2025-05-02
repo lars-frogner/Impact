@@ -32,6 +32,14 @@ pub struct ConstantAccelerationTrajectoryComp {
 impl ConstantAccelerationTrajectoryComp {
     /// Creates a new component for a constant acceleration trajectory with the
     /// given properties.
+    #[roc(body = r#"
+    {
+        initial_time,
+        initial_position,
+        initial_velocity,
+        acceleration,
+    }
+    "#)]
     pub fn new(
         initial_time: fph,
         initial_position: Position,
@@ -48,6 +56,14 @@ impl ConstantAccelerationTrajectoryComp {
 
     /// Creates a new component for a constant velocity trajectory (no
     /// acceleration) with the given properties.
+    #[roc(body = r#"
+    new(
+        initial_time,
+        initial_position,
+        velocity,
+        Vector3.zero,
+    )
+    "#)]
     pub fn with_constant_velocity(
         initial_time: fph,
         initial_position: Position,

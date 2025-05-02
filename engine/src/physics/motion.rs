@@ -55,6 +55,7 @@ pub type Force = Vector3<fph>;
 /// A 3D torque.
 pub type Torque = Vector3<fph>;
 
+#[roc]
 impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
     /// angular speed.
@@ -94,6 +95,7 @@ impl AngularVelocity {
     }
 
     /// Creates a new [`AngularVelocity`] with zero angular speed.
+    #[roc(body = "{ axis_of_rotation: UnitVector3.y_axis, angular_speed: 0.0 }")]
     pub fn zero() -> Self {
         Self {
             axis_of_rotation: Vector3::y_axis(),

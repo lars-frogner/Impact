@@ -6,6 +6,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{Hash32, compute_hash_str_32};
 use nalgebra::{Vector4, vector};
 use nohash_hasher::BuildNoHashHasher;
+use roc_codegen::roc;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -14,6 +15,7 @@ use std::{
 };
 
 /// A type identifier that determines all the properties of a voxel.
+#[roc]
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelType(u8);

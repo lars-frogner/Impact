@@ -1,10 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to cameras.
 
-use crate::{
-    geometry::{Angle, Radians},
-    util::bounds::{Bounds, UpperExclusiveBounds},
-};
-use approx::assert_abs_diff_ne;
+use crate::geometry::{Angle, Degrees, Radians};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::SetupComponent;
 use roc_codegen::roc;
@@ -45,22 +41,34 @@ pub struct OrthographicCameraComp {
     far_distance: f32,
 }
 
+#[roc(dependencies=[Degrees<f32>])]
 impl PerspectiveCameraComp {
     /// Creates a new component representing a
     /// [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
-    /// vertical field of view and near and far distance.
+    /// vertical field of view (in degrees) and near and far distance.
     ///
     /// # Panics
-    /// If `vertical_field_of_view` or the near distance is zero.
+    /// If the field of view or the near distance does not exceed zero, or if
+    /// the far distance does not exceed the near distance.
+    #[roc(body = r#"
+    expect vertical_field_of_view > 0.0
+    expect near_distance > 0.0
+    expect far_distance > near_distance
+    vertical_field_of_view_rad = Degrees.to_radians(vertical_field_of_view)
+    {
+        vertical_field_of_view_rad,
+        near_distance,
+        far_distance,
+    }"#)]
     pub fn new(
-        vertical_field_of_view: impl Angle<f32>,
-        near_and_far_distance: UpperExclusiveBounds<f32>,
+        vertical_field_of_view: Degrees<f32>,
+        near_distance: f32,
+        far_distance: f32,
     ) -> Self {
         let vertical_field_of_view_rad = vertical_field_of_view.radians();
-        assert_abs_diff_ne!(vertical_field_of_view_rad, 0.0);
-
-        let (near_distance, far_distance) = near_and_far_distance.bounds();
-        assert_abs_diff_ne!(near_distance, 0.0);
+        assert!(vertical_field_of_view_rad > 0.0);
+        assert!(near_distance > 0.0);
+        assert!(far_distance > near_distance);
 
         Self {
             vertical_field_of_view_rad,
@@ -85,21 +93,34 @@ impl PerspectiveCameraComp {
     }
 }
 
+#[roc(dependencies=[Degrees<f32>])]
 impl OrthographicCameraComp {
     /// Creates a new component representing an
     /// [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
-    /// vertical field of view and near and far distance.
+    /// vertical field of view (in degrees) and near and far distance.
     ///
     /// # Panics
-    /// If `vertical_field_of_view` is zero.
+    /// If the field of view or the near distance does not exceed zero, or if
+    /// the far distance does not exceed the near distance.
+    #[roc(body = r#"
+    expect vertical_field_of_view > 0.0
+    expect near_distance > 0.0
+    expect far_distance > near_distance
+    vertical_field_of_view_rad = Degrees.to_radians(vertical_field_of_view)
+    {
+        vertical_field_of_view_rad,
+        near_distance,
+        far_distance
+    }"#)]
     pub fn new(
-        vertical_field_of_view: impl Angle<f32>,
-        near_and_far_distance: UpperExclusiveBounds<f32>,
+        vertical_field_of_view: Degrees<f32>,
+        near_distance: f32,
+        far_distance: f32,
     ) -> Self {
         let vertical_field_of_view_rad = vertical_field_of_view.radians();
-        assert_abs_diff_ne!(vertical_field_of_view_rad, 0.0);
-
-        let (near_distance, far_distance) = near_and_far_distance.bounds();
+        assert!(vertical_field_of_view_rad > 0.0);
+        assert!(near_distance > 0.0);
+        assert!(far_distance > near_distance);
 
         Self {
             vertical_field_of_view_rad,

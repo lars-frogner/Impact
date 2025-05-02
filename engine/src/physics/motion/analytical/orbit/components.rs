@@ -37,9 +37,20 @@ pub struct OrbitalTrajectoryComp {
     pub period: fph,
 }
 
+#[roc]
 impl OrbitalTrajectoryComp {
     /// Creates a new component for an orbital trajectory with the given
     /// properties.
+    #[roc(body = r#"
+    {
+        periapsis_time,
+        orientation,
+        focal_position,
+        semi_major_axis,
+        eccentricity,
+        period,
+    }
+    "#)]
     pub fn new(
         periapsis_time: fph,
         orientation: Orientation,
