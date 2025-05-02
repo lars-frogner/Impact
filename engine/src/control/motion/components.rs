@@ -14,8 +14,10 @@ pub struct MotionControlComp {
     control_velocity: Velocity,
 }
 
+#[roc]
 impl MotionControlComp {
     /// Creates a new component for motion control.
+    #[roc(body = "{ control_velocity: Vector3.zero }")]
     pub fn new() -> Self {
         Self {
             control_velocity: Velocity::zeros(),

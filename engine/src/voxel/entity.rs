@@ -195,7 +195,7 @@ pub fn setup_voxel_object_for_new_entity(
             let sdf_generator = SDFUnion::new(
                 sdf_generator_1,
                 sdf_generator_2,
-                voxel_sphere_union.center_offsets,
+                voxel_sphere_union.center_offsets.into(),
                 voxel_sphere_union.smoothness,
             );
             let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
@@ -437,7 +437,7 @@ pub fn setup_voxel_object_for_new_entity(
             let sdf_generator = SDFUnion::new(
                 sdf_generator_1,
                 sdf_generator_2,
-                voxel_sphere_union.center_offsets,
+                voxel_sphere_union.center_offsets.into(),
                 voxel_sphere_union.smoothness,
             );
             let voxel_type_generator = GradientNoiseVoxelTypeGenerator::from_component(

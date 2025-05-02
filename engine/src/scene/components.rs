@@ -101,42 +101,52 @@ impl SceneEntityFlagsComp {
     }
 }
 
+#[roc]
 impl ParentComp {
     /// Creates a new component representing a direct child of the given
     /// [`Entity`].
+    #[roc(body = "{ entity: parent }")]
     pub fn new(parent: Entity) -> Self {
         Self { entity: parent }
     }
 }
 
+#[roc]
 impl SceneGraphParentNodeComp {
     /// Creates a new component representing the parent
     /// [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+    #[roc(body = "{ id: parent_node_id }")]
     pub fn new(parent_node_id: GroupNodeID) -> Self {
         Self { id: parent_node_id }
     }
 }
 
+#[roc]
 impl SceneGraphGroupNodeComp {
     /// Creates a new component representing a
     /// [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+    #[roc(body = "{ id: node_id }")]
     pub fn new(node_id: GroupNodeID) -> Self {
         Self { id: node_id }
     }
 }
 
+#[roc]
 impl SceneGraphCameraNodeComp {
     /// Creates a new component representing a
     /// [`SceneGraph`](crate::scene::SceneGraph) camera node with the given ID.
+    #[roc(body = "{ id: node_id }")]
     pub fn new(node_id: CameraNodeID) -> Self {
         Self { id: node_id }
     }
 }
 
+#[roc]
 impl SceneGraphModelInstanceNodeComp {
     /// Creates a new component representing a
     /// [`SceneGraph`](crate::scene::SceneGraph) model instance node with the
     /// given ID.
+    #[roc(body = "{ id: node_id }")]
     pub fn new(node_id: ModelInstanceNodeID) -> Self {
         Self { id: node_id }
     }

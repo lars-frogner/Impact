@@ -77,8 +77,14 @@ impl Spring {
     }
 }
 
+#[roc]
 impl SpringState {
     /// Creates a new spring state (with dummy values).
+    #[roc(body = r#"
+    {
+        direction: UnitVector3.y_axis,
+        center: Point3.origin,
+    }"#)]
     pub fn new() -> Self {
         Self {
             direction: Vector3::y_axis(),

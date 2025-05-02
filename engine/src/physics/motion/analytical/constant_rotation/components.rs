@@ -27,9 +27,17 @@ pub struct ConstantRotationComp {
     pub angular_velocity: AngularVelocity,
 }
 
+#[roc]
 impl ConstantRotationComp {
     /// Creates a new component for constant rotation defined by the given
     /// initial time and orientation and angular velocity.
+    #[roc(body = r#"
+    {
+        initial_time,
+        initial_orientation,
+        angular_velocity,
+    }
+    "#)]
     pub fn new(
         initial_time: fph,
         initial_orientation: Orientation,

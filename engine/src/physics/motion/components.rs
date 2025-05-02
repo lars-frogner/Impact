@@ -67,10 +67,12 @@ pub struct LogsKineticEnergy;
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct LogsMomentum;
 
+#[roc]
 impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position,
     /// orientation and scaling, retaining the original origin of the entity's
     /// reference frame.
+    #[roc(body = "{ origin_offset: Vector3.zero, position, orientation, scaling }")]
     pub fn new(position: Position, orientation: Orientation, scaling: fph) -> Self {
         Self::scaled_with_offset_origin(Vector3::zeros(), position, orientation, scaling)
     }
@@ -78,6 +80,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position and
     /// orientation, retaining the original origin of the entity's reference
     /// frame and no scaling.
+    #[roc(body = "new(position, orientation, 1.0)")]
     pub fn unscaled(position: Position, orientation: Orientation) -> Self {
         Self::new(position, orientation, 1.0)
     }
@@ -85,6 +88,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position,
     /// retaining the original origin of the entity's reference frame and the
     /// identity orientation and scaling.
+    #[roc(body = "unoriented_scaled(position, 1.0)")]
     pub fn unoriented(position: Position) -> Self {
         Self::unoriented_scaled(position, 1.0)
     }
@@ -92,6 +96,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position and
     /// scaling, retaining the original origin of the entity's reference frame
     /// and the identity orientation.
+    #[roc(body = "new(position, UnitQuaternion.identity, scaling)")]
     pub fn unoriented_scaled(position: Position, scaling: fph) -> Self {
         Self::new(position, Orientation::identity(), scaling)
     }
@@ -99,6 +104,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given orientation,
     /// retaining the original origin of the entity's reference frame and
     /// located at the origin with no scaling.
+    #[roc(body = "unlocated_scaled(orientation, 1.0)")]
     pub fn unlocated(orientation: Orientation) -> Self {
         Self::unlocated_scaled(orientation, 1.0)
     }
@@ -106,6 +112,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given orientation and
     /// scaling, retaining the original origin of the entity's reference frame
     /// and located at the origin.
+    #[roc(body = "new(Point3.origin, orientation, scaling)")]
     pub fn unlocated_scaled(orientation: Orientation, scaling: fph) -> Self {
         Self::new(Position::origin(), orientation, scaling)
     }
@@ -113,18 +120,23 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given scaling,
     /// retaining the original origin of the entity's reference frame and
     /// located at the origin with the identity orientation.
+    #[roc(body = "unoriented_scaled(Point3.origin, scaling)")]
     pub fn scaled(scaling: fph) -> Self {
         Self::unoriented_scaled(Position::origin(), scaling)
     }
 
     /// Creates a new reference frame component with the given origin offset and
     /// position, and with the identity orientation and scaling.
+    #[roc(body = "unoriented_scaled_with_offset_origin(origin_offset, position, 1.0)")]
     pub fn unoriented_with_offset_origin(origin_offset: Vector3<fph>, position: Position) -> Self {
         Self::unoriented_scaled_with_offset_origin(origin_offset, position, 1.0)
     }
 
     /// Creates a new reference frame component with the given origin offset,
     /// position and scaling, and with the identity orientation.
+    #[roc(
+        body = "scaled_with_offset_origin(origin_offset, position, UnitQuaternion.identity, scaling)"
+    )]
     pub fn unoriented_scaled_with_offset_origin(
         origin_offset: Vector3<fph>,
         position: Position,
@@ -135,6 +147,7 @@ impl ReferenceFrameComp {
 
     /// Creates a new reference frame component with the given origin offset,
     /// position orientation, and scaling.
+    #[roc(body = "{ origin_offset, position, orientation, scaling }")]
     pub fn scaled_with_offset_origin(
         origin_offset: Vector3<fph>,
         position: Position,
@@ -151,6 +164,7 @@ impl ReferenceFrameComp {
 
     /// Creates a new reference frame component with the given origin offset,
     /// position and orientation and no scaling.
+    #[roc(body = "scaled_with_offset_origin(origin_offset, position, orientation, 1.0)")]
     pub fn with_offset_origin(
         origin_offset: Vector3<fph>,
         position: Position,
@@ -162,6 +176,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position and
     /// orientation for a rigid body and no scaling. The origin offset will be
     /// set to the center of mass.
+    #[roc(body = "for_scaled_rigid_body(position, orientation, 1.0)")]
     pub fn for_rigid_body(position: Position, orientation: Orientation) -> Self {
         Self::for_scaled_rigid_body(position, orientation, 1.0)
     }
@@ -169,6 +184,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position,
     /// orientation and scaling for a rigid body. The origin offset will be set
     /// to the center of mass.
+    #[roc(body = "new(position, orientation, scaling)")]
     pub fn for_scaled_rigid_body(
         position: Position,
         orientation: Orientation,
@@ -180,6 +196,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position for a
     /// rigid body with the identity orientation and scaling. The origin offset
     /// will be set to the center of mass.
+    #[roc(body = "unoriented(position)")]
     pub fn for_unoriented_rigid_body(position: Position) -> Self {
         Self::unoriented(position)
     }
@@ -187,6 +204,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position and
     /// scaling for a rigid body with the identity orientation. The origin
     /// offset will be set to the center of mass.
+    #[roc(body = "unoriented_scaled(position, scaling)")]
     pub fn for_scaled_unoriented_rigid_body(position: Position, scaling: fph) -> Self {
         Self::unoriented_scaled(position, scaling)
     }
@@ -194,6 +212,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position for an
     /// entity whose orientation will be evolved analytically (and thus should
     /// not be initialised in this component).
+    #[roc(body = "unoriented(position)")]
     pub fn for_driven_rotation(position: Position) -> Self {
         Self::unoriented(position)
     }
@@ -201,6 +220,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given position and
     /// scaling for an entity whose orientation will be evolved analytically
     /// (and thus should not be initialised in this component).
+    #[roc(body = "unoriented_scaled(position, scaling)")]
     pub fn for_scaled_driven_rotation(position: Position, scaling: fph) -> Self {
         Self::unoriented_scaled(position, scaling)
     }
@@ -208,6 +228,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given origin offset and
     /// position for an entity with no scaling whose orientation will be evolved
     /// analytically (and thus should not be initialised in this component).
+    #[roc(body = "unoriented_with_offset_origin(origin_offset, position)")]
     pub fn for_driven_rotation_around_offset_origin(
         origin_offset: Vector3<fph>,
         position: Position,
@@ -218,6 +239,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given origin offset,
     /// position and scaling for an entity whose orientation will be evolved
     /// analytically (and thus should not be initialised in this component).
+    #[roc(body = "unoriented_scaled_with_offset_origin(origin_offset, position, scaling)")]
     pub fn for_scaled_driven_rotation_around_offset_origin(
         origin_offset: Vector3<fph>,
         position: Position,
@@ -229,6 +251,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given orientation for
     /// an entity with no scaling whose trajectory will be evolved analytically
     /// (and whose position should thus not be initialised in this component).
+    #[roc(body = "unlocated(orientation)")]
     pub fn for_driven_trajectory(orientation: Orientation) -> Self {
         Self::unlocated(orientation)
     }
@@ -236,6 +259,7 @@ impl ReferenceFrameComp {
     /// Creates a new reference frame component with the given orientation and
     /// scaling for an entity whose trajectory will be evolved analytically (and
     /// whose position should thus not be initialised in this component).
+    #[roc(body = "unlocated_scaled(orientation, scaling)")]
     pub fn for_scaled_driven_trajectory(orientation: Orientation, scaling: fph) -> Self {
         Self::unlocated_scaled(orientation, scaling)
     }
@@ -244,6 +268,9 @@ impl ReferenceFrameComp {
     /// orientation for an entity with no scaling whose trajectory will be
     /// evolved analytically (and whose position should thus not be initialised
     /// in this component).
+    #[roc(
+        body = "for_scaled_driven_trajectory_with_offset_origin(origin_offset, orientation, 1.0)"
+    )]
     pub fn for_driven_trajectory_with_offset_origin(
         origin_offset: Vector3<fph>,
         orientation: Orientation,
@@ -255,6 +282,7 @@ impl ReferenceFrameComp {
     /// orientation and scaling for an entity whose trajectory will be evolved
     /// analytically (and whose position should thus not be initialised in this
     /// component).
+    #[roc(body = "scaled_with_offset_origin(origin_offset, Point3.origin, orientation, scaling)")]
     pub fn for_scaled_driven_trajectory_with_offset_origin(
         origin_offset: Vector3<fph>,
         orientation: Orientation,
@@ -267,6 +295,13 @@ impl ReferenceFrameComp {
     /// whose trajectory and orientation will be evolved analytically (and whose
     /// position and orientation should thus not be initialised in this
     /// component).
+    #[roc(body = r#"
+    {
+        origin_offset: Vector3.zero,
+        position: Point3.origin,
+        orientation: UnitQuaternion.identity,
+        scaling: 1.0,
+    }"#)]
     pub fn for_driven_trajectory_and_rotation() -> Self {
         Self::default()
     }
@@ -275,6 +310,7 @@ impl ReferenceFrameComp {
     /// scaling whose trajectory and orientation will be evolved analytically
     /// (and whose position and orientation should thus not be initialised in
     /// this component).
+    #[roc(body = "scaled(scaling)")]
     pub fn for_scaled_driven_trajectory_and_rotation(scaling: fph) -> Self {
         Self::scaled(scaling)
     }
@@ -283,6 +319,9 @@ impl ReferenceFrameComp {
     /// an entity with no scaling whose trajectory and orientation will be
     /// evolved analytically (and whose position and orientation should thus not
     /// be initialised in this component).
+    #[roc(
+        body = "for_scaled_driven_trajectory_and_rotation_with_offset_origin(origin_offset, 1.0)"
+    )]
     pub fn for_driven_trajectory_and_rotation_with_offset_origin(
         origin_offset: Vector3<fph>,
     ) -> Self {
@@ -293,6 +332,9 @@ impl ReferenceFrameComp {
     /// scaling for an entity whose trajectory and orientation will be evolved
     /// analytically (and whose position and orientation should thus not be
     /// initialised in this component).
+    #[roc(
+        body = "for_scaled_driven_trajectory_with_offset_origin(origin_offset, UnitQuaternion.identity, scaling)"
+    )]
     pub fn for_scaled_driven_trajectory_and_rotation_with_offset_origin(
         origin_offset: Vector3<fph>,
         scaling: fph,
@@ -328,27 +370,39 @@ impl ReferenceFrameComp {
     }
 }
 
+#[roc]
 impl VelocityComp {
     /// Creates a new velocity component for an entity with the given linear and
     /// angular velocity.
-    pub fn new(linear: Velocity, angular: AngularVelocity) -> Self {
-        Self { linear, angular }
+    #[roc(body = r#"
+    {
+        linear: linear_velocity,
+        angular: angular_velocity,
+    }"#)]
+    pub fn new(linear_velocity: Velocity, angular_velocity: AngularVelocity) -> Self {
+        Self {
+            linear: linear_velocity,
+            angular: angular_velocity,
+        }
     }
 
     /// Creates a new velocity component for an entity with the given linear
     /// velocity and zero angular velocity.
+    #[roc(body = "new(velocity, AngularVelocity.zero({}))")]
     pub fn linear(velocity: Velocity) -> Self {
         Self::new(velocity, AngularVelocity::zero())
     }
 
     /// Creates a new velocity component for an entity with the given angular
     /// velocity and zero linear velocity.
+    #[roc(body = "new(Vector3.zero, velocity)")]
     pub fn angular(velocity: AngularVelocity) -> Self {
         Self::new(Velocity::zeros(), velocity)
     }
 
     /// Creates a new velocity component for an entity with the zero linear and
     /// angular velocity.
+    #[roc(body = "linear(Vector3.zero)")]
     pub fn stationary() -> Self {
         Self::linear(Velocity::zeros())
     }

@@ -34,9 +34,11 @@ pub struct DragLoadMapComp {
     pub drag_coefficient: fph,
 }
 
+#[roc]
 impl DetailedDragComp {
     /// Creates a new component for detailed drag with the given drag
     /// coefficient.
+    #[roc(body = "{ drag_coefficient }")]
     pub fn new(drag_coefficient: fph) -> Self {
         Self { drag_coefficient }
     }

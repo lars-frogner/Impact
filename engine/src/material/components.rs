@@ -255,7 +255,9 @@ impl UniformSpecularReflectanceComp {
     }
 }
 
+#[roc]
 impl TexturedSpecularReflectanceComp {
+    #[roc(body = "{ texture_id, scale_factor: 1.0 }")]
     pub fn unscaled(texture_id: TextureID) -> Self {
         Self {
             texture_id,
@@ -264,7 +266,9 @@ impl TexturedSpecularReflectanceComp {
     }
 }
 
+#[roc]
 impl TexturedRoughnessComp {
+    #[roc(body = "{ texture_id, scale_factor: 1.0 }")]
     pub fn unscaled(texture_id: TextureID) -> Self {
         Self {
             texture_id,
@@ -278,7 +282,9 @@ impl UniformMetalnessComp {
     pub const METAL: Self = Self(1.0);
 }
 
+#[roc]
 impl TexturedMetalnessComp {
+    #[roc(body = "{ texture_id, scale_factor: 1.0 }")]
     pub fn unscaled(texture_id: TextureID) -> Self {
         Self {
             texture_id,
@@ -287,7 +293,9 @@ impl TexturedMetalnessComp {
     }
 }
 
+#[roc]
 impl TexturedEmissiveLuminanceComp {
+    #[roc(body = "{ texture_id, scale_factor: 1.0 }")]
     pub fn unscaled(texture_id: TextureID) -> Self {
         Self {
             texture_id,
@@ -296,7 +304,9 @@ impl TexturedEmissiveLuminanceComp {
     }
 }
 
+#[roc]
 impl ParallaxMapComp {
+    #[roc(body = "{ height_map_texture_id, displacement_scale, uv_per_distance }")]
     pub fn new(
         height_map_texture_id: TextureID,
         displacement_scale: f32,
@@ -310,8 +320,10 @@ impl ParallaxMapComp {
     }
 }
 
+#[roc]
 impl MaterialComp {
     /// Creates a new component representing the material with the given handle.
+    #[roc(body = "{ material_handle }")]
     pub fn new(material_handle: MaterialHandle) -> Self {
         assert!(!material_handle.is_not_applicable());
         Self { material_handle }

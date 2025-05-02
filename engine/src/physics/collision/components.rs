@@ -59,7 +59,17 @@ pub struct CollidableComp {
     pub collidable_id: CollidableID,
 }
 
+#[roc(dependencies=[CollidableKind])]
 impl SphereCollidableComp {
+    #[roc(body = r#"
+    {
+        kind:
+        when kind is
+            Dynamic -> 0
+            Static -> 1
+            Phantom -> 2,
+        sphere,
+    }"#)]
     pub fn new(kind: CollidableKind, sphere: Sphere<fph>) -> Self {
         Self {
             kind: kind.to_u64(),
@@ -76,7 +86,17 @@ impl SphereCollidableComp {
     }
 }
 
+#[roc]
 impl PlaneCollidableComp {
+    #[roc(body = r#"
+    {
+        kind:
+        when kind is
+            Dynamic -> 0
+            Static -> 1
+            Phantom -> 2,
+        plane,
+    }"#)]
     pub fn new(kind: CollidableKind, plane: Plane<fph>) -> Self {
         Self {
             kind: kind.to_u64(),
@@ -93,7 +113,16 @@ impl PlaneCollidableComp {
     }
 }
 
+#[roc]
 impl VoxelObjectCollidableComp {
+    #[roc(body = r#"
+    {
+        kind:
+        when kind is
+            Dynamic -> 0
+            Static -> 1
+            Phantom -> 2,
+    }"#)]
     pub fn new(kind: CollidableKind) -> Self {
         Self {
             kind: kind.to_u64(),

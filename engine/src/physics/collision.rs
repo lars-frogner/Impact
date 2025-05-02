@@ -33,6 +33,7 @@ pub struct CollidableDescriptor {
     idx: usize,
 }
 
+#[roc]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollidableKind {
     Dynamic = 0,

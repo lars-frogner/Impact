@@ -29,11 +29,13 @@ pub struct PlanarTextureProjectionComp {
     pub v_vector: Vector3<f32>,
 }
 
+#[roc(dependencies=[RectangleMeshComp])]
 impl PlanarTextureProjectionComp {
     /// Creates the component for a projection onto the plane defined by the
     /// given origin and two vectors defining the axes along which the U and V
     /// texture coordinates will increase. The texture coordinates will be zero
     /// at the origin and unity at the tip of the respective u- or v-vector.
+    #[roc(body = "{ origin, u_vector, v_vector }")]
     pub fn new(origin: Point3<f32>, u_vector: Vector3<f32>, v_vector: Vector3<f32>) -> Self {
         Self {
             origin,
@@ -48,11 +50,13 @@ impl PlanarTextureProjectionComp {
     /// along the U and V texture coordinate directions. The U-axis will be
     /// aligned with the x-axis and the V-axis will be aligned with the negative
     /// z-axis.
-    pub fn for_rectangle(
-        rectangle: &RectangleMeshComp,
-        n_repeats_u: f32,
-        n_repeats_v: f32,
-    ) -> Self {
+    #[roc(body = r#"
+    origin = (-0.5, 0.0, 0.5)
+    u_vector = (rectangle.extent_x / n_repeats_u, 0.0, 0.0)
+    v_vector = (0.0, 0.0, -rectangle.extent_z / n_repeats_v)
+    new(origin, u_vector, v_vector)
+    "#)]
+    pub fn for_rectangle(rectangle: RectangleMeshComp, n_repeats_u: f32, n_repeats_v: f32) -> Self {
         let origin = point![-0.5, 0.0, 0.5];
         let u_vector = vector![rectangle.extent_x / n_repeats_u, 0.0, 0.0];
         let v_vector = vector![0.0, 0.0, -rectangle.extent_z / n_repeats_v];

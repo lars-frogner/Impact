@@ -29,8 +29,18 @@ pub struct SpringComp {
     pub spring_state: SpringState,
 }
 
+#[roc]
 impl SpringComp {
     /// Creates a new component for a spring connecting two entities.
+    #[roc(body = r#"
+    {
+        entity_1,
+        entity_2,
+        attachment_point_1,
+        attachment_point_2,
+        spring,
+        spring_state: SpringState.new({})
+    }"#)]
     pub fn new(
         entity_1: Entity,
         entity_2: Entity,

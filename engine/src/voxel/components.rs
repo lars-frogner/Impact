@@ -139,7 +139,7 @@ pub struct VoxelSphereUnionComp {
     pub radius_2: f64,
     /// The offset in number of voxels in each dimension between the centers of
     /// the two spheres.
-    pub center_offsets: [f64; 3],
+    pub center_offsets: Vector3<f64>,
     /// The smoothness of the union operation.
     pub smoothness: f64,
 }
@@ -222,9 +222,11 @@ pub struct VoxelAbsorbingCapsuleComp {
     rate: f64,
 }
 
+#[roc(dependencies=[VoxelType])]
 impl SameVoxelTypeComp {
     /// Creates a new component for an entity comprised of voxels of the given
     /// type.
+    #[roc(body = "{ voxel_type_idx: NativeNum.to_usize(voxel_type) }")]
     pub fn new(voxel_type: VoxelType) -> Self {
         Self {
             voxel_type_idx: voxel_type.idx(),
@@ -237,23 +239,38 @@ impl SameVoxelTypeComp {
     }
 }
 
+#[roc]
 impl GradientNoiseVoxelTypesComp {
     const VOXEL_TYPE_ARRAY_SIZE: usize = VoxelTypeRegistry::max_n_voxel_types().next_power_of_two();
 
-    pub fn new<S: AsRef<str>>(
-        voxel_type_names: impl IntoIterator<Item = S>,
+    #[roc(body = r#"
+    n_voxel_types = List.len(voxel_type_names)
+    expect n_voxel_types > 0
+    expect n_voxel_types <= 256
+    voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.compute_hash_str_32)
+    {
+        n_voxel_types,
+        voxel_type_name_hashes,
+        noise_frequency,
+        voxel_type_frequency,
+        seed,
+    }
+    "#)]
+    pub fn new(
+        voxel_type_names: &[&str],
         noise_frequency: f64,
         voxel_type_frequency: f64,
         seed: u64,
     ) -> Self {
-        let mut n_voxel_types = 0;
-        let mut voxel_type_name_hashes = [Hash32::zeroed(); Self::VOXEL_TYPE_ARRAY_SIZE];
-        for name in voxel_type_names {
-            assert!(n_voxel_types < VoxelTypeRegistry::max_n_voxel_types());
-            voxel_type_name_hashes[n_voxel_types] = compute_hash_str_32(name.as_ref());
-            n_voxel_types += 1;
-        }
+        let n_voxel_types = voxel_type_names.len();
         assert!(n_voxel_types > 0);
+        assert!(n_voxel_types <= VoxelTypeRegistry::max_n_voxel_types());
+
+        let mut voxel_type_name_hashes = [Hash32::zeroed(); Self::VOXEL_TYPE_ARRAY_SIZE];
+        for (idx, name) in voxel_type_names.iter().enumerate() {
+            voxel_type_name_hashes[idx] = compute_hash_str_32(name);
+        }
+
         Self {
             n_voxel_types,
             voxel_type_name_hashes,
@@ -291,7 +308,17 @@ impl GradientNoiseVoxelTypesComp {
     }
 }
 
+#[roc]
 impl MultiscaleSphereModificationComp {
+    #[roc(body = r#"
+    {
+        octaves,
+        max_scale,
+        persistence,
+        inflation,
+        smoothness,
+        seed,
+    }"#)]
     pub fn new(
         octaves: usize,
         max_scale: f64,
@@ -311,7 +338,17 @@ impl MultiscaleSphereModificationComp {
     }
 }
 
+#[roc]
 impl MultifractalNoiseModificationComp {
+    #[roc(body = r#"
+    {
+        octaves,
+        frequency,
+        lacunarity,
+        persistence,
+        amplitude,
+        seed,
+    }"#)]
     pub fn new(
         octaves: usize,
         frequency: f64,
@@ -331,6 +368,7 @@ impl MultifractalNoiseModificationComp {
     }
 }
 
+#[roc]
 impl VoxelBoxComp {
     /// Creates a new component for a box with the given voxel extent
     /// and number of voxels in each direction.
@@ -338,6 +376,17 @@ impl VoxelBoxComp {
     /// # Panics
     /// - If the voxel extent is negative.
     /// - If either of the extents is zero or negative.
+    #[roc(body = r#"
+    expect voxel_extent > 0.0
+    expect extent_x >= 0.0
+    expect extent_y >= 0.0
+    expect extent_z >= 0.0
+    {
+        voxel_extent,
+        extent_x,
+        extent_y,
+        extent_z,
+    }"#)]
     pub fn new(voxel_extent: f64, extent_x: f64, extent_y: f64, extent_z: f64) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(extent_x >= 0.0);
@@ -356,6 +405,7 @@ impl VoxelBoxComp {
     }
 }
 
+#[roc]
 impl VoxelSphereComp {
     /// Creates a new component for a sphere with the given voxel extent
     /// and number of voxels across its radius.
@@ -363,6 +413,13 @@ impl VoxelSphereComp {
     /// # Panics
     /// - If the voxel extent is negative.
     /// - If the radius zero or negative.
+    #[roc(body = r#"
+    expect voxel_extent > 0.0
+    expect radius >= 0.0
+    {
+        voxel_extent,
+        radius,
+    }"#)]
     pub fn new(voxel_extent: f64, radius: f64) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(radius >= 0.0);
@@ -377,6 +434,7 @@ impl VoxelSphereComp {
     }
 }
 
+#[roc]
 impl VoxelSphereUnionComp {
     /// Creates a new component for a sphere union with the given smoothness of
     /// the spheres with the given radii and center offsets (in voxels).
@@ -384,11 +442,22 @@ impl VoxelSphereUnionComp {
     /// # Panics
     /// - If the voxel extent is negative.
     /// - If either of the radii is zero or negative.
+    #[roc(body = r#"
+    expect voxel_extent > 0.0
+    expect radius_1 >= 0.0
+    expect radius_2 >= 0.0
+    {
+        voxel_extent,
+        radius_1,
+        radius_2,
+        center_offsets,
+        smoothness,
+    }"#)]
     pub fn new(
         voxel_extent: f64,
         radius_1: f64,
         radius_2: f64,
-        center_offsets: [f64; 3],
+        center_offsets: Vector3<f64>,
         smoothness: f64,
     ) -> Self {
         assert!(voxel_extent > 0.0);
@@ -412,10 +481,25 @@ impl VoxelSphereUnionComp {
     }
 }
 
+#[roc]
 impl VoxelGradientNoisePatternComp {
     /// Creates a new component for a gradient noise voxel pattern with the
     /// given maximum number of voxels in each direction, spatial noise
     /// frequency, noise threshold and seed.
+    #[roc(body = r#"
+    expect voxel_extent > 0.0
+    expect extent_x >= 0.0
+    expect extent_y >= 0.0
+    expect extent_z >= 0.0
+    {
+        voxel_extent,
+        extent_x,
+        extent_y,
+        extent_z,
+        noise_frequency,
+        noise_threshold,
+        seed,
+    }"#)]
     pub fn new(
         voxel_extent: f64,
         extent_x: f64,
@@ -445,10 +529,19 @@ impl VoxelGradientNoisePatternComp {
     }
 }
 
+#[roc]
 impl VoxelAbsorbingSphereComp {
     /// Creates a new [`VoxelAbsorbingSphereComp`] with the given offset and
     /// radius in the reference frame of the entity and the given maximum
     /// absorption rate (at the center of the sphere).
+    #[roc(body = r#"
+    expect radius >= 0.0
+    expect rate >= 0.0
+    {
+        offset,
+        radius,
+        rate,
+    }"#)]
     pub fn new(offset: Vector3<f64>, radius: f64, rate: f64) -> Self {
         assert!(radius >= 0.0);
         assert!(rate >= 0.0);
@@ -470,12 +563,22 @@ impl VoxelAbsorbingSphereComp {
     }
 }
 
+#[roc]
 impl VoxelAbsorbingCapsuleComp {
     /// Creates a new [`VoxelAbsorbingCapsuleComp`] with the given offset to the
     /// start of the capsule's central line segment, displacement from the start
     /// to the end of the line segment and radius, all in the reference frame of
     /// the entity, as well as the given maximum absorption rate (at the central
     /// line segment).
+    #[roc(body = r#"
+    expect radius >= 0.0
+    expect rate >= 0.0
+    {
+        offset_to_segment_start,
+        segment_vector,
+        radius,
+        rate,
+    }"#)]
     pub fn new(
         offset_to_segment_start: Vector3<f64>,
         segment_vector: Vector3<f64>,

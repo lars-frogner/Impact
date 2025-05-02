@@ -35,9 +35,19 @@ pub struct CircularTrajectoryComp {
     pub period: fph,
 }
 
+#[roc]
 impl CircularTrajectoryComp {
     /// Creates a new component for a circular trajectory with the given
     /// properties.
+    #[roc(body = r#"
+    {
+        initial_time,
+        orientation,
+        center_position,
+        radius,
+        period,
+    }
+    "#)]
     pub fn new(
         initial_time: fph,
         orientation: Orientation,
