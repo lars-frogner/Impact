@@ -86,7 +86,7 @@ impl SphereCollidableComp {
     }
 }
 
-#[roc]
+#[roc(dependencies=[CollidableKind])]
 impl PlaneCollidableComp {
     #[roc(body = r#"
     {
@@ -113,7 +113,7 @@ impl PlaneCollidableComp {
     }
 }
 
-#[roc]
+#[roc(dependencies=[CollidableKind])]
 impl VoxelObjectCollidableComp {
     #[roc(body = r#"
     {
