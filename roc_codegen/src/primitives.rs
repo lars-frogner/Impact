@@ -4,24 +4,26 @@
 #[macro_export]
 macro_rules! impl_roc_for_existing_primitive {
     ($t:ty, $package:ident, $module:ident, $name:ident, $postfix:expr, $kind:expr) => {
-        impl $crate::meta::Roc for $t {
-            const ROC_TYPE_ID: $crate::meta::RocTypeID =
-                $crate::meta::RocTypeID::hashed_from_str(stringify!($t));
+        impl $crate::Roc for $t {
+            const ROC_TYPE_ID: $crate::RocTypeID =
+                $crate::RocTypeID::hashed_from_str(stringify!($t));
             const SERIALIZED_SIZE: usize = ::std::mem::size_of::<$t>();
         }
-        impl $crate::meta::RocPod for $t {}
+        impl $crate::RocPod for $t {}
 
         inventory::submit! {
-            $crate::meta::RocType {
-                id: <$t as $crate::meta::Roc>::ROC_TYPE_ID,
+            $crate::RegisteredType {
                 package_name: stringify!($package),
                 module_name: stringify!($module),
-                name: stringify!($name),
                 function_postfix: $postfix,
-                serialized_size: <$t as $crate::meta::Roc>::SERIALIZED_SIZE,
-                flags: $crate::meta::RocTypeFlags::IS_POD,
-                composition: $crate::meta::RocTypeComposition::Primitive($kind),
-                docstring: "",
+                serialized_size: <$t as $crate::Roc>::SERIALIZED_SIZE,
+                flags: $crate::RegisteredTypeFlags::IS_POD,
+                ty: $crate::ir::Type {
+                    id: <$t as $crate::Roc>::ROC_TYPE_ID,
+                    docstring: "",
+                    name: stringify!($name),
+                    composition: $crate::ir::TypeComposition::Primitive($kind),
+                }
             }
         }
     };
@@ -34,7 +36,7 @@ macro_rules! impl_roc_for_builtin_primitives {
             $crate::impl_roc_for_existing_primitive!(
                 $t,
                 $package, $module, $name, $postfix,
-                $crate::meta::RocPrimitiveKind::Builtin
+                $crate::ir::PrimitiveKind::Builtin
             );
         )*
     };
@@ -47,8 +49,8 @@ macro_rules! impl_roc_for_library_provided_primitives {
             $crate::impl_roc_for_existing_primitive!(
                 $t,
                 $package, $module, $name, $postfix,
-                $crate::meta::RocPrimitiveKind::LibraryProvided {
-                    precision: $crate::meta::RocPrimitivePrecision::$precision,
+                $crate::ir::PrimitiveKind::LibraryProvided {
+                    precision: $crate::ir::PrimitivePrecision::$precision,
                 }
             );
         )*
@@ -58,8 +60,8 @@ macro_rules! impl_roc_for_library_provided_primitives {
             $crate::impl_roc_for_existing_primitive!(
                 $t,
                 $package, $module, $name, $postfix,
-                $crate::meta::RocPrimitiveKind::LibraryProvided {
-                    precision: $crate::meta::RocPrimitivePrecision::PrecisionIrrelevant,
+                $crate::PrimitiveKind::LibraryProvided {
+                    precision: $crate::PrimitivePrecision::PrecisionIrrelevant,
                 }
             );
         )*
