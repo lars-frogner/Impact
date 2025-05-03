@@ -42,8 +42,6 @@
 
 ## Roc
 
-- Implement FNV-1a hash function.
-
 - Add support for bitflags.
 
 ## Misc
