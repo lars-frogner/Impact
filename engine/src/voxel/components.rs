@@ -247,7 +247,7 @@ impl GradientNoiseVoxelTypesComp {
     n_voxel_types = List.len(voxel_type_names)
     expect n_voxel_types > 0
     expect n_voxel_types <= 256
-    voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.compute_hash_str_32)
+    voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
     {
         n_voxel_types,
         voxel_type_name_hashes,
