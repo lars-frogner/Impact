@@ -8,13 +8,13 @@ mod roc_attr;
 /// should be available in Roc.
 ///
 /// When applied to a Rust type, the macro will infer and register a
-/// corresponding [`RocType`](roc_codegen::meta::RocType), which is used to
+/// corresponding [`RegisteredType`](roc_codegen::meta::RegisteredType), which is used to
 /// [`generate`](roc_codegen::generate) a Roc module with a type declaration
 /// and some associated utility functions.
 ///
 /// The macro can additionally be applied to the type's `impl` block and
 /// selected methods therein in order to register
-/// [`RocMethod`](roc_codegen::meta::RocMethod)s whose generated Roc code will
+/// [`AssociatedFunction`](roc_codegen::meta::AssociatedFunction)s whose generated Roc code will
 /// be included in the type's Roc module.
 ///
 /// Note that the registration of types and methods is only performed when the
@@ -107,26 +107,28 @@ mod inner {
     pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
         if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
             if attr.is_empty() {
-                roc_attr::apply_roc_type_attribute(None, input, &crate_root_tokens())
+                roc_attr::apply_type_attribute(None, input, &crate_root_tokens())
             } else {
-                syn::parse::<RocTypeAttributeArgs>(attr).and_then(|args| {
-                    roc_attr::apply_roc_type_attribute(Some(args), input, &crate_root_tokens())
+                syn::parse::<TypeAttributeArgs>(attr).and_then(|args| {
+                    roc_attr::apply_type_attribute(Some(args), input, &crate_root_tokens())
                 })
             }
         } else if let Ok(block) = syn::parse::<syn::ItemImpl>(item.clone()) {
             if attr.is_empty() {
-                roc_attr::apply_roc_impl_attribute(None, block, &crate_root_tokens())
+                roc_attr::apply_impl_attribute(None, block, &crate_root_tokens())
             } else {
-                syn::parse::<RocImplAttributeArgs>(attr).and_then(|args| {
-                    roc_attr::apply_roc_impl_attribute(Some(args), block, &crate_root_tokens())
+                syn::parse::<ImplAttributeArgs>(attr).and_then(|args| {
+                    roc_attr::apply_impl_attribute(Some(args), block, &crate_root_tokens())
                 })
             }
+        } else if let Ok(constant) = syn::parse::<syn::ImplItemConst>(item.clone()) {
+            syn::parse::<AssociatedConstantAttributeArgs>(attr).and_then(|args| roc_attr::apply_associated_constant_attribute(args, constant))
         } else if let Ok(func) = syn::parse::<syn::ImplItemFn>(item.clone()) {
-            syn::parse::<RocMethodAttributeArgs>(attr).and_then(|args| roc_attr::apply_roc_method_attribute(args, func))
+            syn::parse::<AssociatedFunctionAttributeArgs>(attr).and_then(|args| roc_attr::apply_associated_function_attribute(args, func))
         } else {
             Err(syn::Error::new_spanned(
                 TokenStream2::from(item.clone()),
-                "the `roc` attribute can only be applied to type definitions, impl blocks and methods",
+                "the `roc` attribute can only be applied to type definitions, impl blocks and associated constants and functions",
             ))
         }
         .unwrap_or_else(|err| {
@@ -140,19 +142,18 @@ mod inner {
         .into()
     }
 
-    // These need to match the corresponding constants in `roc_codegen::meta`.
-    pub const MAX_ROC_TYPE_ENUM_VARIANTS: usize = 8;
-    pub const MAX_ROC_TYPE_ENUM_VARIANT_FIELDS: usize = 2;
-    pub const MAX_ROC_TYPE_STRUCT_FIELDS: usize =
-        MAX_ROC_TYPE_ENUM_VARIANTS * MAX_ROC_TYPE_ENUM_VARIANT_FIELDS;
+    // These need to match the corresponding constants in `roc_codegen`.
+    pub const MAX_ENUM_VARIANTS: usize = 8;
+    pub const MAX_ENUM_VARIANT_FIELDS: usize = 2;
+    pub const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;
 
-    pub const MAX_ROC_FUNCTION_ARGS: usize = 16;
+    pub const MAX_FUNCTION_ARGS: usize = 16;
 
-    pub const MAX_ROC_DEPENDENCIES: usize = 16;
+    pub const MAX_DEPENDENCIES: usize = 16;
 
     #[derive(Clone, Debug)]
-    pub struct RocTypeAttributeArgs {
-        pub category: RocTypeCategory,
+    pub struct TypeAttributeArgs {
+        pub category: TypeCategory,
         pub package_name: Option<String>,
         pub module_name: Option<String>,
         pub type_name: Option<String>,
@@ -160,21 +161,27 @@ mod inner {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum RocTypeCategory {
+    pub enum TypeCategory {
         Primitive,
         Pod,
         Inline,
     }
 
     #[derive(Clone)]
-    pub struct RocImplAttributeArgs {
+    pub struct ImplAttributeArgs {
         pub dependency_types: Vec<syn::Type>,
     }
 
     #[derive(Clone)]
-    pub struct RocMethodAttributeArgs {
+    pub struct AssociatedConstantAttributeArgs {
+        pub expr: String,
+        pub name: Option<String>,
+    }
+
+    #[derive(Clone)]
+    pub struct AssociatedFunctionAttributeArgs {
         pub body: String,
-        pub method_name: Option<String>,
+        pub name: Option<String>,
     }
 
     struct KeyStringValueArg {
@@ -214,16 +221,16 @@ mod inner {
         TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
     }
 
-    impl syn::parse::Parse for RocTypeAttributeArgs {
+    impl syn::parse::Parse for TypeAttributeArgs {
         fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
             let category: syn::Ident = input.parse()?;
 
             let category = if category == "primitive" {
-                RocTypeCategory::Primitive
+                TypeCategory::Primitive
             } else if category == "pod" {
-                RocTypeCategory::Pod
+                TypeCategory::Pod
             } else if category == "inline" {
-                RocTypeCategory::Inline
+                TypeCategory::Inline
             } else {
                 return Err(syn::Error::new_spanned(
                     category.clone(),
@@ -312,7 +319,7 @@ mod inner {
         }
     }
 
-    impl syn::parse::Parse for RocImplAttributeArgs {
+    impl syn::parse::Parse for ImplAttributeArgs {
         fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
             let arg: KeyTypeListValueArg = input.parse()?;
 
@@ -326,13 +333,13 @@ mod inner {
                 }
             };
 
-            if dependency_types.len() > MAX_ROC_DEPENDENCIES {
+            if dependency_types.len() > MAX_DEPENDENCIES {
                 return Err(syn::Error::new_spanned(
                     arg.types,
                     format!(
                         "the `roc` attribute does not support this many dependencies ({}/{})",
                         dependency_types.len(),
-                        MAX_ROC_DEPENDENCIES
+                        MAX_DEPENDENCIES
                     ),
                 ));
             }
@@ -341,7 +348,58 @@ mod inner {
         }
     }
 
-    impl syn::parse::Parse for RocMethodAttributeArgs {
+    impl syn::parse::Parse for AssociatedConstantAttributeArgs {
+        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+            let args =
+                        syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+                            input,
+                        )?;
+
+            let mut expr = None;
+            let mut name = None;
+
+            for arg in &args {
+                match arg.key.to_string().as_str() {
+                    "expr" => {
+                        if expr.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `expr`",
+                            ));
+                        }
+                    }
+                    "name" => {
+                        if name.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `name`",
+                            ));
+                        }
+                    }
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            arg.key.clone(),
+                            format!(
+                                "invalid argument `{}`, must be one of `expr`, `name`",
+                                other
+                            ),
+                        ));
+                    }
+                }
+            }
+
+            let Some(expr) = expr else {
+                let span = args
+                    .first()
+                    .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
+                return Err(syn::Error::new(span, "missing required argument `expr`"));
+            };
+
+            Ok(Self { expr, name })
+        }
+    }
+
+    impl syn::parse::Parse for AssociatedFunctionAttributeArgs {
         fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
             let args =
                 syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
@@ -349,7 +407,7 @@ mod inner {
                 )?;
 
             let mut body = None;
-            let mut method_name = None;
+            let mut name = None;
 
             for arg in &args {
                 match arg.key.to_string().as_str() {
@@ -362,7 +420,7 @@ mod inner {
                         }
                     }
                     "name" => {
-                        if method_name.replace(arg.value.value()).is_some() {
+                        if name.replace(arg.value.value()).is_some() {
                             return Err(syn::Error::new_spanned(
                                 arg.key.clone(),
                                 "repeated argument `name`",
@@ -388,7 +446,7 @@ mod inner {
                 return Err(syn::Error::new(span, "missing required argument `body`"));
             };
 
-            Ok(Self { body, method_name })
+            Ok(Self { body, name })
         }
     }
 

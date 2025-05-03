@@ -24,11 +24,16 @@ struct Cli {
 enum Command {
     /// List types annotated with the `roc` attribute
     ListTypes {
+        /// The categories of types to list
         #[arg(short, long, value_delimiter=' ', num_args=1.., required = true)]
         categories: Vec<ListedRocTypeCategory>,
     },
-    /// List constructors in impl blocks annotated with the `roc` attribute
-    ListConstructors,
+    /// List associated constants and functions for types annotated with the `roc` attribute
+    ListAssociatedItems {
+        /// Specific types to list associated items for (includes all types if omitted)
+        #[arg(short, long, value_delimiter = ' ')]
+        types: Vec<String>,
+    },
     /// Generate Roc modules
     GenerateModules {
         /// Path to directory in which to put the modules
@@ -63,8 +68,8 @@ fn main() -> Result<()> {
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
             generate::list_types(&options, &component_type_ids)?;
         }
-        Command::ListConstructors => {
-            generate::list_constructors()?;
+        Command::ListAssociatedItems { types } => {
+            generate::list_associated_items(types)?;
         }
         Command::GenerateModules {
             target_dir,

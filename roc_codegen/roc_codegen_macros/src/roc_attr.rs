@@ -1,9 +1,9 @@
 //! Attribute macro for Roc code generation.
 
 use crate::inner::{
-    MAX_ROC_DEPENDENCIES, MAX_ROC_FUNCTION_ARGS, MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
-    MAX_ROC_TYPE_ENUM_VARIANTS, MAX_ROC_TYPE_STRUCT_FIELDS, RocImplAttributeArgs,
-    RocMethodAttributeArgs, RocTypeAttributeArgs, RocTypeCategory,
+    AssociatedConstantAttributeArgs, AssociatedFunctionAttributeArgs, ImplAttributeArgs,
+    MAX_DEPENDENCIES, MAX_ENUM_VARIANT_FIELDS, MAX_ENUM_VARIANTS, MAX_FUNCTION_ARGS,
+    MAX_STRUCT_FIELDS, TypeAttributeArgs, TypeCategory,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
@@ -12,15 +12,15 @@ use syn::parse::Parser;
 
 #[derive(Clone, Debug)]
 struct ResolvedAttributeArgs {
-    type_category: RocTypeCategory,
+    type_category: TypeCategory,
     package_name: String,
     module_name: String,
     type_name: String,
     function_postfix: String,
 }
 
-pub(super) fn apply_roc_type_attribute(
-    args: Option<RocTypeAttributeArgs>,
+pub(super) fn apply_type_attribute(
+    args: Option<TypeAttributeArgs>,
     input: syn::DeriveInput,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -39,7 +39,7 @@ pub(super) fn apply_roc_type_attribute(
     let roc_pod_impl = generate_roc_pod_impl(rust_type_name, crate_root, args.type_category);
 
     let mut static_assertions = Vec::new();
-    let type_submit = generate_roc_type_submit(
+    let type_submit = generate_registered_type_submit(
         &args,
         rust_type_name,
         &input,
@@ -56,8 +56,8 @@ pub(super) fn apply_roc_type_attribute(
     })
 }
 
-pub(super) fn apply_roc_impl_attribute(
-    args: Option<RocImplAttributeArgs>,
+pub(super) fn apply_impl_attribute(
+    args: Option<ImplAttributeArgs>,
     block: syn::ItemImpl,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -76,64 +76,97 @@ pub(super) fn apply_roc_impl_attribute(
 
     let for_type = &block.self_ty;
 
-    let mut method_submits = Vec::with_capacity(block.items.len());
-    for item in &block.items {
-        if let syn::ImplItem::Fn(func) = item {
-            let sequence_number = method_submits.len();
-
-            let Some(RocMethodAttributeArgs { body, method_name }) =
-                extract_roc_method_attribute_args(func)
-            else {
-                continue;
-            };
-
-            method_submits.push(generate_roc_method_submit(
-                sequence_number,
-                for_type,
-                method_name,
-                func,
-                crate_root,
-                body,
-            )?);
-        }
-    }
-
-    let dependencies_submit = if let Some(args) = args {
-        generate_roc_dependencies_submit(for_type, &args.dependency_types, crate_root)?
+    let associated_dependencies_submit = if let Some(args) = args {
+        generate_associated_dependencies_submit(for_type, &args.dependency_types, crate_root)?
     } else {
         quote! {}
     };
 
+    let mut associated_constant_submits = Vec::with_capacity(block.items.len());
+    let mut associated_function_submits = Vec::with_capacity(block.items.len());
+
+    for item in &block.items {
+        if let syn::ImplItem::Const(constant) = item {
+            let sequence_number = associated_constant_submits.len();
+
+            let Some(AssociatedConstantAttributeArgs { expr, name }) =
+                extract_associated_constant_attribute_args(constant)
+            else {
+                continue;
+            };
+
+            associated_constant_submits.push(generate_associated_constant_submit(
+                for_type,
+                sequence_number,
+                name,
+                constant,
+                expr,
+                crate_root,
+            )?);
+        } else if let syn::ImplItem::Fn(function) = item {
+            let sequence_number = associated_function_submits.len();
+
+            let Some(AssociatedFunctionAttributeArgs { body, name }) =
+                extract_associated_function_attribute_args(function)
+            else {
+                continue;
+            };
+
+            associated_function_submits.push(generate_associated_function_submit(
+                for_type,
+                sequence_number,
+                name,
+                function,
+                body,
+                crate_root,
+            )?);
+        }
+    }
+
     Ok(quote! {
         #block
-        #(#method_submits)*
-        #dependencies_submit
+        #associated_dependencies_submit
+        #(#associated_constant_submits)*
+        #(#associated_function_submits)*
     })
 }
 
-pub(super) fn apply_roc_method_attribute(
-    _args: RocMethodAttributeArgs,
+pub(super) fn apply_associated_constant_attribute(
+    _args: AssociatedConstantAttributeArgs,
+    constant: syn::ImplItemConst,
+) -> syn::Result<TokenStream> {
+    // When the `roc` macro is applied to an associated constant, it doesn't
+    // actually do anything other than validating the macro arguments. It is
+    // the `roc` macro applied to the surrounding `impl` block that actually
+    // uses the arguments for code generation.
+    Ok(quote! {
+        #constant
+    })
+}
+
+pub(super) fn apply_associated_function_attribute(
+    _args: AssociatedFunctionAttributeArgs,
     func: syn::ImplItemFn,
 ) -> syn::Result<TokenStream> {
-    // When the `roc` macro is applied to a method, it doesn't actually do
-    // anything other than validating the macro arguments. It is the `roc`
-    // macro applied to the surrounding `impl` block that actually uses the
-    // arguments for code generation.
+    // When the `roc` macro is applied to an associated function, it doesn't
+    // actually do anything other than validating the macro arguments. It is
+    // the `roc` macro applied to the surrounding `impl` block that actually
+    // uses the arguments for code generation.
     Ok(quote! {
         #func
     })
 }
 
 fn resolve_type_attribute_args(
-    args: Option<RocTypeAttributeArgs>,
+    args: Option<TypeAttributeArgs>,
     input: &syn::DeriveInput,
 ) -> ResolvedAttributeArgs {
     match args {
         None => {
             let category = if derives_trait(input, "Pod") {
-                RocTypeCategory::Pod
+                TypeCategory::Pod
             } else {
-                RocTypeCategory::Inline
+                TypeCategory::Inline
             };
             let type_name = input.ident.to_string();
             let module_name = type_name.clone();
@@ -147,7 +180,7 @@ fn resolve_type_attribute_args(
                 function_postfix,
             }
         }
-        Some(RocTypeAttributeArgs {
+        Some(TypeAttributeArgs {
             category,
             package_name,
             module_name,
@@ -156,7 +189,7 @@ fn resolve_type_attribute_args(
         }) => {
             let type_name = type_name.unwrap_or_else(|| input.ident.to_string());
             let module_name = module_name.unwrap_or_else(|| type_name.clone());
-            let package_name = if category == RocTypeCategory::Primitive {
+            let package_name = if category == TypeCategory::Primitive {
                 package_name.unwrap_or_else(|| String::from("core"))
             } else {
                 package_name.unwrap_or_default()
@@ -202,14 +235,14 @@ fn generate_roc_impl(
     rust_type_name: &Ident,
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
-    type_category: RocTypeCategory,
+    type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
     let roc_type_id = generate_roc_type_id(rust_type_name, crate_root);
     let size = generate_size_expr(input, crate_root, type_category)?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
-        impl #crate_root::meta::Roc for #rust_type_name {
-            const ROC_TYPE_ID: #crate_root::meta::RocTypeID = #roc_type_id;
+        impl #crate_root::Roc for #rust_type_name {
+            const ROC_TYPE_ID: #crate_root::RocTypeID = #roc_type_id;
             const SERIALIZED_SIZE: usize = #size;
         }
     })
@@ -218,16 +251,13 @@ fn generate_roc_impl(
 fn generate_roc_pod_impl(
     rust_type_name: &Ident,
     crate_root: &TokenStream,
-    type_category: RocTypeCategory,
+    type_category: TypeCategory,
 ) -> TokenStream {
-    if matches!(
-        type_category,
-        RocTypeCategory::Primitive | RocTypeCategory::Pod
-    ) {
+    if matches!(type_category, TypeCategory::Primitive | TypeCategory::Pod) {
         // This impl ensures that we get an error if the type doesn't implement `Pod`
         quote! {
             #[cfg(feature = "roc_codegen")]
-            impl #crate_root::meta::RocPod for #rust_type_name {}
+            impl #crate_root::RocPod for #rust_type_name {}
         }
     } else {
         quote! {}
@@ -240,14 +270,14 @@ fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> Tok
     // that the Roc type ID of any component matches the component ID
     let type_path_tail = format!("::{}", rust_type_name);
     quote!(
-        #crate_root::meta::RocTypeID::hashed_from_str(concat!(
+        #crate_root::RocTypeID::hashed_from_str(concat!(
             module_path!(),
             #type_path_tail
         ))
     )
 }
 
-fn generate_roc_type_submit(
+fn generate_registered_type_submit(
     args: &ResolvedAttributeArgs,
     rust_type_name: &Ident,
     input: &syn::DeriveInput,
@@ -256,83 +286,114 @@ fn generate_roc_type_submit(
 ) -> syn::Result<TokenStream> {
     let package_name = &args.package_name;
     let module_name = &args.module_name;
-    let type_name = &args.type_name;
     let function_postfix = &args.function_postfix;
     let flags = generate_type_flags(crate_root, args.type_category);
+    let docstring = extract_and_process_docstring(&input.attrs);
+    let type_name = &args.type_name;
     let composition =
         generate_type_composition(input, crate_root, args.type_category, static_assertions)?;
-    let docstring = extract_and_process_docstring(&input.attrs);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
-            #crate_root::meta::RocType {
-                id: <#rust_type_name as #crate_root::meta::Roc>::ROC_TYPE_ID,
+            #crate_root::RegisteredType {
                 package_name: #package_name,
                 module_name: #module_name,
-                name: #type_name,
                 function_postfix: #function_postfix,
-                serialized_size: <#rust_type_name as #crate_root::meta::Roc>::SERIALIZED_SIZE,
+                serialized_size: <#rust_type_name as #crate_root::Roc>::SERIALIZED_SIZE,
                 flags: #flags,
-                composition: #composition,
-                docstring: #docstring,
+                ty: #crate_root::ir::Type {
+                    id: <#rust_type_name as #crate_root::Roc>::ROC_TYPE_ID,
+                    docstring: #docstring,
+                    name: #type_name,
+                    composition: #composition,
+                }
             }
         }
     })
 }
 
-fn generate_roc_method_submit(
-    sequence_number: usize,
-    for_type: &syn::Type,
-    specified_name: Option<String>,
-    func: &syn::ImplItemFn,
-    crate_root: &TokenStream,
-    roc_body: String,
-) -> syn::Result<TokenStream> {
-    let name = specified_name.unwrap_or_else(|| func.sig.ident.to_string());
-    let arguments = generate_function_arguments::<MAX_ROC_FUNCTION_ARGS>(&func.sig, crate_root)?;
-    let return_type = generate_method_return_type(&func.sig.output, crate_root)?;
-    let docstring = extract_and_process_docstring(&func.attrs);
-    Ok(quote! {
-        #[cfg(feature = "roc_codegen")]
-        inventory::submit! {
-            #crate_root::meta::RocMethod {
-                sequence_number: #sequence_number,
-                for_type_id: <#for_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
-                name: #name,
-                arguments: #arguments,
-                return_type: #return_type,
-                roc_body: #roc_body,
-                docstring: #docstring,
-            }
-        }
-    })
-}
-
-fn generate_roc_dependencies_submit(
+fn generate_associated_dependencies_submit(
     for_type: &syn::Type,
     dependency_types: &[syn::Type],
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
-    let dependencies = generate_type_id_list(dependency_types, crate_root, MAX_ROC_DEPENDENCIES);
+    let dependencies = generate_type_id_list(dependency_types, crate_root, MAX_DEPENDENCIES);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
-            #crate_root::meta::RocDependencies {
-                for_type_id: <#for_type as #crate_root::meta::Roc>::ROC_TYPE_ID,
+            #crate_root::ir::AssociatedDependencies {
+                for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
                 dependencies: #dependencies,
             }
         }
     })
 }
 
-fn generate_type_flags(crate_root: &TokenStream, type_category: RocTypeCategory) -> TokenStream {
+fn generate_associated_constant_submit(
+    for_type: &syn::Type,
+    sequence_number: usize,
+    specified_name: Option<String>,
+    constant: &syn::ImplItemConst,
+    expr: String,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    let docstring = extract_and_process_docstring(&constant.attrs);
+    let name = specified_name.unwrap_or_else(|| constant.ident.to_string().to_lowercase());
+    let ty = generate_inferrable_collectable_translatable_type(
+        Box::new(constant.ty.clone()),
+        crate_root,
+    )?;
+    Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
+        inventory::submit! {
+            #crate_root::ir::AssociatedConstant {
+                for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
+                sequence_number: #sequence_number,
+                docstring: #docstring,
+                name: #name,
+                ty: #ty,
+                expr: #expr,
+            }
+        }
+    })
+}
+
+fn generate_associated_function_submit(
+    for_type: &syn::Type,
+    sequence_number: usize,
+    specified_name: Option<String>,
+    function: &syn::ImplItemFn,
+    body: String,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    let docstring = extract_and_process_docstring(&function.attrs);
+    let name = specified_name.unwrap_or_else(|| function.sig.ident.to_string());
+    let arguments = generate_function_arguments::<MAX_FUNCTION_ARGS>(&function.sig, crate_root)?;
+    let return_type = generate_function_return_type(&function.sig.output, crate_root)?;
+    Ok(quote! {
+        #[cfg(feature = "roc_codegen")]
+        inventory::submit! {
+            #crate_root::ir::AssociatedFunction {
+                for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
+                sequence_number: #sequence_number,
+                docstring: #docstring,
+                name: #name,
+                arguments: #arguments,
+                body: #body,
+                return_type: #return_type,
+            }
+        }
+    })
+}
+
+fn generate_type_flags(crate_root: &TokenStream, type_category: TypeCategory) -> TokenStream {
     match type_category {
         // All primitives are required to be POD
-        RocTypeCategory::Primitive | RocTypeCategory::Pod => {
-            quote! { #crate_root::meta::RocTypeFlags::IS_POD }
+        TypeCategory::Primitive | TypeCategory::Pod => {
+            quote! { #crate_root::RegisteredTypeFlags::IS_POD }
         }
-        RocTypeCategory::Inline => {
-            quote! { #crate_root::meta::RocTypeFlags::empty() }
+        TypeCategory::Inline => {
+            quote! { #crate_root::RegisteredTypeFlags::empty() }
         }
     }
 }
@@ -340,14 +401,14 @@ fn generate_type_flags(crate_root: &TokenStream, type_category: RocTypeCategory)
 fn generate_type_composition(
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
-    type_category: RocTypeCategory,
+    type_category: TypeCategory,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
-    if type_category == RocTypeCategory::Primitive {
+    if type_category == TypeCategory::Primitive {
         return Ok(quote! {
-            #crate_root::meta::RocTypeComposition::Primitive(
-                #crate_root::meta::RocPrimitiveKind::LibraryProvided{
-                    precision: #crate_root::meta::RocPrimitivePrecision::PrecisionIrrelevant,
+            #crate_root::ir::TypeComposition::Primitive(
+                #crate_root::ir::PrimitiveKind::LibraryProvided {
+                    precision: #crate_root::ir::PrimitivePrecision::PrecisionIrrelevant,
                }
             )
         });
@@ -356,11 +417,10 @@ fn generate_type_composition(
         syn::Data::Struct(data) => {
             let type_name = &input.ident;
 
-            let fields =
-                generate_fields(input, &data.fields, crate_root, MAX_ROC_TYPE_STRUCT_FIELDS)?;
+            let fields = generate_fields(input, &data.fields, crate_root, MAX_STRUCT_FIELDS)?;
 
             Ok(quote! {
-                #crate_root::meta::RocTypeComposition::Struct{
+                #crate_root::ir::TypeComposition::Struct {
                     alignment: ::std::mem::align_of::<#type_name>(),
                     fields: #fields
                 }
@@ -369,7 +429,7 @@ fn generate_type_composition(
         syn::Data::Enum(data) => {
             let variants = generate_variants(input, data, crate_root, false, static_assertions)?;
             Ok(quote! {
-                #crate_root::meta::RocTypeComposition::Enum(#variants)
+                #crate_root::ir::TypeComposition::Enum(#variants)
             })
         }
         syn::Data::Union(_) => Err(syn::Error::new_spanned(
@@ -387,7 +447,7 @@ fn generate_fields(
 ) -> syn::Result<TokenStream> {
     Ok(match fields {
         syn::Fields::Unit => quote! {
-            #crate_root::meta::RocTypeFields::None
+            #crate_root::ir::TypeFields::None
         },
         syn::Fields::Named(fields) => {
             if fields.named.len() > max_fields {
@@ -402,7 +462,7 @@ fn generate_fields(
             }
             let fields = generate_named_field_list(fields, crate_root, max_fields);
             quote! {
-                #crate_root::meta::RocTypeFields::Named(#fields)
+                #crate_root::ir::TypeFields::Named(#fields)
             }
         }
         syn::Fields::Unnamed(fields) => {
@@ -418,7 +478,7 @@ fn generate_fields(
             }
             let fields = generate_unnamed_field_list(fields, crate_root, max_fields);
             quote! {
-                #crate_root::meta::RocTypeFields::Unnamed(#fields)
+                #crate_root::ir::TypeFields::Unnamed(#fields)
             }
         }
     })
@@ -439,7 +499,7 @@ fn generate_named_field_list(
             let ident = field.ident.as_ref().unwrap().to_string();
             let ty = generate_field_type(field, crate_root);
             quote! {
-                Some(#crate_root::meta::NamedRocTypeField {
+                Some(#crate_root::ir::NamedTypeField {
                     docstring: #docstring,
                     ident: #ident,
                     ty: #ty,
@@ -452,7 +512,7 @@ fn generate_named_field_list(
         ));
 
     quote! {
-        #crate_root::meta::StaticList([#(#fields)*])
+        #crate_root::utils::StaticList([#(#fields)*])
     }
 }
 
@@ -469,7 +529,7 @@ fn generate_unnamed_field_list(
         .map(|field| {
             let ty = generate_field_type(field, crate_root);
             quote! {
-                Some(#crate_root::meta::UnnamedRocTypeField {
+                Some(#crate_root::ir::UnnamedTypeField {
                     ty: #ty,
                 }),
             }
@@ -480,7 +540,7 @@ fn generate_unnamed_field_list(
         ));
 
     quote! {
-        #crate_root::meta::StaticList([#(#fields)*])
+        #crate_root::utils::StaticList([#(#fields)*])
     }
 }
 
@@ -489,16 +549,16 @@ fn generate_field_type(field: &syn::Field, crate_root: &TokenStream) -> TokenStr
         let elem_ty = &array.elem;
         let len = &array.len;
         quote! {
-            #crate_root::meta::RocFieldType::Array {
-                elem_type_id: <#elem_ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
+            #crate_root::ir::FieldType::Array {
+                elem_type_id: <#elem_ty as #crate_root::Roc>::ROC_TYPE_ID,
                 len: #len,
             }
         }
     } else {
         let ty = &field.ty;
         quote! {
-            #crate_root::meta::RocFieldType::Single {
-                type_id: <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID,
+            #crate_root::ir::FieldType::Single {
+                type_id: <#ty as #crate_root::Roc>::ROC_TYPE_ID,
             }
         }
     }
@@ -518,13 +578,13 @@ fn generate_variants(
         ));
     }
 
-    if data.variants.len() > MAX_ROC_TYPE_ENUM_VARIANTS {
+    if data.variants.len() > MAX_ENUM_VARIANTS {
         return Err(syn::Error::new_spanned(
             input,
             format!(
                 "the `roc` attribute does not support this many variants ({}/{})",
                 data.variants.len(),
-                MAX_ROC_TYPE_ENUM_VARIANTS
+                MAX_ENUM_VARIANTS
             ),
         ));
     }
@@ -562,7 +622,7 @@ fn generate_variants(
                 variant,
                 &variant.fields,
                 crate_root,
-                MAX_ROC_TYPE_ENUM_VARIANT_FIELDS,
+                MAX_ENUM_VARIANT_FIELDS,
             )?;
 
             let docstring = extract_and_process_docstring(&variant.attrs);
@@ -570,7 +630,7 @@ fn generate_variants(
             let ident_str = ident.to_string();
 
             Ok(quote! {
-                Some(#crate_root::meta::RocTypeVariant {
+                Some(#crate_root::ir::TypeVariant {
                     docstring: #docstring,
                     ident: #ident_str,
                     size: ::std::mem::size_of::<#variant_checks_module_ident::#ident>(),
@@ -581,7 +641,7 @@ fn generate_variants(
         })
         .chain(iter::repeat_n(
             Ok(quote! {None,}),
-            MAX_ROC_TYPE_ENUM_VARIANTS - data.variants.len(),
+            MAX_ENUM_VARIANTS - data.variants.len(),
         ))
         .collect::<syn::Result<Vec<TokenStream>>>()?;
 
@@ -594,16 +654,16 @@ fn generate_variants(
     });
 
     Ok(quote! {
-        #crate_root::meta::RocTypeVariants(#crate_root::meta::StaticList([#(#variants)*]))
+        #crate_root::ir::TypeVariants(#crate_root::utils::StaticList([#(#variants)*]))
     })
 }
 
 fn generate_size_expr(
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
-    type_category: RocTypeCategory,
+    type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
-    if type_category == RocTypeCategory::Primitive {
+    if type_category == TypeCategory::Primitive {
         // Since primitives are always POD, their serialized size
         // will always match their in-memory size
         let type_name = &input.ident;
@@ -680,11 +740,11 @@ fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStr
         let elem_ty = &array.elem;
         let len = &array.len;
         quote! {
-            (<#elem_ty as #crate_root::meta::Roc>::SERIALIZED_SIZE * #len)
+            (<#elem_ty as #crate_root::Roc>::SERIALIZED_SIZE * #len)
         }
     } else {
         quote! {
-            <#ty as #crate_root::meta::Roc>::SERIALIZED_SIZE
+            <#ty as #crate_root::Roc>::SERIALIZED_SIZE
         }
     }
 }
@@ -733,12 +793,12 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
                     ));
                 }
                 let receiver = if reference.is_some() {
-                    quote! { #crate_root::meta::RocMethodReceiver::RefSelf }
+                    quote! { #crate_root::ir::MethodReceiver::RefSelf }
                 } else {
-                    quote! { #crate_root::meta::RocMethodReceiver::OwnedSelf }
+                    quote! { #crate_root::ir::MethodReceiver::OwnedSelf }
                 };
                 Ok(quote! {
-                    Some(#crate_root::meta::RocFunctionArgument::Receiver(#receiver)),
+                    Some(#crate_root::ir::FunctionArgument::Receiver(#receiver)),
                 })
             }
             syn::FnArg::Typed(arg) => {
@@ -751,10 +811,10 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
                         ));
                     }
                 };
-                let ty = generate_function_signature_type(arg.ty.clone(), crate_root)?;
+                let ty = generate_collectable_translatable_type(arg.ty.clone(), crate_root)?;
                 Ok(quote! {
-                    Some(#crate_root::meta::RocFunctionArgument::Typed(
-                        #crate_root::meta::TypedRocFunctionArgument {
+                    Some(#crate_root::ir::FunctionArgument::Typed(
+                        #crate_root::ir::TypedFunctionArgument {
                             ident: #ident_str,
                             ty: #ty,
                         }
@@ -769,32 +829,18 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
         .collect::<syn::Result<Vec<TokenStream>>>()?;
 
     Ok(quote! {
-        #crate_root::meta::RocFunctionArguments(#crate_root::meta::StaticList([#(#args)*]))
+        #crate_root::ir::FunctionArguments(#crate_root::utils::StaticList([#(#args)*]))
     })
 }
 
-fn generate_method_return_type(
+fn generate_function_return_type(
     return_type: &syn::ReturnType,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
     match return_type {
-        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
-            syn::Type::Path(type_path)
-                if type_path.qself.is_none()
-                    && type_path.path.segments.len() == 1
-                    && type_path.path.segments[0].ident == "Self" =>
-            {
-                Ok(quote! {
-                    #crate_root::meta::RocMethodReturnType::SelfType
-                })
-            }
-            _ => {
-                let ty = generate_function_signature_type(ty.clone(), crate_root)?;
-                Ok(quote! {
-                    #crate_root::meta::RocMethodReturnType::Specific(#ty)
-                })
-            }
-        },
+        syn::ReturnType::Type(_, ty) => {
+            generate_inferrable_collectable_translatable_type(ty.clone(), crate_root)
+        }
         syn::ReturnType::Default => Err(syn::Error::new_spanned(
             return_type,
             "the `roc` attribute does not support functions returning nothing",
@@ -802,56 +848,69 @@ fn generate_method_return_type(
     }
 }
 
-fn generate_function_signature_type(
-    mut arg_ty: Box<syn::Type>,
+fn generate_inferrable_collectable_translatable_type(
+    mut ty: Box<syn::Type>,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
-    arg_ty = unwrap_function_signature_references(arg_ty)?;
-    match arg_ty.as_ref() {
+    ty = unwrap_references(ty)?;
+    match ty.as_ref() {
+        syn::Type::Path(type_path)
+            if type_path.qself.is_none()
+                && type_path.path.segments.len() == 1
+                && type_path.path.segments[0].ident == "Self" =>
+        {
+            Ok(quote! {
+                #crate_root::ir::Inferrable::SelfType
+            })
+        }
+        _ => {
+            let ty = generate_collectable_translatable_type(ty.clone(), crate_root)?;
+            Ok(quote! {
+                #crate_root::ir::Inferrable::Specific(#ty)
+            })
+        }
+    }
+}
+
+fn generate_collectable_translatable_type(
+    mut ty: Box<syn::Type>,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    ty = unwrap_references(ty)?;
+    match ty.as_ref() {
         syn::Type::Array(syn::TypeArray { elem, .. })
         | syn::Type::Slice(syn::TypeSlice { elem, .. }) => {
-            let elem_ty = unwrap_function_signature_references(elem.clone())?;
-            let ty = generate_maybe_unregistered_type(&elem_ty, crate_root);
+            let ty = generate_translatable_type(elem.clone(), crate_root)?;
             Ok(quote! {
-                #crate_root::meta::RocFunctionSignatureType::List(#ty)
+                #crate_root::ir::Collectable::List(#ty)
             })
         }
-        arg_ty => {
-            let ty = generate_maybe_unregistered_type(arg_ty, crate_root);
+        _ => {
+            let ty = generate_translatable_type(ty, crate_root)?;
             Ok(quote! {
-                #crate_root::meta::RocFunctionSignatureType::Single(#ty)
+                #crate_root::ir::Collectable::Single(#ty)
             })
         }
     }
 }
 
-fn unwrap_function_signature_references(mut ty: Box<syn::Type>) -> syn::Result<Box<syn::Type>> {
-    while let syn::Type::Reference(syn::TypeReference {
-        elem, mutability, ..
-    }) = *ty
-    {
-        if mutability.is_some() {
-            return Err(syn::Error::new_spanned(
-                elem,
-                "the `roc` attribute does not support function signatures with mutable references",
-            ));
-        }
-        ty = elem;
-    }
-    Ok(ty)
-}
-
-fn generate_maybe_unregistered_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
-    if type_is_string(ty) {
-        quote! {
-            #crate_root::meta::MaybeUnregisteredRocType::String
-        }
-    } else {
-        quote! {
-            #crate_root::meta::MaybeUnregisteredRocType::Registered(
-                <#ty as #crate_root::meta::Roc>::ROC_TYPE_ID
+fn generate_translatable_type(
+    mut ty: Box<syn::Type>,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    ty = unwrap_references(ty)?;
+    if type_is_string(&ty) {
+        Ok(quote! {
+            #crate_root::ir::TranslatableType::Special(
+                #crate_root::ir::SpecialType::String
             )
-        }
+        })
+    } else {
+        Ok(quote! {
+            #crate_root::ir::TranslatableType::Registered(
+                <#ty as #crate_root::Roc>::ROC_TYPE_ID
+            )
+        })
     }
 }
 
@@ -869,6 +928,22 @@ fn type_is_string(ty: &syn::Type) -> bool {
     )
 }
 
+fn unwrap_references(mut ty: Box<syn::Type>) -> syn::Result<Box<syn::Type>> {
+    while let syn::Type::Reference(syn::TypeReference {
+        elem, mutability, ..
+    }) = *ty
+    {
+        if mutability.is_some() {
+            return Err(syn::Error::new_spanned(
+                elem,
+                "the `roc` attribute does not support mutable references",
+            ));
+        }
+        ty = elem;
+    }
+    Ok(ty)
+}
+
 fn generate_type_id_list(
     types: &[syn::Type],
     crate_root: &TokenStream,
@@ -880,13 +955,13 @@ fn generate_type_id_list(
         .iter()
         .map(|ty| {
             quote! {
-                Some(<#ty as #crate_root::meta::Roc>::ROC_TYPE_ID),
+                Some(<#ty as #crate_root::Roc>::ROC_TYPE_ID),
             }
         })
         .chain(iter::repeat_n(quote! {None,}, max_types - types.len()));
 
     quote! {
-        #crate_root::meta::StaticList([#(#ids)*])
+        #crate_root::utils::StaticList([#(#ids)*])
     }
 }
 
@@ -920,7 +995,26 @@ fn process_docstrings(lines: impl IntoIterator<Item = String>) -> String {
     docstring
 }
 
-fn extract_roc_method_attribute_args(func: &syn::ImplItemFn) -> Option<RocMethodAttributeArgs> {
+fn extract_associated_constant_attribute_args(
+    constant: &syn::ImplItemConst,
+) -> Option<AssociatedConstantAttributeArgs> {
+    for attribute in &constant.attrs {
+        if let syn::Meta::List(syn::MetaList { path, tokens, .. }) = &attribute.meta {
+            let Some(last) = path.segments.last() else {
+                continue;
+            };
+            if last.ident != "roc" {
+                continue;
+            }
+            return syn::parse2(tokens.clone()).ok();
+        }
+    }
+    None
+}
+
+fn extract_associated_function_attribute_args(
+    func: &syn::ImplItemFn,
+) -> Option<AssociatedFunctionAttributeArgs> {
     for attribute in &func.attrs {
         if let syn::Meta::List(syn::MetaList { path, tokens, .. }) = &attribute.meta {
             let Some(last) = path.segments.last() else {
