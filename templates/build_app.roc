@@ -143,7 +143,7 @@ roc_build_script! = |app_dir, debug_mode|
 link_script_with_platform! : Str, Str => Result {} _
 link_script_with_platform! = |platform_dir, app_dir|
     Cmd.exec!(
-        "clang",
+        "cc",
         [
             "-shared",
             "-o",
