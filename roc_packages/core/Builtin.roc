@@ -70,8 +70,8 @@ write_bytes_u128 = |bytes, value|
 
 # Signed integers
 
-write_bytes_u8 : List U8, I8 -> List U8
-write_bytes_u8 = |bytes, value|
+write_bytes_i8 : List U8, I8 -> List U8
+write_bytes_i8 = |bytes, value|
     bytes |> write_bytes_u8(Num.to_u8(value))
 
 write_bytes_i16 : List U8, I16 -> List U8
