@@ -74,6 +74,15 @@ fn write_module_header(
     }
 
     if ty.is_component() {
+        for constant in associated_constants {
+            if matches!(
+                constant.ty,
+                ir::Containable::Single(ir::Inferrable::SelfType)
+            ) {
+                writeln!(roc_code, "    add_{},", constant.name)?;
+            }
+        }
+
         for function in associated_functions {
             if matches!(
                 function.return_type,
@@ -415,6 +424,29 @@ pub(super) fn write_associated_constant(
         expr = associated_constant.expr.trim(),
     )?;
 
+    if ty.is_component()
+        && matches!(
+            associated_constant.ty,
+            ir::Containable::Single(ir::Inferrable::SelfType)
+        )
+    {
+        writeln!(
+            roc_code,
+            "\n\
+                {docstring}\
+                add_{name} : Entity.Data -> Entity.Data\n\
+                add_{name} = |data|\n    \
+                    add_to_entity(data, {name})\
+                ",
+            docstring = if docstring.is_empty() {
+                String::new()
+            } else {
+                format!("{docstring}## Adds the component to the given entity's data.\n")
+            },
+            name = associated_constant.name,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -531,11 +563,16 @@ pub(super) fn write_associated_function(
         writeln!(
             roc_code,
             "\n\
-            {docstring}## Adds the component to the given entity's data.\n\
+            {docstring}\
             add_{name} : Entity.Data{arg_types} -> Entity.Data\n\
             add_{name} = |data{arg_names}|\n    \
                 add_to_entity(data, {name}({non_empty_arg_names}))\
             ",
+            docstring = if docstring.is_empty() {
+                String::new()
+            } else {
+                format!("{docstring}## Adds the component to the given entity's data.\n")
+            },
             arg_types = if arg_types.is_empty() {
                 String::new()
             } else {
