@@ -1,7 +1,7 @@
 //! Generation of Roc code for working with types annotated with the
 //! [`roc`](crate::roc) attribute.
 
-use super::{RocGenerateOptions, get_field_type};
+use super::get_field_type;
 use crate::{RegisteredType, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow};
 use std::{
@@ -11,7 +11,6 @@ use std::{
 };
 
 pub(super) fn generate_module(
-    options: &RocGenerateOptions,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_dependencies: &[ir::AssociatedDependencies],
@@ -27,7 +26,7 @@ pub(super) fn generate_module(
     write_module_header(&mut module, associated_constants, associated_functions, ty)?;
     module.push('\n');
 
-    write_imports(options, &mut module, type_map, associated_dependencies, ty)?;
+    write_imports(&mut module, type_map, associated_dependencies, ty)?;
     module.push('\n');
 
     write_type_declaration(&mut module, type_map, &ty.ty)?;
@@ -113,18 +112,12 @@ fn write_module_header(
 }
 
 fn write_imports(
-    options: &RocGenerateOptions,
     roc_code: &mut String,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
 ) -> Result<()> {
-    let mut imports = Vec::from_iter(determine_imports(
-        options,
-        type_map,
-        associated_dependencies,
-        ty,
-    ));
+    let mut imports = Vec::from_iter(determine_imports(type_map, associated_dependencies, ty));
     imports.sort();
     for import in imports {
         writeln!(roc_code, "import {import}")?;
@@ -133,7 +126,6 @@ fn write_imports(
 }
 
 fn determine_imports(
-    options: &RocGenerateOptions,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
@@ -141,36 +133,25 @@ fn determine_imports(
     let mut imports = HashSet::new();
 
     // All modules needs this import
-    imports.insert(format!(
-        "{core}.Builtin as Builtin",
-        core = &options.core_package_name
-    ));
+    imports.insert(String::from("core.Builtin as Builtin"));
 
     if ty.is_component() {
         // ECS components need this import
-        imports.insert(format!(
-            "{pf}.Entity as Entity",
-            pf = &options.platform_package_name
-        ));
+        imports.insert(String::from("pf.Entity as Entity"));
     }
 
     for associated_dependencies in associated_dependencies {
-        add_imports_for_associated_dependencies(
-            options,
-            &mut imports,
-            type_map,
-            associated_dependencies,
-        );
+        add_imports_for_associated_dependencies(&mut imports, type_map, associated_dependencies);
     }
 
     match &ty.ty.composition {
         ir::TypeComposition::Primitive(_) => {}
         ir::TypeComposition::Struct { fields, .. } => {
-            add_imports_for_fields(options, &mut imports, type_map, fields);
+            add_imports_for_fields(&mut imports, type_map, fields);
         }
         ir::TypeComposition::Enum(variants) => {
             for variant in &variants.0 {
-                add_imports_for_fields(options, &mut imports, type_map, &variant.fields);
+                add_imports_for_fields(&mut imports, type_map, &variant.fields);
             }
         }
     }
@@ -178,24 +159,18 @@ fn determine_imports(
 }
 
 fn add_imports_for_associated_dependencies(
-    options: &RocGenerateOptions,
     imports: &mut HashSet<String>,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &ir::AssociatedDependencies,
 ) {
     for dependency_id in &associated_dependencies.dependencies {
         if let Some(dependency) = type_map.get(dependency_id) {
-            imports.insert(dependency.import_module(
-                &options.import_prefix,
-                &options.core_package_name,
-                &options.platform_package_name,
-            ));
+            imports.insert(dependency.import_module());
         }
     }
 }
 
 fn add_imports_for_fields<const N: usize>(
-    options: &RocGenerateOptions,
     imports: &mut HashSet<String>,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     fields: &ir::TypeFields<N>,
@@ -209,11 +184,7 @@ fn add_imports_for_fields<const N: usize>(
                     ir::FieldType::Array { elem_type_id, .. } => elem_type_id,
                 };
                 if let Some(field_ty) = type_map.get(type_id) {
-                    imports.insert(field_ty.import_module(
-                        &options.import_prefix,
-                        &options.core_package_name,
-                        &options.platform_package_name,
-                    ));
+                    imports.insert(field_ty.import_module());
                 }
             }
         }
@@ -224,11 +195,7 @@ fn add_imports_for_fields<const N: usize>(
                     ir::FieldType::Array { elem_type_id, .. } => elem_type_id,
                 };
                 if let Some(field_ty) = type_map.get(type_id) {
-                    imports.insert(field_ty.import_module(
-                        &options.import_prefix,
-                        &options.core_package_name,
-                        &options.platform_package_name,
-                    ));
+                    imports.insert(field_ty.import_module());
                 }
             }
         }

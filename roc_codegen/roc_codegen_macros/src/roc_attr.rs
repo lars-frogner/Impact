@@ -13,14 +13,14 @@ use syn::parse::Parser;
 #[derive(Clone, Debug)]
 struct ResolvedAttributeArgs {
     type_category: TypeCategory,
-    package_name: String,
+    module_prefix: String,
     module_name: String,
     type_name: String,
     function_postfix: String,
 }
 
 pub(super) fn apply_type_attribute(
-    args: Option<TypeAttributeArgs>,
+    args: TypeAttributeArgs,
     input: syn::DeriveInput,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -57,7 +57,7 @@ pub(super) fn apply_type_attribute(
 }
 
 pub(super) fn apply_impl_attribute(
-    args: Option<ImplAttributeArgs>,
+    args: ImplAttributeArgs,
     block: syn::ItemImpl,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -76,7 +76,7 @@ pub(super) fn apply_impl_attribute(
 
     let for_type = &block.self_ty;
 
-    let associated_dependencies_submit = if let Some(args) = args {
+    let associated_dependencies_submit = if !args.dependency_types.is_empty() {
         generate_associated_dependencies_submit(for_type, &args.dependency_types, crate_root)?
     } else {
         quote! {}
@@ -158,51 +158,36 @@ pub(super) fn apply_associated_function_attribute(
 }
 
 fn resolve_type_attribute_args(
-    args: Option<TypeAttributeArgs>,
+    TypeAttributeArgs {
+        category,
+        module_prefix,
+        module_name,
+        type_name,
+        function_postfix,
+    }: TypeAttributeArgs,
     input: &syn::DeriveInput,
 ) -> ResolvedAttributeArgs {
-    match args {
-        None => {
-            let category = if derives_trait(input, "Pod") {
-                TypeCategory::Pod
-            } else {
-                TypeCategory::Inline
-            };
-            let type_name = input.ident.to_string();
-            let module_name = type_name.clone();
-            let package_name = String::new();
-            let function_postfix = String::new();
-            ResolvedAttributeArgs {
-                type_category: category,
-                package_name,
-                module_name,
-                type_name,
-                function_postfix,
-            }
+    let category = category.unwrap_or_else(|| {
+        if derives_trait(input, "Pod") {
+            TypeCategory::Pod
+        } else {
+            TypeCategory::Inline
         }
-        Some(TypeAttributeArgs {
-            category,
-            package_name,
-            module_name,
-            type_name,
-            function_postfix,
-        }) => {
-            let type_name = type_name.unwrap_or_else(|| input.ident.to_string());
-            let module_name = module_name.unwrap_or_else(|| type_name.clone());
-            let package_name = if category == TypeCategory::Primitive {
-                package_name.unwrap_or_else(|| String::from("core"))
-            } else {
-                package_name.unwrap_or_default()
-            };
-            let function_postfix = function_postfix.unwrap_or_default();
-            ResolvedAttributeArgs {
-                type_category: category,
-                package_name,
-                module_name,
-                type_name,
-                function_postfix,
-            }
-        }
+    });
+    let type_name = type_name.unwrap_or_else(|| input.ident.to_string());
+    let module_name = module_name.unwrap_or_else(|| type_name.clone());
+    let module_prefix = if category == TypeCategory::Primitive {
+        module_prefix.unwrap_or_else(|| String::from("core"))
+    } else {
+        module_prefix.unwrap_or_default()
+    };
+    let function_postfix = function_postfix.unwrap_or_default();
+    ResolvedAttributeArgs {
+        type_category: category,
+        module_prefix,
+        module_name,
+        type_name,
+        function_postfix,
     }
 }
 
@@ -284,7 +269,7 @@ fn generate_registered_type_submit(
     crate_root: &TokenStream,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
-    let package_name = &args.package_name;
+    let module_prefix = &args.module_prefix;
     let module_name = &args.module_name;
     let function_postfix = &args.function_postfix;
     let flags = generate_type_flags(crate_root, args.type_category);
@@ -296,7 +281,7 @@ fn generate_registered_type_submit(
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
             #crate_root::RegisteredType {
-                package_name: #package_name,
+                module_prefix: #module_prefix,
                 module_name: #module_name,
                 function_postfix: #function_postfix,
                 serialized_size: <#rust_type_name as #crate_root::Roc>::SERIALIZED_SIZE,
