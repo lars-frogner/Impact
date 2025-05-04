@@ -11,6 +11,8 @@ module [
     scale,
     unscale,
     dot,
+    norm_squared,
+    norm,
     is_approx_eq,
     write_bytes_32,
     write_bytes_64,
@@ -46,6 +48,9 @@ scale = |vec, s| map(vec, |elem| Num.mul(elem, s))
 unscale = |vec, s| scale(vec, 1.0 / s)
 
 dot = |a, b| map2(a, b, Num.mul) |> reduce(Num.add)
+
+norm_squared = |vec| dot(vec, vec)
+norm = |vec| vec |> norm_squared |> Num.sqrt
 
 is_approx_eq : Vector3 a, Vector3 a, { atol ?? Frac a, rtol ?? Frac a } -> Bool
 is_approx_eq = |a, b, tol|
