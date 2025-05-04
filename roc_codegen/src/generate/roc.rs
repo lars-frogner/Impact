@@ -94,8 +94,8 @@ fn write_module_header(
 
         roc_code.push_str(
             "    \
-                add_to_entity,\n    \
-                add_to_entities,\n\
+                add,\n    \
+                add_multiple,\n\
             ]\n\
             ",
         );
@@ -436,7 +436,7 @@ pub(super) fn write_associated_constant(
                 {docstring}\
                 add_{name} : Entity.Data -> Entity.Data\n\
                 add_{name} = |data|\n    \
-                    add_to_entity(data, {name})\
+                    add(data, {name})\
                 ",
             docstring = if docstring.is_empty() {
                 String::new()
@@ -566,7 +566,7 @@ pub(super) fn write_associated_function(
             {docstring}\
             add_{name} : Entity.Data{arg_types} -> Entity.Data\n\
             add_{name} = |data{arg_names}|\n    \
-                add_to_entity(data, {name}({non_empty_arg_names}))\
+                add(data, {name}({non_empty_arg_names}))\
             ",
             docstring = if docstring.is_empty() {
                 String::new()
@@ -689,8 +689,8 @@ fn write_component_functions(roc_code: &mut String, ty: &RegisteredType) -> Resu
         ## Adds a value of the [{name}] component to an entity's data.\n\
         ## Note that an entity never should have more than a single value of\n\
         ## the same component type.\n\
-        add_to_entity : Entity.Data, {name} -> Entity.Data\n\
-        add_to_entity = |data, value|\n    \
+        add : Entity.Data, {name} -> Entity.Data\n\
+        add = |data, value|\n    \
             data |> Entity.append_component(write_packet, value)\n\
         \n\
         ## Adds multiple values of the [{name}] component to the data of\n\
@@ -698,8 +698,8 @@ fn write_component_functions(roc_code: &mut String, ty: &RegisteredType) -> Resu
         ## Note that the number of values should match the number of entities\n\
         ## in the set and that an entity never should have more than a single\n\
         ## value of the same component type.\n\
-        add_to_entities : Entity.MultiData, List {name} -> Entity.MultiData\n\
-        add_to_entities = |data, values|\n    \
+        add_multiple : Entity.MultiData, List {name} -> Entity.MultiData\n\
+        add_multiple = |data, values|\n    \
             data |> Entity.append_components(write_multi_packet, values)\n\
         \n\
         write_packet : List U8, {name} -> List U8\n\
