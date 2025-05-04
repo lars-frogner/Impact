@@ -8,7 +8,7 @@ use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose
 /// [`ContactResponseParameters`] are the same across their surface.
-#[roc]
+#[roc(prefix = "Comp", name = "UniformContactResponse")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct UniformContactResponseComp(pub ContactResponseParameters);

@@ -1,5 +1,6 @@
 build
 lib
 scripts/main
-scripts/Generated
+scripts/Comp
+scripts/Engine
 assets

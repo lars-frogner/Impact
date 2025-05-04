@@ -14,7 +14,7 @@ use roc_codegen::roc;
 /// For this component to have an effect, the entity also needs a
 /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
 /// [`VelocityComp`](crate::physics::VelocityComp).
-#[roc]
+#[roc(prefix = "Comp", name = "OrbitalTrajectory")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OrbitalTrajectoryComp {

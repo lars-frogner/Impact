@@ -64,19 +64,19 @@ pub trait SceneGraphNode {
 pub trait SceneGraphNodeID: NodeIDToIdx + IdxToNodeID + Pod {}
 
 /// Identifier for a [`GroupNode`] in a [`SceneGraph`].
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct GroupNodeID(GenerationalIdx);
 
 /// Identifier for a [`ModelInstanceNode`] in a [`SceneGraph`].
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ModelInstanceNodeID(GenerationalIdx);
 
 /// Identifier for a [`CameraNode`] in a [`SceneGraph`].
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CameraNodeID(GenerationalIdx);

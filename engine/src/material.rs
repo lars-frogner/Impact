@@ -31,20 +31,20 @@ pub type RGBColor = Vector3<f32>;
 stringhash64_newtype!(
     /// Identifier for specific material types.
     /// Wraps a [`StringHash64`](impact_math::StringHash64).
-    #[roc]
+    #[roc(prefix = "Engine")]
     [pub] MaterialID
 );
 
 stringhash64_newtype!(
     /// Identifier for group of textures used for material properties. Wraps a
     /// [`StringHash64`](impact_math::StringHash64).
-    #[roc]
+    #[roc(prefix = "Engine")]
     [pub] MaterialPropertyTextureGroupID
 );
 
 /// A handle for a material, containing the IDs for the pieces of data holding
 /// information about the material.
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct MaterialHandle {

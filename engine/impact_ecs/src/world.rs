@@ -28,8 +28,8 @@ use std::{
 /// a 64-bit count is that passing an [`Entity`] across an FFI boundary gets
 /// messy when it does not fit in a `u64` (`u128` is not FFI-safe).
 #[roc(
-    primitive,
-    package = "pf",
+    category = "primitive",
+    prefix = "pf",
     module = "Entity",
     name = "Id",
     postfix = "_id"

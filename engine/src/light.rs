@@ -37,7 +37,7 @@ pub type Illumninance = Vector3<f32>;
 pub type Luminance = Vector3<f32>;
 
 /// Identifier for a light in a [`LightStorage`].
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct LightID(u32);

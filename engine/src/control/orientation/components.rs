@@ -8,7 +8,7 @@ use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose
 /// orientation that can be controlled by a user.
-#[roc]
+#[roc(prefix = "Comp", name = "OrientationControl")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OrientationControlComp {

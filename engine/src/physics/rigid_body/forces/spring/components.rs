@@ -9,7 +9,7 @@ use crate::physics::motion::Position;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// spring connecting two other entities.
-#[roc]
+#[roc(prefix = "Comp", name = "Spring")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SpringComp {

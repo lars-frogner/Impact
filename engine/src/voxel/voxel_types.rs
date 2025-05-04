@@ -15,7 +15,7 @@ use std::{
 };
 
 /// A type identifier that determines all the properties of a voxel.
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelType(u8);
