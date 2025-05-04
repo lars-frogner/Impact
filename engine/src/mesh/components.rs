@@ -154,6 +154,7 @@ impl MeshComp {
 
 #[roc]
 impl RectangleMeshComp {
+    #[roc(expr = "{ extent_x: 1.0, extent_z: 1.0 }")]
     pub const UNIT_SQUARE: Self = Self {
         extent_x: 1.0,
         extent_z: 1.0,
@@ -178,6 +179,7 @@ impl RectangleMeshComp {
 
 #[roc]
 impl BoxMeshComp {
+    #[roc(expr = "{ extent_x: 1.0, extent_y: 1.0, extent_z: 1.0, front_faces_on_outside: 1 }")]
     pub const UNIT_CUBE: Self = Self {
         extent_x: 1.0,
         extent_y: 1.0,
@@ -185,6 +187,7 @@ impl BoxMeshComp {
         front_faces_on_outside: 1,
     };
 
+    #[roc(expr = "{ extent_x: 1.0, extent_y: 1.0, extent_z: 1.0, front_faces_on_outside: 0 }")]
     pub const SKYBOX: Self = Self {
         extent_x: 1.0,
         extent_y: 1.0,

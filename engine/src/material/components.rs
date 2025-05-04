@@ -230,26 +230,43 @@ pub struct MaterialComp {
     material_handle: MaterialHandle,
 }
 
+#[roc]
 impl UniformColorComp {
+    #[roc(expr = "(0.562, 0.565, 0.578)")]
     pub const IRON: Self = Self(vector![0.562, 0.565, 0.578]);
+    #[roc(expr = "(0.955, 0.638, 0.538)")]
     pub const COPPER: Self = Self(vector![0.955, 0.638, 0.538]);
+    #[roc(expr = "(0.910, 0.778, 0.423)")]
     pub const BRASS: Self = Self(vector![0.910, 0.778, 0.423]);
+    #[roc(expr = "(1.000, 0.782, 0.344)")]
     pub const GOLD: Self = Self(vector![1.000, 0.782, 0.344]);
+    #[roc(expr = "(0.913, 0.922, 0.924)")]
     pub const ALUMINUM: Self = Self(vector![0.913, 0.922, 0.924]);
+    #[roc(expr = "(0.972, 0.960, 0.915)")]
     pub const SILVER: Self = Self(vector![0.972, 0.960, 0.915]);
 }
 
+#[roc]
 impl UniformSpecularReflectanceComp {
+    #[roc(expr = "1.0")]
     pub const METAL: Self = Self(1.0);
+    #[roc(expr = "0.02")]
     pub const WATER: Self = Self(0.02);
+    #[roc(expr = "0.028")]
     pub const SKIN: Self = Self(0.028);
 
+    #[roc(expr = "(0.02, 0.04)")]
     pub const LIVING_TISSUE: (f32, f32) = (0.02, 0.04);
+    #[roc(expr = "(0.04, 0.056)")]
     pub const FABRIC: (f32, f32) = (0.04, 0.056);
+    #[roc(expr = "(0.035, 0.056)")]
     pub const STONE: (f32, f32) = (0.035, 0.056);
+    #[roc(expr = "(0.04, 0.05)")]
     pub const PLASTIC: (f32, f32) = (0.04, 0.05);
+    #[roc(expr = "(0.04, 0.05)")]
     pub const GLASS: (f32, f32) = (0.04, 0.05);
 
+    #[roc(body = "range.0 + 0.01 * percentage * (range.1 - range.0)")]
     pub fn in_range_of(range: (f32, f32), percentage: f32) -> Self {
         Self(range.0 + 0.01 * percentage * (range.1 - range.0))
     }
@@ -277,8 +294,11 @@ impl TexturedRoughnessComp {
     }
 }
 
+#[roc]
 impl UniformMetalnessComp {
+    #[roc(expr = "0.0")]
     pub const DIELECTRIC: Self = Self(0.0);
+    #[roc(expr = "1.0")]
     pub const METAL: Self = Self(1.0);
 }
 
