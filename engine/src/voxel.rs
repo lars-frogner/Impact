@@ -89,7 +89,7 @@ pub enum VoxelSurfacePlacement {
 }
 
 /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct VoxelObjectID(u32);

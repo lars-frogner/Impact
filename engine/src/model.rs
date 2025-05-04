@@ -110,7 +110,7 @@ pub struct ModelInstanceBuffer {
 pub type InstanceFeatureTypeID = Hash64;
 
 /// Identifier for an instance feature value.
-#[roc]
+#[roc(prefix = "Engine")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
 pub struct InstanceFeatureID {

@@ -7,7 +7,7 @@ use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose motion
 /// that can be controlled by a user.
-#[roc]
+#[roc(prefix = "Comp", name = "MotionControl")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MotionControlComp {

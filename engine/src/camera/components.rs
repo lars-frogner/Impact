@@ -14,7 +14,7 @@ use roc_codegen::roc;
 /// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
-#[roc]
+#[roc(prefix = "Comp", name = "PerspectiveCamera")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PerspectiveCameraComp {
@@ -32,7 +32,7 @@ pub struct PerspectiveCameraComp {
 /// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
-#[roc]
+#[roc(prefix = "Comp", name = "OrthographicCamera")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct OrthographicCameraComp {

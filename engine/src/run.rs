@@ -142,7 +142,6 @@ fn init_blank(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
     engine.create_entity((
         &RectangleMeshComp::UNIT_SQUARE,
         &ReferenceFrameComp::unoriented_scaled(Point3::origin(), 1000.0),
-        &UniformContactResponseComp(ContactResponseParameters::default()),
         &PlaneCollidableComp::new(CollidableKind::Static, Plane::new(Vector3::y_axis(), 0.0)),
         &UniformColorComp(vector![0.9, 0.9, 0.9]),
         &UniformSpecularReflectanceComp(0.01),

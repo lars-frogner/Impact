@@ -27,7 +27,7 @@ use roc_codegen::roc;
 /// from them. This means that the body's linear or angular momentum has to be
 /// updated whenever something manually modifies the linear or angular
 /// velocity, respectively.
-#[roc]
+#[roc(prefix = "Engine", name = "EngineRigidBody")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct RigidBody {

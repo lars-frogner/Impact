@@ -190,8 +190,8 @@ where
 
 #[cfg(feature = "roc_codegen")]
 roc_codegen::impl_roc_for_library_provided_primitives! {
-    Plane<f32> => core, Plane, Plane, "_32", SinglePrecision,
-    Plane<f64> => core, Plane, Plane, "_64", DoublePrecision,
+    Plane<f32> => "core", Plane, Plane, "_32", SinglePrecision,
+    Plane<f64> => "core", Plane, Plane, "_64", DoublePrecision,
 }
 
 #[cfg(test)]

@@ -11,7 +11,7 @@ use roc_codegen::roc;
 ///
 /// The purpose of this component is to aid in constructing a [`RigidBodyComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc]
+#[roc(prefix = "Comp", name = "UniformRigidBody")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformRigidBodyComp {
@@ -21,7 +21,7 @@ pub struct UniformRigidBodyComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// rigid body. Transparently wraps a [`RigidBody`].
-#[roc]
+#[roc(prefix = "Comp", name = "RigidBody")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RigidBodyComp(pub RigidBody);
