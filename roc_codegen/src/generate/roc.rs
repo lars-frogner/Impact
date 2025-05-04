@@ -3,7 +3,7 @@
 
 use super::{RocGenerateOptions, get_field_type};
 use crate::{RegisteredType, RocTypeID, ir};
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -77,7 +77,7 @@ fn write_module_header(
         for function in associated_functions {
             if matches!(
                 function.return_type,
-                ir::AssociatedFunctionReturnType::SelfType
+                ir::Containable::Single(ir::Inferrable::SelfType)
             ) {
                 writeln!(roc_code, "    add_{},", function.name)?;
             }
@@ -378,14 +378,25 @@ pub(super) fn write_associated_constant(
     ty: &RegisteredType,
     associated_constant: &ir::AssociatedConstant,
 ) -> Result<()> {
-    let type_name = match associated_constant.ty {
-        ir::AssociatedConstantType::SelfType => Cow::Borrowed(ty.ty.name),
-        ir::AssociatedConstantType::Specific(ref constant_type) => {
-            resolved_type_name_for_collectable_translatable_type(type_map, constant_type, &|| {
-                format!("associated constant {}", associated_constant.name)
-            })?
-        }
-    };
+    let type_name = resolved_type_name_for_containable_type(
+        |type_map, contained_ty, in_container| {
+            resolved_type_name_for_inferrable_type(
+                resolved_type_name_for_translatable_type,
+                type_map,
+                contained_ty,
+                Cow::Borrowed(ty.ty.name),
+                in_container,
+            )
+        },
+        type_map,
+        &associated_constant.ty,
+    )
+    .with_context(|| {
+        format!(
+            "Invalid type for associated constant {}",
+            associated_constant.name
+        )
+    })?;
 
     let docstring = if associated_constant.docstring.is_empty() {
         ""
@@ -439,16 +450,27 @@ pub(super) fn write_associated_function(
             }
             ir::FunctionArgument::Typed(arg) => {
                 arg_name_list.push(arg.ident);
-                arg_type_list.push(resolved_type_name_for_collectable_translatable_type(
-                    type_map,
-                    &arg.ty,
-                    &|| {
+                arg_type_list.push(
+                    resolved_type_name_for_containable_type(
+                        |type_map, contained_ty, in_container| {
+                            resolved_type_name_for_inferrable_type(
+                                resolved_type_name_for_translatable_type,
+                                type_map,
+                                contained_ty,
+                                Cow::Borrowed(ty.ty.name),
+                                in_container,
+                            )
+                        },
+                        type_map,
+                        &arg.ty,
+                    )
+                    .with_context(|| {
                         format!(
-                            "argument {} to function {}",
+                            "Invalid type for argument {} of associated function {}",
                             arg.ident, associated_function.name
                         )
-                    },
-                )?);
+                    })?,
+                );
             }
         }
     }
@@ -462,14 +484,25 @@ pub(super) fn write_associated_function(
         (arg_names.as_str(), arg_types.as_str())
     };
 
-    let return_type = match associated_function.return_type {
-        ir::AssociatedFunctionReturnType::SelfType => Cow::Borrowed(ty.ty.name),
-        ir::AssociatedFunctionReturnType::Specific(ref return_type) => {
-            resolved_type_name_for_collectable_translatable_type(type_map, return_type, &|| {
-                format!("return type of function {}", associated_function.name)
-            })?
-        }
-    };
+    let return_type = resolved_type_name_for_containable_type(
+        |type_map, contained_ty, in_container| {
+            resolved_type_name_for_inferrable_type(
+                resolved_type_name_for_translatable_type,
+                type_map,
+                contained_ty,
+                Cow::Borrowed(ty.ty.name),
+                in_container,
+            )
+        },
+        type_map,
+        &associated_function.return_type,
+    )
+    .with_context(|| {
+        format!(
+            "Invalid return type for associated function {}",
+            associated_function.name
+        )
+    })?;
 
     let docstring = if associated_function.docstring.is_empty() {
         ""
@@ -492,7 +525,7 @@ pub(super) fn write_associated_function(
     if ty.is_component()
         && matches!(
             associated_function.return_type,
-            ir::AssociatedFunctionReturnType::SelfType
+            ir::Containable::Single(ir::Inferrable::SelfType)
         )
     {
         writeln!(
@@ -520,32 +553,74 @@ pub(super) fn write_associated_function(
     Ok(())
 }
 
-fn resolved_type_name_for_collectable_translatable_type(
+fn resolved_type_name_for_containable_type<T, R>(
+    resolved_type_name_for_contained_type: R,
     type_map: &HashMap<RocTypeID, RegisteredType>,
-    ty: &ir::Collectable<ir::TranslatableType>,
-    parent_name: &impl Fn() -> String,
+    ty: &ir::Containable<T>,
+) -> Result<Cow<'static, str>>
+where
+    R: Fn(&HashMap<RocTypeID, RegisteredType>, &T, bool) -> Result<Cow<'static, str>>,
+{
+    match ty {
+        ir::Containable::Single(ty) => resolved_type_name_for_contained_type(type_map, ty, false),
+        ir::Containable::List(ty) => resolved_type_name_for_contained_type(type_map, ty, true)
+            .map(|type_name| Cow::Owned(format!("List {type_name}")))
+            .context("Invalid list element type"),
+        ir::Containable::Tuple2(ty0, ty1) => {
+            let type_name_0 = resolved_type_name_for_contained_type(type_map, ty0, false)
+                .context("Invalid type for tuple element 0")?;
+            let type_name_1 = resolved_type_name_for_contained_type(type_map, ty1, false)
+                .context("Invalid type for tuple element 1")?;
+            Ok(Cow::Owned(format!("({type_name_0}, {type_name_1})")))
+        }
+        ir::Containable::Tuple3(ty0, ty1, ty2) => {
+            let type_name_0 = resolved_type_name_for_contained_type(type_map, ty0, false)
+                .context("Invalid type for tuple element 0")?;
+            let type_name_1 = resolved_type_name_for_contained_type(type_map, ty1, false)
+                .context("Invalid type for tuple element 1")?;
+            let type_name_2 = resolved_type_name_for_contained_type(type_map, ty2, false)
+                .context("Invalid type for tuple element 2")?;
+            Ok(Cow::Owned(format!(
+                "({type_name_0}, {type_name_1}, {type_name_2})"
+            )))
+        }
+        ir::Containable::Result(ty) => resolved_type_name_for_contained_type(type_map, ty, true)
+            .map(|type_name| Cow::Owned(format!("Result {type_name} Str")))
+            .context("Invalid Result Ok type"),
+    }
+}
+
+fn resolved_type_name_for_inferrable_type<T, R>(
+    resolved_type_name_for_specific_type: R,
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::Inferrable<T>,
+    self_ty_name: Cow<'static, str>,
+    is_type_variable: bool,
+) -> Result<Cow<'static, str>>
+where
+    R: Fn(&HashMap<RocTypeID, RegisteredType>, &T, bool) -> Result<Cow<'static, str>>,
+{
+    match ty {
+        ir::Inferrable::SelfType => Ok(self_ty_name),
+        ir::Inferrable::Specific(specific_ty) => {
+            resolved_type_name_for_specific_type(type_map, specific_ty, is_type_variable)
+        }
+    }
+}
+
+fn resolved_type_name_for_translatable_type(
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::TranslatableType,
+    is_type_variable: bool,
 ) -> Result<Cow<'static, str>> {
     match ty {
-        ir::Collectable::Single(ir::TranslatableType::Registered(type_id)) => type_map
+        ir::TranslatableType::Registered(type_id) => type_map
             .get(type_id)
-            .ok_or_else(|| anyhow!("The type for {} has not been registered", parent_name()))
-            .map(|ty| ty.resolved_type_name(false)),
-        ir::Collectable::List(ir::TranslatableType::Registered(elem_type_id)) => type_map
-            .get(elem_type_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "The element type for list {} has not been registered",
-                    parent_name()
-                )
-            })
-            .map(|ty| Cow::Owned(format!("List {}", ty.resolved_type_name(true)))),
-        ir::Collectable::Single(ir::TranslatableType::Special(ty)) => {
+            .ok_or_else(|| anyhow!("Type not registered"))
+            .map(|ty| ty.resolved_type_name(is_type_variable)),
+        ir::TranslatableType::Special(ty) => {
             Ok(Cow::Borrowed(resolved_type_name_for_special_type(ty)))
         }
-        ir::Collectable::List(ir::TranslatableType::Special(ty)) => Ok(Cow::Owned(format!(
-            "List {}",
-            resolved_type_name_for_special_type(ty)
-        ))),
     }
 }
 

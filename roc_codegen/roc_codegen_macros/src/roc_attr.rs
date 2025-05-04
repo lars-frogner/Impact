@@ -339,7 +339,8 @@ fn generate_associated_constant_submit(
 ) -> syn::Result<TokenStream> {
     let docstring = extract_and_process_docstring(&constant.attrs);
     let name = specified_name.unwrap_or_else(|| constant.ident.to_string().to_lowercase());
-    let ty = generate_inferrable_collectable_translatable_type(
+    let ty = generate_containable_type(
+        |ty, crate_root| generate_inferrable_type(generate_translatable_type, ty, crate_root),
         Box::new(constant.ty.clone()),
         crate_root,
     )?;
@@ -811,7 +812,13 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
                         ));
                     }
                 };
-                let ty = generate_collectable_translatable_type(arg.ty.clone(), crate_root)?;
+                let ty = generate_containable_type(
+                    |ty, crate_root| {
+                        generate_inferrable_type(generate_translatable_type, ty, crate_root)
+                    },
+                    arg.ty.clone(),
+                    crate_root,
+                )?;
                 Ok(quote! {
                     Some(#crate_root::ir::FunctionArgument::Typed(
                         #crate_root::ir::TypedFunctionArgument {
@@ -838,9 +845,11 @@ fn generate_function_return_type(
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
     match return_type {
-        syn::ReturnType::Type(_, ty) => {
-            generate_inferrable_collectable_translatable_type(ty.clone(), crate_root)
-        }
+        syn::ReturnType::Type(_, ty) => generate_containable_type(
+            |ty, crate_root| generate_inferrable_type(generate_translatable_type, ty, crate_root),
+            ty.clone(),
+            crate_root,
+        ),
         syn::ReturnType::Default => Err(syn::Error::new_spanned(
             return_type,
             "the `roc` attribute does not support functions returning nothing",
@@ -848,7 +857,53 @@ fn generate_function_return_type(
     }
 }
 
-fn generate_inferrable_collectable_translatable_type(
+fn generate_containable_type(
+    generate_contained_type: impl Fn(Box<syn::Type>, &TokenStream) -> syn::Result<TokenStream>,
+    mut ty: Box<syn::Type>,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    ty = unwrap_references(ty)?;
+    match ty.as_ref() {
+        syn::Type::Array(syn::TypeArray { elem, .. })
+        | syn::Type::Slice(syn::TypeSlice { elem, .. }) => {
+            let ty = generate_contained_type(elem.clone(), crate_root)?;
+            return Ok(quote! {
+                #crate_root::ir::Containable::List(#ty)
+            });
+        }
+        syn::Type::Tuple(syn::TypeTuple { elems, .. }) => {
+            if elems.len() == 2 || elems.len() == 3 {
+                let tuple_len = elems.len();
+
+                let tuple_type_ident = format_ident!("Tuple{tuple_len}");
+
+                let types = elems
+                    .iter()
+                    .map(|ty| generate_contained_type(Box::new(ty.clone()), crate_root))
+                    .collect::<syn::Result<Vec<_>>>()?;
+
+                return Ok(quote! {
+                    #crate_root::ir::Containable::#tuple_type_ident(#(#types, )*)
+                });
+            }
+        }
+        _ => {}
+    }
+    if let Some(ok_ty) = extract_result_ok_type(&ty) {
+        let ty = generate_contained_type(Box::new(ok_ty.clone()), crate_root)?;
+        return Ok(quote! {
+            #crate_root::ir::Containable::Result(#ty)
+        });
+    }
+
+    let ty = generate_contained_type(ty, crate_root)?;
+    Ok(quote! {
+        #crate_root::ir::Containable::Single(#ty)
+    })
+}
+
+fn generate_inferrable_type(
+    generate_specific_type: impl Fn(Box<syn::Type>, &TokenStream) -> syn::Result<TokenStream>,
     mut ty: Box<syn::Type>,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -864,31 +919,9 @@ fn generate_inferrable_collectable_translatable_type(
             })
         }
         _ => {
-            let ty = generate_collectable_translatable_type(ty.clone(), crate_root)?;
+            let ty = generate_specific_type(ty.clone(), crate_root)?;
             Ok(quote! {
                 #crate_root::ir::Inferrable::Specific(#ty)
-            })
-        }
-    }
-}
-
-fn generate_collectable_translatable_type(
-    mut ty: Box<syn::Type>,
-    crate_root: &TokenStream,
-) -> syn::Result<TokenStream> {
-    ty = unwrap_references(ty)?;
-    match ty.as_ref() {
-        syn::Type::Array(syn::TypeArray { elem, .. })
-        | syn::Type::Slice(syn::TypeSlice { elem, .. }) => {
-            let ty = generate_translatable_type(elem.clone(), crate_root)?;
-            Ok(quote! {
-                #crate_root::ir::Collectable::List(#ty)
-            })
-        }
-        _ => {
-            let ty = generate_translatable_type(ty, crate_root)?;
-            Ok(quote! {
-                #crate_root::ir::Collectable::Single(#ty)
             })
         }
     }
@@ -912,6 +945,28 @@ fn generate_translatable_type(
             )
         })
     }
+}
+
+fn extract_result_ok_type(ty: &syn::Type) -> Option<&syn::Type> {
+    let syn::Type::Path(syn::TypePath { path, .. }) = ty else {
+        return None;
+    };
+    let segment = path.segments.last()?;
+    if segment.ident != "Result" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments { args, .. }) =
+        &segment.arguments
+    else {
+        return None;
+    };
+    let syn::GenericArgument::Type(ok_ty) = args.first()? else {
+        return None;
+    };
+    if args.len() > 2 {
+        return None;
+    }
+    Some(ok_ty)
 }
 
 fn type_is_string(ty: &syn::Type) -> bool {
