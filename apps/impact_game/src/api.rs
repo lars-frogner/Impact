@@ -11,6 +11,7 @@ use impact::{
     run::run as run_engine,
     skybox::Skybox,
 };
+use impact_ecs::world::Entity;
 use std::{
     path::Path,
     sync::{Arc, RwLock},
@@ -59,6 +60,16 @@ pub fn set_skybox(cubemap_texture_name: &str, max_luminance: f32) -> Result<()> 
         ));
         Ok(())
     })
+}
+
+pub fn enable_scene_entity(entity: u64) -> Result<()> {
+    log::debug!("Enabling scene entity {entity}");
+    with_engine(|engine| engine.enable_scene_entity(&Entity::from_u64(entity)))
+}
+
+pub fn disable_scene_entity(entity: u64) -> Result<()> {
+    log::debug!("Disabling scene entity {entity}");
+    with_engine(|engine| engine.disable_scene_entity(&Entity::from_u64(entity)))
 }
 
 fn with_engine<T>(f: impl FnOnce(&Engine) -> Result<T>) -> Result<T> {

@@ -112,7 +112,7 @@ impl Engine {
         ecs_world.remove_entity(entity)
     }
 
-    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
     ///
     /// # Errors
     /// Returns an error if the entity does not exist or does not have the
@@ -124,7 +124,7 @@ impl Engine {
         })
     }
 
-    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
     ///
     /// # Errors
     /// Returns an error if the entity does not exist or does not have the
