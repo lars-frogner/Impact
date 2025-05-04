@@ -11,7 +11,7 @@ use std::{
     fmt::Display,
     fs::{self, OpenOptions},
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 /// Options for listing types.
@@ -39,19 +39,9 @@ pub struct GenerateOptions {
     pub overwrite: bool,
 }
 
-/// Roc-specific code generation options.
-#[derive(Clone, Debug)]
-pub struct RocGenerateOptions {
-    /// String to prepend to imports from generated modules.
-    pub import_prefix: String,
-    /// Name to use for the platform package in imports.
-    pub platform_package_name: String,
-    /// Name to use for the `packages/core` package in imports.
-    pub core_package_name: String,
-}
-
 #[derive(Clone, Debug)]
 struct Module {
+    path_from_package_root: PathBuf,
     name: &'static str,
     content: String,
 }
@@ -176,12 +166,11 @@ pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// Generates Roc source files in the target directory for all
+/// Generates Roc source files in the package at the given path for all
 /// [`roc`](crate::roc)-annotated Rust types in linked crates.
 pub fn generate_roc(
-    target_dir: impl AsRef<Path>,
+    package_root: impl AsRef<Path>,
     options: &GenerateOptions,
-    roc_options: &RocGenerateOptions,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
     let type_iter = inventory::iter::<RegisteredType>();
@@ -189,10 +178,9 @@ pub fn generate_roc(
     let associated_constant_iter = inventory::iter::<ir::AssociatedConstant>();
     let associated_function_iter = inventory::iter::<ir::AssociatedFunction>();
 
-    let target_dir = target_dir.as_ref();
+    let package_root = package_root.as_ref();
 
     let modules = generate_roc_modules(
-        roc_options,
         type_iter,
         associated_dependencies_iter,
         associated_constant_iter,
@@ -200,23 +188,35 @@ pub fn generate_roc(
         component_type_ids,
     )?;
 
-    if !target_dir.exists() {
-        fs::create_dir_all(target_dir)?;
+    if !package_root.exists() {
+        fs::create_dir_all(package_root)?;
     }
 
-    for Module { name, content } in modules {
-        let file_path = target_dir.join(format!("{name}.roc"));
+    for Module {
+        path_from_package_root,
+        name,
+        content,
+    } in modules
+    {
+        let module_dir = package_root.join(path_from_package_root);
 
-        let existed = file_path.exists();
+        fs::create_dir_all(&module_dir)?;
+
+        let module_path = module_dir.join(format!("{name}.roc"));
+
+        let existed = module_path.exists();
 
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .create_new(!options.overwrite)
-            .open(&file_path)
+            .open(&module_path)
             .with_context(|| {
-                format!("Could not create file {} for writing", file_path.display())
+                format!(
+                    "Could not create file {} for writing",
+                    module_path.display()
+                )
             })?;
 
         write!(&mut file, "{}", content)?;
@@ -224,7 +224,7 @@ pub fn generate_roc(
         if options.verbose {
             println!(
                 "Generated {}{}",
-                file_path.display(),
+                module_path.display(),
                 if existed { " (replaced existing)" } else { "" }
             );
         }
@@ -234,7 +234,6 @@ pub fn generate_roc(
 }
 
 fn generate_roc_modules<'a>(
-    options: &RocGenerateOptions,
     type_iter: impl IntoIterator<Item = &'a RegisteredType>,
     associated_dependencies_iter: impl IntoIterator<Item = &'a ir::AssociatedDependencies>,
     associated_constant_iter: impl IntoIterator<Item = &'a ir::AssociatedConstant>,
@@ -263,7 +262,6 @@ fn generate_roc_modules<'a>(
                 .map_or_else(Cow::default, Cow::Borrowed);
 
             match roc::generate_module(
-                options,
                 &type_map,
                 ty,
                 associated_dependencies.as_ref(),
@@ -271,6 +269,7 @@ fn generate_roc_modules<'a>(
                 associated_functions.as_ref(),
             ) {
                 Ok(Some(content)) => Some(Ok(Module {
+                    path_from_package_root: ty.module_prefix.split(".").collect(),
                     name: ty.ty.name,
                     content,
                 })),

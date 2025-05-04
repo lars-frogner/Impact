@@ -116,8 +116,12 @@ pub struct RocTypeID(u64);
 /// A type registered for use in Roc.
 #[derive(Clone, Debug)]
 pub struct RegisteredType {
-    /// The name of the Roc package where the type will be defined.
-    pub package_name: &'static str,
+    /// The path prefix required for importing the type's module from the
+    /// package in which Roc code is generated. For primitive types, this
+    /// will typically include an external package name. For generated types,
+    /// it should not include a package name, just the hierarchy of parent
+    /// modules.
+    pub module_prefix: &'static str,
     /// The name of the Roc module where the type will be defined.
     pub module_name: &'static str,
     /// Postfix for the functions operating on this type (for primitive types).
@@ -187,30 +191,15 @@ impl fmt::Display for RocTypeID {
 impl RegisteredType {
     /// Returns the fully qualified Roc import statement required for using
     /// this type in Roc.
-    pub fn import_module(
-        &self,
-        import_prefix: &str,
-        core_package_name: &str,
-        platform_package_name: &str,
-    ) -> String {
-        match &self.ty.composition {
-            ir::TypeComposition::Primitive(_) => {
-                let package_name = match self.package_name {
-                    "pf" => platform_package_name,
-                    "core" => core_package_name,
-                    name => name,
-                };
-                format!(
-                    "{package_name}.{module_name} as {module_name}",
-                    module_name = self.module_name
-                )
-            }
-            ir::TypeComposition::Struct { .. } | ir::TypeComposition::Enum(_) => {
-                format!(
-                    "{import_prefix}{module_name} as {module_name}",
-                    module_name = self.module_name
-                )
-            }
+    pub fn import_module(&self) -> String {
+        if self.module_prefix.is_empty() {
+            String::from(self.module_name)
+        } else {
+            format!(
+                "{module_prefix}.{module_name} as {module_name}",
+                module_prefix = self.module_prefix,
+                module_name = self.module_name
+            )
         }
     }
 
@@ -256,7 +245,7 @@ impl RegisteredType {
         match &self.ty.composition {
             ir::TypeComposition::Primitive(ir::PrimitiveKind::Builtin) => Cow::Borrowed("builtin"),
             ir::TypeComposition::Primitive(ir::PrimitiveKind::LibraryProvided { .. }) => {
-                Cow::Owned(format!("from package {}", self.package_name))
+                Cow::Owned(format!("from {}", self.module_prefix))
             }
             ir::TypeComposition::Struct {
                 fields: ir::TypeFields::None,

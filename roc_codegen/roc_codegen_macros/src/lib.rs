@@ -107,18 +107,18 @@ mod inner {
     pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
         if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
             if attr.is_empty() {
-                roc_attr::apply_type_attribute(None, input, &crate_root_tokens())
+                roc_attr::apply_type_attribute(TypeAttributeArgs::default(), input, &crate_root_tokens())
             } else {
                 syn::parse::<TypeAttributeArgs>(attr).and_then(|args| {
-                    roc_attr::apply_type_attribute(Some(args), input, &crate_root_tokens())
+                    roc_attr::apply_type_attribute(args, input, &crate_root_tokens())
                 })
             }
         } else if let Ok(block) = syn::parse::<syn::ItemImpl>(item.clone()) {
             if attr.is_empty() {
-                roc_attr::apply_impl_attribute(None, block, &crate_root_tokens())
+                roc_attr::apply_impl_attribute(ImplAttributeArgs::default(), block, &crate_root_tokens())
             } else {
                 syn::parse::<ImplAttributeArgs>(attr).and_then(|args| {
-                    roc_attr::apply_impl_attribute(Some(args), block, &crate_root_tokens())
+                    roc_attr::apply_impl_attribute(args, block, &crate_root_tokens())
                 })
             }
         } else if let Ok(constant) = syn::parse::<syn::ImplItemConst>(item.clone()) {
@@ -151,10 +151,10 @@ mod inner {
 
     pub const MAX_DEPENDENCIES: usize = 16;
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Default)]
     pub struct TypeAttributeArgs {
-        pub category: TypeCategory,
-        pub package_name: Option<String>,
+        pub category: Option<TypeCategory>,
+        pub module_prefix: Option<String>,
         pub module_name: Option<String>,
         pub type_name: Option<String>,
         pub function_postfix: Option<String>,
@@ -167,7 +167,7 @@ mod inner {
         Inline,
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     pub struct ImplAttributeArgs {
         pub dependency_types: Vec<syn::Type>,
     }
@@ -223,25 +223,8 @@ mod inner {
 
     impl syn::parse::Parse for TypeAttributeArgs {
         fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            let category: syn::Ident = input.parse()?;
-
-            let category = if category == "primitive" {
-                TypeCategory::Primitive
-            } else if category == "pod" {
-                TypeCategory::Pod
-            } else if category == "inline" {
-                TypeCategory::Inline
-            } else {
-                return Err(syn::Error::new_spanned(
-                    category.clone(),
-                    format!(
-                        "invalid category `{}`, must be one of `pod`, `inline`, `primitive`",
-                        category
-                    ),
-                ));
-            };
-
-            let mut package_name = None;
+            let mut category = None;
+            let mut module_prefix = None;
             let mut module_name = None;
             let mut type_name = None;
             let mut function_postfix = None;
@@ -249,14 +232,12 @@ mod inner {
             if input.is_empty() {
                 return Ok(Self {
                     category,
-                    package_name,
+                    module_prefix,
                     module_name,
                     type_name,
                     function_postfix,
                 });
             }
-
-            input.parse::<syn::token::Comma>()?;
 
             let args =
             syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
@@ -265,11 +246,37 @@ mod inner {
 
             for arg in args {
                 match arg.key.to_string().as_str() {
-                    "package" => {
-                        if package_name.replace(arg.value.value()).is_some() {
+                    "category" => {
+                        let value = arg.value.value();
+
+                        let cat = if value == "primitive" {
+                            TypeCategory::Primitive
+                        } else if value == "pod" {
+                            TypeCategory::Pod
+                        } else if value == "inline" {
+                            TypeCategory::Inline
+                        } else {
+                            return Err(syn::Error::new_spanned(
+                                arg.value,
+                                format!(
+                                    "invalid category `{}`, must be one of `pod`, `inline`, `primitive`",
+                                    value
+                                ),
+                            ));
+                        };
+
+                        if category.replace(cat).is_some() {
                             return Err(syn::Error::new_spanned(
                                 arg.key,
-                                "repeated argument `package`",
+                                "repeated argument `category`",
+                            ));
+                        }
+                    }
+                    "prefix" => {
+                        if module_prefix.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `prefix`",
                             ));
                         }
                     }
@@ -301,7 +308,7 @@ mod inner {
                         return Err(syn::Error::new_spanned(
                             arg.key,
                             format!(
-                                "invalid argument `{}`, must be one of `package`, `module`, `name`, `postfix`",
+                                "invalid argument `{}`, must be one of `category`, `prefix`, `module`, `name`, `postfix`",
                                 other
                             ),
                         ));
@@ -311,7 +318,7 @@ mod inner {
 
             Ok(Self {
                 category,
-                package_name,
+                module_prefix,
                 module_name,
                 type_name,
                 function_postfix,

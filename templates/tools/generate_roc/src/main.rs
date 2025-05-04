@@ -8,9 +8,7 @@ pub use target_crate;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use roc_codegen::generate::{
-    self, GenerateOptions, ListOptions, ListedRocTypeCategory, RocGenerateOptions,
-};
+use roc_codegen::generate::{self, GenerateOptions, ListOptions, ListedRocTypeCategory};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -36,24 +34,15 @@ enum Command {
     },
     /// Generate Roc modules
     GenerateModules {
-        /// Path to directory in which to put the modules
+        /// Path to the Roc package in which to put the modules
         #[arg(short, long)]
-        target_dir: PathBuf,
+        package_root: PathBuf,
         /// Print info messages
         #[arg(short, long)]
         verbose: bool,
-        /// Overwrite any existing files in the target directory
+        /// Overwrite any existing files in the target package
         #[arg(long)]
         overwrite: bool,
-        /// String to prepend to imports from generated modules (e.g. `Generated.`)
-        #[arg(long, default_value = "")]
-        import_prefix: String,
-        /// Name to use for the platform package in imports
-        #[arg(long, default_value = "pf")]
-        platform_package_name: String,
-        /// Name to use for the `packages/core` package in imports
-        #[arg(long, default_value = "core")]
-        core_package_name: String,
     },
 }
 
@@ -72,21 +61,13 @@ fn main() -> Result<()> {
             generate::list_associated_items(types)?;
         }
         Command::GenerateModules {
-            target_dir,
+            package_root,
             verbose,
             overwrite,
-            import_prefix,
-            platform_package_name,
-            core_package_name,
         } => {
             let options = GenerateOptions { verbose, overwrite };
-            let roc_options = RocGenerateOptions {
-                import_prefix,
-                platform_package_name,
-                core_package_name,
-            };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
-            generate::generate_roc(target_dir, &options, &roc_options, &component_type_ids)?;
+            generate::generate_roc(package_root, &options, &component_type_ids)?;
         }
     }
 
