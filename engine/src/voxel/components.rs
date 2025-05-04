@@ -241,12 +241,13 @@ impl SameVoxelTypeComp {
 
 #[roc]
 impl GradientNoiseVoxelTypesComp {
+    #[roc(expr = "256")]
     const VOXEL_TYPE_ARRAY_SIZE: usize = VoxelTypeRegistry::max_n_voxel_types().next_power_of_two();
 
     #[roc(body = r#"
     n_voxel_types = List.len(voxel_type_names)
     expect n_voxel_types > 0
-    expect n_voxel_types <= 256
+    expect n_voxel_types <= voxel_type_array_size
     voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
     {
         n_voxel_types,

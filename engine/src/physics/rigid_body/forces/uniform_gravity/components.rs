@@ -20,6 +20,7 @@ pub struct UniformGravityComp {
 #[roc]
 impl UniformGravityComp {
     /// The downward acceleration at the surface of Earth [m/s^2].
+    #[roc(expr = "9.81")]
     pub const EARTH_DOWNWARD_ACCELERATION: fph = 9.81;
 
     /// Creates a new component for uniform gravitational acceleration.
@@ -37,7 +38,7 @@ impl UniformGravityComp {
 
     /// Creates a new component for the gravitational acceleration at the
     /// surface of Earth.
-    #[roc(body = "downward(9.81)")]
+    #[roc(body = "downward(earth_downward_acceleration)")]
     pub fn earth() -> Self {
         Self::downward(Self::EARTH_DOWNWARD_ACCELERATION)
     }
