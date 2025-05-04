@@ -31,6 +31,22 @@ pub extern "C" fn roc_set_skybox(
     )
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_enable_scene_entity(entity: u64) -> RocResult<(), RocStr> {
+    to_roc_result(
+        api::enable_scene_entity(entity)
+            .with_context(|| format!("Failed enabling scene entity {entity}")),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_disable_scene_entity(entity: u64) -> RocResult<(), RocStr> {
+    to_roc_result(
+        api::disable_scene_entity(entity)
+            .with_context(|| format!("Failed disabling scene entity {entity}")),
+    )
+}
+
 fn to_roc_result<T>(res: anyhow::Result<T>) -> RocResult<T, RocStr> {
     res.map_err(|error| anyhow!("{:#}", error).to_string().as_str().into())
         .into()

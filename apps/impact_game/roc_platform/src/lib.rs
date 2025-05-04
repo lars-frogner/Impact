@@ -9,6 +9,8 @@ define_ffi! {
     roc_create_entity => unsafe extern "C" fn(&RocList<u8>) -> RocResult<u64, RocStr>,
     roc_create_entities => unsafe extern "C" fn(&RocList<u8>) -> RocResult<RocList<u64>, RocStr>,
     roc_set_skybox => unsafe extern "C" fn(&RocStr, f32) -> RocResult<(), RocStr>,
+    roc_enable_scene_entity => unsafe extern "C" fn(u64) -> RocResult<(), RocStr>,
+    roc_disable_scene_entity => unsafe extern "C" fn(u64) -> RocResult<(), RocStr>,
 }
 
 #[unsafe(no_mangle)]
@@ -39,6 +41,24 @@ pub extern "C" fn roc_fx_set_skybox(
     log::debug!("Platform: set_skybox called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_set_skybox)(cubemap_texture_name, max_luminance) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_enable_scene_entity(entity: u64) -> RocResult<(), RocStr> {
+    log::debug!("Platform: enable_scene_entity called");
+    ImpactGameFFI::call(
+        |ffi| unsafe { (ffi.roc_enable_scene_entity)(entity) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_disable_scene_entity(entity: u64) -> RocResult<(), RocStr> {
+    log::debug!("Platform: disable_scene_entity called");
+    ImpactGameFFI::call(
+        |ffi| unsafe { (ffi.roc_disable_scene_entity)(entity) },
         to_roc_err,
     )
 }
