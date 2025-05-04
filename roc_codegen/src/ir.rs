@@ -159,7 +159,7 @@ pub enum FieldType {
 }
 
 /// The type of an associated constant.
-pub type AssociatedConstantType = Inferrable<Collectable<TranslatableType>>;
+pub type AssociatedConstantType = Containable<Inferrable<TranslatableType>>;
 
 /// The list of arguments for a function.
 #[derive(Clone, Debug)]
@@ -185,24 +185,27 @@ pub struct TypedFunctionArgument {
     /// The argument name.
     pub ident: &'static str,
     /// The argument type.
-    pub ty: Collectable<TranslatableType>,
+    pub ty: Containable<Inferrable<TranslatableType>>,
 }
 
 /// The return type of an associated function.
-pub type AssociatedFunctionReturnType = Inferrable<Collectable<TranslatableType>>;
+pub type AssociatedFunctionReturnType = Containable<Inferrable<TranslatableType>>;
+
+/// Wrapper for types that may appear in a container.
+#[derive(Clone, Debug)]
+pub enum Containable<T> {
+    Single(T),
+    List(T),
+    Tuple2(T, T),
+    Tuple3(T, T, T),
+    Result(T),
+}
 
 /// Either a specific type or a type that must be inferred from the context.
 #[derive(Clone, Debug)]
 pub enum Inferrable<T> {
     SelfType,
     Specific(T),
-}
-
-/// Wrapper for types that may appear in a collection.
-#[derive(Clone, Debug)]
-pub enum Collectable<T> {
-    Single(T),
-    List(T),
 }
 
 /// A type that can be translated between Rust and Roc. This means that it
