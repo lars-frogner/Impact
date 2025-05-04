@@ -8,11 +8,11 @@ define_ffi! {
     lib_path_default = "../../../lib/libapp",
     roc_create_entity => unsafe extern "C" fn(&RocList<u8>) -> RocResult<u64, RocStr>,
     roc_create_entities => unsafe extern "C" fn(&RocList<u8>) -> RocResult<RocList<u64>, RocStr>,
+    roc_set_skybox => unsafe extern "C" fn(&RocStr, f32) -> RocResult<(), RocStr>,
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResult<u64, RocStr> {
-    println!("Platform: create_entity called");
     log::debug!("Platform: create_entity called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_create_entity)(component_bytes) },
@@ -24,10 +24,21 @@ pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResu
 pub extern "C" fn roc_fx_create_entities(
     component_bytes: &RocList<u8>,
 ) -> RocResult<RocList<u64>, RocStr> {
-    println!("Platform: create_entities called");
     log::debug!("Platform: create_entities called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_create_entities)(component_bytes) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_set_skybox(
+    cubemap_texture_name: &RocStr,
+    max_luminance: f32,
+) -> RocResult<(), RocStr> {
+    log::debug!("Platform: set_skybox called");
+    ImpactGameFFI::call(
+        |ffi| unsafe { (ffi.roc_set_skybox)(cubemap_texture_name, max_luminance) },
         to_roc_err,
     )
 }
