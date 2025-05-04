@@ -6,9 +6,7 @@ use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn roc_create_entity(component_bytes: &RocList<u8>) -> RocResult<u64, RocStr> {
-    to_roc_result(
-        api::create_entity(component_bytes.as_slice()).with_context(|| "Failed creating entity"),
-    )
+    to_roc_result(api::create_entity(component_bytes.as_slice()).context("Failed creating entity"))
 }
 
 #[unsafe(no_mangle)]
@@ -18,7 +16,18 @@ pub extern "C" fn roc_create_entities(
     to_roc_result(
         api::create_entities(component_bytes.as_slice())
             .map(RocList::from_iter)
-            .with_context(|| "Failed creating multiple entities"),
+            .context("Failed creating multiple entities"),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_set_skybox(
+    cubemap_texture_name: &RocStr,
+    max_luminance: f32,
+) -> RocResult<(), RocStr> {
+    to_roc_result(
+        api::set_skybox(cubemap_texture_name.as_str(), max_luminance)
+            .with_context(|| format!("Failed setting skybox to {cubemap_texture_name}")),
     )
 }
 

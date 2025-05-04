@@ -2,7 +2,7 @@ platform "impact"
     requires {} {
         setup_scene! : {} => Result {} Str,
     }
-    exposes [Stdout, Entity]
+    exposes [Stdout, Entity, Scene]
     packages {}
     imports []
     provides [
