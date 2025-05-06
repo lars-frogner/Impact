@@ -207,31 +207,35 @@ pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> H
     ))
 }
 
+impl fmt::Display for Hash32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl fmt::Display for Hash64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl fmt::Display for StringHash32 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            STRING_HASH_32_REGISTRY
-                .lock()
-                .unwrap()
-                .get(&self.0)
-                .expect("Missing entry for hash in global string hash registry")
-        )
+        if let Some(string) = STRING_HASH_32_REGISTRY.lock().unwrap().get(&self.0) {
+            write!(f, "{}", string)
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
 impl fmt::Display for StringHash64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            STRING_HASH_64_REGISTRY
-                .lock()
-                .unwrap()
-                .get(&self.0)
-                .expect("Missing entry for hash in global string hash registry")
-        )
+        if let Some(string) = STRING_HASH_64_REGISTRY.lock().unwrap().get(&self.0) {
+            write!(f, "{}", string)
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
