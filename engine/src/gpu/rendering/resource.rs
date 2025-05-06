@@ -299,7 +299,7 @@ impl DesynchronizedRenderResources {
         skybox_resource_manager: &mut Option<SkyboxGPUResourceManager>,
         skybox: Option<&Skybox>,
     ) -> Result<()> {
-        if let Some(skybox) = skybox {
+        if let Some(&skybox) = skybox {
             if let Some(skybox_resource_manager) = skybox_resource_manager {
                 skybox_resource_manager.sync_with_skybox(graphics_device, assets, skybox)?;
             } else {
@@ -308,7 +308,7 @@ impl DesynchronizedRenderResources {
                 *skybox_resource_manager = Some(SkyboxGPUResourceManager::for_skybox(
                     graphics_device,
                     assets,
-                    skybox.clone(),
+                    skybox,
                 )?);
             }
         } else {

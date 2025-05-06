@@ -12,10 +12,12 @@ use crate::gpu::{
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
 use anyhow::Result;
+use roc_codegen::roc;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 
 /// The method to use for tone mapping.
+#[roc(prefix = "Engine")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToneMappingMethod {
     None,

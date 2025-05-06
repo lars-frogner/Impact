@@ -19,6 +19,7 @@ use crate::gpu::{
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
 use bloom::{BloomConfig, BloomRenderCommands};
+use roc_codegen::roc;
 use serde::{Deserialize, Serialize};
 use std::mem;
 use tone_mapping::{ToneMappingMethod, ToneMappingRenderCommands};
@@ -63,6 +64,7 @@ pub struct CameraSettings {
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
 /// value or determined automatically based on the incident luminance, with
 /// optional exposure value compensation in f-stops.
+#[roc(prefix = "Engine")]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum SensorSensitivity {
     Manual { iso: f32 },
@@ -346,40 +348,27 @@ impl CapturingCamera {
         Ok(())
     }
 
-    /// Toggles bloom.
-    pub fn toggle_bloom(&mut self) {
-        self.produces_bloom = !self.produces_bloom;
+    pub(super) fn produces_bloom_mut(&mut self) -> &mut bool {
+        &mut self.produces_bloom
     }
 
-    /// Cycles tone mapping.
-    pub fn cycle_tone_mapping(&mut self) {
-        self.tone_mapping_method = match self.tone_mapping_method {
-            ToneMappingMethod::None => ToneMappingMethod::ACES,
-            ToneMappingMethod::ACES => ToneMappingMethod::KhronosPBRNeutral,
-            ToneMappingMethod::KhronosPBRNeutral => ToneMappingMethod::None,
-        };
+    pub(super) fn tone_mapping_method_mut(&mut self) -> &mut ToneMappingMethod {
+        &mut self.tone_mapping_method
     }
 
-    /// Increases the sensor sensitivity by a small multiplicative factor.
-    pub fn increase_sensitivity(&mut self) {
+    pub fn set_sensor_sensitivity(&mut self, sensitivity: SensorSensitivity) {
+        *self.settings.sensitivity_mut() = sensitivity;
+    }
+
+    /// Changes the sensor sensitivity by the given number of F-stops (can be
+    /// positive or negative).
+    pub fn change_sensitivity_by_stops(&mut self, f_stops: f32) {
         match self.settings.sensitivity_mut() {
             SensorSensitivity::Auto { ev_compensation } => {
-                *ev_compensation += 0.1;
+                *ev_compensation += f_stops;
             }
             SensorSensitivity::Manual { iso } => {
-                *iso *= 1.1;
-            }
-        }
-    }
-
-    /// Decreases the sensor sensitivity by a small multiplicative factor.
-    pub fn decrease_sensitivity(&mut self) {
-        match self.settings.sensitivity_mut() {
-            SensorSensitivity::Auto { ev_compensation } => {
-                *ev_compensation -= 0.1;
-            }
-            SensorSensitivity::Manual { iso } => {
-                *iso /= 1.1;
+                *iso *= f_stops.exp2();
             }
         }
     }

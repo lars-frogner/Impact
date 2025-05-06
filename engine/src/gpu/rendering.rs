@@ -1,6 +1,7 @@
 //! Graphics rendering.
 
 pub mod brdf;
+pub mod command;
 pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
@@ -237,80 +238,6 @@ impl RenderingSystem {
             .write()
             .unwrap()
             .declare_desynchronized();
-    }
-
-    pub fn toggle_wireframe_mode(&mut self) {
-        self.config.wireframe_mode_on = !self.config.wireframe_mode_on;
-        *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
-            &self.graphics_device,
-            &mut self.shader_manager.write().unwrap(),
-            &mut self.render_attachment_texture_manager.write().unwrap(),
-            &self.config,
-        );
-    }
-
-    /// Toggles shadow mapping.
-    pub fn toggle_shadow_mapping(&mut self) {
-        self.config.shadow_mapping_enabled = !self.config.shadow_mapping_enabled;
-    }
-
-    /// Toggles ambient occlusion.
-    pub fn toggle_ambient_occlusion(&self) {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .toggle_ambient_occlusion();
-    }
-
-    /// Toggles bloom.
-    pub fn toggle_bloom(&self) {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .capturing_camera_mut()
-            .toggle_bloom();
-    }
-
-    /// Cycle tone mapping.
-    pub fn cycle_tone_mapping(&self) {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .capturing_camera_mut()
-            .cycle_tone_mapping();
-    }
-
-    /// Toggles visualization of render attachments.
-    pub fn toggle_render_attachment_visualization(&self) {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .toggle_render_attachment_visualization();
-    }
-
-    /// Changes the visualized render attachment quantity to the next quantity
-    /// in the list, or wraps around.
-    pub fn cycle_visualized_render_attachment_quantity_forward(&self) {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .cycle_visualized_render_attachment_quantity_forward();
-    }
-
-    /// Changes the visualized render attachment quantity to the previous
-    /// quantity in the list, or wraps around.
-    pub fn cycle_visualized_render_attachment_quantity_backward(&self) {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .cycle_visualized_render_attachment_quantity_backward();
-    }
-
-    /// Toggle render pass timings.
-    pub fn toggle_timings(&mut self) {
-        self.config.timings_enabled = !self.config.timings_enabled;
-        self.timestamp_query_manager
-            .set_enabled(self.config.timings_enabled);
     }
 
     fn render_surface(&mut self, scene: &Scene) -> Result<wgpu::SurfaceTexture> {

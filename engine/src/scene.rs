@@ -1,5 +1,6 @@
 //! Scene containing data to render.
 
+pub mod command;
 pub mod components;
 pub mod entity;
 mod graph;

@@ -3209,7 +3209,7 @@ impl SkyboxPass {
             self.skybox.as_ref(),
             render_resources.get_skybox_resource_manager(),
         ) {
-            (Some(skybox), Some(skybox_resource_manager))
+            (Some(&skybox), Some(skybox_resource_manager))
                 if skybox == skybox_resource_manager.skybox() => {}
             (_, None) => {
                 self.pipeline = None;
@@ -3243,7 +3243,7 @@ impl SkyboxPass {
                     Some(self.depth_stencil_state.clone()),
                     "Skybox pass render pipeline",
                 ));
-                self.skybox = Some(skybox_resource_manager.skybox().clone());
+                self.skybox = Some(skybox_resource_manager.skybox());
             }
         }
     }

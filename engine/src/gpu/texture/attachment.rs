@@ -7,6 +7,7 @@ use crate::gpu::{
 };
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
+use roc_codegen::roc;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
@@ -32,6 +33,7 @@ bitflags! {
 }
 
 /// A quantity that can be rendered to a dedicated render attachment texture.
+#[roc(prefix = "Engine")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RenderAttachmentQuantity {
     DepthStencil = 0,

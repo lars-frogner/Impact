@@ -1,5 +1,7 @@
 //! User interface.
 
+pub mod command;
+
 use crate::window::Window;
 
 /// User interface state.

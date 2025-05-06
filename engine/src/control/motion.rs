@@ -13,6 +13,7 @@ use crate::{
 };
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use nalgebra::vector;
+use roc_codegen::roc;
 use serde::{Deserialize, Serialize};
 
 /// Motion controller allowing for motion at constant
@@ -41,6 +42,7 @@ pub struct SemiDirectionalMotionControllerConfig {
 }
 
 /// Whether there is motion in a certain direction.
+#[roc(prefix = "Engine")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionState {
     Still,
@@ -49,6 +51,7 @@ pub enum MotionState {
 
 /// Possible directions of motion in the local coordinate
 /// system.
+#[roc(prefix = "Engine")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionDirection {
     Forwards,

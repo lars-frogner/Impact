@@ -1,11 +1,6 @@
 //! Input handling.
 
-use crate::{
-    control::motion::{MotionDirection, MotionState},
-    engine::Engine,
-    io::util::parse_ron_file,
-    window::EventLoopController,
-};
+use crate::{engine::Engine, io::util::parse_ron_file, window::EventLoopController};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -14,8 +9,8 @@ use std::{
     sync::Arc,
 };
 use winit::{
-    event::{DeviceEvent, ElementState, KeyEvent, MouseButton, WindowEvent},
-    keyboard::{KeyCode, PhysicalKey},
+    event::{DeviceEvent, ElementState, MouseButton, WindowEvent},
+    keyboard::KeyCode,
 };
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -29,7 +24,7 @@ pub struct InputConfig {
 /// Handler for any user input events.
 #[derive(Debug, Default)]
 pub struct InputHandler {
-    key_handler: KeyInputHandler,
+    _key_handler: KeyInputHandler,
     mouse_button_handler: MouseButtonInputHandler,
 }
 
@@ -96,7 +91,7 @@ pub enum KeyboardInputAction {
 /// Handler for keyboard input events.
 #[derive(Clone, Debug, Default)]
 struct KeyInputHandler {
-    key_map: KeyActionMap,
+    _key_map: KeyActionMap,
 }
 
 /// Macro for easing creation of keyboard action maps.
@@ -111,7 +106,7 @@ impl InputHandler {
     /// keyboard action map and mouse button input handler.
     pub fn new(key_map: KeyActionMap, mouse_button_handler: MouseButtonInputHandler) -> Self {
         Self {
-            key_handler: KeyInputHandler::new(key_map),
+            _key_handler: KeyInputHandler::new(key_map),
             mouse_button_handler,
         }
     }
@@ -138,15 +133,10 @@ impl InputHandler {
     pub fn handle_window_event(
         &self,
         engine: &Arc<Engine>,
-        event_loop_controller: &EventLoopController<'_>,
+        _event_loop_controller: &EventLoopController<'_>,
         event: &WindowEvent,
     ) -> Result<HandlingResult> {
         match event {
-            // Handle keyboard input events
-            WindowEvent::KeyboardInput { event, .. } => {
-                self.key_handler
-                    .handle_event(engine, event_loop_controller, event)
-            }
             WindowEvent::MouseInput { button, state, .. } => self
                 .mouse_button_handler
                 .handle_event(engine, button, state),
@@ -228,184 +218,7 @@ impl std::fmt::Debug for MouseButtonInputHandler {
 
 impl KeyInputHandler {
     fn new(key_map: KeyActionMap) -> Self {
-        Self { key_map }
-    }
-
-    fn handle_event(
-        &self,
-        engine: &Engine,
-        event_loop_controller: &EventLoopController<'_>,
-        key_input_event: &KeyEvent,
-    ) -> Result<HandlingResult> {
-        match key_input_event {
-            KeyEvent {
-                state,
-                physical_key: PhysicalKey::Code(key),
-                ..
-            } => match self.key_map.action_for_key(key) {
-                Some(action) => match action {
-                    KeyboardInputAction::Exit => {
-                        event_loop_controller.exit();
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleInteractionMode => {
-                        if state == &ElementState::Released {
-                            engine.toggle_interaction_mode();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleWireframeMode => {
-                        if state == &ElementState::Released {
-                            engine.toggle_wireframe_mode();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleShadowMapping => {
-                        if state == &ElementState::Released {
-                            engine.renderer().write().unwrap().toggle_shadow_mapping();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleAmbientOcclusion => {
-                        if state == &ElementState::Released {
-                            engine.renderer().read().unwrap().toggle_ambient_occlusion();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleTemporalAntiAliasing => {
-                        if state == &ElementState::Released {
-                            engine.toggle_temporal_anti_aliasing();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleBloom => {
-                        if state == &ElementState::Released {
-                            engine.renderer().read().unwrap().toggle_bloom();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::CycleToneMapping => {
-                        if state == &ElementState::Released {
-                            engine.renderer().read().unwrap().cycle_tone_mapping();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::IncreaseExposure => {
-                        if state == &ElementState::Released {
-                            engine.increase_camera_sensitivity();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::DecreaseExposure => {
-                        if state == &ElementState::Released {
-                            engine.decrease_camera_sensitivity();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleRenderAttachmentVisualization => {
-                        if state == &ElementState::Released {
-                            engine
-                                .renderer()
-                                .read()
-                                .unwrap()
-                                .toggle_render_attachment_visualization();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::CycleVisualizedRenderAttachmentQuantityForward => {
-                        if state == &ElementState::Released {
-                            engine
-                                .renderer()
-                                .read()
-                                .unwrap()
-                                .cycle_visualized_render_attachment_quantity_forward();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::CycleVisualizedRenderAttachmentQuantityBackward => {
-                        if state == &ElementState::Released {
-                            engine
-                                .renderer()
-                                .read()
-                                .unwrap()
-                                .cycle_visualized_render_attachment_quantity_backward();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleRenderPassTimings => {
-                        if state == &ElementState::Released {
-                            engine.renderer().write().unwrap().toggle_timings();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::IncrementSimulationSubstepCount => {
-                        if state == &ElementState::Released {
-                            engine.simulator().write().unwrap().increment_n_substeps();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::DecrementSimulationSubstepCount => {
-                        if state == &ElementState::Released {
-                            engine.simulator().write().unwrap().decrement_n_substeps();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::IncreaseSimulationSpeed => {
-                        if state == &ElementState::Released {
-                            engine
-                                .increment_simulation_speed_multiplier_and_compensate_controller_speed();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::DecreaseSimulationSpeed => {
-                        if state == &ElementState::Released {
-                            engine
-                                .decrement_simulation_speed_multiplier_and_compensate_controller_speed();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::SaveScreenshot => {
-                        if state == &ElementState::Released {
-                            engine.screen_capturer().request_screenshot_save();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::SaveOmnidirectionalLightShadowMap => {
-                        if state == &ElementState::Released {
-                            engine
-                                .screen_capturer()
-                                .request_omnidirectional_light_shadow_map_save();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::SaveUnidirectionalLightShadowMap => {
-                        if state == &ElementState::Released {
-                            engine
-                                .screen_capturer()
-                                .request_unidirectional_light_shadow_map_save();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    // Check if the input is for the motion controller,
-                    // and if so, performed the required motion update
-                    action if engine.control_mode_active() => {
-                        match MotionDirection::try_from_input_action(action) {
-                            Some(direction) => {
-                                engine.update_motion_controller(
-                                    MotionState::from_key_state(*state),
-                                    direction,
-                                );
-                                Ok(HandlingResult::Handled)
-                            }
-                            None => Ok(HandlingResult::Unhandled),
-                        }
-                    }
-                    _ => Ok(HandlingResult::Handled),
-                },
-                None => Ok(HandlingResult::Unhandled),
-            },
-            _ => Ok(HandlingResult::Unhandled),
-        }
+        Self { _key_map: key_map }
     }
 }
 
@@ -416,10 +229,6 @@ impl KeyActionMap {
 
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         parse_ron_file(file_path)
-    }
-
-    fn action_for_key(&self, key: &KeyCode) -> Option<KeyboardInputAction> {
-        self.0.get(key).cloned()
     }
 }
 
@@ -456,29 +265,6 @@ impl Default for KeyActionMap {
             SaveUnidirectionalLightShadowMap => F9,
             Exit => Escape
         ))
-    }
-}
-
-impl MotionState {
-    fn from_key_state(state: ElementState) -> Self {
-        match state {
-            ElementState::Pressed => Self::Moving,
-            ElementState::Released => Self::Still,
-        }
-    }
-}
-
-impl MotionDirection {
-    fn try_from_input_action(action: KeyboardInputAction) -> Option<Self> {
-        match action {
-            KeyboardInputAction::MoveForwards => Some(Self::Forwards),
-            KeyboardInputAction::MoveBackwards => Some(Self::Backwards),
-            KeyboardInputAction::MoveRight => Some(Self::Right),
-            KeyboardInputAction::MoveLeft => Some(Self::Left),
-            KeyboardInputAction::MoveUp => Some(Self::Up),
-            KeyboardInputAction::MoveDown => Some(Self::Down),
-            _ => None,
-        }
     }
 }
 
