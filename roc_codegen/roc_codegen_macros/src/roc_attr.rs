@@ -668,31 +668,49 @@ fn generate_size_expr(
 }
 
 fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &TokenStream) -> TokenStream {
-    generate_summed_field_size_expr(&data.fields, crate_root)
+    generate_summed_field_size_expr(&data.fields, crate_root).unwrap_or_else(|| quote! {0})
 }
 
 fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> TokenStream {
-    let mut variants = data.variants.iter();
-    let Some(variant) = variants.next() else {
+    const _: () = assert!(
+        MAX_ENUM_VARIANTS <= 256,
+        "Enum discriminant is assumed to fit in one byte"
+    );
+
+    let variant_sizes: Vec<_> = data
+        .variants
+        .iter()
+        .filter_map(|variant| generate_summed_field_size_expr(&variant.fields, crate_root))
+        .collect();
+
+    if variant_sizes.is_empty() {
         return quote! {1}; // 1 byte for the discriminant
-    };
-    let mut max_variant_size = generate_summed_field_size_expr(&variant.fields, crate_root);
-    for variant in variants {
-        let variant_size = generate_summed_field_size_expr(&variant.fields, crate_root);
-        max_variant_size = quote! {
-            (if #variant_size > #max_variant_size { #variant_size } else { #max_variant_size })
-        };
     }
+
+    let n_variant_sizes = variant_sizes.len();
+
     quote! {
-        1 + #max_variant_size // 1 extra byte for the discriminant
+        {
+            const SIZES: [usize; #n_variant_sizes] = [#(#variant_sizes),*];
+            let mut max = SIZES[0];
+            let mut i = 1;
+            while i < #n_variant_sizes {
+                if SIZES[i] > max {
+                    max = SIZES[i];
+                }
+                i += 1;
+            }
+            max + 1 // 1 extra byte for the discriminant
+        }
     }
 }
 
-fn generate_summed_field_size_expr(fields: &syn::Fields, crate_root: &TokenStream) -> TokenStream {
+fn generate_summed_field_size_expr(
+    fields: &syn::Fields,
+    crate_root: &TokenStream,
+) -> Option<TokenStream> {
     match fields {
-        syn::Fields::Unit => {
-            quote! {0}
-        }
+        syn::Fields::Unit => None,
         syn::Fields::Named(fields) => {
             generate_summed_field_size_expr_from_field_iter(&fields.named, crate_root)
         }
@@ -705,11 +723,9 @@ fn generate_summed_field_size_expr(fields: &syn::Fields, crate_root: &TokenStrea
 fn generate_summed_field_size_expr_from_field_iter<'a>(
     fields: impl IntoIterator<Item = &'a syn::Field>,
     crate_root: &TokenStream,
-) -> TokenStream {
+) -> Option<TokenStream> {
     let mut fields = fields.into_iter();
-    let Some(field) = fields.next() else {
-        return quote! {0};
-    };
+    let field = fields.next()?;
     let ty = &field.ty;
     let mut summed_fields = serialized_size_of_type(ty, crate_root);
     for field in fields {
@@ -718,7 +734,7 @@ fn generate_summed_field_size_expr_from_field_iter<'a>(
             + #size
         });
     }
-    summed_fields
+    Some(summed_fields)
 }
 
 fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
