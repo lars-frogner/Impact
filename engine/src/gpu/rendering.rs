@@ -4,11 +4,11 @@ pub mod brdf;
 pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
+pub mod screen_capture;
 pub mod surface;
 pub mod tasks;
 
 use crate::{
-    geometry::CubemapFace,
     gpu::{
         GraphicsDevice,
         query::{self, TimestampQueryManager},
@@ -17,12 +17,10 @@ use crate::{
         storage::StorageGPUBufferManager,
         texture::{self, attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
     },
-    light::MAX_SHADOW_MAP_CASCADES,
     scene::Scene,
     window::EventLoopController,
 };
-use anyhow::{Error, Result, anyhow};
-use chrono::Utc;
+use anyhow::{Error, Result};
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
     temporal_anti_aliasing::TemporalAntiAliasingConfig,
@@ -32,10 +30,7 @@ use resource::RenderResourceManager;
 use serde::{Deserialize, Serialize};
 use std::{
     num::NonZeroU32,
-    sync::{
-        Arc, RwLock,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, RwLock},
 };
 use surface::RenderingSurface;
 
@@ -77,14 +72,6 @@ pub struct RenderingConfig {
     pub capturing_camera: CapturingCameraConfig,
     pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
-}
-
-/// Helper for capturing screenshots and related textures.
-#[derive(Debug)]
-pub struct ScreenCapturer {
-    screenshot_save_requested: AtomicBool,
-    omnidirectional_light_shadow_map_save_requested: AtomicBool,
-    unidirectional_light_shadow_map_save_requested: AtomicBool,
 }
 
 impl RenderingSystem {
@@ -417,172 +404,5 @@ impl Default for RenderingConfig {
             wireframe_mode_on: false,
             timings_enabled: false,
         }
-    }
-}
-
-impl ScreenCapturer {
-    /// Creates a new screen capturer.
-    ///
-    /// # Panics
-    /// When a screenshot is captured, a panic will occur if the width times the
-    /// number of bytes per pixel is not a multiple of 256.
-    pub fn new() -> Self {
-        Self {
-            screenshot_save_requested: AtomicBool::new(false),
-            omnidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
-            unidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
-        }
-    }
-
-    /// Schedule a screenshot capture for the next
-    /// [`Self::save_screenshot_if_requested`] call.
-    pub fn request_screenshot_save(&self) {
-        self.screenshot_save_requested
-            .store(true, Ordering::Release);
-    }
-
-    /// Schedule a capture of the omnidirectional light shadow map texture for
-    /// the next [`Self::save_omnidirectional_light_shadow_map_if_requested`]
-    /// call.
-    pub fn request_omnidirectional_light_shadow_map_save(&self) {
-        self.omnidirectional_light_shadow_map_save_requested
-            .store(true, Ordering::Release);
-    }
-
-    /// Schedule a capture of the unidirectional light shadow map texture for
-    /// the next [`Self::save_unidirectional_light_shadow_map_if_requested`]
-    /// call.
-    pub fn request_unidirectional_light_shadow_map_save(&self) {
-        self.unidirectional_light_shadow_map_save_requested
-            .store(true, Ordering::Release);
-    }
-
-    /// Checks if a screenshot capture was scheduled with
-    /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
-    /// saves it as a timestamped PNG file in the current directory.
-    pub fn save_screenshot_if_requested(&self, renderer: &RwLock<RenderingSystem>) -> Result<()> {
-        if self
-            .screenshot_save_requested
-            .swap(false, Ordering::Acquire)
-        {
-            let renderer = renderer.read().unwrap();
-
-            let surface_texture = renderer
-                .surface_texture_to_present
-                .as_ref()
-                .ok_or_else(|| anyhow!("No unpresented surface to save as screenshot"))?;
-
-            texture::save_texture_as_image_file(
-                renderer.graphics_device(),
-                &surface_texture.texture,
-                0,
-                0,
-                format!("screenshot_{}.png", Utc::now().to_rfc3339()),
-            )?;
-        }
-
-        Ok(())
-    }
-
-    /// Checks if a omnidirectional light shadow map capture was scheduled with
-    /// [`Self::request_omnidirectional_light_shadow_map_save`], and if so,
-    /// captures the textures and saves them as timestamped PNG files in the
-    /// current directory.
-    pub fn save_omnidirectional_light_shadow_maps_if_requested(
-        &self,
-        renderer: &RwLock<RenderingSystem>,
-    ) -> Result<()> {
-        if self
-            .omnidirectional_light_shadow_map_save_requested
-            .swap(false, Ordering::Acquire)
-        {
-            let renderer = renderer.read().unwrap();
-
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
-
-            if let Some(light_buffer_manager) = render_resource_manager
-                .synchronized()
-                .get_light_buffer_manager()
-            {
-                for (light_idx, texture) in light_buffer_manager
-                    .omnidirectional_light_shadow_map_manager()
-                    .textures()
-                    .iter()
-                    .enumerate()
-                {
-                    for face in CubemapFace::all() {
-                        texture.save_face_as_image_file(
-                            renderer.graphics_device(),
-                            face,
-                            format!(
-                                "omnidirectional_light_{}_shadow_map_{:?}_{}.png",
-                                light_idx,
-                                face,
-                                Utc::now().to_rfc3339(),
-                            ),
-                        )?;
-                    }
-                }
-                Ok(())
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Checks if a unidirectional light shadow map capture was scheduled with
-    /// [`Self::request_unidirectional_light_shadow_map_save`], and if so,
-    /// captures the textures and saves them as timestamped PNG files in the
-    /// current directory.
-    pub fn save_unidirectional_light_shadow_maps_if_requested(
-        &self,
-        renderer: &RwLock<RenderingSystem>,
-    ) -> Result<()> {
-        if self
-            .unidirectional_light_shadow_map_save_requested
-            .swap(false, Ordering::Acquire)
-        {
-            let renderer = renderer.read().unwrap();
-
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
-
-            if let Some(light_buffer_manager) = render_resource_manager
-                .synchronized()
-                .get_light_buffer_manager()
-            {
-                for (light_idx, texture) in light_buffer_manager
-                    .unidirectional_light_shadow_map_manager()
-                    .textures()
-                    .iter()
-                    .enumerate()
-                {
-                    for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
-                        texture.save_cascade_as_image_file(
-                            renderer.graphics_device(),
-                            cascade_idx,
-                            format!(
-                                "unidirectional_light_{}_shadow_map_{}_{}.png",
-                                light_idx,
-                                cascade_idx,
-                                Utc::now().to_rfc3339(),
-                            ),
-                        )?;
-                    }
-                }
-                Ok(())
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl Default for ScreenCapturer {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -14,7 +14,7 @@ use crate::{
     },
     gpu::{
         self, GraphicsDevice,
-        rendering::{RenderingConfig, RenderingSystem, ScreenCapturer},
+        rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
     io::{self, util::parse_ron_file},
     material::{self, MaterialLibrary},
