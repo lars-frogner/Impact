@@ -125,8 +125,6 @@ fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
 
     let mut engine = Engine::new(app, window)?;
 
-    engine.set_skybox_for_current_scene(Skybox::new(TextureID(hash32!("space_skybox")), 2e3));
-
     let player_entity = engine.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
         // &SphereMeshComp::new(15),

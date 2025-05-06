@@ -1,6 +1,7 @@
 //! Simulation of physics.
 
 pub mod collision;
+pub mod command;
 pub mod constraint;
 pub mod entity;
 pub mod inertia;
@@ -109,6 +110,11 @@ impl PhysicsSimulator {
         self.time_step_duration
     }
 
+    /// Returns the current multiplier for the simulation speed.
+    pub fn simulation_speed_multiplier(&self) -> fph {
+        self.simulation_speed_multiplier
+    }
+
     /// Returns the actual duration used for each time step (including the
     /// simulation speed multiplier).
     pub fn scaled_time_step_duration(&self) -> fph {
@@ -123,15 +129,6 @@ impl PhysicsSimulator {
     /// Returns the number of substeps performed each simulation step.
     pub fn n_substeps(&self) -> u32 {
         self.config.n_substeps
-    }
-
-    /// Returns the factor by which to increase or decrease the simulation speed
-    /// multiplyer when calling
-    /// [`increment_simulation_speed_multiplier`](PhysicsSimulator::increment_simulation_speed_multiplier)
-    /// or
-    /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
-    pub fn simulation_speed_multiplier_increment_factor(&self) -> fph {
-        self.config.simulation_speed_multiplier_increment_factor
     }
 
     /// Returns a reference to the [`RigidBodyForceManager`], guarded by a
@@ -168,45 +165,6 @@ impl PhysicsSimulator {
     /// Will use the given duration as the time step duration.
     pub fn set_time_step_duration(&mut self, time_step_duration: fph) {
         self.time_step_duration = time_step_duration;
-    }
-
-    /// Will execute the given number of substeps each simulation step.
-    pub fn set_n_substeps(&mut self, n_substeps: u32) {
-        self.config.n_substeps = n_substeps;
-    }
-
-    /// Increment the number of substeps by one.
-    pub fn increment_n_substeps(&mut self) {
-        self.config.n_substeps += 1;
-    }
-
-    /// Decrement the number of substeps by one, to a minimum of unity.
-    pub fn decrement_n_substeps(&mut self) {
-        if self.config.n_substeps > 1 {
-            self.config.n_substeps -= 1;
-        }
-    }
-
-    /// Will use the given multiplier to scale the simulation time step
-    /// duration.
-    pub fn set_simulation_speed_multiplier(&mut self, simulation_speed_multiplier: fph) {
-        self.simulation_speed_multiplier = simulation_speed_multiplier;
-    }
-
-    /// Increases the simulation speed multiplier by the
-    /// `simulation_speed_multiplier_increment_factor` specified in the
-    /// configuration.
-    pub fn increment_simulation_speed_multiplier(&mut self) {
-        self.simulation_speed_multiplier *=
-            self.config.simulation_speed_multiplier_increment_factor;
-    }
-
-    /// Decreases the simulation speed multiplier by the
-    /// `simulation_speed_multiplier_increment_factor` specified in the
-    /// configuration.
-    pub fn decrement_simulation_speed_multiplier(&mut self) {
-        self.simulation_speed_multiplier /=
-            self.config.simulation_speed_multiplier_increment_factor;
     }
 
     /// Performs any setup required before starting the game loop.

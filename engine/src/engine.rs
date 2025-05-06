@@ -1,5 +1,6 @@
 //! Manager for all systems and data in the engine.
 
+pub mod command;
 pub mod components;
 pub mod entity;
 pub mod tasks;
@@ -8,10 +9,7 @@ use crate::{
     application::Application,
     assets::{AssetConfig, Assets, lookup_table},
     component::ComponentRegistry,
-    control::{
-        self, ControllerConfig, MotionController, OrientationController,
-        motion::{MotionDirection, MotionState},
-    },
+    control::{self, ControllerConfig, MotionController, OrientationController},
     gpu::{
         self, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
@@ -22,7 +20,6 @@ use crate::{
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
-    skybox::Skybox,
     ui::UserInterface,
     voxel::{self, VoxelConfig, VoxelManager},
     window::{
@@ -347,22 +344,6 @@ impl Engine {
         )
     }
 
-    /// Sets the given skybox as the skybox for the current scene.
-    pub fn set_skybox_for_current_scene(&self, skybox: Skybox) {
-        self.scene()
-            .read()
-            .unwrap()
-            .skybox()
-            .write()
-            .unwrap()
-            .replace(skybox);
-
-        self.renderer()
-            .read()
-            .unwrap()
-            .declare_render_resources_desynchronized();
-    }
-
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
@@ -387,43 +368,12 @@ impl Engine {
         }
     }
 
-    pub fn toggle_interaction_mode(&self) {
-        let mut user_interface = self.user_interface().write().unwrap();
-        if user_interface.control_mode_active() {
-            self.stop_motion_controller();
-            user_interface.activate_cursor_mode();
-        } else {
-            user_interface.activate_control_mode();
-        }
-    }
-
     pub fn control_mode_active(&self) -> bool {
         self.user_interface().read().unwrap().control_mode_active()
     }
 
     pub fn is_paused(&self) -> bool {
         self.user_interface().read().unwrap().is_paused()
-    }
-
-    /// Updates the motion controller with the given motion.
-    pub fn update_motion_controller(&self, state: MotionState, direction: MotionDirection) {
-        if let Some(motion_controller) = &self.motion_controller {
-            log::debug!(
-                "Updating motion controller to state {:?} and direction {:?}",
-                state,
-                direction
-            );
-            motion_controller
-                .lock()
-                .unwrap()
-                .update_motion(state, direction);
-        }
-    }
-
-    fn stop_motion_controller(&self) {
-        if let Some(motion_controller) = &self.motion_controller {
-            motion_controller.lock().unwrap().stop();
-        }
     }
 
     /// Updates the orientation controller with the given mouse displacement.
@@ -461,84 +411,6 @@ impl Engine {
                 motion_controller.lock().unwrap().as_ref(),
                 time_step_duration,
             );
-        }
-    }
-
-    pub fn toggle_wireframe_mode(&self) {
-        let mut renderer = self.renderer().write().unwrap();
-        renderer.toggle_wireframe_mode();
-    }
-
-    /// Toggles temporal anti-aliasing.
-    pub fn toggle_temporal_anti_aliasing(&self) {
-        let renderer = self.renderer().read().unwrap();
-        let mut postprocessor = renderer.postprocessor().write().unwrap();
-        let scene = self.scene().read().unwrap();
-        let mut scene_camera = scene.scene_camera().write().unwrap();
-
-        postprocessor.toggle_temporal_anti_aliasing();
-
-        if let Some(camera) = scene_camera.as_mut() {
-            camera.set_jitter_enabled(postprocessor.temporal_anti_aliasing_enabled());
-            renderer.declare_render_resources_desynchronized();
-        }
-    }
-
-    /// Increases the sensitivity of the capturing camera by a small
-    /// multiplicative factor.
-    pub fn increase_camera_sensitivity(&self) {
-        self.renderer()
-            .read()
-            .unwrap()
-            .postprocessor()
-            .write()
-            .unwrap()
-            .capturing_camera_mut()
-            .increase_sensitivity();
-    }
-
-    /// Decreases the sensitivity of the capturing camera by a small
-    /// multiplicative factor.
-    pub fn decrease_camera_sensitivity(&self) {
-        self.renderer()
-            .read()
-            .unwrap()
-            .postprocessor()
-            .write()
-            .unwrap()
-            .capturing_camera_mut()
-            .decrease_sensitivity();
-    }
-
-    /// Increases the simulation speed multiplier by the
-    /// `simulation_speed_multiplier_increment_factor` specified in the
-    /// simulation configuration and decrease the motion controller speed by the
-    /// same factor to compensate.
-    pub fn increment_simulation_speed_multiplier_and_compensate_controller_speed(&self) {
-        let mut simulator = self.simulator.write().unwrap();
-        simulator.increment_simulation_speed_multiplier();
-
-        if let Some(motion_controller) = &self.motion_controller {
-            let mut motion_controller = motion_controller.lock().unwrap();
-            let new_movement_speed = motion_controller.movement_speed()
-                / simulator.simulation_speed_multiplier_increment_factor();
-            motion_controller.set_movement_speed(new_movement_speed);
-        }
-    }
-
-    /// Decreases the simulation speed multiplier by the
-    /// `simulation_speed_multiplier_increment_factor` specified in the
-    /// simulation configuration and increase the motion controller speed by the
-    /// same factor to compensate.
-    pub fn decrement_simulation_speed_multiplier_and_compensate_controller_speed(&self) {
-        let mut simulator = self.simulator.write().unwrap();
-        simulator.decrement_simulation_speed_multiplier();
-
-        if let Some(motion_controller) = &self.motion_controller {
-            let mut motion_controller = motion_controller.lock().unwrap();
-            let new_movement_speed = motion_controller.movement_speed()
-                * simulator.simulation_speed_multiplier_increment_factor();
-            motion_controller.set_movement_speed(new_movement_speed);
         }
     }
 

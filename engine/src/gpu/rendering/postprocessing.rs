@@ -2,6 +2,7 @@
 
 pub mod ambient_occlusion;
 pub mod capturing;
+pub mod command;
 pub mod gaussian_blur;
 pub mod render_attachment_visualization;
 pub mod temporal_anti_aliasing;
@@ -186,34 +187,5 @@ impl Postprocessor {
     /// Returns a mutable reference to the capturing camera.
     pub fn capturing_camera_mut(&mut self) -> &mut CapturingCamera {
         &mut self.capturing_camera
-    }
-
-    /// Toggles ambient occlusion.
-    pub fn toggle_ambient_occlusion(&mut self) {
-        self.ambient_occlusion_enabled = !self.ambient_occlusion_enabled;
-    }
-
-    /// Toggles temporal anti-aliasing.
-    pub fn toggle_temporal_anti_aliasing(&mut self) {
-        self.temporal_anti_aliasing_enabled = !self.temporal_anti_aliasing_enabled;
-    }
-
-    /// Toggles visualization of render attachments.
-    pub fn toggle_render_attachment_visualization(&mut self) {
-        self.render_attachment_visualization_passes.toggle_enabled();
-    }
-
-    /// Changes the visualized render attachment quantity to the next quantity
-    /// in the list, or wraps around.
-    pub fn cycle_visualized_render_attachment_quantity_forward(&mut self) {
-        self.render_attachment_visualization_passes
-            .cycle_quantity_forward();
-    }
-
-    /// Changes the visualized render attachment quantity to the previous
-    /// quantity in the list, or wraps around.
-    pub fn cycle_visualized_render_attachment_quantity_backward(&mut self) {
-        self.render_attachment_visualization_passes
-            .cycle_quantity_backward();
     }
 }

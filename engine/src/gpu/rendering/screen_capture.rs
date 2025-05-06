@@ -1,5 +1,7 @@
 //! Screen capture.
 
+pub mod command;
+
 use crate::{
     geometry::CubemapFace,
     gpu::rendering::{RenderingSystem, texture},

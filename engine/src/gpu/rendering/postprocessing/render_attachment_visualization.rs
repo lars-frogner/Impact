@@ -14,7 +14,7 @@ use crate::gpu::{
     },
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use std::{borrow::Cow, collections::HashMap};
 
 /// Render passes for visualizing render attachments.
@@ -72,8 +72,22 @@ impl RenderAttachmentVisualizationPasses {
         })
     }
 
-    pub(super) fn toggle_enabled(&mut self) {
-        self.enabled = !self.enabled;
+    pub(super) fn enabled_mut(&mut self) -> &mut bool {
+        &mut self.enabled
+    }
+
+    pub(super) fn quantity(&self) -> RenderAttachmentQuantity {
+        Self::SUPPRTED_QUANTITIES[self.idx_of_quantity_to_visualize]
+    }
+
+    pub(super) fn set_quantity(&mut self, to: RenderAttachmentQuantity) -> Result<()> {
+        self.idx_of_quantity_to_visualize = Self::SUPPRTED_QUANTITIES
+            .iter()
+            .position(|&quantity| quantity == to)
+            .ok_or_else(|| {
+                anyhow!("Visualization of render attachment quantity {to:?} not supported")
+            })?;
+        Ok(())
     }
 
     pub(super) fn cycle_quantity_forward(&mut self) {
@@ -100,7 +114,7 @@ impl RenderAttachmentVisualizationPasses {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         if self.enabled {
-            let quantity = Self::SUPPRTED_QUANTITIES[self.idx_of_quantity_to_visualize];
+            let quantity = self.quantity();
             self.passes[&quantity].record(
                 rendering_surface,
                 surface_texture_view,

@@ -81,8 +81,8 @@ impl SkyboxGPUResourceManager {
     }
 
     /// Returns the skybox whose GPU resources are managed by this manager.
-    pub fn skybox(&self) -> &Skybox {
-        &self.skybox
+    pub fn skybox(&self) -> Skybox {
+        self.skybox
     }
 
     /// Returns the bind group layout for the GPU resource group comprised of
@@ -103,10 +103,10 @@ impl SkyboxGPUResourceManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         assets: &Assets,
-        skybox: &Skybox,
+        skybox: Skybox,
     ) -> Result<()> {
-        if skybox != &self.skybox {
-            *self = Self::for_skybox(graphics_device, assets, skybox.clone())?;
+        if skybox != self.skybox {
+            *self = Self::for_skybox(graphics_device, assets, skybox)?;
         }
         Ok(())
     }
