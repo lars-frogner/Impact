@@ -22,17 +22,19 @@ use std::{borrow::Cow, fmt};
 /// associated utility functions.
 ///
 /// The macro can additionally be applied to the type's `impl` block and
-/// selected methods therein in order to register
-/// [`AssociatedFunction`](crate::meta::AssociatedFunction)s whose generated Roc code will be
-/// included in the type's Roc module.
+/// selected associated constants and functions therein in order to register
+/// [`AssociatedConstant`](crate::meta::AssociatedConstant)s and
+/// [`AssociatedFunction`](crate::meta::AssociatedFunction)s whose generated
+/// Roc code will be included in the type's Roc module.
 ///
-/// Note that the registration of types and methods is only performed when the
-/// crate hosting the target type has an active feature named `roc_codegen` and
-/// the `enabled` feature is active for the [`roc_codegen`] crate.
+/// Note that the registration of types and associated items is only performed
+/// when the crate hosting the target type has an active feature named
+/// `roc_codegen` and the `enabled` feature is active for the [`roc_codegen`]
+/// crate.
 ///
 /// Three categories of types can be annotated with `roc`, and the requested
 /// category can be specified as an argument to the macro:
-/// `#[roc(<category>)]`. The available categories are:
+/// `#[roc(category = "<category>")]`. The available categories are:
 ///
 /// - `pod`: The type is Plain Old Data (POD) and, to prove it, implements the
 ///   [`bytemuck::Pod`] trait. This allows it to be passed more efficiently
@@ -77,21 +79,30 @@ use std::{borrow::Cow, fmt};
 ///   imported, so this is only needed when some of the generated methods
 ///   make use of additional modules.
 ///
-/// When applied to a method in a `roc`-annotated `impl` block, the macro
-/// requires the Roc source code for the body of the method to be specified
-/// in an argument like this: `body = "<Roc code>"`. The argument names will
-/// be the same in Roc as in Rust. The macro also accepts the following
-/// optional argument:
+/// When applied to an associated constant in a `roc`-annotated `impl` block,
+/// the macro requires the Roc expression for the constant to be specified in
+/// an argument like this: `expr = "<Roc code>"`. The macro also accepts the
+/// following optional argument:
 ///
-/// - `name = "<method name>"`: The name used for the method in Roc. Defaults
-///   to the Rust name.
+/// - `name = "<constant name>"`: The name used for the constant in Roc.
+///   Defaults to the Rust name.
 ///
-/// Not all methods can be translated to Roc. The following requirements have
-/// to hold for the method signature:
+/// When applied to an associated function in a `roc`-annotated `impl` block,
+/// the macro requires the Roc source code for the body of the function to be
+/// specified in an argument like this: `body = "<Roc code>"`. The argument
+/// names will be the same in Roc as in Rust. The macro also accepts the
+/// following optional argument:
 ///
-/// - Each type in the method signature must be either a primitive or generated
-///   Roc type (by reference or value), a string (as `&str` or `String`) or an
-///   array or slice of such types.
+/// - `name = "<function name>"`: The name used for the function in Roc.
+///   Defaults to the Rust name.
+///
+/// Not all associated functions can be translated to Roc. The following
+/// requirements have to hold for the function signature:
+///
+/// - Each type in the function signature must be either a primitive or
+///   generated Roc type (by reference or value), a string (as `&str` or
+///   `String`) or an array, slice, 2- or 3-element tuple or `Result` of such
+///   types.
 /// - No generic parameters or `impl <Trait>`.
 /// - No mutable references.
 /// - There must be a return type.
