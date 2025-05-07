@@ -224,11 +224,14 @@ fn generate_roc_impl(
 ) -> syn::Result<TokenStream> {
     let roc_type_id = generate_roc_type_id(rust_type_name, crate_root);
     let size = generate_size_expr(input, crate_root, type_category)?;
+    let trait_method_impls = generate_roc_trait_method_impls(input, crate_root, type_category)?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         impl #crate_root::Roc for #rust_type_name {
             const ROC_TYPE_ID: #crate_root::RocTypeID = #roc_type_id;
             const SERIALIZED_SIZE: usize = #size;
+
+            #trait_method_impls
         }
     })
 }
@@ -260,6 +263,382 @@ fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> Tok
             #type_path_tail
         ))
     )
+}
+
+fn generate_size_expr(
+    input: &syn::DeriveInput,
+    crate_root: &TokenStream,
+    type_category: TypeCategory,
+) -> syn::Result<TokenStream> {
+    if matches!(type_category, TypeCategory::Primitive | TypeCategory::Pod) {
+        // Their serialized size of POD types will always match their
+        // in-memory size
+        let type_name = &input.ident;
+        return Ok(quote! {
+            ::std::mem::size_of::<#type_name>()
+        });
+    }
+    match &input.data {
+        syn::Data::Struct(data) => Ok(generate_struct_size_expr(data, crate_root)),
+        syn::Data::Enum(data) => Ok(generate_enum_size_expr(data, crate_root)),
+        syn::Data::Union(_) => Err(syn::Error::new_spanned(
+            input,
+            "the `roc` attribute does not support unions",
+        )),
+    }
+}
+
+fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &TokenStream) -> TokenStream {
+    generate_summed_field_size_expr(&data.fields, crate_root).unwrap_or_else(|| quote! {0})
+}
+
+fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> TokenStream {
+    const _: () = assert!(
+        MAX_ENUM_VARIANTS <= 256,
+        "Enum discriminant is assumed to fit in one byte"
+    );
+
+    let variant_sizes: Vec<_> = data
+        .variants
+        .iter()
+        .filter_map(|variant| generate_summed_field_size_expr(&variant.fields, crate_root))
+        .collect();
+
+    if variant_sizes.is_empty() {
+        return quote! {1}; // 1 byte for the discriminant
+    }
+
+    let n_variant_sizes = variant_sizes.len();
+
+    quote! {
+        {
+            const SIZES: [usize; #n_variant_sizes] = [#(#variant_sizes),*];
+            let mut max = SIZES[0];
+            let mut i = 1;
+            while i < #n_variant_sizes {
+                if SIZES[i] > max {
+                    max = SIZES[i];
+                }
+                i += 1;
+            }
+            max + 1 // 1 extra byte for the discriminant
+        }
+    }
+}
+
+fn generate_summed_field_size_expr(
+    fields: &syn::Fields,
+    crate_root: &TokenStream,
+) -> Option<TokenStream> {
+    match fields {
+        syn::Fields::Unit => None,
+        syn::Fields::Named(fields) => {
+            generate_summed_field_size_expr_from_field_iter(&fields.named, crate_root)
+        }
+        syn::Fields::Unnamed(fields) => {
+            generate_summed_field_size_expr_from_field_iter(&fields.unnamed, crate_root)
+        }
+    }
+}
+
+fn generate_summed_field_size_expr_from_field_iter<'a>(
+    fields: impl IntoIterator<Item = &'a syn::Field>,
+    crate_root: &TokenStream,
+) -> Option<TokenStream> {
+    let mut fields = fields.into_iter();
+    let field = fields.next()?;
+    let ty = &field.ty;
+    let mut summed_fields = serialized_size_of_type(ty, crate_root);
+    for field in fields {
+        let size = serialized_size_of_type(&field.ty, crate_root);
+        summed_fields.extend(quote! {
+            + #size
+        });
+    }
+    Some(summed_fields)
+}
+
+fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
+    if let syn::Type::Array(array) = ty {
+        let elem_ty = &array.elem;
+        let len = &array.len;
+        quote! {
+            (<#elem_ty as #crate_root::Roc>::SERIALIZED_SIZE * #len)
+        }
+    } else {
+        quote! {
+            <#ty as #crate_root::Roc>::SERIALIZED_SIZE
+        }
+    }
+}
+
+fn generate_roc_trait_method_impls(
+    input: &syn::DeriveInput,
+    crate_root: &TokenStream,
+    type_category: TypeCategory,
+) -> syn::Result<TokenStream> {
+    if let TypeCategory::Primitive | TypeCategory::Pod = type_category {
+        Ok(generate_roc_trait_method_impls_for_pod_type(crate_root))
+    } else {
+        generate_roc_trait_method_impls_for_non_pod_type(input, crate_root)
+    }
+}
+
+fn generate_roc_trait_method_impls_for_pod_type(crate_root: &TokenStream) -> TokenStream {
+    quote! {
+        fn from_roc_bytes(bytes: &[u8]) -> Self {
+            *::bytemuck::from_bytes(&bytes[..<Self as #crate_root::Roc>::SERIALIZED_SIZE])
+        }
+
+        fn write_roc_bytes(&self, buffer: &mut [u8]) {
+            buffer[..<Self as #crate_root::Roc>::SERIALIZED_SIZE].copy_from_slice(::bytemuck::bytes_of(self));
+        }
+    }
+}
+
+fn generate_roc_trait_method_impls_for_non_pod_type(
+    input: &syn::DeriveInput,
+    crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    match &input.data {
+        syn::Data::Struct(data) => Ok(generate_roc_trait_method_impls_for_struct(data, crate_root)),
+        syn::Data::Enum(data) => Ok(generate_roc_trait_method_impls_for_enum(data, crate_root)),
+        syn::Data::Union(_) => Err(syn::Error::new_spanned(
+            input,
+            "the `roc` attribute does not support unions",
+        )),
+    }
+}
+
+fn generate_roc_trait_method_impls_for_struct(
+    data: &syn::DataStruct,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    match &data.fields {
+        syn::Fields::Unit => quote! {
+            fn from_roc_bytes(_bytes: &[u8]) -> Self { Self }
+            fn write_roc_bytes(&self, _buffer: &mut [u8]) {}
+        },
+        syn::Fields::Named(fields) => {
+            let destructuring = generate_destructuring_for_named_fields(fields);
+
+            let from_bytes_calls = generate_from_bytes_calls_for_fields(&fields.named, crate_root);
+
+            let write_bytes_calls =
+                generate_write_bytes_calls_for_fields(&fields.named, crate_root);
+
+            quote! {
+                fn from_roc_bytes(bytes: &[u8]) -> Self {
+                    let mut cursor = 0;
+                    #from_bytes_calls
+                    Self #destructuring
+                }
+
+                fn write_roc_bytes(&self, buffer: &mut [u8]) {
+                    let Self #destructuring = self;
+                    let mut cursor = 0;
+                    #write_bytes_calls
+                }
+            }
+        }
+        syn::Fields::Unnamed(fields) => {
+            let destructuring = generate_destructuring_for_unnamed_fields(fields);
+
+            let from_bytes_calls =
+                generate_from_bytes_calls_for_fields(&fields.unnamed, crate_root);
+
+            let write_bytes_calls =
+                generate_write_bytes_calls_for_fields(&fields.unnamed, crate_root);
+
+            quote! {
+                fn from_roc_bytes(bytes: &[u8]) -> Self {
+                    let mut cursor = 0;
+                    #from_bytes_calls
+                    Self #destructuring
+                }
+
+                fn write_roc_bytes(&self, buffer: &mut [u8]) {
+                    let Self #destructuring = self;
+                    let mut cursor = 0;
+                    #write_bytes_calls
+                }
+            }
+        }
+    }
+}
+
+fn generate_roc_trait_method_impls_for_enum(
+    data: &syn::DataEnum,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let (matches_with_from_bytes_calls, matches_with_write_bytes_calls): (Vec<_>, Vec<_>) = data
+        .variants
+        .iter()
+        .enumerate()
+        .map(|(idx, variant)| {
+            let ident = &variant.ident;
+            let discriminant: u8 = idx.try_into().expect("discriminant should fit in u8");
+
+            match &variant.fields {
+                syn::Fields::Unit => (
+                    quote! {
+                        #discriminant => Self::#ident,
+                    },
+                    quote! {
+                        Self::#ident => {
+                            buffer[0] = #discriminant;
+                        }
+                    },
+                ),
+                syn::Fields::Named(fields) => {
+                    let destructuring = generate_destructuring_for_named_fields(fields);
+
+                    let from_bytes_calls =
+                        generate_from_bytes_calls_for_fields(&fields.named, crate_root);
+
+                    let write_bytes_calls =
+                        generate_write_bytes_calls_for_fields(&fields.named, crate_root);
+
+                    (
+                        quote! {
+                            #discriminant => {
+                                let mut cursor = 1;
+                                #from_bytes_calls
+                                Self::#ident #destructuring
+                            }
+                        },
+                        quote! {
+                            Self::#ident #destructuring => {
+                                buffer[0] = #discriminant;
+                                let mut cursor = 1;
+                                #write_bytes_calls
+                            }
+                        },
+                    )
+                }
+                syn::Fields::Unnamed(fields) => {
+                    let destructuring = generate_destructuring_for_unnamed_fields(fields);
+
+                    let from_bytes_calls =
+                        generate_from_bytes_calls_for_fields(&fields.unnamed, crate_root);
+
+                    let write_bytes_calls =
+                        generate_write_bytes_calls_for_fields(&fields.unnamed, crate_root);
+
+                    (
+                        quote! {
+                            #discriminant => {
+                                let mut cursor = 1;
+                                #from_bytes_calls
+                                Self::#ident #destructuring
+                            }
+                        },
+                        quote! {
+                            Self::#ident #destructuring => {
+                                buffer[0] = #discriminant;
+                                let mut cursor = 1;
+                                #write_bytes_calls
+                            }
+                        },
+                    )
+                }
+            }
+        })
+        .unzip();
+
+    quote! {
+        fn from_roc_bytes(bytes: &[u8]) -> Self {
+            match bytes[0] {
+                #(#matches_with_from_bytes_calls)*
+                invalid_discriminant => panic!("got invalid discriminant {invalid_discriminant}"),
+            }
+        }
+
+        fn write_roc_bytes(&self, buffer: &mut [u8]) {
+            match self {
+                #(#matches_with_write_bytes_calls)*
+            }
+        }
+    }
+}
+
+fn generate_destructuring_for_named_fields(fields: &syn::FieldsNamed) -> TokenStream {
+    let parts = fields.named.iter().enumerate().map(|(idx, field)| {
+        let real_ident = field.ident.as_ref().unwrap();
+        let dummy_ident = field_ident(idx);
+        quote! {
+            #real_ident: #dummy_ident
+        }
+    });
+    quote! {
+        { #(#parts),* }
+    }
+}
+
+fn generate_destructuring_for_unnamed_fields(fields: &syn::FieldsUnnamed) -> TokenStream {
+    let parts = (0..fields.unnamed.len()).map(|idx| field_ident(idx).to_token_stream());
+    quote! {
+        ( #(#parts),* )
+    }
+}
+
+fn generate_from_bytes_calls_for_fields(
+    fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let calls = fields
+        .iter()
+        .enumerate()
+        .map(|(idx, field)| generate_from_bytes_call_for_field(idx, &field.ty, crate_root));
+    quote! {
+        #(#calls)*
+    }
+}
+
+fn generate_write_bytes_calls_for_fields(
+    fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let calls = fields
+        .iter()
+        .enumerate()
+        .map(|(idx, field)| generate_write_bytes_call_for_field(idx, &field.ty, crate_root));
+    quote! {
+        #(#calls)*
+    }
+}
+
+fn generate_from_bytes_call_for_field(
+    field_idx: usize,
+    field_ty: &syn::Type,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let field_ident = field_ident(field_idx);
+    quote! {
+        cursor += <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE;
+        let #field_ident = <#field_ty as #crate_root::Roc>::from_roc_bytes(
+            &bytes[cursor - <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE..cursor],
+        );
+    }
+}
+
+fn generate_write_bytes_call_for_field(
+    field_idx: usize,
+    field_ty: &syn::Type,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let field_ident = field_ident(field_idx);
+    quote! {
+        cursor += <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE;
+        <#field_ty as #crate_root::Roc>::write_roc_bytes(
+            #field_ident,
+            &mut buffer[cursor - <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE..cursor],
+        );
+    }
+}
+
+fn field_ident(field_idx: usize) -> syn::Ident {
+    format_ident!("field_{field_idx}")
 }
 
 fn generate_registered_type_submit(
@@ -642,113 +1021,6 @@ fn generate_variants(
     Ok(quote! {
         #crate_root::ir::TypeVariants(#crate_root::utils::StaticList([#(#variants)*]))
     })
-}
-
-fn generate_size_expr(
-    input: &syn::DeriveInput,
-    crate_root: &TokenStream,
-    type_category: TypeCategory,
-) -> syn::Result<TokenStream> {
-    if type_category == TypeCategory::Primitive {
-        // Since primitives are always POD, their serialized size
-        // will always match their in-memory size
-        let type_name = &input.ident;
-        return Ok(quote! {
-            ::std::mem::size_of::<#type_name>()
-        });
-    }
-    match &input.data {
-        syn::Data::Struct(data) => Ok(generate_struct_size_expr(data, crate_root)),
-        syn::Data::Enum(data) => Ok(generate_enum_size_expr(data, crate_root)),
-        syn::Data::Union(_) => Err(syn::Error::new_spanned(
-            input,
-            "the `roc` attribute does not support unions",
-        )),
-    }
-}
-
-fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &TokenStream) -> TokenStream {
-    generate_summed_field_size_expr(&data.fields, crate_root).unwrap_or_else(|| quote! {0})
-}
-
-fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> TokenStream {
-    const _: () = assert!(
-        MAX_ENUM_VARIANTS <= 256,
-        "Enum discriminant is assumed to fit in one byte"
-    );
-
-    let variant_sizes: Vec<_> = data
-        .variants
-        .iter()
-        .filter_map(|variant| generate_summed_field_size_expr(&variant.fields, crate_root))
-        .collect();
-
-    if variant_sizes.is_empty() {
-        return quote! {1}; // 1 byte for the discriminant
-    }
-
-    let n_variant_sizes = variant_sizes.len();
-
-    quote! {
-        {
-            const SIZES: [usize; #n_variant_sizes] = [#(#variant_sizes),*];
-            let mut max = SIZES[0];
-            let mut i = 1;
-            while i < #n_variant_sizes {
-                if SIZES[i] > max {
-                    max = SIZES[i];
-                }
-                i += 1;
-            }
-            max + 1 // 1 extra byte for the discriminant
-        }
-    }
-}
-
-fn generate_summed_field_size_expr(
-    fields: &syn::Fields,
-    crate_root: &TokenStream,
-) -> Option<TokenStream> {
-    match fields {
-        syn::Fields::Unit => None,
-        syn::Fields::Named(fields) => {
-            generate_summed_field_size_expr_from_field_iter(&fields.named, crate_root)
-        }
-        syn::Fields::Unnamed(fields) => {
-            generate_summed_field_size_expr_from_field_iter(&fields.unnamed, crate_root)
-        }
-    }
-}
-
-fn generate_summed_field_size_expr_from_field_iter<'a>(
-    fields: impl IntoIterator<Item = &'a syn::Field>,
-    crate_root: &TokenStream,
-) -> Option<TokenStream> {
-    let mut fields = fields.into_iter();
-    let field = fields.next()?;
-    let ty = &field.ty;
-    let mut summed_fields = serialized_size_of_type(ty, crate_root);
-    for field in fields {
-        let size = serialized_size_of_type(&field.ty, crate_root);
-        summed_fields.extend(quote! {
-            + #size
-        });
-    }
-    Some(summed_fields)
-}
-
-fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
-    if let syn::Type::Array(array) = ty {
-        let elem_ty = &array.elem;
-        let len = &array.len;
-        quote! {
-            (<#elem_ty as #crate_root::Roc>::SERIALIZED_SIZE * #len)
-        }
-    } else {
-        quote! {
-            <#ty as #crate_root::Roc>::SERIALIZED_SIZE
-        }
-    }
 }
 
 fn generate_function_arguments<const MAX_ARGS: usize>(

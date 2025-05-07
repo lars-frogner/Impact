@@ -111,9 +111,35 @@ pub use roc_codegen_macros::roc;
 /// Represents types that have a Roc equivalent. This should never be
 /// implemented directly. Instead, annotate types using the [`roc`]
 /// attribute macro.
-pub trait Roc {
+pub trait Roc: Sized {
     const ROC_TYPE_ID: RocTypeID;
+
+    /// The number of bytes [`Self::write_roc_bytes`] will write to the buffer
+    /// when serializing a value of this type.
     const SERIALIZED_SIZE: usize;
+
+    /// Deserializes the first [`Self::SERIALIZED_SIZE`] bytes in the given
+    /// slice into a value of this type. The encoding is expected to match that
+    /// used by the serialization and deserialization functions associated with
+    /// the Roc counterpart of this type, as well as with that used by
+    /// [`Self::write_roc_bytes`].
+    ///
+    /// # Panics
+    /// - If `bytes` is shorter than `Self::SERIALIZED_SIZE`.
+    /// - If the alignment of this type exceeds the alignment of the `bytes`
+    ///   slice.
+    /// - If an unexpected enum discriminant is encountered.
+    fn from_roc_bytes(bytes: &[u8]) -> Self;
+
+    /// Serializes this value into [`Self::SERIALIZED_SIZE`] bytes and writes
+    /// them to the beginning of the given buffer. The encoding matches that
+    /// used by the serialization and deserialization functions associated with
+    /// the Roc counterpart of this type, as well as with that used by
+    /// [`Self::from_roc_bytes`].
+    ///
+    /// # Panics
+    /// - If `buffer` is shorter than `Self::SERIALIZED_SIZE`.
+    fn write_roc_bytes(&self, buffer: &mut [u8]);
 }
 
 /// Helper trait to enforce that certain Roc types are POD.
