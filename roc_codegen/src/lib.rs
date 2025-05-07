@@ -10,6 +10,7 @@ mod primitives;
 #[cfg(feature = "enabled")]
 pub mod generate;
 
+use anyhow::Result;
 use bitflags::bitflags;
 use std::{borrow::Cow, fmt};
 
@@ -124,12 +125,11 @@ pub trait Roc: Sized {
     /// the Roc counterpart of this type, as well as with that used by
     /// [`Self::write_roc_bytes`].
     ///
-    /// # Panics
-    /// - If `bytes` is shorter than `Self::SERIALIZED_SIZE`.
-    /// - If the alignment of this type exceeds the alignment of the `bytes`
-    ///   slice.
-    /// - If an unexpected enum discriminant is encountered.
-    fn from_roc_bytes(bytes: &[u8]) -> Self;
+    /// # Errors
+    /// Returns an error if:
+    /// - `bytes` does not have size `Self::SERIALIZED_SIZE`.
+    /// - An unexpected enum discriminant is encountered.
+    fn from_roc_bytes(bytes: &[u8]) -> Result<Self>;
 
     /// Serializes this value into [`Self::SERIALIZED_SIZE`] bytes and writes
     /// them to the beginning of the given buffer. The encoding matches that
@@ -137,9 +137,10 @@ pub trait Roc: Sized {
     /// the Roc counterpart of this type, as well as with that used by
     /// [`Self::from_roc_bytes`].
     ///
-    /// # Panics
-    /// - If `buffer` is shorter than `Self::SERIALIZED_SIZE`.
-    fn write_roc_bytes(&self, buffer: &mut [u8]);
+    /// # Errors
+    /// Returns an error if `buffer` does not have size
+    /// `Self::SERIALIZED_SIZE`.
+    fn write_roc_bytes(&self, buffer: &mut [u8]) -> Result<()>;
 }
 
 /// Helper trait to enforce that certain Roc types are POD.

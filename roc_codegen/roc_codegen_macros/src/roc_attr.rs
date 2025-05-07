@@ -377,21 +377,32 @@ fn generate_roc_trait_method_impls(
     crate_root: &TokenStream,
     type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
+    let type_name = &input.ident;
     if let TypeCategory::Primitive | TypeCategory::Pod = type_category {
-        Ok(generate_roc_trait_method_impls_for_pod_type(crate_root))
+        Ok(generate_roc_trait_method_impls_for_pod_type(
+            type_name, crate_root,
+        ))
     } else {
         generate_roc_trait_method_impls_for_non_pod_type(input, crate_root)
     }
 }
 
-fn generate_roc_trait_method_impls_for_pod_type(crate_root: &TokenStream) -> TokenStream {
+fn generate_roc_trait_method_impls_for_pod_type(
+    type_name: &syn::Ident,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let from_bytes_input_check = generate_from_bytes_input_check(type_name, crate_root);
+    let write_bytes_input_check = generate_write_bytes_input_check(type_name, crate_root);
     quote! {
-        fn from_roc_bytes(bytes: &[u8]) -> Self {
-            *::bytemuck::from_bytes(&bytes[..<Self as #crate_root::Roc>::SERIALIZED_SIZE])
+        fn from_roc_bytes(bytes: &[u8]) -> ::anyhow::Result<Self> {
+            #from_bytes_input_check
+            Ok(::bytemuck::pod_read_unaligned(bytes))
         }
 
-        fn write_roc_bytes(&self, buffer: &mut [u8]) {
-            buffer[..<Self as #crate_root::Roc>::SERIALIZED_SIZE].copy_from_slice(::bytemuck::bytes_of(self));
+        fn write_roc_bytes(&self, buffer: &mut [u8]) -> ::anyhow::Result<()> {
+            #write_bytes_input_check
+            buffer.copy_from_slice(::bytemuck::bytes_of(self));
+            Ok(())
         }
     }
 }
@@ -400,9 +411,14 @@ fn generate_roc_trait_method_impls_for_non_pod_type(
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
+    let type_name = &input.ident;
     match &input.data {
-        syn::Data::Struct(data) => Ok(generate_roc_trait_method_impls_for_struct(data, crate_root)),
-        syn::Data::Enum(data) => Ok(generate_roc_trait_method_impls_for_enum(data, crate_root)),
+        syn::Data::Struct(data) => Ok(generate_roc_trait_method_impls_for_struct(
+            type_name, data, crate_root,
+        )),
+        syn::Data::Enum(data) => Ok(generate_roc_trait_method_impls_for_enum(
+            type_name, data, crate_root,
+        )),
         syn::Data::Union(_) => Err(syn::Error::new_spanned(
             input,
             "the `roc` attribute does not support unions",
@@ -411,13 +427,24 @@ fn generate_roc_trait_method_impls_for_non_pod_type(
 }
 
 fn generate_roc_trait_method_impls_for_struct(
+    type_name: &syn::Ident,
     data: &syn::DataStruct,
     crate_root: &TokenStream,
 ) -> TokenStream {
+    let from_bytes_input_check = generate_from_bytes_input_check(type_name, crate_root);
+    let write_bytes_input_check = generate_write_bytes_input_check(type_name, crate_root);
+
     match &data.fields {
         syn::Fields::Unit => quote! {
-            fn from_roc_bytes(_bytes: &[u8]) -> Self { Self }
-            fn write_roc_bytes(&self, _buffer: &mut [u8]) {}
+            fn from_roc_bytes(bytes: &[u8]) -> ::anyhow::Result<Self> {
+                #from_bytes_input_check
+                Ok(Self)
+            }
+
+            fn write_roc_bytes(&self, buffer: &mut [u8]) -> ::anyhow::Result<()> {
+                #write_bytes_input_check
+                Ok(())
+            }
         },
         syn::Fields::Named(fields) => {
             let destructuring = generate_destructuring_for_named_fields(fields);
@@ -428,16 +455,19 @@ fn generate_roc_trait_method_impls_for_struct(
                 generate_write_bytes_calls_for_fields(&fields.named, crate_root);
 
             quote! {
-                fn from_roc_bytes(bytes: &[u8]) -> Self {
+                fn from_roc_bytes(bytes: &[u8]) -> ::anyhow::Result<Self> {
+                    #from_bytes_input_check
                     let mut cursor = 0;
                     #from_bytes_calls
-                    Self #destructuring
+                    Ok(Self #destructuring)
                 }
 
-                fn write_roc_bytes(&self, buffer: &mut [u8]) {
+                fn write_roc_bytes(&self, buffer: &mut [u8]) -> ::anyhow::Result<()> {
+                    #write_bytes_input_check
                     let Self #destructuring = self;
                     let mut cursor = 0;
                     #write_bytes_calls
+                    Ok(())
                 }
             }
         }
@@ -451,13 +481,15 @@ fn generate_roc_trait_method_impls_for_struct(
                 generate_write_bytes_calls_for_fields(&fields.unnamed, crate_root);
 
             quote! {
-                fn from_roc_bytes(bytes: &[u8]) -> Self {
+                fn from_roc_bytes(bytes: &[u8]) -> ::anyhow::Result<Self> {
+                    #from_bytes_input_check
                     let mut cursor = 0;
                     #from_bytes_calls
                     Self #destructuring
                 }
 
-                fn write_roc_bytes(&self, buffer: &mut [u8]) {
+                fn write_roc_bytes(&self, buffer: &mut [u8]) -> ::anyhow::Result<()> {
+                    #write_bytes_input_check
                     let Self #destructuring = self;
                     let mut cursor = 0;
                     #write_bytes_calls
@@ -468,6 +500,7 @@ fn generate_roc_trait_method_impls_for_struct(
 }
 
 fn generate_roc_trait_method_impls_for_enum(
+    type_name: &syn::Ident,
     data: &syn::DataEnum,
     crate_root: &TokenStream,
 ) -> TokenStream {
@@ -482,7 +515,7 @@ fn generate_roc_trait_method_impls_for_enum(
             match &variant.fields {
                 syn::Fields::Unit => (
                     quote! {
-                        #discriminant => Self::#ident,
+                        #discriminant => Ok(Self::#ident),
                     },
                     quote! {
                         Self::#ident => {
@@ -504,7 +537,7 @@ fn generate_roc_trait_method_impls_for_enum(
                             #discriminant => {
                                 let mut cursor = 1;
                                 #from_bytes_calls
-                                Self::#ident #destructuring
+                                Ok(Self::#ident #destructuring)
                             }
                         },
                         quote! {
@@ -530,7 +563,7 @@ fn generate_roc_trait_method_impls_for_enum(
                             #discriminant => {
                                 let mut cursor = 1;
                                 #from_bytes_calls
-                                Self::#ident #destructuring
+                                Ok(Self::#ident #destructuring)
                             }
                         },
                         quote! {
@@ -546,18 +579,27 @@ fn generate_roc_trait_method_impls_for_enum(
         })
         .unzip();
 
+    let from_bytes_input_check = generate_from_bytes_input_check(type_name, crate_root);
+    let write_bytes_input_check = generate_write_bytes_input_check(type_name, crate_root);
+    let type_name = type_name.to_string();
+
     quote! {
-        fn from_roc_bytes(bytes: &[u8]) -> Self {
+        fn from_roc_bytes(bytes: &[u8]) -> ::anyhow::Result<Self> {
+            #from_bytes_input_check
             match bytes[0] {
                 #(#matches_with_from_bytes_calls)*
-                invalid_discriminant => panic!("got invalid discriminant {invalid_discriminant}"),
+                invalid => Err(::anyhow::anyhow!(
+                    "Got invalid discriminant {invalid} for `{}`", #type_name
+                )),
             }
         }
 
-        fn write_roc_bytes(&self, buffer: &mut [u8]) {
+        fn write_roc_bytes(&self, buffer: &mut [u8]) -> ::anyhow::Result<()> {
+            #write_bytes_input_check
             match self {
                 #(#matches_with_write_bytes_calls)*
             }
+            Ok(())
         }
     }
 }
@@ -618,7 +660,7 @@ fn generate_from_bytes_call_for_field(
         cursor += <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE;
         let #field_ident = <#field_ty as #crate_root::Roc>::from_roc_bytes(
             &bytes[cursor - <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE..cursor],
-        );
+        )?;
     }
 }
 
@@ -633,7 +675,41 @@ fn generate_write_bytes_call_for_field(
         <#field_ty as #crate_root::Roc>::write_roc_bytes(
             #field_ident,
             &mut buffer[cursor - <#field_ty as #crate_root::Roc>::SERIALIZED_SIZE..cursor],
-        );
+        )?;
+    }
+}
+
+fn generate_from_bytes_input_check(
+    type_name: &syn::Ident,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let type_name = type_name.to_string();
+    quote! {
+        if bytes.len() != <Self as #crate_root::Roc>::SERIALIZED_SIZE {
+            ::anyhow::bail!(
+                "Expected {} bytes for `{}`, got {}",
+                <Self as #crate_root::Roc>::SERIALIZED_SIZE,
+                #type_name,
+                bytes.len()
+            );
+        }
+    }
+}
+
+fn generate_write_bytes_input_check(
+    type_name: &syn::Ident,
+    crate_root: &TokenStream,
+) -> TokenStream {
+    let type_name = type_name.to_string();
+    quote! {
+        if buffer.len() != <Self as #crate_root::Roc>::SERIALIZED_SIZE {
+            ::anyhow::bail!(
+                "Expected buffer of length {} for writing `{}`, got {}",
+                <Self as #crate_root::Roc>::SERIALIZED_SIZE,
+                #type_name,
+                buffer.len()
+            );
+        }
     }
 }
 
