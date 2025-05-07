@@ -8,6 +8,14 @@ macro_rules! impl_roc_for_existing_primitive {
             const ROC_TYPE_ID: $crate::RocTypeID =
                 $crate::RocTypeID::hashed_from_str(stringify!($t));
             const SERIALIZED_SIZE: usize = ::std::mem::size_of::<$t>();
+
+            fn from_roc_bytes(bytes: &[u8]) -> Self {
+                *::bytemuck::from_bytes(&bytes[..::std::mem::size_of::<$t>()])
+            }
+
+            fn write_roc_bytes(&self, buffer: &mut [u8]) {
+                buffer[..::std::mem::size_of::<$t>()].copy_from_slice(::bytemuck::bytes_of(self));
+            }
         }
         impl $crate::RocPod for $t {}
 
