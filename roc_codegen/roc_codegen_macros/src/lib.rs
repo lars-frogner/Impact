@@ -52,14 +52,21 @@ mod roc_attr;
 /// When applied to a type, the `roc` macro accepts the following optional
 /// arguments:
 ///
-/// - `name = "<name>"`: The name used for the type in Roc. Defaults to the
+/// - `package = "<package>"`: The name of the Roc package this type resides
+///   in. If not specified, the package is assumed to be the package code is
+///   being generated in. This is typically specified for primitive types and
+///   not for generated types. When specified for a generated type, that type
+///   will only be generated when the specified package name matches the name
+///   of the target package for generation.
+/// - `parents = "<Parent>.<Modules>"`: The parent Roc module(s) for this
+///   type's module, if any. Multiple module names should be separated by `.`.
+/// - `module = "<Module>"`: The name of the Roc module where the type will be
+///   defined. Defaults to the (Roc) name of the type.
+/// - `name = "<Name>"`: The name used for the type in Roc. Defaults to the
 ///   Rust name.
-/// - `module = "<module>"`: The name used for the module holding the type's
-///   Roc code. Defaults to the (Roc) name of the type.
-/// - `package = "<package>"`: The name of the Roc package the module should be
-///   imported from when used. This is currently only relevant when using this
-///   macro to declare primitive types, as all generated (i.e. non-primitive)
-///   types are put in the same package.
+/// - `postfix = "<function postfix>"`: Postfix for the functions operating on
+///   this type (for primitive types, typically when the type's module has both
+///   32- and 64-bit versions of the type).
 ///
 /// When applied to an `impl` block, this macro accepts the following optional
 /// argument:
@@ -165,7 +172,8 @@ mod inner {
     #[derive(Clone, Debug, Default)]
     pub struct TypeAttributeArgs {
         pub category: Option<TypeCategory>,
-        pub module_prefix: Option<String>,
+        pub package_name: Option<String>,
+        pub parent_modules: Option<String>,
         pub module_name: Option<String>,
         pub type_name: Option<String>,
         pub function_postfix: Option<String>,
@@ -235,7 +243,8 @@ mod inner {
     impl syn::parse::Parse for TypeAttributeArgs {
         fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
             let mut category = None;
-            let mut module_prefix = None;
+            let mut package_name = None;
+            let mut parent_modules = None;
             let mut module_name = None;
             let mut type_name = None;
             let mut function_postfix = None;
@@ -243,7 +252,8 @@ mod inner {
             if input.is_empty() {
                 return Ok(Self {
                     category,
-                    module_prefix,
+                    package_name,
+                    parent_modules,
                     module_name,
                     type_name,
                     function_postfix,
@@ -283,11 +293,19 @@ mod inner {
                             ));
                         }
                     }
-                    "prefix" => {
-                        if module_prefix.replace(arg.value.value()).is_some() {
+                    "package" => {
+                        if package_name.replace(arg.value.value()).is_some() {
                             return Err(syn::Error::new_spanned(
                                 arg.key,
-                                "repeated argument `prefix`",
+                                "repeated argument `package`",
+                            ));
+                        }
+                    }
+                    "parents" => {
+                        if parent_modules.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `parents`",
                             ));
                         }
                     }
@@ -319,7 +337,8 @@ mod inner {
                         return Err(syn::Error::new_spanned(
                             arg.key,
                             format!(
-                                "invalid argument `{}`, must be one of `category`, `prefix`, `module`, `name`, `postfix`",
+                                "invalid argument `{}`, must be one of \
+                                 `category`, `package`, `parents`, `module`, `name`, `postfix`",
                                 other
                             ),
                         ));
@@ -329,7 +348,8 @@ mod inner {
 
             Ok(Self {
                 category,
-                module_prefix,
+                package_name,
+                parent_modules,
                 module_name,
                 type_name,
                 function_postfix,

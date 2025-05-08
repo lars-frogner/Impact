@@ -62,14 +62,21 @@ use std::{borrow::Cow, fmt};
 /// When applied to a type, the `roc` macro accepts the following optional
 /// arguments:
 ///
-/// - `name = "<name>"`: The name used for the type in Roc. Defaults to the
+/// - `package = "<package>"`: The name of the Roc package this type resides
+///   in. If not specified, the package is assumed to be the package code is
+///   being generated in. This is typically specified for primitive types and
+///   not for generated types. When specified for a generated type, that type
+///   will only be generated when the specified package name matches the name
+///   of the target package for generation.
+/// - `parents = "<Parent>.<Modules>"`: The parent Roc module(s) for this
+///   type's module, if any. Multiple module names should be separated by `.`.
+/// - `module = "<Module>"`: The name of the Roc module where the type will be
+///   defined. Defaults to the (Roc) name of the type.
+/// - `name = "<Name>"`: The name used for the type in Roc. Defaults to the
 ///   Rust name.
-/// - `module = "<module>"`: The name used for the module holding the type's
-///   Roc code. Defaults to the (Roc) name of the type.
-/// - `package = "<package>"`: The name of the Roc package the module should be
-///   imported from when used. This is currently only relevant when using this
-///   macro to declare primitive types, as all generated (i.e. non-primitive)
-///   types are put in the same package.
+/// - `postfix = "<function postfix>"`: Postfix for the functions operating on
+///   this type (for primitive types, typically when the type's module has both
+///   32- and 64-bit versions of the type).
 ///
 /// When applied to an `impl` block, this macro accepts the following optional
 /// argument:
@@ -154,16 +161,22 @@ pub struct RocTypeID(u64);
 /// A type registered for use in Roc.
 #[derive(Clone, Debug)]
 pub struct RegisteredType {
-    /// The path prefix required for importing the type's module from the
-    /// package in which Roc code is generated. For primitive types, this
-    /// will typically include an external package name. For generated types,
-    /// it should not include a package name, just the hierarchy of parent
-    /// modules.
-    pub module_prefix: &'static str,
+    /// The name of the Roc package this type resides in. If not specified, the
+    /// package is assumed to be the package code is being generated in. This
+    /// is typically specified for primitive types and not for generated types.
+    /// When specified for a generated type, that type will only be generated
+    /// when the specified package name matches the name of the target package
+    /// for generation.
+    pub package_name: Option<&'static str>,
+    /// The parent Roc module(s) for this type's module, if any. Multiple module
+    /// names should be separated by `.`.
+    pub parent_modules: Option<&'static str>,
     /// The name of the Roc module where the type will be defined.
     pub module_name: &'static str,
-    /// Postfix for the functions operating on this type (for primitive types).
-    pub function_postfix: &'static str,
+    /// Postfix for the functions operating on this type (for primitive types,
+    /// typically when the type's module has both 32- and 64-bit versions of
+    /// the type).
+    pub function_postfix: Option<&'static str>,
     /// The size in bytes of an object of this type when serialized to match
     /// the ABI used for FFI between the engine and Roc.
     pub serialized_size: usize,
@@ -227,17 +240,77 @@ impl fmt::Display for RocTypeID {
 }
 
 impl RegisteredType {
-    /// Returns the fully qualified Roc import statement required for using
-    /// this type in Roc.
-    pub fn import_module(&self) -> String {
-        if self.module_prefix.is_empty() {
-            String::from(self.module_name)
+    /// Whether this type is POD.
+    pub fn is_pod(&self) -> bool {
+        self.flags.contains(RegisteredTypeFlags::IS_POD)
+    }
+
+    /// Whether this type is an ECS component.
+    pub fn is_component(&self) -> bool {
+        self.flags.contains(RegisteredTypeFlags::IS_COMPONENT)
+    }
+
+    /// Whether the type is a primitive type.
+    pub fn is_primitive(&self) -> bool {
+        matches!(self.ty.composition, ir::TypeComposition::Primitive(_))
+    }
+
+    /// Whether the type is a Roc builtin type.
+    pub fn is_builtin(&self) -> bool {
+        matches!(
+            &self.ty.composition,
+            ir::TypeComposition::Primitive(ir::PrimitiveKind::Builtin)
+        )
+    }
+
+    /// The alignment of this type if it is a POD struct.
+    pub fn alignment_as_pod_struct(&self) -> Option<usize> {
+        if let ir::TypeComposition::Struct { alignment, .. } = &self.ty.composition {
+            if self.flags.contains(RegisteredTypeFlags::IS_POD) {
+                return Some(*alignment);
+            }
+        }
+        None
+    }
+
+    /// Returns the fully qualified path for the Roc import statement required
+    /// for using this type in Roc.
+    pub fn import_path(&self, current_package: &str) -> String {
+        let mut path = String::new();
+        self.write_package_to_path(&mut path, current_package);
+        self.write_parent_modules_to_path(&mut path);
+        path.push_str(self.module_name);
+        path
+    }
+
+    /// The fully qualified name of this Roc type, including parent modules,
+    /// without any unspecified type variables, e.g. `Vector3 Binary32` as
+    /// opposed to just `Vector3` (which could have either 32- or 64-bit
+    /// precision). The specified usage context may affect whether the name
+    /// with be put in parentheses to avoid ambiguities.
+    pub fn qualified_type_name(&self, usage: ir::TypeUsage) -> Cow<'static, str> {
+        if let Some(type_variable) = self.roc_type_variable() {
+            let mut name = String::new();
+            if usage == ir::TypeUsage::TypeParameter {
+                name.push('(');
+            }
+            self.write_parent_modules_to_path(&mut name);
+            self.write_module_to_path(&mut name);
+            name.push_str(self.ty.name);
+            name.push(' ');
+            name.push_str(type_variable);
+            if usage == ir::TypeUsage::TypeParameter {
+                name.push(')');
+            }
+            Cow::Owned(name)
+        } else if self.is_builtin() {
+            Cow::Borrowed(self.ty.name)
         } else {
-            format!(
-                "{module_prefix}.{module_name} as {module_name}",
-                module_prefix = self.module_prefix,
-                module_name = self.module_name
-            )
+            let mut name = String::new();
+            self.write_parent_modules_to_path(&mut name);
+            self.write_module_to_path(&mut name);
+            name.push_str(self.ty.name);
+            Cow::Owned(name)
         }
     }
 
@@ -245,37 +318,9 @@ impl RegisteredType {
     pub fn description(&self) -> String {
         format!(
             "{} ({})",
-            self.resolved_type_name(false),
+            self.qualified_type_name(ir::TypeUsage::Concrete),
             self.composition_description()
         )
-    }
-
-    /// The name of this Roc type without any unspecified type variables, e.g.
-    /// `Vector3 Binary32` as opposed to just `Vector3` (which could have
-    /// either 32- or 64-bit precision). The name may also be prefixed by its
-    /// module path if required to fully specify the type based on how it was
-    /// imported.
-    pub fn resolved_type_name(&self, use_parenthesis: bool) -> Cow<'static, str> {
-        if let Some(type_variable) = self.roc_type_variable() {
-            Cow::Owned(format!(
-                "{open_paren}{module_name}.{type_name} {type_variable}{close_paren}",
-                module_name = self.module_name,
-                type_name = self.ty.name,
-                open_paren = if use_parenthesis { "(" } else { "" },
-                close_paren = if use_parenthesis { ")" } else { "" }
-            ))
-        } else if matches!(
-            &self.ty.composition,
-            ir::TypeComposition::Primitive(ir::PrimitiveKind::Builtin)
-        ) {
-            Cow::Borrowed(self.ty.name)
-        } else {
-            Cow::Owned(format!(
-                "{module_name}.{type_name}",
-                module_name = self.module_name,
-                type_name = self.ty.name
-            ))
-        }
     }
 
     /// Returns a label describing the composition of the type.
@@ -283,7 +328,10 @@ impl RegisteredType {
         match &self.ty.composition {
             ir::TypeComposition::Primitive(ir::PrimitiveKind::Builtin) => Cow::Borrowed("builtin"),
             ir::TypeComposition::Primitive(ir::PrimitiveKind::LibraryProvided { .. }) => {
-                Cow::Owned(format!("from {}", self.module_prefix))
+                match self.package_name {
+                    Some(package) => Cow::Owned(format!("primitive from {package}")),
+                    None => Cow::Borrowed("primitive"),
+                }
             }
             ir::TypeComposition::Struct {
                 fields: ir::TypeFields::None,
@@ -301,49 +349,47 @@ impl RegisteredType {
         }
     }
 
-    /// The qualified function name to use when evoking this type's standard
+    /// The qualified function name to use when invoking this type's standard
     /// (always generated or pre-implemented) `write_bytes` function in Roc.
     pub fn write_bytes_func_name(&self) -> String {
-        self.resolved_func_name("write_bytes")
+        self.qualified_func_name("write_bytes")
     }
 
-    /// The qualified function name to use when evoking this type's standard
+    /// The qualified function name to use when invoking this type's standard
     /// (always generated or pre-implemented) `from_bytes` function in Roc.
     pub fn from_bytes_func_name(&self) -> String {
-        self.resolved_func_name("from_bytes")
+        self.qualified_func_name("from_bytes")
     }
 
-    fn resolved_func_name(&self, func_base: impl fmt::Display) -> String {
-        format!(
-            "{module_name}.{func_base}{postfix}",
-            module_name = self.module_name,
-            postfix = self.function_postfix
-        )
+    fn qualified_func_name(&self, func_base: &str) -> String {
+        let mut path = String::new();
+        self.write_parent_modules_to_path(&mut path);
+        self.write_module_to_path(&mut path);
+        path.push_str(func_base);
+        path.push_str(self.function_postfix.unwrap_or_default());
+        path
     }
 
-    /// The alignment of this type if it is a POD struct.
-    pub fn alignment_as_pod_struct(&self) -> Option<usize> {
-        if let ir::TypeComposition::Struct { alignment, .. } = &self.ty.composition {
-            if self.flags.contains(RegisteredTypeFlags::IS_POD) {
-                return Some(*alignment);
+    fn write_package_to_path(&self, path: &mut String, current_package: &str) {
+        match self.package_name {
+            Some(package) if package != current_package => {
+                path.push_str(package);
+                path.push('.');
             }
+            _ => {}
         }
-        None
     }
 
-    /// Whether this type is POD.
-    pub fn is_pod(&self) -> bool {
-        self.flags.contains(RegisteredTypeFlags::IS_POD)
+    fn write_parent_modules_to_path(&self, path: &mut String) {
+        if let Some(parent_modules) = self.parent_modules {
+            path.push_str(parent_modules);
+            path.push('.');
+        }
     }
 
-    /// Whether this type is an ECS component.
-    pub fn is_component(&self) -> bool {
-        self.flags.contains(RegisteredTypeFlags::IS_COMPONENT)
-    }
-
-    /// Whether the type is a primitive type.
-    pub fn is_primitive(&self) -> bool {
-        matches!(self.ty.composition, ir::TypeComposition::Primitive(_))
+    fn write_module_to_path(&self, path: &mut String) {
+        path.push_str(self.module_name);
+        path.push('.');
     }
 
     fn roc_type_variable(&self) -> Option<&'static str> {

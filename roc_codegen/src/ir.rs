@@ -219,7 +219,17 @@ pub enum TranslatableType {
 
 /// A special type whose translation between Rust and Roc is handled
 /// explicitly.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpecialType {
     String,
+}
+
+/// In what context a type name is being invoked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypeUsage {
+    /// The type is used directly as a concrete type (e.g., `MyType`)
+    Concrete,
+    /// The type is used as a parameter in a type constructor
+    /// (e.g., `List MyType`)
+    TypeParameter,
 }

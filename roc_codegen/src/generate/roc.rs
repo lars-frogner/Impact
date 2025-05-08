@@ -11,13 +11,18 @@ use std::{
 };
 
 pub(super) fn generate_module(
+    package_name: &str,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_dependencies: &[ir::AssociatedDependencies],
     associated_constants: &[ir::AssociatedConstant],
     associated_functions: &[ir::AssociatedFunction],
 ) -> Result<Option<String>> {
-    if ty.is_primitive() {
+    if ty.is_primitive()
+        || ty
+            .package_name
+            .is_some_and(|type_package| type_package != package_name)
+    {
         return Ok(None);
     }
 
@@ -26,7 +31,13 @@ pub(super) fn generate_module(
     write_module_header(&mut module, associated_constants, associated_functions, ty)?;
     module.push('\n');
 
-    write_imports(&mut module, type_map, associated_dependencies, ty)?;
+    write_imports(
+        &mut module,
+        package_name,
+        type_map,
+        associated_dependencies,
+        ty,
+    )?;
     module.push('\n');
 
     write_type_declaration(&mut module, type_map, &ty.ty)?;
@@ -113,11 +124,17 @@ fn write_module_header(
 
 fn write_imports(
     roc_code: &mut String,
+    package_name: &str,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
 ) -> Result<()> {
-    let mut imports = Vec::from_iter(determine_imports(type_map, associated_dependencies, ty));
+    let mut imports = Vec::from_iter(determine_imports(
+        package_name,
+        type_map,
+        associated_dependencies,
+        ty,
+    ));
     imports.sort();
     for import in imports {
         writeln!(roc_code, "import {import}")?;
@@ -126,52 +143,60 @@ fn write_imports(
 }
 
 fn determine_imports(
+    package_name: &str,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
 ) -> HashSet<String> {
-    let mut imports = HashSet::new();
+    let mut import_paths = HashSet::new();
 
     // All modules needs this import
-    imports.insert(String::from("core.Builtin as Builtin"));
+    import_paths.insert(String::from("core.Builtin"));
 
     if ty.is_component() {
         // ECS components need this import
-        imports.insert(String::from("pf.Entity as Entity"));
+        import_paths.insert(String::from("pf.Entity"));
     }
 
     for associated_dependencies in associated_dependencies {
-        add_imports_for_associated_dependencies(&mut imports, type_map, associated_dependencies);
+        add_imports_for_associated_dependencies(
+            &mut import_paths,
+            package_name,
+            type_map,
+            associated_dependencies,
+        );
     }
 
     match &ty.ty.composition {
         ir::TypeComposition::Primitive(_) => {}
         ir::TypeComposition::Struct { fields, .. } => {
-            add_imports_for_fields(&mut imports, type_map, fields);
+            add_imports_for_fields(&mut import_paths, package_name, type_map, fields);
         }
         ir::TypeComposition::Enum(variants) => {
             for variant in &variants.0 {
-                add_imports_for_fields(&mut imports, type_map, &variant.fields);
+                add_imports_for_fields(&mut import_paths, package_name, type_map, &variant.fields);
             }
         }
     }
-    imports
+    import_paths
 }
 
 fn add_imports_for_associated_dependencies(
-    imports: &mut HashSet<String>,
+    import_paths: &mut HashSet<String>,
+    package_name: &str,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &ir::AssociatedDependencies,
 ) {
     for dependency_id in &associated_dependencies.dependencies {
         if let Some(dependency) = type_map.get(dependency_id) {
-            imports.insert(dependency.import_module());
+            import_paths.insert(dependency.import_path(package_name));
         }
     }
 }
 
 fn add_imports_for_fields<const N: usize>(
-    imports: &mut HashSet<String>,
+    import_paths: &mut HashSet<String>,
+    package_name: &str,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     fields: &ir::TypeFields<N>,
 ) {
@@ -184,7 +209,7 @@ fn add_imports_for_fields<const N: usize>(
                     ir::FieldType::Array { elem_type_id, .. } => elem_type_id,
                 };
                 if let Some(field_ty) = type_map.get(type_id) {
-                    imports.insert(field_ty.import_module());
+                    import_paths.insert(field_ty.import_path(package_name));
                 }
             }
         }
@@ -195,7 +220,7 @@ fn add_imports_for_fields<const N: usize>(
                     ir::FieldType::Array { elem_type_id, .. } => elem_type_id,
                 };
                 if let Some(field_ty) = type_map.get(type_id) {
-                    imports.insert(field_ty.import_module());
+                    import_paths.insert(field_ty.import_path(package_name));
                 }
             }
         }
@@ -282,7 +307,7 @@ fn write_fields_declaration<const N: usize>(
                     }
                 }
 
-                let type_name = resolved_type_name_for_field(type_map, ty, ident, parent_name)?;
+                let type_name = qualified_type_name_for_field(type_map, ty, ident, parent_name)?;
                 write!(declaration, "\n{indentation}    {ident} : {type_name},")?;
 
                 field_count += 1;
@@ -298,7 +323,8 @@ fn write_fields_declaration<const N: usize>(
                 declaration.push('(');
             }
             for (field_idx, ir::UnnamedTypeField { ty }) in fields.iter().enumerate() {
-                let type_name = resolved_type_name_for_field(type_map, ty, field_idx, parent_name)?;
+                let type_name =
+                    qualified_type_name_for_field(type_map, ty, field_idx, parent_name)?;
                 if field_idx > 0 {
                     if !undelimited_tuple {
                         declaration.push(',');
@@ -315,20 +341,19 @@ fn write_fields_declaration<const N: usize>(
     Ok(())
 }
 
-fn resolved_type_name_for_field(
+fn qualified_type_name_for_field(
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::FieldType,
     field: impl Display,
     parent_name: &impl Fn() -> String,
 ) -> Result<Cow<'static, str>> {
     Ok(match ty {
-        ir::FieldType::Single { type_id } => {
-            get_field_type(type_map, type_id, field, parent_name)?.resolved_type_name(false)
-        }
+        ir::FieldType::Single { type_id } => get_field_type(type_map, type_id, field, parent_name)?
+            .qualified_type_name(ir::TypeUsage::Concrete),
         ir::FieldType::Array { elem_type_id, .. } => {
             let mut type_name = String::from("List ");
             let elem_type_name = get_field_type(type_map, elem_type_id, field, parent_name)?
-                .resolved_type_name(true);
+                .qualified_type_name(ir::TypeUsage::TypeParameter);
             write!(&mut type_name, "{}", elem_type_name)?;
             Cow::Owned(type_name)
         }
@@ -354,10 +379,10 @@ pub(super) fn write_associated_constant(
     ty: &RegisteredType,
     associated_constant: &ir::AssociatedConstant,
 ) -> Result<()> {
-    let type_name = resolved_type_name_for_containable_type(
+    let type_name = qualified_type_name_for_containable_type(
         |type_map, contained_ty, in_container| {
-            resolved_type_name_for_inferrable_type(
-                resolved_type_name_for_translatable_type,
+            qualified_type_name_for_inferrable_type(
+                qualified_type_name_for_translatable_type,
                 type_map,
                 contained_ty,
                 Cow::Borrowed(ty.ty.name),
@@ -450,10 +475,10 @@ pub(super) fn write_associated_function(
             ir::FunctionArgument::Typed(arg) => {
                 arg_name_list.push(arg.ident);
                 arg_type_list.push(
-                    resolved_type_name_for_containable_type(
+                    qualified_type_name_for_containable_type(
                         |type_map, contained_ty, in_container| {
-                            resolved_type_name_for_inferrable_type(
-                                resolved_type_name_for_translatable_type,
+                            qualified_type_name_for_inferrable_type(
+                                qualified_type_name_for_translatable_type,
                                 type_map,
                                 contained_ty,
                                 Cow::Borrowed(ty.ty.name),
@@ -483,10 +508,10 @@ pub(super) fn write_associated_function(
         (arg_names.as_str(), arg_types.as_str())
     };
 
-    let return_type = resolved_type_name_for_containable_type(
+    let return_type = qualified_type_name_for_containable_type(
         |type_map, contained_ty, in_container| {
-            resolved_type_name_for_inferrable_type(
-                resolved_type_name_for_translatable_type,
+            qualified_type_name_for_inferrable_type(
+                qualified_type_name_for_translatable_type,
                 type_map,
                 contained_ty,
                 Cow::Borrowed(ty.ty.name),
@@ -557,78 +582,82 @@ pub(super) fn write_associated_function(
     Ok(())
 }
 
-fn resolved_type_name_for_containable_type<T, R>(
-    resolved_type_name_for_contained_type: R,
+fn qualified_type_name_for_containable_type<T, R>(
+    type_name_for_contained_type: R,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::Containable<T>,
 ) -> Result<Cow<'static, str>>
 where
-    R: Fn(&HashMap<RocTypeID, RegisteredType>, &T, bool) -> Result<Cow<'static, str>>,
+    R: Fn(&HashMap<RocTypeID, RegisteredType>, &T, ir::TypeUsage) -> Result<Cow<'static, str>>,
 {
     match ty {
-        ir::Containable::Single(ty) => resolved_type_name_for_contained_type(type_map, ty, false),
-        ir::Containable::List(ty) => resolved_type_name_for_contained_type(type_map, ty, true)
-            .map(|type_name| Cow::Owned(format!("List {type_name}")))
-            .context("Invalid list element type"),
+        ir::Containable::Single(ty) => {
+            type_name_for_contained_type(type_map, ty, ir::TypeUsage::Concrete)
+        }
+        ir::Containable::List(ty) => {
+            type_name_for_contained_type(type_map, ty, ir::TypeUsage::TypeParameter)
+                .map(|type_name| Cow::Owned(format!("List {type_name}")))
+                .context("Invalid list element type")
+        }
         ir::Containable::Tuple2(ty0, ty1) => {
-            let type_name_0 = resolved_type_name_for_contained_type(type_map, ty0, false)
+            let type_name_0 = type_name_for_contained_type(type_map, ty0, ir::TypeUsage::Concrete)
                 .context("Invalid type for tuple element 0")?;
-            let type_name_1 = resolved_type_name_for_contained_type(type_map, ty1, false)
+            let type_name_1 = type_name_for_contained_type(type_map, ty1, ir::TypeUsage::Concrete)
                 .context("Invalid type for tuple element 1")?;
             Ok(Cow::Owned(format!("({type_name_0}, {type_name_1})")))
         }
         ir::Containable::Tuple3(ty0, ty1, ty2) => {
-            let type_name_0 = resolved_type_name_for_contained_type(type_map, ty0, false)
+            let type_name_0 = type_name_for_contained_type(type_map, ty0, ir::TypeUsage::Concrete)
                 .context("Invalid type for tuple element 0")?;
-            let type_name_1 = resolved_type_name_for_contained_type(type_map, ty1, false)
+            let type_name_1 = type_name_for_contained_type(type_map, ty1, ir::TypeUsage::Concrete)
                 .context("Invalid type for tuple element 1")?;
-            let type_name_2 = resolved_type_name_for_contained_type(type_map, ty2, false)
+            let type_name_2 = type_name_for_contained_type(type_map, ty2, ir::TypeUsage::Concrete)
                 .context("Invalid type for tuple element 2")?;
             Ok(Cow::Owned(format!(
                 "({type_name_0}, {type_name_1}, {type_name_2})"
             )))
         }
-        ir::Containable::Result(ty) => resolved_type_name_for_contained_type(type_map, ty, true)
-            .map(|type_name| Cow::Owned(format!("Result {type_name} Str")))
-            .context("Invalid Result Ok type"),
-    }
-}
-
-fn resolved_type_name_for_inferrable_type<T, R>(
-    resolved_type_name_for_specific_type: R,
-    type_map: &HashMap<RocTypeID, RegisteredType>,
-    ty: &ir::Inferrable<T>,
-    self_ty_name: Cow<'static, str>,
-    is_type_variable: bool,
-) -> Result<Cow<'static, str>>
-where
-    R: Fn(&HashMap<RocTypeID, RegisteredType>, &T, bool) -> Result<Cow<'static, str>>,
-{
-    match ty {
-        ir::Inferrable::SelfType => Ok(self_ty_name),
-        ir::Inferrable::Specific(specific_ty) => {
-            resolved_type_name_for_specific_type(type_map, specific_ty, is_type_variable)
+        ir::Containable::Result(ty) => {
+            type_name_for_contained_type(type_map, ty, ir::TypeUsage::TypeParameter)
+                .map(|type_name| Cow::Owned(format!("Result {type_name} Str")))
+                .context("Invalid Result Ok type")
         }
     }
 }
 
-fn resolved_type_name_for_translatable_type(
+fn qualified_type_name_for_inferrable_type<T, R>(
+    type_name_for_specific_type: R,
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::Inferrable<T>,
+    self_ty_name: Cow<'static, str>,
+    usage: ir::TypeUsage,
+) -> Result<Cow<'static, str>>
+where
+    R: Fn(&HashMap<RocTypeID, RegisteredType>, &T, ir::TypeUsage) -> Result<Cow<'static, str>>,
+{
+    match ty {
+        ir::Inferrable::SelfType => Ok(self_ty_name),
+        ir::Inferrable::Specific(specific_ty) => {
+            type_name_for_specific_type(type_map, specific_ty, usage)
+        }
+    }
+}
+
+fn qualified_type_name_for_translatable_type(
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::TranslatableType,
-    is_type_variable: bool,
+    usage: ir::TypeUsage,
 ) -> Result<Cow<'static, str>> {
     match ty {
         ir::TranslatableType::Registered(type_id) => type_map
             .get(type_id)
             .ok_or_else(|| anyhow!("Type not registered"))
-            .map(|ty| ty.resolved_type_name(is_type_variable)),
-        ir::TranslatableType::Special(ty) => {
-            Ok(Cow::Borrowed(resolved_type_name_for_special_type(ty)))
-        }
+            .map(|ty| ty.qualified_type_name(usage)),
+        ir::TranslatableType::Special(ty) => Ok(Cow::Borrowed(type_name_for_special_type(ty))),
     }
 }
 
-fn resolved_type_name_for_special_type(ty: &ir::SpecialType) -> &'static str {
+fn type_name_for_special_type(ty: &ir::SpecialType) -> &'static str {
     match ty {
         ir::SpecialType::String => "Str",
     }

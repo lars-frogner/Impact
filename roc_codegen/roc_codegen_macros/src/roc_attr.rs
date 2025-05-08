@@ -13,10 +13,11 @@ use syn::parse::Parser;
 #[derive(Clone, Debug)]
 struct ResolvedAttributeArgs {
     type_category: TypeCategory,
-    module_prefix: String,
+    package_name: Option<String>,
+    parent_modules: Option<String>,
     module_name: String,
     type_name: String,
-    function_postfix: String,
+    function_postfix: Option<String>,
 }
 
 pub(super) fn apply_type_attribute(
@@ -160,7 +161,8 @@ pub(super) fn apply_associated_function_attribute(
 fn resolve_type_attribute_args(
     TypeAttributeArgs {
         category,
-        module_prefix,
+        package_name,
+        parent_modules,
         module_name,
         type_name,
         function_postfix,
@@ -176,15 +178,10 @@ fn resolve_type_attribute_args(
     });
     let type_name = type_name.unwrap_or_else(|| input.ident.to_string());
     let module_name = module_name.unwrap_or_else(|| type_name.clone());
-    let module_prefix = if category == TypeCategory::Primitive {
-        module_prefix.unwrap_or_else(|| String::from("core"))
-    } else {
-        module_prefix.unwrap_or_default()
-    };
-    let function_postfix = function_postfix.unwrap_or_default();
     ResolvedAttributeArgs {
         type_category: category,
-        module_prefix,
+        package_name,
+        parent_modules,
         module_name,
         type_name,
         function_postfix,
@@ -724,9 +721,10 @@ fn generate_registered_type_submit(
     crate_root: &TokenStream,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
-    let module_prefix = &args.module_prefix;
+    let package_name = string_option_to_tokens(args.package_name.as_deref());
+    let parent_modules = string_option_to_tokens(args.parent_modules.as_deref());
     let module_name = &args.module_name;
-    let function_postfix = &args.function_postfix;
+    let function_postfix = string_option_to_tokens(args.function_postfix.as_deref());
     let flags = generate_type_flags(crate_root, args.type_category);
     let docstring = extract_and_process_docstring(&input.attrs);
     let type_name = &args.type_name;
@@ -736,7 +734,8 @@ fn generate_registered_type_submit(
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
             #crate_root::RegisteredType {
-                module_prefix: #module_prefix,
+                package_name: #package_name,
+                parent_modules: #parent_modules,
                 module_name: #module_name,
                 function_postfix: #function_postfix,
                 serialized_size: <#rust_type_name as #crate_root::Roc>::SERIALIZED_SIZE,
@@ -1431,4 +1430,12 @@ fn extract_associated_function_attribute_args(
         }
     }
     None
+}
+
+fn string_option_to_tokens(opt: Option<&str>) -> TokenStream {
+    if let Some(string) = opt {
+        quote! { Some(#string) }
+    } else {
+        quote! { None }
+    }
 }

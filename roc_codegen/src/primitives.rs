@@ -3,7 +3,7 @@
 
 #[macro_export]
 macro_rules! impl_roc_for_existing_primitive {
-    ($t:ty, $prefix:expr, $module:ident, $name:ident, $postfix:expr, $kind:expr) => {
+    ($t:ty, $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr, $kind:expr) => {
         impl $crate::Roc for $t {
             const ROC_TYPE_ID: $crate::RocTypeID =
                 $crate::RocTypeID::hashed_from_str(stringify!($t));
@@ -38,7 +38,8 @@ macro_rules! impl_roc_for_existing_primitive {
 
         inventory::submit! {
             $crate::RegisteredType {
-                module_prefix: $prefix,
+                package_name: Some(stringify!($package)),
+                parent_modules: $parents,
                 module_name: stringify!($module),
                 function_postfix: $postfix,
                 serialized_size: <$t as $crate::Roc>::SERIALIZED_SIZE,
@@ -56,11 +57,11 @@ macro_rules! impl_roc_for_existing_primitive {
 
 #[macro_export]
 macro_rules! impl_roc_for_builtin_primitives {
-    ($($t:ty => $prefix:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
+    ($($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
         $(
             $crate::impl_roc_for_existing_primitive!(
                 $t,
-                $prefix, $module, $name, $postfix,
+                $package, $parents, $module, $name, $postfix,
                 $crate::ir::PrimitiveKind::Builtin
             );
         )*
@@ -69,22 +70,22 @@ macro_rules! impl_roc_for_builtin_primitives {
 
 #[macro_export]
 macro_rules! impl_roc_for_library_provided_primitives {
-    ($($t:ty => $prefix:expr, $module:ident, $name:ident, $postfix:expr, $precision:ident),+ $(,)?) => {
+    ($($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr, $precision:ident),+ $(,)?) => {
         $(
             $crate::impl_roc_for_existing_primitive!(
                 $t,
-                $prefix, $module, $name, $postfix,
+                $package, $parents, $module, $name, $postfix,
                 $crate::ir::PrimitiveKind::LibraryProvided {
                     precision: $crate::ir::PrimitivePrecision::$precision,
                 }
             );
         )*
     };
-    ($($t:ty => $prefix:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
+    ($($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
         $(
             $crate::impl_roc_for_existing_primitive!(
                 $t,
-                $prefix, $module, $name, $postfix,
+                $package, $parents, $module, $name, $postfix,
                 $crate::PrimitiveKind::LibraryProvided {
                     precision: $crate::PrimitivePrecision::PrecisionIrrelevant,
                 }
@@ -96,39 +97,41 @@ macro_rules! impl_roc_for_library_provided_primitives {
 // Roc's builtin primitive types
 #[cfg(feature = "enabled")]
 impl_roc_for_builtin_primitives! {
-    u8   => "core", Builtin, U8,   "_u8",
-    u16  => "core", Builtin, U16,  "_u16",
-    u32  => "core", Builtin, U32,  "_u32",
-    u64  => "core", Builtin, U64,  "_u64",
-    u128 => "core", Builtin, U128, "_u128",
-    i8   => "core", Builtin, I8,   "_i8",
-    i16  => "core", Builtin, I16,  "_i16",
-    i32  => "core", Builtin, I32,  "_i32",
-    i64  => "core", Builtin, I64,  "_i64",
-    i128 => "core", Builtin, I128, "_i128",
-    f32  => "core", Builtin, F32,  "_f32",
-    f64  => "core", Builtin, F64,  "_f64",
+//  Type    Pkg   Parents  Module   Roc name  Postfix
+    u8   => core, None,    Builtin, U8,       Some("_u8"),
+    u16  => core, None,    Builtin, U16,      Some("_u16"),
+    u32  => core, None,    Builtin, U32,      Some("_u32"),
+    u64  => core, None,    Builtin, U64,      Some("_u64"),
+    u128 => core, None,    Builtin, U128,     Some("_u128"),
+    i8   => core, None,    Builtin, I8,       Some("_i8"),
+    i16  => core, None,    Builtin, I16,      Some("_i16"),
+    i32  => core, None,    Builtin, I32,      Some("_i32"),
+    i64  => core, None,    Builtin, I64,      Some("_i64"),
+    i128 => core, None,    Builtin, I128,     Some("_i128"),
+    f32  => core, None,    Builtin, F32,      Some("_f32"),
+    f64  => core, None,    Builtin, F64,      Some("_f64"),
 }
 
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.
 #[cfg(feature = "enabled")]
 impl_roc_for_library_provided_primitives! {
-    usize                         => "core", NativeNum,      Usize,          "_usize", PrecisionIrrelevant,
-    nalgebra::Vector2<f32>        => "core", Vector2,        Vector2,        "_32",    SinglePrecision,
-    nalgebra::Vector2<f64>        => "core", Vector2,        Vector2,        "_64",    DoublePrecision,
-    nalgebra::Vector3<f32>        => "core", Vector3,        Vector3,        "_32",    SinglePrecision,
-    nalgebra::Vector3<f64>        => "core", Vector3,        Vector3,        "_64",    DoublePrecision,
-    nalgebra::Vector4<f32>        => "core", Vector4,        Vector4,        "_32",    SinglePrecision,
-    nalgebra::Vector4<f64>        => "core", Vector4,        Vector4,        "_64",    DoublePrecision,
-    nalgebra::Matrix3<f32>        => "core", Matrix3,        Matrix3,        "_32",    SinglePrecision,
-    nalgebra::Matrix3<f64>        => "core", Matrix3,        Matrix3,        "_64",    DoublePrecision,
-    nalgebra::Matrix4<f32>        => "core", Matrix4,        Matrix4,        "_32",    SinglePrecision,
-    nalgebra::Matrix4<f64>        => "core", Matrix4,        Matrix4,        "_64",    DoublePrecision,
-    nalgebra::UnitVector3<f32>    => "core", UnitVector3,    UnitVector3,    "_32",    SinglePrecision,
-    nalgebra::UnitVector3<f64>    => "core", UnitVector3,    UnitVector3,    "_64",    DoublePrecision,
-    nalgebra::UnitQuaternion<f32> => "core", UnitQuaternion, UnitQuaternion, "_32",    SinglePrecision,
-    nalgebra::UnitQuaternion<f64> => "core", UnitQuaternion, UnitQuaternion, "_64",    DoublePrecision,
-    nalgebra::Point3<f32>         => "core", Point3,         Point3,         "_32",    SinglePrecision,
-    nalgebra::Point3<f64>         => "core", Point3,         Point3,         "_64",    DoublePrecision,
+//  Type                             Pkg   Parents  Module          Roc name        Postfix         Precision
+    usize                         => core, None,    NativeNum,      Usize,          Some("_usize"), PrecisionIrrelevant,
+    nalgebra::Vector2<f32>        => core, None,    Vector2,        Vector2,        Some("_32"),    SinglePrecision,
+    nalgebra::Vector2<f64>        => core, None,    Vector2,        Vector2,        Some("_64"),    DoublePrecision,
+    nalgebra::Vector3<f32>        => core, None,    Vector3,        Vector3,        Some("_32"),    SinglePrecision,
+    nalgebra::Vector3<f64>        => core, None,    Vector3,        Vector3,        Some("_64"),    DoublePrecision,
+    nalgebra::Vector4<f32>        => core, None,    Vector4,        Vector4,        Some("_32"),    SinglePrecision,
+    nalgebra::Vector4<f64>        => core, None,    Vector4,        Vector4,        Some("_64"),    DoublePrecision,
+    nalgebra::Matrix3<f32>        => core, None,    Matrix3,        Matrix3,        Some("_32"),    SinglePrecision,
+    nalgebra::Matrix3<f64>        => core, None,    Matrix3,        Matrix3,        Some("_64"),    DoublePrecision,
+    nalgebra::Matrix4<f32>        => core, None,    Matrix4,        Matrix4,        Some("_32"),    SinglePrecision,
+    nalgebra::Matrix4<f64>        => core, None,    Matrix4,        Matrix4,        Some("_64"),    DoublePrecision,
+    nalgebra::UnitVector3<f32>    => core, None,    UnitVector3,    UnitVector3,    Some("_32"),    SinglePrecision,
+    nalgebra::UnitVector3<f64>    => core, None,    UnitVector3,    UnitVector3,    Some("_64"),    DoublePrecision,
+    nalgebra::UnitQuaternion<f32> => core, None,    UnitQuaternion, UnitQuaternion, Some("_32"),    SinglePrecision,
+    nalgebra::UnitQuaternion<f64> => core, None,    UnitQuaternion, UnitQuaternion, Some("_64"),    DoublePrecision,
+    nalgebra::Point3<f32>         => core, None,    Point3,         Point3,         Some("_32"),    SinglePrecision,
+    nalgebra::Point3<f64>         => core, None,    Point3,         Point3,         Some("_64"),    DoublePrecision,
 }
