@@ -17,7 +17,7 @@ use std::{
 /// Options for listing types.
 #[derive(Clone, Debug)]
 pub struct ListOptions {
-    pub categories: HashSet<ListedRocTypeCategory>,
+    pub categories: Vec<ListedRocTypeCategory>,
 }
 
 /// The categories of `roc`-annotated types that can be listed.
@@ -45,6 +45,9 @@ pub struct RocGenerateOptions {
     /// Name of the Roc package being generated into. Defaults to the directory
     /// name.
     pub package_name: Option<String>,
+    /// Specific modules to generate. May be parent modules, in which case all
+    /// their children are generated.
+    pub only_modules: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -54,7 +57,18 @@ struct Module {
     content: String,
 }
 
-pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>) -> Result<()> {
+#[derive(Clone, Debug)]
+struct ModuleFilter {
+    allow_all: bool,
+    allowed_module_paths: Vec<ModulePath>,
+}
+
+#[derive(Clone, Debug)]
+struct ModulePath {
+    parts: Vec<String>,
+}
+
+pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>) -> Result<()> {
     let type_map = gather_type_map(inventory::iter::<RegisteredType>(), component_type_ids)?;
 
     let mut type_description_list = Vec::with_capacity(type_map.len());
@@ -74,10 +88,20 @@ pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>
         type_description_list.clear();
     };
 
-    if options
-        .categories
-        .contains(&ListedRocTypeCategory::Primitive)
-    {
+    let categories: HashSet<_> = if options.categories.is_empty() {
+        vec![
+            ListedRocTypeCategory::Primitive,
+            ListedRocTypeCategory::Pod,
+            ListedRocTypeCategory::Component,
+            ListedRocTypeCategory::Inline,
+        ]
+    } else {
+        options.categories
+    }
+    .into_iter()
+    .collect();
+
+    if categories.contains(&ListedRocTypeCategory::Primitive) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if ty.is_primitive() {
                 Some(ty.description())
@@ -88,7 +112,7 @@ pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>
         print_list(&mut type_description_list, "****** Primitives ******");
     }
 
-    if options.categories.contains(&ListedRocTypeCategory::Pod) {
+    if categories.contains(&ListedRocTypeCategory::Pod) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if ty.is_pod() && !ty.is_component() && !ty.is_primitive() {
                 Some(ty.description())
@@ -99,10 +123,7 @@ pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>
         print_list(&mut type_description_list, "****** Plain Old Data ******");
     }
 
-    if options
-        .categories
-        .contains(&ListedRocTypeCategory::Component)
-    {
+    if categories.contains(&ListedRocTypeCategory::Component) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if ty.is_component() {
                 Some(ty.description())
@@ -113,7 +134,7 @@ pub fn list_types(options: &ListOptions, component_type_ids: &HashSet<RocTypeID>
         print_list(&mut type_description_list, "****** ECS Components ******");
     }
 
-    if options.categories.contains(&ListedRocTypeCategory::Inline) {
+    if categories.contains(&ListedRocTypeCategory::Inline) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if !ty.is_pod() {
                 Some(ty.description())
@@ -178,8 +199,8 @@ pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
 /// [`roc`](crate::roc)-annotated Rust types in linked crates.
 pub fn generate_roc(
     target_dir: impl AsRef<Path>,
-    options: &GenerateOptions,
-    roc_options: &RocGenerateOptions,
+    options: GenerateOptions,
+    roc_options: RocGenerateOptions,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
     let target_dir = target_dir.as_ref().canonicalize()?;
@@ -210,6 +231,7 @@ pub fn generate_roc(
 
     let modules = generate_roc_modules(
         package_name,
+        roc_options.only_modules,
         type_iter,
         associated_dependencies_iter,
         associated_constant_iter,
@@ -260,6 +282,7 @@ pub fn generate_roc(
 
 fn generate_roc_modules<'a, 'b>(
     package_name: Cow<'a, str>,
+    only_modules: Vec<String>,
     type_iter: impl IntoIterator<Item = &'b RegisteredType>,
     associated_dependencies_iter: impl IntoIterator<Item = &'b ir::AssociatedDependencies>,
     associated_constant_iter: impl IntoIterator<Item = &'b ir::AssociatedConstant>,
@@ -272,9 +295,15 @@ fn generate_roc_modules<'a, 'b>(
     let associated_constant_map = gather_associated_constant_map(associated_constant_iter);
     let associated_function_map = gather_associated_function_map(associated_function_iter);
 
+    let module_filter = ModuleFilter::from_dot_separated(only_modules);
+
     type_map
         .values()
-        .filter_map(|ty| {
+        .filter_map(|ty: &RegisteredType| {
+            if !module_filter.permits(ty.parent_modules, ty.module_name) {
+                return None;
+            }
+
             let associated_dependencies = associated_dependencies_map
                 .get(&ty.ty.id)
                 .map_or_else(Cow::default, Cow::Borrowed);
@@ -390,4 +419,60 @@ fn get_field_type<'a>(
             parent_name(),
         )
     })
+}
+
+impl ModuleFilter {
+    fn from_dot_separated(module_paths: Vec<String>) -> Self {
+        if module_paths.is_empty() {
+            Self {
+                allow_all: true,
+                allowed_module_paths: Vec::new(),
+            }
+        } else {
+            Self {
+                allow_all: false,
+                allowed_module_paths: module_paths
+                    .into_iter()
+                    .map(|path| ModulePath::from_dot_separated(&path))
+                    .collect(),
+            }
+        }
+    }
+
+    fn permits(&self, parent_modules: Option<&str>, module_name: &str) -> bool {
+        if self.allow_all {
+            return true;
+        }
+
+        let path = ModulePath::from_dot_separated_parents(parent_modules, module_name);
+
+        self.allowed_module_paths
+            .iter()
+            .any(|allowed| allowed.is_parent_to(&path))
+    }
+}
+
+impl ModulePath {
+    fn empty() -> Self {
+        Self { parts: Vec::new() }
+    }
+
+    fn from_dot_separated(module_path: &str) -> Self {
+        Self {
+            parts: module_path.split(".").map(ToString::to_string).collect(),
+        }
+    }
+
+    fn from_dot_separated_parents(parent_modules: Option<&str>, module_name: &str) -> Self {
+        let mut path = parent_modules.map_or_else(Self::empty, Self::from_dot_separated);
+        path.parts.push(module_name.to_string());
+        path
+    }
+
+    fn is_parent_to(&self, other: &Self) -> bool {
+        if self.parts.len() > other.parts.len() {
+            return false;
+        }
+        self.parts.iter().zip(&other.parts).all(|(a, b)| a == b)
+    }
 }

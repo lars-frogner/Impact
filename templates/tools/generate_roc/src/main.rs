@@ -24,30 +24,33 @@ struct Cli {
 enum Command {
     /// List types annotated with the `roc` attribute
     ListTypes {
-        /// The categories of types to list
-        #[arg(short, long, value_delimiter=' ', num_args=1.., required = true)]
+        /// The categories of types to list (includes all categories if omitted)
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
         categories: Vec<ListedRocTypeCategory>,
     },
     /// List associated constants and functions for types annotated with the `roc` attribute
     ListAssociatedItems {
         /// Specific types to list associated items for (includes all types if omitted)
-        #[arg(short, long, value_delimiter = ' ')]
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
         types: Vec<String>,
     },
     /// Generate Roc modules
     GenerateModules {
-        /// Path to the Roc package directory in which to put the modules
-        #[arg(short, long)]
-        target_dir: PathBuf,
-        /// Name of the Roc package in which to put the modules (defaults to the directory name)
-        #[arg(short, long)]
-        package_name: Option<String>,
         /// Print info messages
         #[arg(short, long)]
         verbose: bool,
         /// Overwrite any existing files in the target package
         #[arg(long)]
         overwrite: bool,
+        /// Path to the Roc package directory in which to put the modules
+        #[arg(short, long, value_name = "PATH")]
+        target_dir: PathBuf,
+        /// Name of the Roc package in which to put the modules (defaults to the directory name)
+        #[arg(short, long, value_name = "NAME")]
+        package_name: Option<String>,
+        /// Specific modules to generate (for parent modules, all children are generated)
+        #[arg(long, value_name = "MODULES", value_delimiter = ' ', num_args = 1..)]
+        only: Vec<String>,
     },
 }
 
@@ -56,11 +59,9 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::ListTypes { categories } => {
-            let options = ListOptions {
-                categories: categories.into_iter().collect(),
-            };
+            let options = ListOptions { categories };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
-            generate::list_types(&options, &component_type_ids)?;
+            generate::list_types(options, &component_type_ids)?;
         }
         Command::ListAssociatedItems { types } => {
             generate::list_associated_items(types)?;
@@ -68,13 +69,17 @@ fn main() -> Result<()> {
         Command::GenerateModules {
             target_dir,
             package_name,
+            only,
             verbose,
             overwrite,
         } => {
             let options = GenerateOptions { verbose, overwrite };
-            let roc_options = RocGenerateOptions { package_name };
+            let roc_options = RocGenerateOptions {
+                package_name,
+                only_modules: only,
+            };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
-            generate::generate_roc(target_dir, &options, &roc_options, &component_type_ids)?;
+            generate::generate_roc(target_dir, options, roc_options, &component_type_ids)?;
         }
     }
 
