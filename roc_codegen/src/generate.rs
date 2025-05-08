@@ -39,6 +39,14 @@ pub struct GenerateOptions {
     pub overwrite: bool,
 }
 
+/// Roc code generation options.
+#[derive(Clone, Debug)]
+pub struct RocGenerateOptions {
+    /// Name of the Roc package being generated into. Defaults to the directory
+    /// name.
+    pub package_name: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 struct Module {
     path_from_package_root: PathBuf,
@@ -166,21 +174,42 @@ pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// Generates Roc source files in the package at the given path for all
+/// Generates Roc source files in the package at the given path for
 /// [`roc`](crate::roc)-annotated Rust types in linked crates.
 pub fn generate_roc(
-    package_root: impl AsRef<Path>,
+    target_dir: impl AsRef<Path>,
     options: &GenerateOptions,
+    roc_options: &RocGenerateOptions,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
+    let target_dir = target_dir.as_ref().canonicalize()?;
+
+    if !target_dir.exists() {
+        fs::create_dir_all(&target_dir)?;
+    }
+
+    if !target_dir.is_dir() {
+        bail!("{} is not a directory", target_dir.display());
+    }
+
+    let target_dir_name = if let Some(name) = target_dir.file_name() {
+        name.to_string_lossy()
+    } else {
+        bail!("{} is not a valid package directory", target_dir.display());
+    };
+
+    let package_name = roc_options
+        .package_name
+        .as_deref()
+        .map_or(target_dir_name, Cow::Borrowed);
+
     let type_iter = inventory::iter::<RegisteredType>();
     let associated_dependencies_iter = inventory::iter::<ir::AssociatedDependencies>();
     let associated_constant_iter = inventory::iter::<ir::AssociatedConstant>();
     let associated_function_iter = inventory::iter::<ir::AssociatedFunction>();
 
-    let package_root = package_root.as_ref();
-
     let modules = generate_roc_modules(
+        package_name,
         type_iter,
         associated_dependencies_iter,
         associated_constant_iter,
@@ -188,17 +217,13 @@ pub fn generate_roc(
         component_type_ids,
     )?;
 
-    if !package_root.exists() {
-        fs::create_dir_all(package_root)?;
-    }
-
     for Module {
         path_from_package_root,
         name,
         content,
     } in modules
     {
-        let module_dir = package_root.join(path_from_package_root);
+        let module_dir = target_dir.join(path_from_package_root);
 
         fs::create_dir_all(&module_dir)?;
 
@@ -233,11 +258,12 @@ pub fn generate_roc(
     Ok(())
 }
 
-fn generate_roc_modules<'a>(
-    type_iter: impl IntoIterator<Item = &'a RegisteredType>,
-    associated_dependencies_iter: impl IntoIterator<Item = &'a ir::AssociatedDependencies>,
-    associated_constant_iter: impl IntoIterator<Item = &'a ir::AssociatedConstant>,
-    associated_function_iter: impl IntoIterator<Item = &'a ir::AssociatedFunction>,
+fn generate_roc_modules<'a, 'b>(
+    package_name: Cow<'a, str>,
+    type_iter: impl IntoIterator<Item = &'b RegisteredType>,
+    associated_dependencies_iter: impl IntoIterator<Item = &'b ir::AssociatedDependencies>,
+    associated_constant_iter: impl IntoIterator<Item = &'b ir::AssociatedConstant>,
+    associated_function_iter: impl IntoIterator<Item = &'b ir::AssociatedFunction>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<Module>> {
     let type_map = gather_type_map(type_iter, component_type_ids)?;
@@ -262,6 +288,7 @@ fn generate_roc_modules<'a>(
                 .map_or_else(Cow::default, Cow::Borrowed);
 
             match roc::generate_module(
+                &package_name,
                 &type_map,
                 ty,
                 associated_dependencies.as_ref(),
@@ -269,7 +296,9 @@ fn generate_roc_modules<'a>(
                 associated_functions.as_ref(),
             ) {
                 Ok(Some(content)) => Some(Ok(Module {
-                    path_from_package_root: ty.module_prefix.split(".").collect(),
+                    path_from_package_root: ty
+                        .parent_modules
+                        .map_or_else(PathBuf::new, |parents| parents.split(".").collect()),
                     name: ty.ty.name,
                     content,
                 })),

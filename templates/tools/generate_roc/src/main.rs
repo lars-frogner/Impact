@@ -8,7 +8,9 @@ pub use target_crate;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use roc_codegen::generate::{self, GenerateOptions, ListOptions, ListedRocTypeCategory};
+use roc_codegen::generate::{
+    self, GenerateOptions, ListOptions, ListedRocTypeCategory, RocGenerateOptions,
+};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -34,9 +36,12 @@ enum Command {
     },
     /// Generate Roc modules
     GenerateModules {
-        /// Path to the Roc package in which to put the modules
+        /// Path to the Roc package directory in which to put the modules
         #[arg(short, long)]
-        package_root: PathBuf,
+        target_dir: PathBuf,
+        /// Name of the Roc package in which to put the modules (defaults to the directory name)
+        #[arg(short, long)]
+        package_name: Option<String>,
         /// Print info messages
         #[arg(short, long)]
         verbose: bool,
@@ -61,13 +66,15 @@ fn main() -> Result<()> {
             generate::list_associated_items(types)?;
         }
         Command::GenerateModules {
-            package_root,
+            target_dir,
+            package_name,
             verbose,
             overwrite,
         } => {
             let options = GenerateOptions { verbose, overwrite };
+            let roc_options = RocGenerateOptions { package_name };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
-            generate::generate_roc(package_root, &options, &component_type_ids)?;
+            generate::generate_roc(target_dir, &options, &roc_options, &component_type_ids)?;
         }
     }
 
