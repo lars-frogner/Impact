@@ -38,6 +38,7 @@ macro_rules! impl_roc_for_existing_primitive {
 
         inventory::submit! {
             $crate::RegisteredType {
+                rust_type_path: None,
                 package_name: Some(stringify!($package)),
                 parent_modules: $parents,
                 module_name: stringify!($module),
@@ -95,7 +96,6 @@ macro_rules! impl_roc_for_library_provided_primitives {
 }
 
 // Roc's builtin primitive types
-#[cfg(feature = "enabled")]
 impl_roc_for_builtin_primitives! {
 //  Type    Pkg   Parents  Module   Roc name  Postfix
     u8   => core, None,    Builtin, U8,       Some("_u8"),
@@ -114,7 +114,6 @@ impl_roc_for_builtin_primitives! {
 
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.
-#[cfg(feature = "enabled")]
 impl_roc_for_library_provided_primitives! {
 //  Type                             Pkg   Parents  Module          Roc name        Postfix         Precision
     usize                         => core, None,    NativeNum,      Usize,          Some("_usize"), PrecisionIrrelevant,

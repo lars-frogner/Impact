@@ -39,9 +39,6 @@ enum Command {
         /// Print info messages
         #[arg(short, long)]
         verbose: bool,
-        /// Overwrite any existing files in the target package
-        #[arg(long)]
-        overwrite: bool,
         /// Path to the Roc package directory in which to put the modules
         #[arg(short, long, value_name = "PATH")]
         target_dir: PathBuf,
@@ -71,9 +68,8 @@ fn main() -> Result<()> {
             package_name,
             only,
             verbose,
-            overwrite,
         } => {
-            let options = GenerateOptions { verbose, overwrite };
+            let options = GenerateOptions { verbose };
             let roc_options = RocGenerateOptions {
                 package_name,
                 only_modules: only,
