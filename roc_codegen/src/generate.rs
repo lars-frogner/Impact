@@ -5,12 +5,13 @@ mod roc;
 
 use crate::{RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow, bail};
+use chrono::{SecondsFormat, Utc};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    fmt::Display,
-    fs::{self, OpenOptions},
-    io::Write,
+    fmt::{self, Display},
+    fs::{self, File, OpenOptions},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
 };
 
@@ -30,13 +31,18 @@ pub enum ListedRocTypeCategory {
     Inline,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum GeneratedTypeCategory {
+    Pod,
+    Component,
+    Inline,
+}
+
 /// General code generation options.
 #[derive(Clone, Debug)]
 pub struct GenerateOptions {
     /// Whether to print progress and status messages.
     pub verbose: bool,
-    /// Whether to automatically overwrite existing files.
-    pub overwrite: bool,
 }
 
 /// Roc code generation options.
@@ -52,9 +58,18 @@ pub struct RocGenerateOptions {
 
 #[derive(Clone, Debug)]
 struct Module {
-    path_from_package_root: PathBuf,
-    name: &'static str,
-    content: String,
+    header: ModuleHeader,
+    code: String,
+}
+
+#[derive(Clone, Debug)]
+struct ModuleHeader {
+    code_hash: String,
+    timestamp: String,
+    rust_type_path: Option<String>,
+    type_category: GeneratedTypeCategory,
+    commit_sha: Option<String>,
+    commit_dirty: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -230,7 +245,7 @@ pub fn generate_roc(
     let associated_function_iter = inventory::iter::<ir::AssociatedFunction>();
 
     let modules = generate_roc_modules(
-        package_name,
+        &package_name,
         roc_options.only_modules,
         type_iter,
         associated_dependencies_iter,
@@ -239,56 +254,38 @@ pub fn generate_roc(
         component_type_ids,
     )?;
 
-    for Module {
-        path_from_package_root,
-        name,
-        content,
-    } in modules
-    {
-        let module_dir = target_dir.join(path_from_package_root);
+    let mut warnings = Vec::new();
 
-        fs::create_dir_all(&module_dir)?;
+    for (module, path_from_package_root) in modules {
+        module.save(
+            &target_dir,
+            &path_from_package_root,
+            &mut warnings,
+            options.verbose,
+        )?;
+    }
 
-        let module_path = module_dir.join(format!("{name}.roc"));
-
-        let existed = module_path.exists();
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .create_new(!options.overwrite)
-            .open(&module_path)
-            .with_context(|| {
-                format!(
-                    "Could not create file {} for writing",
-                    module_path.display()
-                )
-            })?;
-
-        write!(&mut file, "{}", content)?;
-
-        if options.verbose {
-            println!(
-                "Generated {}{}",
-                module_path.display(),
-                if existed { " (replaced existing)" } else { "" }
-            );
-        }
+    if options.verbose && !warnings.is_empty() {
+        println!("\nWarnings:");
+    }
+    for warning in warnings {
+        eprintln!("{warning}");
     }
 
     Ok(())
 }
 
 fn generate_roc_modules<'a, 'b>(
-    package_name: Cow<'a, str>,
+    package_name: &str,
     only_modules: Vec<String>,
     type_iter: impl IntoIterator<Item = &'b RegisteredType>,
     associated_dependencies_iter: impl IntoIterator<Item = &'b ir::AssociatedDependencies>,
     associated_constant_iter: impl IntoIterator<Item = &'b ir::AssociatedConstant>,
     associated_function_iter: impl IntoIterator<Item = &'b ir::AssociatedFunction>,
     component_type_ids: &HashSet<RocTypeID>,
-) -> Result<Vec<Module>> {
+) -> Result<Vec<(Module, PathBuf)>> {
+    let timestamp = obtain_timestamp();
+
     let type_map = gather_type_map(type_iter, component_type_ids)?;
     let associated_dependencies_map =
         gather_associated_dependencies_map(associated_dependencies_iter);
@@ -297,7 +294,7 @@ fn generate_roc_modules<'a, 'b>(
 
     let module_filter = ModuleFilter::from_dot_separated(only_modules);
 
-    type_map
+    let mut modules = type_map
         .values()
         .filter_map(|ty: &RegisteredType| {
             if !module_filter.permits(ty.parent_modules, ty.module_name) {
@@ -317,25 +314,32 @@ fn generate_roc_modules<'a, 'b>(
                 .map_or_else(Cow::default, Cow::Borrowed);
 
             match roc::generate_module(
-                &package_name,
+                package_name,
                 &type_map,
                 ty,
                 associated_dependencies.as_ref(),
                 associated_constants.as_ref(),
                 associated_functions.as_ref(),
             ) {
-                Ok(Some(content)) => Some(Ok(Module {
-                    path_from_package_root: ty
+                Ok(Some(code)) => {
+                    let path_from_package_root = ty
                         .parent_modules
-                        .map_or_else(PathBuf::new, |parents| parents.split(".").collect()),
-                    name: ty.ty.name,
-                    content,
-                })),
+                        .map_or_else(PathBuf::new, |parents| parents.split(".").collect())
+                        .join(format!("{}.roc", ty.module_name));
+
+                    let header = ModuleHeader::new(timestamp.clone(), ty, &code);
+
+                    Some(Ok((Module { header, code }, path_from_package_root)))
+                }
                 Ok(None) => None,
                 Err(err) => Some(Err(err)),
             }
         })
-        .collect::<Result<Vec<_>>>()
+        .collect::<Result<Vec<_>>>()?;
+
+    modules.sort_by_key(|(_, path)| path.clone());
+
+    Ok(modules)
 }
 
 fn gather_type_map<'a>(
@@ -419,6 +423,279 @@ fn get_field_type<'a>(
             parent_name(),
         )
     })
+}
+
+fn obtain_timestamp() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Secs, false)
+}
+
+fn obtain_git_commit_sha() -> Option<&'static str> {
+    let sha = env!("VERGEN_GIT_SHA");
+    if sha.is_empty() { None } else { Some(sha) }
+}
+
+fn git_commit_dirty() -> bool {
+    env!("VERGEN_GIT_DIRTY") == "true"
+}
+
+fn compute_module_code_hash(code: &str) -> blake3::Hash {
+    blake3::hash(code.as_bytes())
+}
+
+impl GeneratedTypeCategory {
+    fn from_type(ty: &RegisteredType) -> Self {
+        assert!(!ty.is_primitive());
+        if ty.is_component() {
+            Self::Component
+        } else if ty.is_pod() {
+            Self::Pod
+        } else {
+            Self::Inline
+        }
+    }
+
+    fn parse(string: &str) -> Result<Self> {
+        match string {
+            "Component" => Ok(Self::Component),
+            "POD" => Ok(Self::Pod),
+            "Inline" => Ok(Self::Inline),
+            category => Err(anyhow!("Invalid type category `{category}`")),
+        }
+    }
+}
+
+impl fmt::Display for GeneratedTypeCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Component => "Component",
+                Self::Pod => "POD",
+                Self::Inline => "Inline",
+            }
+        )
+    }
+}
+
+impl Module {
+    fn save(
+        &self,
+        target_dir: &Path,
+        path_from_package_root: &Path,
+        warnings: &mut Vec<String>,
+        verbose: bool,
+    ) -> Result<()> {
+        let display_path = path_from_package_root
+            .iter()
+            .map(|part| part.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(".");
+        let display_path = display_path.strip_suffix(".roc").unwrap_or(&display_path);
+
+        let module_path = target_dir.join(path_from_package_root);
+
+        let exists = module_path.exists();
+
+        if exists {
+            let existing_module =
+                Self::parse_from_file_if_valid(&module_path).with_context(|| {
+                    format!(
+                        "Could not read existing module at {}",
+                        module_path.display()
+                    )
+                })?;
+
+            if let Some(existing_module) = existing_module {
+                if !existing_module.code_is_unmodified() {
+                    warnings.push(format!(
+                        "Existing module {display_path} has been modified after it was last generated, skipping"
+                    ));
+                    return Ok(());
+                }
+                if existing_module.header.code_hash == self.header.code_hash {
+                    if verbose {
+                        println!("No new code for module {display_path}, skipping");
+                    }
+                    return Ok(());
+                }
+            } else {
+                warnings.push(format!(
+                    "An unrecognized file already exists at {}, skipping",
+                    module_path.display()
+                ));
+                return Ok(());
+            }
+        }
+
+        if let Some(module_dir) = module_path.parent() {
+            fs::create_dir_all(module_dir)?;
+        }
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&module_path)
+            .with_context(|| {
+                format!(
+                    "Could not create file {} for writing",
+                    module_path.display()
+                )
+            })?;
+
+        write!(&mut file, "{}{}", self.header, self.code)?;
+
+        if verbose {
+            println!(
+                "Generated {display_path}{}",
+                if exists { " (replaced existing)" } else { "" }
+            );
+        }
+
+        Ok(())
+    }
+
+    fn code_is_unmodified(&self) -> bool {
+        let actual_hash = compute_module_code_hash(&self.code).to_string();
+        self.header.code_hash == actual_hash
+    }
+
+    fn parse_from_file_if_valid(module_path: &Path) -> Result<Option<Self>> {
+        let reader = BufReader::new(File::open(module_path)?);
+        Self::parse_if_valid(reader)
+    }
+
+    fn parse_if_valid(mut reader: impl BufRead) -> Result<Option<Self>> {
+        let Some(header) = ModuleHeader::parse_if_valid(&mut reader)? else {
+            return Ok(None);
+        };
+
+        let mut code = String::new();
+        reader.read_to_string(&mut code)?;
+
+        Ok(Some(Self { header, code }))
+    }
+}
+
+impl ModuleHeader {
+    fn new(timestamp: String, ty: &RegisteredType, module_code: &str) -> Self {
+        let code_hash = compute_module_code_hash(module_code).to_string();
+        let rust_type_path = ty.rust_type_path.map(ToString::to_string);
+        let type_category = GeneratedTypeCategory::from_type(ty);
+        let commit_sha = obtain_git_commit_sha().map(ToString::to_string);
+        let commit_dirty = git_commit_dirty();
+        Self {
+            code_hash,
+            timestamp,
+            rust_type_path,
+            type_category,
+            commit_sha,
+            commit_dirty,
+        }
+    }
+
+    fn parse_if_valid(reader: &mut impl BufRead) -> Result<Option<Self>> {
+        let mut hash_line = String::new();
+        reader.read_line(&mut hash_line)?;
+        let Some(hash_str) = Self::extract_module_hash_str(&hash_line) else {
+            return Ok(None);
+        };
+        let code_hash = hash_str.to_string();
+
+        let mut timestamp_line = String::new();
+        reader.read_line(&mut timestamp_line)?;
+        let Some(timestamp_str) = Self::extract_module_header_timestamp_str(&timestamp_line) else {
+            return Ok(None);
+        };
+        let timestamp = timestamp_str.to_string();
+
+        let mut rust_type_line = String::new();
+        reader.read_line(&mut rust_type_line)?;
+        let Some(rust_type_str) = Self::extract_module_header_rust_type_str(&rust_type_line) else {
+            return Ok(None);
+        };
+        let rust_type_path = if rust_type_str == "-" {
+            None
+        } else {
+            Some(rust_type_str.to_string())
+        };
+
+        let mut type_category_line = String::new();
+        reader.read_line(&mut type_category_line)?;
+        let Some(type_category_str) =
+            Self::extract_module_header_type_category_str(&type_category_line)
+        else {
+            return Ok(None);
+        };
+        let type_category = GeneratedTypeCategory::parse(type_category_str)?;
+
+        let mut commmit_line = String::new();
+        reader.read_line(&mut commmit_line)?;
+        let Some(commit_str) = Self::extract_module_header_commit_str(&commmit_line) else {
+            return Ok(None);
+        };
+        let (commit_sha, commit_dirty) = if commit_str == "-" {
+            (None, false)
+        } else if let Some(commit_sha) = commit_str.strip_suffix(" (dirty)") {
+            (Some(commit_sha.to_string()), true)
+        } else {
+            (Some(commit_str.to_string()), false)
+        };
+
+        Ok(Some(Self {
+            code_hash,
+            timestamp,
+            rust_type_path,
+            type_category,
+            commit_sha,
+            commit_dirty,
+        }))
+    }
+
+    fn extract_module_hash_str(first_line: &str) -> Option<&str> {
+        Some(first_line.strip_prefix("# Hash: ")?.trim())
+    }
+
+    fn extract_module_header_timestamp_str(second_line: &str) -> Option<&str> {
+        Some(second_line.strip_prefix("# Generated: ")?.trim())
+    }
+
+    fn extract_module_header_rust_type_str(third_line: &str) -> Option<&str> {
+        Some(third_line.strip_prefix("# Rust type: ")?.trim())
+    }
+
+    fn extract_module_header_type_category_str(fourth_line: &str) -> Option<&str> {
+        Some(fourth_line.strip_prefix("# Type category: ")?.trim())
+    }
+
+    fn extract_module_header_commit_str(fifth_line: &str) -> Option<&str> {
+        Some(fifth_line.strip_prefix("# Commit: ")?.trim())
+    }
+}
+
+impl fmt::Display for ModuleHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "# Hash: {}", &self.code_hash)?;
+        writeln!(f, "# Generated: {}", &self.timestamp)?;
+        writeln!(
+            f,
+            "# Rust type: {}",
+            self.rust_type_path.as_deref().unwrap_or("-")
+        )?;
+        writeln!(f, "# Type category: {}", self.type_category)?;
+        writeln!(
+            f,
+            "# Commit: {sha}{dirty}",
+            sha = self.commit_sha.as_deref().unwrap_or("-"),
+            dirty = if self.commit_sha.is_some() && self.commit_dirty {
+                " (dirty)"
+            } else {
+                ""
+            }
+        )?;
+        Ok(())
+    }
 }
 
 impl ModuleFilter {

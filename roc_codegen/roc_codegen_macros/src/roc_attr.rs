@@ -253,13 +253,17 @@ fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> Tok
     // WARNING: If changing this, make sure to change the generation of
     // component IDs in `impact_ecs_macros` accordingly, since we guarantee
     // that the Roc type ID of any component matches the component ID
-    let type_path_tail = format!("::{}", rust_type_name);
+    let type_path_str = generate_qualified_type_path_str(rust_type_name);
     quote!(
-        #crate_root::RocTypeID::hashed_from_str(concat!(
-            module_path!(),
-            #type_path_tail
-        ))
+        #crate_root::RocTypeID::hashed_from_str(#type_path_str)
     )
+}
+
+fn generate_qualified_type_path_str(rust_type_name: &Ident) -> TokenStream {
+    let type_path_tail = format!("::{}", rust_type_name);
+    quote! {
+        concat!(module_path!(), #type_path_tail)
+    }
 }
 
 fn generate_size_expr(
@@ -721,6 +725,7 @@ fn generate_registered_type_submit(
     crate_root: &TokenStream,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
+    let rust_type_path = generate_qualified_type_path_str(rust_type_name);
     let package_name = string_option_to_tokens(args.package_name.as_deref());
     let parent_modules = string_option_to_tokens(args.parent_modules.as_deref());
     let module_name = &args.module_name;
@@ -734,6 +739,7 @@ fn generate_registered_type_submit(
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
             #crate_root::RegisteredType {
+                rust_type_path: Some(#rust_type_path),
                 package_name: #package_name,
                 parent_modules: #parent_modules,
                 module_name: #module_name,
