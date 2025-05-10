@@ -426,7 +426,7 @@ fn get_storage_iter_code_sorted_by_arg_type(
         .map(|ty| ty.elem.to_token_stream().to_string())
         .zip(storage_iter_code)
         .collect();
-    type_names_and_code.sort_by_key(|(ty, _)| ty.to_string());
+    type_names_and_code.sort_by_key(|(ty, _)| ty.clone());
     type_names_and_code
         .into_iter()
         .map(|(_, code)| code)
