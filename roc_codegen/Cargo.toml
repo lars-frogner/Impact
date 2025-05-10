@@ -95,20 +95,37 @@ name = "roc_codegen"
 version = { workspace = true }
 edition = { workspace = true }
 
+build = "build.rs"
+
 [features]
 cli = ["dep:clap"]
-enabled = ["roc_codegen_macros/enabled"]
+enabled = [
+    "roc_codegen_macros/enabled",
+    "dep:anyhow",
+    "dep:bitflags",
+    "dep:blake3",
+    "dep:bytemuck",
+    "dep:chrono",
+    "dep:const-fnv1a-hash",
+    "dep:inventory",
+    "dep:nalgebra",
+]
 
 [dependencies]
-anyhow = "1.0"
-bitflags = "2.6"
-bytemuck = { version = "1.22", features = ["derive"] }
+anyhow = { version = "1.0", optional = true }
+bitflags = { version = "2.6", optional = true }
+blake3 = { version = "1.8", optional = true }
+bytemuck = { version = "1.22", features = ["derive"], optional = true }
+chrono = { version = "0.4", optional = true }
 clap = { version = "4.5", features = ["derive"], optional = true }
-const-fnv1a-hash = "1.1"
-inventory = "0.3"
-nalgebra = { version = "0.33", features = ["bytemuck"] }
+const-fnv1a-hash = { version = "1.1", optional = true }
+inventory = { version = "0.3", optional = true }
+nalgebra = { version = "0.33", features = ["bytemuck"], optional = true }
 
 roc_codegen_macros = { path = "roc_codegen_macros" }
+
+[build-dependencies]
+vergen-gitcl = { version = "1.0", features = [] }
 
 [lints]
 workspace = true
