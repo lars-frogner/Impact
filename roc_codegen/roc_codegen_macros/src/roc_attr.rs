@@ -1071,6 +1071,9 @@ fn generate_variants(
                 MAX_ENUM_VARIANT_FIELDS,
             )?;
 
+            let serialized_size = generate_summed_field_size_expr(&variant.fields, crate_root)
+                .unwrap_or_else(|| quote! {0});
+
             let docstring = extract_and_process_docstring(&variant.attrs);
             let ident = &variant.ident;
             let ident_str = ident.to_string();
@@ -1079,8 +1082,7 @@ fn generate_variants(
                 Some(#crate_root::ir::TypeVariant {
                     docstring: #docstring,
                     ident: #ident_str,
-                    size: ::std::mem::size_of::<#variant_checks_module_ident::#ident>(),
-                    alignment: ::std::mem::align_of::<#variant_checks_module_ident::#ident>(),
+                    serialized_size: #serialized_size,
                     fields: #fields,
                 }),
             })
