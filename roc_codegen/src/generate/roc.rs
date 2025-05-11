@@ -151,11 +151,19 @@ fn determine_imports(
     let mut import_paths = HashSet::new();
 
     // All modules needs this import
-    import_paths.insert(String::from("core.Builtin"));
+    import_paths.insert(String::from(if package_name == "core" {
+        "Builtin"
+    } else {
+        "core.Builtin"
+    }));
 
     if ty.is_component() {
         // ECS components need this import
-        import_paths.insert(String::from("pf.Entity"));
+        import_paths.insert(String::from(if package_name == "pf" {
+            "Entity"
+        } else {
+            "pf.Entity"
+        }));
     }
 
     for associated_dependencies in associated_dependencies {
