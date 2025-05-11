@@ -125,10 +125,8 @@ pub struct TypeVariant<const N_FIELDS: usize> {
     pub docstring: &'static str,
     /// The identifier (name) of the variant.
     pub ident: &'static str,
-    /// The memory size of the struct representing this variant's payload.
-    pub size: usize,
-    /// [`std::mem::align_of`] the struct representing this variant's payload.
-    pub alignment: usize,
+    /// The serialized size of this variant's payload.
+    pub serialized_size: usize,
     /// The fields of the struct representing this variant's payload.
     pub fields: TypeFields<N_FIELDS>,
 }

@@ -150,15 +150,13 @@ fn determine_imports(
 ) -> HashSet<String> {
     let mut import_paths = HashSet::new();
 
-    // All modules needs this import
-    import_paths.insert(String::from(if package_name == "core" {
-        "Builtin"
-    } else {
-        "core.Builtin"
-    }));
-
     if ty.is_component() {
-        // ECS components need this import
+        // ECS components need these imports
+        import_paths.insert(String::from(if package_name == "core" {
+            "Builtin"
+        } else {
+            "core.Builtin"
+        }));
         import_paths.insert(String::from(if package_name == "pf" {
             "Entity"
         } else {
@@ -834,11 +832,11 @@ fn write_write_bytes_function(
                     roc_code,
                     "            \
                     bytes\n            \
-                    |> List.reserve({})\n            \
-                    |> List.append({})\n\
+                    |> List.reserve({size})\n            \
+                    |> List.append({discriminant})\n\
                     ",
-                    variant.size + 1,
-                    variant_idx,
+                    size = ty.serialized_size,
+                    discriminant = variant_idx,
                 )?;
                 write_calls_to_write_bytes(
                     roc_code,
@@ -852,6 +850,19 @@ fn write_write_bytes_function(
                     },
                     &|| format!("variant {} of enum {}", variant.ident, ty.ty.name),
                 )?;
+
+                let padding_size = ty
+                    .serialized_size
+                    .checked_sub(variant.serialized_size + 1)
+                    .unwrap();
+                if padding_size > 0 {
+                    writeln!(
+                        roc_code,
+                        "            \
+                        |> List.concat(List.repeat(0, {padding_size}))\
+                        ",
+                    )?;
+                }
             }
         }
         ir::TypeComposition::Primitive(_) => {
@@ -940,7 +951,7 @@ fn write_from_bytes_function(
         "\
         ## Deserializes a value of [{name}] from its bytes in the\n\
         ## representation used by the engine.\n\
-        from_bytes : List U8 -> Result {name} Builtin.DecodeErr\n\
+        from_bytes : List U8 -> Result {name} _\n\
         from_bytes = |{underscore}bytes|\n\
         ",
         name = ty.ty.name,
@@ -962,15 +973,23 @@ fn write_from_bytes_function(
             writeln!(roc_code, "    )")?;
         }
         ir::TypeComposition::Enum(variants) => {
-            writeln!(roc_code, "    when bytes is")?;
+            writeln!(
+                roc_code,
+                "    \
+                if List.len(bytes) != {size} then\n        \
+                    Err(InvalidNumberOfBytes)\n    \
+                else\n        \
+                    when bytes is\
+                ",
+                size = ty.serialized_size
+            )?;
             for (variant_idx, variant) in variants.0.iter().enumerate() {
                 match &variant.fields {
                     ir::TypeFields::None => {
                         writeln!(
                             roc_code,
-                            "        \
-                            [{variant_idx}] -> Ok({})\n        \
-                            [{variant_idx}, ..] -> Err(InvalidNumberOfBytes)\
+                            "            \
+                            [{variant_idx}, ..] -> Ok({})\
                             ",
                             variant.ident
                         )?;
@@ -978,10 +997,10 @@ fn write_from_bytes_function(
                     ir::TypeFields::Named(_) => {
                         write!(
                             roc_code,
-                            "        \
-                            [{variant_idx}, .. as data_bytes] ->\n            \
-                                Ok(\n                \
-                                    {} \
+                            "            \
+                            [{variant_idx}, .. as data_bytes] ->\n                \
+                                Ok(\n                    \
+                                    {}     \
                             ",
                             variant.ident
                         )?;
@@ -989,12 +1008,12 @@ fn write_from_bytes_function(
                             roc_code,
                             type_map,
                             &variant.fields,
-                            4,
+                            5,
                             "data_bytes",
                             &|| format!("variant {} of enum {}", variant.ident, ty.ty.name),
                         )?;
                         roc_code.push_str(
-                            "            \
+                            "                \
                                 )\n\n\
                             ",
                         );
@@ -1005,9 +1024,9 @@ fn write_from_bytes_function(
                     ir::TypeFields::Unnamed(_) => {
                         write!(
                             roc_code,
-                            "        \
-                            [{variant_idx}, .. as data_bytes] ->\n            \
-                                Ok(\n                \
+                            "            \
+                            [{variant_idx}, .. as data_bytes] ->\n                \
+                                Ok(\n                    \
                                     {}\
                             ",
                             variant.ident
@@ -1016,12 +1035,12 @@ fn write_from_bytes_function(
                             roc_code,
                             type_map,
                             &variant.fields,
-                            4,
+                            5,
                             "data_bytes",
                             &|| format!("variant {} of enum {}", variant.ident, ty.ty.name),
                         )?;
                         roc_code.push_str(
-                            "            \
+                            "                \
                                 )\n\n\
                             ",
                         );
@@ -1029,8 +1048,8 @@ fn write_from_bytes_function(
                 }
             }
             roc_code.push_str(
-                "        \
-                [] -> Err(MissingDiscriminant)\n        \
+                "            \
+                [] -> Err(MissingDiscriminant)\n            \
                 _ -> Err(InvalidDiscriminant)\n\
                 ",
             );
@@ -1163,6 +1182,16 @@ fn write_calls_to_from_bytes<const N: usize>(
 }
 
 fn write_roundtrip_test(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
+    match &ty.ty.composition {
+        ir::TypeComposition::Primitive(_) => Ok(()),
+        ir::TypeComposition::Struct { .. } => write_roundtrip_test_for_struct(roc_code, ty),
+        ir::TypeComposition::Enum(variants) => {
+            write_roundtrip_test_for_enum(roc_code, ty, variants)
+        }
+    }
+}
+
+fn write_roundtrip_test_for_struct(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
     writeln!(
         roc_code,
         "\
@@ -1182,5 +1211,58 @@ fn write_roundtrip_test(roc_code: &mut String, ty: &RegisteredType) -> Result<()
         ",
         ty.serialized_size,
     )?;
+    Ok(())
+}
+
+fn write_roundtrip_test_for_enum<const N_VARIANTS: usize, const N_FIELDS: usize>(
+    roc_code: &mut String,
+    ty: &RegisteredType,
+    variants: &ir::TypeVariants<N_VARIANTS, N_FIELDS>,
+) -> Result<()> {
+    writeln!(
+        roc_code,
+        "\
+        test_roundtrip : {{}} -> Result {{}} _\n\
+        test_roundtrip = |{{}}|\
+        ",
+    )?;
+
+    for (discriminant, variant) in variants.0.iter().enumerate() {
+        writeln!(
+            roc_code,
+            "    \
+            test_roundtrip_for_variant({discriminant}, {variant_size}, {padding_size})?\
+            ",
+            variant_size = variant.serialized_size + 1,
+            padding_size = ty
+                .serialized_size
+                .checked_sub(variant.serialized_size + 1)
+                .unwrap()
+        )?;
+    }
+    writeln!(roc_code, "    Ok({{}})\n")?;
+
+    writeln!(
+        roc_code,
+        "\
+        test_roundtrip_for_variant : U8, U64, U64 -> Result {{}} _\n\
+        test_roundtrip_for_variant = |discriminant, variant_size, padding_size|\n    \
+            bytes = \n        \
+                List.range({{ start: At discriminant, end: Length variant_size }})\n        \
+                |> List.concat(List.repeat(0, padding_size))\n        \
+                |> List.map(|b| Num.to_u8(b))\n    \
+            decoded = from_bytes(bytes)?\n    \
+            encoded = write_bytes([], decoded)\n    \
+            if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then\n        \
+                Ok({{}})\n    \
+            else\n        \
+                Err(NotEqual(encoded, bytes))\n\
+        \n\
+        expect\n    \
+            result = test_roundtrip({{}})\n    \
+            result |> Result.is_ok\
+        ",
+    )?;
+
     Ok(())
 }
