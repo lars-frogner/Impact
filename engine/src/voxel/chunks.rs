@@ -209,7 +209,7 @@ impl ChunkedVoxelObject {
     {
         let generator_grid_shape = generator.grid_shape();
 
-        if generator_grid_shape.iter().any(|&dim| dim == 0) {
+        if generator_grid_shape.contains(&0) {
             return None;
         }
 

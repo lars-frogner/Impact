@@ -7,6 +7,7 @@ edition = { workspace = true }
 roc_codegen = ["dep:inventory", "roc_codegen/enabled"]
 
 [dependencies]
+anyhow = { workspace = true }
 bytemuck = { workspace = true }
 const-fnv1a-hash = { workspace = true }
 inventory = { workspace = true, optional = true }

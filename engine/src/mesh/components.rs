@@ -13,7 +13,7 @@ use std::fmt::Display;
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "RectangleMesh")]
+#[roc(parents = "Comp", name = "RectangleMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct RectangleMeshComp {
@@ -28,7 +28,7 @@ pub struct RectangleMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "BoxMesh")]
+#[roc(parents = "Comp", name = "BoxMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct BoxMeshComp {
@@ -47,7 +47,7 @@ pub struct BoxMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "CylinderMesh")]
+#[roc(parents = "Comp", name = "CylinderMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct CylinderMeshComp {
@@ -66,7 +66,7 @@ pub struct CylinderMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "ConeMesh")]
+#[roc(parents = "Comp", name = "ConeMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ConeMeshComp {
@@ -85,7 +85,7 @@ pub struct ConeMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "CircularFrustumMesh")]
+#[roc(parents = "Comp", name = "CircularFrustumMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct CircularFrustumMeshComp {
@@ -105,7 +105,7 @@ pub struct CircularFrustumMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "SphereMesh")]
+#[roc(parents = "Comp", name = "SphereMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereMeshComp {
@@ -121,7 +121,7 @@ pub struct SphereMeshComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "HemisphereMesh")]
+#[roc(parents = "Comp", name = "HemisphereMesh")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct HemisphereMeshComp {
@@ -134,7 +134,7 @@ pub struct HemisphereMeshComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// [`TriangleMesh`](crate::mesh::TriangleMesh).
-#[roc(prefix = "Comp", name = "Mesh")]
+#[roc(parents = "Comp", name = "Mesh")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MeshComp {

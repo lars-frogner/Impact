@@ -33,7 +33,7 @@ pub struct CollidableDescriptor {
     idx: usize,
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Physics")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollidableKind {
     Dynamic = 0,
@@ -78,7 +78,7 @@ pub struct VoxelObjectCollidableGeometry {
 }
 
 /// Identifier for a collidable in a [`CollisionWorld`].
-#[roc(prefix = "Engine")]
+#[roc(parents = "Physics")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CollidableID(u32);

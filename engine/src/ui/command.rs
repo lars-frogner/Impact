@@ -3,13 +3,13 @@
 use super::UserInterface;
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum UICommand {
     SetInteractionMode(ToInteractionMode),
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToInteractionMode {
     Control,

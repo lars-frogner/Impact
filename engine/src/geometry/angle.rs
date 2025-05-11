@@ -331,10 +331,11 @@ where
 
 #[cfg(feature = "roc_codegen")]
 roc_codegen::impl_roc_for_library_provided_primitives! {
-    Radians<f32> => "core", Radians, Radians, "_32", SinglePrecision,
-    Radians<f64> => "core", Radians, Radians, "_64", DoublePrecision,
-    Degrees<f32> => "core", Degrees, Degrees, "_32", SinglePrecision,
-    Degrees<f64> => "core", Degrees, Degrees, "_64", DoublePrecision,
+//  Type            Pkg   Parents  Module   Roc name  Postfix      Precision
+    Radians<f32> => core, None,    Radians, Radians,  Some("_32"), SinglePrecision,
+    Radians<f64> => core, None,    Radians, Radians,  Some("_64"), DoublePrecision,
+    Degrees<f32> => core, None,    Degrees, Degrees,  Some("_32"), SinglePrecision,
+    Degrees<f64> => core, None,    Degrees, Degrees,  Some("_64"), DoublePrecision,
 }
 
 #[cfg(test)]

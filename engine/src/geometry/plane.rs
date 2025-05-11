@@ -190,8 +190,9 @@ where
 
 #[cfg(feature = "roc_codegen")]
 roc_codegen::impl_roc_for_library_provided_primitives! {
-    Plane<f32> => "core", Plane, Plane, "_32", SinglePrecision,
-    Plane<f64> => "core", Plane, Plane, "_64", DoublePrecision,
+//  Type            Pkg   Parents  Module   Roc name  Postfix      Precision
+    Plane<f32> =>   core, None,    Plane,   Plane,    Some("_32"), SinglePrecision,
+    Plane<f64> =>   core, None,    Plane,   Plane,    Some("_64"), DoublePrecision,
 }
 
 #[cfg(test)]

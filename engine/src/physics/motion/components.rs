@@ -14,7 +14,7 @@ use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// reference frame defined by position, orientation and scaling.
-#[roc(prefix = "Comp", name = "ReferenceFrame")]
+#[roc(parents = "Comp", name = "ReferenceFrame")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ReferenceFrameComp {
@@ -34,7 +34,7 @@ pub struct ReferenceFrameComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// linear and/or angular velocity.
-#[roc(prefix = "Comp", name = "Velocity")]
+#[roc(parents = "Comp", name = "Velocity")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct VelocityComp {
@@ -47,7 +47,7 @@ pub struct VelocityComp {
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// position and orientation are not supposed to change.
-#[roc(prefix = "Comp")]
+#[roc(parents = "Comp")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct Static;
@@ -55,14 +55,14 @@ pub struct Static;
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// translational and rotational kinetic energy should be written to the log at
 /// each time step.
-#[roc(prefix = "Comp")]
+#[roc(parents = "Comp")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct LogsKineticEnergy;
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// linear and angular momentum should be written to the log at each time step.
-#[roc(prefix = "Comp")]
+#[roc(parents = "Comp")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct LogsMomentum;
@@ -388,7 +388,7 @@ impl VelocityComp {
 
     /// Creates a new velocity component for an entity with the given linear
     /// velocity and zero angular velocity.
-    #[roc(body = "new(velocity, AngularVelocity.zero({}))")]
+    #[roc(body = "new(velocity, Physics.AngularVelocity.zero({}))")]
     pub fn linear(velocity: Velocity) -> Self {
         Self::new(velocity, AngularVelocity::zero())
     }

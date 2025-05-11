@@ -6,7 +6,7 @@ use crate::{
 };
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum ControlCommand {
     SetMotion {

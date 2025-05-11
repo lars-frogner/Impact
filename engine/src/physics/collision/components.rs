@@ -16,7 +16,7 @@ use roc_codegen::roc;
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "SphereCollidable")]
+#[roc(parents = "Comp", name = "SphereCollidable")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SphereCollidableComp {
@@ -29,7 +29,7 @@ pub struct SphereCollidableComp {
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "PlaneCollidable")]
+#[roc(parents = "Comp", name = "PlaneCollidable")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PlaneCollidableComp {
@@ -42,7 +42,7 @@ pub struct PlaneCollidableComp {
 ///
 /// The purpose of this component is to aid in constructing a [`CollidableComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "VoxelObjectCollidable")]
+#[roc(parents = "Comp", name = "VoxelObjectCollidable")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelObjectCollidableComp {
@@ -51,7 +51,7 @@ pub struct VoxelObjectCollidableComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// collidable in the [`CollisionWorld`](super::CollisionWorld).
-#[roc(prefix = "Comp", name = "Collidable")]
+#[roc(parents = "Comp", name = "Collidable")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CollidableComp {

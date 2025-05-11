@@ -29,7 +29,7 @@ use std::{
 /// messy when it does not fit in a `u64` (`u128` is not FFI-safe).
 #[roc(
     category = "primitive",
-    prefix = "pf",
+    package = "pf",
     module = "Entity",
     name = "Id",
     postfix = "_id"

@@ -12,7 +12,7 @@ use nalgebra::Vector3;
 use roc_codegen::roc;
 
 /// A spring or elastic band.
-#[roc(prefix = "Engine", name = "EngineSpring")]
+#[roc(parents = "Physics")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct Spring {
@@ -27,7 +27,7 @@ pub struct Spring {
 }
 
 /// The current state of a spring.
-#[roc(prefix = "Engine")]
+#[roc(parents = "Physics")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct SpringState {

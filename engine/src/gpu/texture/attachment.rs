@@ -33,7 +33,7 @@ bitflags! {
 }
 
 /// A quantity that can be rendered to a dedicated render attachment texture.
-#[roc(prefix = "Engine")]
+#[roc(parents = "Rendering")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RenderAttachmentQuantity {
     DepthStencil = 0,

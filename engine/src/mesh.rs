@@ -29,7 +29,7 @@ use texture_projection::TextureProjection;
 stringhash64_newtype!(
     /// Identifier for specific meshes.
     /// Wraps a [`StringHash64`](impact_math::StringHash64).
-    #[roc(prefix = "Engine")]
+    #[roc(parents = "Mesh")]
     [pub] MeshID
 );
 

@@ -15,7 +15,7 @@ use roc_codegen::roc;
 /// The purpose of this component is to aid in constructing a
 /// [`MeshComp`](crate::mesh::components::MeshComp) for the entity. It is
 /// therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "PlanarTextureProjection")]
+#[roc(parents = "Comp", name = "PlanarTextureProjection")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct PlanarTextureProjectionComp {

@@ -5,7 +5,7 @@ use crate::{engine::command::ActiveState, skybox::Skybox};
 use impact_ecs::world::Entity;
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum SceneCommand {
     SetSkybox(Skybox),

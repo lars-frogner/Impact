@@ -9,7 +9,7 @@ use crate::physics::motion::Position;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// spring connecting two other entities.
-#[roc(prefix = "Comp", name = "Spring")]
+#[roc(parents = "Comp", name = "Spring")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SpringComp {
@@ -39,7 +39,7 @@ impl SpringComp {
         attachment_point_1,
         attachment_point_2,
         spring,
-        spring_state: SpringState.new({})
+        spring_state: Physics.SpringState.new({})
     }"#)]
     pub fn new(
         entity_1: Entity,

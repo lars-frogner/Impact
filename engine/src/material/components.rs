@@ -15,7 +15,7 @@ use roc_codegen::roc;
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "FixedColor")]
+#[roc(parents = "Comp", name = "FixedColor")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct FixedColorComp(pub RGBColor);
@@ -26,7 +26,7 @@ pub struct FixedColorComp(pub RGBColor);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "FixedTexture")]
+#[roc(parents = "Comp", name = "FixedTexture")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct FixedTextureComp(pub TextureID);
@@ -44,7 +44,7 @@ pub struct FixedTextureComp(pub TextureID);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "UniformColor")]
+#[roc(parents = "Comp", name = "UniformColor")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformColorComp(pub RGBColor);
@@ -62,7 +62,7 @@ pub struct UniformColorComp(pub RGBColor);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "TexturedColor")]
+#[roc(parents = "Comp", name = "TexturedColor")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedColorComp(pub TextureID);
@@ -74,7 +74,7 @@ pub struct TexturedColorComp(pub TextureID);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "UniformSpecularReflectance")]
+#[roc(parents = "Comp", name = "UniformSpecularReflectance")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformSpecularReflectanceComp(pub f32);
@@ -86,7 +86,7 @@ pub struct UniformSpecularReflectanceComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "TexturedSpecularReflectance")]
+#[roc(parents = "Comp", name = "TexturedSpecularReflectance")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedSpecularReflectanceComp {
@@ -100,7 +100,7 @@ pub struct TexturedSpecularReflectanceComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "UniformRoughness")]
+#[roc(parents = "Comp", name = "UniformRoughness")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformRoughnessComp(pub f32);
@@ -111,7 +111,7 @@ pub struct UniformRoughnessComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "TexturedRoughness")]
+#[roc(parents = "Comp", name = "TexturedRoughness")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedRoughnessComp {
@@ -137,7 +137,7 @@ pub struct TexturedRoughnessComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "UniformMetalness")]
+#[roc(parents = "Comp", name = "UniformMetalness")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformMetalnessComp(pub f32);
@@ -160,7 +160,7 @@ pub struct UniformMetalnessComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "TexturedMetalness")]
+#[roc(parents = "Comp", name = "TexturedMetalness")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedMetalnessComp {
@@ -176,7 +176,7 @@ pub struct TexturedMetalnessComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "UniformEmissiveLuminance")]
+#[roc(parents = "Comp", name = "UniformEmissiveLuminance")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct UniformEmissiveLuminanceComp(pub f32);
@@ -189,7 +189,7 @@ pub struct UniformEmissiveLuminanceComp(pub f32);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "TexturedEmissiveLuminance")]
+#[roc(parents = "Comp", name = "TexturedEmissiveLuminance")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct TexturedEmissiveLuminanceComp {
@@ -202,7 +202,7 @@ pub struct TexturedEmissiveLuminanceComp {
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "NormalMap")]
+#[roc(parents = "Comp", name = "NormalMap")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct NormalMapComp(pub TextureID);
@@ -212,7 +212,7 @@ pub struct NormalMapComp(pub TextureID);
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
-#[roc(prefix = "Comp", name = "ParallaxMap")]
+#[roc(parents = "Comp", name = "ParallaxMap")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ParallaxMapComp {
@@ -223,7 +223,7 @@ pub struct ParallaxMapComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a material.
-#[roc(prefix = "Comp", name = "Material")]
+#[roc(parents = "Comp", name = "Material")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MaterialComp {

@@ -13,7 +13,7 @@ use roc_codegen::roc;
 /// The purpose of this component is to aid in constructing a
 /// [`DragLoadMapComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "DetailedDrag")]
+#[roc(parents = "Comp", name = "DetailedDrag")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct DetailedDragComp {
@@ -24,7 +24,7 @@ pub struct DetailedDragComp {
 /// [`Component`](impact_ecs::component::Component) for entities that have an
 /// associated [`DragLoadMap`](crate::physics::DragLoadMap) in the
 /// [`DragLoadMapRepository`](crate::physics::rigid_body::forces::DragLoadMapRepository).
-#[roc(prefix = "Comp", name = "DragLoadMap")]
+#[roc(parents = "Comp", name = "DragLoadMap")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DragLoadMapComp {
