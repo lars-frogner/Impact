@@ -45,7 +45,6 @@ pub fn deserialize_components_for_single_entity(
 ///     component_bytes: [u8; component_count * component_size],
 /// }
 /// ```
-/// Returns the resulting list of entity IDs encoded as `u64`s.
 pub fn deserialize_components_for_multiple_entities(
     component_bytes: &[u8],
 ) -> Result<Vec<ComponentStorage>> {
