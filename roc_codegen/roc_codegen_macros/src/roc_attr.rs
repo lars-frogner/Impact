@@ -1,6 +1,6 @@
 //! Attribute macro for Roc code generation.
 
-use crate::inner::{
+use crate::{
     AssociatedConstantAttributeArgs, AssociatedFunctionAttributeArgs, ImplAttributeArgs,
     MAX_DEPENDENCIES, MAX_ENUM_VARIANT_FIELDS, MAX_ENUM_VARIANTS, MAX_FUNCTION_ARGS,
     MAX_STRUCT_FIELDS, TypeAttributeArgs, TypeCategory,
@@ -57,6 +57,7 @@ pub(super) fn apply_type_attribute(
     })
 }
 
+#[cfg(feature = "enabled")]
 pub(super) fn apply_impl_attribute(
     args: ImplAttributeArgs,
     block: syn::ItemImpl,
@@ -129,6 +130,17 @@ pub(super) fn apply_impl_attribute(
         #associated_dependencies_submit
         #(#associated_constant_submits)*
         #(#associated_function_submits)*
+    })
+}
+
+#[cfg(not(feature = "enabled"))]
+pub(super) fn apply_impl_attribute(
+    _args: ImplAttributeArgs,
+    block: syn::ItemImpl,
+    _crate_root: &TokenStream,
+) -> syn::Result<TokenStream> {
+    Ok(quote! {
+        #block
     })
 }
 
@@ -223,7 +235,6 @@ fn generate_roc_impl(
     let size = generate_size_expr(input, crate_root, type_category)?;
     let trait_method_impls = generate_roc_trait_method_impls(input, crate_root, type_category)?;
     Ok(quote! {
-        #[cfg(feature = "roc_codegen")]
         impl #crate_root::Roc for #rust_type_name {
             const ROC_TYPE_ID: #crate_root::RocTypeID = #roc_type_id;
             const SERIALIZED_SIZE: usize = #size;
@@ -241,7 +252,6 @@ fn generate_roc_pod_impl(
     if matches!(type_category, TypeCategory::Primitive | TypeCategory::Pod) {
         // This impl ensures that we get an error if the type doesn't implement `Pod`
         quote! {
-            #[cfg(feature = "roc_codegen")]
             impl #crate_root::RocPod for #rust_type_name {}
         }
     } else {
@@ -718,6 +728,7 @@ fn field_ident(field_idx: usize) -> syn::Ident {
     format_ident!("field_{field_idx}")
 }
 
+#[cfg(feature = "enabled")]
 fn generate_registered_type_submit(
     args: &ResolvedAttributeArgs,
     rust_type_name: &Ident,
@@ -755,6 +766,17 @@ fn generate_registered_type_submit(
             }
         }
     })
+}
+
+#[cfg(not(feature = "enabled"))]
+fn generate_registered_type_submit(
+    _args: &ResolvedAttributeArgs,
+    _rust_type_name: &Ident,
+    _input: &syn::DeriveInput,
+    _crate_root: &TokenStream,
+    _static_assertions: &mut Vec<TokenStream>,
+) -> syn::Result<TokenStream> {
+    Ok(quote! {})
 }
 
 fn generate_associated_dependencies_submit(
