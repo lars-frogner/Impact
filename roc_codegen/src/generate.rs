@@ -254,22 +254,44 @@ pub fn generate_roc(
         component_type_ids,
     )?;
 
+    let mut unchanged = Vec::new();
+    let mut generated = Vec::new();
     let mut warnings = Vec::new();
 
     for (module, path_from_package_root) in modules {
         module.save(
             &target_dir,
             &path_from_package_root,
+            &mut unchanged,
+            &mut generated,
             &mut warnings,
             options.verbose,
         )?;
     }
 
-    if options.verbose && !warnings.is_empty() {
+    if !unchanged.is_empty() && (!generated.is_empty() || !warnings.is_empty()) {
+        println!("Unchanged:");
+    }
+    for msg in &unchanged {
+        println!("{msg}");
+    }
+    if !generated.is_empty() && (!unchanged.is_empty() || !warnings.is_empty()) {
+        if !unchanged.is_empty() {
+            println!();
+        }
+        println!("Generated:");
+    }
+    for msg in &generated {
+        println!("{msg}");
+    }
+    if !warnings.is_empty() && (!unchanged.is_empty() || !generated.is_empty()) {
+        if !generated.is_empty() || !unchanged.is_empty() {
+            println!();
+        }
         println!("\nWarnings:");
     }
-    for warning in warnings {
-        eprintln!("{warning}");
+    for msg in &warnings {
+        eprintln!("{msg}");
     }
 
     Ok(())
@@ -483,6 +505,8 @@ impl Module {
         &self,
         target_dir: &Path,
         path_from_package_root: &Path,
+        unchanged: &mut Vec<String>,
+        generated: &mut Vec<String>,
         warnings: &mut Vec<String>,
         verbose: bool,
     ) -> Result<()> {
@@ -515,7 +539,7 @@ impl Module {
                 }
                 if existing_module.header.code_hash == self.header.code_hash {
                     if verbose {
-                        println!("No new code for module {display_path}, skipping");
+                        unchanged.push(format!("No new code for module {display_path}, skipping"));
                     }
                     return Ok(());
                 }
@@ -547,12 +571,11 @@ impl Module {
         write!(&mut file, "{}{}", self.header, self.code)?;
 
         if verbose {
-            println!(
+            generated.push(format!(
                 "Generated {display_path}{}",
                 if exists { " (replaced existing)" } else { "" }
-            );
+            ));
         }
-
         Ok(())
     }
 
