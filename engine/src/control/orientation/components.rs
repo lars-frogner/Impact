@@ -8,7 +8,7 @@ use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose
 /// orientation that can be controlled by a user.
-#[roc(prefix = "Comp", name = "OrientationControl")]
+#[roc(parents = "Comp", name = "OrientationControl")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OrientationControlComp {
@@ -18,7 +18,7 @@ pub struct OrientationControlComp {
 #[roc]
 impl OrientationControlComp {
     /// Creates a new component for orientation control.
-    #[roc(body = "{ control_angular_velocity: AngularVelocity.zero({}) }")]
+    #[roc(body = "{ control_angular_velocity: Physics.AngularVelocity.zero({}) }")]
     pub fn new() -> Self {
         Self {
             control_angular_velocity: AngularVelocity::zero(),

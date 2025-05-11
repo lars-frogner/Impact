@@ -16,7 +16,7 @@ use roc_codegen::roc;
 /// For this component to have an effect, the entity also needs a
 /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
 /// [`VelocityComp`](crate::physics::VelocityComp).
-#[roc(prefix = "Comp", name = "HarmonicOscillatorTrajectory")]
+#[roc(parents = "Comp", name = "HarmonicOscillatorTrajectory")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct HarmonicOscillatorTrajectoryComp {

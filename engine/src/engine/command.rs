@@ -32,7 +32,7 @@ use anyhow::Result;
 use impact_ecs::world::Entity;
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum EngineCommand {
     Rendering(RenderingCommand),
@@ -43,7 +43,7 @@ pub enum EngineCommand {
     Capture(CaptureCommand),
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToActiveState {
     Enabled,
@@ -57,7 +57,7 @@ pub struct ModifiedActiveState {
     pub changed: bool,
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveState {
     Enabled,

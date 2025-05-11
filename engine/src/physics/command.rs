@@ -4,14 +4,14 @@ use super::PhysicsSimulator;
 use crate::physics::fph;
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum PhysicsCommand {
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum ToSubstepCount {
     HigherBy(u32),
@@ -19,7 +19,7 @@ pub enum ToSubstepCount {
     Specific(u32),
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum ToSimulationSpeedMultiplier {
     Higher,

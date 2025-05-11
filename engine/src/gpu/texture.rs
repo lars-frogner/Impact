@@ -33,7 +33,7 @@ use wgpu::util::DeviceExt;
 stringhash32_newtype!(
     /// Identifier for specific textures.
     /// Wraps a [`StringHash32`](impact_math::StringHash32).
-    #[roc(prefix = "Engine")]
+    #[roc(parents = "Rendering")]
     [pub] TextureID
 );
 

@@ -9,7 +9,7 @@ use roc_codegen::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// uniform gravitational acceleration.
-#[roc(prefix = "Comp", name = "UniformGravity")]
+#[roc(parents = "Comp", name = "UniformGravity")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct UniformGravityComp {

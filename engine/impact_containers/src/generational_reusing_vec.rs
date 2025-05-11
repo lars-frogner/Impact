@@ -25,7 +25,7 @@ pub struct GenerationalReusingVec<T> {
 }
 
 /// An index into a [`GenerationalReusingVec`].
-#[roc(prefix = "Engine")]
+#[roc(parents = "Containers")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct GenerationalIdx {

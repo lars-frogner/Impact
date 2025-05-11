@@ -20,7 +20,7 @@ use roc_codegen::roc;
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "SameVoxelType")]
+#[roc(parents = "Comp", name = "SameVoxelType")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct SameVoxelTypeComp {
@@ -35,7 +35,7 @@ pub struct SameVoxelTypeComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "GradientNoiseVoxelTypes")]
+#[roc(parents = "Comp", name = "GradientNoiseVoxelTypes")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct GradientNoiseVoxelTypesComp {
@@ -53,7 +53,7 @@ pub struct GradientNoiseVoxelTypesComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "MultiscaleSphereModification")]
+#[roc(parents = "Comp", name = "MultiscaleSphereModification")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct MultiscaleSphereModificationComp {
@@ -72,7 +72,7 @@ pub struct MultiscaleSphereModificationComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "MultifractalNoiseModification")]
+#[roc(parents = "Comp", name = "MultifractalNoiseModification")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct MultifractalNoiseModificationComp {
@@ -90,7 +90,7 @@ pub struct MultifractalNoiseModificationComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "VoxelBox")]
+#[roc(parents = "Comp", name = "VoxelBox")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelBoxComp {
@@ -110,7 +110,7 @@ pub struct VoxelBoxComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "VoxelSphere")]
+#[roc(parents = "Comp", name = "VoxelSphere")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelSphereComp {
@@ -127,7 +127,7 @@ pub struct VoxelSphereComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "VoxelSphereUnion")]
+#[roc(parents = "Comp", name = "VoxelSphereUnion")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelSphereUnionComp {
@@ -150,7 +150,7 @@ pub struct VoxelSphereUnionComp {
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
-#[roc(prefix = "Comp", name = "VoxelGradientNoisePattern")]
+#[roc(parents = "Comp", name = "VoxelGradientNoisePattern")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct VoxelGradientNoisePatternComp {
@@ -172,7 +172,7 @@ pub struct VoxelGradientNoisePatternComp {
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// [`ChunkedVoxelObject`](crate::voxel::ChunkedVoxelObject).
-#[roc(prefix = "Comp", name = "VoxelObject")]
+#[roc(parents = "Comp", name = "VoxelObject")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelObjectComp {
@@ -187,7 +187,7 @@ pub struct VoxelObjectComp {
 /// at the full radius.
 ///
 /// Does nothing if the entity does not have a [`ReferenceFrameComp`].
-#[roc(prefix = "Comp", name = "VoxelAbsorbingSphere")]
+#[roc(parents = "Comp", name = "VoxelAbsorbingSphere")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelAbsorbingSphereComp {
@@ -205,7 +205,7 @@ pub struct VoxelAbsorbingSphereComp {
 /// quadratically to zero at the capsule boundary.
 ///
 /// Does nothing if the entity does not have a [`ReferenceFrameComp`].
-#[roc(prefix = "Comp", name = "VoxelAbsorbingCapsule")]
+#[roc(parents = "Comp", name = "VoxelAbsorbingCapsule")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelAbsorbingCapsuleComp {

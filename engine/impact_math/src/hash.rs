@@ -12,13 +12,23 @@ use std::{
 };
 
 /// A 32-bit hash.
-#[roc(category = "primitive", module = "Hashing", postfix = "_hash_32")]
+#[roc(
+    category = "primitive",
+    package = "core",
+    module = "Hashing",
+    postfix = "_hash_32"
+)]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct Hash32(u32);
 
 /// A 64-bit hash.
-#[roc(category = "primitive", module = "Hashing", postfix = "_hash_64")]
+#[roc(
+    category = "primitive",
+    package = "core",
+    module = "Hashing",
+    postfix = "_hash_64"
+)]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct Hash64(u64);
@@ -30,6 +40,7 @@ pub struct Hash64(u64);
 /// trait.
 #[roc(
     category = "primitive",
+    package = "core",
     module = "Hashing",
     postfix = "_string_hash_32"
 )]
@@ -44,6 +55,7 @@ pub struct StringHash32(Hash32);
 /// trait.
 #[roc(
     category = "primitive",
+    package = "core",
     module = "Hashing",
     postfix = "_string_hash_64"
 )]

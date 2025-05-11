@@ -11,7 +11,7 @@ use crate::{
 use anyhow::Result;
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum PostprocessingCommand {
     SetAmbientOcclusion(ToActiveState),
@@ -23,14 +23,14 @@ pub enum PostprocessingCommand {
     SetVisualizedRenderAttachmentQuantity(ToRenderAttachmentQuantity),
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum ToToneMappingMethod {
     Next,
     Specific(ToneMappingMethod),
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum ToExposure {
     DifferentByStops(f32),
@@ -38,7 +38,7 @@ pub enum ToExposure {
     Manual { iso: f32 },
 }
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum ToRenderAttachmentQuantity {
     Next,

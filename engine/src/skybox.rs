@@ -8,7 +8,7 @@ use roc_codegen::roc;
 
 /// A skybox specified by a cubemap texture and a maximum luminance (the
 /// luminance that a texel value of unity should be mapped to).
-#[roc(prefix = "Engine")]
+#[roc(parents = "Skybox")]
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
 pub struct Skybox {

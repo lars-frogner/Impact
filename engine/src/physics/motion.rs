@@ -29,7 +29,7 @@ pub type Orientation = UnitQuaternion<fph>;
 
 /// An angular velocity in 3D space, represented by an axis of rotation and an
 /// angular speed.
-#[roc(prefix = "Engine")]
+#[roc(parents = "Physics")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct AngularVelocity {

@@ -42,7 +42,7 @@ pub struct SemiDirectionalMotionControllerConfig {
 }
 
 /// Whether there is motion in a certain direction.
-#[roc(prefix = "Engine")]
+#[roc(parents = "Control")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionState {
     Still,
@@ -51,7 +51,7 @@ pub enum MotionState {
 
 /// Possible directions of motion in the local coordinate
 /// system.
-#[roc(prefix = "Engine")]
+#[roc(parents = "Control")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionDirection {
     Forwards,

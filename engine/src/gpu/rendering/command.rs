@@ -20,7 +20,7 @@ use crate::{
 use anyhow::Result;
 use roc_codegen::roc;
 
-#[roc(prefix = "Engine")]
+#[roc(parents = "Command")]
 #[derive(Clone, Debug)]
 pub enum RenderingCommand {
     Postprocessing(PostprocessingCommand),

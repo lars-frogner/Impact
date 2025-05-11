@@ -64,7 +64,7 @@ pub struct CameraSettings {
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
 /// value or determined automatically based on the incident luminance, with
 /// optional exposure value compensation in f-stops.
-#[roc(prefix = "Engine")]
+#[roc(parents = "Rendering")]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum SensorSensitivity {
     Manual { iso: f32 },
