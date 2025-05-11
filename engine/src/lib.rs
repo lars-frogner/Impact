@@ -36,6 +36,4 @@ pub mod profiling;
 pub use impact_containers;
 pub use impact_ecs;
 pub use impact_math;
-
-#[cfg(feature = "roc_codegen")]
 pub use roc_codegen;

@@ -1,8 +1,15 @@
 //! Procedural macros for generating equivalents of Rust types and methods in
 //! Roc.
 
-#[cfg(feature = "enabled")]
+#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
 mod roc_attr;
+
+use lazy_static::lazy_static;
+use proc_macro::TokenStream;
+use proc_macro_crate::{self, FoundCrate};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
+use std::str::FromStr;
 
 /// Attribute macro for annotating Rust types and associated methods that
 /// should be available in Roc.
@@ -105,25 +112,8 @@ mod roc_attr;
 /// - No mutable references.
 /// - There must be a return type.
 #[proc_macro_attribute]
-pub fn roc(
-    attr: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    inner::roc(attr, item)
-}
-
-#[cfg(feature = "enabled")]
-mod inner {
-    use super::roc_attr;
-    use lazy_static::lazy_static;
-    use proc_macro::TokenStream;
-    use proc_macro_crate::{self, FoundCrate};
-    use proc_macro2::TokenStream as TokenStream2;
-    use quote::quote;
-    use std::str::FromStr;
-
-    pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
-        if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
+pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
+    if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
             if attr.is_empty() {
                 roc_attr::apply_type_attribute(TypeAttributeArgs::default(), input, &crate_root_tokens())
             } else {
@@ -158,365 +148,354 @@ mod inner {
             }
         })
         .into()
+}
+
+// These need to match the corresponding constants in `roc_codegen`.
+const MAX_ENUM_VARIANTS: usize = 32;
+const MAX_ENUM_VARIANT_FIELDS: usize = 4;
+const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;
+
+const MAX_FUNCTION_ARGS: usize = 16;
+
+const MAX_DEPENDENCIES: usize = 16;
+
+#[derive(Clone, Debug, Default)]
+struct TypeAttributeArgs {
+    category: Option<TypeCategory>,
+    package_name: Option<String>,
+    parent_modules: Option<String>,
+    module_name: Option<String>,
+    type_name: Option<String>,
+    function_postfix: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TypeCategory {
+    Primitive,
+    Pod,
+    Inline,
+}
+
+#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[derive(Clone, Default)]
+struct ImplAttributeArgs {
+    dependency_types: Vec<syn::Type>,
+}
+
+#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[derive(Clone)]
+struct AssociatedConstantAttributeArgs {
+    expr: String,
+    name: Option<String>,
+}
+
+#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[derive(Clone)]
+struct AssociatedFunctionAttributeArgs {
+    body: String,
+    name: Option<String>,
+}
+
+struct KeyStringValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    value: syn::LitStr,
+}
+
+struct KeyTypeListValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    _bracket_token: syn::token::Bracket,
+    types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
+}
+
+const CRATE_NAME: &str = "roc_codegen";
+
+lazy_static! {
+    static ref CRATE_IMPORT_ROOT: String = determine_crate_import_root();
+}
+
+/// Determines whether to use `crate`, the actual crate name or a re-export of
+/// the crate as root for `use` statements.
+fn determine_crate_import_root() -> String {
+    if let Ok(found_crate) = proc_macro_crate::crate_name(CRATE_NAME) {
+        let crate_root = match found_crate {
+            FoundCrate::Itself => "crate".to_string(),
+            FoundCrate::Name(name) => name,
+        };
+        crate_root
+    } else {
+        format!("crate::{}", CRATE_NAME)
     }
+}
 
-    // These need to match the corresponding constants in `roc_codegen`.
-    pub const MAX_ENUM_VARIANTS: usize = 32;
-    pub const MAX_ENUM_VARIANT_FIELDS: usize = 4;
-    pub const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;
+fn crate_root_tokens() -> TokenStream2 {
+    TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
+}
 
-    pub const MAX_FUNCTION_ARGS: usize = 16;
+impl syn::parse::Parse for TypeAttributeArgs {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let mut category = None;
+        let mut package_name = None;
+        let mut parent_modules = None;
+        let mut module_name = None;
+        let mut type_name = None;
+        let mut function_postfix = None;
 
-    pub const MAX_DEPENDENCIES: usize = 16;
-
-    #[derive(Clone, Debug, Default)]
-    pub struct TypeAttributeArgs {
-        pub category: Option<TypeCategory>,
-        pub package_name: Option<String>,
-        pub parent_modules: Option<String>,
-        pub module_name: Option<String>,
-        pub type_name: Option<String>,
-        pub function_postfix: Option<String>,
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum TypeCategory {
-        Primitive,
-        Pod,
-        Inline,
-    }
-
-    #[derive(Clone, Default)]
-    pub struct ImplAttributeArgs {
-        pub dependency_types: Vec<syn::Type>,
-    }
-
-    #[derive(Clone)]
-    pub struct AssociatedConstantAttributeArgs {
-        pub expr: String,
-        pub name: Option<String>,
-    }
-
-    #[derive(Clone)]
-    pub struct AssociatedFunctionAttributeArgs {
-        pub body: String,
-        pub name: Option<String>,
-    }
-
-    struct KeyStringValueArg {
-        key: syn::Ident,
-        _eq_token: syn::Token![=],
-        value: syn::LitStr,
-    }
-
-    struct KeyTypeListValueArg {
-        key: syn::Ident,
-        _eq_token: syn::Token![=],
-        _bracket_token: syn::token::Bracket,
-        types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
-    }
-
-    const CRATE_NAME: &str = "roc_codegen";
-
-    lazy_static! {
-        static ref CRATE_IMPORT_ROOT: String = determine_crate_import_root();
-    }
-
-    /// Determines whether to use `crate`, the actual crate name or a re-export of
-    /// the crate as root for `use` statements.
-    fn determine_crate_import_root() -> String {
-        if let Ok(found_crate) = proc_macro_crate::crate_name(CRATE_NAME) {
-            let crate_root = match found_crate {
-                FoundCrate::Itself => "crate".to_string(),
-                FoundCrate::Name(name) => name,
-            };
-            crate_root
-        } else {
-            format!("crate::{}", CRATE_NAME)
-        }
-    }
-
-    fn crate_root_tokens() -> TokenStream2 {
-        TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
-    }
-
-    impl syn::parse::Parse for TypeAttributeArgs {
-        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            let mut category = None;
-            let mut package_name = None;
-            let mut parent_modules = None;
-            let mut module_name = None;
-            let mut type_name = None;
-            let mut function_postfix = None;
-
-            if input.is_empty() {
-                return Ok(Self {
-                    category,
-                    package_name,
-                    parent_modules,
-                    module_name,
-                    type_name,
-                    function_postfix,
-                });
-            }
-
-            let args =
-            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
-                input,
-            )?;
-
-            for arg in args {
-                match arg.key.to_string().as_str() {
-                    "category" => {
-                        let value = arg.value.value();
-
-                        let cat = if value == "primitive" {
-                            TypeCategory::Primitive
-                        } else if value == "pod" {
-                            TypeCategory::Pod
-                        } else if value == "inline" {
-                            TypeCategory::Inline
-                        } else {
-                            return Err(syn::Error::new_spanned(
-                                arg.value,
-                                format!(
-                                    "invalid category `{}`, must be one of `pod`, `inline`, `primitive`",
-                                    value
-                                ),
-                            ));
-                        };
-
-                        if category.replace(cat).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key,
-                                "repeated argument `category`",
-                            ));
-                        }
-                    }
-                    "package" => {
-                        if package_name.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key,
-                                "repeated argument `package`",
-                            ));
-                        }
-                    }
-                    "parents" => {
-                        if parent_modules.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key,
-                                "repeated argument `parents`",
-                            ));
-                        }
-                    }
-                    "module" => {
-                        if module_name.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key,
-                                "repeated argument `module`",
-                            ));
-                        }
-                    }
-                    "name" => {
-                        if type_name.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key,
-                                "repeated argument `name`",
-                            ));
-                        }
-                    }
-                    "postfix" => {
-                        if function_postfix.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key,
-                                "repeated argument `postfix`",
-                            ));
-                        }
-                    }
-                    other => {
-                        return Err(syn::Error::new_spanned(
-                            arg.key,
-                            format!(
-                                "invalid argument `{}`, must be one of \
-                                 `category`, `package`, `parents`, `module`, `name`, `postfix`",
-                                other
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            Ok(Self {
+        if input.is_empty() {
+            return Ok(Self {
                 category,
                 package_name,
                 parent_modules,
                 module_name,
                 type_name,
                 function_postfix,
-            })
+            });
         }
-    }
 
-    impl syn::parse::Parse for ImplAttributeArgs {
-        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            let arg: KeyTypeListValueArg = input.parse()?;
+        let args =
+            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+                input,
+            )?;
 
-            let dependency_types: Vec<_> = match arg.key.to_string().as_str() {
-                "dependencies" => arg.types.iter().cloned().collect(),
+        for arg in args {
+            match arg.key.to_string().as_str() {
+                "category" => {
+                    let value = arg.value.value();
+
+                    let cat = if value == "primitive" {
+                        TypeCategory::Primitive
+                    } else if value == "pod" {
+                        TypeCategory::Pod
+                    } else if value == "inline" {
+                        TypeCategory::Inline
+                    } else {
+                        return Err(syn::Error::new_spanned(
+                            arg.value,
+                            format!(
+                                "invalid category `{}`, must be one of `pod`, `inline`, `primitive`",
+                                value
+                            ),
+                        ));
+                    };
+
+                    if category.replace(cat).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `category`",
+                        ));
+                    }
+                }
+                "package" => {
+                    if package_name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `package`",
+                        ));
+                    }
+                }
+                "parents" => {
+                    if parent_modules.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `parents`",
+                        ));
+                    }
+                }
+                "module" => {
+                    if module_name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `module`",
+                        ));
+                    }
+                }
+                "name" => {
+                    if type_name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(arg.key, "repeated argument `name`"));
+                    }
+                }
+                "postfix" => {
+                    if function_postfix.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            "repeated argument `postfix`",
+                        ));
+                    }
+                }
                 other => {
                     return Err(syn::Error::new_spanned(
                         arg.key,
-                        format!("invalid argument `{}`, must be `dependencies`", other),
+                        format!(
+                            "invalid argument `{}`, must be one of \
+                                 `category`, `package`, `parents`, `module`, `name`, `postfix`",
+                            other
+                        ),
                     ));
                 }
-            };
-
-            if dependency_types.len() > MAX_DEPENDENCIES {
-                return Err(syn::Error::new_spanned(
-                    arg.types,
-                    format!(
-                        "the `roc` attribute does not support this many dependencies ({}/{})",
-                        dependency_types.len(),
-                        MAX_DEPENDENCIES
-                    ),
-                ));
             }
-
-            Ok(Self { dependency_types })
         }
-    }
 
-    impl syn::parse::Parse for AssociatedConstantAttributeArgs {
-        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            let args =
-                        syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
-                            input,
-                        )?;
-
-            let mut expr = None;
-            let mut name = None;
-
-            for arg in &args {
-                match arg.key.to_string().as_str() {
-                    "expr" => {
-                        if expr.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key.clone(),
-                                "repeated argument `expr`",
-                            ));
-                        }
-                    }
-                    "name" => {
-                        if name.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key.clone(),
-                                "repeated argument `name`",
-                            ));
-                        }
-                    }
-                    other => {
-                        return Err(syn::Error::new_spanned(
-                            arg.key.clone(),
-                            format!(
-                                "invalid argument `{}`, must be one of `expr`, `name`",
-                                other
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            let Some(expr) = expr else {
-                let span = args
-                    .first()
-                    .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
-                return Err(syn::Error::new(span, "missing required argument `expr`"));
-            };
-
-            Ok(Self { expr, name })
-        }
-    }
-
-    impl syn::parse::Parse for AssociatedFunctionAttributeArgs {
-        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            let args =
-                syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
-                    input,
-                )?;
-
-            let mut body = None;
-            let mut name = None;
-
-            for arg in &args {
-                match arg.key.to_string().as_str() {
-                    "body" => {
-                        if body.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key.clone(),
-                                "repeated argument `body`",
-                            ));
-                        }
-                    }
-                    "name" => {
-                        if name.replace(arg.value.value()).is_some() {
-                            return Err(syn::Error::new_spanned(
-                                arg.key.clone(),
-                                "repeated argument `name`",
-                            ));
-                        }
-                    }
-                    other => {
-                        return Err(syn::Error::new_spanned(
-                            arg.key.clone(),
-                            format!(
-                                "invalid argument `{}`, must be one of `body`, `name`",
-                                other
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            let Some(body) = body else {
-                let span = args
-                    .first()
-                    .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
-                return Err(syn::Error::new(span, "missing required argument `body`"));
-            };
-
-            Ok(Self { body, name })
-        }
-    }
-
-    impl syn::parse::Parse for KeyStringValueArg {
-        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            Ok(Self {
-                key: input.parse()?,
-                _eq_token: input.parse()?,
-                value: input.parse()?,
-            })
-        }
-    }
-
-    impl syn::parse::Parse for KeyTypeListValueArg {
-        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-            let content;
-            Ok(Self {
-                key: input.parse()?,
-                _eq_token: input.parse()?,
-                _bracket_token: syn::bracketed!(content in input),
-                types: content.parse_terminated(syn::Type::parse, syn::Token![,])?,
-            })
-        }
+        Ok(Self {
+            category,
+            package_name,
+            parent_modules,
+            module_name,
+            type_name,
+            function_postfix,
+        })
     }
 }
 
-#[cfg(not(feature = "enabled"))]
-mod inner {
-    pub fn roc(
-        _attr: proc_macro::TokenStream,
-        item: proc_macro::TokenStream,
-    ) -> proc_macro::TokenStream {
-        item
+impl syn::parse::Parse for ImplAttributeArgs {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let arg: KeyTypeListValueArg = input.parse()?;
+
+        let dependency_types: Vec<_> = match arg.key.to_string().as_str() {
+            "dependencies" => arg.types.iter().cloned().collect(),
+            other => {
+                return Err(syn::Error::new_spanned(
+                    arg.key,
+                    format!("invalid argument `{}`, must be `dependencies`", other),
+                ));
+            }
+        };
+
+        if dependency_types.len() > MAX_DEPENDENCIES {
+            return Err(syn::Error::new_spanned(
+                arg.types,
+                format!(
+                    "the `roc` attribute does not support this many dependencies ({}/{})",
+                    dependency_types.len(),
+                    MAX_DEPENDENCIES
+                ),
+            ));
+        }
+
+        Ok(Self { dependency_types })
+    }
+}
+
+impl syn::parse::Parse for AssociatedConstantAttributeArgs {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let args =
+            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+                input,
+            )?;
+
+        let mut expr = None;
+        let mut name = None;
+
+        for arg in &args {
+            match arg.key.to_string().as_str() {
+                "expr" => {
+                    if expr.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key.clone(),
+                            "repeated argument `expr`",
+                        ));
+                    }
+                }
+                "name" => {
+                    if name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key.clone(),
+                            "repeated argument `name`",
+                        ));
+                    }
+                }
+                other => {
+                    return Err(syn::Error::new_spanned(
+                        arg.key.clone(),
+                        format!(
+                            "invalid argument `{}`, must be one of `expr`, `name`",
+                            other
+                        ),
+                    ));
+                }
+            }
+        }
+
+        let Some(expr) = expr else {
+            let span = args
+                .first()
+                .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
+            return Err(syn::Error::new(span, "missing required argument `expr`"));
+        };
+
+        Ok(Self { expr, name })
+    }
+}
+
+impl syn::parse::Parse for AssociatedFunctionAttributeArgs {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let args =
+            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+                input,
+            )?;
+
+        let mut body = None;
+        let mut name = None;
+
+        for arg in &args {
+            match arg.key.to_string().as_str() {
+                "body" => {
+                    if body.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key.clone(),
+                            "repeated argument `body`",
+                        ));
+                    }
+                }
+                "name" => {
+                    if name.replace(arg.value.value()).is_some() {
+                        return Err(syn::Error::new_spanned(
+                            arg.key.clone(),
+                            "repeated argument `name`",
+                        ));
+                    }
+                }
+                other => {
+                    return Err(syn::Error::new_spanned(
+                        arg.key.clone(),
+                        format!(
+                            "invalid argument `{}`, must be one of `body`, `name`",
+                            other
+                        ),
+                    ));
+                }
+            }
+        }
+
+        let Some(body) = body else {
+            let span = args
+                .first()
+                .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
+            return Err(syn::Error::new(span, "missing required argument `body`"));
+        };
+
+        Ok(Self { body, name })
+    }
+}
+
+impl syn::parse::Parse for KeyStringValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            value: input.parse()?,
+        })
+    }
+}
+
+impl syn::parse::Parse for KeyTypeListValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            _bracket_token: syn::bracketed!(content in input),
+            types: content.parse_terminated(syn::Type::parse, syn::Token![,])?,
+        })
     }
 }

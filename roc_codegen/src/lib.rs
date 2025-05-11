@@ -109,61 +109,86 @@ pub mod generate;
 pub mod ir;
 #[cfg(feature = "enabled")]
 pub mod utils;
-#[cfg(feature = "enabled")]
+
 #[macro_use]
 mod primitives;
 
 #[cfg(feature = "enabled")]
 pub use inner::*;
 
+use anyhow::Result;
+use std::fmt;
+
+/// Represents types that have a Roc equivalent. This should never be
+/// implemented directly. Instead, annotate types using the [`roc`]
+/// attribute macro.
+pub trait Roc: Sized {
+    const ROC_TYPE_ID: RocTypeID;
+
+    /// The number of bytes [`Self::write_roc_bytes`] will write to the buffer
+    /// when serializing a value of this type.
+    const SERIALIZED_SIZE: usize;
+
+    /// Deserializes the first [`Self::SERIALIZED_SIZE`] bytes in the given
+    /// slice into a value of this type. The encoding is expected to match that
+    /// used by the serialization and deserialization functions associated with
+    /// the Roc counterpart of this type, as well as with that used by
+    /// [`Self::write_roc_bytes`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - `bytes` does not have size `Self::SERIALIZED_SIZE`.
+    /// - An unexpected enum discriminant is encountered.
+    fn from_roc_bytes(bytes: &[u8]) -> Result<Self>;
+
+    /// Serializes this value into [`Self::SERIALIZED_SIZE`] bytes and writes
+    /// them to the beginning of the given buffer. The encoding matches that
+    /// used by the serialization and deserialization functions associated with
+    /// the Roc counterpart of this type, as well as with that used by
+    /// [`Self::from_roc_bytes`].
+    ///
+    /// # Errors
+    /// Returns an error if `buffer` does not have size
+    /// `Self::SERIALIZED_SIZE`.
+    fn write_roc_bytes(&self, buffer: &mut [u8]) -> Result<()>;
+}
+
+/// Helper trait to enforce that certain Roc types are POD.
+pub trait RocPod: Roc + bytemuck::Pod {}
+
+/// A unique ID identifying a type implementing [`Roc`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RocTypeID(u64);
+
+impl RocTypeID {
+    pub const fn hashed_from_str(input: &str) -> Self {
+        // WARNING: we guarantee that this matches
+        // `impact_ecs::component::ComponentID::hashed_from_str`
+        let hash = const_fnv1a_hash::fnv1a_hash_str_64(input);
+        Self(if hash == 0 { 1 } else { hash }) // Reserve the zero ID
+    }
+
+    pub const fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+impl fmt::Display for RocTypeID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(feature = "enabled")]
 mod inner {
     use super::ir;
-    use anyhow::Result;
     use bitflags::bitflags;
-    use std::{borrow::Cow, fmt};
-
-    /// Represents types that have a Roc equivalent. This should never be
-    /// implemented directly. Instead, annotate types using the [`roc`]
-    /// attribute macro.
-    pub trait Roc: Sized {
-        const ROC_TYPE_ID: RocTypeID;
-
-        /// The number of bytes [`Self::write_roc_bytes`] will write to the buffer
-        /// when serializing a value of this type.
-        const SERIALIZED_SIZE: usize;
-
-        /// Deserializes the first [`Self::SERIALIZED_SIZE`] bytes in the given
-        /// slice into a value of this type. The encoding is expected to match that
-        /// used by the serialization and deserialization functions associated with
-        /// the Roc counterpart of this type, as well as with that used by
-        /// [`Self::write_roc_bytes`].
-        ///
-        /// # Errors
-        /// Returns an error if:
-        /// - `bytes` does not have size `Self::SERIALIZED_SIZE`.
-        /// - An unexpected enum discriminant is encountered.
-        fn from_roc_bytes(bytes: &[u8]) -> Result<Self>;
-
-        /// Serializes this value into [`Self::SERIALIZED_SIZE`] bytes and writes
-        /// them to the beginning of the given buffer. The encoding matches that
-        /// used by the serialization and deserialization functions associated with
-        /// the Roc counterpart of this type, as well as with that used by
-        /// [`Self::from_roc_bytes`].
-        ///
-        /// # Errors
-        /// Returns an error if `buffer` does not have size
-        /// `Self::SERIALIZED_SIZE`.
-        fn write_roc_bytes(&self, buffer: &mut [u8]) -> Result<()>;
-    }
-
-    /// Helper trait to enforce that certain Roc types are POD.
-    pub trait RocPod: Roc + bytemuck::Pod {}
-
-    /// A unique ID identifying a type implementing [`Roc`].
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct RocTypeID(u64);
+    use std::borrow::Cow;
 
     /// A type registered for use in Roc.
     #[derive(Clone, Debug)]
@@ -217,29 +242,6 @@ mod inner {
             /// determined at generation time (by comparing against registered
             /// components), not at compile/derive time.
             const IS_COMPONENT = 1 << 1;
-        }
-    }
-
-    impl RocTypeID {
-        pub const fn hashed_from_str(input: &str) -> Self {
-            // WARNING: we guarantee that this matches
-            // `impact_ecs::component::ComponentID::hashed_from_str`
-            let hash = const_fnv1a_hash::fnv1a_hash_str_64(input);
-            Self(if hash == 0 { 1 } else { hash }) // Reserve the zero ID
-        }
-
-        pub const fn from_u64(value: u64) -> Self {
-            Self(value)
-        }
-
-        pub const fn as_u64(&self) -> u64 {
-            self.0
-        }
-    }
-
-    impl fmt::Display for RocTypeID {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", self.0)
         }
     }
 
