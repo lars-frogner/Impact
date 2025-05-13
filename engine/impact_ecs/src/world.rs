@@ -35,6 +35,7 @@ use std::{
     postfix = "_id"
 )]
 #[repr(C)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct Entity {
     id: EntityID,
@@ -44,11 +45,13 @@ pub struct Entity {
 /// Unique ID identifying an [`Entity`].
 #[cfg(not(test))]
 #[repr(C)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct EntityID(u32);
 
 #[cfg(test)]
 #[repr(C)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct EntityID(pub(crate) u32);
 

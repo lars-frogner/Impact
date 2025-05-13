@@ -18,6 +18,7 @@ use std::{borrow::Cow, fmt::Display};
 
 /// The method to use for tone mapping.
 #[roc(parents = "Rendering")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToneMappingMethod {
     None,

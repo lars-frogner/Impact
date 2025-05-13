@@ -34,6 +34,7 @@ stringhash32_newtype!(
     /// Identifier for specific textures.
     /// Wraps a [`StringHash32`](impact_math::StringHash32).
     #[roc(parents = "Rendering")]
+    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
     [pub] TextureID
 );
 

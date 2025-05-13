@@ -116,7 +116,8 @@ build = "build.rs"
 [features]
 cli = ["dep:clap"]
 profiling = ["dep:criterion"]
-fuzzing = ["dep:arbitrary"]
+arbitrary = ["dep:arbitrary", "impact_ecs/arbitrary", "impact_math/arbitrary"]
+fuzzing = ["arbitrary"]
 unchecked = []
 roc_codegen = [
     "impact_containers/roc_codegen",

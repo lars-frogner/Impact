@@ -12,7 +12,8 @@ use anyhow::Result;
 use roc_codegen::roc;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PostprocessingCommand {
     SetAmbientOcclusion(ToActiveState),
     SetTemporalAntiAliasing(ToActiveState),
@@ -24,13 +25,15 @@ pub enum PostprocessingCommand {
 }
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ToToneMappingMethod {
     Next,
     Specific(ToneMappingMethod),
 }
 
 #[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum ToExposure {
     DifferentByStops(f32),
@@ -39,7 +42,8 @@ pub enum ToExposure {
 }
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ToRenderAttachmentQuantity {
     Next,
     Previous,
@@ -114,3 +118,16 @@ impl Postprocessor {
         Ok(self.render_attachment_visualization_passes.quantity())
     }
 }
+
+impl PartialEq for ToExposure {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Auto { ev_compensation: a }, Self::Auto { ev_compensation: b })
+            | (Self::DifferentByStops(a), Self::DifferentByStops(b))
+            | (Self::Manual { iso: a }, Self::Manual { iso: b }) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ToExposure {}

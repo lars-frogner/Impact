@@ -4,12 +4,14 @@ use super::UserInterface;
 use roc_codegen::roc;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UICommand {
     SetInteractionMode(ToInteractionMode),
 }
 
 #[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToInteractionMode {
     Control,
