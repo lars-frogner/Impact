@@ -10,7 +10,8 @@ use roc_codegen::roc;
 /// luminance that a texel value of unity should be mapped to).
 #[roc(parents = "Skybox")]
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct Skybox {
     cubemap_texture_id: TextureID,
     max_luminance: f32,
@@ -28,3 +29,12 @@ impl Skybox {
         }
     }
 }
+
+impl PartialEq for Skybox {
+    fn eq(&self, other: &Self) -> bool {
+        self.cubemap_texture_id == other.cubemap_texture_id
+            && self.max_luminance.to_bits() == other.max_luminance.to_bits()
+    }
+}
+
+impl Eq for Skybox {}

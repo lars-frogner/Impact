@@ -21,7 +21,8 @@ use anyhow::Result;
 use roc_codegen::roc;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RenderingCommand {
     Postprocessing(PostprocessingCommand),
     SetShadowMapping(ToActiveState),

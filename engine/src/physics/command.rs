@@ -5,14 +5,16 @@ use crate::physics::fph;
 use roc_codegen::roc;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PhysicsCommand {
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
 }
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToSubstepCount {
     HigherBy(u32),
     LowerBy(u32),
@@ -20,6 +22,7 @@ pub enum ToSubstepCount {
 }
 
 #[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum ToSimulationSpeedMultiplier {
     Higher,
@@ -66,3 +69,15 @@ impl PhysicsSimulator {
         new_multiplier
     }
 }
+
+impl PartialEq for ToSimulationSpeedMultiplier {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Higher, Self::Higher) | (Self::Lower, Self::Lower) => true,
+            (Self::Specific(a), Self::Specific(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ToSimulationSpeedMultiplier {}

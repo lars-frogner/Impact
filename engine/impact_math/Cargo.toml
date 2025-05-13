@@ -4,10 +4,12 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [features]
+arbitrary = ["dep:arbitrary"]
 roc_codegen = ["dep:inventory", "roc_codegen/enabled"]
 
 [dependencies]
 anyhow = { workspace = true }
+arbitrary = { version = "1.3", features = ["derive"], optional = true }
 bytemuck = { workspace = true }
 const-fnv1a-hash = { workspace = true }
 inventory = { workspace = true, optional = true }

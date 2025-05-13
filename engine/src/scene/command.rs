@@ -6,7 +6,8 @@ use impact_ecs::world::Entity;
 use roc_codegen::roc;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SceneCommand {
     SetSkybox(Skybox),
     SetSceneEntityActiveState { entity: Entity, state: ActiveState },

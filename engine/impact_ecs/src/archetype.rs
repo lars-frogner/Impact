@@ -34,6 +34,7 @@ pub struct Archetype {
 /// Unique identifier for an [`Archetype`], obtained by hashing
 /// the sorted list of component IDs defining the archetype.
 #[repr(C)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ArchetypeID(u32);
 

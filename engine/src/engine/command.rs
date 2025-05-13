@@ -33,7 +33,8 @@ use impact_ecs::world::Entity;
 use roc_codegen::roc;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EngineCommand {
     Rendering(RenderingCommand),
     Physics(PhysicsCommand),
@@ -44,6 +45,7 @@ pub enum EngineCommand {
 }
 
 #[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToActiveState {
     Enabled,
@@ -58,6 +60,7 @@ pub struct ModifiedActiveState {
 }
 
 #[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveState {
     Enabled,
