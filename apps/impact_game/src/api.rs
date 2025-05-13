@@ -5,13 +5,10 @@ pub mod ffi;
 use crate::Game;
 use anyhow::{Result, bail};
 use impact::{
-    engine::{Engine, EngineConfig},
-    gpu::texture::TextureID,
-    impact_math::hash32,
+    engine::{Engine, EngineConfig, command::EngineCommand},
+    roc_codegen::Roc,
     run::run as run_engine,
-    skybox::Skybox,
 };
-use impact_ecs::world::Entity;
 use std::{
     path::Path,
     sync::{Arc, RwLock},
@@ -37,6 +34,12 @@ pub fn run_with_config(config: EngineConfig) -> Result<()> {
     })
 }
 
+pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
+    log::debug!("Executing engine command");
+    let command = EngineCommand::from_roc_bytes(command_bytes)?;
+    with_engine(|engine| engine.execute_command(command))
+}
+
 pub fn create_entity(component_bytes: &[u8]) -> Result<u64> {
     log::debug!("Creating entity");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
@@ -49,27 +52,6 @@ pub fn create_entities(component_bytes: &[u8]) -> Result<impl Iterator<Item = u6
     let components = impact::ffi::deserialize_components_for_multiple_entities(component_bytes)?;
     let entities = with_engine(|engine| engine.create_entities(components))?;
     Ok(entities.into_iter().map(|entity| entity.as_u64()))
-}
-
-pub fn set_skybox(cubemap_texture_name: &str, max_luminance: f32) -> Result<()> {
-    log::debug!("Setting skybox to {cubemap_texture_name}");
-    with_engine(|engine| {
-        engine.set_skybox_for_current_scene(Skybox::new(
-            TextureID(hash32!(cubemap_texture_name)),
-            max_luminance,
-        ));
-        Ok(())
-    })
-}
-
-pub fn enable_scene_entity(entity: u64) -> Result<()> {
-    log::debug!("Enabling scene entity {entity}");
-    with_engine(|engine| engine.enable_scene_entity(&Entity::from_u64(entity)))
-}
-
-pub fn disable_scene_entity(entity: u64) -> Result<()> {
-    log::debug!("Disabling scene entity {entity}");
-    with_engine(|engine| engine.disable_scene_entity(&Entity::from_u64(entity)))
 }
 
 fn with_engine<T>(f: impl FnOnce(&Engine) -> Result<T>) -> Result<T> {
