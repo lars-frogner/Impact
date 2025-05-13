@@ -4,7 +4,7 @@
 use crate::physics::motion::AngularVelocity;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose
 /// orientation that can be controlled by a user.

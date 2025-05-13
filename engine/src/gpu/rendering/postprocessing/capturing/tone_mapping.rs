@@ -12,7 +12,7 @@ use crate::gpu::{
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
 use anyhow::Result;
-use roc_codegen::roc;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 

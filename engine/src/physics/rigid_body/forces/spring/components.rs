@@ -2,7 +2,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, world::Entity};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 use super::{Spring, SpringState};
 use crate::physics::motion::Position;

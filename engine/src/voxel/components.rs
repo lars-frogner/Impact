@@ -12,7 +12,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use impact_math::{Hash32, compute_hash_str_32};
 use nalgebra::{Point3, Vector3};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose voxel type is the same everywhere.

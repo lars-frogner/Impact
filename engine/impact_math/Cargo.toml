@@ -5,7 +5,7 @@ edition = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]
-roc_codegen = ["dep:inventory", "roc_codegen/enabled"]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -16,7 +16,7 @@ inventory = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 num-traits = { workspace = true }
 
-roc_codegen = { path = "../../roc_codegen" }
+roc_integration = { path = "../../roc_integration" }
 
 [lints]
 workspace = true

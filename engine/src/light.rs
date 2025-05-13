@@ -20,7 +20,7 @@ use bytemuck::{Pod, Zeroable};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::iter;
 
 /// The luminous intensity of a light source, which is the visible power

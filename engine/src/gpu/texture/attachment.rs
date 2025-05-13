@@ -7,7 +7,7 @@ use crate::gpu::{
 };
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,

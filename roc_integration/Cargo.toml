@@ -1,5 +1,5 @@
 [workspace]
-members = ["roc_codegen_macros"]
+members = ["roc_integration_macros"]
 
 [workspace.package]
 version = "0.1.0"
@@ -91,7 +91,7 @@ verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
 
 [package]
-name = "roc_codegen"
+name = "roc_integration"
 version = { workspace = true }
 edition = { workspace = true }
 
@@ -99,8 +99,8 @@ build = "build.rs"
 
 [features]
 cli = ["dep:clap"]
-enabled = [
-    "roc_codegen_macros/enabled",
+roc_codegen = [
+    "roc_integration_macros/roc_codegen",
     "dep:bitflags",
     "dep:blake3",
     "dep:chrono",
@@ -118,7 +118,7 @@ const-fnv1a-hash = { version = "1.1" }
 inventory = { version = "0.3", optional = true }
 nalgebra = { version = "0.33", features = ["bytemuck"] }
 
-roc_codegen_macros = { path = "roc_codegen_macros" }
+roc_integration_macros = { path = "roc_integration_macros" }
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0", features = [] }

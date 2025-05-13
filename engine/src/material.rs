@@ -7,7 +7,7 @@ mod features;
 pub use features::{
     MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, register_material_feature_types,
 };
-use roc_codegen::roc;
+use roc_integration::roc;
 
 use crate::{
     assets::Assets,

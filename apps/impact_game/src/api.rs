@@ -6,7 +6,7 @@ use crate::Game;
 use anyhow::{Result, bail};
 use impact::{
     engine::{Engine, EngineConfig, command::EngineCommand},
-    roc_codegen::Roc,
+    roc_integration::Roc,
     run::run as run_engine,
 };
 use std::{

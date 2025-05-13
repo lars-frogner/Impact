@@ -123,7 +123,7 @@ roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_math/roc_codegen",
-    "roc_codegen/enabled",
+    "roc_integration/roc_codegen",
 ]
 
 [dependencies]
@@ -176,7 +176,7 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 impact_containers = { path = "impact_containers" }
 impact_ecs = { path = "impact_ecs" }
 impact_math = { path = "impact_math" }
-roc_codegen = { path = "../roc_codegen" }
+roc_integration = { path = "../roc_integration" }
 
 [dev-dependencies]
 clap = { version = "4.5", features = ["derive"] }

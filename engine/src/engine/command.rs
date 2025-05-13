@@ -30,7 +30,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_ecs::world::Entity;
-use roc_codegen::roc;
+use roc_integration::roc;
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]

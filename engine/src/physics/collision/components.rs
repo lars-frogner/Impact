@@ -9,7 +9,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a spherical collidable.

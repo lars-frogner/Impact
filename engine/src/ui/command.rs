@@ -1,7 +1,7 @@
 //! Commands for controlling the user interface.
 
 use super::UserInterface;
-use roc_codegen::roc;
+use roc_integration::roc;
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]

@@ -7,7 +7,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::SetupComponent;
 use nalgebra::{Point3, Vector3, point, vector};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that use a [`PlanarTextureProjection`].

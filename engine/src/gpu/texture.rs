@@ -18,7 +18,7 @@ use impact_math::stringhash32_newtype;
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
 use rmp_serde::{Serializer, from_read};
-use roc_codegen::roc;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     borrow::Cow,

@@ -12,7 +12,7 @@ use crate::{
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, UnitVector3, Vector3};
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A unit vector in 3D space.

@@ -2,9 +2,9 @@
 
 use crate::{RocTypeID, utils::StaticList};
 
-// These need to match the corresponding constants in `roc_codegen_macros`.
-// We can't use dynamically sized collections in the IR, since the macros
-// must be able to define values statically.
+// These need to match the corresponding constants in `roc_integration_macros`.
+// We can't use dynamically sized collections in the IR, since the macros must
+// be able to define values statically.
 pub const MAX_ENUM_VARIANTS: usize = 32;
 pub const MAX_ENUM_VARIANT_FIELDS: usize = 4;
 pub const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;

@@ -19,7 +19,7 @@ use crate::gpu::{
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
 use bloom::{BloomConfig, BloomRenderCommands};
-use roc_codegen::roc;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::mem;
 use tone_mapping::{ToneMappingMethod, ToneMappingRenderCommands};

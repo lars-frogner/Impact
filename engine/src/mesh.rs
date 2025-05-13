@@ -18,7 +18,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     fmt::Debug,

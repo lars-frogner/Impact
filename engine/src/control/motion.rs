@@ -13,7 +13,7 @@ use crate::{
 };
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use nalgebra::vector;
-use roc_codegen::roc;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 
 /// Motion controller allowing for motion at constant

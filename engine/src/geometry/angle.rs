@@ -329,8 +329,7 @@ where
     }
 }
 
-roc_codegen::impl_roc_for_library_provided_primitives! {
-    "roc_codegen",
+roc_integration::impl_roc_for_library_provided_primitives! {
 //  Type            Pkg   Parents  Module   Roc name  Postfix      Precision
     Radians<f32> => core, None,    Radians, Radians,  Some("_32"), SinglePrecision,
     Radians<f64> => core, None,    Radians, Radians,  Some("_64"), DoublePrecision,

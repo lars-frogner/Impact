@@ -188,8 +188,7 @@ impl<F: Float> Sphere<F> {
     }
 }
 
-roc_codegen::impl_roc_for_library_provided_primitives! {
-    "roc_codegen",
+roc_integration::impl_roc_for_library_provided_primitives! {
 //  Type            Pkg   Parents  Module   Roc name  Postfix      Precision
     Sphere<f32> =>  core, None,    Sphere,  Sphere,   Some("_32"), SinglePrecision,
     Sphere<f64> =>  core, None,    Sphere,  Sphere,   Some("_64"), DoublePrecision,

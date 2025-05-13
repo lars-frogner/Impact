@@ -15,7 +15,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::world::Entity;
 use nalgebra::{Similarity3, UnitVector3, Vector3};
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::collections::HashMap;
 
 #[derive(Debug)]

@@ -1,5 +1,5 @@
 [package]
-name = "roc_codegen_macros"
+name = "roc_integration_macros"
 version = "0.1.0"
 edition = { workspace = true }
 
@@ -7,7 +7,7 @@ edition = { workspace = true }
 proc-macro = true
 
 [features]
-enabled = []
+roc_codegen = []
 
 [dependencies]
 lazy_static = "1.5"

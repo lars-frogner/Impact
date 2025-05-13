@@ -4,14 +4,14 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [features]
-roc_codegen = ["dep:inventory", "roc_codegen/enabled"]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
 inventory = { workspace = true, optional = true }
 
-roc_codegen = { path = "../../roc_codegen" }
+roc_integration = { path = "../../roc_integration" }
 
 [lints]
 workspace = true
