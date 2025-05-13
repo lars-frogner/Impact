@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{Hash32, compute_hash_str_32};
 use nalgebra::{Vector4, vector};
 use nohash_hasher::BuildNoHashHasher;
-use roc_codegen::roc;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,

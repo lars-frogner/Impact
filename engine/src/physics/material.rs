@@ -4,7 +4,7 @@ pub mod components;
 
 use crate::physics::fph;
 use bytemuck::{Pod, Zeroable};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// Parameters quantifying the physical response of a body in contact with
 /// another body.

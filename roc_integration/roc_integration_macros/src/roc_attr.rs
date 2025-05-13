@@ -57,7 +57,7 @@ pub(super) fn apply_type_attribute(
     })
 }
 
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 pub(super) fn apply_impl_attribute(
     args: ImplAttributeArgs,
     block: syn::ItemImpl,
@@ -133,7 +133,7 @@ pub(super) fn apply_impl_attribute(
     })
 }
 
-#[cfg(not(feature = "enabled"))]
+#[cfg(not(feature = "roc_codegen"))]
 pub(super) fn apply_impl_attribute(
     _args: ImplAttributeArgs,
     block: syn::ItemImpl,
@@ -728,7 +728,7 @@ fn field_ident(field_idx: usize) -> syn::Ident {
     format_ident!("field_{field_idx}")
 }
 
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 fn generate_registered_type_submit(
     args: &ResolvedAttributeArgs,
     rust_type_name: &Ident,
@@ -768,7 +768,7 @@ fn generate_registered_type_submit(
     })
 }
 
-#[cfg(not(feature = "enabled"))]
+#[cfg(not(feature = "roc_codegen"))]
 fn generate_registered_type_submit(
     _args: &ResolvedAttributeArgs,
     _rust_type_name: &Ident,

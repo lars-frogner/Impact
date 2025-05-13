@@ -4,7 +4,7 @@ use super::RigidBody;
 use crate::physics::fph;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that have a rigid body with a uniform mass density.

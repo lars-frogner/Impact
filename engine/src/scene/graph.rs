@@ -23,7 +23,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::Similarity3;
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world

@@ -5,7 +5,7 @@ edition = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]
-roc_codegen = ["roc_codegen/enabled"]
+roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -17,7 +17,7 @@ paste = { workspace = true }
 
 impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }
-roc_codegen = { path = "../../roc_codegen" }
+roc_integration = { path = "../../roc_integration" }
 
 [lints]
 workspace = true

@@ -11,7 +11,7 @@ pub use graph::{
     CameraNodeID, GroupNodeID, ModelInstanceNode, ModelInstanceNodeID, NodeStorage, NodeTransform,
     SceneGraph, SceneGraphNodeID,
 };
-use roc_codegen::roc;
+use roc_integration::roc;
 
 use crate::{
     camera::SceneCamera,

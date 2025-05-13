@@ -2,7 +2,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use lazy_static::lazy_static;
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::{
     cmp,
     collections::HashMap,

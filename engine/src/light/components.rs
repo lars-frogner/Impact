@@ -7,7 +7,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::UnitVector3;
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that produce a
 /// spatially uniform and isotropic (ambient) light field.

@@ -4,7 +4,7 @@
 use crate::{mesh::MeshID, physics::fph};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities that should be affected by a drag force and torque computed from

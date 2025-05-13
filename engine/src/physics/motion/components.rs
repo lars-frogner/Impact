@@ -10,7 +10,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{Similarity3, Translation3, Vector3};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// reference frame defined by position, orientation and scaling.

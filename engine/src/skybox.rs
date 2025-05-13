@@ -4,7 +4,7 @@ pub mod resource;
 
 use crate::gpu::texture::TextureID;
 use bytemuck::{Pod, Zeroable};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// A skybox specified by a cubemap texture and a maximum luminance (the
 /// luminance that a texel value of unity should be mapped to).

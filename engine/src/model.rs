@@ -3,7 +3,7 @@
 pub mod buffer;
 pub mod transform;
 
-use roc_codegen::roc;
+use roc_integration::roc;
 pub use transform::register_model_feature_types;
 
 use crate::{gpu::GraphicsDevice, material::MaterialHandle, mesh::MeshID};

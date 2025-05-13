@@ -10,7 +10,7 @@ use super::{
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::{
     hash::Hash,
     sync::{RwLock, RwLockReadGuard},

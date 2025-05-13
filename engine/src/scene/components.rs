@@ -3,7 +3,7 @@
 use crate::scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent, world::Entity};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// participate in a scene and have associated [`SceneEntityFlags`].

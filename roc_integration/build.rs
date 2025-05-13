@@ -1,5 +1,5 @@
 fn main() {
-    if std::env::var("CARGO_FEATURE_ENABLED").is_ok() {
+    if std::env::var("CARGO_FEATURE_ROC_CODEGEN").is_ok() {
         let git = vergen_gitcl::GitclBuilder::default()
             .sha(true)
             .dirty(false)

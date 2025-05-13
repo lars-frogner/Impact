@@ -17,8 +17,8 @@
 ///
 /// Note that the registration of types and associated items is only performed
 /// when the crate hosting the target type has an active feature named
-/// `roc_codegen` and the `enabled` feature is active for the [`roc_codegen`]
-/// crate.
+/// `roc_codegen` and the `roc_codegen` feature is active for the
+/// [`roc_integration`] crate.
 ///
 /// Three categories of types can be annotated with `roc`, and the requested
 /// category can be specified as an argument to the macro:
@@ -101,19 +101,19 @@
 /// - No generic parameters or `impl <Trait>`.
 /// - No mutable references.
 /// - There must be a return type.
-pub use roc_codegen_macros::roc;
+pub use roc_integration_macros::roc;
 
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 pub mod generate;
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 pub mod ir;
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 pub mod utils;
 
 #[macro_use]
 mod primitives;
 
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 pub use inner::*;
 
 use anyhow::Result;
@@ -184,7 +184,7 @@ impl fmt::Display for RocTypeID {
     }
 }
 
-#[cfg(feature = "enabled")]
+#[cfg(feature = "roc_codegen")]
 mod inner {
     use super::ir;
     use bitflags::bitflags;

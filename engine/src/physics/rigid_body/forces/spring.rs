@@ -9,7 +9,7 @@ use crate::physics::{
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// A spring or elastic band.
 #[roc(parents = "Physics")]

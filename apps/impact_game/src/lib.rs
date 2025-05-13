@@ -6,7 +6,7 @@ pub mod scripting;
 pub use impact;
 
 #[cfg(feature = "roc_codegen")]
-pub use impact::{component::gather_roc_type_ids_for_all_components, roc_codegen};
+pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
 use anyhow::Result;
 use impact::{application::Application, engine::EngineConfig, game_loop::GameLoopConfig};

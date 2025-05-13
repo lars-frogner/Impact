@@ -3,7 +3,7 @@
 //! when adding new items.
 
 use bytemuck::{Pod, Zeroable};
-use roc_codegen::roc;
+use roc_integration::roc;
 use std::{cmp, collections::VecDeque};
 
 /// A [`Vec`] that maintains a list of each index where

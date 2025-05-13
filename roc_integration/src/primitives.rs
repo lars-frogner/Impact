@@ -3,7 +3,7 @@
 
 #[macro_export]
 macro_rules! impl_roc_for_existing_primitive {
-    ($feature:expr, $t:ty, $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr, $kind:expr) => {
+    ($t:ty, $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr, $kind:expr) => {
         impl $crate::Roc for $t {
             const ROC_TYPE_ID: $crate::RocTypeID =
                 $crate::RocTypeID::hashed_from_str(stringify!($t));
@@ -36,7 +36,7 @@ macro_rules! impl_roc_for_existing_primitive {
         }
         impl $crate::RocPod for $t {}
 
-        #[cfg(feature = $feature)]
+        #[cfg(feature = "roc_codegen")]
         inventory::submit! {
             $crate::RegisteredType {
                 rust_type_path: None,
@@ -59,10 +59,10 @@ macro_rules! impl_roc_for_existing_primitive {
 
 #[macro_export]
 macro_rules! impl_roc_for_builtin_primitives {
-    ($feature:expr, $($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
+    ($($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
         $(
             $crate::impl_roc_for_existing_primitive!(
-                $feature, $t, $package, $parents, $module, $name, $postfix,
+                $t, $package, $parents, $module, $name, $postfix,
                 $crate::ir::PrimitiveKind::Builtin
             );
         )*
@@ -71,20 +71,20 @@ macro_rules! impl_roc_for_builtin_primitives {
 
 #[macro_export]
 macro_rules! impl_roc_for_library_provided_primitives {
-    ($feature:expr, $($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr, $precision:ident),+ $(,)?) => {
+    ($($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr, $precision:ident),+ $(,)?) => {
         $(
             $crate::impl_roc_for_existing_primitive!(
-                $feature, $t, $package, $parents, $module, $name, $postfix,
+                $t, $package, $parents, $module, $name, $postfix,
                 $crate::ir::PrimitiveKind::LibraryProvided {
                     precision: $crate::ir::PrimitivePrecision::$precision,
                 }
             );
         )*
     };
-    ($feature:expr, $($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
+    ($($t:ty => $package:ident, $parents:expr, $module:ident, $name:ident, $postfix:expr),+ $(,)?) => {
         $(
             $crate::impl_roc_for_existing_primitive!(
-                $feature, $t, $package, $parents, $module, $name, $postfix,
+                $t, $package, $parents, $module, $name, $postfix,
                 $crate::PrimitiveKind::LibraryProvided {
                     precision: $crate::PrimitivePrecision::PrecisionIrrelevant,
                 }
@@ -95,7 +95,6 @@ macro_rules! impl_roc_for_library_provided_primitives {
 
 // Roc's builtin primitive types
 impl_roc_for_builtin_primitives! {
-    "enabled",
 //  Type    Pkg   Parents  Module   Roc name  Postfix
     u8   => core, None,    Builtin, U8,       Some("_u8"),
     u16  => core, None,    Builtin, U16,      Some("_u16"),
@@ -114,7 +113,6 @@ impl_roc_for_builtin_primitives! {
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.
 impl_roc_for_library_provided_primitives! {
-    "enabled",
 //  Type                             Pkg   Parents  Module          Roc name        Postfix         Precision
     usize                         => core, None,    NativeNum,      Usize,          Some("_usize"), PrecisionIrrelevant,
     nalgebra::Vector2<f32>        => core, None,    Vector2,        Vector2,        Some("_32"),    SinglePrecision,

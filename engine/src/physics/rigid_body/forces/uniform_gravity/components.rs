@@ -5,7 +5,7 @@ use crate::physics::fph;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{Vector3, vector};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// uniform gravitational acceleration.

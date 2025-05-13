@@ -15,7 +15,7 @@ use crate::physics::{
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// A rigid body. It holds its [`InertialProperties`], the total [`Force`] and
 /// [`Torque`] it is subjected to as well as its [`Momentum`] and

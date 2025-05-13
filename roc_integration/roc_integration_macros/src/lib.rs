@@ -1,7 +1,7 @@
 //! Procedural macros for generating equivalents of Rust types and methods in
 //! Roc.
 
-#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
 mod roc_attr;
 
 use lazy_static::lazy_static;
@@ -15,20 +15,20 @@ use std::str::FromStr;
 /// should be available in Roc.
 ///
 /// When applied to a Rust type, the macro will infer and register a
-/// corresponding [`RegisteredType`](roc_codegen::meta::RegisteredType), which
-/// is used to [`generate`](roc_codegen::generate) a Roc module with a type
-/// declaration and some associated utility functions.
+/// corresponding [`RegisteredType`](roc_integration::meta::RegisteredType),
+/// which is used to [`generate`](roc_integration::generate) a Roc module with a
+/// type declaration and some associated utility functions.
 ///
 /// The macro can additionally be applied to the type's `impl` block and
 /// selected associated constants and functions therein in order to register
-/// [`AssociatedConstant`](roc_codegen::meta::AssociatedConstant)s and
-/// [`AssociatedFunction`](roc_codegen::meta::AssociatedFunction)s whose
+/// [`AssociatedConstant`](roc_integration::meta::AssociatedConstant)s and
+/// [`AssociatedFunction`](roc_integration::meta::AssociatedFunction)s whose
 /// generated Roc code will be included in the type's Roc module.
 ///
 /// Note that the registration of types and associated items is only performed
 /// when the crate hosting the target type has an active feature named
-/// `roc_codegen` and the `enabled` feature is active for the [`roc_codegen`]
-/// crate.
+/// `roc_codegen` and the `roc_codegen` feature is active for the
+/// [`roc_integration`] crate.
 ///
 /// Three categories of types can be annotated with `roc`, and the requested
 /// category can be specified as an argument to the macro:
@@ -150,7 +150,7 @@ pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-// These need to match the corresponding constants in `roc_codegen`.
+// These need to match the corresponding constants in `roc_integration`.
 const MAX_ENUM_VARIANTS: usize = 32;
 const MAX_ENUM_VARIANT_FIELDS: usize = 4;
 const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;
@@ -176,20 +176,20 @@ enum TypeCategory {
     Inline,
 }
 
-#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
 #[derive(Clone, Default)]
 struct ImplAttributeArgs {
     dependency_types: Vec<syn::Type>,
 }
 
-#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
 #[derive(Clone)]
 struct AssociatedConstantAttributeArgs {
     expr: String,
     name: Option<String>,
 }
 
-#[cfg_attr(not(feature = "enabled"), allow(dead_code))]
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
 #[derive(Clone)]
 struct AssociatedFunctionAttributeArgs {
     body: String,
@@ -209,7 +209,7 @@ struct KeyTypeListValueArg {
     types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
 }
 
-const CRATE_NAME: &str = "roc_codegen";
+const CRATE_NAME: &str = "roc_integration";
 
 lazy_static! {
     static ref CRATE_IMPORT_ROOT: String = determine_crate_import_root();

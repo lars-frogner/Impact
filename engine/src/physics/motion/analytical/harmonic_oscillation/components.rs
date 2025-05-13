@@ -7,7 +7,7 @@ use crate::physics::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use roc_codegen::roc;
+use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that follow a
 /// trajectory with harmonically oscillating position, velocity and acceleration

@@ -8,7 +8,7 @@ use crate::{
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix3, Point3, Similarity3, UnitQuaternion, Vector3, point, vector};
-use roc_codegen::roc;
+use roc_integration::roc;
 use simba::scalar::SubsetOf;
 
 /// The inertia-related properties of a physical body.

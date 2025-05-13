@@ -20,7 +20,7 @@ use bytemuck::{Pod, Zeroable};
 use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
 use mesh::MeshedChunkedVoxelObject;
-use roc_codegen::roc;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,

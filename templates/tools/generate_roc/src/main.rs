@@ -8,7 +8,7 @@ pub use target_crate;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use roc_codegen::generate::{
+use roc_integration::generate::{
     self, GenerateOptions, ListOptions, ListedRocTypeCategory, RocGenerateOptions,
 };
 use std::path::PathBuf;
