@@ -8,7 +8,7 @@ use roc_integration::roc;
 
 /// A skybox specified by a cubemap texture and a maximum luminance (the
 /// luminance that a texel value of unity should be mapped to).
-#[roc(parents = "Skybox")]
+#[roc]
 #[repr(C)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
