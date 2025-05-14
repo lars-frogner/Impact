@@ -9,7 +9,10 @@ pub use impact;
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
 use anyhow::Result;
-use impact::{application::Application, engine::EngineConfig, game_loop::GameLoopConfig};
+use impact::{
+    application::Application, engine::EngineConfig, game_loop::GameLoopConfig,
+    window::input::key::KeyboardEvent,
+};
 
 #[derive(Debug)]
 pub struct Game {
@@ -29,5 +32,10 @@ impl Application for Game {
     fn setup_scene(&self) -> Result<()> {
         log::debug!("Setting up scene");
         scripting::setup_scene()
+    }
+
+    fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
+        log::debug!("Handling keyboard event {event:?}");
+        scripting::handle_keyboard_event(event)
     }
 }
