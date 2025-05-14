@@ -588,10 +588,11 @@ impl ChunkedVoxelObject {
         self.voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), plane)
     }
 
+    #[allow(clippy::unused_self, clippy::todo)]
     fn voxel_ranges_within_plane(
         &self,
-        max_voxel_ranges: [Range<usize>; 3],
-        plane: &Plane<f64>,
+        _max_voxel_ranges: [Range<usize>; 3],
+        _plane: &Plane<f64>,
     ) -> [Range<usize>; 3] {
         todo!()
     }
