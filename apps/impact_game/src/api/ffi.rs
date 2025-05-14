@@ -32,6 +32,18 @@ pub unsafe extern "C" fn run_with_config_at_path(
     }
 }
 
+#[cfg(feature = "fuzzing")]
+#[unsafe(no_mangle)]
+pub extern "C" fn fuzz_test_command_roundtrip(n_iterations: usize, seed: u64, verbose: u8) -> i32 {
+    match crate::scripting::fuzzing::fuzz_test_command_roundtrip(n_iterations, seed, verbose != 0) {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+    }
+}
+
 unsafe fn create_slice<'a, T>(slice_ptr: *const T, slice_len: usize) -> &'a [T] {
     if slice_ptr.is_null() {
         &[]
