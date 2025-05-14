@@ -190,12 +190,12 @@ impl Engine {
     // Rendering
 
     pub fn set_ambient_occlusion(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting ambient occlusion to {to:?}");
+        log::info!("Setting ambient occlusion to {to:?}");
         self.renderer.read().unwrap().set_ambient_occlusion(to)
     }
 
     pub fn set_temporal_anti_aliasing(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting temporal anti-aliasing to {to:?}");
+        log::info!("Setting temporal anti-aliasing to {to:?}");
         let renderer = self.renderer().read().unwrap();
 
         let state = renderer.set_temporal_anti_aliasing(to);
@@ -213,22 +213,22 @@ impl Engine {
     }
 
     pub fn set_bloom(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting bloom to {to:?}");
+        log::info!("Setting bloom to {to:?}");
         self.renderer.read().unwrap().set_bloom(to)
     }
 
     pub fn set_tone_mapping_method(&self, to: ToToneMappingMethod) -> ToneMappingMethod {
-        log::debug!("Setting tone mapping method to {to:?}");
+        log::info!("Setting tone mapping method to {to:?}");
         self.renderer.read().unwrap().set_tone_mapping_method(to)
     }
 
     pub fn set_exposure(&self, to: ToExposure) {
-        log::debug!("Setting exposure to {to:?}");
+        log::info!("Setting exposure to {to:?}");
         self.renderer.read().unwrap().set_exposure(to);
     }
 
     pub fn set_render_attachment_visualization(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting render attachment visualization to {to:?}");
+        log::info!("Setting render attachment visualization to {to:?}");
         self.renderer
             .read()
             .unwrap()
@@ -239,7 +239,7 @@ impl Engine {
         &self,
         to: ToRenderAttachmentQuantity,
     ) -> Result<RenderAttachmentQuantity> {
-        log::debug!("Setting visualized render attachment quantity to {to:?}");
+        log::info!("Setting visualized render attachment quantity to {to:?}");
         self.renderer
             .read()
             .unwrap()
@@ -247,24 +247,24 @@ impl Engine {
     }
 
     pub fn set_shadow_mapping(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting shadow mapping to {to:?}");
+        log::info!("Setting shadow mapping to {to:?}");
         self.renderer.write().unwrap().set_shadow_mapping(to)
     }
 
     pub fn set_wireframe_mode(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting wireframe mode to {to:?}");
+        log::info!("Setting wireframe mode to {to:?}");
         self.renderer.write().unwrap().set_wireframe_mode(to)
     }
 
     pub fn set_render_pass_timings(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::debug!("Setting render pass timings to {to:?}");
+        log::info!("Setting render pass timings to {to:?}");
         self.renderer.write().unwrap().set_render_pass_timings(to)
     }
 
     // Physics
 
     pub fn set_simulation_substep_count(&self, to: ToSubstepCount) -> u32 {
-        log::debug!("Setting simulation substep count to {to:?}");
+        log::info!("Setting simulation substep count to {to:?}");
         self.simulator
             .write()
             .unwrap()
@@ -272,7 +272,7 @@ impl Engine {
     }
 
     pub fn set_simulation_speed(&self, to: ToSimulationSpeedMultiplier) -> f64 {
-        log::debug!("Setting simulation speed to {to:?}");
+        log::info!("Setting simulation speed to {to:?}");
         let mut simulator = self.simulator.write().unwrap();
         let old_multiplier = simulator.simulation_speed_multiplier();
         let new_multiplier = simulator.set_simulation_speed(to);
@@ -294,7 +294,7 @@ impl Engine {
     // Scene
 
     pub fn set_skybox(&self, skybox: Skybox) {
-        log::debug!("Setting skybox to {skybox:?}");
+        log::info!("Setting skybox to {skybox:?}");
         self.scene().read().unwrap().set_skybox(skybox);
 
         self.renderer()
@@ -304,7 +304,7 @@ impl Engine {
     }
 
     pub fn set_scene_entity_active_state(&self, entity: Entity, state: ActiveState) -> Result<()> {
-        log::debug!(
+        log::info!(
             "Setting state of scene entity {entity} to {state:?}",
             entity = entity.as_u64()
         );
@@ -325,35 +325,35 @@ impl Engine {
                     .unwrap()
                     .update_motion(state, direction);
             } else {
-                log::debug!("Not setting motion since there is no motion controller");
+                log::info!("Not setting motion since there is no motion controller");
             }
         } else {
-            log::debug!("Not setting motion since control mode is disabled");
+            log::info!("Not setting motion since control mode is disabled");
         }
     }
 
     pub fn stop_motion(&self) {
         if let Some(motion_controller) = &self.motion_controller {
-            log::debug!("Stopping controller motion");
+            log::info!("Stopping controller motion");
             motion_controller.lock().unwrap().stop();
         } else {
-            log::debug!("Not stopping motion since there is no motion controller");
+            log::info!("Not stopping motion since there is no motion controller");
         }
     }
 
     pub fn set_movement_speed(&self, speed: fph) {
         if let Some(motion_controller) = &self.motion_controller {
-            log::debug!("Setting movement speed to {speed:?}");
+            log::info!("Setting movement speed to {speed:?}");
             motion_controller.lock().unwrap().set_movement_speed(speed);
         } else {
-            log::debug!("Not setting movement speed since there is no motion controller");
+            log::info!("Not setting movement speed since there is no motion controller");
         }
     }
 
     // UI
 
     pub fn set_interaction_mode(&self, to: ToInteractionMode) {
-        log::debug!("Setting interaction mode to {to:?}");
+        log::info!("Setting interaction mode to {to:?}");
         let mut user_interface = self.user_interface().write().unwrap();
         let was_control = user_interface.control_mode_active();
         user_interface.set_interaction_mode(to);
@@ -367,12 +367,12 @@ impl Engine {
     // Capture
 
     pub fn save_screenshot(&self) {
-        log::debug!("Saving screenshot");
+        log::info!("Saving screenshot");
         self.screen_capturer().request_screenshot_save();
     }
 
     pub fn save_shadow_maps(&self, save_for: SaveShadowMapsFor) {
-        log::debug!("Saving shadow maps for {save_for:?}");
+        log::info!("Saving shadow maps for {save_for:?}");
         match save_for {
             SaveShadowMapsFor::OmnidirectionalLight => {
                 self.screen_capturer()
