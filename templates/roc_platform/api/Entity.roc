@@ -8,13 +8,11 @@ module [
     append_components,
     create!,
     create_multiple!,
-    enable!,
-    disable!,
     write_bytes_id,
     from_bytes_id,
 ]
 
-import Builtin
+import core.Builtin
 import Platform
 
 Id := U64
@@ -41,24 +39,6 @@ create! = |@Data(bytes)|
 create_multiple! : MultiData => Result (List Id) Str
 create_multiple! = |@MultiData(component_bytes)|
     Ok(Platform.create_entities!(component_bytes)? |> List.map(@Id))
-
-## Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
-##
-## # Errors
-## Returns an error if the entity does not exist or does not have the
-## [`SceneEntityFlagsComp`] component.
-enable! : Id => Result {} Str
-enable! = |@Id(id)|
-    Platform.enable_scene_entity!(id)
-
-## Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
-##
-## # Errors
-## Returns an error if the entity does not exist or does not have the
-## [`SceneEntityFlagsComp`] component.
-disable! : Id => Result {} Str
-disable! = |@Id(id)|
-    Platform.disable_scene_entity!(id)
 
 write_bytes_id : List U8, Id -> List U8
 write_bytes_id = |bytes, @Id(id)|

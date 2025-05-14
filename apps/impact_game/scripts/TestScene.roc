@@ -5,24 +5,24 @@ module [
     unidirectional_light,
 ]
 
-import core.Plane as Plane
-import core.Point3 as Point3
-import core.UnitQuaternion as UnitQuaternion
-import core.UnitVector3 as UnitVector3
-import core.Vector3 as Vector3
-import pf.Entity as Entity
-import Comp.AmbientEmission
-import Comp.MotionControl
-import Comp.OrientationControl
-import Comp.PerspectiveCamera
-import Comp.PlaneCollidable
-import Comp.RectangleMesh
-import Comp.ReferenceFrame
-import Comp.ShadowableUnidirectionalEmission
-import Comp.UniformColor
-import Comp.UniformRoughness
-import Comp.UniformSpecularReflectance
-import Comp.Velocity
+import core.Plane
+import core.Point3
+import core.UnitQuaternion
+import core.UnitVector3
+import core.Vector3
+import pf.Entity
+import pf.Comp.AmbientEmission
+import pf.Comp.MotionControl
+import pf.Comp.OrientationControl
+import pf.Comp.PerspectiveCamera
+import pf.Comp.PlaneCollidable
+import pf.Comp.RectangleMesh
+import pf.Comp.ReferenceFrame
+import pf.Comp.ShadowableUnidirectionalEmission
+import pf.Comp.UniformColor
+import pf.Comp.UniformRoughness
+import pf.Comp.UniformSpecularReflectance
+import pf.Comp.Velocity
 
 player = |_|
     Entity.new
