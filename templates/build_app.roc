@@ -22,11 +22,16 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Debug
             _ -> Release
 
+    fuzzing_mode =
+        when Env.var!("FUZZING") is
+            Ok(str) if !(Str.is_empty(str)) -> Fuzzing
+            _ -> NoFuzzing
+
     os_and_arch = get_os_and_arch!({})?
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, debug_mode)?
+    cargo_build_app!(app_dir, debug_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, debug_mode, os_and_arch)?
 
@@ -58,26 +63,60 @@ convert_os_and_arch! = |{ os, arch }|
         (LINUX, X64) -> Ok(LinuxX64)
         _ -> Err(UnsupportedNative(os, arch))
 
+get_target_triple : OSAndArch -> Str
+get_target_triple = |os_and_arch|
+    when os_and_arch is
+        MacosX64 -> "x86_64-apple-darwin"
+        MacosArm64 -> "aarch64-apple-darwin"
+        LinuxX64 -> "x86_64-unknown-linux-gnu"
+        LinuxArm64 -> "aarch64-unknown-linux-gnu"
+        WindowsX64 -> "x86_64-pc-windows-msvc"
+        WindowsArm64 -> "aarch64-pc-windows-msvc"
+
 build_platform! : Str => Result {} _
 build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [Debug, Release] => Result {} _
-cargo_build_app! = |app_dir, debug_mode|
-    base_args = ["build", "--manifest-path", "${app_dir}/Cargo.toml"]
-    opt_args =
+cargo_build_app! : Str, [Debug, Release], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
+    target_triple = get_target_triple(os_and_arch)
+
+    base_args = ["cargo", "build", "--manifest-path", "${app_dir}/Cargo.toml", "--target", target_triple]
+
+    debug_args =
         when debug_mode is
             Debug -> []
             Release -> ["--release"]
-    Cmd.exec!("cargo", List.concat(base_args, opt_args))
+
+    fuzzing_args =
+        when fuzzing_mode is
+            NoFuzzing -> []
+            Fuzzing -> ["--features", "fuzzing"]
+
+    fuzzing_env_vars =
+        when fuzzing_mode is
+            NoFuzzing -> []
+            Fuzzing ->
+                [
+                    "RUSTFLAGS=-C debuginfo=2 -C debug-assertions -C overflow-checks=yes -Z sanitizer=address -C link-arg=-lasan",
+                ]
+
+    Cmd.exec!(
+        "env",
+        fuzzing_env_vars
+        |> List.concat(base_args)
+        |> List.concat(debug_args)
+        |> List.concat(fuzzing_args),
+    )
     |> Result.map_err(ErrBuildingAppLibrary)
 
 copy_app_lib! : Str, [Debug, Release], OSAndArch => Result {} _
 copy_app_lib! = |app_dir, debug_mode, os_and_arch|
     crate_name = find_crate_name!(app_dir)?
     lib_extension = lib_file_extension(os_and_arch)
-    rust_target_folder = get_rust_target_folder!(debug_mode)
+    target_triple = get_target_triple(os_and_arch)
+    rust_target_folder = get_rust_target_folder!(debug_mode, target_triple)
     app_build_path = "${app_dir}/${rust_target_folder}lib${crate_name}.${lib_extension}"
     app_dest_path = "${app_dir}/lib/libapp"
 
@@ -111,19 +150,19 @@ lib_file_extension = |os_and_arch|
         LinuxArm64 | LinuxX64 -> "so"
         WindowsX64 | WindowsArm64 -> "dll"
 
-get_rust_target_folder! : [Debug, Release] => Str
-get_rust_target_folder! = |debug_mode|
+get_rust_target_folder! : [Debug, Release], Str => Str
+get_rust_target_folder! = |debug_mode, target_triple|
     debug_or_release = if debug_mode == Debug then "debug" else "release"
 
     when Env.var!("CARGO_BUILD_TARGET") is
         Ok(target_env_var) ->
             if Str.is_empty(target_env_var) then
-                "target/${debug_or_release}/"
+                "target/${target_triple}/${debug_or_release}/"
             else
                 "target/${target_env_var}/${debug_or_release}/"
 
         Err(_) ->
-            "target/${debug_or_release}/"
+            "target/${target_triple}/${debug_or_release}/"
 
 roc_build_script! : Str, [Debug, Release] => Result {} _
 roc_build_script! = |app_dir, debug_mode|

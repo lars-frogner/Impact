@@ -6,9 +6,18 @@ platform "impact"
     packages {}
     imports []
     provides [
-        setup_scene_for_host!,
+        setup_scene_extern!,
+        command_roundtrip_extern!,
     ]
 
-setup_scene_for_host! : I32 => Result {} Str
-setup_scene_for_host! = |_|
+import Command.EngineCommand as EngineCommand
+import Stdout
+
+setup_scene_extern! : I32 => Result {} Str
+setup_scene_extern! = |_|
     setup_scene!({})
+
+command_roundtrip_extern! : List U8 => Result (List U8) Str
+command_roundtrip_extern! = |bytes|
+    command = EngineCommand.from_bytes(bytes) |> Result.map_err(|err| Inspect.to_str(err))?
+    Ok(EngineCommand.write_bytes([], command))
