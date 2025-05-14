@@ -1,5 +1,7 @@
 //! Input handling.
 
+pub mod key;
+
 use crate::{engine::Engine, io::util::parse_ron_file, window::EventLoopController};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
