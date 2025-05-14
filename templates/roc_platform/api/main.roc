@@ -2,8 +2,26 @@ platform "impact"
     requires {} {
         setup_scene! : {} => Result {} Str,
     }
-    exposes [Stdout, Entity, Scene]
-    packages {}
+    exposes [
+        Command,
+        Comp,
+        Containers,
+        Control,
+        Entity,
+        Light,
+        Material,
+        Mesh,
+        Model,
+        Physics,
+        Rendering,
+        Scene,
+        Stdout,
+        Skybox,
+        Voxel,
+    ]
+    packages {
+        core: "../../../../roc_packages/core/main.roc",
+    }
     imports []
     provides [
         setup_scene_extern!,
@@ -11,7 +29,6 @@ platform "impact"
     ]
 
 import Command.EngineCommand as EngineCommand
-import Stdout
 
 setup_scene_extern! : I32 => Result {} Str
 setup_scene_extern! = |_|

@@ -5,9 +5,8 @@ app [
     core: "../../../roc_packages/core/main.roc",
 }
 
-import pf.Entity as Entity
-import pf.Scene as Scene
-import pf.Stdout as Stdout
+import pf.Entity
+import pf.Stdout
 import TestScene
 
 setup_scene! : {} => Result {} Str
@@ -18,7 +17,5 @@ setup_scene! = |_|
     _ground = Entity.create!(TestScene.ground({}))?
     _ambient_light = Entity.create!(TestScene.ambient_light({}))?
     _unidirectional_light = Entity.create!(TestScene.unidirectional_light({}))?
-
-    Scene.set_skybox!("space_skybox", 1e6)?
 
     Ok({})
