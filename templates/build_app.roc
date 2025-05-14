@@ -4,6 +4,7 @@ app [main!] {
 
 import cli.Cmd
 import cli.Env
+import cli.Stdout
 
 main! : _ => Result {} _
 main! = |_args|
@@ -80,6 +81,8 @@ build_platform! = |platform_dir|
 
 cargo_build_app! : Str, [Debug, Release], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
 cargo_build_app! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate")?
+
     target_triple = get_target_triple(os_and_arch)
 
     base_args = ["cargo", "build", "--manifest-path", "${app_dir}/Cargo.toml", "--target", target_triple]
@@ -113,6 +116,8 @@ cargo_build_app! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
 
 copy_app_lib! : Str, [Debug, Release], OSAndArch => Result {} _
 copy_app_lib! = |app_dir, debug_mode, os_and_arch|
+    Stdout.line!("Copying application library to application lib folder")?
+
     crate_name = find_crate_name!(app_dir)?
     lib_extension = lib_file_extension(os_and_arch)
     target_triple = get_target_triple(os_and_arch)
@@ -166,6 +171,8 @@ get_rust_target_folder! = |debug_mode, target_triple|
 
 roc_build_script! : Str, [Debug, Release] => Result {} _
 roc_build_script! = |app_dir, debug_mode|
+    Stdout.line!("Building Roc script")?
+
     base_args = ["build", "--no-link", "${app_dir}/scripts/main.roc", "--output", "${app_dir}/lib/script.o"]
     opt_args =
         when debug_mode is
@@ -186,6 +193,7 @@ roc_build_script! = |app_dir, debug_mode|
 
 link_script_with_platform! : Str, Str => Result {} _
 link_script_with_platform! = |platform_dir, app_dir|
+    Stdout.line!("Linking Roc script with platform library")?
     Cmd.exec!(
         "cc",
         [

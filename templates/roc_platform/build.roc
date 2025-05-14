@@ -4,6 +4,7 @@ app [main!] {
 
 import cli.Cmd
 import cli.Env
+import cli.Stdout
 
 main! : _ => Result {} _
 main! = |_args|
@@ -41,6 +42,7 @@ get_rust_target_folder! = |debug_mode|
 
 cargo_build_platform! : Str, [Debug, Release] => Result {} _
 cargo_build_platform! = |platform_dir, debug_mode|
+    Stdout.line!("Building platform crate")?
     base_args = ["build", "--manifest-path", "${platform_dir}/Cargo.toml"]
     opt_args =
         when debug_mode is
@@ -51,8 +53,9 @@ cargo_build_platform! = |platform_dir, debug_mode|
 
 copy_platform_lib! : Str, Str => Result {} _
 copy_platform_lib! = |platform_dir, rust_target_folder|
-    platform_build_path = "${platform_dir}/${rust_target_folder}libroc_platform.a"
+    Stdout.line!("Copying platform library to platform lib folder")?
 
+    platform_build_path = "${platform_dir}/${rust_target_folder}libroc_platform.a"
     platform_dest_path = "${platform_dir}/lib/"
 
     Cmd.exec!("cp", [platform_build_path, platform_dest_path])
