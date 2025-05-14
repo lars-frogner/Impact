@@ -176,7 +176,12 @@ roc_build_script! = |app_dir, debug_mode|
 
     when result is
         Ok(_) -> Ok({})
-        Err(CmdStatusErr(Other("Non-zero exit code: 2"))) -> Ok({}) # Build warnings
+        Err(CmdStatusErr(Other(msg))) ->
+            if Str.ends_with(msg, "exit code: 2") then
+                Ok({}) # Build warnings
+            else
+                Err(CmdStatusErr(Other(msg)))
+
         err -> err
 
 link_script_with_platform! : Str, Str => Result {} _
