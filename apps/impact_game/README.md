@@ -16,9 +16,9 @@
 
 # Adding a function `bar` for calling into Roc from the application or engine crate
 
-1. Go to the Roc platform header in `roc_platform/api/main.roc` and add the Roc type declaration for `bar!` in the `requires` field. Any Roc application using the platform will then have to provide an implementation of `bar!`.
+1. Go to the `requires` entry of the Roc platform header in `roc_platform/api/main.roc` and add the Roc type declaration for `bar!` as a new field in the `callbacks` record. Any Roc application using the platform will then have to provide an implementation of `bar!`.
 
-2. In the same file, implement a function `bar_extern!` wrapping a call to `bar!` with an FFI-compatible interface. Add `bar_extern!` to the `provides` list in the platform header above. This ensures that the shared library consisting of the Roc application and platform will expose a symbol for the `bar_extern!` function. Roc will name this symbol `roc__bar_extern_1_exposed`.
+2. In the same file, implement a function `bar_extern!` wrapping a call to `callbacks.bar!` with an FFI-compatible interface. Add `bar_extern!` to the `provides` list in the platform header above. This ensures that the shared library consisting of the Roc application and platform will expose a symbol for the `bar_extern!` function. Roc will name this symbol `roc__bar_extern_1_exposed`.
 
 3. Add an entry for the `roc__bar_extern_1_exposed` symbol in the `define_ffi!` invocation in `scripting.rs` in the application crate. Include the exact function signature (now in Rust parlance) of `bar_extern!` from `roc_platform/api/main.roc`.
 

@@ -1,8 +1,10 @@
-//!
+//! Calling functions in a Roc script.
 
 use anyhow::{Context, Result, anyhow};
 use ffi_utils::define_ffi;
-use impact::{engine::command::EngineCommand, roc_integration::Roc};
+use impact::{
+    engine::command::EngineCommand, roc_integration::Roc, window::input::key::KeyboardEvent,
+};
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 define_ffi! {
@@ -10,6 +12,7 @@ define_ffi! {
     lib_path_env = "SCRIPT_LIB_PATH",
     lib_path_default = "../../../lib/libscript",
     roc__setup_scene_extern_1_exposed => unsafe extern "C" fn(i32) -> RocResult<(), RocStr>,
+    roc__handle_keyboard_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
     roc__command_roundtrip_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<RocList<u8>, RocStr>,
 }
 
@@ -21,6 +24,17 @@ pub fn setup_scene() -> Result<()> {
     .with_context(|| "Failed scene setup")
 }
 
+pub fn handle_keyboard_event(event: KeyboardEvent) -> Result<()> {
+    let mut bytes = RocList::from_slice(&[0; KeyboardEvent::SERIALIZED_SIZE]);
+    event.write_roc_bytes(bytes.as_mut_slice())?;
+
+    ScriptFFI::call(
+        |ffi| from_roc_result(unsafe { (ffi.roc__handle_keyboard_event_extern_1_exposed)(bytes) }),
+        |error| Err(anyhow!("{:#}", error)),
+    )
+    .with_context(|| format!("Failed handling keyboard event {event:?}"))
+}
+
 pub fn command_roundtrip(command: EngineCommand) -> Result<EngineCommand> {
     let mut bytes = RocList::from_slice(&[0; EngineCommand::SERIALIZED_SIZE]);
     command.write_roc_bytes(bytes.as_mut_slice())?;
@@ -29,7 +43,7 @@ pub fn command_roundtrip(command: EngineCommand) -> Result<EngineCommand> {
         |ffi| from_roc_result(unsafe { (ffi.roc__command_roundtrip_extern_1_exposed)(bytes) }),
         |error| Err(anyhow!("{:#}", error)),
     )
-    .with_context(|| "Failed command roundtrip")?;
+    .with_context(|| format!("Failed roundtrip for command {command:?}"))?;
 
     EngineCommand::from_roc_bytes(returned_bytes.as_slice())
 }
