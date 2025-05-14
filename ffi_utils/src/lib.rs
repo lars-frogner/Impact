@@ -8,25 +8,20 @@ macro_rules! define_ffi {
         lib_path_default = $lib_path_default:expr,
         $($symbol:ident => $func:ty,)+
     ) => {
-        $(
-            #[allow(non_camel_case_types)]
-            type $symbol = $func;
-        )*
-
-        #[allow(non_snake_case)]
-        struct $object {
+        ::paste::paste! {
             $(
-                $symbol: ::libloading::Symbol<'static, $symbol>,
+                #[allow(non_camel_case_types)]
+                type $symbol = $func;
             )*
-        }
 
-        #[allow(non_upper_case_globals)]
-        static $object: ::std::sync::LazyLock<::anyhow::Result<$object>> = ::std::sync::LazyLock::new(
-            $object::load
-        );
+            #[allow(non_snake_case)]
+            struct $object {
+                $(
+                    $symbol: ::libloading::Symbol<'static, $symbol>,
+                )*
+            }
 
-        impl $object {
-            fn load() -> ::anyhow::Result<Self> {
+            static [<__LIB_FOR_ $object:upper>]: ::std::sync::LazyLock<::anyhow::Result<::libloading::Library>> = ::std::sync::LazyLock::new(|| {
                 use ::anyhow::Context;
 
                 let mut library_path = match ::std::env::var($lib_path_env).map(::std::path::PathBuf::from) {
@@ -41,22 +36,33 @@ macro_rules! define_ffi {
                     .with_context(|| format!("Failed to resolve library path {}", library_path.display()))?;
 
                 log::debug!("Loading dynamic library at {}", library_path.display());
-                let lib = Box::leak(Box::new(unsafe { ::libloading::Library::new(library_path)? }));
+                Ok(unsafe { ::libloading::Library::new(library_path)? })
+            });
 
-                Ok(Self {
-                    $(
-                        $symbol: {
-                            log::debug!("Loading symbol {}", stringify!($symbol));
-                            unsafe { lib.get::<$symbol>(stringify!($symbol).as_bytes())? }
-                        },
-                    )*
-                })
-            }
+            #[allow(non_upper_case_globals)]
+            static $object: ::std::sync::LazyLock<::anyhow::Result<$object>> = ::std::sync::LazyLock::new(
+                $object::load
+            );
 
-            fn call<T>(call: impl FnOnce(&$object) -> T, map_err: impl FnOnce(&::anyhow::Error) -> T) -> T {
-                match $object.as_ref() {
-                    Ok(ffi) => call(ffi),
-                    Err(error) => map_err(error),
+            impl $object {
+                fn load() -> ::anyhow::Result<Self> {
+                    let lib = [<__LIB_FOR_ $object:upper>].as_ref().map_err(|error| ::anyhow::anyhow!("{:#}", error))?;
+
+                    Ok(Self {
+                        $(
+                            $symbol: {
+                                log::debug!("Loading symbol {}", stringify!($symbol));
+                                unsafe { lib.get::<$symbol>(stringify!($symbol).as_bytes())? }
+                            },
+                        )*
+                    })
+                }
+
+                fn call<T>(call: impl FnOnce(&$object) -> T, map_err: impl FnOnce(&::anyhow::Error) -> T) -> T {
+                    match $object.as_ref() {
+                        Ok(ffi) => call(ffi),
+                        Err(error) => map_err(error),
+                    }
                 }
             }
         }

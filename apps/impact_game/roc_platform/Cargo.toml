@@ -11,6 +11,7 @@ anyhow = "1.0"
 ffi_utils = { path = "../../../ffi_utils" }
 libloading = "0.8"
 log = "0.4"
+paste = "1.0"
 roc_platform_core = { path = "../../../roc_platform/core" }
 
 [profile.release]
