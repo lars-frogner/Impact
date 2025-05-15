@@ -31,6 +31,7 @@ platform "impact"
     provides [
         setup_scene_extern!,
         handle_keyboard_event_extern!,
+        handle_mouse_button_event_extern!,
         command_roundtrip_extern!,
     ]
 
@@ -46,6 +47,11 @@ handle_keyboard_event_extern! : List U8 => Result {} Str
 handle_keyboard_event_extern! = |bytes|
     event = KeyboardEvent.from_bytes(bytes) |> map_err_to_str?
     callbacks.handle_keyboard_event!(event)
+
+handle_mouse_button_event_extern! : List U8 => Result {} Str
+handle_mouse_button_event_extern! = |bytes|
+    event = MouseButtonEvent.from_bytes(bytes) |> map_err_to_str?
+    callbacks.handle_mouse_button_event!(event)
 
 command_roundtrip_extern! : List U8 => Result (List U8) Str
 command_roundtrip_extern! = |bytes|
