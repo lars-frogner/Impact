@@ -3,6 +3,7 @@ platform "impact"
         callbacks : {
             setup_scene! : {} => Result {} Str,
             handle_keyboard_event! : KeyboardEvent => Result {} Str,
+            handle_mouse_button_event! : MouseButtonEvent => Result {} Str,
         }
     }
     exposes [
@@ -35,6 +36,7 @@ platform "impact"
 
 import Command.EngineCommand as EngineCommand
 import Input.KeyboardEvent as KeyboardEvent exposing [KeyboardEvent]
+import Input.MouseButtonEvent as MouseButtonEvent exposing [MouseButtonEvent]
 
 setup_scene_extern! : I32 => Result {} Str
 setup_scene_extern! = |_|

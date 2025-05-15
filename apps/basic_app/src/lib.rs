@@ -10,8 +10,10 @@ pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integrat
 
 use anyhow::Result;
 use impact::{
-    application::Application, engine::EngineConfig, game_loop::GameLoopConfig,
-    window::input::key::KeyboardEvent,
+    application::Application,
+    engine::EngineConfig,
+    game_loop::GameLoopConfig,
+    window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
 };
 
 #[derive(Debug)]
@@ -37,5 +39,10 @@ impl Application for Game {
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
         log::debug!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
+    }
+
+    fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
+        log::debug!("Handling mouse button event {event:?}");
+        scripting::handle_mouse_button_event(event)
     }
 }
