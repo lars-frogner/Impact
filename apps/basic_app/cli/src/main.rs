@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[cfg(feature = "fuzzing")]
 define_ffi! {
     name = ImpactGameFFI,
-    lib_path_env = "IMPACT_GAME_LIB_PATH",
+    lib_path_env = "BASIC_APP_LIB_PATH",
     lib_path_default = "../../../lib/libapp",
     run_with_config_at_path => unsafe extern "C" fn(*const u8, usize) -> i32,
     fuzz_test_command_roundtrip => unsafe extern "C" fn(usize, u64, u8) -> i32,
@@ -14,7 +14,7 @@ define_ffi! {
 #[cfg(not(feature = "fuzzing"))]
 define_ffi! {
     name = ImpactGameFFI,
-    lib_path_env = "IMPACT_GAME_LIB_PATH",
+    lib_path_env = "BASIC_APP_LIB_PATH",
     lib_path_default = "../../../lib/libapp",
     run_with_config_at_path => unsafe extern "C" fn(*const u8, usize) -> i32,
 }
