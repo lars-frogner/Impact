@@ -6,7 +6,6 @@ pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
 use anyhow::{Result, anyhow};
-use input::HandlingResult;
 use std::{num::NonZeroU32, sync::Arc};
 use winit::{
     application::ApplicationHandler as EngineHandler,
@@ -110,40 +109,36 @@ impl EngineHandler for GameHandler {
 
         let event_loop_controller = EventLoopController(event_loop);
 
-        match game_loop.handle_window_event(&event_loop_controller, &event) {
-            Ok(HandlingResult::Handled) => {}
-            Ok(HandlingResult::Unhandled) => {
-                match event {
-                    WindowEvent::RedrawRequested => {
-                        let result = game_loop.perform_iteration(&event_loop_controller);
-                        if let Err(errors) = result {
-                            log::error!("Unhandled errors: {:?}", errors);
-                            event_loop_controller.exit();
-                        } else {
-                            game_loop.window().request_redraw();
-                        }
-                    }
-                    // Exit if user requests close
-                    WindowEvent::CloseRequested => event_loop_controller.exit(),
-                    // Resize rendering surface when window is resized
-                    WindowEvent::Resized(new_size) => {
-                        if new_size.width == 0 || new_size.height == 0 {
-                            log::error!("Tried resizing window to zero size");
-                            event_loop_controller.exit();
-                        } else {
-                            game_loop.resize_rendering_surface(
-                                NonZeroU32::new(new_size.width).unwrap(),
-                                NonZeroU32::new(new_size.height).unwrap(),
-                            );
-                        }
-                    }
-                    _ => {}
+        match event {
+            WindowEvent::RedrawRequested => {
+                let result = game_loop.perform_iteration(&event_loop_controller);
+                if let Err(errors) = result {
+                    log::error!("Unhandled errors: {:?}", errors);
+                    event_loop_controller.exit();
+                } else {
+                    game_loop.window().request_redraw();
                 }
             }
-            Err(error) => {
-                log::error!("Window event handling error: {:?}", error);
-                event_loop_controller.exit();
+            // Exit if user requests close
+            WindowEvent::CloseRequested => event_loop_controller.exit(),
+            // Resize rendering surface when window is resized
+            WindowEvent::Resized(new_size) => {
+                if new_size.width == 0 || new_size.height == 0 {
+                    log::error!("Tried resizing window to zero size");
+                    event_loop_controller.exit();
+                } else {
+                    game_loop.resize_rendering_surface(
+                        NonZeroU32::new(new_size.width).unwrap(),
+                        NonZeroU32::new(new_size.height).unwrap(),
+                    );
+                }
             }
+            _ => {}
+        }
+
+        if let Err(error) = game_loop.handle_window_event(&event_loop_controller, &event) {
+            log::error!("Window event handling error: {:?}", error);
+            event_loop_controller.exit();
         }
     }
 
@@ -159,12 +154,9 @@ impl EngineHandler for GameHandler {
 
         let event_loop_controller = EventLoopController(event_loop);
 
-        match game_loop.handle_device_event(&event_loop_controller, &event) {
-            Ok(_) => {}
-            Err(error) => {
-                log::error!("Device event handling error: {:?}", error);
-                event_loop_controller.exit();
-            }
+        if let Err(error) = game_loop.handle_device_event(&event_loop_controller, &event) {
+            log::error!("Device event handling error: {:?}", error);
+            event_loop_controller.exit();
         }
     }
 }

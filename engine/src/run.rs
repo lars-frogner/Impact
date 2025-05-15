@@ -85,7 +85,7 @@ use crate::{
             FixedVoxelMaterialProperties, VoxelType, VoxelTypeRegistry, VoxelTypeSpecifications,
         },
     },
-    window::{GameHandler, Window, input::InputConfig},
+    window::{GameHandler, Window},
 };
 use anyhow::Result;
 use impact_math::hash32;
@@ -164,13 +164,6 @@ fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED | SceneEntityFlags::CASTS_NO_SHADOWS),
     ))?;
 
-    engine.mouse_button_input_handler_mut().left_pressed = Some(Box::new(move |engine| {
-        engine.enable_scene_entity(&laser_entity)
-    }));
-    engine.mouse_button_input_handler_mut().left_released = Some(Box::new(move |engine| {
-        engine.disable_scene_entity(&laser_entity)
-    }));
-
     let absorbing_sphere_entity = engine.create_entity((
         &ParentComp::new(player_entity),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 0.0, -3.0), 0.1),
@@ -181,13 +174,6 @@ fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
         &VoxelAbsorbingSphereComp::new(vector![0.0, 0.0, 0.0], 10.0, 15.0),
         &SceneEntityFlagsComp(SceneEntityFlags::IS_DISABLED),
     ))?;
-
-    engine.mouse_button_input_handler_mut().right_pressed = Some(Box::new(move |engine| {
-        engine.enable_scene_entity(&absorbing_sphere_entity)
-    }));
-    engine.mouse_button_input_handler_mut().right_released = Some(Box::new(move |engine| {
-        engine.disable_scene_entity(&absorbing_sphere_entity)
-    }));
 
     // engine.create_entity((
     //     &engine.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
