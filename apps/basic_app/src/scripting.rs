@@ -3,7 +3,9 @@
 use anyhow::{Context, Result, anyhow};
 use ffi_utils::define_ffi;
 use impact::{
-    engine::command::EngineCommand, roc_integration::Roc, window::input::key::KeyboardEvent,
+    engine::command::EngineCommand,
+    roc_integration::Roc,
+    window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
 };
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
@@ -13,6 +15,7 @@ define_ffi! {
     lib_path_default = "../../../lib/libscript",
     roc__setup_scene_extern_1_exposed => unsafe extern "C" fn(i32) -> RocResult<(), RocStr>,
     roc__handle_keyboard_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
+    roc__handle_mouse_button_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
     roc__command_roundtrip_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<RocList<u8>, RocStr>,
 }
 
@@ -33,6 +36,19 @@ pub fn handle_keyboard_event(event: KeyboardEvent) -> Result<()> {
         |error| Err(anyhow!("{:#}", error)),
     )
     .with_context(|| format!("Failed handling keyboard event {event:?}"))
+}
+
+pub fn handle_mouse_button_event(event: MouseButtonEvent) -> Result<()> {
+    let mut bytes = RocList::from_slice(&[0; MouseButtonEvent::SERIALIZED_SIZE]);
+    event.write_roc_bytes(bytes.as_mut_slice())?;
+
+    ScriptFFI::call(
+        |ffi| {
+            from_roc_result(unsafe { (ffi.roc__handle_mouse_button_event_extern_1_exposed)(bytes) })
+        },
+        |error| Err(anyhow!("{:#}", error)),
+    )
+    .with_context(|| format!("Failed handling mouse button event {event:?}"))
 }
 
 pub fn command_roundtrip(command: EngineCommand) -> Result<EngineCommand> {

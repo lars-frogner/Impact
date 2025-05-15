@@ -1,6 +1,7 @@
 //! Input handling.
 
 pub mod key;
+pub mod mouse;
 
 use crate::{engine::Engine, io::util::parse_ron_file, window::EventLoopController};
 use anyhow::Result;

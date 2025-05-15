@@ -195,11 +195,11 @@ impl KeyboardEvent {
     /// Returns a `KeyboardEvent` corresponding to the given `winit`
     /// `KeyEvent`, or [`None`] if the `KeyEvent` has no analogous
     /// `KeyboardEvent`.
-    pub fn from_winit_key_event(event: event::KeyEvent) -> Option<Self> {
+    pub fn from_winit(event: event::KeyEvent) -> Option<Self> {
         let keyboard::PhysicalKey::Code(code) = event.physical_key else {
             return None;
         };
-        let key = KeyboardKey::from_winit_key_code(code)?;
+        let key = KeyboardKey::from_winit(code)?;
         let state = event.state.into();
         Some(Self { key, state })
     }
@@ -209,7 +209,7 @@ impl KeyboardKey {
     /// Returns the `KeyboardKey` corresponding to the given `winit` `KeyCode`,
     /// or [`None`] if the `KeyCode` is not supported.
     #[allow(clippy::enum_glob_use)]
-    pub fn from_winit_key_code(code: keyboard::KeyCode) -> Option<Self> {
+    pub fn from_winit(code: keyboard::KeyCode) -> Option<Self> {
         use KeyboardKey::*;
         use keyboard::KeyCode::*;
 
