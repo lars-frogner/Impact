@@ -6,7 +6,7 @@ use crate::{
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
-    window::{EventLoopController, Window, WindowEvent, input::HandlingResult},
+    window::{EventLoopController, Window, WindowEvent},
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -82,20 +82,18 @@ impl GameLoop {
         &self,
         event_loop_controller: &EventLoopController<'_>,
         event: &WindowEvent,
-    ) -> Result<HandlingResult> {
+    ) -> Result<()> {
         self.engine
-            .input_handler()
-            .handle_window_event(&self.engine, event_loop_controller, event)
+            .handle_window_event(event_loop_controller, event)
     }
 
     pub fn handle_device_event(
         &self,
         event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
-    ) -> Result<HandlingResult> {
+    ) -> Result<()> {
         self.engine
-            .input_handler()
-            .handle_device_event(&self.engine, event_loop_controller, event)
+            .handle_device_event(event_loop_controller, event)
     }
 
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {

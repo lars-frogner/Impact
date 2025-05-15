@@ -22,10 +22,7 @@ use crate::{
     scene::Scene,
     ui::UserInterface,
     voxel::{self, VoxelConfig, VoxelManager},
-    window::{
-        Window,
-        input::{InputConfig, InputHandler, MouseButtonInputHandler},
-    },
+    window::Window,
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
@@ -46,7 +43,6 @@ use std::{
 pub struct Engine {
     app: Arc<dyn Application>,
     window: Window,
-    input_handler: InputHandler,
     graphics_device: Arc<GraphicsDevice>,
     user_interface: RwLock<UserInterface>,
     component_registry: RwLock<ComponentRegistry>,
@@ -67,7 +63,6 @@ pub struct EngineConfig {
     pub rendering: RenderingConfig,
     pub physics: PhysicsConfig,
     pub voxel: VoxelConfig,
-    pub input: InputConfig,
     pub controller: ControllerConfig,
 }
 
@@ -125,15 +120,12 @@ impl Engine {
 
         let simulator = PhysicsSimulator::new(config.physics)?;
 
-        let input_handler = InputHandler::from_config(config.input)?;
-
         let (motion_controller, orientation_controller) =
             control::create_controllers(config.controller);
 
         Ok(Self {
             app,
             window,
-            input_handler,
             graphics_device,
             user_interface: RwLock::new(user_interface),
             component_registry: RwLock::new(component_registry),
@@ -156,16 +148,6 @@ impl Engine {
     /// Returns a reference to the [`Window`].
     pub fn window(&self) -> &Window {
         &self.window
-    }
-
-    /// Returns a reference to the [`InputHandler`].
-    pub fn input_handler(&self) -> &InputHandler {
-        &self.input_handler
-    }
-
-    /// Returns a mutable reference to the [`MouseButtonInputHandler`].
-    pub fn mouse_button_input_handler_mut(&mut self) -> &mut MouseButtonInputHandler {
-        self.input_handler.mouse_button_handler_mut()
     }
 
     /// Returns a reference to the [`GraphicsDevice`].
@@ -474,6 +456,5 @@ impl EngineConfig {
     fn resolve_paths(&mut self, root_path: &Path) {
         self.assets.resolve_paths(root_path);
         self.voxel.resolve_paths(root_path);
-        self.input.resolve_paths(root_path);
     }
 }
