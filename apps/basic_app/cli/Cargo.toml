@@ -1,5 +1,5 @@
 [package]
-name = "impact_game_cli"
+name = "basic_app_cli"
 version = "0.1.0"
 edition = "2024"
 
@@ -15,5 +15,5 @@ log = "0.4"
 paste = "1.0"
 
 [[bin]]
-name = "impact_game_cli"
+name = "basic_app_cli"
 path = "src/main.rs"

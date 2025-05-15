@@ -14,4 +14,4 @@ detect_deadlocks=1:\
 detect_stack_use_after_return=1:\
 strict_string_checks=1" \
 RUST_BACKTRACE=1 \
-./cli/target/release/impact_game_cli fuzz "$@"
+./cli/target/release/basic_app_cli fuzz "$@"

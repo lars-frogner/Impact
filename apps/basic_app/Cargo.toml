@@ -91,7 +91,7 @@ verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
 
 [package]
-name = "impact_game"
+name = "basic_app"
 version = { workspace = true }
 edition = { workspace = true }
 
