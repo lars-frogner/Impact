@@ -1,8 +1,8 @@
-# Hash: 0ca57413fe78768b004ded2110c78fdb45946739229a566401572544ca0a8578
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 2c2ea5f09d6617a1d1f1a432ae43766e83d8c1f48662a15606588d0e4fe07218
+# Generated: 2025-05-16T20:58:03+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: d505d37
+# Commit: 3e6e703 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -23,6 +23,7 @@ EngineCommand : [
     Control Command.ControlCommand.ControlCommand,
     UI Command.UICommand.UICommand,
     Capture Command.CaptureCommand.CaptureCommand,
+    Exit,
 ]
 
 ## Serializes a value of [EngineCommand] into the binary representation
@@ -69,6 +70,12 @@ write_bytes = |bytes, value|
             |> List.append(5)
             |> Command.CaptureCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 8))
+
+        Exit ->
+            bytes
+            |> List.reserve(11)
+            |> List.append(6)
+            |> List.concat(List.repeat(0, 10))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
 ## representation used by the engine.
@@ -120,6 +127,7 @@ from_bytes = |bytes|
                     ),
                 )
 
+            [6, ..] -> Ok(Exit)
             [] -> Err(MissingDiscriminant)
             _ -> Err(InvalidDiscriminant)
 
@@ -131,6 +139,7 @@ test_roundtrip = |{}|
     test_roundtrip_for_variant(3, 10, 1)?
     test_roundtrip_for_variant(4, 3, 8)?
     test_roundtrip_for_variant(5, 3, 8)?
+    test_roundtrip_for_variant(6, 1, 10)?
     Ok({})
 
 test_roundtrip_for_variant : U8, U64, U64 -> Result {} _

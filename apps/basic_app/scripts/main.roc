@@ -5,16 +5,16 @@ app [callbacks] {
 
 import pf.Command
 import pf.Entity
-import pf.Input.KeyboardEvent exposing [KeyboardEvent]
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import pf.Skybox
 import pf.Stdout
 import core.Hashing
+import KeyboardInputHandling
 import TestScene
 
 callbacks = {
     setup_scene!,
-    handle_keyboard_event!,
+    handle_keyboard_event!: KeyboardInputHandling.handle_keyboard_event!,
     handle_mouse_button_event!,
 }
 
@@ -35,11 +35,6 @@ setup_scene! = |_|
         ),
     )?
 
-    Ok({})
-
-handle_keyboard_event! : KeyboardEvent => Result {} Str
-handle_keyboard_event! = |event|
-    _ = Stdout.line!("handle_keyboard_event! called with event ${Inspect.to_str(event)}")
     Ok({})
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
