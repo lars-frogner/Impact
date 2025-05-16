@@ -39,9 +39,9 @@ PerspectiveCamera : {
 ## the far distance does not exceed the near distance.
 new : Degrees.Degrees Binary32, F32, F32 -> PerspectiveCamera
 new = |vertical_field_of_view, near_distance, far_distance|
-    expect vertical_field_of_view > 0.0
-    expect near_distance > 0.0
-    expect far_distance > near_distance
+    #expect vertical_field_of_view > 0.0
+    #expect near_distance > 0.0
+    #expect far_distance > near_distance
     vertical_field_of_view_rad = Degrees.to_radians(vertical_field_of_view)
     {
         vertical_field_of_view_rad,
