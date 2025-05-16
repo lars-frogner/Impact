@@ -139,6 +139,9 @@ impl EngineHandler for GameHandler {
         if let Err(error) = game_loop.handle_window_event(&event_loop_controller, &event) {
             log::error!("Window event handling error: {:?}", error);
             event_loop_controller.exit();
+        } else if game_loop.shutdown_requested() {
+            log::info!("Shutting down after request");
+            event_loop_controller.exit();
         }
     }
 
