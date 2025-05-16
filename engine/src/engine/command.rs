@@ -42,6 +42,7 @@ pub enum EngineCommand {
     Control(ControlCommand),
     UI(UICommand),
     Capture(CaptureCommand),
+    Exit,
 }
 
 #[roc(parents = "Command")]
@@ -76,6 +77,7 @@ impl Engine {
             EngineCommand::Control(command) => self.execute_control_command(command),
             EngineCommand::UI(command) => self.execute_ui_command(command),
             EngineCommand::Capture(command) => self.execute_capture_command(command),
+            EngineCommand::Exit => self.execute_exit_command(),
         }
     }
 
@@ -184,6 +186,11 @@ impl Engine {
                 self.save_shadow_maps(save_for);
             }
         }
+        Ok(())
+    }
+
+    pub fn execute_exit_command(&self) -> Result<()> {
+        self.request_shutdown();
         Ok(())
     }
 

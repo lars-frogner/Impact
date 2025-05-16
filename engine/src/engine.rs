@@ -35,7 +35,10 @@ use std::{
     fmt::Debug,
     num::NonZeroU32,
     path::Path,
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 /// Manager for all systems and data in the engine.
@@ -54,6 +57,7 @@ pub struct Engine {
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
+    shutdown_requested: AtomicBool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -137,6 +141,7 @@ impl Engine {
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
+            shutdown_requested: AtomicBool::new(false),
         })
     }
 
@@ -412,6 +417,14 @@ impl Engine {
             .read()
             .unwrap()
             .declare_render_resources_desynchronized();
+    }
+
+    pub fn shutdown_requested(&self) -> bool {
+        self.shutdown_requested.load(Ordering::Relaxed)
+    }
+
+    pub fn request_shutdown(&self) {
+        self.shutdown_requested.store(true, Ordering::Relaxed);
     }
 
     fn with_component_mut<C: Component, R>(

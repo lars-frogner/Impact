@@ -100,6 +100,10 @@ impl GameLoop {
         self.engine.resize_rendering_surface(new_width, new_height);
     }
 
+    pub fn shutdown_requested(&self) -> bool {
+        self.engine.shutdown_requested()
+    }
+
     pub fn perform_iteration(
         &mut self,
         event_loop_controller: &EventLoopController<'_>,
