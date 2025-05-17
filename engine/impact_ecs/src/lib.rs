@@ -4,6 +4,9 @@ pub mod archetype;
 pub mod component;
 pub mod world;
 
+#[cfg(feature = "profiling")]
+pub mod profiling;
+
 /// Derive macro generating an impl of the trait
 /// [`Component`](component::Component).
 pub use impact_ecs_macros::Component;
