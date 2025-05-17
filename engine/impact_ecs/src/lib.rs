@@ -309,3 +309,8 @@ pub use impact_ecs_macros::query;
 /// ```
 ///
 pub use impact_ecs_macros::setup;
+
+type NoHashMap<K, V> = std::collections::HashMap<K, V, nohash_hasher::BuildNoHashHasher<K>>;
+type NoHashSet<K> = std::collections::HashSet<K, nohash_hasher::BuildNoHashHasher<K>>;
+type NoHashKeyIndexMapper<K> =
+    impact_containers::KeyIndexMapper<K, nohash_hasher::BuildNoHashHasher<K>>;

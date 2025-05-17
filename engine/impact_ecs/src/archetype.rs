@@ -1,6 +1,7 @@
 //! Organization of ECS entities into archetypes.
 
 use super::{
+    NoHashKeyIndexMapper, NoHashMap, NoHashSet,
     component::{
         CanHaveSingleInstance, Component, ComponentArray, ComponentID, ComponentSlice,
         ComponentStorage, ComponentView, SingleInstance,
@@ -13,7 +14,7 @@ use impact_containers::KeyIndexMapper;
 use impact_ecs_macros::archetype_of;
 use paste::paste;
 use std::{
-    collections::{HashMap, HashSet, hash_map::DefaultHasher},
+    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     iter,
     marker::PhantomData,
@@ -28,14 +29,14 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct Archetype {
     id: ArchetypeID,
-    component_ids: HashSet<ComponentID>,
+    component_ids: NoHashSet<ComponentID>,
 }
 
 /// Unique identifier for an [`Archetype`], obtained by hashing
 /// the sorted list of component IDs defining the archetype.
 #[repr(C)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct ArchetypeID(u32);
 
 /// Container holding [`ComponentArray`]s for a set
@@ -46,7 +47,7 @@ pub struct ArchetypeID(u32);
 #[derive(Debug)]
 pub struct ArchetypeComponents<A> {
     archetype: Archetype,
-    component_index_map: KeyIndexMapper<ComponentID>,
+    component_index_map: NoHashKeyIndexMapper<ComponentID>,
     component_arrays: Vec<A>,
     component_count: usize,
 }
@@ -171,7 +172,7 @@ pub struct ArchetypeTable {
     entity_index_mapper: KeyIndexMapper<EntityID>,
     /// A map from [`ComponentID`] to the index of the corresponding
     /// [`ComponentStorage`] in the `component_storages` vector.
-    component_index_map: HashMap<ComponentID, usize>,
+    component_index_map: NoHashMap<ComponentID, usize>,
     component_storages: Vec<RwLock<ComponentStorage>>,
 }
 
@@ -198,7 +199,7 @@ struct TableEntityEntryInfo<'a> {
     archetype: &'a Archetype,
     /// Index of the entity's component in each component storage.
     entity_idx: usize,
-    component_index_map: &'a HashMap<ComponentID, usize>,
+    component_index_map: &'a NoHashMap<ComponentID, usize>,
 }
 
 /// Immutable reference to the entry for a specific component
@@ -237,6 +238,14 @@ impl ArchetypeID {
         self.0
     }
 }
+
+impl Hash for ArchetypeID {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u32(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for ArchetypeID {}
 
 impl Archetype {
     /// Creates a new archetype defined by the component IDs
@@ -344,8 +353,10 @@ where
     A: ComponentArray,
 {
     fn new(archetype: Archetype, component_arrays: Vec<A>, component_count: usize) -> Self {
-        let component_index_map =
-            KeyIndexMapper::new_with_keys(component_arrays.iter().map(A::component_id));
+        let component_index_map = KeyIndexMapper::with_hasher_and_keys(
+            nohash_hasher::BuildNoHashHasher::default(),
+            component_arrays.iter().map(A::component_id),
+        );
 
         Self {
             archetype,
@@ -423,7 +434,7 @@ where
     pub fn empty() -> Self {
         Self {
             archetype: archetype_of!(),
-            component_index_map: KeyIndexMapper::new(),
+            component_index_map: NoHashKeyIndexMapper::default(),
             component_arrays: Vec::new(),
             component_count: 0,
         }
@@ -1235,7 +1246,7 @@ impl<'a> TableEntityEntry<'a> {
     fn new(
         archetype: &'a Archetype,
         entity_idx: usize,
-        component_index_map: &'a HashMap<ComponentID, usize>,
+        component_index_map: &'a NoHashMap<ComponentID, usize>,
         components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
     ) -> Self {
         Self {
@@ -1286,7 +1297,7 @@ impl<'a> TableEntityMutEntry<'a> {
     fn new(
         archetype: &'a Archetype,
         entity_idx: usize,
-        component_index_map: &'a HashMap<ComponentID, usize>,
+        component_index_map: &'a NoHashMap<ComponentID, usize>,
         components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
     ) -> Self {
         Self {
@@ -1495,13 +1506,13 @@ impl_archetype_conversion!((
 
 #[cfg(test)]
 mod tests {
-    use crate::component::ComponentInstance;
-
     use super::{
         super::{Component, archetype_of},
         *,
     };
+    use crate::component::ComponentInstance;
     use bytemuck::{Pod, Zeroable};
+    use std::collections::HashSet;
 
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
