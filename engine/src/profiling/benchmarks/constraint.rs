@@ -14,10 +14,10 @@ use crate::{
         },
         rigid_body::{RigidBody, components::RigidBodyComp},
     },
-    profiling::Profiler,
     voxel::VoxelObjectManager,
 };
 use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_profiling::Profiler;
 use nalgebra::point;
 
 pub fn prepare_contacts(profiler: impl Profiler) {

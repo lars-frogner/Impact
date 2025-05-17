@@ -1,5 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use impact::define_criterion_target;
+use impact::profiling::benchmarks::model;
+use impact_profiling::define_criterion_target;
 use pprof::criterion::{Output, PProfProfiler};
 
 define_criterion_target!(model, add_feature_to_dynamic_instance_buffer_from_storage);

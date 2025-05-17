@@ -2,7 +2,6 @@
 
 use crate::{
     geometry::Sphere,
-    profiling::Profiler,
     scene::RenderResourcesDesynchronized,
     voxel::{
         chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
@@ -14,6 +13,7 @@ use crate::{
         voxel_types::VoxelType,
     },
 };
+use impact_profiling::Profiler;
 use nalgebra::{UnitVector3, vector};
 use std::hint::black_box;
 

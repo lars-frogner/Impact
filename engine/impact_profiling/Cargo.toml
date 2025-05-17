@@ -1,0 +1,10 @@
+[package]
+name = "impact_profiling"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+criterion = { version = "0.5.1" }
+
+[lints]
+workspace = true
