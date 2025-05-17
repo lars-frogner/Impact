@@ -19,6 +19,7 @@ const-fnv1a-hash = "1.1"
 inventory = "0.3"
 lazy_static = "1.5"
 nalgebra = "0.33"
+nohash-hasher = "0.2.0"
 num-traits = "0.2"
 paste = "1.0"
 
@@ -150,7 +151,7 @@ lazy_static = { workspace = true }
 log = "0.4"
 naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
-nohash-hasher = "0.2.0"
+nohash-hasher = { workspace = true }
 noise = "0.9.0"
 num-derive = "0.4"
 num-traits = { workspace = true }

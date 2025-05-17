@@ -98,7 +98,7 @@ pub trait ComponentSlice<'a>: ComponentArray {
 
 /// A unique ID identifying a type implementing [`Component`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct ComponentID(u64);
 
 /// A descriptor for a [`Component`]. Component types can register themselves
@@ -198,6 +198,14 @@ impl ComponentID {
         Self(0)
     }
 }
+
+impl std::hash::Hash for ComponentID {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        hasher.write_u64(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for ComponentID {}
 
 // We can treat a reference to a component as a component array
 // and slice with a single instance

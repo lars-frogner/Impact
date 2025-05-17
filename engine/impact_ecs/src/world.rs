@@ -1,6 +1,7 @@
 //! Overarching container and coordinator for ECS.
 
 use super::{
+    NoHashKeyIndexMapper,
     archetype::{
         Archetype, ArchetypeComponentStorage, ArchetypeComponents, ArchetypeID, ArchetypeTable,
         ComponentStorageEntry, ComponentStorageEntryMut,
@@ -9,7 +10,6 @@ use super::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::KeyIndexMapper;
 use roc_integration::roc;
 use std::{
     hash::Hash,
@@ -61,7 +61,7 @@ pub struct EntityID(pub(crate) u32);
 pub struct World {
     /// A map from [`ArchetypeID`] to the index of the corresponding
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
-    archetype_index_mapper: KeyIndexMapper<ArchetypeID>,
+    archetype_index_mapper: NoHashKeyIndexMapper<ArchetypeID>,
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
     entity_id_counter: u32,
     n_removed_entities: usize,
@@ -124,7 +124,7 @@ impl World {
     /// Creates a new world with no entities.
     pub fn new() -> Self {
         Self {
-            archetype_index_mapper: KeyIndexMapper::new(),
+            archetype_index_mapper: NoHashKeyIndexMapper::default(),
             archetype_tables: Vec::new(),
             entity_id_counter: 0,
             n_removed_entities: 0,
