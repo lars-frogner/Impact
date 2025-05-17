@@ -37,6 +37,11 @@ path = "src/bin/impact_ecs.rs"
 required-features = ["cli"]
 
 [[bench]]
-name = "world"
+name = "entity"
+harness = false
+required-features = ["profiling"]
+
+[[bench]]
+name = "query"
 harness = false
 required-features = ["profiling"]
