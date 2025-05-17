@@ -5,19 +5,37 @@ edition = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]
+cli = ["dep:clap"]
+profiling = ["dep:criterion", "impact_profiling"]
 roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
 bytemuck = { workspace = true }
+clap = { version = "4.5", features = ["derive"], optional = true }
 const-fnv1a-hash = { workspace = true }
+criterion = { version = "0.5.1", optional = true }
 inventory = { workspace = true }
 paste = { workspace = true }
 
 impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }
+impact_profiling = { path = "../impact_profiling", optional = true }
 roc_integration = { path = "../../roc_integration" }
+
+[dev-dependencies]
+pprof = { version = "0.14", features = ["criterion", "flamegraph"] }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "impact_ecs"
+path = "src/bin/impact_ecs.rs"
+required-features = ["cli"]
+
+[[bench]]
+name = "world"
+harness = false
+required-features = ["profiling"]
