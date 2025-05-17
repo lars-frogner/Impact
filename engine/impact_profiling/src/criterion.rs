@@ -1,18 +1,16 @@
 //! Profiling using `criterion`.
 
-use super::Profiler;
+use crate::Profiler;
 use criterion::Criterion;
 
 #[macro_export]
 macro_rules! define_criterion_target {
     ($group:ident, $name:ident) => {
         pub fn $name(c: &mut ::criterion::Criterion) {
-            ::impact::profiling::benchmarks::$group::$name(
-                ::impact::profiling::criterion::CriterionFunctionProfiler::new(
-                    c,
-                    stringify!($name),
-                ),
-            );
+            $group::$name($crate::criterion::CriterionFunctionProfiler::new(
+                c,
+                stringify!($name),
+            ));
         }
     };
 }

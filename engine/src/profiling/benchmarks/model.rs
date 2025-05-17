@@ -1,11 +1,9 @@
 //! Benchmarks for model related functionality.
 
-use crate::{
-    model::{
-        DynamicInstanceFeatureBuffer, InstanceFeatureStorage, transform::InstanceModelViewTransform,
-    },
-    profiling::Profiler,
+use crate::model::{
+    DynamicInstanceFeatureBuffer, InstanceFeatureStorage, transform::InstanceModelViewTransform,
 };
+use impact_profiling::Profiler;
 
 pub fn add_feature_to_dynamic_instance_buffer_from_storage(profiler: impl Profiler) {
     let mut storage = InstanceFeatureStorage::new::<InstanceModelViewTransform>();

@@ -1,12 +1,13 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use impact::{
-    define_criterion_target,
+    profiling::benchmarks::chunked_voxel_object,
     voxel::{
         chunks::{ChunkedVoxelObject, sdf::VoxelChunkSignedDistanceField},
         generation::{SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
         voxel_types::VoxelType,
     },
 };
+use impact_profiling::define_criterion_target;
 use pprof::criterion::{Output, PProfProfiler};
 
 pub fn clone_object(c: &mut Criterion) {
