@@ -105,7 +105,7 @@ impl SceneEntityFlagsComp {
 impl ParentComp {
     /// Creates a new component representing a direct child of the specified
     /// entity.
-    #[roc(body = "{ entity: parent }")]
+    #[roc(body = "{ entity_id: parent }")]
     pub fn new(parent: EntityID) -> Self {
         Self { entity_id: parent }
     }
