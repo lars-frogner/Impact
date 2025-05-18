@@ -1,8 +1,8 @@
-# Hash: 06ea5345eb96f2e47df8fa815b5a8d0b4c0d531c1d4e913385e8ba7a131d54dd
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 567bf1473951aadcbe5b097bb68a3d03e25ce65421ef51e1af74e4d569aa9f3f
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::physics::command::ToSubstepCount
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     ToSubstepCount,
     write_bytes,
@@ -70,28 +70,4 @@ from_bytes = |bytes|
                 )
 
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 5, 0)?
-    test_roundtrip_for_variant(1, 5, 0)?
-    test_roundtrip_for_variant(2, 5, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

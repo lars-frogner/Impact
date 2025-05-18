@@ -1,8 +1,8 @@
-# Hash: 9bbeb87ea6e7a9e5dd458bb6840c97cf37f70e704f93ce37d10cbf4765acfcee
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 9eb9adaa71d83ca286a669fb0c6f77acde32d0abcc4f95619bf2a9edc2dc4cef
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::window::input::key::KeyboardKey
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     KeyboardKey,
     write_bytes,
@@ -193,36 +193,4 @@ from_bytes = |bytes|
                 )
 
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 2, 0)?
-    test_roundtrip_for_variant(1, 2, 0)?
-    test_roundtrip_for_variant(2, 2, 0)?
-    test_roundtrip_for_variant(3, 2, 0)?
-    test_roundtrip_for_variant(4, 2, 0)?
-    test_roundtrip_for_variant(5, 2, 0)?
-    test_roundtrip_for_variant(6, 2, 0)?
-    test_roundtrip_for_variant(7, 2, 0)?
-    test_roundtrip_for_variant(8, 2, 0)?
-    test_roundtrip_for_variant(9, 2, 0)?
-    test_roundtrip_for_variant(10, 2, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

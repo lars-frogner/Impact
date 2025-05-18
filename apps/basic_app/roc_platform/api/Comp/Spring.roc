@@ -1,8 +1,8 @@
-# Hash: 93d65e910653175c1250e1340208a78e5a1e2020ef53a3ee46a0faab2f52fecf
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 98ca116054a405848f26c5b58444a333e75eb1ca8b673031646444e64f918b67
+# Generated: 2025-05-18T19:54:00+00:00
 # Rust type: impact::physics::rigid_body::forces::spring::components::SpringComp
 # Type category: Component
-# Commit: d505d37
+# Commit: b32d32f (dirty)
 module [
     Spring,
     new,
@@ -21,9 +21,9 @@ import core.Point3
 ## spring connecting two other entities.
 Spring : {
     ## The first entity the spring is attached to.
-    entity_1 : Entity.Id,
+    entity_1_id : Entity.Id,
     ## The second entity the spring is attached to.
-    entity_2 : Entity.Id,
+    entity_2_id : Entity.Id,
     ## The point where the spring is attached to the first entity, in that
     ## entity's reference frame.
     attachment_point_1 : Point3.Point3 Binary64,
@@ -38,10 +38,10 @@ Spring : {
 
 ## Creates a new component for a spring connecting two entities.
 new : Entity.Id, Entity.Id, Point3.Point3 Binary64, Point3.Point3 Binary64, Physics.Spring.Spring -> Spring
-new = |entity_1, entity_2, attachment_point_1, attachment_point_2, spring|
+new = |entity_1_id, entity_2_id, attachment_point_1, attachment_point_2, spring|
     {
-        entity_1,
-        entity_2,
+        entity_1_id,
+        entity_2_id,
         attachment_point_1,
         attachment_point_2,
         spring,
@@ -51,8 +51,8 @@ new = |entity_1, entity_2, attachment_point_1, attachment_point_2, spring|
 ## Creates a new component for a spring connecting two entities.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Entity.Id, Entity.Id, Point3.Point3 Binary64, Point3.Point3 Binary64, Physics.Spring.Spring -> Entity.Data
-add_new = |data, entity_1, entity_2, attachment_point_1, attachment_point_2, spring|
-    add(data, new(entity_1, entity_2, attachment_point_1, attachment_point_2, spring))
+add_new = |data, entity_1_id, entity_2_id, attachment_point_1, attachment_point_2, spring|
+    add(data, new(entity_1_id, entity_2_id, attachment_point_1, attachment_point_2, spring))
 
 ## Adds a value of the [Spring] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -107,8 +107,8 @@ write_bytes : List U8, Spring -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(144)
-    |> Entity.write_bytes_id(value.entity_1)
-    |> Entity.write_bytes_id(value.entity_2)
+    |> Entity.write_bytes_id(value.entity_1_id)
+    |> Entity.write_bytes_id(value.entity_2_id)
     |> Point3.write_bytes_64(value.attachment_point_1)
     |> Point3.write_bytes_64(value.attachment_point_2)
     |> Physics.Spring.write_bytes(value.spring)
@@ -120,8 +120,8 @@ from_bytes : List U8 -> Result Spring _
 from_bytes = |bytes|
     Ok(
         {
-            entity_1: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
-            entity_2: bytes |> List.sublist({ start: 8, len: 8 }) |> Entity.from_bytes_id?,
+            entity_1_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+            entity_2_id: bytes |> List.sublist({ start: 8, len: 8 }) |> Entity.from_bytes_id?,
             attachment_point_1: bytes |> List.sublist({ start: 16, len: 24 }) |> Point3.from_bytes_64?,
             attachment_point_2: bytes |> List.sublist({ start: 40, len: 24 }) |> Point3.from_bytes_64?,
             spring: bytes |> List.sublist({ start: 64, len: 32 }) |> Physics.Spring.from_bytes?,

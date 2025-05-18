@@ -1,14 +1,13 @@
-# Hash: 6d2005a64466e0c79fcd99d5b50ab9d8150a674949fe1ce5b493ec385b5bbae6
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: be8324e7455bbb58ee1f72890d6f1b418b37fddb95c09acc1b330bcebb2573a4
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::window::input::key::LockKey
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     LockKey,
     write_bytes,
     from_bytes,
 ]
-
 
 LockKey : [
     CapsLock,
@@ -41,27 +40,4 @@ from_bytes = |bytes|
             [0, ..] -> Ok(CapsLock)
             [1, ..] -> Ok(NumLock)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

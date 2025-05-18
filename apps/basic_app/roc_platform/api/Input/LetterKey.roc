@@ -1,14 +1,13 @@
-# Hash: 4b9488dc4bc1b5443d5f10a9e6b92083c7943fb2c2cdf3a94e109a449750c1b1
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: e6d17d51b70dc96a8dfbeead30c52230ce9e8105e20d2381b88838063ab99bdb
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::window::input::key::LetterKey
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     LetterKey,
     write_bytes,
     from_bytes,
 ]
-
 
 LetterKey : [
     KeyA,
@@ -209,51 +208,4 @@ from_bytes = |bytes|
             [24, ..] -> Ok(KeyY)
             [25, ..] -> Ok(KeyZ)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    test_roundtrip_for_variant(2, 1, 0)?
-    test_roundtrip_for_variant(3, 1, 0)?
-    test_roundtrip_for_variant(4, 1, 0)?
-    test_roundtrip_for_variant(5, 1, 0)?
-    test_roundtrip_for_variant(6, 1, 0)?
-    test_roundtrip_for_variant(7, 1, 0)?
-    test_roundtrip_for_variant(8, 1, 0)?
-    test_roundtrip_for_variant(9, 1, 0)?
-    test_roundtrip_for_variant(10, 1, 0)?
-    test_roundtrip_for_variant(11, 1, 0)?
-    test_roundtrip_for_variant(12, 1, 0)?
-    test_roundtrip_for_variant(13, 1, 0)?
-    test_roundtrip_for_variant(14, 1, 0)?
-    test_roundtrip_for_variant(15, 1, 0)?
-    test_roundtrip_for_variant(16, 1, 0)?
-    test_roundtrip_for_variant(17, 1, 0)?
-    test_roundtrip_for_variant(18, 1, 0)?
-    test_roundtrip_for_variant(19, 1, 0)?
-    test_roundtrip_for_variant(20, 1, 0)?
-    test_roundtrip_for_variant(21, 1, 0)?
-    test_roundtrip_for_variant(22, 1, 0)?
-    test_roundtrip_for_variant(23, 1, 0)?
-    test_roundtrip_for_variant(24, 1, 0)?
-    test_roundtrip_for_variant(25, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))
