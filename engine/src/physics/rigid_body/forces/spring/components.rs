@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to spring forces.
 
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{Component, world::Entity};
+use impact_ecs::{Component, world::EntityID};
 use roc_integration::roc;
 
 use super::{Spring, SpringState};
@@ -14,9 +14,9 @@ use crate::physics::motion::Position;
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SpringComp {
     /// The first entity the spring is attached to.
-    pub entity_1: Entity,
+    pub entity_1_id: EntityID,
     /// The second entity the spring is attached to.
-    pub entity_2: Entity,
+    pub entity_2_id: EntityID,
     /// The point where the spring is attached to the first entity, in that
     /// entity's reference frame.
     pub attachment_point_1: Position,
@@ -34,23 +34,23 @@ impl SpringComp {
     /// Creates a new component for a spring connecting two entities.
     #[roc(body = r#"
     {
-        entity_1,
-        entity_2,
+        entity_1_id,
+        entity_2_id,
         attachment_point_1,
         attachment_point_2,
         spring,
         spring_state: Physics.SpringState.new({})
     }"#)]
     pub fn new(
-        entity_1: Entity,
-        entity_2: Entity,
+        entity_1_id: EntityID,
+        entity_2_id: EntityID,
         attachment_point_1: Position,
         attachment_point_2: Position,
         spring: Spring,
     ) -> Self {
         Self {
-            entity_1,
-            entity_2,
+            entity_1_id,
+            entity_2_id,
             attachment_point_1,
             attachment_point_2,
             spring,
@@ -60,10 +60,14 @@ impl SpringComp {
 
     /// Creates a new component for a spring connecting the origins of two
     /// entities' reference frames.
-    pub fn attached_to_origins(entity_1: Entity, entity_2: Entity, spring: Spring) -> Self {
+    pub fn attached_to_origins(
+        entity_1_id: EntityID,
+        entity_2_id: EntityID,
+        spring: Spring,
+    ) -> Self {
         Self::new(
-            entity_1,
-            entity_2,
+            entity_1_id,
+            entity_2_id,
             Position::origin(),
             Position::origin(),
             spring,

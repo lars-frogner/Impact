@@ -62,11 +62,11 @@ pub fn create_multiple_different_entities(profiler: impl Profiler) {
 
 pub fn get_only_entity(profiler: impl Profiler) {
     let mut world = World::new();
-    let entity = world
+    let entity_id = world
         .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
         .unwrap();
     profiler.profile(&mut || {
-        let entry = world.entity(&entity);
+        let entry = world.entity(entity_id);
         entry.n_components()
     });
 }
@@ -76,18 +76,18 @@ pub fn get_one_of_many_different_entities(profiler: impl Profiler) {
     let entities = populate_world(&mut world);
     let entity = entities[21];
     profiler.profile(&mut || {
-        let entry = world.entity(&entity);
+        let entry = world.entity(entity);
         entry.n_components()
     });
 }
 
 pub fn get_component_of_only_entity(profiler: impl Profiler) {
     let mut world = World::new();
-    let entity = world
+    let entity_id = world
         .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
         .unwrap();
     profiler.profile(&mut || {
-        let entry = world.entity(&entity);
+        let entry = world.entity(entity_id);
         let comp_entry = entry.component::<F32TripleComp>();
         let comp = comp_entry.access();
         *comp
@@ -99,7 +99,7 @@ pub fn get_component_of_one_of_many_different_entities(profiler: impl Profiler) 
     let entities = populate_world(&mut world);
     let entity = entities[21];
     profiler.profile(&mut || {
-        let entry = world.entity(&entity);
+        let entry = world.entity(entity);
         let comp_entry = entry.component::<F32TripleComp>();
         let comp = comp_entry.access();
         *comp
@@ -108,11 +108,11 @@ pub fn get_component_of_one_of_many_different_entities(profiler: impl Profiler) 
 
 pub fn modify_component_of_only_entity(profiler: impl Profiler) {
     let mut world = World::new();
-    let entity = world
+    let entity_id = world
         .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
         .unwrap();
     profiler.profile(&mut || {
-        let entry = world.entity(&entity);
+        let entry = world.entity(entity_id);
         let mut comp_entry = entry.component_mut::<F32TripleComp>();
         let comp = comp_entry.access();
         comp.1 = 42.0;
@@ -125,7 +125,7 @@ pub fn modify_component_of_one_of_many_different_entities(profiler: impl Profile
     let entities = populate_world(&mut world);
     let entity = entities[21];
     profiler.profile(&mut || {
-        let entry = world.entity(&entity);
+        let entry = world.entity(entity);
         let mut comp_entry = entry.component_mut::<F32TripleComp>();
         let comp = comp_entry.access();
         comp.1 = 42.0;

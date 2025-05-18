@@ -16,7 +16,7 @@ use crate::{
     },
     voxel::VoxelObjectManager,
 };
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::world::{EntityID, World as ECSWorld};
 use impact_profiling::Profiler;
 use nalgebra::point;
 
@@ -35,7 +35,11 @@ pub fn prepare_contacts(profiler: impl Profiler) {
                   contact_manifold,
               }| {
             for contact in contact_manifold.contacts() {
-                contacts.push((collider_a.entity(), collider_b.entity(), contact.clone()));
+                contacts.push((
+                    collider_a.entity_id(),
+                    collider_b.entity_id(),
+                    contact.clone(),
+                ));
             }
         },
     );
@@ -122,7 +126,7 @@ fn setup_sphere_bodies(
     ecs_world: &mut ECSWorld,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = SphereBody>,
-) -> Vec<Entity> {
+) -> Vec<EntityID> {
     bodies
         .into_iter()
         .map(
@@ -139,7 +143,7 @@ fn setup_sphere_bodies(
                 let frame =
                     ReferenceFrameComp::for_rigid_body(*sphere.center(), Orientation::identity());
 
-                let entity = ecs_world
+                let entity_id = ecs_world
                     .create_entity((
                         &frame,
                         &VelocityComp::linear(velocity),
@@ -160,11 +164,11 @@ fn setup_sphere_bodies(
 
                 collision_world.synchronize_collidable(
                     collidable_id,
-                    entity,
+                    entity_id,
                     frame.create_transform_to_parent_space(),
                 );
 
-                entity
+                entity_id
             },
         )
         .collect()

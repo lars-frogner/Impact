@@ -158,11 +158,11 @@ impl Scene {
             },
             components,
             |parent: &ParentComp| -> SceneGraphParentNodeComp {
-                let parent_entity = ecs_world
-                    .get_entity(&parent.entity)
+                let parent_entity_id = ecs_world
+                    .get_entity(parent.entity_id)
                     .expect("Missing parent entity");
 
-                let parent_group_node = parent_entity
+                let parent_group_node = parent_entity_id
                     .get_component::<SceneGraphGroupNodeComp>()
                     .expect("Missing group node component for parent entity");
 

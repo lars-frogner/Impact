@@ -8,14 +8,14 @@ use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
     component::{ComponentArray, ComponentCategory, ComponentID, SingleInstance},
-    world::Entity,
+    world::EntityID,
 };
 
 impl Engine {
     pub fn create_entity<A, E>(
         &self,
         components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
-    ) -> Result<Entity>
+    ) -> Result<EntityID>
     where
         A: ComponentArray,
         E: Into<anyhow::Error>,
@@ -29,7 +29,7 @@ impl Engine {
     pub fn create_entities<A, E>(
         &self,
         components: impl TryInto<ArchetypeComponents<A>, Error = E>,
-    ) -> Result<Vec<Entity>>
+    ) -> Result<Vec<EntityID>>
     where
         A: ComponentArray,
         E: Into<anyhow::Error>,
@@ -84,10 +84,10 @@ impl Engine {
         self.ecs_world.write().unwrap().create_entities(components)
     }
 
-    pub fn remove_entity(&self, entity: &Entity) -> Result<()> {
+    pub fn remove_entity(&self, entity_id: EntityID) -> Result<()> {
         let mut ecs_world = self.ecs_world.write().unwrap();
 
-        let entry = ecs_world.entity(entity);
+        let entry = ecs_world.entity(entity_id);
 
         self.simulator()
             .read()
@@ -109,28 +109,30 @@ impl Engine {
                 .declare_render_resources_desynchronized();
         }
 
-        ecs_world.remove_entity(entity)
+        ecs_world.remove_entity(entity_id)
     }
 
-    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the specified
+    /// entity.
     ///
     /// # Errors
     /// Returns an error if the entity does not exist or does not have the
     /// [`SceneEntityFlagsComp`] component.
-    pub fn enable_scene_entity(&self, entity: &Entity) -> Result<()> {
-        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
+    pub fn enable_scene_entity(&self, entity_id: EntityID) -> Result<()> {
+        self.with_component_mut(entity_id, |flags: &mut SceneEntityFlagsComp| {
             flags.0.remove(SceneEntityFlags::IS_DISABLED);
             Ok(())
         })
     }
 
-    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the given entity.
+    /// Sets the [`SceneEntityFlags::IS_DISABLED`] flag for the specified
+    /// entity.
     ///
     /// # Errors
     /// Returns an error if the entity does not exist or does not have the
     /// [`SceneEntityFlagsComp`] component.
-    pub fn disable_scene_entity(&self, entity: &Entity) -> Result<()> {
-        self.with_component_mut(entity, |flags: &mut SceneEntityFlagsComp| {
+    pub fn disable_scene_entity(&self, entity_id: EntityID) -> Result<()> {
+        self.with_component_mut(entity_id, |flags: &mut SceneEntityFlagsComp| {
             flags.0.insert(SceneEntityFlags::IS_DISABLED);
             Ok(())
         })

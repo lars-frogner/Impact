@@ -2,7 +2,7 @@
 
 use crate::{
     Component,
-    world::{Entity, World},
+    world::{EntityID, World},
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -34,7 +34,7 @@ const F64_TUPLE: F64TupleComp = F64TupleComp(0.0, 1.0);
 const F32_TRIPLE: F32TripleComp = F32TripleComp(0.0, 1.0, 2.0);
 const F64_TRIPLE: F64TripleComp = F64TripleComp(0.0, 1.0, 2.0);
 
-fn populate_world(world: &mut World) -> Vec<Entity> {
+fn populate_world(world: &mut World) -> Vec<EntityID> {
     let mut entities = Vec::new();
     entities.push(world.create_entity(&ZeroSized).unwrap());
     entities.extend(world.create_entities(&[F32_TUPLE; 5]).unwrap());

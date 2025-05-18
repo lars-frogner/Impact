@@ -3,7 +3,7 @@
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{
     Component, query,
-    world::{Entity, World},
+    world::{EntityID, World},
 };
 use std::collections::HashSet;
 
@@ -481,7 +481,7 @@ fn correct_single_entity_is_included() {
     let correct_included = world.create_entity((&BYTE, &POS)).unwrap();
     world.create_entity(&BYTE).unwrap();
 
-    query!(world, |entity: Entity, _rect: &Position, _byte: &Byte| {
+    query!(world, |entity: EntityID, _rect: &Position, _byte: &Byte| {
         assert_eq!(entity, correct_included);
     });
 }
@@ -497,7 +497,7 @@ fn correct_two_entities_are_included() {
 
     query!(
         world,
-        |entity: Entity, _byte: &mut Byte| {
+        |entity: EntityID, _byte: &mut Byte| {
             assert!(correct_included.remove(&entity));
         },
         [Marked]
@@ -519,7 +519,7 @@ fn correct_three_entities_are_included() {
 
     query!(
         world,
-        |entity: Entity, _rect: &mut Rectangle| {
+        |entity: EntityID, _rect: &mut Rectangle| {
             assert!(correct_included.remove(&entity));
         },
         [Position],
@@ -539,7 +539,7 @@ fn all_entities_are_included_when_no_comps_specified() {
     correct_included.insert(world.create_entity((&BYTE, &Marked)).unwrap());
     correct_included.insert(world.create_entity(&BYTE).unwrap());
 
-    query!(world, |entity: Entity| {
+    query!(world, |entity: EntityID| {
         assert!(correct_included.remove(&entity));
     });
     assert!(correct_included.is_empty());

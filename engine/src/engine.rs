@@ -28,7 +28,7 @@ use anyhow::{Result, anyhow};
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{Component, SingleInstance},
-    world::{Entity, World as ECSWorld},
+    world::{EntityID, World as ECSWorld},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -429,20 +429,20 @@ impl Engine {
 
     fn with_component_mut<C: Component, R>(
         &self,
-        entity: &Entity,
+        entity_id: EntityID,
         f: impl FnOnce(&mut C) -> Result<R>,
     ) -> Result<R> {
         let ecs_world = self.ecs_world.read().unwrap();
 
         let entity_entry = ecs_world
-            .get_entity(entity)
-            .ok_or_else(|| anyhow!("Missing entity: {:?}", entity))?;
+            .get_entity(entity_id)
+            .ok_or_else(|| anyhow!("Missing entity with ID {:?}", entity_id))?;
 
         let mut component_entry = entity_entry.get_component_mut().ok_or_else(|| {
             anyhow!(
-                "Missing component {:?} for entity: {:?}",
+                "Missing component {:?} for entity with ID {:?}",
                 C::component_id(),
-                entity
+                entity_id
             )
         })?;
 

@@ -16,7 +16,7 @@ use crate::physics::{
 };
 use bitflags::bitflags;
 use impact_containers::KeyIndexMapper;
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::world::{EntityID, World as ECSWorld};
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -30,7 +30,7 @@ use std::{
 pub struct ConstraintSolver {
     config: ConstraintSolverConfig,
     bodies: Vec<ConstrainedBody>,
-    body_index_map: KeyIndexMapper<Entity>,
+    body_index_map: KeyIndexMapper<EntityID>,
     contacts: ConstraintCache<ContactID, PreparedContact>,
     spherical_joints: ConstraintCache<ConstraintID, PreparedSphericalJoint>,
 }
@@ -111,14 +111,14 @@ impl ConstraintSolver {
     pub fn prepare_contact(
         &mut self,
         ecs_world: &ECSWorld,
-        body_a_entity: Entity,
-        body_b_entity: Entity,
+        body_a_entity_id_id: EntityID,
+        body_b_entity_id_id: EntityID,
         contact: &Contact,
     ) {
         if let Some(prepared_contact) = self.prepare_constraint_for_body_pair(
             ecs_world,
-            body_a_entity,
-            body_b_entity,
+            body_a_entity_id_id,
+            body_b_entity_id_id,
             &contact.geometry,
         ) {
             self.contacts.register_prepared_constraint(
@@ -139,8 +139,8 @@ impl ConstraintSolver {
     ) {
         if let Some(prepared_joint) = self.prepare_constraint_for_body_pair(
             ecs_world,
-            joint.body_a_entity,
-            joint.body_b_entity,
+            joint.body_a_entity_id,
+            joint.body_b_entity_id,
             joint,
         ) {
             self.spherical_joints.register_prepared_constraint(
@@ -257,17 +257,17 @@ impl ConstraintSolver {
     fn prepare_constraint_for_body_pair<C: TwoBodyConstraint>(
         &mut self,
         ecs_world: &ECSWorld,
-        body_a_entity: Entity,
-        body_b_entity: Entity,
+        body_a_entity_id_id: EntityID,
+        body_b_entity_id_id: EntityID,
         constraint: &C,
     ) -> Option<BodyPairConstraint<C::Prepared>> {
         let (body_a_idx, body_b_idx) =
-            self.prepare_body_pair(ecs_world, body_a_entity, body_b_entity)?;
+            self.prepare_body_pair(ecs_world, body_a_entity_id_id, body_b_entity_id_id)?;
 
         let prepared_constraint = constraint.prepare(
             ecs_world,
-            &body_a_entity,
-            &body_b_entity,
+            body_a_entity_id_id,
+            body_b_entity_id_id,
             &self.bodies[body_a_idx],
             &self.bodies[body_b_idx],
         );
@@ -284,20 +284,20 @@ impl ConstraintSolver {
     fn prepare_body_pair(
         &mut self,
         ecs_world: &ECSWorld,
-        body_a_entity: Entity,
-        body_b_entity: Entity,
+        body_a_entity_id: EntityID,
+        body_b_entity_id: EntityID,
     ) -> Option<(usize, usize)> {
-        let body_a_idx = self.prepare_body(ecs_world, body_a_entity)?;
-        let body_b_idx = self.prepare_body(ecs_world, body_b_entity)?;
+        let body_a_idx = self.prepare_body(ecs_world, body_a_entity_id)?;
+        let body_b_idx = self.prepare_body(ecs_world, body_b_entity_id)?;
         Some((body_a_idx, body_b_idx))
     }
 
-    fn prepare_body(&mut self, ecs_world: &ECSWorld, body_entity: Entity) -> Option<usize> {
-        if let Some(body_idx) = self.body_index_map.get(body_entity) {
+    fn prepare_body(&mut self, ecs_world: &ECSWorld, body_entity_id: EntityID) -> Option<usize> {
+        if let Some(body_idx) = self.body_index_map.get(body_entity_id) {
             return Some(body_idx);
         }
 
-        let entry = ecs_world.get_entity(&body_entity)?;
+        let entry = ecs_world.get_entity(body_entity_id)?;
 
         let frame = entry.get_component::<ReferenceFrameComp>()?;
 
@@ -318,7 +318,7 @@ impl ConstraintSolver {
 
         let body_idx = self.bodies.len();
         self.bodies.push(constrained_body);
-        self.body_index_map.push_key(body_entity);
+        self.body_index_map.push_key(body_entity_id);
 
         Some(body_idx)
     }
@@ -487,10 +487,10 @@ fn apply_positional_corrections_sequentially_for_body_pair_constraints<
 
 fn set_prepared_body_velocities_to_entity_velocities(
     ecs_world: &ECSWorld,
-    body_entity: Entity,
+    body_entity_id: EntityID,
     body: &mut ConstrainedBody,
 ) {
-    let Some(entry) = ecs_world.get_entity(&body_entity) else {
+    let Some(entry) = ecs_world.get_entity(body_entity_id) else {
         return;
     };
     let Some(velocity) = entry.get_component::<VelocityComp>() else {
@@ -504,10 +504,10 @@ fn set_prepared_body_velocities_to_entity_velocities(
 
 fn apply_body_velocities_and_configurations_to_entities(
     ecs_world: &ECSWorld,
-    body_entity: Entity,
+    body_entity_id: EntityID,
     body: &ConstrainedBody,
 ) {
-    let Some(entry) = ecs_world.get_entity(&body_entity) else {
+    let Some(entry) = ecs_world.get_entity(body_entity_id) else {
         return;
     };
     let Some(mut frame) = entry.get_component_mut::<ReferenceFrameComp>() else {

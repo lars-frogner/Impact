@@ -14,7 +14,7 @@ pub mod tasks;
 use anyhow::{Result, bail};
 use collision::CollisionWorld;
 use constraint::{ConstraintManager, solver::ConstraintSolverConfig};
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::world::{EntityID, World as ECSWorld};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
 use rigid_body::forces::{RigidBodyForceConfig, RigidBodyForceManager};
@@ -240,7 +240,7 @@ impl PhysicsSimulator {
         medium: &UniformMedium,
         current_simulation_time: fph,
         step_duration: fph,
-        entities_to_remove: &mut Vec<Entity>,
+        entities_to_remove: &mut Vec<EntityID>,
     ) {
         let new_simulation_time = current_simulation_time + step_duration;
 
@@ -281,12 +281,12 @@ impl PhysicsSimulator {
         Self::remove_entities(ecs_world, &entities_to_remove);
     }
 
-    fn remove_entities(ecs_world: &RwLock<ECSWorld>, entities_to_remove: &Vec<Entity>) {
+    fn remove_entities(ecs_world: &RwLock<ECSWorld>, entities_to_remove: &Vec<EntityID>) {
         if !entities_to_remove.is_empty() {
             let mut ecs_world_write = ecs_world.write().unwrap();
 
-            for entity in entities_to_remove {
-                ecs_world_write.remove_entity(entity).unwrap();
+            for entity_id in entities_to_remove {
+                ecs_world_write.remove_entity(*entity_id).unwrap();
             }
         }
     }

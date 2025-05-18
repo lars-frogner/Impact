@@ -17,7 +17,7 @@ use crate::{
 use approx::abs_diff_eq;
 use impact_ecs::{
     query,
-    world::{Entity, EntityEntry, World as ECSWorld},
+    world::{EntityEntry, EntityID, World as ECSWorld},
 };
 use nalgebra::UnitVector3;
 
@@ -29,11 +29,11 @@ enum SpringForceApplicationOutcome {
 }
 
 /// Applies spring forces to all applicable entities with a [`SpringComp`].
-pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut Vec<Entity>) {
-    query!(ecs_world, |entity: Entity, spring: &mut SpringComp| {
+pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut Vec<EntityID>) {
+    query!(ecs_world, |entity_id: EntityID, spring: &mut SpringComp| {
         let outcome = apply_forces(spring, ecs_world);
         if outcome == SpringForceApplicationOutcome::EntityMissing {
-            entities_to_remove.push(entity);
+            entities_to_remove.push(entity_id);
         }
     });
 }
@@ -55,11 +55,11 @@ pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
 }
 
 fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApplicationOutcome {
-    let (entity_1, entity_2) = if let (Some(entity_1), Some(entity_2)) = (
-        ecs_world.get_entity(&spring.entity_1),
-        ecs_world.get_entity(&spring.entity_2),
+    let (entity_1, entity_2) = if let (Some(entity_1_id), Some(entity_2_id)) = (
+        ecs_world.get_entity(spring.entity_1_id),
+        ecs_world.get_entity(spring.entity_2_id),
     ) {
-        (entity_1, entity_2)
+        (entity_1_id, entity_2_id)
     } else {
         log::debug!("Missing spring attachment entity: spring component will be removed");
         return SpringForceApplicationOutcome::EntityMissing;

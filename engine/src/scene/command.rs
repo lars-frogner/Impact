@@ -2,7 +2,7 @@
 
 use super::Scene;
 use crate::{engine::command::ActiveState, skybox::Skybox};
-use impact_ecs::world::Entity;
+use impact_ecs::world::EntityID;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -10,7 +10,10 @@ use roc_integration::roc;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SceneCommand {
     SetSkybox(Skybox),
-    SetSceneEntityActiveState { entity: Entity, state: ActiveState },
+    SetSceneEntityActiveState {
+        entity_id: EntityID,
+        state: ActiveState,
+    },
 }
 
 impl Scene {

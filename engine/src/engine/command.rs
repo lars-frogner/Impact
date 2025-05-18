@@ -29,7 +29,7 @@ use crate::{
     ui::command::{ToInteractionMode, UICommand},
 };
 use anyhow::Result;
-use impact_ecs::world::Entity;
+use impact_ecs::world::EntityID;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -146,7 +146,10 @@ impl Engine {
             SceneCommand::SetSkybox(skybox) => {
                 self.set_skybox(skybox);
             }
-            SceneCommand::SetSceneEntityActiveState { entity, state } => {
+            SceneCommand::SetSceneEntityActiveState {
+                entity_id: entity,
+                state,
+            } => {
                 self.set_scene_entity_active_state(entity, state)?;
             }
         }
@@ -310,14 +313,15 @@ impl Engine {
             .declare_render_resources_desynchronized();
     }
 
-    pub fn set_scene_entity_active_state(&self, entity: Entity, state: ActiveState) -> Result<()> {
-        log::info!(
-            "Setting state of scene entity {entity} to {state:?}",
-            entity = entity.as_u64()
-        );
+    pub fn set_scene_entity_active_state(
+        &self,
+        entity_id: EntityID,
+        state: ActiveState,
+    ) -> Result<()> {
+        log::info!("Setting state of scene entity with ID {entity_id} to {state:?}");
         match state {
-            ActiveState::Enabled => self.enable_scene_entity(&entity),
-            ActiveState::Disabled => self.disable_scene_entity(&entity),
+            ActiveState::Enabled => self.enable_scene_entity(entity_id),
+            ActiveState::Disabled => self.disable_scene_entity(entity_id),
         }
     }
 
