@@ -1,14 +1,13 @@
-# Hash: c2fd48fe57ee1aa69f058f4b68b028bd5917f3132e777625a5268fd532bf3be1
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: af1b408ccebea2a541a46f23f78249bd8848125d4100753914e7bc708387c55e
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::ui::command::ToInteractionMode
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     ToInteractionMode,
     write_bytes,
     from_bytes,
 ]
-
 
 ToInteractionMode : [
     Control,
@@ -48,28 +47,4 @@ from_bytes = |bytes|
             [1, ..] -> Ok(Cursor)
             [2, ..] -> Ok(Opposite)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    test_roundtrip_for_variant(2, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

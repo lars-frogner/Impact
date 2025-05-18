@@ -1,8 +1,8 @@
-# Hash: 9437aad85c70a1776aff2c90b08a58feffb6b6646c7b00b545fc6a82d3f36c17
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 3e989192f076d2bc30ae6a3a433da81e47a154b580ff29a0ec1057e685da99e2
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::gpu::rendering::postprocessing::command::ToExposure
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     ToExposure,
     write_bytes,
@@ -76,28 +76,4 @@ from_bytes = |bytes|
 
 
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 5, 0)?
-    test_roundtrip_for_variant(1, 5, 0)?
-    test_roundtrip_for_variant(2, 5, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

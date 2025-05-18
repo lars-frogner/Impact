@@ -1,8 +1,8 @@
-# Hash: 9d25e6031f9db9230f8914466a7b7bb2ed18148b17d4dc5abf8671831e8e4773
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 43dd4e28d823a1f17555809393255e56773ee81635571179917dfe9e494615cb
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::gpu::rendering::postprocessing::command::ToRenderAttachmentQuantity
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     ToRenderAttachmentQuantity,
     write_bytes,
@@ -58,28 +58,4 @@ from_bytes = |bytes|
                 )
 
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 1)?
-    test_roundtrip_for_variant(1, 1, 1)?
-    test_roundtrip_for_variant(2, 2, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

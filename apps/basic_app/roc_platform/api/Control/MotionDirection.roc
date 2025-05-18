@@ -1,14 +1,13 @@
-# Hash: 030a927f23a03a8d8439499a3260e642df96100644956abeda3e194a8144f2ae
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 48f4e5e77b58a4d584e232686f410f6d49415c58dff35f4710d05fbce0562136
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::control::motion::MotionDirection
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     MotionDirection,
     write_bytes,
     from_bytes,
 ]
-
 
 ## Possible directions of motion in the local coordinate
 ## system.
@@ -71,31 +70,4 @@ from_bytes = |bytes|
             [4, ..] -> Ok(Up)
             [5, ..] -> Ok(Down)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    test_roundtrip_for_variant(2, 1, 0)?
-    test_roundtrip_for_variant(3, 1, 0)?
-    test_roundtrip_for_variant(4, 1, 0)?
-    test_roundtrip_for_variant(5, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

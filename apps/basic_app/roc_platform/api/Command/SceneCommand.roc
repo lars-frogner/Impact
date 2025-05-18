@@ -1,8 +1,8 @@
-# Hash: e325e7cffe786c6c3baaa70b74abdb06583ee3d7c35fbb557b00d7f64527c159
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: d32b91bc9a20e66458ecc6894a5b849d46994f32a9811bcf7216bca44da64002
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::scene::command::SceneCommand
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     SceneCommand,
     write_bytes,
@@ -16,7 +16,7 @@ import Skybox
 SceneCommand : [
     SetSkybox Skybox.Skybox,
     SetSceneEntityActiveState {
-            entity : Entity.Id,
+            entity_id : Entity.Id,
             state : Command.ActiveState.ActiveState,
         },
 ]
@@ -33,11 +33,11 @@ write_bytes = |bytes, value|
             |> Skybox.write_bytes(val)
             |> List.concat(List.repeat(0, 1))
 
-        SetSceneEntityActiveState { entity, state } ->
+        SetSceneEntityActiveState { entity_id, state } ->
             bytes
             |> List.reserve(10)
             |> List.append(1)
-            |> Entity.write_bytes_id(entity)
+            |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
 
 ## Deserializes a value of [SceneCommand] from its bytes in the
@@ -58,34 +58,11 @@ from_bytes = |bytes|
             [1, .. as data_bytes] ->
                 Ok(
                     SetSceneEntityActiveState     {
-                        entity: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+                        entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
                         state: data_bytes |> List.sublist({ start: 8, len: 1 }) |> Command.ActiveState.from_bytes?,
                     },
                 )
 
 
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 9, 1)?
-    test_roundtrip_for_variant(1, 10, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

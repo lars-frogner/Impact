@@ -1,8 +1,8 @@
 # Hash: a046e12144715ad1c249597a92b395f9e79d91f20f03ba28f11c9c473d0319f2
-# Generated: 2025-05-14T18:52:22+00:00
+# Generated: 2025-05-18T21:08:36+00:00
 # Rust type: impact::scene::components::SceneEntityFlagsComp
 # Type category: Component
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     SceneEntityFlags,
     add,

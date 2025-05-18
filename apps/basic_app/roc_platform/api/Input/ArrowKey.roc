@@ -1,14 +1,13 @@
-# Hash: 71ce86a8ec4ed16a5b352608f5bfc463c13ed82b269f083ead6d4dd5b31d5568
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: da16adc7c0727ea97b17063bda4b8a3467a3444ef311a38ccd57fda0c3da56e9
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::window::input::key::ArrowKey
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     ArrowKey,
     write_bytes,
     from_bytes,
 ]
-
 
 ArrowKey : [
     ArrowUp,
@@ -55,29 +54,4 @@ from_bytes = |bytes|
             [2, ..] -> Ok(ArrowLeft)
             [3, ..] -> Ok(ArrowRight)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    test_roundtrip_for_variant(2, 1, 0)?
-    test_roundtrip_for_variant(3, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

@@ -1,14 +1,13 @@
-# Hash: f95709b3a7e1a1f040bfe2c0300c9fa84ffa958895895d50382cf999aa746c51
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 7f814adca479874a13e78291868bfe1d0fd21daee0c3cf6eb68f83475b09b0c3
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::engine::command::ToActiveState
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     ToActiveState,
     write_bytes,
     from_bytes,
 ]
-
 
 ToActiveState : [
     Enabled,
@@ -48,28 +47,4 @@ from_bytes = |bytes|
             [1, ..] -> Ok(Disabled)
             [2, ..] -> Ok(Opposite)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    test_roundtrip_for_variant(2, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

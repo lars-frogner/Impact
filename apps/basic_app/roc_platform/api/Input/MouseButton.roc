@@ -1,14 +1,13 @@
-# Hash: 1764ec9df6c89d9e49ff5c1cbe610ed42fde45452fd3703d57632c2aea6a106a
-# Generated: 2025-05-15T13:42:14+00:00
+# Hash: 2a3acd34988e8d48bb96c7049b57bb3a7f9eb014ac3e85d408239054f9937d5b
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::window::input::mouse::MouseButton
 # Type category: Inline
-# Commit: 1e7723b (dirty)
+# Commit: c6462c2 (dirty)
 module [
     MouseButton,
     write_bytes,
     from_bytes,
 ]
-
 
 ## A button on a mouse.
 MouseButton : [
@@ -49,28 +48,4 @@ from_bytes = |bytes|
             [1, ..] -> Ok(Right)
             [2, ..] -> Ok(Middle)
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 1, 0)?
-    test_roundtrip_for_variant(1, 1, 0)?
-    test_roundtrip_for_variant(2, 1, 0)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

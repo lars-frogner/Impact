@@ -1,8 +1,8 @@
-# Hash: ddc2f21305b365d73ac4d13cd032c049534c2927a41685a4b869a3201311c91e
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 02fbfdc24b9e60ec6bef62823e8756c01d00451b72327023e3c8dfde3e7c43b4
+# Generated: 2025-05-18T21:33:59+00:00
 # Rust type: impact::gpu::rendering::command::RenderingCommand
 # Type category: Inline
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     RenderingCommand,
     write_bytes,
@@ -88,29 +88,4 @@ from_bytes = |bytes|
                 )
 
             [] -> Err(MissingDiscriminant)
-            _ -> Err(InvalidDiscriminant)
-
-test_roundtrip : {} -> Result {} _
-test_roundtrip = |{}|
-    test_roundtrip_for_variant(0, 7, 0)?
-    test_roundtrip_for_variant(1, 2, 5)?
-    test_roundtrip_for_variant(2, 2, 5)?
-    test_roundtrip_for_variant(3, 2, 5)?
-    Ok({})
-
-test_roundtrip_for_variant : U8, U64, U64 -> Result {} _
-test_roundtrip_for_variant = |discriminant, variant_size, padding_size|
-    bytes = 
-        List.range({ start: At discriminant, end: Length variant_size })
-        |> List.concat(List.repeat(0, padding_size))
-        |> List.map(|b| Num.to_u8(b))
-    decoded = from_bytes(bytes)?
-    encoded = write_bytes([], decoded)
-    if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
-        Ok({})
-    else
-        Err(NotEqual(encoded, bytes))
-
-expect
-    result = test_roundtrip({})
-    result |> Result.is_ok
+            [discr, ..] -> Err(InvalidDiscriminant(discr))

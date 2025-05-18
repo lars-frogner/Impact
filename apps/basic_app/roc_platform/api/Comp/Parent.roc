@@ -1,8 +1,8 @@
-# Hash: a5d9cbb891ab374ca06bd73e4600616f7f836ded3c24d4f8d50dc50ce83ad7e0
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 1439e58375e08c532f39775e9403f94fc39b04dc9520d517b60567cf0c0e0879
+# Generated: 2025-05-18T21:01:52+00:00
 # Rust type: impact::scene::components::ParentComp
 # Type category: Component
-# Commit: d505d37
+# Commit: c6462c2 (dirty)
 module [
     Parent,
     new,
@@ -21,17 +21,17 @@ import core.Builtin
 ## [`SceneGraphParentNodeComp`] for the entity. It is therefore not kept after
 ## entity creation.
 Parent : {
-    entity : Entity.Id,
+    entity_id : Entity.Id,
 }
 
-## Creates a new component representing a direct child of the given
-## [`Entity`].
+## Creates a new component representing a direct child of the specified
+## entity.
 new : Entity.Id -> Parent
 new = |parent|
-    { entity: parent }
+    { entity_id: parent }
 
-## Creates a new component representing a direct child of the given
-## [`Entity`].
+## Creates a new component representing a direct child of the specified
+## entity.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Entity.Id -> Entity.Data
 add_new = |data, parent|
@@ -57,7 +57,7 @@ write_packet : List U8, Parent -> List U8
 write_packet = |bytes, value|
     type_id = 6272559603799074398
     size = 8
-    alignment = 4
+    alignment = 8
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -69,7 +69,7 @@ write_multi_packet : List U8, List Parent -> List U8
 write_multi_packet = |bytes, values|
     type_id = 6272559603799074398
     size = 8
-    alignment = 4
+    alignment = 8
     count = List.len(values)
     bytes_with_header =
         bytes
@@ -90,7 +90,7 @@ write_bytes : List U8, Parent -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(8)
-    |> Entity.write_bytes_id(value.entity)
+    |> Entity.write_bytes_id(value.entity_id)
 
 ## Deserializes a value of [Parent] from its bytes in the
 ## representation used by the engine.
@@ -98,7 +98,7 @@ from_bytes : List U8 -> Result Parent _
 from_bytes = |bytes|
     Ok(
         {
-            entity: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
         },
     )
 
