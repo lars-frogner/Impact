@@ -12,6 +12,29 @@ use impact_ecs::{
 };
 
 impl Engine {
+    pub fn create_entity_with_id<A, E>(
+        &self,
+        entity_id: EntityID,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let mut components = components
+            .try_into()
+            .map_err(E::into)?
+            .into_inner()
+            .into_storage();
+
+        self.perform_setup_for_new_entities(&mut components)?;
+
+        self.ecs_world
+            .write()
+            .unwrap()
+            .create_entity_with_id(entity_id, SingleInstance::new(components))
+    }
+
     pub fn create_entity<A, E>(
         &self,
         components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
@@ -35,52 +58,7 @@ impl Engine {
         E: Into<anyhow::Error>,
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
-
-        let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
-
-        self.scene().read().unwrap().perform_setup_for_new_entity(
-            self.graphics_device(),
-            &self.assets().read().unwrap(),
-            &mut components,
-            &mut render_resources_desynchronized,
-        )?;
-
-        self.simulator()
-            .read()
-            .unwrap()
-            .perform_setup_for_new_entity(
-                self.scene().read().unwrap().mesh_repository(),
-                &mut components,
-            );
-
-        self.scene().read().unwrap().add_new_entity_to_scene_graph(
-            self.window(),
-            self.renderer(),
-            &self.ecs_world,
-            &mut components,
-            &mut render_resources_desynchronized,
-        )?;
-
-        if render_resources_desynchronized.is_yes() {
-            self.renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-        }
-
-        let (setup_component_ids, setup_component_names, standard_component_names) =
-            self.extract_component_metadata(&components);
-
-        log::info!(
-            "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
-            components.component_count(),
-            setup_component_names.join("\n    "),
-            standard_component_names.join("\n    "),
-        );
-
-        // Remove all setup components
-        components.remove_component_types_with_ids(setup_component_ids)?;
-
+        self.perform_setup_for_new_entities(&mut components)?;
         self.ecs_world.write().unwrap().create_entities(components)
     }
 
@@ -136,6 +114,58 @@ impl Engine {
             flags.0.insert(SceneEntityFlags::IS_DISABLED);
             Ok(())
         })
+    }
+
+    fn perform_setup_for_new_entities(
+        &self,
+        components: &mut ArchetypeComponentStorage,
+    ) -> Result<()> {
+        let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
+
+        self.scene().read().unwrap().perform_setup_for_new_entity(
+            self.graphics_device(),
+            &self.assets().read().unwrap(),
+            components,
+            &mut render_resources_desynchronized,
+        )?;
+
+        self.simulator()
+            .read()
+            .unwrap()
+            .perform_setup_for_new_entity(
+                self.scene().read().unwrap().mesh_repository(),
+                components,
+            );
+
+        self.scene().read().unwrap().add_new_entity_to_scene_graph(
+            self.window(),
+            self.renderer(),
+            &self.ecs_world,
+            components,
+            &mut render_resources_desynchronized,
+        )?;
+
+        if render_resources_desynchronized.is_yes() {
+            self.renderer()
+                .read()
+                .unwrap()
+                .declare_render_resources_desynchronized();
+        }
+
+        let (setup_component_ids, setup_component_names, standard_component_names) =
+            self.extract_component_metadata(components);
+
+        log::info!(
+            "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
+            components.component_count(),
+            setup_component_names.join("\n    "),
+            standard_component_names.join("\n    "),
+        );
+
+        // Remove all setup components
+        components.remove_component_types_with_ids(setup_component_ids)?;
+
+        Ok(())
     }
 
     fn extract_component_metadata(
