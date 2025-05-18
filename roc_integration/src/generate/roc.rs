@@ -38,7 +38,6 @@ pub(super) fn generate_module(
         associated_dependencies,
         ty,
     )?;
-    module.push('\n');
 
     write_type_declaration(&mut module, type_map, &ty.ty)?;
     module.push('\n');
@@ -53,7 +52,6 @@ pub(super) fn generate_module(
     module.push('\n');
 
     write_from_bytes_function(&mut module, type_map, ty)?;
-    module.push('\n');
 
     write_roundtrip_test(&mut module, ty)?;
 
@@ -136,8 +134,11 @@ fn write_imports(
         ty,
     ));
     imports.sort();
-    for import in imports {
+    for import in &imports {
         writeln!(roc_code, "import {import}")?;
+    }
+    if !imports.is_empty() {
+        roc_code.push('\n');
     }
     Ok(())
 }
@@ -1198,7 +1199,7 @@ fn write_roundtrip_test(roc_code: &mut String, ty: &RegisteredType) -> Result<()
 fn write_roundtrip_test_for_struct(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
     writeln!(
         roc_code,
-        "\
+        "\n\
         test_roundtrip : {{}} -> Result {{}} _\n\
         test_roundtrip = |{{}}|\n    \
             bytes = List.range({{ start: At 0, end: Length {} }}) |> List.map(|b| Num.to_u8(b))\n    \

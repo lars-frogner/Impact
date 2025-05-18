@@ -288,7 +288,7 @@ pub fn generate_roc(
         if !generated.is_empty() || !unchanged.is_empty() {
             println!();
         }
-        println!("\nWarnings:");
+        println!("Warnings:");
     }
     for msg in &warnings {
         eprintln!("{msg}");
