@@ -1,5 +1,7 @@
 //! Overarching container and coordinator for ECS.
 
+use crate::NoHashMap;
+
 use super::{
     NoHashKeyIndexMapper,
     archetype::{
@@ -11,9 +13,9 @@ use super::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use std::{
-    collections::{HashMap, hash_map},
+    collections::hash_map,
     fmt,
-    hash::Hash,
+    hash::{self, Hash},
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -32,19 +34,19 @@ use std::{
 )]
 #[repr(C)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct EntityID(u64);
 
 #[cfg(test)]
 #[repr(C)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct EntityID(pub(crate) u64);
 
 /// Overall manager for entities in the world and their [`Component`] data.
 #[derive(Debug)]
 pub struct World {
-    entity_archetypes: HashMap<EntityID, ArchetypeID>,
+    entity_archetypes: NoHashMap<EntityID, ArchetypeID>,
     /// A map from [`ArchetypeID`] to the index of the corresponding
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_table_indices_by_id: NoHashKeyIndexMapper<ArchetypeID>,
@@ -71,6 +73,14 @@ impl EntityID {
     }
 }
 
+impl Hash for EntityID {
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        hasher.write_u64(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for EntityID {}
+
 impl fmt::Display for EntityID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_u64())
@@ -82,7 +92,7 @@ impl World {
     /// generating random entity IDs.
     pub fn new(seed: u64) -> Self {
         Self {
-            entity_archetypes: HashMap::new(),
+            entity_archetypes: NoHashMap::default(),
             archetype_table_indices_by_id: NoHashKeyIndexMapper::default(),
             archetype_tables: Vec::new(),
             rng: fastrand::Rng::with_seed(seed),
