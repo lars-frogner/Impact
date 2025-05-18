@@ -11,7 +11,6 @@ pub use graph::{
     CameraNodeID, GroupNodeID, ModelInstanceNode, ModelInstanceNodeID, NodeStorage, NodeTransform,
     SceneGraph, SceneGraphNodeID,
 };
-use roc_integration::roc;
 
 use crate::{
     camera::SceneCamera,
@@ -25,6 +24,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use roc_integration::roc;
 use std::{num::NonZeroU32, sync::RwLock};
 
 /// Container for data needed to render a scene.
