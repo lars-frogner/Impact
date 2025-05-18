@@ -43,8 +43,9 @@ pub struct Scene {
 }
 
 bitflags! {
-    /// Bitflags encoding a set of binary states or properties for an entity in a scene.
-    #[roc(category="primitive")]
+    /// Bitflags encoding a set of binary states or properties for an entity in
+    /// a scene.
+    #[roc(parents="Scene", category="primitive")] // <- Not auto-generated, so keep Roc code synced
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct SceneEntityFlags: u8 {
