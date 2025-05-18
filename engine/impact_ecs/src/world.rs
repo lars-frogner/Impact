@@ -67,6 +67,12 @@ impl EntityID {
         Self(const_fnv1a_hash::fnv1a_hash_str_64(input))
     }
 
+    /// Converts the given `u64` into an entity ID. Should only be called
+    /// with values returned from [`Self::as_u64`].
+    pub const fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
+
     /// Returns the `u64` value corresponding to the entity ID.
     pub const fn as_u64(&self) -> u64 {
         self.0
