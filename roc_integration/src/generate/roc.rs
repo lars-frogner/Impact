@@ -1050,7 +1050,7 @@ fn write_from_bytes_function(
             roc_code.push_str(
                 "            \
                 [] -> Err(MissingDiscriminant)\n            \
-                _ -> Err(InvalidDiscriminant)\n\
+                [discr, ..] -> Err(InvalidDiscriminant(discr))\n\
                 ",
             );
         }

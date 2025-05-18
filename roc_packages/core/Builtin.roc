@@ -105,7 +105,7 @@ write_bytes_f64 = |bytes, value|
 DecodeErr : [
     InvalidNumberOfBytes,
     MissingDiscriminant,
-    InvalidDiscriminant,
+    InvalidDiscriminant U8,
 ]
 
 ## Assumes little-endian byte ordering
