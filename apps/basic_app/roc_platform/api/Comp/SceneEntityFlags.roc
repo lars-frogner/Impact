@@ -1,8 +1,8 @@
-# Hash: a046e12144715ad1c249597a92b395f9e79d91f20f03ba28f11c9c473d0319f2
-# Generated: 2025-05-18T21:08:36+00:00
+# Hash: 5060a1243ec7dcb1b98b9ab7636c14a1be5ffa313975cc855fcedb7b2b250563
+# Generated: 2025-05-18T21:51:50+00:00
 # Rust type: impact::scene::components::SceneEntityFlagsComp
 # Type category: Component
-# Commit: c6462c2 (dirty)
+# Commit: 2ba7e8c (dirty)
 module [
     SceneEntityFlags,
     add,
@@ -10,7 +10,7 @@ module [
 ]
 
 import Entity
-import SceneEntityFlags
+import Scene.SceneEntityFlags
 import core.Builtin
 
 ## [`Component`](impact_ecs::component::Component) for entities that
@@ -18,7 +18,7 @@ import core.Builtin
 ##
 ## If not specified, this component is automatically added to any new entity
 ## that has a model, light or rigid body.
-SceneEntityFlags : SceneEntityFlags.SceneEntityFlags
+SceneEntityFlags : Scene.SceneEntityFlags.SceneEntityFlags
 
 ## Adds a value of the [SceneEntityFlags] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -73,7 +73,7 @@ write_bytes : List U8, SceneEntityFlags -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(1)
-    |> SceneEntityFlags.write_bytes(value)
+    |> Scene.SceneEntityFlags.write_bytes(value)
 
 ## Deserializes a value of [SceneEntityFlags] from its bytes in the
 ## representation used by the engine.
@@ -81,7 +81,7 @@ from_bytes : List U8 -> Result SceneEntityFlags _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 1 }) |> SceneEntityFlags.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 1 }) |> Scene.SceneEntityFlags.from_bytes?,
         ),
     )
 
