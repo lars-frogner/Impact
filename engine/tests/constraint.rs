@@ -220,7 +220,7 @@ fn separated_bodies_unaffected_by_contact_constraints() {
         )
     });
 
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig::default());
 
     let (entity_ids, _) = setup_bodies_and_run_constraints(
@@ -250,7 +250,7 @@ fn test_binary_sphere_collision(
     expected_velocity_a: Velocity,
     expected_velocity_b: Velocity,
 ) {
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_iterations: 1,
         n_positional_correction_iterations: 0,
@@ -419,7 +419,7 @@ fn sphere_colliding_with_static_plane() {
         restitution_coef,
     );
 
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_iterations: 1,
         n_positional_correction_iterations: 0,
@@ -474,7 +474,7 @@ fn position_correction_of_interpenetrating_spheres() {
         ),
     ];
 
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_iterations: 0,
         n_positional_correction_iterations: 1,

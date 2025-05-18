@@ -49,7 +49,7 @@ pub struct World {
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_table_indices_by_id: NoHashKeyIndexMapper<ArchetypeID>,
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
-    entity_id_counter: u64,
+    rng: fastrand::Rng,
 }
 
 /// A reference into the entry for an entity in the [`World`].
@@ -60,12 +60,6 @@ pub struct EntityEntry<'a> {
 }
 
 impl EntityID {
-    /// Converts the given `u64` into an entity ID. Should only be called
-    /// with values returned from [`Self::as_u64`].
-    pub const fn from_u64(value: u64) -> Self {
-        Self(value)
-    }
-
     /// Returns the `u64` value corresponding to the entity ID.
     pub const fn as_u64(&self) -> u64 {
         self.0
@@ -79,13 +73,14 @@ impl fmt::Display for EntityID {
 }
 
 impl World {
-    /// Creates a new world with no entities.
-    pub fn new() -> Self {
+    /// Creates a new world with no entities. The specified seed is used for
+    /// generating random entity IDs.
+    pub fn new(seed: u64) -> Self {
         Self {
             entity_archetypes: HashMap::new(),
             archetype_table_indices_by_id: NoHashKeyIndexMapper::default(),
             archetype_tables: Vec::new(),
-            entity_id_counter: 0,
+            rng: fastrand::Rng::with_seed(seed),
         }
     }
 
@@ -117,7 +112,7 @@ impl World {
     /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Speed(f32);
     /// #
-    /// let mut world = World::new();
+    /// let mut world = World::default();
     ///
     /// let entity_1_id = world.create_entity(&Distance(5.0))?;
     /// let entity_2_id = world.create_entity((&Distance(0.0), &Speed(10.0)))?;
@@ -175,7 +170,7 @@ impl World {
     /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Speed(f32);
     /// #
-    /// let mut world = World::new();
+    /// let mut world = World::default();
     /// let entity_ids = world.create_entities(
     ///     (
     ///         &[Distance(0.0),Distance(1.0), Distance(2.0)],
@@ -265,7 +260,7 @@ impl World {
     /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     /// # struct Level(u32);
     /// #
-    /// let mut world = World::new();
+    /// let mut world = World::default();
     ///
     /// let entity_id = world.create_entity(&Level(1))?;
     /// let entry = world.entity(entity_id);
@@ -487,18 +482,17 @@ impl World {
     }
 
     fn create_entity_id(&mut self) -> EntityID {
-        let id = self.entity_id_counter;
-        self.entity_id_counter = self
-            .entity_id_counter
-            .checked_add(1)
-            .expect("Exceeded max number of created entities");
+        let mut id = self.rng.u64(..);
+        while self.entity_archetypes.contains_key(&EntityID(id)) {
+            id = self.rng.u64(..);
+        }
         EntityID(id)
     }
 }
 
 impl Default for World {
     fn default() -> Self {
-        Self::new()
+        Self::new(0)
     }
 }
 
@@ -608,13 +602,13 @@ mod tests {
 
     #[test]
     fn creating_world_works() {
-        let world = World::new();
+        let world = World::default();
         assert_eq!(world.entity_count(), 0);
     }
 
     #[test]
     fn creating_single_entity_works() {
-        let mut world = World::new();
+        let mut world = World::default();
 
         let entity_1_id = world.create_entity(&POS).unwrap();
         assert_eq!(world.entity_count(), 1);
@@ -636,20 +630,20 @@ mod tests {
     #[test]
     #[should_panic]
     fn creating_entity_with_two_aliased_comps_fails() {
-        let mut world = World::new();
+        let mut world = World::default();
         world.create_entity((&POS, &LIKEPOS)).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn creating_entity_with_two_of_three_aliased_comps_fails() {
-        let mut world = World::new();
+        let mut world = World::default();
         world.create_entity((&POS, &TEMP, &LIKEPOS)).unwrap();
     }
 
     #[test]
     fn creating_two_entities_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_ids = world.create_entities(&[TEMP, TEMP2]).unwrap();
 
         assert_eq!(entity_ids.len(), 2);
@@ -685,7 +679,7 @@ mod tests {
 
     #[test]
     fn removing_entity_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity(&POS).unwrap();
         assert_eq!(world.entity_count(), 1);
 
@@ -697,7 +691,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_same_entity_twice_fails() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity(&POS).unwrap();
         world.remove_entity(entity_id).unwrap();
         world.remove_entity(entity_id).unwrap();
@@ -705,14 +699,14 @@ mod tests {
 
     #[test]
     fn removing_all_entities_from_empty_world_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         world.remove_all_entities();
         assert_eq!(world.entity_count(), 0);
     }
 
     #[test]
     fn removing_all_entities_from_single_entity_world_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity(&POS).unwrap();
         world.remove_all_entities();
         assert_eq!(world.entity_count(), 0);
@@ -721,7 +715,7 @@ mod tests {
 
     #[test]
     fn removing_all_entities_from_multi_entity_world_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_ids = world
             .create_entities((&[POS, POS2], &[TEMP, TEMP2]))
             .unwrap();
@@ -733,7 +727,7 @@ mod tests {
 
     #[test]
     fn adding_component_for_entity_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity(&POS).unwrap();
         world.add_component_for_entity(entity_id, &TEMP).unwrap();
 
@@ -747,14 +741,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn adding_existing_component_for_entity_fails() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity(&POS).unwrap();
         world.add_component_for_entity(entity_id, &POS).unwrap();
     }
 
     #[test]
     fn removing_component_for_entity_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity((&POS, &TEMP)).unwrap();
         assert!(world.entity(entity_id).has_component::<Position>());
         world
@@ -770,7 +764,7 @@ mod tests {
 
     #[test]
     fn removing_all_components_for_entity_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity((&POS, &TEMP)).unwrap();
         world
             .remove_component_for_entity::<Position>(entity_id)
@@ -786,7 +780,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_absent_component_from_entity_fails() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity(&POS).unwrap();
         world
             .remove_component_for_entity::<Temperature>(entity_id)
@@ -795,7 +789,7 @@ mod tests {
 
     #[test]
     fn modifying_component_for_entity_works() {
-        let mut world = World::new();
+        let mut world = World::default();
         let entity_id = world.create_entity((&POS, &TEMP)).unwrap();
         let entry = world.entity(entity_id);
         *entry.component_mut::<Temperature>().access() = TEMP2;

@@ -68,6 +68,13 @@ pub struct EngineConfig {
     pub physics: PhysicsConfig,
     pub voxel: VoxelConfig,
     pub controller: ControllerConfig,
+    pub ecs: ECSConfig,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ECSConfig {
+    pub seed: u64,
 }
 
 impl Engine {
@@ -80,7 +87,7 @@ impl Engine {
         let mut component_registry = ComponentRegistry::new();
         components::register_all_components(&mut component_registry)?;
 
-        let ecs_world = ECSWorld::new();
+        let ecs_world = ECSWorld::new(config.ecs.seed);
 
         let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
 
