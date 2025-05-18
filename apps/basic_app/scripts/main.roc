@@ -9,23 +9,24 @@ import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import pf.Skybox
 import pf.Stdout
 import core.Hashing
-import KeyboardInputHandling
-import TestScene
+import InputHandling.Keyboard as KeyboardInput
+import InputHandling.MouseButton as MouseButtonInput
+import Scenes.Test as TestScene
 
 callbacks = {
     setup_scene!,
-    handle_keyboard_event!: KeyboardInputHandling.handle_keyboard_event!,
+    handle_keyboard_event!: KeyboardInput.handle_event!,
     handle_mouse_button_event!,
 }
 
 setup_scene! : {} => Result {} Str
 setup_scene! = |_|
-    _ = Stdout.line!("setup_scene! called")
+    _ = Stdout.line!("Setting up scene")
 
-    _player = Entity.create!(TestScene.player({}))?
-    _ground = Entity.create!(TestScene.ground({}))?
-    _ambient_light = Entity.create!(TestScene.ambient_light({}))?
-    _unidirectional_light = Entity.create!(TestScene.unidirectional_light({}))?
+    Entity.create_with_id!(TestScene.player_id, TestScene.player({}))?
+    Entity.create_with_id!(TestScene.ground_id, TestScene.ground({}))?
+    _ = Entity.create!(TestScene.ambient_light({}))?
+    Entity.create_with_id!(TestScene.unidirectional_light_id, TestScene.unidirectional_light({}))?
 
     Command.execute!(
         Scene(
@@ -38,6 +39,13 @@ setup_scene! = |_|
     Ok({})
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
-handle_mouse_button_event! = |event|
-    _ = Stdout.line!("handle_mouse_button_event! called with event ${Inspect.to_str(event)}")
-    Ok({})
+handle_mouse_button_event! = |{ button, state }|
+    _ = Stdout.line!("Handling mouse button ${Inspect.to_str(button)} ${Inspect.to_str(state)}")
+    when button is
+        Left -> MouseButtonInput.toggle_scene_entity_active_state!(TestScene.ground_id, flip(state))
+        _ -> Ok({})
+
+flip = |state|
+    when state is
+        Pressed -> Released
+        Released -> Pressed

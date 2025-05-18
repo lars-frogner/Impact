@@ -1,11 +1,11 @@
-module [handle_keyboard_event!]
+module [handle_event!]
 
 import pf.Command
 import pf.Input.KeyboardEvent exposing [KeyboardEvent]
 import pf.Stdout
 
-handle_keyboard_event! : KeyboardEvent => Result {} Str
-handle_keyboard_event! = |{ key, state }|
+handle_event! : KeyboardEvent => Result {} Str
+handle_event! = |{ key, state }|
     _ = Stdout.line!("Handling ${Inspect.to_str(key)} ${Inspect.to_str(state)}")
 
     command =

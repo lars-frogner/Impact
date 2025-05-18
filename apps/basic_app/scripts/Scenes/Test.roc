@@ -1,4 +1,7 @@
 module [
+    player_id,
+    ground_id,
+    unidirectional_light_id,
     player,
     ground,
     ambient_light,
@@ -23,6 +26,10 @@ import pf.Comp.UniformColor
 import pf.Comp.UniformRoughness
 import pf.Comp.UniformSpecularReflectance
 import pf.Comp.Velocity
+
+player_id = Entity.new_id("player")
+ground_id = Entity.new_id("ground")
+unidirectional_light_id = Entity.new_id("unidirectional_light")
 
 player = |_|
     Entity.new
