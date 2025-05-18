@@ -52,6 +52,7 @@ use crate::{
     mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     model::{
         InstanceFeature, InstanceFeatureManager, ModelID,
+        buffer::InstanceFeatureGPUBufferManager,
         transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
     },
     scene::{ModelInstanceNode, Scene},
@@ -1379,21 +1380,28 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
     ) {
+        // We only keep models that actually have buffered model-to-light transforms,
+        // otherwise they will not be rendered into the shadow map anyway
+        #[allow(clippy::ptr_arg)]
+        fn has_features(buffer_managers: &Vec<InstanceFeatureGPUBufferManager>) -> bool {
+            buffer_managers
+                .get(ModelInstanceNode::model_light_transform_feature_idx())
+                .is_some_and(|buffer| buffer.n_features() > 0)
+        }
+
         let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
-        self.models
-            .retain(|model_id| instance_feature_buffer_managers.contains_key(model_id));
+        self.models.retain(|model_id| {
+            instance_feature_buffer_managers
+                .get(model_id)
+                .is_some_and(has_features)
+        });
 
         for (model_id, instance_feature_buffer_manager) in instance_feature_buffer_managers {
             if self.models.contains(model_id) {
                 continue;
             }
-            // We only add the model if it actually has buffered model-to-light transforms,
-            // otherwise it will not be rendered into the shadow map anyway
-            if instance_feature_buffer_manager
-                .get(ModelInstanceNode::model_light_transform_feature_idx())
-                .is_none_or(|buffer| buffer.n_features() == 0)
-            {
+            if !has_features(instance_feature_buffer_manager) {
                 continue;
             }
             if let Some(material_specification) = material_library
@@ -1720,21 +1728,28 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
     ) {
+        // We only keep models that actually have buffered model-to-light transforms,
+        // otherwise they will not be rendered into the shadow map anyway
+        #[allow(clippy::ptr_arg)]
+        fn has_features(buffer_managers: &Vec<InstanceFeatureGPUBufferManager>) -> bool {
+            buffer_managers
+                .get(ModelInstanceNode::model_light_transform_feature_idx())
+                .is_some_and(|buffer| buffer.n_features() > 0)
+        }
+
         let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
-        self.models
-            .retain(|model_id| instance_feature_buffer_managers.contains_key(model_id));
+        self.models.retain(|model_id| {
+            instance_feature_buffer_managers
+                .get(model_id)
+                .is_some_and(has_features)
+        });
 
         for (model_id, instance_feature_buffer_manager) in instance_feature_buffer_managers {
             if self.models.contains(model_id) {
                 continue;
             }
-            // We only add the model if it actually has buffered model-to-light transforms,
-            // otherwise it will not be rendered into the shadow map anyway
-            if instance_feature_buffer_manager
-                .get(ModelInstanceNode::model_light_transform_feature_idx())
-                .is_none_or(|buffer| buffer.n_features() == 0)
-            {
+            if !has_features(instance_feature_buffer_manager) {
                 continue;
             }
             if let Some(material_specification) = material_library
