@@ -6,7 +6,7 @@ use impact_ecs::component::{ComponentID, ComponentStorage, SingleInstance};
 
 /// The expected layout is a packed sequence of component structures of the
 /// following form:
-/// ```
+/// ```ignore
 /// {
 ///     component_id: u64,
 ///     component_size: u64,
@@ -36,7 +36,7 @@ pub fn deserialize_components_for_single_entity(
 
 /// The expected layout is a packed sequence of multi-instance component
 /// structures of the following form:
-/// ```
+/// ```ignore
 /// {
 ///     component_id: u64,
 ///     component_size: u64,

@@ -6,7 +6,7 @@ use crate::physics::{
     material::{ContactResponseParameters, components::UniformContactResponseComp},
     motion::{self, Orientation, Position, Velocity},
 };
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::world::{EntityID, World as ECSWorld};
 use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
 use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
@@ -158,21 +158,21 @@ impl ContactGeometry {
     /// two bodies.
     fn determine_effective_response_parameters(
         ecs_world: &ECSWorld,
-        body_a_entity: &Entity,
-        body_b_entity: &Entity,
+        body_a_entity_id: EntityID,
+        body_b_entity_id: EntityID,
     ) -> ContactResponseParameters {
         let body_a_response_params =
-            Self::obtain_contact_response_parameters_for_body(ecs_world, body_a_entity);
+            Self::obtain_contact_response_parameters_for_body(ecs_world, body_a_entity_id);
 
         let body_b_response_params =
-            Self::obtain_contact_response_parameters_for_body(ecs_world, body_b_entity);
+            Self::obtain_contact_response_parameters_for_body(ecs_world, body_b_entity_id);
 
         ContactResponseParameters::combined(&body_a_response_params, &body_b_response_params)
     }
 
     fn obtain_contact_response_parameters_for_body(
         ecs_world: &ECSWorld,
-        body_entity: &Entity,
+        body_entity: EntityID,
     ) -> ContactResponseParameters {
         let entry = ecs_world.entity(body_entity);
 
@@ -200,8 +200,8 @@ impl TwoBodyConstraint for ContactGeometry {
     fn prepare(
         &self,
         ecs_world: &ECSWorld,
-        body_a_entity: &Entity,
-        body_b_entity: &Entity,
+        body_a_entity_id: EntityID,
+        body_b_entity_id: EntityID,
         body_a: &ConstrainedBody,
         body_b: &ConstrainedBody,
     ) -> Self::Prepared {
@@ -229,7 +229,11 @@ impl TwoBodyConstraint for ContactGeometry {
             restitution_coef,
             static_friction_coef,
             dynamic_friction_coef,
-        } = Self::determine_effective_response_parameters(ecs_world, body_a_entity, body_b_entity);
+        } = Self::determine_effective_response_parameters(
+            ecs_world,
+            body_a_entity_id,
+            body_b_entity_id,
+        );
 
         // World space velocity of the reference contact point when considered
         // fixed to body A and B respectively

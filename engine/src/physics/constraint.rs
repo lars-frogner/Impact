@@ -18,7 +18,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use contact::Contact;
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::world::{EntityID, World as ECSWorld};
 use nalgebra::{Matrix3, Vector3};
 use num_traits::Zero;
 use solver::{ConstraintSolver, ConstraintSolverConfig};
@@ -51,8 +51,8 @@ trait TwoBodyConstraint {
     fn prepare(
         &self,
         ecs_world: &ECSWorld,
-        body_a_entity: &Entity,
-        body_b_entity: &Entity,
+        body_a_entity_id: EntityID,
+        body_b_entity_id: EntityID,
         body_a: &ConstrainedBody,
         body_b: &ConstrainedBody,
     ) -> Self::Prepared;
@@ -175,8 +175,8 @@ impl ConstraintManager {
                 for contact in contact_manifold.contacts() {
                     self.solver.prepare_contact(
                         ecs_world,
-                        collider_a.entity(),
-                        collider_b.entity(),
+                        collider_a.entity_id(),
+                        collider_b.entity_id(),
                         contact,
                     );
                 }
@@ -196,13 +196,13 @@ impl ConstraintManager {
     pub fn prepare_specific_contacts_only<'a>(
         &mut self,
         ecs_world: &ECSWorld,
-        contacts: impl IntoIterator<Item = (Entity, Entity, &'a Contact)>,
+        contacts: impl IntoIterator<Item = (EntityID, EntityID, &'a Contact)>,
     ) {
         self.solver.clear_prepared_bodies();
 
-        for (body_a_entity, body_b_entity, contact) in contacts {
+        for (body_a_entity_id, body_b_entity_id, contact) in contacts {
             self.solver
-                .prepare_contact(ecs_world, body_a_entity, body_b_entity, contact);
+                .prepare_contact(ecs_world, body_a_entity_id, body_b_entity_id, contact);
         }
 
         self.solver.remove_unprepared_constraints();

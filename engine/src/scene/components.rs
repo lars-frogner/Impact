@@ -2,7 +2,7 @@
 
 use crate::scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags};
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{Component, SetupComponent, world::Entity};
+use impact_ecs::{Component, SetupComponent, world::EntityID};
 use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities that
@@ -25,7 +25,7 @@ pub struct SceneEntityFlagsComp(pub SceneEntityFlags);
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
 pub struct ParentComp {
-    pub entity: Entity,
+    pub entity_id: EntityID,
 }
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -103,11 +103,11 @@ impl SceneEntityFlagsComp {
 
 #[roc]
 impl ParentComp {
-    /// Creates a new component representing a direct child of the given
-    /// [`Entity`].
+    /// Creates a new component representing a direct child of the specified
+    /// entity.
     #[roc(body = "{ entity: parent }")]
-    pub fn new(parent: Entity) -> Self {
-        Self { entity: parent }
+    pub fn new(parent: EntityID) -> Self {
+        Self { entity_id: parent }
     }
 }
 

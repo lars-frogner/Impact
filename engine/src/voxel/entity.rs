@@ -818,14 +818,14 @@ pub fn handle_emptied_voxel_objects(engine: &Engine) -> Result<()> {
         let scene = engine.scene().read().unwrap();
         let mut voxel_manager = scene.voxel_manager().write().unwrap();
 
-        if let Some(entity) = voxel_manager.object_manager.pop_empty_voxel_object_entity() {
+        if let Some(entity_id) = voxel_manager.object_manager.pop_empty_voxel_object_entity() {
             // We must release these locks before attempting to remove the entity, or we
             // will deadlock
             drop(voxel_manager);
             drop(scene);
 
             log::debug!("Removing entity for emptied voxel object");
-            engine.remove_entity(&entity)?;
+            engine.remove_entity(entity_id)?;
         } else {
             break;
         }

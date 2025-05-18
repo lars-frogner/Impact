@@ -9,7 +9,7 @@ use crate::{
 };
 use impact_ecs::{
     query,
-    world::{Entity, World as ECSWorld},
+    world::{EntityID, World as ECSWorld},
 };
 
 pub fn synchronize_collision_world(collision_world: &mut CollisionWorld, ecs_world: &ECSWorld) {
@@ -17,7 +17,7 @@ pub fn synchronize_collision_world(collision_world: &mut CollisionWorld, ecs_wor
 
     query!(
         ecs_world,
-        |entity: Entity,
+        |entity_id: EntityID,
          collidable: &CollidableComp,
          frame: &ReferenceFrameComp,
          flags: &SceneEntityFlagsComp| {
@@ -29,7 +29,7 @@ pub fn synchronize_collision_world(collision_world: &mut CollisionWorld, ecs_wor
 
             collision_world.synchronize_collidable(
                 collidable.collidable_id,
-                entity,
+                entity_id,
                 transform_to_world_space,
             );
         }

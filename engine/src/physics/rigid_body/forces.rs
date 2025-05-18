@@ -13,7 +13,7 @@ use anyhow::Result;
 use detailed_drag::{DragLoadMapConfig, DragLoadMapRepository};
 use impact_ecs::{
     query,
-    world::{Entity, World as ECSWorld},
+    world::{EntityID, World as ECSWorld},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
@@ -51,7 +51,7 @@ impl RigidBodyForceManager {
         &self,
         ecs_world: &ECSWorld,
         medium: &UniformMedium,
-        entities_to_remove: &mut Vec<Entity>,
+        entities_to_remove: &mut Vec<EntityID>,
     ) {
         reset_forces_and_torques(ecs_world);
 

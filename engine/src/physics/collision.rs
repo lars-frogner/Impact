@@ -13,7 +13,7 @@ use crate::{
     voxel::{VoxelObjectID, VoxelObjectManager},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::world::Entity;
+use impact_ecs::world::EntityID;
 use nalgebra::{Similarity3, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ pub struct CollisionWorld {
 pub struct CollidableDescriptor {
     kind: CollidableKind,
     geometry: LocalCollidableGeometry,
-    entity: Entity,
+    entity_id: EntityID,
     idx: usize,
 }
 
@@ -138,7 +138,7 @@ impl CollisionWorld {
     pub fn synchronize_collidable(
         &mut self,
         collidable_id: CollidableID,
-        entity: Entity,
+        entity_id: EntityID,
         transform_to_world_space: Similarity3<fph>,
     ) {
         let descriptor = self
@@ -146,7 +146,7 @@ impl CollisionWorld {
             .get_mut(&collidable_id)
             .expect("Missing descriptor for collidable");
 
-        descriptor.entity = entity;
+        descriptor.entity_id = entity_id;
 
         let collidable = Collidable::new(
             collidable_id,
@@ -295,13 +295,13 @@ impl CollidableDescriptor {
         Self {
             kind,
             geometry,
-            entity: Entity::zeroed(),
+            entity_id: EntityID::zeroed(),
             idx: usize::MAX,
         }
     }
 
-    pub fn entity(&self) -> Entity {
-        self.entity
+    pub fn entity_id(&self) -> EntityID {
+        self.entity_id
     }
 
     pub fn kind(&self) -> CollidableKind {

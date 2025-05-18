@@ -18,7 +18,7 @@ use anyhow::Result;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
-use impact_ecs::{archetype::ArchetypeComponentStorage, world::Entity};
+use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityID};
 use mesh::MeshedChunkedVoxelObject;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
@@ -107,7 +107,7 @@ pub struct VoxelObjectManager {
     objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
     inertial_property_managers: HashMap<VoxelObjectID, VoxelObjectInertialPropertyManager>,
     staged_objects: Vec<StagedVoxelObject>,
-    emptied_object_entities: Vec<Entity>,
+    emptied_object_entities: Vec<EntityID>,
     id_counter: u32,
 }
 
@@ -474,11 +474,11 @@ impl VoxelObjectManager {
         self.staged_objects.push(staged_object);
     }
 
-    /// Pushes the given the [`Entity`] representing a voxel object that has
-    /// been emptied onto a buffer, awaiting removal of the entity and
-    /// associated resources.
-    pub fn mark_voxel_object_as_empty_for_entity(&mut self, object_entity: Entity) {
-        self.emptied_object_entities.push(object_entity);
+    /// Pushes the specified entity representing a voxel object that has been
+    /// emptied onto a buffer, awaiting removal of the entity and associated
+    /// resources.
+    pub fn mark_voxel_object_as_empty_for_entity(&mut self, object_entity_id: EntityID) {
+        self.emptied_object_entities.push(object_entity_id);
     }
 
     /// Pops the last [`StagedVoxelObject`] off the staging buffer.
@@ -486,8 +486,8 @@ impl VoxelObjectManager {
         self.staged_objects.pop()
     }
 
-    /// Pops the last [`Entity`] for an emptied voxel object off the buffer.
-    pub fn pop_empty_voxel_object_entity(&mut self) -> Option<Entity> {
+    /// Pops the last entity for an emptied voxel object off the buffer.
+    pub fn pop_empty_voxel_object_entity(&mut self) -> Option<EntityID> {
         self.emptied_object_entities.pop()
     }
 

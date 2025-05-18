@@ -6,7 +6,7 @@ use super::{
         CanHaveSingleInstance, Component, ComponentArray, ComponentID, ComponentSlice,
         ComponentStorage, ComponentView, SingleInstance,
     },
-    world::{Entity, EntityID},
+    world::EntityID,
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
@@ -176,16 +176,15 @@ pub struct ArchetypeTable {
     component_storages: Vec<RwLock<ComponentStorage>>,
 }
 
-/// An immutable reference into the entry for an
-/// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
+/// An immutable reference into the entry for an entity in an
+/// [`ArchetypeTable`].
 #[derive(Debug)]
 pub struct TableEntityEntry<'a> {
     info: TableEntityEntryInfo<'a>,
     components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
 }
 
-/// An mutable reference into the entry for an
-/// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
+/// An mutable reference into the entry for an entity in an [`ArchetypeTable`].
 #[derive(Debug)]
 pub struct TableEntityMutEntry<'a> {
     info: TableEntityEntryInfo<'a>,
@@ -973,18 +972,15 @@ impl ArchetypeTable {
         self.entity_index_mapper.is_empty()
     }
 
-    /// Whether the [`Entity`](crate::world::Entity) with the given [`EntityID`]
-    /// is present in the table.
+    /// Whether the entity with the given [`EntityID`] is present in the table.
     pub fn has_entity(&self, entity_id: EntityID) -> bool {
         self.entity_index_mapper.contains_key(entity_id)
     }
 
-    /// Returns an iterator over all [`Entity`]s whose components
+    /// Returns an iterator over all entities whose components
     /// are stored in the table.
-    pub fn all_entities(&self) -> impl Iterator<Item = Entity> {
-        self.entity_index_mapper
-            .key_at_each_idx()
-            .map(|entity_id| Entity::new(entity_id, self.archetype().id()))
+    pub fn all_entities(&self) -> impl Iterator<Item = EntityID> {
+        self.entity_index_mapper.key_at_each_idx()
     }
 
     /// Takes an iterable of [`EntityID`]s and all the associated
@@ -1109,8 +1105,8 @@ impl ArchetypeTable {
     }
 
     /// Returns a [`TableEntityEntry`] that can be used to read the components
-    /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
-    /// If the entity is not present in the table, [`None`] is returned.
+    /// of the entity with the given [`EntityID`]. If the entity is not present
+    /// in the table, [`None`] is returned.
     ///
     /// # Concurrency
     /// The returned `TableEntityEntry` holds locks to the component storages
@@ -1130,7 +1126,7 @@ impl ArchetypeTable {
     }
 
     /// Returns a [`TableEntityEntry`] that can be used to read the components
-    /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
+    /// of the entity with the given [`EntityID`].
     ///
     /// # Panics
     /// If the entity is not present in the table.
@@ -1145,9 +1141,8 @@ impl ArchetypeTable {
     }
 
     /// Returns a [`TableEntityMutEntry`] that can be used to read and modify
-    /// the components of the [`Entity`](crate::world::Entity) with the
-    /// given [`EntityID`]. If the entity is not present in the table,
-    /// [`None`] is returned.
+    /// the components of the entity with the given [`EntityID`]. If the entity
+    /// is not present in the table, [`None`] is returned.
     ///
     /// # Concurrency
     /// The returned `TableEntityMutEntry` holds locks to the component storages
@@ -1167,8 +1162,7 @@ impl ArchetypeTable {
     }
 
     /// Returns a [`TableEntityMutEntry`] that can be used to read and modify
-    /// the components of the [`Entity`](crate::world::Entity) with the
-    /// given [`EntityID`].
+    /// the components of the entity with the given [`EntityID`].
     ///
     /// # Panics
     /// If the entity is not present in the table.
@@ -2494,12 +2488,10 @@ mod tests {
         let mut entities = table.all_entities();
 
         let entity = entities.next().unwrap();
-        assert_eq!(entity.archetype_id(), table.archetype().id());
-        assert!(inserted_entities.remove(&entity.id()));
+        assert!(inserted_entities.remove(&entity));
 
         let entity = entities.next().unwrap();
-        assert_eq!(entity.archetype_id(), table.archetype().id());
-        assert!(inserted_entities.remove(&entity.id()));
+        assert!(inserted_entities.remove(&entity));
 
         assert!(entities.next().is_none());
     }

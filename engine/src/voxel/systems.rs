@@ -25,7 +25,7 @@ use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::ComponentArray,
     query,
-    world::{Entity, World as ECSWorld},
+    world::{EntityID, World as ECSWorld},
 };
 use nalgebra::{Similarity3, Vector3};
 
@@ -39,7 +39,7 @@ pub fn apply_absorption(
 ) {
     query!(
         ecs_world,
-        |entity: Entity,
+        |entity_id: EntityID,
          voxel_object: &VoxelObjectComp,
          reference_frame: &mut ReferenceFrameComp,
          velocity: &mut VelocityComp,
@@ -175,7 +175,7 @@ pub fn apply_absorption(
                 handle_voxel_object_after_removing_voxels(
                     voxel_manager,
                     ecs_world,
-                    entity,
+                    entity_id,
                     voxel_object,
                     reference_frame,
                     velocity,
@@ -257,7 +257,7 @@ fn apply_capsule_absorption(
 fn handle_voxel_object_after_removing_voxels(
     voxel_manager: &mut VoxelManager,
     ecs_world: &ECSWorld,
-    entity: Entity,
+    entity_id: EntityID,
     voxel_object: &VoxelObjectComp,
     reference_frame: &mut ReferenceFrameComp,
     velocity: &mut VelocityComp,
@@ -278,7 +278,7 @@ fn handle_voxel_object_after_removing_voxels(
         log::debug!("Marked voxel object as empty");
         voxel_manager
             .object_manager
-            .mark_voxel_object_as_empty_for_entity(entity);
+            .mark_voxel_object_as_empty_for_entity(entity_id);
         return;
     }
 
@@ -319,7 +319,7 @@ fn handle_voxel_object_after_removing_voxels(
             log::debug!("Marked voxel object as empty");
             voxel_manager
                 .object_manager
-                .mark_voxel_object_as_empty_for_entity(entity);
+                .mark_voxel_object_as_empty_for_entity(entity_id);
         } else {
             // We need to know how the center of mass of the original object has changed to
             // update its linear velocity. Here we compute the change in the local frame of
@@ -340,7 +340,7 @@ fn handle_voxel_object_after_removing_voxels(
         handle_disconnected_voxel_object(
             &mut voxel_manager.object_manager,
             ecs_world,
-            entity,
+            entity_id,
             original_reference_frame,
             original_velocity,
             original_rigid_body,
@@ -364,7 +364,7 @@ fn handle_voxel_object_after_removing_voxels(
 fn handle_disconnected_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
     ecs_world: &ECSWorld,
-    parent_entity: Entity,
+    parent_entity_id: EntityID,
     original_reference_frame: ReferenceFrameComp,
     original_velocity: VelocityComp,
     original_rigid_body: RigidBodyComp,
@@ -414,7 +414,7 @@ fn handle_disconnected_voxel_object(
 
     add_additional_parent_components_for_disconnected_object(
         ecs_world,
-        parent_entity,
+        parent_entity_id,
         &mut components,
     );
 
@@ -428,11 +428,11 @@ fn handle_disconnected_voxel_object(
 
 fn add_additional_parent_components_for_disconnected_object(
     ecs_world: &ECSWorld,
-    parent_entity: Entity,
+    parent_entity_id: EntityID,
     components: &mut ArchetypeComponentStorage,
 ) {
     let parent = ecs_world
-        .get_entity(&parent_entity)
+        .get_entity(parent_entity_id)
         .expect("Missing parent entity for disconnected voxel object");
 
     if let Some(scene_graph_parent) = parent.get_component() {

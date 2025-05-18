@@ -17,7 +17,7 @@ use impact::{
     },
     voxel::VoxelObjectManager,
 };
-use impact_ecs::world::{Entity, World as ECSWorld};
+use impact_ecs::world::{EntityID, World as ECSWorld};
 use nalgebra::{point, vector};
 
 #[derive(Clone, Debug)]
@@ -69,7 +69,7 @@ fn setup_sphere_bodies(
     ecs_world: &mut ECSWorld,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = SphereBody>,
-) -> Vec<Entity> {
+) -> Vec<EntityID> {
     bodies
         .into_iter()
         .map(
@@ -87,7 +87,7 @@ fn setup_sphere_bodies(
                 let frame =
                     ReferenceFrameComp::for_rigid_body(*sphere.center(), Orientation::identity());
 
-                let entity = ecs_world
+                let entity_id = ecs_world
                     .create_entity((
                         &frame,
                         &VelocityComp::linear(velocity),
@@ -108,11 +108,11 @@ fn setup_sphere_bodies(
 
                 collision_world.synchronize_collidable(
                     collidable_id,
-                    entity,
+                    entity_id,
                     frame.create_transform_to_parent_space(),
                 );
 
-                entity
+                entity_id
             },
         )
         .collect()
@@ -122,7 +122,7 @@ fn setup_plane_bodies(
     ecs_world: &mut ECSWorld,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = PlaneBody>,
-) -> Vec<Entity> {
+) -> Vec<EntityID> {
     bodies
         .into_iter()
         .map(
@@ -136,7 +136,7 @@ fn setup_plane_bodies(
 
                 let frame = ReferenceFrameComp::unscaled(origin, orientation);
 
-                let entity = ecs_world
+                let entity_id = ecs_world
                     .create_entity((
                         &frame,
                         &UniformContactResponseComp(ContactResponseParameters {
@@ -149,11 +149,11 @@ fn setup_plane_bodies(
 
                 collision_world.synchronize_collidable(
                     collidable_id,
-                    entity,
+                    entity_id,
                     frame.create_transform_to_parent_space(),
                 );
 
-                entity
+                entity_id
             },
         )
         .collect()
@@ -161,10 +161,10 @@ fn setup_plane_bodies(
 
 fn for_entity_state(
     ecs_world: &ECSWorld,
-    entity: &Entity,
+    entity_id: EntityID,
     f: impl FnOnce(&Position, &Orientation, &Velocity, &AngularVelocity),
 ) {
-    let entry = ecs_world.entity(entity);
+    let entry = ecs_world.entity(entity_id);
     let frame = entry.component::<ReferenceFrameComp>();
     let frame = frame.access();
     let velocity = entry.component::<VelocityComp>();
@@ -177,13 +177,13 @@ fn for_entity_state(
     );
 }
 
-fn for_entity_states<'a>(
+fn for_entity_states(
     ecs_world: &ECSWorld,
-    entities: impl IntoIterator<Item = &'a Entity>,
+    entity_ids: impl IntoIterator<Item = EntityID>,
     f: &impl Fn(usize, &Position, &Orientation, &Velocity, &AngularVelocity),
 ) {
-    for (idx, entity) in entities.into_iter().enumerate() {
-        for_entity_state(ecs_world, entity, |p, o, v, a| f(idx, p, o, v, a));
+    for (idx, entity_id) in entity_ids.into_iter().enumerate() {
+        for_entity_state(ecs_world, entity_id, |p, o, v, a| f(idx, p, o, v, a));
     }
 }
 
@@ -192,7 +192,7 @@ fn setup_bodies_and_run_constraints(
     constraint_manager: &mut ConstraintManager,
     spheres: impl IntoIterator<Item = SphereBody>,
     planes: impl IntoIterator<Item = PlaneBody>,
-) -> (Vec<Entity>, Vec<Entity>) {
+) -> (Vec<EntityID>, Vec<EntityID>) {
     let mut collision_world = CollisionWorld::new();
     let sphere_entities = setup_sphere_bodies(ecs_world, &mut collision_world, spheres);
     let plane_entities = setup_plane_bodies(ecs_world, &mut collision_world, planes);
@@ -223,7 +223,7 @@ fn separated_bodies_unaffected_by_contact_constraints() {
     let mut ecs_world = ECSWorld::new();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig::default());
 
-    let (entities, _) = setup_bodies_and_run_constraints(
+    let (entity_ids, _) = setup_bodies_and_run_constraints(
         &mut ecs_world,
         &mut constraint_manager,
         spheres.clone(),
@@ -235,7 +235,7 @@ fn separated_bodies_unaffected_by_contact_constraints() {
 
     for_entity_states(
         &ecs_world,
-        &entities,
+        entity_ids,
         &|idx, position, _, velocity, angular_velocity| {
             assert_eq!(position, spheres[idx].center());
             assert_eq!(velocity, &spheres[idx].velocity);
@@ -257,7 +257,7 @@ fn test_binary_sphere_collision(
         ..Default::default()
     });
 
-    let (entities, _) = setup_bodies_and_run_constraints(
+    let (entity_ids, _) = setup_bodies_and_run_constraints(
         &mut ecs_world,
         &mut constraint_manager,
         [sphere_a.clone(), sphere_b.clone()],
@@ -269,7 +269,7 @@ fn test_binary_sphere_collision(
 
     for_entity_state(
         &ecs_world,
-        &entities[0],
+        entity_ids[0],
         |position, orientation, velocity, angular_velocity| {
             assert_eq!(position, sphere_a.center());
             assert_eq!(orientation, &Orientation::identity());
@@ -283,7 +283,7 @@ fn test_binary_sphere_collision(
     );
     for_entity_state(
         &ecs_world,
-        &entities[1],
+        entity_ids[1],
         |position, orientation, velocity, angular_velocity| {
             assert_eq!(position, sphere_b.center());
             assert_eq!(orientation, &Orientation::identity());
@@ -426,7 +426,7 @@ fn sphere_colliding_with_static_plane() {
         ..Default::default()
     });
 
-    let (sphere_entities, _) = setup_bodies_and_run_constraints(
+    let (sphere_entity_ids, _) = setup_bodies_and_run_constraints(
         &mut ecs_world,
         &mut constraint_manager,
         [sphere.clone()],
@@ -438,7 +438,7 @@ fn sphere_colliding_with_static_plane() {
 
     for_entity_state(
         &ecs_world,
-        &sphere_entities[0],
+        sphere_entity_ids[0],
         |position, orientation, velocity, angular_velocity| {
             assert_eq!(position, sphere.center());
             assert_eq!(orientation, &Orientation::identity());
@@ -482,7 +482,7 @@ fn position_correction_of_interpenetrating_spheres() {
         ..Default::default()
     });
 
-    let (sphere_entities, _) = setup_bodies_and_run_constraints(
+    let (sphere_entity_ids, _) = setup_bodies_and_run_constraints(
         &mut ecs_world,
         &mut constraint_manager,
         spheres.clone(),
@@ -494,7 +494,7 @@ fn position_correction_of_interpenetrating_spheres() {
 
     for_entity_states(
         &ecs_world,
-        &sphere_entities,
+        sphere_entity_ids,
         &|idx, position, orientation, velocity, angular_velocity| {
             assert_abs_diff_eq!(
                 position,
