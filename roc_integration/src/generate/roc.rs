@@ -1185,8 +1185,12 @@ fn write_roundtrip_test(roc_code: &mut String, ty: &RegisteredType) -> Result<()
     match &ty.ty.composition {
         ir::TypeComposition::Primitive(_) => Ok(()),
         ir::TypeComposition::Struct { .. } => write_roundtrip_test_for_struct(roc_code, ty),
-        ir::TypeComposition::Enum(variants) => {
-            write_roundtrip_test_for_enum(roc_code, ty, variants)
+        ir::TypeComposition::Enum(_) => {
+            // Creating valid roundtrip tests for enums is not trivial since
+            // there could be illegal values at any byte position in the input
+            // if the enum has enum payloads. We rely on fuzzing to test enums
+            // instead.
+            Ok(())
         }
     }
 }
@@ -1211,58 +1215,5 @@ fn write_roundtrip_test_for_struct(roc_code: &mut String, ty: &RegisteredType) -
         ",
         ty.serialized_size,
     )?;
-    Ok(())
-}
-
-fn write_roundtrip_test_for_enum<const N_VARIANTS: usize, const N_FIELDS: usize>(
-    roc_code: &mut String,
-    ty: &RegisteredType,
-    variants: &ir::TypeVariants<N_VARIANTS, N_FIELDS>,
-) -> Result<()> {
-    writeln!(
-        roc_code,
-        "\
-        test_roundtrip : {{}} -> Result {{}} _\n\
-        test_roundtrip = |{{}}|\
-        ",
-    )?;
-
-    for (discriminant, variant) in variants.0.iter().enumerate() {
-        writeln!(
-            roc_code,
-            "    \
-            test_roundtrip_for_variant({discriminant}, {variant_size}, {padding_size})?\
-            ",
-            variant_size = variant.serialized_size + 1,
-            padding_size = ty
-                .serialized_size
-                .checked_sub(variant.serialized_size + 1)
-                .unwrap()
-        )?;
-    }
-    writeln!(roc_code, "    Ok({{}})\n")?;
-
-    writeln!(
-        roc_code,
-        "\
-        test_roundtrip_for_variant : U8, U64, U64 -> Result {{}} _\n\
-        test_roundtrip_for_variant = |discriminant, variant_size, padding_size|\n    \
-            bytes = \n        \
-                List.range({{ start: At discriminant, end: Length variant_size }})\n        \
-                |> List.concat(List.repeat(0, padding_size))\n        \
-                |> List.map(|b| Num.to_u8(b))\n    \
-            decoded = from_bytes(bytes)?\n    \
-            encoded = write_bytes([], decoded)\n    \
-            if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then\n        \
-                Ok({{}})\n    \
-            else\n        \
-                Err(NotEqual(encoded, bytes))\n\
-        \n\
-        expect\n    \
-            result = test_roundtrip({{}})\n    \
-            result |> Result.is_ok\
-        ",
-    )?;
-
     Ok(())
 }
