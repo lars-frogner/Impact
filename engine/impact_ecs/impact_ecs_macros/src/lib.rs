@@ -187,7 +187,7 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 ///     );
 /// }
 ///
-/// let mut world = World::new();
+/// let mut world = World::default();
 /// let mut components = ArchetypeComponentStorage::try_from_view(
 ///     (&[Light, Light],
 ///      &[Flux(1.0), Flux(5.0)],
@@ -305,7 +305,7 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Stuck;
 /// #
-/// let mut world = World::new();
+/// let mut world = World::default();
 /// let entity_1_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active))?;
 /// let entity_2_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
 /// let entity_3_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;

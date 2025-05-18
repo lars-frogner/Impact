@@ -21,7 +21,7 @@ use impact_profiling::Profiler;
 use nalgebra::point;
 
 pub fn prepare_contacts(profiler: impl Profiler) {
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut collision_world = CollisionWorld::new();
 
     setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
@@ -57,7 +57,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 }
 
 pub fn solve_contact_velocities(profiler: impl Profiler) {
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut collision_world = CollisionWorld::new();
 
     setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
@@ -80,7 +80,7 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
 }
 
 pub fn correct_contact_configurations(profiler: impl Profiler) {
-    let mut ecs_world = ECSWorld::new();
+    let mut ecs_world = ECSWorld::default();
     let mut collision_world = CollisionWorld::new();
 
     setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
