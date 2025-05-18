@@ -8,10 +8,10 @@ use super::{
     },
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map},
     fmt,
     hash::Hash,
     sync::{RwLock, RwLockReadGuard},
@@ -60,6 +60,11 @@ pub struct EntityEntry<'a> {
 }
 
 impl EntityID {
+    /// Hashes the given string into an entity ID.
+    pub const fn hashed_from_str(input: &str) -> Self {
+        Self(const_fnv1a_hash::fnv1a_hash_str_64(input))
+    }
+
     /// Returns the `u64` value corresponding to the entity ID.
     pub const fn as_u64(&self) -> u64 {
         self.0
@@ -84,12 +89,77 @@ impl World {
         }
     }
 
-    /// Creates a new entity with the given set of components. The given set of
+    /// Creates a new entity with the given set of components and assigns it the
+    /// given ID. The set of components must be provided as a type that can be
+    /// converted to an [`ArchetypeComponents`] object wrapped in a
+    /// [`SingleInstance`]. Typically, this will be a tuple of references to
+    /// [`Component`] instances, which can be converted into a `SingleInstance`
+    /// wrapped
+    /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - An entity with the specified ID already exists.
+    /// - The given set of components does not have a valid [`Archetype`], which
+    ///   happens if there are multiple components of the same type.
+    ///
+    /// # Examples
+    /// ```
+    /// # use impact_ecs::{
+    /// #    world::{EntityID, World},
+    /// # };
+    /// # use impact_ecs_macros::ComponentDoctest as Component;
+    /// # use bytemuck::{Zeroable, Pod};
+    /// # use anyhow::Error;
+    /// #
+    /// # #[repr(C)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+    /// # struct Distance(f32);
+    /// # #[repr(C)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+    /// # struct Speed(f32);
+    /// #
+    /// let mut world = World::default();
+    ///
+    /// world.create_entity_with_id(
+    ///     EntityID::hashed_from_str("a"), &Distance(5.0),
+    /// )?;
+    /// world.create_entity_with_id(
+    ///     EntityID::hashed_from_str("b"), (&Distance(0.0), &Speed(10.0)),
+    /// )?;
+    ///
+    /// assert_eq!(world.entity_count(), 2);
+    /// #
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub fn create_entity_with_id<A, E>(
+        &mut self,
+        entity_id: EntityID,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components: ArchetypeComponents<A> =
+            components.try_into().map_err(E::into)?.into_inner();
+
+        self.try_register_archetype_for_new_entity(entity_id, components.archetype().id())?;
+
+        self.add_entities_to_table([entity_id], components);
+
+        Ok(())
+    }
+
+    /// Creates a new entity with the given set of components. The set of
     /// components must be provided as a type that can be converted to an
     /// [`ArchetypeComponents`] object wrapped in a [`SingleInstance`].
     /// Typically, this will be a tuple of references to [`Component`]
     /// instances, which can be converted into a `SingleInstance` wrapped
     /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
+    ///
+    /// # Returns
+    /// The randomly generated ID of the new entity.
     ///
     /// # Errors
     /// Returns an error if the given set of components does not have a valid
@@ -121,11 +191,6 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
-    ///
-    /// # Note Since the [`EntityId`] is currently a 32-bit count, the total
-    /// number of created entities may not exceed [`u32::MAX`]. The reason we do
-    /// not use a 64-bit count is that passing an entity across an FFI boundary
-    /// gets messy when it does not fit in a `u64` (`u128` is not FFI-safe).
     pub fn create_entity<A, E>(
         &mut self,
         components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
@@ -140,12 +205,14 @@ impl World {
             .unwrap())
     }
 
-    /// Creates multiple new entities with the given set of components.
-    /// The given set of components must be provided as a type
-    /// that can be converted to an [`ArchetypeComponents`] object.
-    /// Typically, this will be a tuple of slices with [`Component`]
-    /// instances, which can be converted into an
+    /// Creates multiple new entities with the given set of components. The set
+    /// of components must be provided as a type that can be converted to an
+    /// [`ArchetypeComponents`] object. Typically, this will be a tuple of
+    /// slices with [`Component`] instances, which can be converted into an
     /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
+    ///
+    /// # Returns
+    /// The randomly generated IDs of the new entities.
     ///
     /// # Errors
     /// Returns an error if:
@@ -182,11 +249,6 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
-    ///
-    /// # Note Since the [`EntityId`] is currently a 32-bit count, the total
-    /// number of created entities may not exceed [`u32::MAX`]. The reason we do
-    /// not use a 64-bit count is that passing an entity across an FFI boundary
-    /// gets messy when it does not fit in a `u64` (`u128` is not FFI-safe).
     pub fn create_entities<A, E>(
         &mut self,
         components: impl TryInto<ArchetypeComponents<A>, Error = E>,
@@ -366,27 +428,41 @@ impl World {
         &mut self,
         components: ArchetypeComponents<impl ComponentArray>,
     ) -> Vec<EntityID> {
-        let archetype_id = components.archetype().id();
-
-        let entities: Vec<_> = (0..components.component_count())
+        let entity_ids: Vec<_> = (0..components.component_count())
             .map(|_| self.create_entity_id())
             .collect();
 
-        self.register_archetype_for_entities(archetype_id, &entities);
-        self.add_entities_to_table(entities.iter().copied(), components);
+        self.register_archetype_for_entities(&entity_ids, components.archetype().id());
+        self.add_entities_to_table(entity_ids.iter().copied(), components);
 
-        entities
+        entity_ids
     }
 
     fn register_archetype_for_entities(
         &mut self,
-        archetype_id: ArchetypeID,
         entity_ids: &[EntityID],
+        archetype_id: ArchetypeID,
     ) {
         self.entity_archetypes.reserve(entity_ids.len());
         for entity_id in entity_ids {
             self.entity_archetypes.insert(*entity_id, archetype_id);
         }
+    }
+
+    fn try_register_archetype_for_new_entity(
+        &mut self,
+        entity_id: EntityID,
+        archetype_id: ArchetypeID,
+    ) -> Result<()> {
+        match self.entity_archetypes.entry(entity_id) {
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(archetype_id);
+            }
+            hash_map::Entry::Occupied(_) => {
+                bail!("Entity with ID {entity_id} already exists");
+            }
+        }
+        Ok(())
     }
 
     fn add_entities_to_table(
@@ -604,6 +680,58 @@ mod tests {
     fn creating_world_works() {
         let world = World::default();
         assert_eq!(world.entity_count(), 0);
+    }
+
+    #[test]
+    fn creating_single_entity_with_id_works() {
+        let mut world = World::default();
+
+        let entity_1_id = EntityID::hashed_from_str("entity_1");
+        world.create_entity_with_id(entity_1_id, &POS).unwrap();
+        assert_eq!(world.entity_count(), 1);
+        let entry = world.entity(entity_1_id);
+        assert_eq!(entry.archetype(), &archetype_of!(Position));
+        assert_eq!(entry.n_components(), 1);
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        drop(entry);
+
+        let entity_2_id = EntityID::hashed_from_str("entity_2");
+        world
+            .create_entity_with_id(entity_2_id, (&POS, &TEMP))
+            .unwrap();
+        assert_eq!(world.entity_count(), 2);
+        let entry = world.entity(entity_2_id);
+        assert_eq!(entry.archetype(), &archetype_of!(Position, Temperature));
+        assert_eq!(entry.n_components(), 2);
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_two_entities_with_same_id_fails() {
+        let mut world = World::default();
+        let entity_id = EntityID::hashed_from_str("entity");
+        world.create_entity_with_id(entity_id, &POS).unwrap();
+        world.create_entity_with_id(entity_id, &POS).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_entity_with_id_and_two_aliased_comps_fails() {
+        let mut world = World::default();
+        world
+            .create_entity_with_id(EntityID::hashed_from_str("entity"), (&POS, &LIKEPOS))
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_entity_with_id_and_two_of_three_aliased_comps_fails() {
+        let mut world = World::default();
+        world
+            .create_entity_with_id(EntityID::hashed_from_str("entity"), (&POS, &TEMP, &LIKEPOS))
+            .unwrap();
     }
 
     #[test]
