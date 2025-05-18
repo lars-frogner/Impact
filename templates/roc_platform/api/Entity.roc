@@ -2,10 +2,12 @@ module [
     Id,
     Data,
     MultiData,
+    new_id,
     new,
     new_multi,
     append_component,
     append_components,
+    create_with_id!,
     create!,
     create_multiple!,
     write_bytes_id,
@@ -13,13 +15,18 @@ module [
 ]
 
 import core.Builtin
+import core.Hashing
 import Platform
 
-Id := U64
+Id := U64 implements [Eq]
 
 Data := List U8
 
 MultiData := List U8
+
+new_id : Str -> Id
+new_id = |string|
+    @Id(Hashing.hash_str_64(string) |> Hashing.unwrap_u64)
 
 new = @Data([])
 new_multi = @MultiData([])
@@ -31,6 +38,10 @@ append_component = |@Data(bytes), encode, value|
 append_components : MultiData, (List U8, List a -> List U8), List a -> MultiData
 append_components = |@MultiData(bytes), encode, values|
     @MultiData(bytes |> encode(values))
+
+create_with_id! : Id, Data => Result {} Str
+create_with_id! = |@Id(id), @Data(bytes)|
+    Platform.create_entity_with_id!(id, bytes)
 
 create! : Data => Result Id Str
 create! = |@Data(bytes)|

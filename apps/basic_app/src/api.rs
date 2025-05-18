@@ -9,6 +9,7 @@ use impact::{
     roc_integration::Roc,
     run::run as run_engine,
 };
+use impact_ecs::world::EntityID;
 use std::{
     path::Path,
     sync::{Arc, RwLock},
@@ -40,18 +41,24 @@ pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
     with_engine(|engine| engine.execute_command(command))
 }
 
+pub fn create_entity_with_id(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
+    log::debug!("Creating entity with ID {entity_id}");
+    let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
+    with_engine(|engine| engine.create_entity_with_id(EntityID::from_u64(entity_id), components))
+}
+
 pub fn create_entity(component_bytes: &[u8]) -> Result<u64> {
     log::debug!("Creating entity");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
-    let entity = with_engine(|engine| engine.create_entity(components))?;
-    Ok(entity.as_u64())
+    let entity_id = with_engine(|engine| engine.create_entity(components))?;
+    Ok(entity_id.as_u64())
 }
 
 pub fn create_entities(component_bytes: &[u8]) -> Result<impl Iterator<Item = u64>> {
     log::debug!("Creating multiple entities");
     let components = impact::ffi::deserialize_components_for_multiple_entities(component_bytes)?;
-    let entities = with_engine(|engine| engine.create_entities(components))?;
-    Ok(entities.into_iter().map(|entity| entity.as_u64()))
+    let entity_ids = with_engine(|engine| engine.create_entities(components))?;
+    Ok(entity_ids.into_iter().map(|entity_id| entity_id.as_u64()))
 }
 
 fn with_engine<T>(f: impl FnOnce(&Engine) -> Result<T>) -> Result<T> {
