@@ -8,10 +8,11 @@ pub mod texture_projection;
 
 use crate::{
     geometry::{AxisAlignedBox, Point, Sphere},
+    io,
     num::Float,
     util::tracking::{CollectionChange, CollectionChangeTracker},
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -19,12 +20,16 @@ use impact_math::{hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use roc_integration::roc;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     fmt::Debug,
     ops::Neg,
+    path::{Path, PathBuf},
 };
-use texture_projection::TextureProjection;
+use texture_projection::{
+    PlanarTextureProjection, TextureProjection, TextureProjectionSpecification,
+};
 
 stringhash64_newtype!(
     /// Identifier for specific meshes.
@@ -35,14 +40,27 @@ stringhash64_newtype!(
 
 /// Repository where [`TriangleMesh`]es are stored under a unique [`MeshID`].
 #[derive(Debug, Default)]
-pub struct MeshRepository<F: Float> {
-    meshes: HashMap<MeshID, TriangleMesh<F>>,
+pub struct MeshRepository {
+    meshes: HashMap<MeshID, TriangleMesh<f32>>,
 }
 
 /// Record of the state of a [`MeshRepository`].
 #[derive(Clone, Debug)]
 pub struct MeshRepositoryState {
     mesh_ids: HashSet<MeshID>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MeshSpecification {
+    pub name: String,
+    pub file_path: PathBuf,
+    pub texture_projection: Option<TextureProjectionSpecification>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MeshFileFormat {
+    Obj,
+    Ply,
 }
 
 lazy_static! {
@@ -156,7 +174,7 @@ pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
     "tangent space quaternion",
 ];
 
-impl<F: Float> MeshRepository<F> {
+impl MeshRepository {
     /// Creates a new empty mesh repository.
     pub fn new() -> Self {
         Self {
@@ -179,8 +197,69 @@ impl<F: Float> MeshRepository<F> {
 
         self.meshes.insert(
             skybox_mesh_id(),
-            TriangleMesh::create_box(F::ONE, F::ONE, F::ONE, FrontFaceSide::Inside),
+            TriangleMesh::create_box(1.0, 1.0, 1.0, FrontFaceSide::Inside),
         );
+    }
+
+    /// Loads all meshes in the given specifications and stores them in the
+    /// repository
+    ///
+    /// # Errors
+    /// See [`Self::load_specified_mesh`].
+    pub fn load_specified_meshes(&mut self, specifications: &[MeshSpecification]) -> Result<()> {
+        for specification in specifications {
+            self.load_specified_mesh(specification)?;
+        }
+        Ok(())
+    }
+
+    /// Loads the mesh in the given specification and stores it in the
+    /// repository.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Another mesh with the same name is already loaded.
+    /// - The file format is not supported.
+    /// - The file can not be found or loaded as a mesh.
+    pub fn load_specified_mesh(&mut self, specification: &MeshSpecification) -> Result<()> {
+        let file_path = &specification.file_path;
+        let file_format = specification.resolve_file_format()?;
+
+        let mesh_id = MeshID(hash64!(&specification.name));
+        if self.has_mesh(mesh_id) {
+            bail!(
+                "Tried to load mesh under already existing name: {}",
+                specification.name
+            );
+        }
+
+        let mut mesh = match file_format {
+            MeshFileFormat::Obj => io::obj::read_mesh_from_obj_file(file_path),
+            MeshFileFormat::Ply => io::ply::read_mesh_from_ply_file(file_path),
+        }
+        .with_context(|| format!("Failed to load mesh from {}", file_path.display()))?;
+
+        match &specification.texture_projection {
+            None => {}
+            Some(TextureProjectionSpecification::Planar {
+                origin,
+                u_vector,
+                v_vector,
+            }) => {
+                let projection = PlanarTextureProjection::new(*origin, *u_vector, *v_vector)
+                    .with_context(|| {
+                        format!(
+                            "Invalid planar texture projection for mesh `{}`",
+                            specification.name
+                        )
+                    })?;
+                mesh.generate_texture_coords(&projection);
+            }
+        }
+
+        self.add_mesh(mesh_id, mesh)?;
+
+        Ok(())
     }
 
     /// Records the current state of the repository and returns it as a
@@ -193,13 +272,13 @@ impl<F: Float> MeshRepository<F> {
 
     /// Returns a reference to the [`TriangleMesh`] with the given ID, or
     /// [`None`] if the mesh is not present.
-    pub fn get_mesh(&self, mesh_id: MeshID) -> Option<&TriangleMesh<F>> {
+    pub fn get_mesh(&self, mesh_id: MeshID) -> Option<&TriangleMesh<f32>> {
         self.meshes.get(&mesh_id)
     }
 
     /// Returns a mutable reference to the [`TriangleMesh`] with the given ID,
     /// or [`None`] if the mesh is not present.
-    pub fn get_mesh_mut(&mut self, mesh_id: MeshID) -> Option<&mut TriangleMesh<F>> {
+    pub fn get_mesh_mut(&mut self, mesh_id: MeshID) -> Option<&mut TriangleMesh<f32>> {
         self.meshes.get_mut(&mesh_id)
     }
 
@@ -209,7 +288,7 @@ impl<F: Float> MeshRepository<F> {
     }
 
     /// Returns a reference to the [`HashMap`] storing all meshes.
-    pub fn meshes(&self) -> &HashMap<MeshID, TriangleMesh<F>> {
+    pub fn meshes(&self) -> &HashMap<MeshID, TriangleMesh<f32>> {
         &self.meshes
     }
 
@@ -218,7 +297,7 @@ impl<F: Float> MeshRepository<F> {
     /// # Errors
     /// Returns an error if a mesh with the given ID already exists. The
     /// repository will remain unchanged.
-    pub fn add_mesh(&mut self, mesh_id: MeshID, mesh: TriangleMesh<F>) -> Result<()> {
+    pub fn add_mesh(&mut self, mesh_id: MeshID, mesh: TriangleMesh<f32>) -> Result<()> {
         match self.meshes.entry(mesh_id) {
             Entry::Vacant(entry) => {
                 entry.insert(mesh);
@@ -230,7 +309,7 @@ impl<F: Float> MeshRepository<F> {
 
     /// Includes the given mesh in the repository under the given ID, unless a
     /// mesh with the same ID is already present.
-    pub fn add_mesh_unless_present(&mut self, mesh_id: MeshID, mesh: TriangleMesh<F>) {
+    pub fn add_mesh_unless_present(&mut self, mesh_id: MeshID, mesh: TriangleMesh<f32>) {
         let _ = self.add_mesh(mesh_id, mesh);
     }
 
@@ -238,6 +317,31 @@ impl<F: Float> MeshRepository<F> {
     pub fn reset_to_state(&mut self, state: &MeshRepositoryState) {
         self.meshes
             .retain(|mesh_id, _| state.mesh_ids.contains(mesh_id));
+    }
+}
+
+impl MeshSpecification {
+    /// Resolves all paths in the specification by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        self.file_path = root_path.join(&self.file_path);
+    }
+
+    fn resolve_file_format(&self) -> Result<MeshFileFormat> {
+        let Some(extension) = self.file_path.extension() else {
+            bail!(
+                "Missing extension for mesh file {}",
+                self.file_path.display()
+            );
+        };
+        match &*extension.to_string_lossy().to_lowercase() {
+            "obj" => Ok(MeshFileFormat::Obj),
+            "ply" => Ok(MeshFileFormat::Ply),
+            other => Err(anyhow!(
+                "Unsupported mesh file format {other} for mesh file {}",
+                self.file_path.display()
+            )),
+        }
     }
 }
 

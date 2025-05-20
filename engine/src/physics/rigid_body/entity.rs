@@ -26,7 +26,7 @@ use std::sync::RwLock;
 /// representing a rigid body, and if so, creates the corresponding rigid body
 /// and adds a [`RigidBodyComp`] to the entity.
 pub fn setup_rigid_body_for_new_entity(
-    mesh_repository: &RwLock<MeshRepository<f32>>,
+    mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,
 ) {
     fn execute_setup(

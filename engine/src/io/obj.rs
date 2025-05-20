@@ -28,6 +28,30 @@ use std::{
 };
 use tobj::{GPU_LOAD_OPTIONS, Material as ObjMaterial, Mesh as ObjMesh};
 
+/// Reads the Wavefront OBJ file at the given path and creates a corresponding
+/// `TriangleMesh`. If there are multiple meshes in the file, they are merged
+/// into a single mesh.
+///
+/// # Errors
+/// Returns an error if the file can not be found or loaded as a mesh.
+pub fn read_mesh_from_obj_file(file_path: impl AsRef<Path>) -> Result<TriangleMesh<f32>> {
+    let file_path = file_path.as_ref();
+
+    let (mut models, _) = tobj::load_obj(file_path, &GPU_LOAD_OPTIONS)?;
+
+    if models.is_empty() {
+        bail!("File {} does not contain any meshes", file_path.display());
+    }
+
+    let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
+
+    for model in models {
+        mesh.merge_with(&create_mesh_from_tobj_mesh(model.mesh));
+    }
+
+    Ok(mesh)
+}
+
 /// Reads the Wavefront OBJ file at the given path and any associated MTL
 /// material files and returns the set of components representing the mesh and
 /// material of each model in the file. The meshes are added to the mesh
@@ -41,7 +65,7 @@ use tobj::{GPU_LOAD_OPTIONS, Material as ObjMaterial, Mesh as ObjMesh};
 /// found or loaded.
 pub fn load_models_from_obj_file<P>(
     assets: &mut Assets,
-    mesh_repository: &mut MeshRepository<f32>,
+    mesh_repository: &mut MeshRepository,
     obj_file_path: P,
 ) -> Result<Vec<SingleInstance<ArchetypeComponentStorage>>>
 where
@@ -114,7 +138,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file<P>(
-    mesh_repository: &mut MeshRepository<f32>,
+    mesh_repository: &mut MeshRepository,
     obj_file_path: P,
 ) -> Result<MeshComp>
 where
@@ -155,7 +179,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file_with_projection<P>(
-    mesh_repository: &mut MeshRepository<f32>,
+    mesh_repository: &mut MeshRepository,
     obj_file_path: P,
     projection: &impl TextureProjection<f32>,
 ) -> Result<MeshComp>
@@ -190,17 +214,6 @@ where
     }
 
     Ok(MeshComp { id: mesh_id })
-}
-
-pub fn read_meshes_from_obj_file<P>(obj_file_path: P) -> Result<Vec<TriangleMesh<f32>>>
-where
-    P: AsRef<Path> + Debug,
-{
-    let (models, _) = tobj::load_obj(obj_file_path, &GPU_LOAD_OPTIONS)?;
-    Ok(models
-        .into_iter()
-        .map(|model| create_mesh_from_tobj_mesh(model.mesh))
-        .collect())
 }
 
 fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {

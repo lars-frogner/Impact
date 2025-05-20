@@ -13,6 +13,19 @@
             ),
             sampler_config: Some(()),
         ),
+        Cubemap(
+            name: "ocean_skybox",
+            right_image_path: "../assets/ocean_skybox/right.jpg",
+            left_image_path: "../assets/ocean_skybox/left.jpg",
+            top_image_path: "../assets/ocean_skybox/top.jpg",
+            bottom_image_path: "../assets/ocean_skybox/bottom.jpg",
+            front_image_path: "../assets/ocean_skybox/front.jpg",
+            back_image_path: "../assets/ocean_skybox/back.jpg",
+            texture_config: (
+                color_space: Srgb,
+            ),
+            sampler_config: Some(()),
+        ),
         // Texture(
         //     name: "concrete_color_texture",
         //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg",
@@ -132,6 +145,24 @@
             sampler_config: Some((
                 addressing: Repeating,
             )),
+        ),
+    ],
+    meshes: [
+        (
+            name: "dragon",
+            file_path: "../assets/Dragon_1.obj",
+        ),
+        (
+            name: "abstract_object",
+            file_path: "../assets/abstract_object.obj",
+        ),
+        (
+            name: "abstract_pyramid",
+            file_path: "../assets/abstract_pyramid.obj",
+        ),
+        (
+            name: "abstract_cube",
+            file_path: "../assets/abstract_cube.obj",
         ),
     ]
 )

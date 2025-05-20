@@ -11,7 +11,7 @@ impl PhysicsSimulator {
     /// additional components to the entity's components.
     pub fn perform_setup_for_new_entity(
         &self,
-        mesh_repository: &RwLock<MeshRepository<f32>>,
+        mesh_repository: &RwLock<MeshRepository>,
         components: &mut ArchetypeComponentStorage,
     ) {
         rigid_body::entity::setup_rigid_body_for_new_entity(mesh_repository, components);
