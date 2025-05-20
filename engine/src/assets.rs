@@ -15,6 +15,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use impact_math::hash32;
+use log::debug;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{HashMap, hash_map::Entry},
@@ -198,6 +199,15 @@ impl Assets {
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
     ) -> Result<TextureID> {
+        let texture_name = texture_name.to_string();
+        let image_path = image_path.as_ref();
+
+        debug!(
+            "Loading texture `{}` from {}",
+            &texture_name,
+            image_path.display()
+        );
+
         let texture_id = TextureID(hash32!(texture_name));
 
         match self.textures.entry(texture_id) {
@@ -250,6 +260,10 @@ impl Assets {
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
     ) -> Result<TextureID> {
+        let texture_name = texture_name.to_string();
+
+        debug!("Loading cubemap texture `{texture_name}`");
+
         let texture_id = TextureID(hash32!(texture_name));
 
         match self.textures.entry(texture_id) {
@@ -306,6 +320,9 @@ impl Assets {
         P: AsRef<Path>,
     {
         let texture_name = texture_name.as_ref();
+
+        debug!("Loading texture array `{texture_name}`");
+
         let texture_id = TextureID(hash32!(texture_name));
 
         match self.textures.entry(texture_id) {
