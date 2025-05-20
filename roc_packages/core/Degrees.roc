@@ -2,7 +2,7 @@ module [
     Degrees,
     DegreesF32,
     DegreesF64,
-    to_radians,
+    from_radians,
     write_bytes_32,
     write_bytes_64,
     from_bytes_32,
@@ -16,9 +16,9 @@ Degrees a : Frac a
 DegreesF32 : Degrees Binary32
 DegreesF64 : Degrees Binary64
 
-to_radians : Degrees a -> Frac a
-to_radians = |degrees|
-    degrees * Num.pi / 180
+from_radians : Frac a -> Degrees a
+from_radians = |radians|
+    radians * 180 / Num.pi
 
 write_bytes_32 = Builtin.write_bytes_f32
 write_bytes_64 = Builtin.write_bytes_f64
