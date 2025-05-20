@@ -18,6 +18,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
+use log::debug;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
@@ -222,6 +223,12 @@ impl MeshRepository {
     /// - The file format is not supported.
     /// - The file can not be found or loaded as a mesh.
     pub fn load_specified_mesh(&mut self, specification: &MeshSpecification) -> Result<()> {
+        debug!(
+            "Loading mesh `{}` from {}",
+            specification.name,
+            specification.file_path.display()
+        );
+
         let file_path = &specification.file_path;
         let file_format = specification.resolve_file_format()?;
 
