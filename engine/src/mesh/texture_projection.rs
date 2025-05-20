@@ -3,8 +3,10 @@
 pub mod components;
 
 use crate::num::Float;
-use approx::assert_abs_diff_ne;
+use anyhow::{Result, bail};
+use approx::abs_diff_eq;
 use nalgebra::{Point3, UnitVector3, Vector2, Vector3, vector};
+use serde::{Deserialize, Serialize};
 
 /// Represents a projection of 3D positions into UV texture coordinates.
 pub trait TextureProjection<F: Float> {
@@ -28,31 +30,47 @@ pub struct PlanarTextureProjection<F: Float> {
     inverse_v_vector_length: F,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TextureProjectionSpecification {
+    Planar {
+        origin: Point3<f32>,
+        u_vector: Vector3<f32>,
+        v_vector: Vector3<f32>,
+    },
+}
+
 impl<F: Float> PlanarTextureProjection<F> {
     /// Creates a projection onto the plane defined by the given origin and two
     /// vectors defining the axes along which the U and V texture coordinates
     /// will increase. The texture coordinates will be zero at the origin and
     /// unity at the tip of the respective u- or v-vector.
     ///
-    /// # Panics
+    /// # Errors
+    /// Returns an error if:
     /// - If the u- or v-vector has zero length.
     /// - If the u- and v-vectors are colinear.
-    pub fn new(origin: Point3<F>, u_vector: Vector3<F>, v_vector: Vector3<F>) -> Self {
+    pub fn new(origin: Point3<F>, u_vector: Vector3<F>, v_vector: Vector3<F>) -> Result<Self> {
         let (u_direction, u_vector_length) = UnitVector3::new_and_get(u_vector);
-        assert_abs_diff_ne!(u_vector_length, F::ZERO);
+        if abs_diff_eq!(u_vector_length, F::ZERO) {
+            bail!("u_vector has zero length");
+        }
         let (v_direction, v_vector_length) = UnitVector3::new_and_get(v_vector);
-        assert_abs_diff_ne!(v_vector_length, F::ZERO);
+        if abs_diff_eq!(v_vector_length, F::ZERO) {
+            bail!("v_vector has zero length");
+        }
 
         let (v_normal_to_u_direction, v_normal_to_u_length) = UnitVector3::new_and_get(
             v_direction.as_ref() - u_direction.as_ref() * v_direction.dot(&u_direction),
         );
-        assert_abs_diff_ne!(v_normal_to_u_length, F::ZERO);
+        if abs_diff_eq!(v_normal_to_u_length, F::ZERO) {
+            bail!("u_vector and v_vector are parallel");
+        }
 
         let v_direction_comp_along_u_direction = v_direction.dot(&u_direction);
         let inverse_v_direction_comp_normal_to_u_direction =
             F::ONE / v_direction.dot(&v_normal_to_u_direction);
 
-        Self {
+        Ok(Self {
             origin,
             u_direction,
             v_normal_to_u_direction,
@@ -60,7 +78,7 @@ impl<F: Float> PlanarTextureProjection<F> {
             inverse_v_direction_comp_normal_to_u_direction,
             inverse_u_vector_length: F::ONE / u_vector_length,
             inverse_v_vector_length: F::ONE / v_vector_length,
-        }
+        })
     }
 }
 
@@ -97,7 +115,7 @@ mod tests {
         let origin = point![-0.3, 3.9, 12.8];
         let u_vector = vector![-2.1, 4.8, 0.2];
         let v_vector = vector![6.3, -8.1, 5.5];
-        let projection = PlanarTextureProjection::new(origin, u_vector, v_vector);
+        let projection = PlanarTextureProjection::new(origin, u_vector, v_vector).unwrap();
 
         assert_abs_diff_eq!(
             projection.project_position(&origin),

@@ -19,12 +19,12 @@ use std::{path::PathBuf, sync::RwLock};
 /// the map and adds it to the drag load map repository if not present, then
 /// adds the appropriate drag load map component to the entity.
 pub fn setup_drag_load_map_for_new_entity(
-    mesh_repository: &RwLock<MeshRepository<f32>>,
+    mesh_repository: &RwLock<MeshRepository>,
     drag_load_map_repository: &RwLock<DragLoadMapRepository<f32>>,
     components: &mut ArchetypeComponentStorage,
 ) {
     fn generate_map(
-        mesh_repository: &RwLock<MeshRepository<f32>>,
+        mesh_repository: &RwLock<MeshRepository>,
         config: &DragLoadMapConfig,
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,

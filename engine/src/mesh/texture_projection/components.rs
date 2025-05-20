@@ -64,7 +64,10 @@ impl PlanarTextureProjectionComp {
     }
 
     /// Creates the [`PlanarTextureProjection`] corresponding to this component.
+    ///
+    /// # Panics
+    /// On error from [`PlanarTextureProjection::new`].
     pub fn create_projection(&self) -> PlanarTextureProjection<f32> {
-        PlanarTextureProjection::new(self.origin, self.u_vector, self.v_vector)
+        PlanarTextureProjection::new(self.origin, self.u_vector, self.v_vector).unwrap()
     }
 }

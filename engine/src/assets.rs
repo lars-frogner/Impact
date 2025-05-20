@@ -11,6 +11,7 @@ use crate::{
         },
     },
     io::util::parse_ron_file,
+    mesh::MeshSpecification,
 };
 use anyhow::{Result, bail};
 use impact_math::hash32;
@@ -46,6 +47,7 @@ pub struct AssetConfig {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AssetSpecifications {
     pub textures: Vec<TextureSpecification>,
+    pub meshes: Vec<MeshSpecification>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -100,15 +102,19 @@ impl Assets {
     /// Parses the asset file pointed to in the [`AssetConfig`] and loads all
     /// assets specified in the file.
     ///
+    /// # Returns
+    /// The parsed [`AssetSpecifications`].
+    ///
     /// # Errors
     /// Returns an error if the asset file does not exist or is invalid.
     /// See also [`Self::load_specified_assets`].
-    pub fn load_assets_specified_in_config(&mut self) -> Result<()> {
+    pub fn load_assets_specified_in_config(&mut self) -> Result<AssetSpecifications> {
         let Some(asset_file_path) = self.config.asset_file_path.as_ref() else {
-            return Ok(());
+            return Ok(AssetSpecifications::default());
         };
         let specifications = AssetSpecifications::from_ron_file(asset_file_path)?;
-        self.load_specified_assets(&specifications)
+        self.load_specified_assets(&specifications)?;
+        Ok(specifications)
     }
 
     /// Loads all assets in the given specifications.
@@ -452,6 +458,9 @@ impl AssetSpecifications {
     /// path to all paths.
     fn resolve_paths(&mut self, root_path: &Path) {
         for specification in &mut self.textures {
+            specification.resolve_paths(root_path);
+        }
+        for specification in &mut self.meshes {
             specification.resolve_paths(root_path);
         }
     }

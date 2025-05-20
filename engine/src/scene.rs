@@ -30,7 +30,7 @@ use std::{num::NonZeroU32, sync::RwLock};
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
-    mesh_repository: RwLock<MeshRepository<f32>>,
+    mesh_repository: RwLock<MeshRepository>,
     initial_mesh_repository_state: MeshRepositoryState,
     material_library: RwLock<MaterialLibrary>,
     initial_material_library_state: MaterialLibraryState,
@@ -67,7 +67,7 @@ pub enum RenderResourcesDesynchronized {
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(
-        mesh_repository: MeshRepository<f32>,
+        mesh_repository: MeshRepository,
         material_library: MaterialLibrary,
         instance_feature_manager: InstanceFeatureManager,
         voxel_manager: VoxelManager,
@@ -89,7 +89,7 @@ impl Scene {
     }
 
     /// Returns a reference to the [`MeshRepository`], guarded by a [`RwLock`].
-    pub fn mesh_repository(&self) -> &RwLock<MeshRepository<f32>> {
+    pub fn mesh_repository(&self) -> &RwLock<MeshRepository> {
         &self.mesh_repository
     }
 

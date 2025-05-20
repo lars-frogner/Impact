@@ -11,7 +11,7 @@ impl RigidBodyForceManager {
     /// setup and adds any required auxiliary components to the entity.
     pub fn perform_setup_for_new_entity(
         &self,
-        mesh_repository: &RwLock<MeshRepository<f32>>,
+        mesh_repository: &RwLock<MeshRepository>,
         components: &mut ArchetypeComponentStorage,
     ) {
         detailed_drag::entity::setup_drag_load_map_for_new_entity(

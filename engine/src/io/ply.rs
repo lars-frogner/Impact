@@ -24,6 +24,51 @@ struct PlyVertex {
 struct PlyTriangleVertexIndices([u32; 3]);
 
 /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
+/// file at the given path and creates a corresponding `TriangleMesh`.
+///
+/// # Errors
+/// Returns an error if the file can not be found or loaded as a mesh.
+pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMesh<f32>> {
+    let file_path = file_path.as_ref();
+
+    let vertex_parser = Parser::<PlyVertex>::new();
+    let triangle_vertex_indices_parser = Parser::<PlyTriangleVertexIndices>::new();
+
+    let mut file_reader = BufReader::new(File::open(file_path)?);
+
+    let header = vertex_parser.read_header(&mut file_reader)?;
+
+    let mut vertex_property_names = Vec::new();
+    let mut vertex_list = Vec::new();
+    let mut triangle_vertex_indices_list = Vec::new();
+
+    for element in header.elements.values() {
+        match element.name.as_str() {
+            "vertex" => {
+                vertex_property_names.extend(element.properties.keys());
+                vertex_list =
+                    vertex_parser.read_payload_for_element(&mut file_reader, element, &header)?;
+            }
+            "face" => {
+                triangle_vertex_indices_list = triangle_vertex_indices_parser
+                    .read_payload_for_element(&mut file_reader, element, &header)?;
+            }
+            element_name => bail!(
+                "Unexpected element `{}` in header of {}",
+                element_name,
+                file_path.display()
+            ),
+        }
+    }
+
+    Ok(convert_ply_vertices_and_faces_to_mesh(
+        vertex_property_names,
+        vertex_list,
+        triangle_vertex_indices_list,
+    ))
+}
+
+/// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
 /// file at the given path and adds the contained mesh to the mesh repository if
 /// it does not already exist.
 ///
@@ -33,7 +78,7 @@ struct PlyTriangleVertexIndices([u32; 3]);
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file<P>(
-    mesh_repository: &mut MeshRepository<f32>,
+    mesh_repository: &mut MeshRepository,
     ply_file_path: P,
 ) -> Result<MeshComp>
 where
@@ -63,7 +108,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file_with_projection<P>(
-    mesh_repository: &mut MeshRepository<f32>,
+    mesh_repository: &mut MeshRepository,
     ply_file_path: P,
     projection: &impl TextureProjection<f32>,
 ) -> Result<MeshComp>
@@ -87,47 +132,6 @@ where
     }
 
     Ok(MeshComp { id: mesh_id })
-}
-
-pub fn read_mesh_from_ply_file<P>(ply_file_path: P) -> Result<TriangleMesh<f32>>
-where
-    P: AsRef<Path> + Debug,
-{
-    let vertex_parser = Parser::<PlyVertex>::new();
-    let triangle_vertex_indices_parser = Parser::<PlyTriangleVertexIndices>::new();
-
-    let mut file_reader = BufReader::new(File::open(ply_file_path.as_ref())?);
-
-    let header = vertex_parser.read_header(&mut file_reader)?;
-
-    let mut vertex_property_names = Vec::new();
-    let mut vertex_list = Vec::new();
-    let mut triangle_vertex_indices_list = Vec::new();
-
-    for element in header.elements.values() {
-        match element.name.as_str() {
-            "vertex" => {
-                vertex_property_names.extend(element.properties.keys());
-                vertex_list =
-                    vertex_parser.read_payload_for_element(&mut file_reader, element, &header)?;
-            }
-            "face" => {
-                triangle_vertex_indices_list = triangle_vertex_indices_parser
-                    .read_payload_for_element(&mut file_reader, element, &header)?;
-            }
-            element_name => bail!(
-                "Unexpected element `{}` in header of {}",
-                element_name,
-                ply_file_path.as_ref().display()
-            ),
-        }
-    }
-
-    Ok(convert_ply_vertices_and_faces_to_mesh(
-        vertex_property_names,
-        vertex_list,
-        triangle_vertex_indices_list,
-    ))
 }
 
 fn convert_ply_vertices_and_faces_to_mesh(
