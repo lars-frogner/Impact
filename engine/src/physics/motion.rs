@@ -59,10 +59,11 @@ pub type Torque = Vector3<fph>;
 impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
     /// angular speed.
-    pub fn new<A: Angle<fph>>(axis_of_rotation: Direction, angular_speed: A) -> Self {
+    #[roc(body = "{ axis_of_rotation, angular_speed }")]
+    pub fn new(axis_of_rotation: Direction, angular_speed: Radians<fph>) -> Self {
         Self {
             axis_of_rotation,
-            angular_speed: angular_speed.as_radians(),
+            angular_speed,
         }
     }
 
@@ -280,13 +281,13 @@ pub fn compute_rotational_kinetic_energy(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::{Degrees, Radians};
+    use crate::geometry::Radians;
     use approx::assert_abs_diff_eq;
 
     #[test]
     fn advancing_orientation_with_zero_angular_speed_gives_same_orientation() {
         let orientation = Orientation::identity();
-        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Degrees(0.0));
+        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Radians(0.0));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 1.2);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
@@ -294,7 +295,7 @@ mod tests {
     #[test]
     fn advancing_orientation_by_zero_duration_gives_same_orientation() {
         let orientation = Orientation::identity();
-        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Degrees(1.2));
+        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Radians(1.2));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 0.0);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }

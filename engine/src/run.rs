@@ -435,7 +435,10 @@ fn init_physics_lab(app: Arc<dyn Application>, window: Window) -> Result<Engine>
             0.5 * voxel_extent * box_size - 0.5 * room_extent,
             0.0
         ]),
-        &VelocityComp::angular(AngularVelocity::new(Vector3::y_axis(), Degrees(500.0))),
+        &VelocityComp::angular(AngularVelocity::new(
+            Vector3::y_axis(),
+            Degrees(500.0).as_radians(),
+        )),
         &VoxelObjectCollidableComp::new(CollidableKind::Static),
         // &Static,
     ))?;
@@ -526,7 +529,8 @@ fn create_room(
     normal_texture_id: TextureID,
 ) -> Result<()> {
     let half_extent = 0.5 * extent;
-    let angular_velocity = AngularVelocity::new(Vector3::z_axis(), Degrees(angular_speed));
+    let angular_velocity =
+        AngularVelocity::new(Vector3::z_axis(), Degrees(angular_speed).as_radians());
 
     for (position, orientation) in [
         (
