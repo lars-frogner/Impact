@@ -16,7 +16,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{hash64, stringhash64_newtype};
+use impact_math::{Hash64, hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use log::debug;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
@@ -174,6 +174,15 @@ pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
     "texture coords",
     "tangent space quaternion",
 ];
+
+#[roc(dependencies = [Hash64])]
+impl MeshID {
+    #[roc(body = "Hashing.hash_str_64(name)")]
+    /// Creates a mesh ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash64!(name))
+    }
+}
 
 impl MeshRepository {
     /// Creates a new empty mesh repository.

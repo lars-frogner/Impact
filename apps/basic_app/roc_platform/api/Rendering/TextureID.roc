@@ -1,10 +1,11 @@
-# Hash: 38c0d24f21ca83834c8690962179480ce5cfca4f933457be0efa71b12c7423d5
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 31e717876e794ea4d67e44a75a0a40bb37ede53bb6f1b5bc44cffc12be8befa9
+# Generated: 2025-05-20T21:44:20+00:00
 # Rust type: impact::gpu::texture::TextureID
 # Type category: POD
-# Commit: d505d37
+# Commit: ee14593 (dirty)
 module [
     TextureID,
+    from_name,
     write_bytes,
     from_bytes,
 ]
@@ -14,6 +15,11 @@ import core.Hashing
 ## Identifier for specific textures.
 ## Wraps a [`StringHash32`](impact_math::StringHash32).
 TextureID : Hashing.StringHash32
+
+## Creates a texture ID hashed from the given name.
+from_name : Str -> TextureID
+from_name = |name|
+    Hashing.hash_str_32(name)
 
 ## Serializes a value of [TextureID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
