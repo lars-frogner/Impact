@@ -14,7 +14,7 @@ use image::{
     self, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma, Rgba,
     buffer::ConvertBuffer,
 };
-use impact_math::stringhash32_newtype;
+use impact_math::{Hash32, hash32, stringhash32_newtype};
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
 use rmp_serde::{Serializer, from_read};
@@ -181,6 +181,15 @@ pub struct TextureLookupTable<T: TexelType> {
 pub enum DepthOrArrayLayers {
     Depth(NonZeroU32),
     ArrayLayers(NonZeroU32),
+}
+
+#[roc(dependencies = [Hash32])]
+impl TextureID {
+    #[roc(body = "Hashing.hash_str_32(name)")]
+    /// Creates a texture ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash32!(name))
+    }
 }
 
 impl From<&SamplerConfig> for SamplerID {

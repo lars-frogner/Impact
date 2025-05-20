@@ -1,10 +1,11 @@
-# Hash: 83ae5edfea0e2ce5f6db355918fae4bd5cfba3793ac4b7670f0da1aac2c64c86
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 42105fd6bd9667dd0353d9d48abf262fda7ed182eb68a52e3ab8daf23782d0a6
+# Generated: 2025-05-20T21:44:20+00:00
 # Rust type: impact::mesh::MeshID
 # Type category: POD
-# Commit: d505d37
+# Commit: ee14593 (dirty)
 module [
     MeshID,
+    from_name,
     write_bytes,
     from_bytes,
 ]
@@ -14,6 +15,11 @@ import core.Hashing
 ## Identifier for specific meshes.
 ## Wraps a [`StringHash64`](impact_math::StringHash64).
 MeshID : Hashing.StringHash64
+
+## Creates a mesh ID hashed from the given name.
+from_name : Str -> MeshID
+from_name = |name|
+    Hashing.hash_str_64(name)
 
 ## Serializes a value of [MeshID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
