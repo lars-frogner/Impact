@@ -215,7 +215,7 @@ impl AbsDiffEq for RigidBody {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{geometry::Degrees, num::Float};
+    use crate::{geometry::Radians, num::Float};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use nalgebra::{Vector3, point, vector};
     use proptest::prelude::*;
@@ -270,7 +270,7 @@ mod tests {
             Orientation::identity(),
             1.0,
             &Velocity::zeros(),
-            &AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
+            &AngularVelocity::new(Vector3::y_axis(), Radians(0.0)),
         )
     }
 
