@@ -1,8 +1,8 @@
-# Hash: d2daa52b287f2aed12721bd57d3fc12d33d3fab0dfd1e744cc0e92e638678550
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: b3d38f81525764cbe19a8ac7d0a939296a13e1809a1265a0a1a9699ac96f2511
+# Generated: 2025-05-21T19:40:35+00:00
 # Rust type: impact::camera::components::PerspectiveCameraComp
 # Type category: Component
-# Commit: d505d37
+# Commit: f1fa9f1 (dirty)
 module [
     PerspectiveCamera,
     new,
@@ -13,7 +13,7 @@ module [
 
 import Entity
 import core.Builtin
-import core.Degrees
+import core.Radians
 
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 ## entities that have a
@@ -25,39 +25,39 @@ import core.Degrees
 ## [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 ## creation.
 PerspectiveCamera : {
-    vertical_field_of_view_rad : F32,
+    vertical_field_of_view : Radians.Radians Binary32,
     near_distance : F32,
     far_distance : F32,
 }
 
 ## Creates a new component representing a
 ## [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
-## vertical field of view (in degrees) and near and far distance.
+## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics
 ## If the field of view or the near distance does not exceed zero, or if
 ## the far distance does not exceed the near distance.
-new : Degrees.Degrees Binary32, F32, F32 -> PerspectiveCamera
+new : Radians.Radians Binary32, F32, F32 -> PerspectiveCamera
 new = |vertical_field_of_view, near_distance, far_distance|
-    #expect vertical_field_of_view > 0.0
-    #expect near_distance > 0.0
-    #expect far_distance > near_distance
-    vertical_field_of_view_rad = Degrees.to_radians(vertical_field_of_view)
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect vertical_field_of_view > 0.0
+    # expect near_distance > 0.0
+    # expect far_distance > near_distance
     {
-        vertical_field_of_view_rad,
+        vertical_field_of_view,
         near_distance,
         far_distance,
     }
 
 ## Creates a new component representing a
 ## [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
-## vertical field of view (in degrees) and near and far distance.
+## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics
 ## If the field of view or the near distance does not exceed zero, or if
 ## the far distance does not exceed the near distance.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Degrees.Degrees Binary32, F32, F32 -> Entity.Data
+add_new : Entity.Data, Radians.Radians Binary32, F32, F32 -> Entity.Data
 add_new = |data, vertical_field_of_view, near_distance, far_distance|
     add(data, new(vertical_field_of_view, near_distance, far_distance))
 
@@ -114,7 +114,7 @@ write_bytes : List U8, PerspectiveCamera -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(12)
-    |> Builtin.write_bytes_f32(value.vertical_field_of_view_rad)
+    |> Radians.write_bytes_32(value.vertical_field_of_view)
     |> Builtin.write_bytes_f32(value.near_distance)
     |> Builtin.write_bytes_f32(value.far_distance)
 
@@ -124,7 +124,7 @@ from_bytes : List U8 -> Result PerspectiveCamera _
 from_bytes = |bytes|
     Ok(
         {
-            vertical_field_of_view_rad: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            vertical_field_of_view: bytes |> List.sublist({ start: 0, len: 4 }) |> Radians.from_bytes_32?,
             near_distance: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
             far_distance: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
         },

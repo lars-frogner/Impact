@@ -143,7 +143,7 @@ fn init_app(app: Arc<dyn Application>, window: Window) -> Result<Engine> {
 
     engine.create_entity((
         &ParentComp::new(player_entity),
-        &PerspectiveCameraComp::new(vertical_field_of_view.as_degrees(), 0.01, 1000.0),
+        &PerspectiveCameraComp::new(vertical_field_of_view.as_radians(), 0.01, 1000.0),
     ))?;
 
     let laser_entity = engine.create_entity((
@@ -393,7 +393,7 @@ fn init_physics_lab(app: Arc<dyn Application>, window: Window) -> Result<Engine>
         &VelocityComp::stationary(),
         &MotionControlComp::new(),
         &OrientationControlComp::new(),
-        &PerspectiveCameraComp::new(vertical_field_of_view.as_degrees(), 0.01, 1000.0),
+        &PerspectiveCameraComp::new(vertical_field_of_view.as_radians(), 0.01, 1000.0),
     ))?;
 
     let sphere_radius = 0.5;
