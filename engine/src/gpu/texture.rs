@@ -14,7 +14,7 @@ use image::{
     self, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma, Rgba,
     buffer::ConvertBuffer,
 };
-use impact_math::{Hash32, hash32, stringhash32_newtype};
+use impact_math::{hash32, stringhash32_newtype};
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
 use rmp_serde::{Serializer, from_read};
@@ -183,7 +183,7 @@ pub enum DepthOrArrayLayers {
     ArrayLayers(NonZeroU32),
 }
 
-#[roc(dependencies = [Hash32])]
+#[roc(dependencies = [impact_math::Hash32])]
 impl TextureID {
     #[roc(body = "Hashing.hash_str_32(name)")]
     /// Creates a texture ID hashed from the given name.
