@@ -13,6 +13,7 @@ module [
     dot,
     norm_squared,
     norm,
+    cross,
     is_approx_eq,
     write_bytes_32,
     write_bytes_64,
@@ -51,6 +52,13 @@ dot = |a, b| map2(a, b, Num.mul) |> reduce(Num.add)
 
 norm_squared = |vec| dot(vec, vec)
 norm = |vec| vec |> norm_squared |> Num.sqrt
+
+cross = |(ax, ay, az), (bx, by, bz)|
+    (
+        ay * bz - az * by,
+        az * bx - ax * bz,
+        ax * by - ay * bx,
+    )
 
 is_approx_eq : Vector3 a, Vector3 a, { atol ?? Frac a, rtol ?? Frac a } -> Bool
 is_approx_eq = |a, b, tol|
