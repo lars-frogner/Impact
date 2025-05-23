@@ -1,8 +1,8 @@
-# Hash: 3673798384b339239a75d0e48055f7c7cdaaec3ec8a524de972f3912ef1646ce
-# Generated: 2025-05-18T21:33:59+00:00
+# Hash: 7ffdd60aef12c67b680a22a87e17575f48807ee116f6c648b08bc418d2421459
+# Generated: 2025-05-22T18:34:24+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 8a339ce (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -33,55 +33,56 @@ write_bytes = |bytes, value|
     when value is
         Rendering(val) ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(0)
             |> Command.RenderingCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 3))
+            |> List.concat(List.repeat(0, 26))
 
         Physics(val) ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(1)
             |> Command.PhysicsCommand.write_bytes(val)
 
         Scene(val) ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(2)
             |> Command.SceneCommand.write_bytes(val)
+            |> List.concat(List.repeat(0, 23))
 
         Control(val) ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(3)
             |> Command.ControlCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 1))
+            |> List.concat(List.repeat(0, 24))
 
         UI(val) ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(4)
             |> Command.UICommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 8))
+            |> List.concat(List.repeat(0, 31))
 
         Capture(val) ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(5)
             |> Command.CaptureCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 8))
+            |> List.concat(List.repeat(0, 31))
 
         Exit ->
             bytes
-            |> List.reserve(11)
+            |> List.reserve(34)
             |> List.append(6)
-            |> List.concat(List.repeat(0, 10))
+            |> List.concat(List.repeat(0, 33))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result EngineCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 11 then
+    if List.len(bytes) != 34 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -95,7 +96,7 @@ from_bytes = |bytes|
             [1, .. as data_bytes] ->
                 Ok(
                     Physics(
-                        data_bytes |> List.sublist({ start: 0, len: 10 }) |> Command.PhysicsCommand.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 33 }) |> Command.PhysicsCommand.from_bytes?,
                     ),
                 )
 
