@@ -177,7 +177,7 @@ impl RectangleMeshComp {
     }
 }
 
-#[roc]
+#[roc(dependencies=[FrontFaceSide])]
 impl BoxMeshComp {
     #[roc(expr = "{ extent_x: 1.0, extent_y: 1.0, extent_z: 1.0, front_faces_on_outside: 1 }")]
     pub const UNIT_CUBE: Self = Self {
@@ -196,6 +196,17 @@ impl BoxMeshComp {
     };
 
     /// Creates a new component for a box mesh with the given extents.
+    #[roc(body = r#"
+    front_faces_on_outside =
+        when front_face_side is
+            Outside -> 1
+            Inside -> 0
+    {
+        extent_x,
+        extent_y,
+        extent_z,
+        front_faces_on_outside,
+    }"#)]
     pub fn new(
         extent_x: f32,
         extent_y: f32,

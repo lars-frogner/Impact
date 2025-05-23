@@ -55,7 +55,7 @@ pub type Force = Vector3<fph>;
 /// A 3D torque.
 pub type Torque = Vector3<fph>;
 
-#[roc]
+#[roc(dependencies=[Vector3<fph>])]
 impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
     /// angular speed.
@@ -69,6 +69,11 @@ impl AngularVelocity {
 
     /// Creates a new [`AngularVelocity`] from the given angular velocity
     /// vector.
+    #[roc(body = r#"
+    when UnitVector3.try_from_and_get(angular_velocity_vector, 1e-15) is
+        Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
+        None -> zero({})
+    "#)]
     pub fn from_vector(angular_velocity_vector: Vector3<fph>) -> Self {
         if let Some((axis_of_rotation, angular_speed)) =
             UnitVector3::try_new_and_get(angular_velocity_vector, fph::EPSILON)

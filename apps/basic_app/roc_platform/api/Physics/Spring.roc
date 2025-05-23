@@ -1,10 +1,13 @@
-# Hash: 20efc1a58720fcb668dcf47a87654933ac61fbb419c5aab6ebf494c7b4dcb78b
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: c0b4f895cda80dae2751e78e897b7e96cc82c48703da1d896fe51832d0c6ef9a
+# Generated: 2025-05-21T22:02:06+00:00
 # Rust type: impact::physics::rigid_body::forces::spring::Spring
 # Type category: POD
-# Commit: d505d37
+# Commit: 8a339ce (dirty)
 module [
     Spring,
+    new,
+    standard,
+    elastic_band,
     write_bytes,
     from_bytes,
 ]
@@ -22,6 +25,26 @@ Spring : {
     ## The length below which the spring force is always zero.
     slack_length : F64,
 }
+
+## Creates a new spring.
+new : F64, F64, F64, F64 -> Spring
+new = |stiffness, damping, rest_length, slack_length|
+    {
+        stiffness,
+        damping,
+        rest_length,
+        slack_length,
+    }
+
+## Creates a standard spring (no slack).
+standard : F64, F64, F64 -> Spring
+standard = |stiffness, damping, rest_length|
+    new(stiffness, damping, rest_length, 0)
+
+## Creates an elastic band that is slack below a given length.
+elastic_band : F64, F64, F64 -> Spring
+elastic_band = |stiffness, damping, slack_length|
+    new(stiffness, damping, slack_length, slack_length)
 
 ## Serializes a value of [Spring] into the binary representation
 ## expected by the engine and appends the bytes to the list.
