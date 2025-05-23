@@ -2,6 +2,8 @@ module [
     Vector4,
     Vector4F32,
     Vector4F64,
+    zero,
+    same,
     map,
     map2,
     reduce,
@@ -25,6 +27,12 @@ Vector4 a : (Frac a, Frac a, Frac a, Frac a)
 
 Vector4F32 : Vector4 Binary32
 Vector4F64 : Vector4 Binary64
+
+zero = (0.0, 0.0, 0.0, 0.0)
+
+same : Frac a -> Vector4 a
+same = |val|
+    (val, val, val, val)
 
 map : Vector4 a, (Frac a -> Frac b) -> Vector4 b
 map = |vec, f|
