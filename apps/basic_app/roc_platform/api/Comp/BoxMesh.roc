@@ -1,19 +1,22 @@
-# Hash: fcc208727db8cdf0c7c1471042efa21cd29dbe987e1b36f6a3fc8ca921c41f99
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: d14da78dc7d7be31bdbf82217821607ba28ca57d202f6551522f5081a51570f7
+# Generated: 2025-05-21T21:01:06+00:00
 # Rust type: impact::mesh::components::BoxMeshComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 8a339ce (dirty)
 module [
     BoxMesh,
     unit_cube,
     skybox,
+    new,
     add_unit_cube,
     add_skybox,
+    add_new,
     add,
     add_multiple,
 ]
 
 import Entity
+import Mesh.FrontFaceSide
 import core.Builtin
 
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -44,6 +47,26 @@ skybox = { extent_x: 1.0, extent_y: 1.0, extent_z: 1.0, front_faces_on_outside: 
 add_skybox : Entity.Data -> Entity.Data
 add_skybox = |data|
     add(data, skybox)
+
+## Creates a new component for a box mesh with the given extents.
+new : F32, F32, F32, Mesh.FrontFaceSide.FrontFaceSide -> BoxMesh
+new = |extent_x, extent_y, extent_z, front_face_side|
+    front_faces_on_outside =
+        when front_face_side is
+            Outside -> 1
+            Inside -> 0
+    {
+        extent_x,
+        extent_y,
+        extent_z,
+        front_faces_on_outside,
+    }
+
+## Creates a new component for a box mesh with the given extents.
+## Adds the component to the given entity's data.
+add_new : Entity.Data, F32, F32, F32, Mesh.FrontFaceSide.FrontFaceSide -> Entity.Data
+add_new = |data, extent_x, extent_y, extent_z, front_face_side|
+    add(data, new(extent_x, extent_y, extent_z, front_face_side))
 
 ## Adds a value of the [BoxMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of

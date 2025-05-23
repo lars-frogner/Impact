@@ -129,6 +129,7 @@ bitflags! {
 
 /// Whether the front faces of a mesh are oriented toward the outside or the
 /// inside.
+#[roc(parents = "Mesh")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FrontFaceSide {
     Outside,

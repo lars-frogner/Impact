@@ -1,11 +1,12 @@
-# Hash: 02d333e7184a620de348a1c0d4b12763a81e7f0f1af2ea20d296bfc61e5fa196
-# Generated: 2025-05-20T22:05:14+00:00
+# Hash: a86c3a221921a7c850c7ec145cef802dfb4e7e4ca277635bc44d921c543c28ca
+# Generated: 2025-05-21T21:20:07+00:00
 # Rust type: impact::physics::motion::AngularVelocity
 # Type category: POD
-# Commit: d013f26 (dirty)
+# Commit: 8a339ce (dirty)
 module [
     AngularVelocity,
     new,
+    from_vector,
     zero,
     write_bytes,
     from_bytes,
@@ -13,6 +14,7 @@ module [
 
 import core.Radians
 import core.UnitVector3
+import core.Vector3
 
 ## An angular velocity in 3D space, represented by an axis of rotation and an
 ## angular speed.
@@ -26,6 +28,14 @@ AngularVelocity : {
 new : UnitVector3.UnitVector3 Binary64, Radians.Radians Binary64 -> AngularVelocity
 new = |axis_of_rotation, angular_speed|
     { axis_of_rotation, angular_speed }
+
+## Creates a new [`AngularVelocity`] from the given angular velocity
+## vector.
+from_vector : Vector3.Vector3 Binary64 -> AngularVelocity
+from_vector = |angular_velocity_vector|
+    when UnitVector3.try_from_and_get(angular_velocity_vector, 1e-15) is
+        Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
+        None -> zero({})
 
 ## Creates a new [`AngularVelocity`] with zero angular speed.
 zero : {} -> AngularVelocity

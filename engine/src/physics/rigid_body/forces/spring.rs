@@ -37,8 +37,15 @@ pub struct SpringState {
     center: Position,
 }
 
+#[roc]
 impl Spring {
     /// Creates a new spring.
+    #[roc(body = r#"{
+        stiffness,
+        damping,
+        rest_length,
+        slack_length,
+    }"#)]
     pub fn new(stiffness: fph, damping: fph, rest_length: fph, slack_length: fph) -> Self {
         Self {
             stiffness,
@@ -49,11 +56,13 @@ impl Spring {
     }
 
     /// Creates a standard spring (no slack).
+    #[roc(body = "new(stiffness, damping, rest_length, 0)")]
     pub fn standard(stiffness: fph, damping: fph, rest_length: fph) -> Self {
         Self::new(stiffness, damping, rest_length, 0.0)
     }
 
     /// Creates an elastic band that is slack below a given length.
+    #[roc(body = "new(stiffness, damping, slack_length, slack_length)")]
     pub fn elastic_band(stiffness: fph, damping: fph, slack_length: fph) -> Self {
         Self::new(stiffness, damping, slack_length, slack_length)
     }
