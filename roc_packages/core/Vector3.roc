@@ -3,6 +3,7 @@ module [
     Vector3F32,
     Vector3F64,
     zero,
+    same,
     map,
     map2,
     reduce,
@@ -29,6 +30,10 @@ Vector3F32 : Vector3 Binary32
 Vector3F64 : Vector3 Binary64
 
 zero = (0.0, 0.0, 0.0)
+
+same : Frac a -> Vector3 a
+same = |val|
+    (val, val, val)
 
 map : Vector3 a, (Frac a -> Frac b) -> Vector3 b
 map = |vec, f|
