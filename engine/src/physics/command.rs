@@ -1,7 +1,7 @@
 //! Commands for operating the physics simulator.
 
 use super::PhysicsSimulator;
-use crate::physics::fph;
+use crate::physics::{fph, medium::UniformMedium};
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -10,6 +10,7 @@ use roc_integration::roc;
 pub enum PhysicsCommand {
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
+    SetMedium(UniformMedium),
 }
 
 #[roc(parents = "Command")]

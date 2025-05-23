@@ -23,6 +23,7 @@ use crate::{
     physics::{
         command::{PhysicsCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
         fph,
+        medium::UniformMedium,
     },
     scene::command::SceneCommand,
     skybox::Skybox,
@@ -136,6 +137,9 @@ impl Engine {
             }
             PhysicsCommand::SetSimulationSpeed(to) => {
                 self.set_simulation_speed(to);
+            }
+            PhysicsCommand::SetMedium(to) => {
+                self.set_medium(to);
             }
         }
         Ok(())
@@ -299,6 +303,10 @@ impl Engine {
         }
 
         new_multiplier
+    }
+
+    pub fn set_medium(&self, to: UniformMedium) {
+        self.simulator.write().unwrap().set_medium(to);
     }
 
     // Scene

@@ -1,8 +1,8 @@
-# Hash: 4d4f4b919d2a3454eead5949f4a18bf20ecb619e9619fdeea5d639eb99e4d7eb
-# Generated: 2025-05-18T21:33:59+00:00
+# Hash: 0538789cef94f00bf2ee5cb24ef89fd29a85dd8d784f8ae36566282b024f72de
+# Generated: 2025-05-22T18:34:24+00:00
 # Rust type: impact::physics::command::PhysicsCommand
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 8a339ce (dirty)
 module [
     PhysicsCommand,
     write_bytes,
@@ -11,10 +11,12 @@ module [
 
 import Command.ToSimulationSpeedMultiplier
 import Command.ToSubstepCount
+import Physics.UniformMedium
 
 PhysicsCommand : [
     SetSimulationSubstepCount Command.ToSubstepCount.ToSubstepCount,
     SetSimulationSpeed Command.ToSimulationSpeedMultiplier.ToSimulationSpeedMultiplier,
+    SetMedium Physics.UniformMedium.UniformMedium,
 ]
 
 ## Serializes a value of [PhysicsCommand] into the binary representation
@@ -24,22 +26,29 @@ write_bytes = |bytes, value|
     when value is
         SetSimulationSubstepCount(val) ->
             bytes
-            |> List.reserve(10)
+            |> List.reserve(33)
             |> List.append(0)
             |> Command.ToSubstepCount.write_bytes(val)
-            |> List.concat(List.repeat(0, 4))
+            |> List.concat(List.repeat(0, 27))
 
         SetSimulationSpeed(val) ->
             bytes
-            |> List.reserve(10)
+            |> List.reserve(33)
             |> List.append(1)
             |> Command.ToSimulationSpeedMultiplier.write_bytes(val)
+            |> List.concat(List.repeat(0, 23))
+
+        SetMedium(val) ->
+            bytes
+            |> List.reserve(33)
+            |> List.append(2)
+            |> Physics.UniformMedium.write_bytes(val)
 
 ## Deserializes a value of [PhysicsCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result PhysicsCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 10 then
+    if List.len(bytes) != 33 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -54,6 +63,13 @@ from_bytes = |bytes|
                 Ok(
                     SetSimulationSpeed(
                         data_bytes |> List.sublist({ start: 0, len: 9 }) |> Command.ToSimulationSpeedMultiplier.from_bytes?,
+                    ),
+                )
+
+            [2, .. as data_bytes] ->
+                Ok(
+                    SetMedium(
+                        data_bytes |> List.sublist({ start: 0, len: 32 }) |> Physics.UniformMedium.from_bytes?,
                     ),
                 )
 
