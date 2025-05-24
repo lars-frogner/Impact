@@ -246,8 +246,9 @@ impl GradientNoiseVoxelTypesComp {
 
     #[roc(body = r#"
     n_voxel_types = List.len(voxel_type_names)
-    expect n_voxel_types > 0
-    expect n_voxel_types <= voxel_type_array_size
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect n_voxel_types > 0
+    # expect n_voxel_types <= voxel_type_array_size
     voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
     {
         n_voxel_types,
@@ -378,10 +379,11 @@ impl VoxelBoxComp {
     /// - If the voxel extent is negative.
     /// - If either of the extents is zero or negative.
     #[roc(body = r#"
-    expect voxel_extent > 0.0
-    expect extent_x >= 0.0
-    expect extent_y >= 0.0
-    expect extent_z >= 0.0
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect voxel_extent > 0.0
+    # expect extent_x >= 0.0
+    # expect extent_y >= 0.0
+    # expect extent_z >= 0.0
     {
         voxel_extent,
         extent_x,
@@ -415,8 +417,9 @@ impl VoxelSphereComp {
     /// - If the voxel extent is negative.
     /// - If the radius zero or negative.
     #[roc(body = r#"
-    expect voxel_extent > 0.0
-    expect radius >= 0.0
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect voxel_extent > 0.0
+    # expect radius >= 0.0
     {
         voxel_extent,
         radius,
@@ -444,9 +447,10 @@ impl VoxelSphereUnionComp {
     /// - If the voxel extent is negative.
     /// - If either of the radii is zero or negative.
     #[roc(body = r#"
-    expect voxel_extent > 0.0
-    expect radius_1 >= 0.0
-    expect radius_2 >= 0.0
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect voxel_extent > 0.0
+    # expect radius_1 >= 0.0
+    # expect radius_2 >= 0.0
     {
         voxel_extent,
         radius_1,
@@ -488,10 +492,11 @@ impl VoxelGradientNoisePatternComp {
     /// given maximum number of voxels in each direction, spatial noise
     /// frequency, noise threshold and seed.
     #[roc(body = r#"
-    expect voxel_extent > 0.0
-    expect extent_x >= 0.0
-    expect extent_y >= 0.0
-    expect extent_z >= 0.0
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect voxel_extent > 0.0
+    # expect extent_x >= 0.0
+    # expect extent_y >= 0.0
+    # expect extent_z >= 0.0
     {
         voxel_extent,
         extent_x,
@@ -536,8 +541,9 @@ impl VoxelAbsorbingSphereComp {
     /// radius in the reference frame of the entity and the given maximum
     /// absorption rate (at the center of the sphere).
     #[roc(body = r#"
-    expect radius >= 0.0
-    expect rate >= 0.0
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect radius >= 0.0
+    # expect rate >= 0.0
     {
         offset,
         radius,
@@ -572,8 +578,9 @@ impl VoxelAbsorbingCapsuleComp {
     /// the entity, as well as the given maximum absorption rate (at the central
     /// line segment).
     #[roc(body = r#"
-    expect radius >= 0.0
-    expect rate >= 0.0
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect radius >= 0.0
+    # expect rate >= 0.0
     {
         offset_to_segment_start,
         segment_vector,
