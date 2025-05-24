@@ -22,7 +22,7 @@ use crate::{
     voxel,
     window::Window,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     setup,
@@ -62,9 +62,9 @@ impl Scene {
             self.instance_feature_manager(),
             components,
             desynchronized,
-        );
+        )?;
 
-        voxel::entity::setup_voxel_object_for_new_entity(&self.voxel_manager, components);
+        voxel::entity::setup_voxel_object_for_new_entity(&self.voxel_manager, components)?;
 
         mesh::entity::generate_missing_vertex_properties_for_new_entity_mesh(
             self.mesh_repository(),
@@ -86,7 +86,7 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        Self::add_parent_group_node_component_for_new_entity(ecs_world, components);
+        Self::add_parent_group_node_component_for_new_entity(ecs_world, components)?;
         self.add_group_node_component_for_new_entity(components);
 
         camera::entity::add_camera_to_scene_for_new_entity(
@@ -98,14 +98,14 @@ impl Scene {
             desynchronized,
         )?;
 
-        self.add_model_instance_node_component_for_new_entity(components);
+        self.add_model_instance_node_component_for_new_entity(components)?;
 
         voxel::entity::add_model_instance_node_component_for_new_voxel_object_entity(
             self.voxel_manager(),
             self.instance_feature_manager(),
             self.scene_graph(),
             components,
-        );
+        )?;
 
         Ok(())
     }
@@ -151,25 +151,30 @@ impl Scene {
     fn add_parent_group_node_component_for_new_entity(
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
-    ) {
+    ) -> Result<()> {
         setup!(
             {
                 let ecs_world = ecs_world.read().unwrap();
             },
             components,
-            |parent: &ParentComp| -> SceneGraphParentNodeComp {
-                let parent_entity_id = ecs_world
+            |parent: &ParentComp| -> Result<SceneGraphParentNodeComp> {
+                let parent_entity = ecs_world
                     .get_entity(parent.entity_id)
-                    .expect("Missing parent entity");
+                    .ok_or_else(|| anyhow!("Missing parent entity with ID {}", parent.entity_id))?;
 
-                let parent_group_node = parent_entity_id
+                let parent_group_node = parent_entity
                     .get_component::<SceneGraphGroupNodeComp>()
-                    .expect("Missing group node component for parent entity");
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Missing group node component for parent entity with ID {}",
+                            parent.entity_id
+                        )
+                    })?;
 
-                SceneGraphParentNodeComp::new(parent_group_node.access().id)
+                Ok(SceneGraphParentNodeComp::new(parent_group_node.access().id))
             },
             ![SceneGraphParentNodeComp]
-        );
+        )
     }
 
     fn add_group_node_component_for_new_entity(&self, components: &mut ArchetypeComponentStorage) {
@@ -201,7 +206,7 @@ impl Scene {
     fn add_model_instance_node_component_for_new_entity(
         &self,
         components: &mut ArchetypeComponentStorage,
-    ) {
+    ) -> Result<()> {
         setup!(
             {
                 let mesh_repository = self.mesh_repository().read().unwrap();
@@ -215,10 +220,23 @@ impl Scene {
              frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>,
              flags: Option<&SceneEntityFlagsComp>|
-             -> (SceneGraphModelInstanceNodeComp, SceneEntityFlagsComp) {
+             -> Result<(SceneGraphModelInstanceNodeComp, SceneEntityFlagsComp)> {
                 let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
 
                 let model_id = ModelID::for_mesh_and_material(mesh.id, *material.material_handle());
+
+                let bounding_sphere = if components.has_component_type::<UncullableComp>() {
+                    // The scene graph will not cull models with no bounding sphere
+                    None
+                } else {
+                    Some(
+                        mesh_repository
+                            .get_mesh(mesh.id)
+                            .ok_or_else(|| anyhow!("Tried to create renderable entity with missing mesh (mesh ID {})", mesh.id))?
+                            .compute_bounding_sphere()
+                            .ok_or_else(|| anyhow!("Tried to create renderable entity with empty mesh (mesh ID {})", mesh.id))?
+                    )
+                };
 
                 let mut feature_type_ids = Vec::with_capacity(4);
 
@@ -263,23 +281,10 @@ impl Scene {
                     feature_ids.push(feature_id);
                 }
 
-                let bounding_sphere = if components.has_component_type::<UncullableComp>() {
-                    // The scene graph will not cull models with no bounding sphere
-                    None
-                } else {
-                    // Panic on errors since returning an error could leave us
-                    // in an inconsistent state
-                    Some(mesh_repository
-                        .get_mesh(mesh.id)
-                        .expect("Tried to create renderable entity with mesh not present in mesh repository")
-                        .compute_bounding_sphere()
-                        .expect("Tried to create renderable entity with empty mesh"))
-                };
-
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-                (
+                Ok((
                     SceneGraphModelInstanceNodeComp::new(scene_graph.create_model_instance_node(
                         parent_node_id,
                         model_to_parent_transform,
@@ -289,10 +294,10 @@ impl Scene {
                         flags.into(),
                     )),
                     SceneEntityFlagsComp(flags),
-                )
+                ))
             },
             ![SceneGraphModelInstanceNodeComp]
-        );
+        )
     }
 
     fn remove_model_instance_node_for_entity(

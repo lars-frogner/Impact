@@ -18,9 +18,10 @@ use crate::{
     model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
+use anyhow::{Result, bail};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_math::hash64;
-use std::sync::RwLock;
+use std::{collections::hash_map::Entry, sync::RwLock};
 
 /// Binding locations for textures used in a physical material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -68,7 +69,7 @@ pub fn setup_physical_material_for_new_entity(
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
-) {
+) -> Result<()> {
     setup!(
         {
             desynchronized.set_yes();
@@ -87,7 +88,7 @@ pub fn setup_physical_material_for_new_entity(
          textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
-         -> MaterialComp {
+         -> Result<MaterialComp> {
             setup_physical_material(
                 graphics_device,
                 assets,
@@ -108,7 +109,7 @@ pub fn setup_physical_material_for_new_entity(
             )
         },
         ![MaterialComp, TexturedColorComp]
-    );
+    )?;
 
     setup!(
         {
@@ -128,7 +129,7 @@ pub fn setup_physical_material_for_new_entity(
          textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
-         -> MaterialComp {
+         -> Result<MaterialComp> {
             setup_physical_material(
                 graphics_device,
                 assets,
@@ -149,7 +150,7 @@ pub fn setup_physical_material_for_new_entity(
             )
         },
         ![MaterialComp, UniformColorComp]
-    );
+    )
 }
 
 pub fn setup_physical_material(
@@ -169,7 +170,7 @@ pub fn setup_physical_material(
     textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
     normal_map: Option<&NormalMapComp>,
     parallax_map: Option<&ParallaxMapComp>,
-) -> MaterialComp {
+) -> Result<MaterialComp> {
     let mut material_name_parts = Vec::with_capacity(8);
 
     let mut texture_ids = Vec::with_capacity(4);
@@ -195,10 +196,10 @@ pub fn setup_physical_material(
             texture_ids.push(color.0);
         }
         (None, None) => {
-            panic!("Tried to create physical material with no color");
+            bail!("Tried to create physical material with no color");
         }
         (Some(_), Some(_)) => {
-            panic!("Tried to create physical material with both uniform and textured color");
+            bail!("Tried to create physical material with both uniform and textured color");
         }
     }
 
@@ -285,7 +286,7 @@ pub fn setup_physical_material(
 
     match (normal_map, parallax_map) {
         (Some(_), Some(_)) => {
-            panic!("Tried to create physical material with normal mapping and parallax mapping");
+            bail!("Tried to create physical material with normal mapping and parallax mapping");
         }
         (Some(normal_map), None) => {
             material_name_parts.push("NormalMapping");
@@ -364,26 +365,25 @@ pub fn setup_physical_material(
         let texture_group_id = MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
 
         // Add a new texture set if none with the same textures already exist
-        material_library
-            .material_property_texture_group_entry(texture_group_id)
-            .or_insert_with(|| {
-                MaterialPropertyTextureGroup::new(
-                    graphics_device,
-                    assets,
-                    texture_ids,
-                    texture_group_id.to_string(),
-                )
-                .expect("Missing textures from assets")
-            });
+        if let Entry::Vacant(entry) =
+            material_library.material_property_texture_group_entry(texture_group_id)
+        {
+            entry.insert(MaterialPropertyTextureGroup::new(
+                graphics_device,
+                assets,
+                texture_ids,
+                texture_group_id.to_string(),
+            )?);
+        }
 
         Some(texture_group_id)
     } else {
         None
     };
 
-    MaterialComp::new(MaterialHandle::new(
+    Ok(MaterialComp::new(MaterialHandle::new(
         material_id,
         Some(feature_id),
         texture_group_id,
-    ))
+    )))
 }

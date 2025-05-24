@@ -11,6 +11,7 @@ use crate::{
         },
     },
 };
+use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use std::{path::PathBuf, sync::RwLock};
 
@@ -22,19 +23,19 @@ pub fn setup_drag_load_map_for_new_entity(
     mesh_repository: &RwLock<MeshRepository>,
     drag_load_map_repository: &RwLock<DragLoadMapRepository<f32>>,
     components: &mut ArchetypeComponentStorage,
-) {
+) -> Result<()> {
     fn generate_map(
         mesh_repository: &RwLock<MeshRepository>,
         config: &DragLoadMapConfig,
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,
-    ) -> DragLoadMap<f32> {
+    ) -> Result<DragLoadMap<f32>> {
         let center_of_mass = rigid_body.0.inertial_properties().center_of_mass();
 
         let mesh_repository = mesh_repository.read().unwrap();
-        let mesh = mesh_repository
-            .get_mesh(mesh_id)
-            .expect("Missing mesh for generating drag load map");
+        let mesh = mesh_repository.get_mesh(mesh_id).ok_or_else(|| {
+            anyhow!("Tried to generate drag load map for missing mesh (mesh ID {mesh_id})")
+        })?;
 
         let map = with_timing_info_logging!(
             "Generating drag load map with resolution {} and smoothness {} for {} using {} direction samples",
@@ -51,7 +52,7 @@ pub fn setup_drag_load_map_for_new_entity(
             )
         });
 
-        map
+        Ok(map)
     }
 
     fn generate_map_path(mesh_id: MeshID) -> PathBuf {
@@ -63,7 +64,7 @@ pub fn setup_drag_load_map_for_new_entity(
     setup!(components, |drag: &DetailedDragComp,
                         mesh: &MeshComp,
                         rigid_body: &RigidBodyComp|
-     -> DragLoadMapComp {
+     -> Result<DragLoadMapComp> {
         let mesh_id = mesh.id;
 
         let drag_load_map_repository_readonly = drag_load_map_repository.read().unwrap();
@@ -75,20 +76,25 @@ pub fn setup_drag_load_map_for_new_entity(
             let map_file_exists = map_path.exists();
 
             let map = if config.use_saved_maps && map_file_exists {
-                DragLoadMap::<f32>::read_from_file(&map_path).unwrap_or_else(|err| {
-                    log::error!("Could not load drag load map from file: {}", err);
-                    generate_map(mesh_repository, config, mesh_id, rigid_body)
-                })
+                DragLoadMap::<f32>::read_from_file(&map_path).with_context(|| {
+                    format!(
+                        "Failed to load drag load map from file `{}`",
+                        map_path.display()
+                    )
+                })?
             } else {
-                generate_map(mesh_repository, config, mesh_id, rigid_body)
+                generate_map(mesh_repository, config, mesh_id, rigid_body)?
             };
 
             if config.save_generated_maps
                 && (config.overwrite_existing_map_files || !map_file_exists)
             {
-                if let Err(err) = map.save_to_file(&map_path) {
-                    log::error!("Could not save drag load map to file: {}", err);
-                }
+                map.save_to_file(&map_path).with_context(|| {
+                    format!(
+                        "Failed to save drag load map to file `{}`",
+                        map_path.display()
+                    )
+                })?;
             }
 
             // Release read lock before attempting to write
@@ -98,9 +104,9 @@ pub fn setup_drag_load_map_for_new_entity(
                 .unwrap()
                 .add_drag_load_map_unless_present(mesh_id, map);
         }
-        DragLoadMapComp {
+        Ok(DragLoadMapComp {
             mesh_id,
             drag_coefficient: drag.drag_coefficient,
-        }
-    });
+        })
+    })
 }

@@ -2,6 +2,7 @@
 
 use super::{collision, rigid_body};
 use crate::{mesh::MeshRepository, physics::PhysicsSimulator};
+use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use std::sync::RwLock;
 
@@ -13,15 +14,17 @@ impl PhysicsSimulator {
         &self,
         mesh_repository: &RwLock<MeshRepository>,
         components: &mut ArchetypeComponentStorage,
-    ) {
-        rigid_body::entity::setup_rigid_body_for_new_entity(mesh_repository, components);
+    ) -> Result<()> {
+        rigid_body::entity::setup_rigid_body_for_new_entity(mesh_repository, components)?;
 
         self.rigid_body_force_manager
             .read()
             .unwrap()
-            .perform_setup_for_new_entity(mesh_repository, components);
+            .perform_setup_for_new_entity(mesh_repository, components)?;
 
         collision::entity::setup_collidable_for_new_entity(&self.collision_world, components);
+
+        Ok(())
     }
 
     /// Performs any modifications required to clean up the physics simulator
