@@ -55,7 +55,7 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
     let input_verification_code = querying_util::generate_input_verification_code(
         &input.comp_arg_types,
         &input.required_comp_types,
-        [&input.disallowed_comp_types],
+        [input.disallowed_comp_types.as_ref()],
         crate_root,
     )?;
 
