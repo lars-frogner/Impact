@@ -136,7 +136,7 @@ pub(crate) fn verify_disallowed_comps_unique(
 pub(crate) fn generate_input_verification_code<'a>(
     arg_comp_types: &[Type],
     requested_comp_types: &[Type],
-    additional_comp_types: impl IntoIterator<Item = &'a Option<Vec<Type>>>,
+    additional_comp_types: impl IntoIterator<Item = Option<&'a Vec<Type>>>,
     crate_root: &Ident,
 ) -> Result<TokenStream> {
     let mut impl_assertions: Vec<_> = arg_comp_types

@@ -5,10 +5,11 @@ use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Expr, GenericArgument, PathArguments, Result, Token, Type, TypeReference, braced,
-    parenthesized,
-    parse::{Parse, ParseStream},
+    Error, Expr, GenericArgument, PathArguments, Result, Token, Type, TypeReference, TypeTuple,
+    braced, parenthesized,
+    parse::{Parse, ParseStream, discouraged::Speculative},
     punctuated::Punctuated,
+    spanned::Spanned,
     token::Paren,
 };
 
@@ -37,9 +38,31 @@ enum InterpretedArgType {
 
 struct SetupClosure {
     comp_args: Punctuated<SetupCompClosureArg, Token![,]>,
-    return_comp_types: Option<Punctuated<Type, Token![,]>>,
+    return_type: SetupClosureReturnType,
     body: Expr,
 }
+
+enum SetupClosureReturnType {
+    ResultWrapped(ResultWrappedReturnCompTypes),
+    Plain(ReturnCompTypes),
+    None,
+}
+
+struct ResultWrappedReturnCompTypes {
+    start_token: Option<Token![::]>,
+    result_path: Punctuated<Ident, Token![::]>,
+    begin_bracket: Token![<],
+    ok_ty: ReturnCompTypes,
+    err_ty: Option<ResultWrappedReturnErrType>,
+    end_bracket: Token![>],
+}
+
+struct ResultWrappedReturnErrType {
+    comma: Token![,],
+    ty: Type,
+}
+
+struct ReturnCompTypes(Punctuated<Type, Token![,]>);
 
 struct ProcessedSetupInput {
     scope: Option<TokenStream>,
@@ -57,11 +80,17 @@ struct ProcessedSetupInput {
     /// Types of all non-[`Option`] arguments, types wrapped by `Option`s and
     /// required types listed after the closure.
     requested_comp_types: Vec<Type>,
-    /// Types in the return tuple.
-    return_comp_types: Option<Vec<Type>>,
+    /// The return type of the closure.
+    return_type: ProcessedSetupClosureReturnType,
     /// Disallowed types listed after the closure.
     disallowed_comp_types: Option<Vec<Type>>,
     full_closure_args: Vec<TokenStream>,
+}
+
+struct ProcessedSetupClosureReturnType {
+    comp_types: Vec<Type>,
+    is_result_wrapped: bool,
+    return_tokens: TokenStream,
 }
 
 pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream> {
@@ -72,20 +101,21 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
         &input.requested_comp_types,
         &input.disallowed_comp_types,
     )?;
-    if let Some(return_comp_types) = &input.return_comp_types {
-        querying_util::verify_comp_types_unique(return_comp_types)?;
-    }
+    querying_util::verify_comp_types_unique(&input.return_type.comp_types)?;
 
     let input_verification_code = querying_util::generate_input_verification_code(
         &input.all_arg_comp_types,
         &input.requested_comp_types,
-        [&input.return_comp_types, &input.disallowed_comp_types],
+        [
+            Some(&input.return_type.comp_types),
+            input.disallowed_comp_types.as_ref(),
+        ],
         crate_root,
     )?;
 
     let (closure_name, closure_def_code) = generate_closure_def_code(
         &input.full_closure_args,
-        &input.return_comp_types,
+        &input.return_type,
         &input.closure_body,
     );
 
@@ -104,7 +134,7 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
     let (component_storage_array_name, component_storage_array_creation_code) =
         generate_component_storage_array_creation_code(
             &input.components_name,
-            &input.return_comp_types,
+            &input.return_type.comp_types,
         );
 
     let (component_iter_names, component_iter_code) = generate_component_iter_names_and_code(
@@ -113,17 +143,20 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
         &input.interpreted_arg_types,
     );
 
-    let closure_call_code = generate_closure_call_code(
+    let (closure_error_name, closure_call_code) = generate_closure_call_code(
         &input.components_name,
         &closure_name,
         &input.arg_names,
         &component_iter_names,
         &component_storage_array_name,
-        &input.return_comp_types,
+        &input.return_type,
     );
 
     let extension_code =
         generate_extension_code(&input.components_name, &component_storage_array_name);
+
+    let (extension_code_with_error_handling, else_branch_expr) =
+        generate_closure_error_handling_code(&closure_error_name, extension_code);
 
     Ok(quote! {
         // Use local scope to avoid polluting surrounding code
@@ -152,9 +185,15 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
                 // and store any returned components
                 #closure_call_code
 
-                // Add any new components to existing component set,
-                // overwriting if already present
-                #extension_code
+                // If there was no error from the closure calls or they were
+                // infallible, add any new components to existing component set,
+                // overwriting if already present. If the calls were fallible
+                // and there was an error, let the branch evaluate to it.
+                #extension_code_with_error_handling
+            } else {
+                // If the closure calls were fallible, this branch must evaluate
+                // to `Ok(())`
+                #else_branch_expr
             }
         }
     })
@@ -197,24 +236,37 @@ impl Parse for SetupClosure {
 
         input.parse::<Token![|]>()?;
 
-        let return_comp_types = if input.lookahead1().peek(Token![->]) {
+        let return_type = if input.lookahead1().peek(Token![->]) {
             input.parse::<Token![->]>()?;
-            if input.lookahead1().peek(Paren) {
-                let content;
-                parenthesized!(content in input);
-                Some(Punctuated::parse_separated_nonempty(&content)?)
+
+            let fork = input.fork();
+
+            if let Ok(return_comp_types) = fork.parse::<ResultWrappedReturnCompTypes>() {
+                if return_comp_types
+                    .result_path
+                    .last()
+                    .is_some_and(|ident| ident == "Result")
+                {
+                    input.advance_to(&fork);
+                    SetupClosureReturnType::ResultWrapped(return_comp_types)
+                } else {
+                    return Err(Error::new(
+                        return_comp_types.result_path.span(),
+                        "Returned components wrapped in non-`Result` type",
+                    ));
+                }
             } else {
-                Some(Punctuated::parse_separated_nonempty(input)?)
+                SetupClosureReturnType::Plain(input.parse::<ReturnCompTypes>()?)
             }
         } else {
-            None
+            SetupClosureReturnType::None
         };
 
         let body = input.parse()?;
 
         Ok(Self {
             comp_args,
-            return_comp_types,
+            return_type,
             body,
         })
     }
@@ -230,6 +282,53 @@ impl Parse for SetupCompClosureArg {
             var,
             ty,
             interpreted_ty,
+        })
+    }
+}
+
+impl Parse for ResultWrappedReturnCompTypes {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let start_token = input.parse::<Option<Token![::]>>()?;
+        let result_path = Punctuated::parse_separated_nonempty(input)?;
+        let begin_bracket: Token![<] = input.parse()?;
+        let ok_ty = input.parse::<ReturnCompTypes>()?;
+        let err_ty = if input.peek(Token![,]) {
+            Some(input.parse::<ResultWrappedReturnErrType>()?)
+        } else {
+            None
+        };
+        let end_bracket: Token![>] = input.parse()?;
+        Ok(Self {
+            start_token,
+            result_path,
+            begin_bracket,
+            ok_ty,
+            err_ty,
+            end_bracket,
+        })
+    }
+}
+
+impl Parse for ResultWrappedReturnErrType {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(Self {
+            comma: input.parse()?,
+            ty: input.parse()?,
+        })
+    }
+}
+
+impl Parse for ReturnCompTypes {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.lookahead1().peek(Paren) {
+            let content;
+            parenthesized!(content in input);
+            Self(Punctuated::parse_terminated(&content)?)
+        } else {
+            let ty = input.parse::<Type>()?;
+            let mut types = Punctuated::new();
+            types.push_value(ty);
+            Self(types)
         })
     }
 }
@@ -311,7 +410,7 @@ impl SetupInput {
 
         let SetupClosure {
             comp_args,
-            return_comp_types,
+            return_type,
             body: closure_body,
         } = closure;
 
@@ -343,9 +442,8 @@ impl SetupInput {
             .map(InterpretedArgType::unwrap_type)
             .collect();
 
-        // Types in the return tuple
-        let return_comp_types =
-            return_comp_types.map(|return_comp_types| return_comp_types.into_iter().collect());
+        // Types in the return tuple, potentially wrapped in a `Result`
+        let return_type = return_type.process();
 
         // Required type list specified after the closure
         let also_required_comp_types =
@@ -380,11 +478,78 @@ impl SetupInput {
             all_arg_comp_types,
             required_comp_types,
             requested_comp_types,
-            return_comp_types,
+            return_type,
             disallowed_comp_types,
             full_closure_args,
         }
     }
+}
+
+impl SetupClosureReturnType {
+    fn process(self) -> ProcessedSetupClosureReturnType {
+        match self {
+            Self::Plain(ty) => {
+                let types: Vec<_> = ty.0.into_iter().collect();
+
+                let comp_types = if is_only_unit_type(&types) {
+                    Vec::new()
+                } else {
+                    types
+                };
+
+                let return_tokens = quote! { -> (#(#comp_types),*) };
+
+                ProcessedSetupClosureReturnType {
+                    comp_types,
+                    is_result_wrapped: false,
+                    return_tokens,
+                }
+            }
+            Self::ResultWrapped(ResultWrappedReturnCompTypes {
+                start_token,
+                result_path,
+                begin_bracket,
+                ok_ty,
+                err_ty,
+                end_bracket,
+            }) => {
+                let types: Vec<_> = ok_ty.0.into_iter().collect();
+
+                let (comp_types, ok_tokens) = if is_only_unit_type(&types) {
+                    (Vec::new(), quote! { () })
+                } else {
+                    let ok_tokens = quote! { (#(#types),*) };
+                    (types, ok_tokens)
+                };
+
+                let err_tokens = match err_ty {
+                    Some(ResultWrappedReturnErrType { comma, ty }) => quote! { #comma #ty },
+                    None => quote! {},
+                };
+                let return_tokens = quote! {
+                    -> #start_token #result_path #begin_bracket #ok_tokens #err_tokens #end_bracket
+                };
+
+                ProcessedSetupClosureReturnType {
+                    comp_types,
+                    is_result_wrapped: true,
+                    return_tokens,
+                }
+            }
+            Self::None => ProcessedSetupClosureReturnType {
+                comp_types: Vec::new(),
+                is_result_wrapped: false,
+                return_tokens: quote! {},
+            },
+        }
+    }
+}
+
+fn is_only_unit_type(types: &[Type]) -> bool {
+    matches!(
+        types.first(),
+        Some(Type::Tuple(TypeTuple { elems, .. })) if types.len() == 1 && elems.is_empty(),
+    )
 }
 
 fn create_full_closure_args(arg_names: &[Ident], arg_types: &[Type]) -> Vec<TokenStream> {
@@ -397,16 +562,13 @@ fn create_full_closure_args(arg_names: &[Ident], arg_types: &[Type]) -> Vec<Toke
 
 fn generate_closure_def_code(
     full_closure_args: &[TokenStream],
-    return_comp_types: &Option<Vec<Type>>,
+    return_type: &ProcessedSetupClosureReturnType,
     closure_body: &Expr,
 ) -> (Ident, TokenStream) {
     let closure_name = Ident::new("_closure_internal__", Span::call_site());
-    let return_type_code = match return_comp_types {
-        Some(return_comp_types) => quote! { -> (#(#return_comp_types),*) },
-        None => quote! {},
-    };
+    let return_type = &return_type.return_tokens;
     let closure_def_code = quote! {
-        let mut #closure_name = |#(#full_closure_args),*| #return_type_code #closure_body;
+        let mut #closure_name = |#(#full_closure_args),*| #return_type #closure_body;
     };
     (closure_name, closure_def_code)
 }
@@ -435,19 +597,18 @@ fn generate_if_expr_code(
 
 fn generate_component_storage_array_creation_code(
     components_name: &Ident,
-    return_comp_types: &Option<Vec<Type>>,
+    return_comp_types: &Vec<Type>,
 ) -> (Option<Ident>, TokenStream) {
-    match return_comp_types {
-        Some(return_comp_types) => {
-            let array_name = Ident::new("_component_storage_array_internal__", Span::call_site());
-            let array_creation_code = quote! {
-                let mut #array_name = [
-                    #(#components_name.new_storage_with_capacity::<#return_comp_types>()),*
-                ];
-            };
-            (Some(array_name), array_creation_code)
-        }
-        None => (None, quote! {}),
+    if return_comp_types.is_empty() {
+        (None, quote! {})
+    } else {
+        let array_name = Ident::new("_component_storage_array_internal__", Span::call_site());
+        let array_creation_code = quote! {
+            let mut #array_name = [
+                #(#components_name.new_storage_with_capacity::<#return_comp_types>()),*
+            ];
+        };
+        (Some(array_name), array_creation_code)
     }
 }
 
@@ -502,8 +663,8 @@ fn generate_closure_call_code(
     arg_names: &[Ident],
     component_iter_names: &[Ident],
     component_storage_array_name: &Option<Ident>,
-    return_comp_types: &Option<Vec<Type>>,
-) -> TokenStream {
+    return_type: &ProcessedSetupClosureReturnType,
+) -> (Option<Ident>, TokenStream) {
     let (zipped_iter, nested_arg_names) = if arg_names.len() > 1 {
         (
             querying_util::generate_nested_tuple(
@@ -523,31 +684,47 @@ fn generate_closure_call_code(
     };
 
     let closure_return_value_name = Ident::new("_closure_result_internal__", Span::call_site());
-    let closure_call_code = quote! {
-        let #closure_return_value_name = #closure_name(#(#arg_names),*);
-    };
 
     let component_storing_code = generate_component_storing_code(
         &closure_return_value_name,
         component_storage_array_name,
-        return_comp_types,
+        &return_type.comp_types,
     );
 
-    quote! {
-        for #nested_arg_names in #zipped_iter {
-            #closure_call_code
-            #component_storing_code
-        }
+    if return_type.is_result_wrapped {
+        let error_value_name = Ident::new("_closure_err_internal__", Span::call_site());
+        let code = quote! {
+            let mut #error_value_name = None;
+            for #nested_arg_names in #zipped_iter {
+                let #closure_return_value_name = match #closure_name(#(#arg_names),*) {
+                    Ok(#closure_return_value_name) => #closure_return_value_name,
+                    Err(err) => {
+                        #error_value_name = Some(err);
+                        break;
+                    }
+                };
+                #component_storing_code
+            }
+        };
+        (Some(error_value_name), code)
+    } else {
+        let code = quote! {
+            for #nested_arg_names in #zipped_iter {
+                let #closure_return_value_name = #closure_name(#(#arg_names),*);
+                #component_storing_code
+            }
+        };
+        (None, code)
     }
 }
 
 fn generate_component_storing_code(
     closure_return_value_name: &Ident,
     component_storage_array_name: &Option<Ident>,
-    return_comp_types: &Option<Vec<Type>>,
+    return_comp_types: &[Type],
 ) -> TokenStream {
-    match (component_storage_array_name, return_comp_types) {
-        (Some(storage_array_name), Some(return_comp_types)) => {
+    match component_storage_array_name {
+        Some(storage_array_name) if !return_comp_types.is_empty() => {
             let names = create_return_comp_names(return_comp_types);
             let indices = 0..names.len();
             quote! {
@@ -586,5 +763,25 @@ fn generate_extension_code(
         }
     } else {
         quote! {}
+    }
+}
+
+fn generate_closure_error_handling_code(
+    closure_error_name: &Option<Ident>,
+    ok_code: TokenStream,
+) -> (TokenStream, TokenStream) {
+    if let Some(error_name) = closure_error_name {
+        let for_then_branch = quote! {
+            if let Some(err) = #error_name {
+                Err(err)
+            } else {
+                #ok_code
+                Ok(())
+            }
+        };
+        let for_else_branch = quote! { Ok(()) };
+        (for_then_branch, for_else_branch)
+    } else {
+        (ok_code, quote! {})
     }
 }

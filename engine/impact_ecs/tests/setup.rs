@@ -50,6 +50,8 @@ fn test_valid_setup_inputs() {
 
     setup!(components, || {}, [Position], ![LikeByte]);
 
+    setup!(components, || -> () {});
+
     setup!(components, || -> Byte { BYTE });
 
     setup!(components, || -> Marked { Marked });
@@ -164,6 +166,18 @@ fn test_valid_setup_inputs() {
         [Rectangle],
         ![Marked]
     );
+
+    let _: Result<(), ()> = setup!(components, || -> Result<(), ()> { Ok(()) });
+
+    let _: Result<(), ()> = setup!(components, || -> Result<Byte, ()> { Ok(BYTE) });
+
+    let _: Result<(), i32> = setup!(components, || -> Result<Byte, i32> { Err(1) });
+
+    let _: Result<(), ()> = setup!(components, || -> Result<(Byte, Position), ()> { Err(()) });
+
+    let _: anyhow::Result<()> = setup!(components, || -> anyhow::Result<Byte> { Ok(BYTE) });
+
+    let _: anyhow::Result<()> = setup!(components, || -> ::anyhow::Result<Byte> { Ok(BYTE) });
 
     // The macro accepts this because it does not know they are
     // the same type, but the result is just that there are no
@@ -842,4 +856,38 @@ fn setup_on_storage_with_optional_and_required_comps_gives_some_2() {
         [Byte]
     );
     assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_no_matching_comps_does_not_return_closure_error() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let res = setup!(components, |_pos: &Position| -> Result<(), i32> { Err(1) });
+    assert_eq!(res, Ok(()));
+}
+
+#[test]
+fn setup_on_storage_with_matching_comp_returns_closure_error() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let res = setup!(components, |_byte: &Byte| -> Result<(), i32> { Err(1) });
+    assert_eq!(res, Err(1));
+}
+
+#[test]
+fn setup_on_storage_with_matching_comp_has_no_effect_if_closure_errors() {
+    let mut components = ArchetypeComponentStorage::from_view(&BYTE);
+    let res = setup!(components, |_byte: &Byte| -> Result<Position, i32> {
+        Err(1)
+    });
+    assert_eq!(res, Err(1));
+    assert_eq!(components.n_component_types(), 1);
+    assert!(components.has_component_type::<Byte>());
+}
+
+#[test]
+fn setup_on_storage_with_matching_comp_returns_ok_if_closure_does() {
+    let mut components = ArchetypeComponentStorage::from_view(&BYTE);
+    let res = setup!(components, |_byte: &Byte| -> Result<Position, i32> {
+        Ok(POS)
+    });
+    assert_eq!(res, Ok(()));
 }

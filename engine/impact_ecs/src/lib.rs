@@ -194,9 +194,11 @@ pub use impact_ecs_macros::query;
 /// `ArchetypeComponentStorage`. The type of each closure argument must be
 /// annotated, and has to be an immutable reference to a type implementing the
 /// `Component` trait, optionally wrapped in an [`Option`]. If the closure
-/// returns anything, it must be a single value or a tuple of values
-/// implementing the `Component` trait, and the return type has to be annotated
-/// in the closure signature.
+/// returns anything, the return type has to be annotated in the closure
+/// signature. It can be a single value or a tuple of values implementing the
+/// `Component` trait, or the unit type `()`, and optionally be wrapped in a
+/// `Result`. If the closure returns a `Result<C, E>`, the `setup!` expression
+/// will evaluate to a `Result<(), E>`.
 ///
 /// The body of the closure specifies what to do with each set of matching
 /// component instances present in the `ArchetypeComponentStorage`. The closure
