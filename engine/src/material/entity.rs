@@ -10,6 +10,7 @@ use crate::{
     model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
+use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use std::sync::RwLock;
 
@@ -26,7 +27,7 @@ pub fn setup_material_for_new_entity(
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
-) {
+) -> Result<()> {
     fixed::setup_fixed_color_material_for_new_entity(
         material_library,
         instance_feature_manager,
@@ -39,7 +40,7 @@ pub fn setup_material_for_new_entity(
         assets,
         material_library,
         components,
-    );
+    )?;
 
     physical::setup_physical_material_for_new_entity(
         graphics_device,
@@ -48,7 +49,9 @@ pub fn setup_material_for_new_entity(
         instance_feature_manager,
         components,
         desynchronized,
-    );
+    )?;
+
+    Ok(())
 }
 
 /// Checks if the given entity has a [`MaterialComp`], and if so, removes the

@@ -14,10 +14,11 @@ use crate::{
     model::{InstanceFeature, InstanceFeatureManager},
     scene::RenderResourcesDesynchronized,
 };
+use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_math::hash64;
 use lazy_static::lazy_static;
-use std::sync::RwLock;
+use std::{collections::hash_map::Entry, sync::RwLock};
 
 /// Binding locations for textures used in a fixed material.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,13 +68,13 @@ pub fn setup_fixed_texture_material_for_new_entity(
     assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,
     components: &mut ArchetypeComponentStorage,
-) {
+) -> Result<()> {
     setup!(
         {
             let mut material_library = material_library.write().unwrap();
         },
         components,
-        |fixed_texture: &FixedTextureComp| -> MaterialComp {
+        |fixed_texture: &FixedTextureComp| -> Result<MaterialComp> {
             setup_fixed_texture_material(
                 graphics_device,
                 assets,
@@ -82,7 +83,7 @@ pub fn setup_fixed_texture_material_for_new_entity(
             )
         },
         ![MaterialComp]
-    );
+    )
 }
 
 fn setup_fixed_color_material(
@@ -121,7 +122,7 @@ fn setup_fixed_texture_material(
     assets: &Assets,
     material_library: &mut MaterialLibrary,
     fixed_texture: &FixedTextureComp,
-) -> MaterialComp {
+) -> Result<MaterialComp> {
     material_library
         .material_specification_entry(*FIXED_TEXTURE_MATERIAL_ID)
         .or_insert_with(|| {
@@ -142,21 +143,20 @@ fn setup_fixed_texture_material(
 
     let texture_group_id = MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
 
-    material_library
-        .material_property_texture_group_entry(texture_group_id)
-        .or_insert_with(|| {
-            MaterialPropertyTextureGroup::new(
-                graphics_device,
-                assets,
-                texture_ids,
-                texture_group_id.to_string(),
-            )
-            .expect("Missing textures from assets")
-        });
+    if let Entry::Vacant(entry) =
+        material_library.material_property_texture_group_entry(texture_group_id)
+    {
+        entry.insert(MaterialPropertyTextureGroup::new(
+            graphics_device,
+            assets,
+            texture_ids,
+            texture_group_id.to_string(),
+        )?);
+    };
 
-    MaterialComp::new(MaterialHandle::new(
+    Ok(MaterialComp::new(MaterialHandle::new(
         *FIXED_TEXTURE_MATERIAL_ID,
         None,
         Some(texture_group_id),
-    ))
+    )))
 }

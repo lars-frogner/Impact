@@ -2,6 +2,7 @@
 
 use super::{RigidBodyForceManager, detailed_drag};
 use crate::mesh::MeshRepository;
+use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use std::sync::RwLock;
 
@@ -13,12 +14,13 @@ impl RigidBodyForceManager {
         &self,
         mesh_repository: &RwLock<MeshRepository>,
         components: &mut ArchetypeComponentStorage,
-    ) {
+    ) -> Result<()> {
         detailed_drag::entity::setup_drag_load_map_for_new_entity(
             mesh_repository,
             &self.drag_load_map_repository,
             components,
-        );
+        )?;
+        Ok(())
     }
 
     /// Performs any modifications required to clean up the force manager when

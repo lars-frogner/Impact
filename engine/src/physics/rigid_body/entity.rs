@@ -19,6 +19,7 @@ use crate::{
     },
     scene::components::SceneEntityFlagsComp,
 };
+use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use std::sync::RwLock;
 
@@ -28,7 +29,7 @@ use std::sync::RwLock;
 pub fn setup_rigid_body_for_new_entity(
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,
-) {
+) -> Result<()> {
     fn execute_setup(
         mut inertial_properties: InertialProperties,
         frame: Option<&ReferenceFrameComp>,
@@ -186,22 +187,27 @@ pub fn setup_rigid_body_for_new_entity(
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
          flags: Option<&SceneEntityFlagsComp>|
-         -> (
+         -> Result<(
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
             SceneEntityFlagsComp
-        ) {
+        )> {
             let mesh_repository_readonly = mesh_repository.read().unwrap();
-            let triangle_mesh = mesh_repository_readonly
-                .get_mesh(mesh.id)
-                .expect("Invalid mesh ID when creating rigid body");
+            let triangle_mesh = mesh_repository_readonly.get_mesh(mesh.id).ok_or_else(|| {
+                anyhow!(
+                    "Tried to create rigid body for missing mesh (mesh ID {})",
+                    mesh.id
+                )
+            })?;
             let inertial_properties = InertialProperties::of_uniform_triangle_mesh(
                 triangle_mesh,
                 uniform_rigid_body.mass_density,
             );
-            execute_setup(inertial_properties, frame, velocity, flags)
+            Ok(execute_setup(inertial_properties, frame, velocity, flags))
         },
         ![RigidBodyComp]
-    );
+    )?;
+
+    Ok(())
 }

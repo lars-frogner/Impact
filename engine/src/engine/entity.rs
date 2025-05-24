@@ -135,7 +135,7 @@ impl Engine {
             .perform_setup_for_new_entity(
                 self.scene().read().unwrap().mesh_repository(),
                 components,
-            );
+            )?;
 
         self.scene().read().unwrap().add_new_entity_to_scene_graph(
             self.window(),
