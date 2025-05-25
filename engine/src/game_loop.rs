@@ -100,6 +100,10 @@ impl GameLoop {
         self.engine.resize_rendering_surface(new_width, new_height);
     }
 
+    pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
+        self.engine.update_pixels_per_point(pixels_per_point);
+    }
+
     pub fn shutdown_requested(&self) -> bool {
         self.engine.shutdown_requested()
     }

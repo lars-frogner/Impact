@@ -133,6 +133,9 @@ impl EngineHandler for GameHandler {
                     );
                 }
             }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                game_loop.update_pixels_per_point(scale_factor);
+            }
             _ => {}
         }
 
@@ -179,6 +182,12 @@ impl Window {
     /// Returns the underlying [`winit::Window`] wrapped in an [`Arc`].
     pub fn arc_window(&self) -> Arc<WinitWindow> {
         Arc::clone(&self.window)
+    }
+
+    /// Returns the number of physical pixels per point/logical pixel of the
+    /// screen the window is on.
+    pub fn pixels_per_point(&self) -> f64 {
+        self.window.scale_factor()
     }
 
     /// Returns a tuple (width, height) with the extents of the
