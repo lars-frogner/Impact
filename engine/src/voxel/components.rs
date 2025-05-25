@@ -249,7 +249,12 @@ impl GradientNoiseVoxelTypesComp {
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect n_voxel_types > 0
     # expect n_voxel_types <= voxel_type_array_size
-    voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
+    unpadded_voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
+    padding_len = voxel_type_array_size - n_voxel_types
+    voxel_type_name_hashes = List.concat(
+        unpadded_voxel_type_name_hashes,
+        List.repeat(Hashing.hash_str_32(""), padding_len),
+    )
     {
         n_voxel_types,
         voxel_type_name_hashes,
