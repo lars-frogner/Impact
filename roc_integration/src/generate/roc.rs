@@ -26,40 +26,111 @@ pub(super) fn generate_module(
         return Ok(None);
     }
 
-    let mut module = String::new();
+    let mut module_body = String::new();
+    let mut optional_exports = OptionalExports::new();
+    let mut optional_imports = OptionalImports::new(package_name);
 
-    write_module_header(&mut module, associated_constants, associated_functions, ty)?;
-    module.push('\n');
+    write_type_declaration(&mut module_body, type_map, &ty.ty)?;
+
+    write_associated_constants(
+        &mut module_body,
+        &mut optional_exports,
+        type_map,
+        ty,
+        associated_constants,
+    )?;
+
+    write_associated_functions(
+        &mut module_body,
+        &mut optional_exports,
+        type_map,
+        ty,
+        associated_functions,
+    )?;
+
+    write_component_functions(
+        &mut module_body,
+        &mut optional_exports,
+        &mut optional_imports,
+        ty,
+    )?;
+
+    write_write_bytes_function(&mut module_body, type_map, ty)?;
+
+    write_from_bytes_function(&mut module_body, type_map, ty)?;
+
+    write_roundtrip_test(&mut module_body, ty)?;
+
+    let mut module = String::with_capacity(module_body.len());
+
+    write_module_header(
+        &mut module,
+        optional_exports,
+        associated_constants,
+        associated_functions,
+        ty,
+    )?;
 
     write_imports(
         &mut module,
         package_name,
+        optional_imports,
         type_map,
         associated_dependencies,
         ty,
     )?;
 
-    write_type_declaration(&mut module, type_map, &ty.ty)?;
-    module.push('\n');
-
-    write_associated_constants(&mut module, type_map, ty, associated_constants)?;
-
-    write_associated_functions(&mut module, type_map, ty, associated_functions)?;
-
-    write_component_functions(&mut module, ty)?;
-
-    write_write_bytes_function(&mut module, type_map, ty)?;
-    module.push('\n');
-
-    write_from_bytes_function(&mut module, type_map, ty)?;
-
-    write_roundtrip_test(&mut module, ty)?;
+    module.push_str(&module_body);
 
     Ok(Some(module))
 }
 
+#[derive(Clone, Debug)]
+pub struct OptionalExports {
+    export_names: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct OptionalImports {
+    current_package_name: String,
+    import_paths: HashSet<String>,
+}
+
+impl OptionalExports {
+    pub fn new() -> Self {
+        Self {
+            export_names: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, name: impl ToString) {
+        self.export_names.push(name.to_string());
+    }
+}
+
+impl OptionalImports {
+    pub fn new(current_package_name: impl ToString) -> Self {
+        Self {
+            current_package_name: current_package_name.to_string(),
+            import_paths: HashSet::new(),
+        }
+    }
+
+    pub fn add(&mut self, package_name: impl AsRef<str>, module_path: impl AsRef<str>) {
+        let package_name = package_name.as_ref();
+        let module_path = module_path.as_ref();
+        if package_name == self.current_package_name {
+            self.import_paths.insert(module_path.to_string());
+        } else {
+            self.import_paths
+                .insert(format!("{package_name}.{module_path}"));
+        }
+    }
+}
+
 fn write_module_header(
     roc_code: &mut String,
+    optional_exports: OptionalExports,
     associated_constants: &[ir::AssociatedConstant],
     associated_functions: &[ir::AssociatedFunction],
     ty: &RegisteredType,
@@ -81,41 +152,17 @@ fn write_module_header(
         writeln!(roc_code, "    {},", function.name)?;
     }
 
-    if ty.is_component() {
-        for constant in associated_constants {
-            if matches!(
-                constant.ty,
-                ir::Containable::Single(ir::Inferrable::SelfType)
-            ) {
-                writeln!(roc_code, "    add_{},", constant.name)?;
-            }
-        }
-
-        for function in associated_functions {
-            if matches!(
-                function.return_type,
-                ir::Containable::Single(ir::Inferrable::SelfType)
-            ) {
-                writeln!(roc_code, "    add_{},", function.name)?;
-            }
-        }
-
-        roc_code.push_str(
-            "    \
-                add,\n    \
-                add_multiple,\n\
-            ]\n\
-            ",
-        );
-    } else {
-        roc_code.push_str(
-            "    \
-                write_bytes,\n    \
-                from_bytes,\n\
-            ]\n\
-            ",
-        );
+    for export_name in optional_exports.export_names {
+        writeln!(roc_code, "    {},", export_name)?;
     }
+
+    roc_code.push_str(
+        "    \
+            write_bytes,\n    \
+            from_bytes,\n\
+        ]\n\
+        \n",
+    );
 
     Ok(())
 }
@@ -123,12 +170,14 @@ fn write_module_header(
 fn write_imports(
     roc_code: &mut String,
     package_name: &str,
+    optional_imports: OptionalImports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
 ) -> Result<()> {
     let mut imports = Vec::from_iter(determine_imports(
         package_name,
+        optional_imports,
         type_map,
         associated_dependencies,
         ty,
@@ -145,25 +194,12 @@ fn write_imports(
 
 fn determine_imports(
     package_name: &str,
+    optional_imports: OptionalImports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
 ) -> HashSet<String> {
-    let mut import_paths = HashSet::new();
-
-    if ty.is_component() {
-        // ECS components need these imports
-        import_paths.insert(String::from(if package_name == "core" {
-            "Builtin"
-        } else {
-            "core.Builtin"
-        }));
-        import_paths.insert(String::from(if package_name == "pf" {
-            "Entity"
-        } else {
-            "pf.Entity"
-        }));
-    }
+    let mut import_paths = optional_imports.import_paths;
 
     for associated_dependencies in associated_dependencies {
         add_imports_for_associated_dependencies(
@@ -250,7 +286,7 @@ fn write_type_declaration(
             write_fields_declaration(roc_code, type_map, fields, 0, false, &|| {
                 format!("struct type {}", ty.name)
             })?;
-            roc_code.push('\n');
+            roc_code.push_str("\n\n");
             Ok(())
         }
         ir::TypeComposition::Enum(variants) => {
@@ -280,7 +316,7 @@ fn write_type_declaration(
             if variant_count > 0 {
                 roc_code.push('\n');
             }
-            roc_code.push_str("]\n");
+            roc_code.push_str("]\n\n");
             Ok(())
         }
     }
@@ -369,12 +405,19 @@ fn qualified_type_name_for_field(
 
 fn write_associated_constants(
     roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_constants: &[ir::AssociatedConstant],
 ) -> Result<()> {
     for associated_constant in associated_constants {
-        write_associated_constant(roc_code, type_map, ty, associated_constant)?;
+        write_associated_constant(
+            roc_code,
+            optional_exports,
+            type_map,
+            ty,
+            associated_constant,
+        )?;
         roc_code.push('\n');
     }
     Ok(())
@@ -382,6 +425,7 @@ fn write_associated_constants(
 
 pub(super) fn write_associated_constant(
     roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_constant: &ir::AssociatedConstant,
@@ -429,21 +473,61 @@ pub(super) fn write_associated_constant(
             ir::Containable::Single(ir::Inferrable::SelfType)
         )
     {
-        writeln!(
-            roc_code,
-            "\n\
+        let name = associated_constant.name;
+
+        optional_exports.add(format!("add_{name}"));
+        optional_exports.add(format!("add_multiple_{name}"));
+
+        let (docstring, docstring_multi) = if docstring.is_empty() {
+            (String::new(), String::new())
+        } else {
+            (
+                format!("{docstring}## Adds the component to the given entity's data.\n"),
+                format!(
+                    "{docstring}\
+                     ## Adds multiple values of the component to the data of\n\
+                     ## a set of entities of the same archetype's data.\n"
+                ),
+            )
+        };
+        if ty.serialized_size == 0 {
+            writeln!(
+                roc_code,
+                "\n\
                 {docstring}\
                 add_{name} : Entity.Data -> Entity.Data\n\
-                add_{name} = |data|\n    \
-                    add(data, {name})\
+                add_{name} = |entity_data|\n    \
+                    add(entity_data)\n\
+                \n\
+                {docstring_multi}\
+                add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                add_multiple_{name} = |entity_data|\n    \
+                    add_multiple(entity_data)\n\
+                "
+            )?;
+        } else {
+            writeln!(
+                roc_code,
+                "\n\
+                {docstring}\
+                add_{name} : Entity.Data -> Entity.Data\n\
+                add_{name} = |entity_data|\n    \
+                    add(entity_data, {name})\n\
+                \n\
+                {docstring_multi}\
+                add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                add_multiple_{name} = |entity_data|\n    \
+                    res = add_multiple(\n        \
+                        entity_data,\n        \
+                        Same({name})\n    \
+                    )\n    \
+                    when res is\n        \
+                        Ok(res_data) -> res_data\n        \
+                        Err(err) -> crash \"unexpected error in {ty_name}.add_multiple_{name}: ${{Inspect.to_str(err)}}\"\n\
                 ",
-            docstring = if docstring.is_empty() {
-                String::new()
-            } else {
-                format!("{docstring}## Adds the component to the given entity's data.\n")
-            },
-            name = associated_constant.name,
-        )?;
+                ty_name = ty.ty.name,
+            )?;
+        }
     }
 
     Ok(())
@@ -451,12 +535,19 @@ pub(super) fn write_associated_constant(
 
 fn write_associated_functions(
     roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_functions: &[ir::AssociatedFunction],
 ) -> Result<()> {
     for associated_function in associated_functions {
-        write_associated_function(roc_code, type_map, ty, associated_function)?;
+        write_associated_function(
+            roc_code,
+            optional_exports,
+            type_map,
+            ty,
+            associated_function,
+        )?;
         roc_code.push('\n');
     }
     Ok(())
@@ -464,6 +555,7 @@ fn write_associated_functions(
 
 pub(super) fn write_associated_function(
     roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_function: &ir::AssociatedFunction,
@@ -559,31 +651,103 @@ pub(super) fn write_associated_function(
             ir::Containable::Single(ir::Inferrable::SelfType)
         )
     {
-        writeln!(
-            roc_code,
-            "\n\
-            {docstring}\
-            add_{name} : Entity.Data{arg_types} -> Entity.Data\n\
-            add_{name} = |data{arg_names}|\n    \
-                add(data, {name}({non_empty_arg_names}))\
-            ",
-            docstring = if docstring.is_empty() {
-                String::new()
+        let name = associated_function.name;
+
+        optional_exports.add(format!("add_{name}"));
+
+        let (docstring, docstring_multi) = if docstring.is_empty() {
+            (String::new(), String::new())
+        } else {
+            (
+                format!("{docstring}## Adds the component to the given entity's data.\n"),
+                format!(
+                    "{docstring}\
+                     ## Adds multiple values of the component to the data of\n\
+                     ## a set of entities of the same archetype's data.\n"
+                ),
+            )
+        };
+
+        if arg_type_list.is_empty() {
+            optional_exports.add(format!("add_multiple_{name}"));
+
+            if ty.serialized_size == 0 {
+                writeln!(
+                    roc_code,
+                    "\n\
+                    {docstring}\
+                    add_{name} : Entity.Data -> Entity.Data\n\
+                    add_{name} = |entity_data|\n    \
+                        add(entity_data)\n\
+                    \n\
+                    {docstring_multi}\
+                    add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                    add_multiple_{name} = |entity_data|\n    \
+                        add_multiple(entity_data)\
+                    "
+                )?;
             } else {
-                format!("{docstring}## Adds the component to the given entity's data.\n")
-            },
-            arg_types = if arg_types.is_empty() {
-                String::new()
-            } else {
-                format!(", {arg_types}")
-            },
-            arg_names = if arg_names.is_empty() {
-                String::new()
-            } else {
-                format!(", {arg_names}")
-            },
-            name = associated_function.name,
-        )?;
+                writeln!(
+                    roc_code,
+                    "\n\
+                    {docstring}\
+                    add_{name} : Entity.Data -> Entity.Data\n\
+                    add_{name} = |entity_data|\n    \
+                        add(entity_data, {name}({{}}))\n\
+                    \n\
+                    {docstring_multi}\
+                    add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                    add_multiple_{name} = |entity_data|\n    \
+                        res = add_multiple(\n        \
+                            entity_data,\n        \
+                            Same({name}({{}}))\n    \
+                        )\n    \
+                        when res is\n        \
+                            Ok(res_data) -> res_data\n        \
+                            Err(err) -> crash \"unexpected error in {ty_name}.add_multiple_{name}: ${{Inspect.to_str(err)}}\"\
+                    ",
+                    ty_name = ty.ty.name,
+                )?;
+            }
+        } else {
+            writeln!(
+                roc_code,
+                "\n\
+                {docstring}\
+                add_{name} : Entity.Data, {arg_types} -> Entity.Data\n\
+                add_{name} = |entity_data, {arg_names}|\n    \
+                    add(entity_data, {name}({arg_names}))\
+                "
+            )?;
+
+            // This only works with up to four arguments until we have map5
+            if arg_type_list.len() <= 4 {
+                optional_exports.add(format!("add_multiple_{name}"));
+
+                writeln!(
+                    roc_code,
+                    "\n\
+                    {docstring_multi}\
+                    add_multiple_{name} : Entity.MultiData, {wrapped_arg_types} -> Result Entity.MultiData Str\n\
+                    add_multiple_{name} = |entity_data, {arg_names}|\n    \
+                        add_multiple(\n        \
+                            entity_data,\n        \
+                            All(Entity.Arg.broadcasted_map{arg_count}(\n            \
+                                {arg_names},\n            \
+                                Entity.multi_count(entity_data),\n            \
+                                {name}\n        \
+                            ))\n    \
+                        )\
+                    ",
+                    wrapped_arg_types = arg_type_list
+                        .iter()
+                        .map(|arg_type| format!("Entity.Arg.Broadcasted ({arg_type})"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    arg_count = arg_type_list.len(),
+                )?;
+            }
+        }
     }
 
     Ok(())
@@ -670,10 +834,22 @@ fn type_name_for_special_type(ty: &ir::SpecialType) -> &'static str {
     }
 }
 
-fn write_component_functions(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
+fn write_component_functions(
+    roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
+    optional_imports: &mut OptionalImports,
+    ty: &RegisteredType,
+) -> Result<()> {
     if !ty.is_component() {
         return Ok(());
     }
+
+    optional_exports.add("add");
+    optional_exports.add("add_multiple");
+
+    optional_imports.add("pf", "Entity");
+    optional_imports.add("pf", "Entity.Arg");
+    optional_imports.add("core", "Builtin");
 
     let alignment = ty.alignment_as_pod_struct().ok_or_else(|| {
         anyhow!(
@@ -686,27 +862,60 @@ fn write_component_functions(roc_code: &mut String, ty: &RegisteredType) -> Resu
         )
     })?;
 
+    if ty.serialized_size == 0 {
+        writeln!(
+            roc_code,
+            "\
+            ## Adds the [{name}] component to an entity's data.\n\
+            add : Entity.Data -> Entity.Data\n\
+            add = |entity_data|\n    \
+                entity_data |> Entity.append_component(write_packet, {{}})\n\
+            \n\
+            ## Adds the [{name}] component to each entity's data.\n\
+            add_multiple : Entity.MultiData -> Entity.MultiData\n\
+            add_multiple = |entity_data|\n    \
+                res = entity_data\n        \
+                    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({{}}), Entity.multi_count(entity_data)))\n    \
+                when res is\n        \
+                    Ok(res_data) -> res_data\n        \
+                    Err(err) -> crash \"unexpected error in {name}.add_multiple: ${{Inspect.to_str(err)}}\"\n\
+            ",
+            name = ty.ty.name,
+        )?;
+    } else {
+        writeln!(
+            roc_code,
+            "\
+            ## Adds a value of the [{name}] component to an entity's data.\n\
+            ## Note that an entity never should have more than a single value of\n\
+            ## the same component type.\n\
+            add : Entity.Data, {name} -> Entity.Data\n\
+            add = |entity_data, comp_value|\n    \
+                entity_data |> Entity.append_component(write_packet, comp_value)\n\
+            \n\
+            ## Adds multiple values of the [{name}] component to the data of\n\
+            ## a set of entities of the same archetype's data.\n\
+            ## Note that the number of values should match the number of entities\n\
+            ## in the set and that an entity never should have more than a single\n\
+            ## value of the same component type.\n\
+            add_multiple : Entity.MultiData, Entity.Arg.Broadcasted ({name}) -> Result Entity.MultiData Str\n\
+            add_multiple = |entity_data, comp_values|\n    \
+                entity_data\n    \
+                |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))\n    \
+                |> Result.map_err(\n        \
+                    |CountMismatch(new_count, orig_count)|\n            \
+                        \"Got ${{Inspect.to_str(new_count)}} values in {name}.add_multiple, expected ${{Inspect.to_str(orig_count)}}\",\n    \
+                )\n\
+            ",
+            name = ty.ty.name,
+        )?;
+    }
+
     writeln!(
         roc_code,
         "\
-        ## Adds a value of the [{name}] component to an entity's data.\n\
-        ## Note that an entity never should have more than a single value of\n\
-        ## the same component type.\n\
-        add : Entity.Data, {name} -> Entity.Data\n\
-        add = |data, value|\n    \
-            data |> Entity.append_component(write_packet, value)\n\
-        \n\
-        ## Adds multiple values of the [{name}] component to the data of\n\
-        ## a set of entities of the same archetype's data.\n\
-        ## Note that the number of values should match the number of entities\n\
-        ## in the set and that an entity never should have more than a single\n\
-        ## value of the same component type.\n\
-        add_multiple : Entity.MultiData, List {name} -> Entity.MultiData\n\
-        add_multiple = |data, values|\n    \
-            data |> Entity.append_components(write_multi_packet, values)\n\
-        \n\
         write_packet : List U8, {name} -> List U8\n\
-        write_packet = |bytes, value|\n    \
+        write_packet = |bytes, val|\n    \
             type_id = {type_id}\n    \
             size = {size}\n    \
             alignment = {alignment}\n    \
@@ -715,14 +924,14 @@ fn write_component_functions(roc_code: &mut String, ty: &RegisteredType) -> Resu
             |> Builtin.write_bytes_u64(type_id)\n    \
             |> Builtin.write_bytes_u64(size)\n    \
             |> Builtin.write_bytes_u64(alignment)\n    \
-            |> write_bytes(value)\n\
+            |> write_bytes(val)\n\
         \n\
         write_multi_packet : List U8, List {name} -> List U8\n\
-        write_multi_packet = |bytes, values|\n    \
+        write_multi_packet = |bytes, vals|\n    \
             type_id = {type_id}\n    \
             size = {size}\n    \
             alignment = {alignment}\n    \
-            count = List.len(values)\n    \
+            count = List.len(vals)\n    \
             bytes_with_header =\n        \
                 bytes\n        \
                 |> List.reserve(32 + size * count)\n        \
@@ -730,7 +939,7 @@ fn write_component_functions(roc_code: &mut String, ty: &RegisteredType) -> Resu
                 |> Builtin.write_bytes_u64(size)\n        \
                 |> Builtin.write_bytes_u64(alignment)\n        \
                 |> Builtin.write_bytes_u64(count)\n    \
-            values\n    \
+            vals\n    \
             |> List.walk(\n        \
                 bytes_with_header,\n        \
                 |bts, value| bts |> write_bytes(value),\n    \
@@ -870,6 +1079,7 @@ fn write_write_bytes_function(
             unreachable!()
         }
     }
+    roc_code.push('\n');
     Ok(())
 }
 

@@ -6,6 +6,7 @@ mod roc;
 use crate::{RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{SecondsFormat, Utc};
+use roc::OptionalExports;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -181,6 +182,9 @@ pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
         type_list.retain(|(_, name)| for_types.contains(*name));
     }
 
+    // (We don't actually care about exports here)
+    let mut exports = OptionalExports::new();
+
     for (type_id, type_name) in type_list {
         let Some(ty) = type_map.get(type_id) else {
             continue;
@@ -194,14 +198,26 @@ pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
         if let Some(associated_constants) = associated_constant_map.get(type_id) {
             for associated_constant in associated_constants {
                 let mut text = String::new();
-                roc::write_associated_constant(&mut text, &type_map, ty, associated_constant)?;
+                roc::write_associated_constant(
+                    &mut text,
+                    &mut exports,
+                    &type_map,
+                    ty,
+                    associated_constant,
+                )?;
                 println!("{text}");
             }
         };
         if let Some(associated_functions) = associated_function_map.get(type_id) {
             for associated_function in associated_functions {
                 let mut text = String::new();
-                roc::write_associated_function(&mut text, &type_map, ty, associated_function)?;
+                roc::write_associated_function(
+                    &mut text,
+                    &mut exports,
+                    &type_map,
+                    ty,
+                    associated_function,
+                )?;
                 println!("{text}");
             }
         };
