@@ -2,9 +2,10 @@ module [
     Id,
     Data,
     MultiData,
-    new_id,
+    id,
     new,
     new_multi,
+    multi_count,
     append_component,
     append_components,
     create_with_id!,
@@ -22,38 +23,49 @@ Id := U64 implements [Eq]
 
 Data := List U8
 
-MultiData := List U8
+MultiData := { count : U64, bytes : List U8 }
 
-new_id : Str -> Id
-new_id = |string|
+id : Str -> Id
+id = |string|
     @Id(Hashing.hash_str_64(string) |> Hashing.unwrap_u64)
 
 new = @Data([])
-new_multi = @MultiData([])
+
+new_multi : U64 -> MultiData
+new_multi = |count|
+    @MultiData { count, bytes: [] }
+
+multi_count : MultiData -> U64
+multi_count = |@MultiData { count }|
+    count
 
 append_component : Data, (List U8, a -> List U8), a -> Data
 append_component = |@Data(bytes), encode, value|
     @Data(bytes |> encode(value))
 
-append_components : MultiData, (List U8, List a -> List U8), List a -> MultiData
-append_components = |@MultiData(bytes), encode, values|
-    @MultiData(bytes |> encode(values))
+append_components : MultiData, (List U8, List a -> List U8), List a -> Result MultiData [CountMismatch U64 U64]
+append_components = |@MultiData { count, bytes }, encode, values|
+    value_count = List.len(values)
+    if value_count == count then
+        Ok(@MultiData { count, bytes: bytes |> encode(values) })
+    else
+        Err(CountMismatch(value_count, count))
 
 create_with_id! : Id, Data => Result {} Str
-create_with_id! = |@Id(id), @Data(bytes)|
-    Platform.create_entity_with_id!(id, bytes)
+create_with_id! = |@Id(ident), @Data(bytes)|
+    Platform.create_entity_with_id!(ident, bytes)
 
 create! : Data => Result Id Str
 create! = |@Data(bytes)|
     Platform.create_entity!(bytes) |> Result.map_ok(@Id)
 
 create_multiple! : MultiData => Result (List Id) Str
-create_multiple! = |@MultiData(component_bytes)|
-    Ok(Platform.create_entities!(component_bytes)? |> List.map(@Id))
+create_multiple! = |@MultiData { bytes }|
+    Ok(Platform.create_entities!(bytes)? |> List.map(@Id))
 
 write_bytes_id : List U8, Id -> List U8
-write_bytes_id = |bytes, @Id(id)|
-    Builtin.write_bytes_u64(bytes, id)
+write_bytes_id = |bytes, @Id(ident)|
+    Builtin.write_bytes_u64(bytes, ident)
 
 from_bytes_id : List U8 -> Result Id Builtin.DecodeErr
 from_bytes_id = |bytes|
