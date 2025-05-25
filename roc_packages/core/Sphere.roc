@@ -27,7 +27,8 @@ SphereF64 : Sphere Binary64
 ## If `radius` is negative.
 new : Point3 a, Frac a -> Sphere a
 new = |center, radius|
-    expect radius >= 0.0
+    # This can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect radius >= 0.0
     { center, radius }
 
 write_bytes_32 : List U8, SphereF32 -> List U8
