@@ -1,17 +1,21 @@
-# Hash: af8f68b0f10bffc95d78a89df8b6d276e642cb0189e3d521911aea02e649e1d8
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: e5af60a5d349d16bbadf3f16de5c4a070fbab4958ee4aa01d7ec550fd7808ed0
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::light::components::AmbientEmissionComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     AmbientEmission,
     new,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 import core.Vector3
 
@@ -36,27 +40,47 @@ new = |illuminance|
 ## illuminance (in lux).
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Vector3.Vector3 Binary32 -> Entity.Data
-add_new = |data, illuminance|
-    add(data, new(illuminance))
+add_new = |entity_data, illuminance|
+    add(entity_data, new(illuminance))
+
+## Creates a new ambient light emission component with the given
+## illuminance (in lux).
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, illuminance|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            illuminance,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [AmbientEmission] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, AmbientEmission -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [AmbientEmission] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List AmbientEmission -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (AmbientEmission) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in AmbientEmission.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, AmbientEmission -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 10976986305333878027
     size = 12
     alignment = 4
@@ -65,14 +89,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List AmbientEmission -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 10976986305333878027
     size = 12
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -80,7 +104,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

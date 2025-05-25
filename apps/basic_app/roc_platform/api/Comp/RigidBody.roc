@@ -1,15 +1,18 @@
-# Hash: 94a054532bfe6ed3cfd2489d457e29be412efcb346807abb3526760d8fd2c201
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: b7fd9a2c299728dd25c6874ab7836593447a5fb472fbe932f4b2ad42372b056a
+# Generated: 2025-05-23T20:19:02+00:00
 # Rust type: impact::physics::rigid_body::components::RigidBodyComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     RigidBody,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import Physics.RigidBody
 import core.Builtin
 
@@ -21,20 +24,25 @@ RigidBody : Physics.RigidBody.RigidBody
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, RigidBody -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [RigidBody] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List RigidBody -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (RigidBody) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in RigidBody.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, RigidBody -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 5315438492690380404
     size = 272
     alignment = 8
@@ -43,14 +51,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List RigidBody -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 5315438492690380404
     size = 272
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -58,7 +66,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

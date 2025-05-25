@@ -1,20 +1,25 @@
-# Hash: 7e1158e9bd31e499299cbb13f343037cfc82a69f6ae30c5f49d56ee538c6f1e4
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 9e248325f4312280a63910402dbf9667da91cf0070aa1d875f389bf98a022a10
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::mesh::texture_projection::components::PlanarTextureProjectionComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     PlanarTextureProjection,
     new,
     for_rectangle,
     add_new,
+    add_multiple_new,
     add_for_rectangle,
+    add_multiple_for_rectangle,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Comp.RectangleMesh
 import Entity
+import Entity.Arg
 import core.Builtin
 import core.Point3
 import core.Vector3
@@ -50,8 +55,25 @@ new = |origin, u_vector, v_vector|
 ## at the origin and unity at the tip of the respective u- or v-vector.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> Entity.Data
-add_new = |data, origin, u_vector, v_vector|
-    add(data, new(origin, u_vector, v_vector))
+add_new = |entity_data, origin, u_vector, v_vector|
+    add(entity_data, new(origin, u_vector, v_vector))
+
+## Creates the component for a projection onto the plane defined by the
+## given origin and two vectors defining the axes along which the U and V
+## texture coordinates will increase. The texture coordinates will be zero
+## at the origin and unity at the tip of the respective u- or v-vector.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, origin, u_vector, v_vector|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map3(
+            origin, u_vector, v_vector,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Creates the component for a projection onto the axis-aligned horizontal
 ## rectangle specified by the given [`RectangleMeshComp`], scaling the
@@ -74,27 +96,51 @@ for_rectangle = |rectangle, n_repeats_u, n_repeats_v|
 ## z-axis.
 ## Adds the component to the given entity's data.
 add_for_rectangle : Entity.Data, Comp.RectangleMesh.RectangleMesh, F32, F32 -> Entity.Data
-add_for_rectangle = |data, rectangle, n_repeats_u, n_repeats_v|
-    add(data, for_rectangle(rectangle, n_repeats_u, n_repeats_v))
+add_for_rectangle = |entity_data, rectangle, n_repeats_u, n_repeats_v|
+    add(entity_data, for_rectangle(rectangle, n_repeats_u, n_repeats_v))
+
+## Creates the component for a projection onto the axis-aligned horizontal
+## rectangle specified by the given [`RectangleMeshComp`], scaling the
+## projection so that the texture will repeat the given numbers of times
+## along the U and V texture coordinate directions. The U-axis will be
+## aligned with the x-axis and the V-axis will be aligned with the negative
+## z-axis.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_for_rectangle : Entity.MultiData, Entity.Arg.Broadcasted (Comp.RectangleMesh.RectangleMesh), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_for_rectangle = |entity_data, rectangle, n_repeats_u, n_repeats_v|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map3(
+            rectangle, n_repeats_u, n_repeats_v,
+            Entity.multi_count(entity_data),
+            for_rectangle
+        ))
+    )
 
 ## Adds a value of the [PlanarTextureProjection] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, PlanarTextureProjection -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [PlanarTextureProjection] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List PlanarTextureProjection -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (PlanarTextureProjection) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in PlanarTextureProjection.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, PlanarTextureProjection -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 2690438958355382704
     size = 36
     alignment = 4
@@ -103,14 +149,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List PlanarTextureProjection -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 2690438958355382704
     size = 36
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -118,7 +164,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

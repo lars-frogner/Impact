@@ -1,8 +1,8 @@
 # Hash: 31b3c16a3f448cbaf33e1e2911e7997a097c00a81c78216cdae0e7a0b53ae7f3
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::gpu::texture::attachment::RenderAttachmentQuantity
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     RenderAttachmentQuantity,
     write_bytes,

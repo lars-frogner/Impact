@@ -1,8 +1,8 @@
-# Hash: 7a6d0246632b97532b44ccbf7e8e08763ffba04ec973135e748b41a1d6cf0aa0
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: f9e77b60c322ec8ce57bc586d1c46cf114f73358ef7e8608c4776e597e49408d
+# Generated: 2025-05-24T10:33:40+00:00
 # Rust type: impact::physics::rigid_body::forces::uniform_gravity::components::UniformGravityComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     UniformGravity,
     earth_downward_acceleration,
@@ -10,13 +10,19 @@ module [
     downward,
     earth,
     add_new,
+    add_multiple_new,
     add_downward,
+    add_multiple_downward,
     add_earth,
+    add_multiple_earth,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 import core.Vector3
 
@@ -39,8 +45,22 @@ new = |acceleration|
 ## Creates a new component for uniform gravitational acceleration.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Vector3.Vector3 Binary64 -> Entity.Data
-add_new = |data, acceleration|
-    add(data, new(acceleration))
+add_new = |entity_data, acceleration|
+    add(entity_data, new(acceleration))
+
+## Creates a new component for uniform gravitational acceleration.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, acceleration|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            acceleration,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Creates a new component for uniform gravitational acceleration in the
 ## negative y-direction.
@@ -52,8 +72,23 @@ downward = |acceleration|
 ## negative y-direction.
 ## Adds the component to the given entity's data.
 add_downward : Entity.Data, F64 -> Entity.Data
-add_downward = |data, acceleration|
-    add(data, downward(acceleration))
+add_downward = |entity_data, acceleration|
+    add(entity_data, downward(acceleration))
+
+## Creates a new component for uniform gravitational acceleration in the
+## negative y-direction.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_downward : Entity.MultiData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
+add_multiple_downward = |entity_data, acceleration|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            acceleration,
+            Entity.multi_count(entity_data),
+            downward
+        ))
+    )
 
 ## Creates a new component for the gravitational acceleration at the
 ## surface of Earth.
@@ -65,27 +100,46 @@ earth = |{}|
 ## surface of Earth.
 ## Adds the component to the given entity's data.
 add_earth : Entity.Data -> Entity.Data
-add_earth = |data|
-    add(data, earth({}))
+add_earth = |entity_data|
+    add(entity_data, earth({}))
+
+## Creates a new component for the gravitational acceleration at the
+## surface of Earth.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_earth : Entity.MultiData -> Entity.MultiData
+add_multiple_earth = |entity_data|
+    res = add_multiple(
+        entity_data,
+        Same(earth({}))
+    )
+    when res is
+        Ok(res_data) -> res_data
+        Err(err) -> crash "unexpected error in UniformGravity.add_multiple_earth: ${Inspect.to_str(err)}"
 
 ## Adds a value of the [UniformGravity] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, UniformGravity -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [UniformGravity] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List UniformGravity -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformGravity) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in UniformGravity.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, UniformGravity -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 5075699606031977644
     size = 24
     alignment = 8
@@ -94,14 +148,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List UniformGravity -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 5075699606031977644
     size = 24
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -109,7 +163,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

@@ -1,19 +1,24 @@
-# Hash: b3f14b3a95f110e6690ef1dc76827f26022720712df682eec69d955e633d4f6b
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 2f4c4735d27dfb251373699b582f274a9783fd2586d39c770a2e8f81899d57ab
+# Generated: 2025-05-24T10:34:21+00:00
 # Rust type: impact::mesh::components::RectangleMeshComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     RectangleMesh,
     unit_square,
     new,
     add_unit_square,
+    add_multiple_unit_square,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -33,8 +38,19 @@ unit_square : RectangleMesh
 unit_square = { extent_x: 1.0, extent_z: 1.0 }
 
 add_unit_square : Entity.Data -> Entity.Data
-add_unit_square = |data|
-    add(data, unit_square)
+add_unit_square = |entity_data|
+    add(entity_data, unit_square)
+
+add_multiple_unit_square : Entity.MultiData -> Entity.MultiData
+add_multiple_unit_square = |entity_data|
+    res = add_multiple(
+        entity_data,
+        Same(unit_square)
+    )
+    when res is
+        Ok(res_data) -> res_data
+        Err(err) -> crash "unexpected error in RectangleMesh.add_multiple_unit_square: ${Inspect.to_str(err)}"
+
 
 ## Creates a new component for a rectangle mesh with the given horizontal
 ## extents.
@@ -46,27 +62,47 @@ new = |extent_x, extent_z|
 ## extents.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, F32, F32 -> Entity.Data
-add_new = |data, extent_x, extent_z|
-    add(data, new(extent_x, extent_z))
+add_new = |entity_data, extent_x, extent_z|
+    add(entity_data, new(extent_x, extent_z))
+
+## Creates a new component for a rectangle mesh with the given horizontal
+## extents.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, extent_x, extent_z|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map2(
+            extent_x, extent_z,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [RectangleMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, RectangleMesh -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [RectangleMesh] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List RectangleMesh -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (RectangleMesh) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in RectangleMesh.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, RectangleMesh -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 6379808845987299625
     size = 8
     alignment = 4
@@ -75,14 +111,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List RectangleMesh -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 6379808845987299625
     size = 8
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -90,7 +126,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

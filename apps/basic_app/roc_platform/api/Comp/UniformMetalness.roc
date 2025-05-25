@@ -1,19 +1,24 @@
-# Hash: 47c49091b8bf20842bea1a14fefb3bb303d2b270de7525ee308633b8e855e0f7
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: e803edba5fd07306f781d26d8e33efaa5529e9e6b6c554206921ea8cc4c22350
+# Generated: 2025-05-24T10:34:21+00:00
 # Rust type: impact::material::components::UniformMetalnessComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     UniformMetalness,
     dielectric,
     metal,
     add_dielectric,
+    add_multiple_dielectric,
     add_metal,
+    add_multiple_metal,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -40,34 +45,61 @@ dielectric : UniformMetalness
 dielectric = 0.0
 
 add_dielectric : Entity.Data -> Entity.Data
-add_dielectric = |data|
-    add(data, dielectric)
+add_dielectric = |entity_data|
+    add(entity_data, dielectric)
+
+add_multiple_dielectric : Entity.MultiData -> Entity.MultiData
+add_multiple_dielectric = |entity_data|
+    res = add_multiple(
+        entity_data,
+        Same(dielectric)
+    )
+    when res is
+        Ok(res_data) -> res_data
+        Err(err) -> crash "unexpected error in UniformMetalness.add_multiple_dielectric: ${Inspect.to_str(err)}"
+
 
 metal : UniformMetalness
 metal = 1.0
 
 add_metal : Entity.Data -> Entity.Data
-add_metal = |data|
-    add(data, metal)
+add_metal = |entity_data|
+    add(entity_data, metal)
+
+add_multiple_metal : Entity.MultiData -> Entity.MultiData
+add_multiple_metal = |entity_data|
+    res = add_multiple(
+        entity_data,
+        Same(metal)
+    )
+    when res is
+        Ok(res_data) -> res_data
+        Err(err) -> crash "unexpected error in UniformMetalness.add_multiple_metal: ${Inspect.to_str(err)}"
+
 
 ## Adds a value of the [UniformMetalness] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, UniformMetalness -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [UniformMetalness] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List UniformMetalness -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformMetalness) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in UniformMetalness.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, UniformMetalness -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 16657324603404166233
     size = 4
     alignment = 4
@@ -76,14 +108,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List UniformMetalness -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 16657324603404166233
     size = 4
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -91,7 +123,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

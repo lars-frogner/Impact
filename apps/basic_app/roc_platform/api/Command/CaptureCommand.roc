@@ -1,8 +1,8 @@
 # Hash: 9db1b9848c368a15e2c229567c3eed0c1cb060072516617e6b70b52383a3d372
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::gpu::rendering::screen_capture::command::CaptureCommand
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     CaptureCommand,
     write_bytes,

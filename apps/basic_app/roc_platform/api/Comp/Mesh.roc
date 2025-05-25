@@ -1,17 +1,21 @@
-# Hash: 4b90afe2a2a2481052c7329123182e5163a54b6aa9914b28f0f536b573673185
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 19e9913a26eb2146fb76b7361aec2a73f2eb19fd09c2295ffb312527388d6678
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::mesh::components::MeshComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     Mesh,
     new,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import Mesh.MeshID
 import core.Builtin
 
@@ -32,27 +36,47 @@ new = |mesh_id|
 ## [`TriangleMesh`](crate::mesh::TriangleMesh) with the given ID.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Mesh.MeshID.MeshID -> Entity.Data
-add_new = |data, mesh_id|
-    add(data, new(mesh_id))
+add_new = |entity_data, mesh_id|
+    add(entity_data, new(mesh_id))
+
+## Creates a new component representing a
+## [`TriangleMesh`](crate::mesh::TriangleMesh) with the given ID.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Mesh.MeshID.MeshID) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, mesh_id|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            mesh_id,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [Mesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, Mesh -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [Mesh] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List Mesh -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (Mesh) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in Mesh.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, Mesh -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 10372688481577730772
     size = 8
     alignment = 8
@@ -61,14 +85,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List Mesh -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 10372688481577730772
     size = 8
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -76,7 +100,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),
