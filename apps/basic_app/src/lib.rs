@@ -37,12 +37,12 @@ impl Application for Game {
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
-        log::debug!("Handling keyboard event {event:?}");
+        log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
-        log::debug!("Handling mouse button event {event:?}");
+        log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 }

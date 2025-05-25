@@ -374,7 +374,7 @@ impl Engine {
     /// Updates the orientation controller with the given mouse displacement.
     pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
         if let Some(orientation_controller) = &self.orientation_controller {
-            log::debug!(
+            log::trace!(
                 "Updating orientation controller by mouse delta ({}, {})",
                 mouse_displacement.0,
                 mouse_displacement.1

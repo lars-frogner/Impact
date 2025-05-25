@@ -17,7 +17,7 @@ define_task!(
     depends_on = [AdvanceSimulation, UpdateSceneGroupToWorldTransforms],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_debug_logging!("Applying voxel absorbers"; {
+        with_trace_logging!("Applying voxel absorbers"; {
             let simulator = engine.simulator().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
@@ -36,7 +36,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing voxel object meshes"; {
+        with_trace_logging!("Synchronizing voxel object meshes"; {
             let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
 
@@ -65,7 +65,7 @@ define_task!(
     depends_on = [SyncRenderCommands, ApplySphereVoxelAbsorption],
     execute_on = [PhysicsTag, RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Handling staged voxel objects"; {
+        with_trace_logging!("Handling staged voxel objects"; {
             voxel::entity::handle_staged_voxel_objects(engine)
         })
     }
@@ -78,7 +78,7 @@ define_task!(
     depends_on = [SyncRenderCommands, ApplySphereVoxelAbsorption],
     execute_on = [PhysicsTag, RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Handling emptied voxel objects"; {
+        with_trace_logging!("Handling emptied voxel objects"; {
             voxel::entity::handle_emptied_voxel_objects(engine)
         })
     }

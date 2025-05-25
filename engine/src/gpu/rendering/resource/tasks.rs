@@ -2,8 +2,8 @@
 
 use super::DesynchronizedRenderResources;
 use crate::{
-    engine::{Engine, tasks::AppTaskScheduler},
     define_task,
+    engine::{Engine, tasks::AppTaskScheduler},
     gpu::rendering::tasks::RenderingTag,
     scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
@@ -32,7 +32,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Completing synchronization of render resources"; {
+        with_trace_logging!("Completing synchronization of render resources"; {
             let renderer = engine.renderer().read().unwrap();
             let mut render_resource_manager = renderer.render_resource_manager().write().unwrap();
             render_resource_manager.declare_synchronized();
@@ -46,7 +46,7 @@ define_task!(
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing camera and skybox GPU resources"; {
+        with_trace_logging!("Synchronizing camera and skybox GPU resources"; {
             let renderer = engine.renderer().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
@@ -92,7 +92,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing mesh GPU buffers"; {
+        with_trace_logging!("Synchronizing mesh GPU buffers"; {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -120,7 +120,7 @@ define_task!(
     depends_on = [SyncVoxelObjectMeshes],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing voxel object GPU buffers"; {
+        with_trace_logging!("Synchronizing voxel object GPU buffers"; {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -152,7 +152,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing light GPU buffers"; {
+        with_trace_logging!("Synchronizing light GPU buffers"; {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -184,7 +184,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing model instance feature GPU buffers"; {
+        with_trace_logging!("Synchronizing model instance feature GPU buffers"; {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {

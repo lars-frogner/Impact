@@ -1,8 +1,8 @@
 //! Tasks for coordination between systems in the scene.
 
 use crate::{
-    engine::{Engine, tasks::AppTaskScheduler},
     define_task,
+    engine::{Engine, tasks::AppTaskScheduler},
     gpu::rendering::tasks::RenderingTag,
     scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
@@ -21,7 +21,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing scene graph node transforms and flags"; {
+        with_trace_logging!("Synchronizing scene graph node transforms and flags"; {
             let ecs_world = engine.ecs_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut scene_graph = scene.scene_graph().write().unwrap();
@@ -42,7 +42,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing lights in storage"; {
+        with_trace_logging!("Synchronizing lights in storage"; {
             let scene = engine.scene().read().unwrap();
             let ecs_world = engine.ecs_world().read().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
@@ -65,7 +65,7 @@ define_task!(
     depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Updating scene object group-to-world transforms"; {
+        with_trace_logging!("Updating scene object group-to-world transforms"; {
             let scene = engine.scene().read().unwrap();
             scene.scene_graph()
                 .write()
@@ -88,7 +88,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing scene camera view transform"; {
+        with_trace_logging!("Synchronizing scene camera view transform"; {
             let scene = engine.scene().read().unwrap();
             if let Some(scene_camera) = scene.scene_camera().write().unwrap().as_mut() {
                 scene.scene_graph()
@@ -114,7 +114,7 @@ define_task!(
     depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Updating scene object bounding spheres"; {
+        with_trace_logging!("Updating scene object bounding spheres"; {
             let scene = engine.scene().read().unwrap();
             scene.scene_graph()
                 .write()
@@ -134,7 +134,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Clearing model instance buffers"; {
+        with_trace_logging!("Clearing model instance buffers"; {
             let scene = engine.scene().read().unwrap();
             scene.instance_feature_manager().write().unwrap().clear_buffer_contents();
             Ok(())
@@ -156,7 +156,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Buffering visible model instances"; {
+        with_trace_logging!("Buffering visible model instances"; {
             let scene = engine.scene().read().unwrap();
             let scene_camera = scene.scene_camera().read().unwrap();
             if let Some(scene_camera) = scene_camera.as_ref() {
@@ -194,7 +194,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
+        with_trace_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
             if engine.renderer().read().unwrap().config().shadow_mapping_enabled {
                 let scene = engine.scene().read().unwrap();
                 let scene_camera = scene.scene_camera().read().unwrap();
@@ -234,7 +234,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
+        with_trace_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
             if engine.renderer().read().unwrap().config().shadow_mapping_enabled {
                 let scene = engine.scene().read().unwrap();
                 let scene_camera = scene.scene_camera().read().unwrap();
