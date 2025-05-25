@@ -1,5 +1,20 @@
 //! Crate-local macros and utility macros.
 
+macro_rules! with_trace_logging {
+    ($message:expr $(,$arg:expr)*; $expression:expr) => {{
+        log::trace!(concat!("Begin: ", $message)$(,$arg)*);
+        let _start_time = ::std::time::Instant::now();
+        let _result = $expression;
+        let _duration = _start_time.elapsed();
+        log::trace!(
+            concat!("({:.2} ms) Done: ", $message),
+            _duration.as_secs_f64() * 1e3
+            $(,$arg)*
+        );
+        _result
+    }};
+}
+
 macro_rules! with_debug_logging {
     ($message:expr $(,$arg:expr)*; $expression:expr) => {{
         log::debug!(concat!("Begin: ", $message)$(,$arg)*);

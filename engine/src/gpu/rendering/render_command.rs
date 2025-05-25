@@ -604,7 +604,7 @@ impl AttachmentClearingPass {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Recorded clearing pass for {} render attachments",
             n_attachments
         );
@@ -814,7 +814,7 @@ impl DepthPrepass {
             );
         }
 
-        log::debug!(
+        log::trace!(
             "Recorded depth prepass for {} models ({} draw calls)",
             self.models.len(),
             self.models.len()
@@ -1291,7 +1291,7 @@ impl GeometryPass {
             .map(|pipeline| pipeline.models.len())
             .product();
 
-        log::debug!(
+        log::trace!(
             "Recorded geometry pass for {} models ({} pipelines, {} draw calls)",
             n_models,
             self.model_pipelines.len(),
@@ -1649,7 +1649,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Recorded shadow map update passes for {} omnidirectional lights and {} models ({} passes, {} draw calls)",
             shadow_map_textures.len(),
             self.models.len(),
@@ -2010,7 +2010,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Recorded shadow map update passes for {} unidirectional lights and {} models ({} passes, {} draw calls)",
             shadow_map_textures.len(),
             self.models.len(),
@@ -2307,7 +2307,7 @@ impl AmbientLightPass {
             0..1,
         );
 
-        log::debug!("Recorded ambient light pass (1 draw call)");
+        log::trace!("Recorded ambient light pass (1 draw call)");
 
         Ok(())
     }
@@ -2867,7 +2867,7 @@ impl DirectionalLightPass {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Recorded lighting pass for {} unshadowable and {} shadowable omnidirectional lights and {} unshadowable and {} shadowable unidirectional lights ({} draw calls)",
             n_omnidirectional_lights,
             n_shadowable_omnidirectional_lights,
@@ -3397,7 +3397,7 @@ impl SkyboxPass {
             0..1,
         );
 
-        log::debug!("Recorded skybox pass");
+        log::trace!("Recorded skybox pass");
 
         Ok(())
     }
@@ -3749,7 +3749,7 @@ impl PostprocessingRenderPass {
             0..1,
         );
 
-        log::debug!("Recorded postprocessing pass: {}", &self.label);
+        log::trace!("Recorded postprocessing pass: {}", &self.label);
 
         Ok(())
     }
@@ -3813,7 +3813,7 @@ impl RenderAttachmentTextureCopyCommand {
             source_texture.size(),
         );
 
-        log::debug!(
+        log::trace!(
             "Recorded texture copy command ({:?} to {:?})",
             self.source,
             self.destination
@@ -3844,7 +3844,7 @@ impl StorageBufferResultCopyCommand {
 
         storage_buffer.encode_copy_to_result_buffer(command_encoder)?;
 
-        log::debug!(
+        log::trace!(
             "Recorded result copy command for storage buffer ({})",
             self.buffer_id
         );

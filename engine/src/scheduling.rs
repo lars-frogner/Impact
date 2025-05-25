@@ -586,44 +586,43 @@ where
         let ordered_task = state.task_ordering().task(task_idx);
         let task = ordered_task.task();
 
-        // log::debug!(
-        //     "Worker {} obtained task {}",
-        //     channel.owning_worker_id(),
-        //     task.id()
-        // );
+        log::trace!(
+            "Worker {} obtained task {}",
+            channel.owning_worker_id(),
+            task.id()
+        );
 
         // Execute the task only if it thinks it should be based on
         // the current execution tags
         if task.should_execute(execution_tags.as_ref()) {
-            // with_debug_logging!("Worker {} executing task {}",
-            //     channel.owning_worker_id(),
-            //     task.id();
-            //     {
-            let result = {
-                cfg_if::cfg_if! {
-                    if #[cfg(test)] {
-                        task.execute_with_worker(channel.owning_worker_id(), state.world_state())
-                    } else {
-                        task.execute(state.world_state())
+            with_trace_logging!("Worker {} executing task {}",
+                channel.owning_worker_id(),
+                task.id();
+                {
+                    let result = {
+                        cfg_if::cfg_if! {
+                            if #[cfg(test)] {
+                                task.execute_with_worker(channel.owning_worker_id(), state.world_state())
+                            } else {
+                                task.execute(state.world_state())
+                            }
+                        }
+                    };
+
+                    if let Err(error) = result {
+                        // Return immediately with the task ID and an error
+                        // if the task execution failed
+                        return TaskClosureReturnValue::failure(task.id(), error);
                     }
                 }
-            };
-
-            if let Err(error) = result {
-                // Return immediately with the task ID and an error
-                // if the task execution failed
-                return TaskClosureReturnValue::failure(task.id(), error);
-            }
-            //     }
-            // );
+            );
+        } else {
+            log::trace!(
+                "Worker {} skipped execution of task {}",
+                channel.owning_worker_id(),
+                task.id()
+            );
         }
-        // else {
-        //     log::debug!(
-        //         "Worker {} skipped execution of task {}",
-        //         channel.owning_worker_id(),
-        //         task.id()
-        //     );
-        // }
 
         // Find each of the tasks that depend on this one, and
         // increment its count of completed dependencies. We keep
@@ -645,20 +644,22 @@ where
         // immediately
         if ready_dependent_task_indices.len() > 1 {
             for &ready_dependent_task_idx in &ready_dependent_task_indices[1..] {
-                // with_debug_logging!(
-                //         "Worker {} scheduling execution of task {}",
-                //         channel.owning_worker_id(),
-                //         state
-                //             .task_ordering()
-                //             .task(ready_dependent_task_idx)
-                //             .task()
-                //             .id();
-                channel.send_execute_instruction(Self::create_message(
-                    &state,
-                    &execution_tags,
-                    ready_dependent_task_idx,
-                ));
-                // );
+                with_trace_logging!(
+                    "Worker {} scheduling execution of task {}",
+                    channel.owning_worker_id(),
+                    state
+                        .task_ordering()
+                        .task(ready_dependent_task_idx)
+                        .task()
+                        .id();
+                    {
+                        channel.send_execute_instruction(Self::create_message(
+                            &state,
+                            &execution_tags,
+                            ready_dependent_task_idx,
+                        ));
+                    }
+                );
             }
         }
         if let Some(&ready_dependent_task_idx) = ready_dependent_task_indices.first() {
@@ -747,7 +748,7 @@ impl<S> TaskOrdering<S> {
     ) -> Result<Vec<OrderedTask<S>>> {
         let ordered_task_ids = dependency_graph.obtain_ordered_task_ids()?;
 
-        log::debug!(
+        log::trace!(
             "Ordered tasks: {:?}",
             ordered_task_ids
                 .iter()

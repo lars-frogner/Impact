@@ -1,8 +1,8 @@
 //! Tasks for synchronizing render passes.
 
 use crate::{
-    engine::{Engine, tasks::AppTaskScheduler},
     define_task,
+    engine::{Engine, tasks::AppTaskScheduler},
     gpu::rendering::{resource::tasks::SyncRenderResources, tasks::RenderingTag},
 };
 use anyhow::Result;
@@ -15,7 +15,7 @@ define_task!(
     depends_on = [SyncRenderResources],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_debug_logging!("Synchronizing render commands"; {
+        with_trace_logging!("Synchronizing render commands"; {
             let renderer = engine.renderer().read().unwrap();
             let mut shader_manager = renderer.shader_manager().write().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();

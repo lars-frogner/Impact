@@ -1,8 +1,8 @@
 //! Tasks for physics.
 
 use crate::{
-    engine::{Engine, tasks::AppTaskScheduler},
     define_execution_tag, define_task,
+    engine::{Engine, tasks::AppTaskScheduler},
     physics::{PhysicsSimulator, motion},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
     thread::ThreadPoolTaskErrors,
@@ -26,7 +26,7 @@ define_task!(
     ],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_debug_logging!("Updating controlled entities"; {
+        with_trace_logging!("Updating controlled entities"; {
             engine.update_controlled_entities();
             Ok(())
         })

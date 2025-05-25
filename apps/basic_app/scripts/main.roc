@@ -4,7 +4,6 @@ app [callbacks] {
 }
 
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
-import pf.Stdout
 import InputHandling.Keyboard as KeyboardInput
 import Scenes.Asteroid
 
@@ -15,6 +14,5 @@ callbacks = {
 }
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
-handle_mouse_button_event! = |{ button, state }|
-    _ = Stdout.line!("Handling mouse button ${Inspect.to_str(button)} ${Inspect.to_str(state)}")
-    Scenes.Asteroid.handle_mouse_button_event!({ button, state })
+handle_mouse_button_event! = |event|
+    Scenes.Asteroid.handle_mouse_button_event!(event)

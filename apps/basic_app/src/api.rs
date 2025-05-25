@@ -36,26 +36,26 @@ pub fn run_with_config(config: EngineConfig) -> Result<()> {
 }
 
 pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
-    log::debug!("Executing engine command");
+    log::trace!("Executing engine command");
     let command = EngineCommand::from_roc_bytes(command_bytes)?;
     with_engine(|engine| engine.execute_command(command))
 }
 
 pub fn create_entity_with_id(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
-    log::debug!("Creating entity with ID {entity_id}");
+    log::trace!("Creating entity with ID {entity_id}");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     with_engine(|engine| engine.create_entity_with_id(EntityID::from_u64(entity_id), components))
 }
 
 pub fn create_entity(component_bytes: &[u8]) -> Result<u64> {
-    log::debug!("Creating entity");
+    log::trace!("Creating entity");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     let entity_id = with_engine(|engine| engine.create_entity(components))?;
     Ok(entity_id.as_u64())
 }
 
 pub fn create_entities(component_bytes: &[u8]) -> Result<impl Iterator<Item = u64>> {
-    log::debug!("Creating multiple entities");
+    log::trace!("Creating multiple entities");
     let components = impact::ffi::deserialize_components_for_multiple_entities(component_bytes)?;
     let entity_ids = with_engine(|engine| engine.create_entities(components))?;
     Ok(entity_ids.into_iter().map(|entity_id| entity_id.as_u64()))
