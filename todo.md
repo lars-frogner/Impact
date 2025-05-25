@@ -36,13 +36,13 @@
 
 ## ECS
 
-- Be smarter about entity representation and management to increase max number of entities without exceeding 64 bits.
-
 - Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
 
 ## Roc
 
-- Add support for bitflags.
+- Implement hot reloading of script.
+
+- Support state/context in Roc script.
 
 ## Misc
 
