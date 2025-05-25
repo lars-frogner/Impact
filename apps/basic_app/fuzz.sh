@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 mkdir -p lib roc_platform/lib
-DEBUG=1 FUZZING=1 roc build.roc
+DEBUG=1 ASAN=1 FUZZING=1 roc build.roc
 
 cargo build --manifest-path cli/Cargo.toml --release --features fuzzing
 
