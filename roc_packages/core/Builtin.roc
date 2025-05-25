@@ -31,7 +31,7 @@ module [
 ## Assumes little-endian byte ordering
 write_bytes_uint : List U8, Int *, U64 -> List U8
 write_bytes_uint = |bytes, value, n_bytes|
-    # Enabling this expect breaks FFI
+    # This can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect List.contains([2, 4, 8, 16], n_bytes)
 
     List.range({ start: At 0, end: Length n_bytes })
