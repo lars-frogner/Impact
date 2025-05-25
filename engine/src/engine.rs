@@ -363,6 +363,13 @@ impl Engine {
         }
     }
 
+    pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
+        self.renderer()
+            .write()
+            .unwrap()
+            .update_pixels_per_point(pixels_per_point);
+    }
+
     pub fn control_mode_active(&self) -> bool {
         self.user_interface().read().unwrap().control_mode_active()
     }

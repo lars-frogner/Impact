@@ -2,6 +2,7 @@
 
 pub mod brdf;
 pub mod command;
+pub mod gui;
 pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
@@ -22,6 +23,7 @@ use crate::{
     window::EventLoopController,
 };
 use anyhow::{Error, Result};
+use gui::{GUIRenderer, GUIRenderingConfig};
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
     temporal_anti_aliasing::TemporalAntiAliasingConfig,
@@ -50,6 +52,7 @@ pub struct RenderingSystem {
     gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
+    gui_renderer: RwLock<GUIRenderer>,
     frame_counter: u32,
     timestamp_query_manager: TimestampQueryManager,
 }
@@ -72,6 +75,8 @@ pub struct RenderingConfig {
     #[serde(default)]
     pub capturing_camera: CapturingCameraConfig,
     pub wireframe_mode_on: bool,
+    #[serde(default)]
+    pub gui: GUIRenderingConfig,
     pub timings_enabled: bool,
 }
 
@@ -116,6 +121,8 @@ impl RenderingSystem {
             &config.capturing_camera,
         )?;
 
+        let gui_renderer = GUIRenderer::new(&graphics_device, &rendering_surface, &config.gui);
+
         let timestamp_query_manager = TimestampQueryManager::new(
             &graphics_device,
             NonZeroU32::new(128).unwrap(),
@@ -135,6 +142,7 @@ impl RenderingSystem {
             gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
+            gui_renderer: RwLock::new(gui_renderer),
             frame_counter: 1,
             timestamp_query_manager,
         })
@@ -232,6 +240,11 @@ impl RenderingSystem {
         self.recreate_render_attachment_textures();
     }
 
+    pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
+        self.rendering_surface
+            .update_pixels_per_point(pixels_per_point);
+    }
+
     /// Marks the render resources as being out of sync with the source data.
     pub fn declare_render_resources_desynchronized(&self) {
         self.render_resource_manager
@@ -267,6 +280,7 @@ impl RenderingSystem {
             &self.gpu_resource_group_manager.read().unwrap(),
             &self.storage_gpu_buffer_manager.read().unwrap(),
             &self.postprocessor.read().unwrap(),
+            &self.gui_renderer.read().unwrap(),
             &self.config,
             self.frame_counter,
             &mut timestamp_recorder,
@@ -329,6 +343,7 @@ impl Default for RenderingConfig {
             temporal_anti_aliasing: TemporalAntiAliasingConfig::default(),
             capturing_camera: CapturingCameraConfig::default(),
             wireframe_mode_on: false,
+            gui: GUIRenderingConfig::default(),
             timings_enabled: false,
         }
     }

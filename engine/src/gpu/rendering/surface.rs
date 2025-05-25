@@ -13,6 +13,9 @@ pub struct RenderingSurface {
     /// Configuration defining how the surface will create its underlying
     /// [`wgpu::SurfaceTexture`].
     surface_config: SurfaceConfiguration,
+    /// DPI factor of the screen the surface is rendered to. Needed when
+    /// rendering GUI.
+    pixels_per_point: f64,
 }
 
 #[derive(Debug)]
@@ -31,7 +34,13 @@ impl RenderingSurface {
     /// Returns an error if surface creation fails.
     pub fn new(wgpu_instance: &wgpu::Instance, window: &Window) -> Result<Self> {
         let (width, height) = window.dimensions();
-        Self::new_from_surface_target(wgpu_instance, window.arc_window(), width, height)
+        Self::new_from_surface_target(
+            wgpu_instance,
+            window.arc_window(),
+            width,
+            height,
+            window.pixels_per_point(),
+        )
     }
 
     /// Creates the configuration for the rendering surface based on the given
@@ -65,6 +74,12 @@ impl RenderingSurface {
         self.surface_config.surface_dimensions()
     }
 
+    /// Returns the number of physical pixels per point/logical pixel of the
+    /// screen the surface is rendered to.
+    pub fn pixels_per_point(&self) -> f64 {
+        self.pixels_per_point
+    }
+
     /// Returns the [`wgpu::TextureFormat`] of the rendering surface texture.
     ///
     /// # Panics
@@ -93,6 +108,11 @@ impl RenderingSurface {
         config.width = u32::from(new_width);
         config.height = u32::from(new_height);
         self.configure_surface_for_device(graphics_device);
+    }
+
+    /// Informs the surface of a new number of pixels per point.
+    pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
+        self.pixels_per_point = pixels_per_point;
     }
 
     /// Returns the size of the push constant obtained by calling
@@ -133,12 +153,14 @@ impl RenderingSurface {
         surface_target: impl Into<SurfaceTarget<'static>>,
         width: NonZeroU32,
         height: NonZeroU32,
+        pixels_per_point: f64,
     ) -> Result<Self> {
         let surface = wgpu_instance.create_surface(surface_target)?;
         let surface_config = SurfaceConfiguration::Uninitialized { width, height };
         Ok(Self {
             surface,
             surface_config,
+            pixels_per_point,
         })
     }
 

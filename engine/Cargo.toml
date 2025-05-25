@@ -141,6 +141,7 @@ chrono = "0.4"
 clap = { version = "4.5", features = ["derive"], optional = true }
 const-fnv1a-hash = { workspace = true }
 criterion = { version = "0.5.1", optional = true }
+egui-wgpu = "0.31"
 glam = "0.30"
 image = { version = "0.25", default-features = false, features = [
     "png",
