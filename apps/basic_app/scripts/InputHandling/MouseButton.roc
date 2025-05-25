@@ -1,4 +1,7 @@
-module [toggle_scene_entity_active_state!]
+module [
+    toggle_scene_entity_active_state!,
+    flip,
+]
 
 import pf.Command
 import pf.Entity
@@ -11,3 +14,8 @@ toggle_scene_entity_active_state! = |entity_id, button_state|
             Pressed -> Enabled
             Released -> Disabled
     Command.execute!(Scene(SetSceneEntityActiveState({ entity_id, state })))
+
+flip = |state|
+    when state is
+        Pressed -> Released
+        Released -> Pressed
