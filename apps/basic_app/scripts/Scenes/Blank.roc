@@ -1,5 +1,5 @@
 module [
-    entities,
+    entity_ids,
     setup!,
 ]
 
@@ -26,21 +26,21 @@ import pf.Comp.UniformSpecularReflectance
 import pf.Comp.Velocity
 import pf.Rendering.TextureID
 
-entities = {
-    player: Entity.new_id("player"),
-    ground: Entity.new_id("ground"),
-    ambient_light: Entity.new_id("ambient_light"),
-    unidirectional_light: Entity.new_id("unidirectional_light"),
+entity_ids = {
+    player: Entity.id("player"),
+    ground: Entity.id("ground"),
+    ambient_light: Entity.id("ambient_light"),
+    unidirectional_light: Entity.id("unidirectional_light"),
 }
 
 setup! : {} => Result {} Str
 setup! = |_|
     Command.execute!(Scene(SetSkybox(Skybox.new(skybox, 1e5))))?
 
-    Entity.create_with_id!(entities.player, player)?
-    Entity.create_with_id!(entities.ground, ground)?
-    Entity.create_with_id!(entities.ambient_light, ambient_light)?
-    Entity.create_with_id!(entities.unidirectional_light, unidirectional_light)?
+    Entity.create_with_id!(entity_ids.player, player)?
+    Entity.create_with_id!(entity_ids.ground, ground)?
+    Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
+    Entity.create_with_id!(entity_ids.unidirectional_light, unidirectional_light)?
 
     Ok({})
 
@@ -68,12 +68,12 @@ ground =
 
 ambient_light =
     Entity.new
-    |> Comp.AmbientEmission.add_new(Vector3.scale((1.0, 1.0, 1.0), 2000000.0))
+    |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
 
 unidirectional_light =
     Entity.new
     |> Comp.ShadowableUnidirectionalEmission.add_new(
-        Vector3.scale((1.0, 1.0, 1.0), 200000.0),
+        Vector3.same(200000),
         UnitVector3.from((0.0, -1.0, 0.0)),
         2.0,
     )

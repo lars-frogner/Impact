@@ -1,5 +1,5 @@
 module [
-    entities,
+    entity_ids,
     setup!,
 ]
 
@@ -38,43 +38,43 @@ import pf.Mesh.MeshID as MeshID
 import pf.Physics.AngularVelocity
 import pf.Rendering.TextureID as TextureID
 
-entities = {
-    player: Entity.new_id("player"),
-    dragon: Entity.new_id("dragon"),
-    pole: Entity.new_id("pole"),
-    abstract_object: Entity.new_id("abstract_object"),
-    abstract_pyramid: Entity.new_id("abstract_pyramid"),
-    box: Entity.new_id("box"),
-    sphere: Entity.new_id("sphere"),
-    abstract_cube: Entity.new_id("abstract_cube"),
-    floor: Entity.new_id("floor"),
-    upper_x_wall: Entity.new_id("upper_x_wall"),
-    lower_x_wall: Entity.new_id("lower_x_wall"),
-    upper_z_wall: Entity.new_id("upper_z_wall"),
-    bulb_light: Entity.new_id("bulb_light"),
-    sun_light: Entity.new_id("sun_light"),
-    ambient_light: Entity.new_id("ambient_light"),
+entity_ids = {
+    player: Entity.id("player"),
+    dragon: Entity.id("dragon"),
+    pole: Entity.id("pole"),
+    abstract_object: Entity.id("abstract_object"),
+    abstract_pyramid: Entity.id("abstract_pyramid"),
+    box: Entity.id("box"),
+    sphere: Entity.id("sphere"),
+    abstract_cube: Entity.id("abstract_cube"),
+    floor: Entity.id("floor"),
+    upper_x_wall: Entity.id("upper_x_wall"),
+    lower_x_wall: Entity.id("lower_x_wall"),
+    upper_z_wall: Entity.id("upper_z_wall"),
+    bulb_light: Entity.id("bulb_light"),
+    sun_light: Entity.id("sun_light"),
+    ambient_light: Entity.id("ambient_light"),
 }
 
 setup! : {} => Result {} Str
 setup! = |_|
     Command.execute!(Scene(SetSkybox(skybox)))?
 
-    Entity.create_with_id!(entities.player, player)?
-    Entity.create_with_id!(entities.dragon, dragon)?
-    Entity.create_with_id!(entities.pole, pole)?
-    Entity.create_with_id!(entities.abstract_object, abstract_object)?
-    Entity.create_with_id!(entities.abstract_pyramid, abstract_pyramid)?
-    Entity.create_with_id!(entities.box, box)?
-    Entity.create_with_id!(entities.sphere, sphere)?
-    Entity.create_with_id!(entities.abstract_cube, abstract_cube)?
-    Entity.create_with_id!(entities.floor, floor)?
-    Entity.create_with_id!(entities.upper_x_wall, upper_x_wall)?
-    Entity.create_with_id!(entities.lower_x_wall, lower_x_wall)?
-    Entity.create_with_id!(entities.upper_z_wall, upper_z_wall)?
-    Entity.create_with_id!(entities.bulb_light, bulb_light)?
-    Entity.create_with_id!(entities.sun_light, sun_light)?
-    Entity.create_with_id!(entities.ambient_light, ambient_light)?
+    Entity.create_with_id!(entity_ids.player, player)?
+    Entity.create_with_id!(entity_ids.dragon, dragon)?
+    Entity.create_with_id!(entity_ids.pole, pole)?
+    Entity.create_with_id!(entity_ids.abstract_object, abstract_object)?
+    Entity.create_with_id!(entity_ids.abstract_pyramid, abstract_pyramid)?
+    Entity.create_with_id!(entity_ids.box, box)?
+    Entity.create_with_id!(entity_ids.sphere, sphere)?
+    Entity.create_with_id!(entity_ids.abstract_cube, abstract_cube)?
+    Entity.create_with_id!(entity_ids.floor, floor)?
+    Entity.create_with_id!(entity_ids.upper_x_wall, upper_x_wall)?
+    Entity.create_with_id!(entity_ids.lower_x_wall, lower_x_wall)?
+    Entity.create_with_id!(entity_ids.upper_z_wall, upper_z_wall)?
+    Entity.create_with_id!(entity_ids.bulb_light, bulb_light)?
+    Entity.create_with_id!(entity_ids.sun_light, sun_light)?
+    Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
 
     Ok({})
 
@@ -232,18 +232,18 @@ bulb_light =
     |> Comp.UniformColor.add((1.0, 1.0, 1.0))
     |> Comp.UniformEmissiveLuminance.add(1e6)
     |> Comp.ShadowableOmnidirectionalEmission.add_new(
-        Vector3.scale((1.0, 1.0, 1.0), 2e7),
+        Vector3.same(2e7),
         0.7,
     )
 
 sun_light =
     Entity.new
     |> Comp.ShadowableUnidirectionalEmission.add_new(
-        Vector3.scale((1.0, 1.0, 1.0), 10000.0),
+        Vector3.same(10000),
         UnitVector3.from((0.6, -0.3, 1.0)),
         2.0,
     )
 
 ambient_light =
     Entity.new
-    |> Comp.AmbientEmission.add_new(Vector3.scale((1.0, 1.0, 1.0), 1000.0))
+    |> Comp.AmbientEmission.add_new(Vector3.same(1000.0))
