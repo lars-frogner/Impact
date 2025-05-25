@@ -1,17 +1,20 @@
-# Hash: b37363379353437a1a46d6c45e99dcfca9b4b78b38c5dafa611b065746a2c7d2
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: e1173b74240dc05e0d659655e1e6ade7767c89cfa362ceabd23636f3be681512
+# Generated: 2025-05-23T20:19:02+00:00
 # Rust type: impact::voxel::components::MultifractalNoiseModificationComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     MultifractalNoiseModification,
     new,
     add_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 import core.NativeNum
 
@@ -43,27 +46,32 @@ new = |octaves, frequency, lacunarity, persistence, amplitude, seed|
     }
 
 add_new : Entity.Data, NativeNum.Usize, F64, F64, F64, F64, U64 -> Entity.Data
-add_new = |data, octaves, frequency, lacunarity, persistence, amplitude, seed|
-    add(data, new(octaves, frequency, lacunarity, persistence, amplitude, seed))
+add_new = |entity_data, octaves, frequency, lacunarity, persistence, amplitude, seed|
+    add(entity_data, new(octaves, frequency, lacunarity, persistence, amplitude, seed))
 
 ## Adds a value of the [MultifractalNoiseModification] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, MultifractalNoiseModification -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [MultifractalNoiseModification] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List MultifractalNoiseModification -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (MultifractalNoiseModification) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in MultifractalNoiseModification.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, MultifractalNoiseModification -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 16681079135556438596
     size = 48
     alignment = 8
@@ -72,14 +80,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List MultifractalNoiseModification -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 16681079135556438596
     size = 48
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -87,7 +95,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

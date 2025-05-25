@@ -1,8 +1,8 @@
 # Hash: a11f31d4c9ce708f64871b7491e3bd7af31f27f62c6d6fa648d670b196d03330
-# Generated: 2025-05-14T18:52:22+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::material::MaterialPropertyTextureGroupID
 # Type category: POD
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     MaterialPropertyTextureGroupID,
     write_bytes,

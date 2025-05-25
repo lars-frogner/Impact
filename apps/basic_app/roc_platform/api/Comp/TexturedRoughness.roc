@@ -1,17 +1,21 @@
-# Hash: c93ee1c03b5e92d5ce8f918cf4984bd46706c1ac745833e9b6fab1ded16356e3
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 0a9c290929ccd3656abb557b512bf2a63f99b390d2d657e16d72e22c9332026d
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::material::components::TexturedRoughnessComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     TexturedRoughness,
     unscaled,
     add_unscaled,
+    add_multiple_unscaled,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import Rendering.TextureID
 import core.Builtin
 
@@ -31,27 +35,43 @@ unscaled = |texture_id|
     { texture_id, scale_factor: 1.0 }
 
 add_unscaled : Entity.Data, Rendering.TextureID.TextureID -> Entity.Data
-add_unscaled = |data, texture_id|
-    add(data, unscaled(texture_id))
+add_unscaled = |entity_data, texture_id|
+    add(entity_data, unscaled(texture_id))
+
+add_multiple_unscaled : Entity.MultiData, Entity.Arg.Broadcasted (Rendering.TextureID.TextureID) -> Result Entity.MultiData Str
+add_multiple_unscaled = |entity_data, texture_id|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            texture_id,
+            Entity.multi_count(entity_data),
+            unscaled
+        ))
+    )
 
 ## Adds a value of the [TexturedRoughness] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, TexturedRoughness -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [TexturedRoughness] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List TexturedRoughness -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (TexturedRoughness) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in TexturedRoughness.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, TexturedRoughness -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 1963253879334442476
     size = 8
     alignment = 4
@@ -60,14 +80,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List TexturedRoughness -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 1963253879334442476
     size = 8
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -75,7 +95,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

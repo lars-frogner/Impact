@@ -1,8 +1,8 @@
 # Hash: 7af375db33d62c8ae445804c1b4dfd2ab7e0bbe2e36be38c5e075a74d02c3f54
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::control::motion::MotionState
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     MotionState,
     write_bytes,

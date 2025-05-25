@@ -1,8 +1,8 @@
 # Hash: 3e989192f076d2bc30ae6a3a433da81e47a154b580ff29a0ec1057e685da99e2
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::gpu::rendering::postprocessing::command::ToExposure
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     ToExposure,
     write_bytes,

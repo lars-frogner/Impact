@@ -1,17 +1,21 @@
-# Hash: 7418eece568eba766749c7044a6d5028d10cd139a77bbad147c3a121bff107a2
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 4f9f5390c36de1cf60f0ac7099fd84e44456d9f93aa34f4d3739370a7308be08
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::mesh::components::HemisphereMeshComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     HemisphereMesh,
     new,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -38,27 +42,47 @@ new = |n_rings|
 ## rings.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, U32 -> Entity.Data
-add_new = |data, n_rings|
-    add(data, new(n_rings))
+add_new = |entity_data, n_rings|
+    add(entity_data, new(n_rings))
+
+## Creates a new component for a hemisphere mesh with the given number of
+## rings.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, n_rings|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            n_rings,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [HemisphereMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, HemisphereMesh -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [HemisphereMesh] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List HemisphereMesh -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (HemisphereMesh) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in HemisphereMesh.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, HemisphereMesh -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 5932358679912990868
     size = 4
     alignment = 4
@@ -67,14 +91,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List HemisphereMesh -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 5932358679912990868
     size = 4
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -82,7 +106,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

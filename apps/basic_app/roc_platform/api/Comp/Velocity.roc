@@ -1,8 +1,8 @@
-# Hash: 9e44e88be2b5442e00b00495271105f95b4e815fdf3bb2f6e513b4d545752e2e
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 1310c2f17488b2fa76125d5e7ba4702ac7bfed3ae4a4a02c9640a132c7eb2ec5
+# Generated: 2025-05-24T10:33:40+00:00
 # Rust type: impact::physics::motion::components::VelocityComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     Velocity,
     new,
@@ -10,14 +10,21 @@ module [
     angular,
     stationary,
     add_new,
+    add_multiple_new,
     add_linear,
+    add_multiple_linear,
     add_angular,
+    add_multiple_angular,
     add_stationary,
+    add_multiple_stationary,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import Physics.AngularVelocity
 import core.Builtin
 import core.Vector3
@@ -45,8 +52,23 @@ new = |linear_velocity, angular_velocity|
 ## angular velocity.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Vector3.Vector3 Binary64, Physics.AngularVelocity.AngularVelocity -> Entity.Data
-add_new = |data, linear_velocity, angular_velocity|
-    add(data, new(linear_velocity, angular_velocity))
+add_new = |entity_data, linear_velocity, angular_velocity|
+    add(entity_data, new(linear_velocity, angular_velocity))
+
+## Creates a new velocity component for an entity with the given linear and
+## angular velocity.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, linear_velocity, angular_velocity|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map2(
+            linear_velocity, angular_velocity,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Creates a new velocity component for an entity with the given linear
 ## velocity and zero angular velocity.
@@ -58,8 +80,23 @@ linear = |velocity|
 ## velocity and zero angular velocity.
 ## Adds the component to the given entity's data.
 add_linear : Entity.Data, Vector3.Vector3 Binary64 -> Entity.Data
-add_linear = |data, velocity|
-    add(data, linear(velocity))
+add_linear = |entity_data, velocity|
+    add(entity_data, linear(velocity))
+
+## Creates a new velocity component for an entity with the given linear
+## velocity and zero angular velocity.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_linear : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiData Str
+add_multiple_linear = |entity_data, velocity|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            velocity,
+            Entity.multi_count(entity_data),
+            linear
+        ))
+    )
 
 ## Creates a new velocity component for an entity with the given angular
 ## velocity and zero linear velocity.
@@ -71,8 +108,23 @@ angular = |velocity|
 ## velocity and zero linear velocity.
 ## Adds the component to the given entity's data.
 add_angular : Entity.Data, Physics.AngularVelocity.AngularVelocity -> Entity.Data
-add_angular = |data, velocity|
-    add(data, angular(velocity))
+add_angular = |entity_data, velocity|
+    add(entity_data, angular(velocity))
+
+## Creates a new velocity component for an entity with the given angular
+## velocity and zero linear velocity.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_angular : Entity.MultiData, Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiData Str
+add_multiple_angular = |entity_data, velocity|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            velocity,
+            Entity.multi_count(entity_data),
+            angular
+        ))
+    )
 
 ## Creates a new velocity component for an entity with the zero linear and
 ## angular velocity.
@@ -84,27 +136,46 @@ stationary = |{}|
 ## angular velocity.
 ## Adds the component to the given entity's data.
 add_stationary : Entity.Data -> Entity.Data
-add_stationary = |data|
-    add(data, stationary({}))
+add_stationary = |entity_data|
+    add(entity_data, stationary({}))
+
+## Creates a new velocity component for an entity with the zero linear and
+## angular velocity.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_stationary : Entity.MultiData -> Entity.MultiData
+add_multiple_stationary = |entity_data|
+    res = add_multiple(
+        entity_data,
+        Same(stationary({}))
+    )
+    when res is
+        Ok(res_data) -> res_data
+        Err(err) -> crash "unexpected error in Velocity.add_multiple_stationary: ${Inspect.to_str(err)}"
 
 ## Adds a value of the [Velocity] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, Velocity -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [Velocity] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List Velocity -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (Velocity) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in Velocity.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, Velocity -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 17258100226553216954
     size = 56
     alignment = 8
@@ -113,14 +184,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List Velocity -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 17258100226553216954
     size = 56
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -128,7 +199,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

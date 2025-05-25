@@ -1,8 +1,8 @@
 # Hash: b59c2b03277f349d7d2dbad1d55940bd0cb203c2139a8659e54cba6811c954f0
-# Generated: 2025-05-14T18:52:22+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::material::MaterialHandle
 # Type category: POD
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     MaterialHandle,
     write_bytes,

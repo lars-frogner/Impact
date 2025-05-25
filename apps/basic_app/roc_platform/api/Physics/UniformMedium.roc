@@ -1,8 +1,8 @@
 # Hash: 8b36252f70b2e9d8b5a1026caee1b9d21a7a83bc4126381ac94d0206bb9b9277
-# Generated: 2025-05-22T18:52:55+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::physics::medium::UniformMedium
 # Type category: Inline
-# Commit: 8a339ce (dirty)
+# Commit: 31f3514 (dirty)
 module [
     UniformMedium,
     sea_level_air_mass_density,

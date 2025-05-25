@@ -1,8 +1,8 @@
 # Hash: da16adc7c0727ea97b17063bda4b8a3467a3444ef311a38ccd57fda0c3da56e9
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::window::input::key::ArrowKey
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     ArrowKey,
     write_bytes,

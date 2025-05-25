@@ -1,8 +1,8 @@
 # Hash: 567bf1473951aadcbe5b097bb68a3d03e25ce65421ef51e1af74e4d569aa9f3f
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::physics::command::ToSubstepCount
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     ToSubstepCount,
     write_bytes,

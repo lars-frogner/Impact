@@ -1,8 +1,8 @@
 # Hash: 93cf77e5490074a1398be60badfae98f3b6f988bf24588b0492d9cdab836e311
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::window::input::key::WhitespaceKey
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     WhitespaceKey,
     write_bytes,

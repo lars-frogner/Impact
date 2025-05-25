@@ -1,8 +1,8 @@
 # Hash: c0b4f895cda80dae2751e78e897b7e96cc82c48703da1d896fe51832d0c6ef9a
-# Generated: 2025-05-21T22:02:06+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::physics::rigid_body::forces::spring::Spring
 # Type category: POD
-# Commit: 8a339ce (dirty)
+# Commit: 31f3514 (dirty)
 module [
     Spring,
     new,

@@ -1,8 +1,8 @@
 # Hash: 0538789cef94f00bf2ee5cb24ef89fd29a85dd8d784f8ae36566282b024f72de
-# Generated: 2025-05-22T18:34:24+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::physics::command::PhysicsCommand
 # Type category: Inline
-# Commit: 8a339ce (dirty)
+# Commit: 31f3514 (dirty)
 module [
     PhysicsCommand,
     write_bytes,

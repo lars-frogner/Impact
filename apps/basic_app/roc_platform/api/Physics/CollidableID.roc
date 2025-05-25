@@ -1,8 +1,8 @@
 # Hash: 284e3605bb8d850c584b8443301efd8d136dea7a7411eb1a591bfd18d7dd5128
-# Generated: 2025-05-14T18:52:22+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::physics::collision::CollidableID
 # Type category: POD
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     CollidableID,
     write_bytes,

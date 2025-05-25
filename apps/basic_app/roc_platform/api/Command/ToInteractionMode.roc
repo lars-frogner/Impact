@@ -1,8 +1,8 @@
 # Hash: af1b408ccebea2a541a46f23f78249bd8848125d4100753914e7bc708387c55e
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::ui::command::ToInteractionMode
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     ToInteractionMode,
     write_bytes,

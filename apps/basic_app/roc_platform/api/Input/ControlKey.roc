@@ -1,8 +1,8 @@
 # Hash: 3f9fa523717532c390fcd6b06d6a1af14690788d762e2e6aa620501d3c4b89fa
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::window::input::key::ControlKey
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     ControlKey,
     write_bytes,

@@ -1,17 +1,21 @@
-# Hash: 46932c956922a0d9640070b0e953ebd6b89d7f047d99a43a6c19bb48ccdb48c3
-# Generated: 2025-05-21T19:40:35+00:00
+# Hash: 42e6106b683c5953b4a5e9667867f08f24fd39db90172c809b791fe61cdaa29d
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::camera::components::OrthographicCameraComp
 # Type category: Component
-# Commit: f1fa9f1 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     OrthographicCamera,
     new,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 import core.Radians
 
@@ -58,27 +62,52 @@ new = |vertical_field_of_view, near_distance, far_distance|
 ## the far distance does not exceed the near distance.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Radians.Radians Binary32, F32, F32 -> Entity.Data
-add_new = |data, vertical_field_of_view, near_distance, far_distance|
-    add(data, new(vertical_field_of_view, near_distance, far_distance))
+add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
+    add(entity_data, new(vertical_field_of_view, near_distance, far_distance))
+
+## Creates a new component representing an
+## [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
+## vertical field of view (in radians) and near and far distance.
+##
+## # Panics
+## If the field of view or the near distance does not exceed zero, or if
+## the far distance does not exceed the near distance.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Radians.Radians Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map3(
+            vertical_field_of_view, near_distance, far_distance,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [OrthographicCamera] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, OrthographicCamera -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [OrthographicCamera] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List OrthographicCamera -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (OrthographicCamera) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in OrthographicCamera.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, OrthographicCamera -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 15197630099165986382
     size = 12
     alignment = 4
@@ -87,14 +116,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List OrthographicCamera -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 15197630099165986382
     size = 12
     alignment = 4
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -102,7 +131,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

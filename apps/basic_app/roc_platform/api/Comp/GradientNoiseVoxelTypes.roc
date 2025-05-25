@@ -1,18 +1,22 @@
-# Hash: 124fc362b83cde5845a2e4a6454ed3b57b16535d2d1f105a311cb6e02ab6af49
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: 220df6e288ed8e824a1c11684deeaebb11cbbfe6da16306ba06695ccdee49e97
+# Generated: 2025-05-25T11:17:50+00:00
 # Rust type: impact::voxel::components::GradientNoiseVoxelTypesComp
 # Type category: Component
-# Commit: d505d37
+# Commit: 09871e3 (dirty)
 module [
     GradientNoiseVoxelTypes,
     voxel_type_array_size,
     new,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 import core.Hashing
 import core.NativeNum
@@ -38,9 +42,15 @@ voxel_type_array_size = 256
 new : List Str, F64, F64, U64 -> GradientNoiseVoxelTypes
 new = |voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     n_voxel_types = List.len(voxel_type_names)
-    expect n_voxel_types > 0
-    expect n_voxel_types <= voxel_type_array_size
-    voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect n_voxel_types > 0
+    # expect n_voxel_types <= voxel_type_array_size
+    unpadded_voxel_type_name_hashes = voxel_type_names |> List.map(Hashing.hash_str_32)
+    padding_len = voxel_type_array_size - n_voxel_types
+    voxel_type_name_hashes = List.concat(
+        unpadded_voxel_type_name_hashes,
+        List.repeat(Hashing.hash_str_32(""), padding_len),
+    )
     {
         n_voxel_types,
         voxel_type_name_hashes,
@@ -50,27 +60,43 @@ new = |voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     }
 
 add_new : Entity.Data, List Str, F64, F64, U64 -> Entity.Data
-add_new = |data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
-    add(data, new(voxel_type_names, noise_frequency, voxel_type_frequency, seed))
+add_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
+    add(entity_data, new(voxel_type_names, noise_frequency, voxel_type_frequency, seed))
+
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (List Str), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (U64) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map4(
+            voxel_type_names, noise_frequency, voxel_type_frequency, seed,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [GradientNoiseVoxelTypes] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, GradientNoiseVoxelTypes -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [GradientNoiseVoxelTypes] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List GradientNoiseVoxelTypes -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (GradientNoiseVoxelTypes) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in GradientNoiseVoxelTypes.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, GradientNoiseVoxelTypes -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 865311061570754875
     size = 1056
     alignment = 8
@@ -79,14 +105,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List GradientNoiseVoxelTypes -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 865311061570754875
     size = 1056
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -94,7 +120,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

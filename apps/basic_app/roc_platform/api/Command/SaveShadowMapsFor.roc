@@ -1,8 +1,8 @@
 # Hash: 722c0380bbc5418d7a94b8fcb8620c73962115a1dc74da76793288eb745f4c2f
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::gpu::rendering::screen_capture::command::SaveShadowMapsFor
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     SaveShadowMapsFor,
     write_bytes,

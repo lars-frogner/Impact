@@ -1,17 +1,21 @@
-# Hash: 1439e58375e08c532f39775e9403f94fc39b04dc9520d517b60567cf0c0e0879
-# Generated: 2025-05-18T21:01:52+00:00
+# Hash: adaf958c4108ba5bb32a6c8d25672e940dcdd72a0df6fd36f476719c041c36e0
+# Generated: 2025-05-23T21:48:57+00:00
 # Rust type: impact::scene::components::ParentComp
 # Type category: Component
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     Parent,
     new,
     add_new,
+    add_multiple_new,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
@@ -34,27 +38,47 @@ new = |parent|
 ## entity.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Entity.Id -> Entity.Data
-add_new = |data, parent|
-    add(data, new(parent))
+add_new = |entity_data, parent|
+    add(entity_data, new(parent))
+
+## Creates a new component representing a direct child of the specified
+## entity.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Entity.Id) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, parent|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            parent,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [Parent] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
 add : Entity.Data, Parent -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
 
 ## Adds multiple values of the [Parent] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, List Parent -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (Parent) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in Parent.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
 
 write_packet : List U8, Parent -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 6272559603799074398
     size = 8
     alignment = 8
@@ -63,14 +87,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List Parent -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 6272559603799074398
     size = 8
     alignment = 8
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -78,7 +102,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

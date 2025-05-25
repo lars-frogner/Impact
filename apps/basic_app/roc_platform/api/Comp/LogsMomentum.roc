@@ -1,39 +1,40 @@
-# Hash: a9d0696cc06dab31aa531adce71c5290f7e0bb04900cd103789954cde16c008c
-# Generated: 2025-05-14T18:52:22+00:00
+# Hash: fd4303b0b8aa14d28f7a0ac002843f50019a568a0e5fd8be303c29ac6aaaa1c5
+# Generated: 2025-05-24T10:33:40+00:00
 # Rust type: impact::physics::motion::components::LogsMomentum
 # Type category: Component
-# Commit: d505d37
+# Commit: 31f3514 (dirty)
 module [
     LogsMomentum,
     add,
     add_multiple,
+    write_bytes,
+    from_bytes,
 ]
 
 import Entity
+import Entity.Arg
 import core.Builtin
 
 ## Marker [`Component`](impact_ecs::component::Component) for entities whose
 ## linear and angular momentum should be written to the log at each time step.
 LogsMomentum : {}
 
-## Adds a value of the [LogsMomentum] component to an entity's data.
-## Note that an entity never should have more than a single value of
-## the same component type.
-add : Entity.Data, LogsMomentum -> Entity.Data
-add = |data, value|
-    data |> Entity.append_component(write_packet, value)
+## Adds the [LogsMomentum] component to an entity's data.
+add : Entity.Data -> Entity.Data
+add = |entity_data|
+    entity_data |> Entity.append_component(write_packet, {})
 
-## Adds multiple values of the [LogsMomentum] component to the data of
-## a set of entities of the same archetype's data.
-## Note that the number of values should match the number of entities
-## in the set and that an entity never should have more than a single
-## value of the same component type.
-add_multiple : Entity.MultiData, List LogsMomentum -> Entity.MultiData
-add_multiple = |data, values|
-    data |> Entity.append_components(write_multi_packet, values)
+## Adds the [LogsMomentum] component to each entity's data.
+add_multiple : Entity.MultiData -> Entity.MultiData
+add_multiple = |entity_data|
+    res = entity_data
+        |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({}), Entity.multi_count(entity_data)))
+    when res is
+        Ok(res_data) -> res_data
+        Err(err) -> crash "unexpected error in LogsMomentum.add_multiple: ${Inspect.to_str(err)}"
 
 write_packet : List U8, LogsMomentum -> List U8
-write_packet = |bytes, value|
+write_packet = |bytes, val|
     type_id = 17486227594892526631
     size = 0
     alignment = 1
@@ -42,14 +43,14 @@ write_packet = |bytes, value|
     |> Builtin.write_bytes_u64(type_id)
     |> Builtin.write_bytes_u64(size)
     |> Builtin.write_bytes_u64(alignment)
-    |> write_bytes(value)
+    |> write_bytes(val)
 
 write_multi_packet : List U8, List LogsMomentum -> List U8
-write_multi_packet = |bytes, values|
+write_multi_packet = |bytes, vals|
     type_id = 17486227594892526631
     size = 0
     alignment = 1
-    count = List.len(values)
+    count = List.len(vals)
     bytes_with_header =
         bytes
         |> List.reserve(32 + size * count)
@@ -57,7 +58,7 @@ write_multi_packet = |bytes, values|
         |> Builtin.write_bytes_u64(size)
         |> Builtin.write_bytes_u64(alignment)
         |> Builtin.write_bytes_u64(count)
-    values
+    vals
     |> List.walk(
         bytes_with_header,
         |bts, value| bts |> write_bytes(value),

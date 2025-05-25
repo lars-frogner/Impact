@@ -1,8 +1,8 @@
 # Hash: 291dd7f24924cf310ad0681a1030253c8c4fcb9788ce1671313105e4384e61fe
-# Generated: 2025-05-18T21:33:59+00:00
+# Generated: 2025-05-23T18:55:01+00:00
 # Rust type: impact::window::input::key::ModifierKey
 # Type category: Inline
-# Commit: c6462c2 (dirty)
+# Commit: 31f3514 (dirty)
 module [
     ModifierKey,
     write_bytes,
