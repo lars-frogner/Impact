@@ -23,6 +23,11 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Debug
             _ -> Release
 
+    asan_mode =
+        when Env.var!("ASAN") is
+            Ok(str) if !(Str.is_empty(str)) -> AddressSanitizer
+            _ -> NoAddressSanitizer
+
     fuzzing_mode =
         when Env.var!("FUZZING") is
             Ok(str) if !(Str.is_empty(str)) -> Fuzzing
@@ -32,7 +37,7 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, debug_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, debug_mode, os_and_arch)?
 
@@ -79,9 +84,9 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [Debug, Release], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate")?
+cargo_build_app! : Str, [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
@@ -97,17 +102,17 @@ cargo_build_app! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
             NoFuzzing -> []
             Fuzzing -> ["--features", "fuzzing"]
 
-    fuzzing_env_vars =
-        when fuzzing_mode is
-            NoFuzzing -> []
-            Fuzzing ->
+    asan_env_vars =
+        when asan_mode is
+            NoAddressSanitizer -> []
+            AddressSanitizer ->
                 [
                     "RUSTFLAGS=-C debuginfo=2 -C debug-assertions -C overflow-checks=yes -Z sanitizer=address -C link-arg=-lasan",
                 ]
 
     Cmd.exec!(
         "env",
-        fuzzing_env_vars
+        asan_env_vars
         |> List.concat(base_args)
         |> List.concat(debug_args)
         |> List.concat(fuzzing_args),
