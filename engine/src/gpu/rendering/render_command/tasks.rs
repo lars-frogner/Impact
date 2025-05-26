@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::{resource::tasks::SyncRenderResources, tasks::RenderingTag},
 };
 use anyhow::Result;
@@ -35,6 +35,6 @@ define_task!(
 
 /// Registers tasks for synchronizing render commands in the given task
 /// scheduler.
-pub fn register_render_command_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_render_command_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncRenderCommands)
 }

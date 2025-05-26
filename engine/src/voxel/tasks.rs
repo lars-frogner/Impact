@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::{render_command::tasks::SyncRenderCommands, tasks::RenderingTag},
     physics::tasks::{AdvanceSimulation, PhysicsTag},
     scene::{RenderResourcesDesynchronized, tasks::UpdateSceneGroupToWorldTransforms},
@@ -85,7 +85,7 @@ define_task!(
 );
 
 /// Registers all tasks related to voxels in the given task scheduler.
-pub fn register_voxel_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_voxel_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     task_scheduler.register_task(ApplySphereVoxelAbsorption)?;
     task_scheduler.register_task(SyncVoxelObjectMeshes)?;
     task_scheduler.register_task(HandleEmptiedVoxelObjects)?;

@@ -1,11 +1,11 @@
 //! Tasks for rendering.
 
 use crate::{
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
+    runtime::EventLoopController,
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
-    window::EventLoopController,
     {define_execution_tag, define_task},
 };
 use anyhow::Result;
@@ -52,7 +52,7 @@ impl RenderingSystem {
 }
 
 /// Registers all tasks needed for rendering in the given task scheduler.
-pub fn register_rendering_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_rendering_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     resource::tasks::register_render_resource_tasks(task_scheduler)?;
     render_command::tasks::register_render_command_tasks(task_scheduler)?;
     task_scheduler.register_task(Render)

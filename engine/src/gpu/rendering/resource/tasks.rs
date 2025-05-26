@@ -3,7 +3,7 @@
 use super::DesynchronizedRenderResources;
 use crate::{
     define_task,
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::tasks::RenderingTag,
     scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
@@ -208,7 +208,7 @@ define_task!(
 
 /// Registers tasks for synchronizing render resources in the given task
 /// scheduler.
-pub fn register_render_resource_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_render_resource_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncMeshGPUBuffers)?;
     task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;
