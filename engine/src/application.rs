@@ -3,11 +3,16 @@
 use crate::{
     engine::EngineConfig,
     game_loop::GameLoopConfig,
-    window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
+    window::{
+        WindowConfig,
+        input::{key::KeyboardEvent, mouse::MouseButtonEvent},
+    },
 };
 use anyhow::Result;
 
 pub trait Application: Send + Sync + std::fmt::Debug {
+    fn window_config(&self) -> WindowConfig;
+
     fn game_loop_config(&self) -> GameLoopConfig;
 
     fn engine_config(&self) -> EngineConfig;

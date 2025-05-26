@@ -13,7 +13,10 @@ use impact::{
     application::Application,
     engine::EngineConfig,
     game_loop::GameLoopConfig,
-    window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
+    window::{
+        WindowConfig,
+        input::{key::KeyboardEvent, mouse::MouseButtonEvent},
+    },
 };
 
 #[derive(Debug)]
@@ -23,6 +26,10 @@ pub struct Game {
 }
 
 impl Application for Game {
+    fn window_config(&self) -> WindowConfig {
+        WindowConfig::default()
+    }
+
     fn game_loop_config(&self) -> GameLoopConfig {
         GameLoopConfig::default()
     }
