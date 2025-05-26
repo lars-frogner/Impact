@@ -3,8 +3,8 @@
 use crate::{
     application::Application,
     engine::Engine,
-    game_loop::GameLoop,
-    window::{ApplicationHandler, Window},
+    runtime::{Runtime, RuntimeHandler},
+    window::Window,
 };
 use anyhow::Result;
 use std::sync::Arc;
@@ -14,22 +14,22 @@ pub fn run(
     on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
 ) -> Result<()> {
     let window_config = app.window_config();
-    let mut handler = ApplicationHandler::new(
-        |window| init_game_loop(app, window, on_engine_created),
+    let mut runtime_invoker = RuntimeHandler::new(
+        |window| create_runtime(app, window, on_engine_created),
         window_config,
     );
-    handler.run()
+    runtime_invoker.run()
 }
 
-fn init_game_loop(
+fn create_runtime(
     app: Arc<dyn Application>,
     window: Window,
     on_engine_created: impl FnOnce(Arc<Engine>),
-) -> Result<GameLoop> {
-    let game_loop_config = app.game_loop_config();
+) -> Result<Runtime> {
+    let runtime_config = app.runtime_config();
     let engine = Engine::new(app, window)?;
-    let game_loop = GameLoop::new(engine, game_loop_config)?;
-    on_engine_created(game_loop.arc_engine());
-    game_loop.engine().app().setup_scene()?;
-    Ok(game_loop)
+    let runtime = Runtime::new(engine, runtime_config)?;
+    on_engine_created(runtime.arc_engine());
+    runtime.engine().app().setup_scene()?;
+    Ok(runtime)
 }

@@ -3,7 +3,7 @@
 pub mod key;
 pub mod mouse;
 
-use crate::{engine::Engine, window::EventLoopController};
+use crate::{engine::Engine, runtime::EventLoopController};
 use anyhow::Result;
 use key::KeyboardEvent;
 use mouse::MouseButtonEvent;

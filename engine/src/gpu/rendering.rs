@@ -19,8 +19,8 @@ use crate::{
         storage::StorageGPUBufferManager,
         texture::{self, attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
     },
+    runtime::EventLoopController,
     scene::Scene,
-    window::EventLoopController,
 };
 use anyhow::{Error, Result};
 use gui::{GUIRenderer, GUIRenderingConfig};

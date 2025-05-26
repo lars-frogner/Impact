@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     physics::{
         motion,
         tasks::{AdvanceSimulation, PhysicsTag},
@@ -41,7 +41,7 @@ define_task!(
 );
 
 /// Registers all tasks related to motion in the given task scheduler.
-pub fn register_motion_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_motion_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     task_scheduler.register_task(LogKineticEnergy)?;
     task_scheduler.register_task(LogMomentum)
 }

@@ -12,7 +12,7 @@ use anyhow::Result;
 use impact::{
     application::Application,
     engine::EngineConfig,
-    game_loop::GameLoopConfig,
+    runtime::RuntimeConfig,
     window::{
         WindowConfig,
         input::{key::KeyboardEvent, mouse::MouseButtonEvent},
@@ -30,8 +30,8 @@ impl Application for Game {
         WindowConfig::default()
     }
 
-    fn game_loop_config(&self) -> GameLoopConfig {
-        GameLoopConfig::default()
+    fn runtime_config(&self) -> RuntimeConfig {
+        RuntimeConfig::default()
     }
 
     fn engine_config(&self) -> EngineConfig {

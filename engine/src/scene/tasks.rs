@@ -2,11 +2,11 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::tasks::RenderingTag,
+    runtime::EventLoopController,
     scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
-    window::EventLoopController,
 };
 use anyhow::Result;
 
@@ -277,7 +277,7 @@ impl Scene {
 
 /// Registers all tasks needed for coordinate between systems in the scene in
 /// the given task scheduler.
-pub fn register_scene_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_scene_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncSceneObjectTransformsAndFlags)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;

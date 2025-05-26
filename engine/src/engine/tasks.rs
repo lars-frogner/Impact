@@ -1,13 +1,13 @@
 //! Management of tasks in the engine.
 
 use crate::{
-    engine::Engine, gpu, physics, scene, scheduling::TaskScheduler, thread::ThreadPoolTaskErrors,
-    voxel, window::EventLoopController,
+    engine::Engine, gpu, physics, runtime::EventLoopController, scene, scheduling::TaskScheduler,
+    thread::ThreadPoolTaskErrors, voxel,
 };
 use anyhow::Result;
 use std::{num::NonZeroUsize, sync::Arc};
 
-pub type AppTaskScheduler = TaskScheduler<Engine>;
+pub type EngineTaskScheduler = TaskScheduler<Engine>;
 
 impl Engine {
     /// Creates a new task scheduler with the given number of workers and
@@ -18,9 +18,9 @@ impl Engine {
     pub fn create_task_scheduler(
         self,
         n_workers: NonZeroUsize,
-    ) -> Result<(Arc<Self>, AppTaskScheduler)> {
+    ) -> Result<(Arc<Self>, EngineTaskScheduler)> {
         let world = Arc::new(self);
-        let mut task_scheduler = AppTaskScheduler::new(n_workers, Arc::clone(&world));
+        let mut task_scheduler = EngineTaskScheduler::new(n_workers, Arc::clone(&world));
 
         register_all_tasks(&mut task_scheduler)?;
 
@@ -52,7 +52,7 @@ impl Engine {
 }
 
 /// Registers all tasks in the given task scheduler.
-pub fn register_all_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_all_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     scene::tasks::register_scene_tasks(task_scheduler)?;
     gpu::rendering::tasks::register_rendering_tasks(task_scheduler)?;
     physics::tasks::register_physics_tasks(task_scheduler)?;

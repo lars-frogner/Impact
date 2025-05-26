@@ -2,11 +2,11 @@
 
 use crate::{
     define_execution_tag, define_task,
-    engine::{Engine, tasks::AppTaskScheduler},
+    engine::{Engine, tasks::EngineTaskScheduler},
     physics::{PhysicsSimulator, motion},
+    runtime::EventLoopController,
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
     thread::ThreadPoolTaskErrors,
-    window::EventLoopController,
 };
 use anyhow::Result;
 
@@ -79,7 +79,7 @@ impl PhysicsSimulator {
 }
 
 /// Registers all tasks needed for physics in the given task scheduler.
-pub fn register_physics_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
+pub fn register_physics_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
     task_scheduler.register_task(UpdateControlledEntities)?;
     task_scheduler.register_task(AdvanceSimulation)?;
     motion::tasks::register_motion_tasks(task_scheduler)
