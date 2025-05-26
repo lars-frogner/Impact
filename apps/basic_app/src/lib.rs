@@ -1,4 +1,4 @@
-//! The Impact game.
+//! A basic Impact application.
 
 pub mod api;
 pub mod scripting;
