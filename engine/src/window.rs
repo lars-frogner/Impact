@@ -5,10 +5,11 @@ pub mod input;
 pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, sync::Arc};
 use winit::{
-    application::ApplicationHandler as EngineHandler,
+    application::ApplicationHandler as WinitApplicationHandler,
     dpi::PhysicalSize,
     event::{DeviceEvent, DeviceId},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
@@ -16,8 +17,9 @@ use winit::{
 };
 
 /// Top-level entity that manages the window, event loop and game loop.
-pub struct GameHandler {
+pub struct ApplicationHandler {
     create_game_loop: Option<Box<dyn FnOnce(Window) -> Result<GameLoop>>>,
+    window_config: WindowConfig,
     game_loop: Option<GameLoop>,
 }
 
@@ -25,6 +27,13 @@ pub struct GameHandler {
 #[derive(Clone, Debug)]
 pub struct Window {
     window: Arc<WinitWindow>,
+}
+
+/// Configuration options for window creation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WindowConfig {
+    /// The initial inner width and height of the window in physical pixels.
+    pub initial_size: (NonZeroU32, NonZeroU32),
 }
 
 /// Wrapper for an event loop controller.
@@ -36,12 +45,16 @@ pub fn calculate_aspect_ratio(width: NonZeroU32, height: NonZeroU32) -> f32 {
     u32::from(width) as f32 / u32::from(height) as f32
 }
 
-impl GameHandler {
-    /// Creates a new `GameHandler` that will use the given function to create
-    /// the game loop after [`Self::run`] has been called.
-    pub fn new(create_game_loop: impl FnOnce(Window) -> Result<GameLoop> + 'static) -> Self {
+impl ApplicationHandler {
+    /// Creates a new `ApplicationHandler` that will use the given function to
+    /// create the game loop after [`Self::run`] has been called.
+    pub fn new(
+        create_game_loop: impl FnOnce(Window) -> Result<GameLoop> + 'static,
+        window_config: WindowConfig,
+    ) -> Self {
         Self {
             create_game_loop: Some(Box::new(create_game_loop)),
+            window_config,
             game_loop: None,
         }
     }
@@ -55,20 +68,14 @@ impl GameHandler {
     }
 }
 
-impl EngineHandler for GameHandler {
+impl WinitApplicationHandler for ApplicationHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(game_loop) = &self.game_loop {
             // `game_loop` is already initialized
             game_loop.window().request_redraw();
             return;
         }
-        match event_loop
-            .create_window(
-                WindowAttributes::default().with_inner_size(PhysicalSize::new(1600, 1200)),
-            )
-            .map_err(|error| error.into())
-            .and_then(Window::wrap)
-        {
+        match Window::create(event_loop, &self.window_config) {
             Ok(window) => {
                 window.request_redraw();
 
@@ -167,13 +174,23 @@ impl EngineHandler for GameHandler {
     }
 }
 
-impl std::fmt::Debug for GameHandler {
+impl std::fmt::Debug for ApplicationHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.game_loop.fmt(f)
     }
 }
 
 impl Window {
+    fn create(event_loop: &ActiveEventLoop, config: &WindowConfig) -> Result<Self> {
+        let (width, height) = config.initial_size;
+        let size = PhysicalSize::new(width.get(), height.get());
+        let attributes = WindowAttributes::default().with_inner_size(size);
+        let window = event_loop.create_window(attributes)?;
+        Ok(Self {
+            window: Arc::new(window),
+        })
+    }
+
     /// Returns the underlying [`winit::Window`].
     pub fn window(&self) -> &WinitWindow {
         &self.window
@@ -231,15 +248,15 @@ impl Window {
     fn request_redraw(&self) {
         self.window.request_redraw();
     }
+}
 
-    fn wrap(window: WinitWindow) -> Result<Self> {
-        let window_size = window.inner_size();
-        if window_size.width == 0 || window_size.height == 0 {
-            Err(anyhow!("degenerate window dimensions"))
-        } else {
-            Ok(Self {
-                window: Arc::new(window),
-            })
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            initial_size: (
+                NonZeroU32::new(1600).unwrap(),
+                NonZeroU32::new(1200).unwrap(),
+            ),
         }
     }
 }

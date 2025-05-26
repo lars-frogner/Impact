@@ -4,7 +4,7 @@ use crate::{
     application::Application,
     engine::Engine,
     game_loop::GameLoop,
-    window::{GameHandler, Window},
+    window::{ApplicationHandler, Window},
 };
 use anyhow::Result;
 use std::sync::Arc;
@@ -13,7 +13,11 @@ pub fn run(
     app: Arc<dyn Application>,
     on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
 ) -> Result<()> {
-    let mut handler = GameHandler::new(|window| init_game_loop(app, window, on_engine_created));
+    let window_config = app.window_config();
+    let mut handler = ApplicationHandler::new(
+        |window| init_game_loop(app, window, on_engine_created),
+        window_config,
+    );
     handler.run()
 }
 
