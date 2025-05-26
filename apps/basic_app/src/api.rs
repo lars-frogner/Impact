@@ -1,4 +1,4 @@
-//! Running the Impact game.
+//! Running the basic application.
 
 pub mod ffi;
 
