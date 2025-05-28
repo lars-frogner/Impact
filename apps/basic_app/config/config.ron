@@ -49,6 +49,7 @@
     ),
     physics: (
         simulator: (
+            initially_running: true,
             n_substeps: 1,
             initial_time_step_duration: 0.015,
             match_frame_duration: true,
@@ -90,5 +91,8 @@
             vertical_field_of_view: (70.0),
             sensitivity: 1.0,
         )),
+    ),
+    user_interface: (
+        initially_visible: true,
     ),
 )

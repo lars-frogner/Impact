@@ -26,7 +26,7 @@ handle_event! = |{ key, state }|
                     KeyC -> on_released(state, Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Previous))))
                     KeyI -> on_released(state, Rendering(SetShadowMapping(Opposite)))
                     KeyF -> on_released(state, Rendering(SetWireframeMode(Opposite)))
-                    KeyP -> on_released(state, Rendering(SetRenderPassTimings(Opposite)))
+                    KeyP -> on_released(state, Physics(SetSimulation(Opposite)))
                     KeyM -> on_released(state, Physics(SetSimulationSubstepCount(HigherBy(1))))
                     KeyN -> on_released(state, Physics(SetSimulationSubstepCount(LowerBy(1))))
                     _ -> None
@@ -37,11 +37,10 @@ handle_event! = |{ key, state }|
                     Comma -> on_released(state, Physics(SetSimulationSpeed(Lower)))
                     _ -> None
 
-            Whitespace(whitspace_key) ->
-                when whitspace_key is
-                    Tab -> on_released(state, UI(SetInteractionMode(Opposite)))
-                    _ -> None
-
+            # Whitespace(whitspace_key) ->
+            #    when whitspace_key is
+            #        Tab -> on_released(state, UI(Set(Opposite)))
+            #        _ -> None
             Function(function_key) ->
                 when function_key is
                     F12 -> on_released(state, Capture(SaveScreenshot))
@@ -51,7 +50,7 @@ handle_event! = |{ key, state }|
 
             Control(control_key) ->
                 when control_key is
-                    Escape -> on_released(state, Exit)
+                    Escape -> on_released(state, UI(Set(Opposite)))
                     _ -> None
 
             _ -> None

@@ -94,6 +94,18 @@ impl Window {
             .expect("Could not unconfine cursor");
     }
 
+    /// Hides the cursor and confines it to the window area.
+    pub fn hide_and_confine_cursor(&self) {
+        self.set_cursor_visible(false);
+        self.confine_cursor();
+    }
+
+    /// Shows the cursor and allows it to leave the window area.
+    pub fn show_and_unconfine_cursor(&self) {
+        self.set_cursor_visible(true);
+        self.unconfine_cursor();
+    }
+
     pub fn request_redraw(&self) {
         self.window.request_redraw();
     }

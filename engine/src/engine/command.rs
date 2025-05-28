@@ -27,7 +27,7 @@ use crate::{
     },
     scene::command::SceneCommand,
     skybox::Skybox,
-    ui::command::{ToInteractionMode, UICommand},
+    ui::command::UICommand,
 };
 use anyhow::Result;
 use impact_ecs::world::EntityID;
@@ -130,6 +130,9 @@ impl Engine {
 
     pub fn execute_physics_command(&self, command: PhysicsCommand) -> Result<()> {
         match command {
+            PhysicsCommand::SetSimulation(to) => {
+                self.set_simulation(to);
+            }
             PhysicsCommand::SetSimulationSubstepCount(to) => {
                 self.set_simulation_substep_count(to);
             }
@@ -175,8 +178,8 @@ impl Engine {
 
     pub fn execute_ui_command(&self, command: UICommand) -> Result<()> {
         match command {
-            UICommand::SetInteractionMode(to) => {
-                self.set_interaction_mode(to);
+            UICommand::Set(to) => {
+                self.set_ui(to);
             }
         }
         Ok(())
@@ -270,6 +273,24 @@ impl Engine {
 
     // Physics
 
+    pub fn set_simulation(&self, to: ToActiveState) -> ModifiedActiveState {
+        log::info!("Setting simulation to {to:?}");
+
+        let controls_were_enabled = self.controls_enabled();
+
+        let mut running_state = self.simulation_running();
+        let new_running_state = to.set(&mut running_state);
+        self.set_simulation_running(running_state);
+
+        let controls_are_enabled = self.controls_enabled();
+
+        if controls_were_enabled && !controls_are_enabled {
+            self.stop_motion();
+        }
+
+        new_running_state
+    }
+
     pub fn set_simulation_substep_count(&self, to: ToSubstepCount) -> u32 {
         log::info!("Setting simulation substep count to {to:?}");
         self.simulator
@@ -329,7 +350,7 @@ impl Engine {
     // Control
 
     pub fn set_motion(&self, state: MotionState, direction: MotionDirection) {
-        if self.control_mode_active() {
+        if self.controls_enabled() {
             if let Some(motion_controller) = &self.motion_controller {
                 log::debug!("Setting motion in direction {direction:?} to {state:?}");
                 motion_controller
@@ -340,7 +361,7 @@ impl Engine {
                 log::info!("Not setting motion since there is no motion controller");
             }
         } else {
-            log::info!("Not setting motion since control mode is disabled");
+            log::info!("Not setting motion since controls are disabled");
         }
     }
 
@@ -364,16 +385,22 @@ impl Engine {
 
     // UI
 
-    pub fn set_interaction_mode(&self, to: ToInteractionMode) {
-        log::info!("Setting interaction mode to {to:?}");
-        let mut user_interface = self.user_interface().write().unwrap();
-        let was_control = user_interface.control_mode_active();
-        user_interface.set_interaction_mode(to);
-        let is_control = user_interface.control_mode_active();
+    pub fn set_ui(&self, to: ToActiveState) -> ModifiedActiveState {
+        log::info!("Setting user interface to {to:?}");
 
-        if was_control && !is_control {
+        let controls_were_enabled = self.controls_enabled();
+
+        let mut visible_state = self.ui_visible();
+        let new_visible_state = to.set(&mut visible_state);
+        self.set_ui_visible(visible_state);
+
+        let controls_are_enabled = self.controls_enabled();
+
+        if controls_were_enabled && !controls_are_enabled {
             self.stop_motion();
         }
+
+        new_visible_state
     }
 
     // Capture

@@ -54,6 +54,9 @@ pub struct Engine {
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
+    simulation_running: AtomicBool,
+    ui_visible: AtomicBool,
+    shutdown_requested: AtomicBool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -126,12 +129,15 @@ impl Engine {
             voxel_manager,
         );
 
+        let simulation_running = config.physics.simulator.initially_running;
         let simulator = PhysicsSimulator::new(config.physics)?;
 
         let (motion_controller, orientation_controller) =
             control::create_controllers(config.controller);
 
-        Ok(Self {
+        let ui_visible = config.user_interface.initially_visible;
+
+        let engine = Self {
             app,
             window,
             graphics_device,
@@ -145,7 +151,18 @@ impl Engine {
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
-        })
+            simulation_running: AtomicBool::new(simulation_running),
+            ui_visible: AtomicBool::new(ui_visible),
+            shutdown_requested: AtomicBool::new(false),
+        };
+
+        if engine.controls_enabled() {
+            engine.window.hide_and_confine_cursor();
+        } else {
+            engine.window.show_and_unconfine_cursor();
+        }
+
+        Ok(engine)
     }
 
     /// Returns a reference to the [`Application`].
@@ -365,14 +382,6 @@ impl Engine {
             .update_pixels_per_point(pixels_per_point);
     }
 
-    pub fn control_mode_active(&self) -> bool {
-        self.user_interface().read().unwrap().control_mode_active()
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.user_interface().read().unwrap().is_paused()
-    }
-
     /// Updates the orientation controller with the given mouse displacement.
     pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
         if let Some(orientation_controller) = &self.orientation_controller {
@@ -430,6 +439,46 @@ impl Engine {
             .read()
             .unwrap()
             .declare_render_resources_desynchronized();
+    }
+
+    pub fn simulation_running(&self) -> bool {
+        self.simulation_running.load(Ordering::Relaxed)
+    }
+
+    pub fn set_simulation_running(&self, running: bool) {
+        self.simulation_running.store(running, Ordering::Relaxed);
+
+        if self.controls_enabled() {
+            self.window.hide_and_confine_cursor();
+        } else {
+            self.window.show_and_unconfine_cursor();
+        }
+    }
+
+    pub fn ui_visible(&self) -> bool {
+        self.ui_visible.load(Ordering::Relaxed)
+    }
+
+    pub fn set_ui_visible(&self, visible: bool) {
+        self.ui_visible.store(visible, Ordering::Relaxed);
+
+        if self.controls_enabled() {
+            self.window.hide_and_confine_cursor();
+        } else {
+            self.window.show_and_unconfine_cursor();
+        }
+    }
+
+    pub fn controls_enabled(&self) -> bool {
+        self.simulation_running() && !self.ui_visible()
+    }
+
+    pub fn shutdown_requested(&self) -> bool {
+        self.shutdown_requested.load(Ordering::Relaxed)
+    }
+
+    pub fn request_shutdown(&self) {
+        self.shutdown_requested.store(true, Ordering::Relaxed);
     }
 
     fn with_component_mut<C: Component, R>(

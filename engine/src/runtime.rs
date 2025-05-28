@@ -10,10 +10,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroUsize},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
 };
 use winit::{
     event::{DeviceEvent, DeviceId, WindowEvent},
@@ -27,7 +24,6 @@ pub struct Runtime {
     engine: Arc<Engine>,
     task_scheduler: EngineTaskScheduler,
     game_loop: GameLoop,
-    shutdown_requested: AtomicBool,
 }
 
 pub struct RuntimeHandler {
@@ -59,7 +55,6 @@ impl Runtime {
             engine,
             task_scheduler,
             game_loop,
-            shutdown_requested: AtomicBool::new(false),
         })
     }
 
@@ -110,11 +105,7 @@ impl Runtime {
     }
 
     fn shutdown_requested(&self) -> bool {
-        self.shutdown_requested.load(Ordering::Relaxed)
-    }
-
-    pub fn request_shutdown(&self) {
-        self.shutdown_requested.store(true, Ordering::Relaxed);
+        self.engine.shutdown_requested()
     }
 }
 

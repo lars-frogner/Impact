@@ -57,6 +57,9 @@ pub struct PhysicsConfig {
 /// Configuration parameters for the physics simulation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SimulatorConfig {
+    /// Whether the physics simulation should begin running as soon as the
+    /// application starts.
+    pub initially_running: bool,
     /// The number of substeps to perform each simulation step. Increase to
     /// improve accuracy.
     pub n_substeps: u32,
@@ -319,6 +322,7 @@ impl SimulatorConfig {
 impl Default for SimulatorConfig {
     fn default() -> Self {
         Self {
+            initially_running: true,
             n_substeps: 1,
             initial_time_step_duration: 0.015,
             match_frame_duration: true,
