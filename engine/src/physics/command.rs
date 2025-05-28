@@ -1,13 +1,17 @@
 //! Commands for operating the physics simulator.
 
 use super::PhysicsSimulator;
-use crate::physics::{fph, medium::UniformMedium};
+use crate::{
+    engine::command::ToActiveState,
+    physics::{fph, medium::UniformMedium},
+};
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PhysicsCommand {
+    SetSimulation(ToActiveState),
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
     SetMedium(UniformMedium),

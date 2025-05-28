@@ -8,6 +8,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{
     num::NonZeroU32,
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
@@ -56,15 +57,20 @@ impl GameLoop {
         task_scheduler: &TaskScheduler<Engine>,
         event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
-        if engine.is_paused() {
+        if !engine.simulation_running() && !engine.ui_visible() {
             let iter_end_time = self.wait_for_target_frame_duration();
             self.previous_iter_end_time = iter_end_time;
             return Ok(());
         }
 
+        let execution_tags: &Arc<_> = if engine.simulation_running() {
+            &PHYSICS_AND_RENDERING_TAGS
+        } else {
+            &RENDERING_TAGS
+        };
+
         let execution_result = with_timing_info_logging!("Game loop iteration"; {
-            task_scheduler
-                .execute_and_wait(&PHYSICS_AND_RENDERING_TAGS)
+            task_scheduler.execute_and_wait(execution_tags)
         });
 
         if let Err(mut task_errors) = execution_result {
