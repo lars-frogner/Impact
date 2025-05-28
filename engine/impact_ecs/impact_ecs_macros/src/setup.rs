@@ -42,6 +42,7 @@ struct SetupClosure {
     body: Expr,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum SetupClosureReturnType {
     ResultWrapped(ResultWrappedReturnCompTypes),
     Plain(ReturnCompTypes),
