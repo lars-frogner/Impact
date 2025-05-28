@@ -65,11 +65,8 @@ use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
 };
 
-use super::gui::GUIRenderer;
-
-/// Manager of commands for rendering the scene. Postprocessing and GUI
-/// rendering commands are managed by the [`Postprocessor`] and [`GUIRenderer`],
-/// respectively, but evoked by this manager.
+/// Manager of commands for rendering the scene. Postprocessing commands are
+/// managed by the [`Postprocessor`], but evoked by this manager.
 #[derive(Debug)]
 pub struct RenderCommandManager {
     attachment_clearing_pass: AttachmentClearingPass,
@@ -253,7 +250,7 @@ const INVERTED_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Cw;
 
 impl RenderCommandManager {
     /// Creates a new render command manager, initializing all
-    /// non-postprocessing and non-GUI render commands.
+    /// non-postprocessing render commands.
     pub fn new(
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
@@ -370,8 +367,8 @@ impl RenderCommandManager {
         Ok(())
     }
 
-    /// Records all render commands (including postprocessing commands and the
-    /// GUI rendering command) into the given command encoder.
+    /// Records all render commands (including postprocessing commands) into the
+    /// given command encoder.
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
@@ -385,7 +382,6 @@ impl RenderCommandManager {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         postprocessor: &Postprocessor,
-        gui_renderer: &GUIRenderer,
         config: &RenderingConfig,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -489,13 +485,6 @@ impl RenderCommandManager {
             timestamp_recorder,
             command_encoder,
         )?;
-
-        gui_renderer.record_commands(
-            rendering_surface,
-            surface_texture_view,
-            timestamp_recorder,
-            command_encoder,
-        );
 
         Ok(())
     }

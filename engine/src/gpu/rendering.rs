@@ -23,7 +23,7 @@ use crate::{
     scene::Scene,
 };
 use anyhow::{Error, Result};
-use gui::{GUIRenderer, GUIRenderingConfig};
+use gui::{GUIRenderer, GUIRenderingConfig, GUIRenderingInput};
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
     temporal_anti_aliasing::TemporalAntiAliasingConfig,
@@ -224,9 +224,13 @@ impl RenderingSystem {
     /// Returns an error if:
     /// - The surface texture to render to can not be obtained.
     /// - Recording a render pass fails.
-    pub fn render_to_surface(&mut self, scene: &Scene) -> Result<()> {
+    pub fn render_to_surface(
+        &mut self,
+        scene: &Scene,
+        gui_input: Option<&GUIRenderingInput>,
+    ) -> Result<()> {
         with_timing_info_logging!("Rendering"; {
-            self.surface_texture_to_present = Some(self.render_surface(scene)?);
+            self.surface_texture_to_present = Some(self.render_surface(scene, gui_input)?);
         });
         Ok(())
     }
@@ -253,7 +257,11 @@ impl RenderingSystem {
             .declare_desynchronized();
     }
 
-    fn render_surface(&mut self, scene: &Scene) -> Result<wgpu::SurfaceTexture> {
+    fn render_surface(
+        &mut self,
+        scene: &Scene,
+        gui_input: Option<&GUIRenderingInput>,
+    ) -> Result<wgpu::SurfaceTexture> {
         self.render_attachment_texture_manager
             .write()
             .unwrap()
@@ -280,12 +288,25 @@ impl RenderingSystem {
             &self.gpu_resource_group_manager.read().unwrap(),
             &self.storage_gpu_buffer_manager.read().unwrap(),
             &self.postprocessor.read().unwrap(),
-            &self.gui_renderer.read().unwrap(),
             &self.config,
             self.frame_counter,
             &mut timestamp_recorder,
             &mut command_encoder,
         )?;
+
+        if let Some(gui_input) = gui_input {
+            self.gui_renderer
+                .write()
+                .unwrap()
+                .update_resources_and_record_render_pass(
+                    &self.graphics_device,
+                    &self.rendering_surface,
+                    &surface_texture_view,
+                    gui_input,
+                    &mut timestamp_recorder,
+                    &mut command_encoder,
+                );
+        }
 
         timestamp_recorder.finish(&mut command_encoder);
 

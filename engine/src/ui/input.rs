@@ -1,0 +1,66 @@
+//! Input management for user interface.
+
+use winit::event::WindowEvent;
+
+use crate::window::Window;
+use std::fmt;
+
+pub struct UserInterfaceInputManager {
+    window: Window,
+    egui_ctx: egui::Context,
+    state: egui_winit::State,
+}
+
+#[derive(Clone, Debug)]
+pub struct UIEventHandlingResponse {
+    pub event_consumed: bool,
+}
+
+impl UserInterfaceInputManager {
+    pub fn new(window: Window, egui_ctx: egui::Context) -> Self {
+        let state = egui_winit::State::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            window.window(),
+            Some(window.pixels_per_point() as f32),
+            window.window().theme(),
+            None,
+        );
+        Self {
+            window,
+            egui_ctx,
+            state,
+        }
+    }
+
+    pub fn handle_window_event(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
+        let egui_winit::EventResponse {
+            consumed,
+            repaint: _, // We always repaint
+        } = self.state.on_window_event(self.window.window(), event);
+
+        UIEventHandlingResponse {
+            event_consumed: consumed,
+        }
+    }
+
+    pub fn take_raw_input(&mut self) -> egui::RawInput {
+        let input = self.state.egui_input_mut();
+        let viewport_info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
+
+        egui_winit::update_viewport_info(
+            viewport_info,
+            &self.egui_ctx,
+            self.window.window(),
+            false,
+        );
+
+        self.state.take_egui_input(self.window.window())
+    }
+}
+
+impl fmt::Debug for UserInterfaceInputManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UserInterfaceInputManager").finish()
+    }
+}

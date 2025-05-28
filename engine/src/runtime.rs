@@ -4,6 +4,7 @@ use crate::{
     engine::{Engine, tasks::EngineTaskScheduler},
     game_loop::{GameLoop, GameLoopConfig},
     thread::ThreadPoolResult,
+    ui::{UserInterface, input::UIEventHandlingResponse},
     window::{Window, WindowConfig},
 };
 use anyhow::Result;
@@ -24,6 +25,7 @@ pub struct Runtime {
     engine: Arc<Engine>,
     task_scheduler: EngineTaskScheduler,
     game_loop: GameLoop,
+    user_interface: UserInterface,
 }
 
 pub struct RuntimeHandler {
@@ -46,7 +48,11 @@ pub struct RuntimeConfig {
 pub struct EventLoopController<'a>(&'a ActiveEventLoop);
 
 impl Runtime {
-    pub fn new(engine: Engine, config: RuntimeConfig) -> Result<Self> {
+    pub fn new(
+        engine: Engine,
+        user_interface: UserInterface,
+        config: RuntimeConfig,
+    ) -> Result<Self> {
         let (engine, task_scheduler) = engine.create_task_scheduler(config.n_worker_threads)?;
 
         let game_loop = GameLoop::new(config.game_loop);
@@ -55,6 +61,7 @@ impl Runtime {
             engine,
             task_scheduler,
             game_loop,
+            user_interface,
         })
     }
 
@@ -70,6 +77,20 @@ impl Runtime {
         self.engine().window()
     }
 
+    fn run_ui_processing(&mut self) {
+        if self.engine.ui_visible() {
+            // This could be moved into GameLoop::perform_iteration and the tesselation
+            // could be done in parallel with other tasks. The actual running must be
+            // done before beginning to execute other tasks since user interactions
+            // can affect the engine state.
+            let raw_ui_output = self.user_interface.run(&self.engine);
+            let ui_output = self.user_interface.process_raw_output(raw_ui_output);
+            *self.engine.ui_output().write().unwrap() = Some(ui_output);
+        } else {
+            *self.engine.ui_output().write().unwrap() = None;
+        }
+    }
+
     fn perform_game_loop_iteration(
         &mut self,
         event_loop_controller: &EventLoopController<'_>,
@@ -78,7 +99,17 @@ impl Runtime {
             .perform_iteration(&self.engine, &self.task_scheduler, event_loop_controller)
     }
 
-    fn handle_window_event(
+    fn handle_window_event_for_ui(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
+        if self.engine.ui_visible() {
+            self.user_interface.handle_window_event(event)
+        } else {
+            UIEventHandlingResponse {
+                event_consumed: false,
+            }
+        }
+    }
+
+    fn handle_window_event_for_engine(
         &self,
         event_loop_controller: &EventLoopController<'_>,
         event: &WindowEvent,
@@ -180,9 +211,19 @@ impl winit::application::ApplicationHandler for RuntimeHandler {
 
         let event_loop_controller = EventLoopController(event_loop);
 
+        let ui_handling_response = runtime.handle_window_event_for_ui(&event);
+
+        // Do not propagate event if consumed by UI event handler
+        if ui_handling_response.event_consumed {
+            return;
+        }
+
         match event {
             WindowEvent::RedrawRequested => {
+                runtime.run_ui_processing();
+
                 let result = runtime.perform_game_loop_iteration(&event_loop_controller);
+
                 if let Err(errors) = result {
                     log::error!("Unhandled errors: {:?}", errors);
                     event_loop_controller.exit();
@@ -210,7 +251,7 @@ impl winit::application::ApplicationHandler for RuntimeHandler {
             _ => {}
         }
 
-        if let Err(error) = runtime.handle_window_event(&event_loop_controller, &event) {
+        if let Err(error) = runtime.handle_window_event_for_engine(&event_loop_controller, &event) {
             log::error!("Window event handling error: {:?}", error);
             event_loop_controller.exit();
         } else if runtime.shutdown_requested() {

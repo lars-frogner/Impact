@@ -20,7 +20,7 @@ use crate::{
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
-    ui::UserInterface,
+    ui::{UserInterfaceConfig, UserInterfaceOutput},
     voxel::{self, VoxelConfig, VoxelManager},
     window::Window,
 };
@@ -35,7 +35,10 @@ use std::{
     fmt::Debug,
     num::NonZeroU32,
     path::Path,
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 /// Manager for all systems and data in the engine.
@@ -44,13 +47,13 @@ pub struct Engine {
     app: Arc<dyn Application>,
     window: Window,
     graphics_device: Arc<GraphicsDevice>,
-    user_interface: RwLock<UserInterface>,
     component_registry: RwLock<ComponentRegistry>,
     ecs_world: RwLock<ECSWorld>,
     renderer: RwLock<RenderingSystem>,
     assets: RwLock<Assets>,
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
+    ui_output: RwLock<Option<UserInterfaceOutput>>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
@@ -68,6 +71,7 @@ pub struct EngineConfig {
     pub voxel: VoxelConfig,
     pub controller: ControllerConfig,
     pub ecs: ECSConfig,
+    pub user_interface: UserInterfaceConfig,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -80,8 +84,6 @@ impl Engine {
     /// Creates a new instance of the engine.
     pub fn new(app: Arc<dyn Application>, window: Window) -> Result<Self> {
         let config = app.engine_config();
-
-        let user_interface = UserInterface::new(window.clone());
 
         let mut component_registry = ComponentRegistry::new();
         components::register_all_components(&mut component_registry)?;
@@ -141,13 +143,13 @@ impl Engine {
             app,
             window,
             graphics_device,
-            user_interface: RwLock::new(user_interface),
             component_registry: RwLock::new(component_registry),
             ecs_world: RwLock::new(ecs_world),
             renderer: RwLock::new(renderer),
             assets: RwLock::new(assets),
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
+            ui_output: RwLock::new(None),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
@@ -178,11 +180,6 @@ impl Engine {
     /// Returns a reference to the [`GraphicsDevice`].
     pub fn graphics_device(&self) -> &GraphicsDevice {
         &self.graphics_device
-    }
-
-    /// Returns a reference to the [`UserInterface`], guarded by a [`RwLock`].
-    pub fn user_interface(&self) -> &RwLock<UserInterface> {
-        &self.user_interface
     }
 
     /// Returns a reference to the ECS [`ComponentRegistry`], guarded by a
@@ -216,6 +213,12 @@ impl Engine {
     /// [`RwLock`].
     pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
+    }
+
+    /// Returns a reference to the [`UserInterfaceOutput`] (or `None` if
+    /// absent), guarded by a [`RwLock`].
+    pub fn ui_output(&self) -> &RwLock<Option<UserInterfaceOutput>> {
+        &self.ui_output
     }
 
     /// Returns a reference to the [`ScreenCapturer`].
