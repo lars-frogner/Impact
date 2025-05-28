@@ -22,6 +22,12 @@ pub struct GUIRenderingConfig {
     pub dithering: bool,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct GUIRenderingInput {
+    pub textures_delta: egui::TexturesDelta,
+    pub clipped_primitives: Vec<egui::ClippedPrimitive>,
+}
+
 impl GUIRenderer {
     /// Creates a new GUI renderer with the given configuration options.
     pub fn new(
@@ -39,29 +45,53 @@ impl GUIRenderer {
         Self { renderer }
     }
 
-    /// Records all GUI render commands into the given command encoder.
-    pub fn record_commands(
-        &self,
+    pub fn update_resources_and_record_render_pass(
+        &mut self,
+        graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
+        input: &GUIRenderingInput,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) {
-        let color_attachments = [Some(Self::color_attachment(surface_texture_view))];
+        let device = graphics_device.device();
+        let queue = graphics_device.queue();
+
+        let screen_descriptor = Self::screen_descriptor(rendering_surface);
+
+        for (texture_id, image_delta) in &input.textures_delta.set {
+            self.renderer
+                .update_texture(device, queue, *texture_id, image_delta);
+        }
+
+        self.renderer.update_buffers(
+            device,
+            queue,
+            command_encoder,
+            &input.clipped_primitives,
+            &screen_descriptor,
+        );
+
+        let color_attachment = Self::color_attachment(surface_texture_view);
 
         let mut render_pass = render_command::begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
-            &color_attachments,
+            &[Some(color_attachment)],
             None,
             Cow::Borrowed("GUI render pass"),
         )
         .forget_lifetime();
 
-        let screen_descriptor = Self::screen_descriptor(rendering_surface);
+        self.renderer.render(
+            &mut render_pass,
+            &input.clipped_primitives,
+            &screen_descriptor,
+        );
 
-        self.renderer
-            .render(&mut render_pass, &[], &screen_descriptor);
+        for texture_id in &input.textures_delta.free {
+            self.renderer.free_texture(texture_id);
+        }
 
         log::trace!("Recorded GUI render pass");
     }

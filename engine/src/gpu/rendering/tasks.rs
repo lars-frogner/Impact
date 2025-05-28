@@ -27,7 +27,11 @@ define_task!(
     |engine: &Engine| {
         with_trace_logging!("Rendering"; {
             let scene = engine.scene().read().unwrap();
-            engine.renderer().write().unwrap().render_to_surface(&scene)?;
+            let ui_output = engine.ui_output().read().unwrap();
+            engine.renderer().write().unwrap().render_to_surface(
+                &scene,
+                ui_output.as_ref().map(|output| output.rendering_input()),
+            )?;
             engine.capture_screenshots()
         })
     }

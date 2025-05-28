@@ -4,6 +4,7 @@ use crate::{
     application::Application,
     engine::Engine,
     runtime::{Runtime, RuntimeHandler},
+    ui::UserInterface,
     window::Window,
 };
 use anyhow::Result;
@@ -27,8 +28,9 @@ fn create_runtime(
     on_engine_created: impl FnOnce(Arc<Engine>),
 ) -> Result<Runtime> {
     let runtime_config = app.runtime_config();
-    let engine = Engine::new(app, window)?;
-    let runtime = Runtime::new(engine, runtime_config)?;
+    let engine = Engine::new(app, window.clone())?;
+    let user_interface = UserInterface::new(window);
+    let runtime = Runtime::new(engine, user_interface, runtime_config)?;
     on_engine_created(runtime.arc_engine());
     runtime.engine().app().setup_scene()?;
     Ok(runtime)
