@@ -44,7 +44,7 @@ define_task!(
     ],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_debug_logging!("Advancing simulation"; {
+        with_trace_logging!("Advancing simulation"; {
             engine.simulator()
                 .write()
                 .unwrap()
