@@ -1,7 +1,7 @@
 //! Interfacing with the application using the engine.
 
 use crate::{
-    engine::EngineConfig,
+    engine::{Engine, EngineConfig},
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
@@ -16,6 +16,8 @@ pub trait Application: Send + Sync + std::fmt::Debug {
     fn runtime_config(&self) -> RuntimeConfig;
 
     fn engine_config(&self) -> EngineConfig;
+
+    fn run_ui(&self, ctx: &egui::Context, engine: &Engine);
 
     fn setup_scene(&self) -> Result<()>;
 
