@@ -79,9 +79,6 @@
     voxel: (
         voxel_types_path: Some("voxel_types.ron"),
     ),
-    input: (
-        key_map_path: Some("keymap.ron"),
-    ),
     controller: (
         motion: SemiDirectional((
             movement_speed: 8.0,
