@@ -18,6 +18,11 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> str
             _ -> "${app_dir}/roc_platform"
 
+    backend =
+        when Env.var!("CRANELIFT") is
+            Ok(str) if !(Str.is_empty(str)) -> Cranelift
+            _ -> LLVM
+
     debug_mode =
         when Env.var!("DEBUG") is
             Ok(str) if !(Str.is_empty(str)) -> Debug
@@ -37,7 +42,7 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, backend, debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, debug_mode, os_and_arch)?
 
@@ -84,13 +89,23 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate with options: ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+cargo_build_app! : Str, [LLVM, Cranelift], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, backend, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
-    base_args = ["cargo", "build", "--manifest-path", "${app_dir}/Cargo.toml", "--target", target_triple]
+    base_args = ["--manifest-path", "${app_dir}/Cargo.toml", "--target", target_triple]
+
+    nightly_arg =
+        when (backend, asan_mode) is
+            (Cranelift, _) | (_, AddressSanitizer) -> ["+nightly"]
+            _ -> []
+
+    backend_args =
+        when backend is
+            LLVM -> []
+            Cranelift -> ["-Zcodegen-backend"]
 
     debug_args =
         when debug_mode is
@@ -102,6 +117,11 @@ cargo_build_app! = |app_dir, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
             NoFuzzing -> []
             Fuzzing -> ["--features", "fuzzing"]
 
+    backend_env_vars =
+        when backend is
+            LLVM -> []
+            Cranelift -> ["CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift"]
+
     asan_env_vars =
         when asan_mode is
             NoAddressSanitizer -> []
@@ -112,8 +132,13 @@ cargo_build_app! = |app_dir, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
 
     Cmd.exec!(
         "env",
-        asan_env_vars
+        backend_env_vars
+        |> List.concat(asan_env_vars)
+        |> List.append("cargo")
+        |> List.concat(nightly_arg)
+        |> List.append("build")
         |> List.concat(base_args)
+        |> List.concat(backend_args)
         |> List.concat(debug_args)
         |> List.concat(fuzzing_args),
     )
