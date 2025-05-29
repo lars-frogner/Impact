@@ -304,8 +304,9 @@ impl VoxelChunkCullingPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let scene_camera =
-            scene_camera.ok_or_else(|| anyhow!("Missing scene camera for voxel chunk culling"))?;
+        let Some(scene_camera) = scene_camera else {
+            return Ok(());
+        };
 
         let frustum = scene_camera.camera().view_frustum();
 
