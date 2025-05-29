@@ -3,14 +3,18 @@
 pub mod command;
 pub mod input;
 
-use crate::{engine::Engine, gpu::rendering::gui::GUIRenderingInput, window::Window};
+use crate::{
+    application::Application, engine::Engine, gpu::rendering::gui::GUIRenderingInput,
+    window::Window,
+};
 use input::{UIEventHandlingResponse, UserInterfaceInputManager};
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, sync::Arc};
 use winit::event::WindowEvent;
 
 #[derive(Debug)]
 pub struct UserInterface {
+    app: Arc<dyn Application>,
     egui_ctx: egui::Context,
     input_manager: UserInterfaceInputManager,
 }
@@ -33,12 +37,13 @@ pub struct UserInterfaceOutput {
 }
 
 impl UserInterface {
-    pub fn new(window: Window) -> Self {
+    pub fn new(app: Arc<dyn Application>, window: Window) -> Self {
         let egui_ctx = egui::Context::default();
 
         let input_manager = UserInterfaceInputManager::new(window, egui_ctx.clone());
 
         Self {
+            app,
             egui_ctx,
             input_manager,
         }
@@ -50,25 +55,7 @@ impl UserInterface {
 
     pub fn run(&mut self, engine: &Engine) -> RawUserInterfaceOutput {
         let input = self.input_manager.take_raw_input();
-
-        let output = self.egui_ctx.run(input, |ctx| {
-            egui::CentralPanel::default()
-                .frame(egui::Frame {
-                    fill: egui::Color32::TRANSPARENT,
-                    ..Default::default()
-                })
-                .show(ctx, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(10.0);
-                        ui.label("Impact");
-                        ui.add_space(10.0);
-                        if ui.button("Exit").clicked() {
-                            engine.request_shutdown();
-                        }
-                    })
-                });
-        });
-
+        let output = self.egui_ctx.run(input, |ctx| self.app.run_ui(ctx, engine));
         RawUserInterfaceOutput { output }
     }
 

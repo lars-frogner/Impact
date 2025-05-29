@@ -2,6 +2,7 @@
 
 pub mod api;
 pub mod scripting;
+pub mod ui;
 
 pub use impact;
 
@@ -11,7 +12,8 @@ pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integrat
 use anyhow::Result;
 use impact::{
     application::Application,
-    engine::EngineConfig,
+    egui,
+    engine::{Engine, EngineConfig},
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
@@ -36,6 +38,10 @@ impl Application for Game {
 
     fn engine_config(&self) -> EngineConfig {
         self.engine_config.clone()
+    }
+
+    fn run_ui(&self, ctx: &egui::Context, engine: &Engine) {
+        ui::run(ctx, engine);
     }
 
     fn setup_scene(&self) -> Result<()> {
