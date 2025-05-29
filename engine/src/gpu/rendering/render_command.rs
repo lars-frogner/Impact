@@ -740,6 +740,10 @@ impl DepthPrepass {
             return Ok(());
         }
 
+        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+            return Ok(());
+        };
+
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
@@ -756,10 +760,6 @@ impl DepthPrepass {
         render_pass.set_stencil_reference(self.write_stencil_value as u32);
 
         self.set_push_constants(&mut render_pass, rendering_surface, frame_counter);
-
-        let camera_buffer_manager = render_resources
-            .get_camera_buffer_manager()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for camera"))?;
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
@@ -1162,6 +1162,10 @@ impl GeometryPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+            return Ok(());
+        };
+
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
 
         let depth_stencil_attachment =
@@ -1176,10 +1180,6 @@ impl GeometryPass {
         );
 
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
-
-        let camera_buffer_manager = render_resources
-            .get_camera_buffer_manager()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for camera"))?;
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
@@ -2227,6 +2227,10 @@ impl AmbientLightPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+            return Ok(());
+        };
+
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
@@ -2249,10 +2253,6 @@ impl AmbientLightPass {
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
 
         self.set_push_constants(&mut render_pass, rendering_surface, postprocessor);
-
-        let camera_buffer_manager = render_resources
-            .get_camera_buffer_manager()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for camera"))?;
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
@@ -2582,6 +2582,10 @@ impl DirectionalLightPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+            return Ok(());
+        };
+
         let n_omnidirectional_lights = light_storage.omnidirectional_lights().len();
         let n_shadowable_omnidirectional_lights =
             light_storage.shadowable_omnidirectional_lights().len();
@@ -2616,10 +2620,6 @@ impl DirectionalLightPass {
         );
 
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
-
-        let camera_buffer_manager = render_resources
-            .get_camera_buffer_manager()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for camera"))?;
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
@@ -3342,6 +3342,10 @@ impl SkyboxPass {
             return Ok(());
         };
 
+        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+            return Ok(());
+        };
+
         let color_attachment = self.color_attachment(render_attachment_texture_manager);
 
         let depth_stencil_attachment =
@@ -3358,10 +3362,6 @@ impl SkyboxPass {
         render_pass.set_pipeline(pipeline);
 
         render_pass.set_stencil_reference(StencilValue::Background as u32);
-
-        let camera_buffer_manager = render_resources
-            .get_camera_buffer_manager()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for camera"))?;
 
         self.set_push_constants(&mut render_pass, postprocessor, camera_buffer_manager);
 
@@ -3696,9 +3696,9 @@ impl PostprocessingRenderPass {
         let mut bind_group_index = 0;
 
         if self.uses_camera {
-            let camera_buffer_manager = render_resources
-                .get_camera_buffer_manager()
-                .ok_or_else(|| anyhow!("Missing GPU buffer for camera"))?;
+            let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+                return Ok(());
+            };
 
             render_pass.set_bind_group(bind_group_index, camera_buffer_manager.bind_group(), &[]);
             bind_group_index += 1;
