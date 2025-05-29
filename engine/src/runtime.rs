@@ -83,7 +83,7 @@ impl Runtime {
             // could be done in parallel with other tasks. The actual running must be
             // done before beginning to execute other tasks since user interactions
             // can affect the engine state.
-            let raw_ui_output = self.user_interface.run(&self.engine);
+            let raw_ui_output = self.user_interface.run(&self.game_loop, &self.engine);
             let ui_output = self.user_interface.process_raw_output(raw_ui_output);
             *self.engine.ui_output().write().unwrap() = Some(ui_output);
         } else {

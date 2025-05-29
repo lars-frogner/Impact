@@ -2,7 +2,7 @@
 
 pub mod ffi;
 
-use crate::Game;
+use crate::{Game, ui::UserInterface};
 use anyhow::{Result, bail};
 use impact::{
     engine::{Engine, EngineConfig, command::EngineCommand},
@@ -28,6 +28,7 @@ pub fn run_with_config(config: EngineConfig) -> Result<()> {
     let game = Arc::new(Game {
         engine_config: config,
         scripts: (),
+        user_interface: RwLock::new(UserInterface::default()),
     });
     run_engine(game, |engine| {
         *ENGINE.write().unwrap() = Some(engine);

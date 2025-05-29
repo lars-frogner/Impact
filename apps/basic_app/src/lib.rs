@@ -14,17 +14,21 @@ use impact::{
     application::Application,
     egui,
     engine::{Engine, EngineConfig},
+    game_loop::GameLoop,
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
         input::{key::KeyboardEvent, mouse::MouseButtonEvent},
     },
 };
+use std::sync::RwLock;
+use ui::UserInterface;
 
 #[derive(Debug)]
 pub struct Game {
     pub engine_config: EngineConfig,
     pub scripts: (),
+    pub user_interface: RwLock<UserInterface>,
 }
 
 impl Application for Game {
@@ -40,8 +44,11 @@ impl Application for Game {
         self.engine_config.clone()
     }
 
-    fn run_ui(&self, ctx: &egui::Context, engine: &Engine) {
-        ui::run(ctx, engine);
+    fn run_ui(&self, ctx: &egui::Context, game_loop: &GameLoop, engine: &Engine) {
+        self.user_interface
+            .write()
+            .unwrap()
+            .run(ctx, game_loop, engine);
     }
 
     fn setup_scene(&self) -> Result<()> {

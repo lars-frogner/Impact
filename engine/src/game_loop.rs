@@ -112,6 +112,18 @@ impl GameLoop {
         Ok(())
     }
 
+    pub fn smooth_frame_duration(&self) -> Duration {
+        self.frame_rate_tracker.compute_smooth_frame_duration()
+    }
+
+    pub fn smooth_fps(&self) -> u32 {
+        frame_duration_to_fps(self.smooth_frame_duration())
+    }
+
+    pub fn elapsed_time(&self) -> Duration {
+        self.start_time.elapsed()
+    }
+
     fn wait_for_target_frame_duration(&self) -> Instant {
         let mut iter_end_time = Instant::now();
         if let Some(min_frame_duration) = self.config.min_frame_duration() {
