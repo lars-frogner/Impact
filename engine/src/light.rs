@@ -256,7 +256,7 @@ impl LightStorage {
     /// Creates a new empty light storage.
     pub fn new() -> Self {
         Self {
-            ambient_light_buffer: AmbientLightUniformBuffer::new(),
+            ambient_light_buffer: AmbientLightUniformBuffer::with_capacity(1),
             omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer::with_capacity(
                 Self::INITIAL_LIGHT_CAPACITY,
             ),
