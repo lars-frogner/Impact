@@ -25,9 +25,7 @@ use temporal_anti_aliasing::{TemporalAntiAliasingConfig, TemporalAntiAliasingRen
 /// Manager of GPU resources and render commands for postprocessing effects.
 #[derive(Debug)]
 pub struct Postprocessor {
-    ambient_occlusion_enabled: bool,
     ambient_occlusion_commands: AmbientOcclusionRenderCommands,
-    temporal_anti_aliasing_enabled: bool,
     temporal_anti_aliasing_commands: TemporalAntiAliasingRenderCommands,
     capturing_camera: CapturingCamera,
     render_attachment_visualization_passes: RenderAttachmentVisualizationPasses,
@@ -37,42 +35,42 @@ impl Postprocessor {
     /// Creates a new postprocessor along with the associated render commands
     /// according to the given configuration.
     pub fn new(
+        ambient_occlusion_config: AmbientOcclusionConfig,
+        temporal_anti_aliasing_config: TemporalAntiAliasingConfig,
+        capturing_camera_config: CapturingCameraConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-        ambient_occlusion_config: &AmbientOcclusionConfig,
-        temporal_anti_aliasing_config: &TemporalAntiAliasingConfig,
-        capturing_camera_settings: &CapturingCameraConfig,
     ) -> Result<Self> {
         let ambient_occlusion_commands = AmbientOcclusionRenderCommands::new(
+            ambient_occlusion_config,
             graphics_device,
             rendering_surface,
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
-            ambient_occlusion_config,
         )?;
 
         let temporal_anti_aliasing_commands = TemporalAntiAliasingRenderCommands::new(
+            temporal_anti_aliasing_config,
             graphics_device,
             rendering_surface,
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
-            temporal_anti_aliasing_config,
         )?;
 
         let capturing_camera = CapturingCamera::new(
+            capturing_camera_config,
             graphics_device,
             rendering_surface,
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             storage_gpu_buffer_manager,
-            capturing_camera_settings,
         )?;
 
         let render_attachment_visualization_passes = RenderAttachmentVisualizationPasses::new(
@@ -84,9 +82,7 @@ impl Postprocessor {
         )?;
 
         Ok(Self {
-            ambient_occlusion_enabled: ambient_occlusion_config.initially_enabled,
             ambient_occlusion_commands,
-            temporal_anti_aliasing_enabled: temporal_anti_aliasing_config.initially_enabled,
             temporal_anti_aliasing_commands,
             capturing_camera,
             render_attachment_visualization_passes,
@@ -119,7 +115,6 @@ impl Postprocessor {
             self,
             frame_counter,
             timestamp_recorder,
-            self.ambient_occlusion_enabled,
             command_encoder,
         )?;
         self.capturing_camera.record_commands_before_tone_mapping(
@@ -141,7 +136,6 @@ impl Postprocessor {
             self,
             frame_counter,
             timestamp_recorder,
-            self.temporal_anti_aliasing_enabled,
             command_encoder,
         )?;
         self.capturing_camera.record_tone_mapping_render_commands(
@@ -169,22 +163,48 @@ impl Postprocessor {
         Ok(())
     }
 
-    /// Returns a reference to the capturing camera.
     pub fn capturing_camera(&self) -> &CapturingCamera {
         &self.capturing_camera
     }
 
-    /// Whether ambient occlusion is enabled.
-    pub fn ambient_occlusion_enabled(&self) -> bool {
-        self.ambient_occlusion_enabled
+    pub fn ambient_occlusion_config(&self) -> &AmbientOcclusionConfig {
+        self.ambient_occlusion_commands.config()
     }
 
-    /// Whether temporal anti-aliasing is enabled.
-    pub fn temporal_anti_aliasing_enabled(&self) -> bool {
-        self.temporal_anti_aliasing_enabled
+    /// Sets the given ambient occlusion configuration parameters and updates
+    /// the appropriate render resources.
+    pub fn set_ambient_occlusion_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        config: AmbientOcclusionConfig,
+    ) {
+        self.ambient_occlusion_commands.set_config(
+            graphics_device,
+            gpu_resource_group_manager,
+            config,
+        );
     }
 
-    /// Returns a mutable reference to the capturing camera.
+    pub fn temporal_anti_aliasing_config(&self) -> &TemporalAntiAliasingConfig {
+        self.temporal_anti_aliasing_commands.config()
+    }
+
+    /// Sets the given temporal anti-aliasing configuration parameters and
+    /// updates the appropriate render resources.
+    pub fn set_temporal_anti_aliasing_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        config: TemporalAntiAliasingConfig,
+    ) {
+        self.temporal_anti_aliasing_commands.set_config(
+            graphics_device,
+            gpu_resource_group_manager,
+            config,
+        );
+    }
+
     pub fn capturing_camera_mut(&mut self) -> &mut CapturingCamera {
         &mut self.capturing_camera
     }

@@ -25,6 +25,7 @@ use crate::{
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use anyhow::{Result, bail};
+use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{ConstStringHash64, hash64};
 use lazy_static::lazy_static;
@@ -103,6 +104,23 @@ lazy_static! {
         StorageBufferID(hash64!(format!("AverageLuminanceBuffer")));
 }
 
+impl AverageLuminanceComputationConfig {
+    fn new_config_requires_parameters_update(&self, other: &Self) -> bool {
+        abs_diff_ne!(
+            self.luminance_bounds.lower(),
+            other.luminance_bounds.lower()
+        ) || abs_diff_ne!(
+            self.luminance_bounds.upper(),
+            other.luminance_bounds.upper()
+        )
+    }
+
+    fn new_config_requires_average_parameters_update(&self, other: &Self) -> bool {
+        self.new_config_requires_parameters_update(other)
+            || abs_diff_ne!(self.current_frame_weight, other.current_frame_weight)
+    }
+}
+
 impl Default for AverageLuminanceComputationConfig {
     fn default() -> Self {
         Self {
@@ -115,12 +133,12 @@ impl Default for AverageLuminanceComputationConfig {
 
 impl AverageLuminanceComputeCommands {
     pub(super) fn new(
+        config: AverageLuminanceComputationConfig,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-        config: &AverageLuminanceComputationConfig,
     ) -> Result<Self> {
         let histogram_compute_pass = create_luminance_histogram_compute_pass(
             graphics_device,
@@ -157,8 +175,43 @@ impl AverageLuminanceComputeCommands {
             histogram_copy_command,
             average_compute_pass,
             result_copy_command,
-            config: config.clone(),
+            config,
         })
+    }
+
+    pub(super) fn config(&self) -> &AverageLuminanceComputationConfig {
+        &self.config
+    }
+
+    pub(super) fn set_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        config: AverageLuminanceComputationConfig,
+    ) {
+        if self.config.new_config_requires_parameters_update(&config) {
+            let parameters_uniform = LuminanceHistogramParameters::new(&config.luminance_bounds);
+            update_luminance_histogram_parameters_uniform(
+                graphics_device,
+                gpu_resource_group_manager,
+                &parameters_uniform,
+            );
+        }
+        if self
+            .config
+            .new_config_requires_average_parameters_update(&config)
+        {
+            let average_parameters_uniform = LuminanceHistogramAverageParameters::new(
+                &config.luminance_bounds,
+                config.current_frame_weight,
+            );
+            update_luminance_histogram_average_parameters_uniform(
+                graphics_device,
+                gpu_resource_group_manager,
+                &average_parameters_uniform,
+            );
+        }
+        self.config = config;
     }
 
     pub(super) fn record(
@@ -336,12 +389,7 @@ fn create_luminance_histogram_compute_pass(
     storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
     luminance_bounds: &UpperExclusiveBounds<f32>,
 ) -> Result<ComputePass> {
-    let resource_group_id = GPUResourceGroupID(hash64!(format!(
-        "LuminanceHistogramResources{{ luminance_range: [{}, {}) }}",
-        luminance_bounds.lower(),
-        luminance_bounds.upper(),
-    )));
-
+    let resource_group_id = luminance_histogram_resource_group_id();
     gpu_resource_group_manager
         .resource_group_entry(resource_group_id)
         .or_insert_with(|| {
@@ -393,13 +441,7 @@ fn create_luminance_histogram_average_compute_pass(
     luminance_bounds: &UpperExclusiveBounds<f32>,
     current_frame_weight: f32,
 ) -> Result<ComputePass> {
-    let resource_group_id = GPUResourceGroupID(hash64!(format!(
-        "LuminanceHistogramAverageResources{{ luminance_range: [{}, {}), current_frame_weight: {} }}",
-        luminance_bounds.lower(),
-        luminance_bounds.upper(),
-        current_frame_weight,
-    )));
-
+    let resource_group_id = luminance_histogram_average_resource_group_id();
     gpu_resource_group_manager
         .resource_group_entry(resource_group_id)
         .or_insert_with(|| {
@@ -470,4 +512,46 @@ fn get_or_create_histogram_storage_buffer<'a>(
                 Cow::Borrowed("Luminance histogram buffer"),
             )
         })
+}
+
+fn update_luminance_histogram_parameters_uniform(
+    graphics_device: &GraphicsDevice,
+    gpu_resource_group_manager: &GPUResourceGroupManager,
+    uniform: &LuminanceHistogramParameters,
+) {
+    let resource_group_id = luminance_histogram_resource_group_id();
+    let resource_group = gpu_resource_group_manager
+        .get_resource_group(resource_group_id)
+        .expect(
+            "Luminance histogram parameters resource group should not be missing during update",
+        );
+    let buffer = resource_group
+        .single_uniform_buffer(0)
+        .expect("Luminance histogram parameters resource group should have single uniform buffer");
+    buffer.update_uniform(graphics_device, uniform);
+}
+
+fn update_luminance_histogram_average_parameters_uniform(
+    graphics_device: &GraphicsDevice,
+    gpu_resource_group_manager: &GPUResourceGroupManager,
+    uniform: &LuminanceHistogramAverageParameters,
+) {
+    let resource_group_id = luminance_histogram_average_resource_group_id();
+    let resource_group = gpu_resource_group_manager
+        .get_resource_group(resource_group_id)
+        .expect(
+            "Luminance histogram average parameters resource group should not be missing during update",
+        );
+    let buffer = resource_group.single_uniform_buffer(0).expect(
+        "Luminance histogram average parameters resource group should have single uniform buffer",
+    );
+    buffer.update_uniform(graphics_device, uniform);
+}
+
+fn luminance_histogram_resource_group_id() -> GPUResourceGroupID {
+    GPUResourceGroupID(hash64!("LuminanceHistogramResources"))
+}
+
+fn luminance_histogram_average_resource_group_id() -> GPUResourceGroupID {
+    GPUResourceGroupID(hash64!("LuminanceHistogramAverageResources"))
 }

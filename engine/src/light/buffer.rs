@@ -4,7 +4,7 @@ use crate::{
     assert_uniform_valid,
     gpu::{
         GraphicsDevice,
-        rendering::RenderingConfig,
+        rendering::ShadowMappingConfig,
         texture::shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{
             self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
@@ -94,7 +94,7 @@ impl LightGPUBufferManager {
     pub fn for_light_storage(
         graphics_device: &GraphicsDevice,
         light_storage: &LightStorage,
-        config: &RenderingConfig,
+        shadow_mapping_config: &ShadowMappingConfig,
     ) -> Self {
         let ambient_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
@@ -168,7 +168,7 @@ impl LightGPUBufferManager {
 
         let omnidirectional_light_shadow_map_manager = OmnidirectionalLightShadowMapManager::new(
             graphics_device,
-            config,
+            shadow_mapping_config,
             shadowable_omnidirectional_light_gpu_buffer
                 .light_ids()
                 .len(),
@@ -176,7 +176,7 @@ impl LightGPUBufferManager {
 
         let unidirectional_light_shadow_map_manager = UnidirectionalLightShadowMapManager::new(
             graphics_device,
-            config,
+            shadow_mapping_config,
             shadowable_unidirectional_light_gpu_buffer.light_ids().len(),
         );
 
@@ -560,7 +560,7 @@ impl LightGPUBufferManager {
 impl OmnidirectionalLightShadowMapManager {
     fn new(
         graphics_device: &GraphicsDevice,
-        config: &RenderingConfig,
+        config: &ShadowMappingConfig,
         omnidirectional_light_count: usize,
     ) -> Self {
         let resolution = config.omnidirectional_light_shadow_map_resolution;
@@ -621,7 +621,7 @@ impl OmnidirectionalLightShadowMapManager {
 impl UnidirectionalLightShadowMapManager {
     fn new(
         graphics_device: &GraphicsDevice,
-        config: &RenderingConfig,
+        config: &ShadowMappingConfig,
         unidirectional_light_count: usize,
     ) -> Self {
         let resolution = config.unidirectional_light_shadow_map_resolution;

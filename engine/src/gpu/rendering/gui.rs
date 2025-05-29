@@ -14,6 +14,7 @@ use std::borrow::Cow;
 #[allow(missing_debug_implementations)]
 pub struct GUIRenderer {
     renderer: Renderer,
+    _config: GUIRenderingConfig,
 }
 
 /// Configuration options for GUI rendering.
@@ -31,9 +32,9 @@ pub struct GUIRenderingInput {
 impl GUIRenderer {
     /// Creates a new GUI renderer with the given configuration options.
     pub fn new(
+        config: GUIRenderingConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
-        config: &GUIRenderingConfig,
     ) -> Self {
         let renderer = Renderer::new(
             graphics_device.device(),
@@ -42,7 +43,10 @@ impl GUIRenderer {
             1,
             config.dithering,
         );
-        Self { renderer }
+        Self {
+            renderer,
+            _config: config,
+        }
     }
 
     pub fn update_resources_and_record_render_pass(

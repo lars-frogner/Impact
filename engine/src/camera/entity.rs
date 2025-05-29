@@ -113,7 +113,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let node_id =
                 scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
 
-            let jittering_enabled = postprocessor.temporal_anti_aliasing_enabled();
+            let jittering_enabled = postprocessor.temporal_anti_aliasing_config().enabled;
             *scene_camera = Some(SceneCamera::new(camera, node_id, jittering_enabled));
 
             SceneGraphCameraNodeComp::new(node_id)
@@ -183,7 +183,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let node_id =
                 scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
 
-            let jittering_enabled = postprocessor.temporal_anti_aliasing_enabled();
+            let jittering_enabled = postprocessor.temporal_anti_aliasing_config().enabled;
             *scene_camera = Some(SceneCamera::new(camera, node_id, jittering_enabled));
 
             SceneGraphCameraNodeComp::new(node_id)

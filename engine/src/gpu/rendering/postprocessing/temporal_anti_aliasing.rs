@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 
+use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{ConstStringHash64, hash64};
 use serde::{Deserialize, Serialize};
@@ -30,8 +31,8 @@ use anyhow::Result;
 /// Configuration options for temporal anti-aliasing.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TemporalAntiAliasingConfig {
-    /// Whether temporal anti-aliasing should be enabled when the scene loads.
-    pub initially_enabled: bool,
+    /// Whether temporal anti-aliasing is enabled.
+    pub enabled: bool,
     /// How much the luminance of the current frame should be weighted compared
     /// to the luminance reprojected from the previous frame.
     pub current_frame_weight: f32,
@@ -42,6 +43,7 @@ pub struct TemporalAntiAliasingConfig {
 pub(super) struct TemporalAntiAliasingRenderCommands {
     copy_command: RenderAttachmentTextureCopyCommand,
     blending_pass: PostprocessingRenderPass,
+    config: TemporalAntiAliasingConfig,
 }
 
 /// Uniform holding parameters needed in the shader for applying temporal
@@ -57,10 +59,24 @@ struct TemporalAntiAliasingParameters {
     _pad: [u8; 8],
 }
 
+impl TemporalAntiAliasingConfig {
+    fn new_config_requires_resource_update(&self, other: &Self) -> bool {
+        abs_diff_ne!(
+            self.current_frame_weight,
+            other.current_frame_weight,
+            epsilon = 1e-6
+        ) || abs_diff_ne!(
+            self.variance_clipping_threshold,
+            other.variance_clipping_threshold,
+            epsilon = 1e-6
+        )
+    }
+}
+
 impl Default for TemporalAntiAliasingConfig {
     fn default() -> Self {
         Self {
-            initially_enabled: true,
+            enabled: true,
             current_frame_weight: 0.1,
             variance_clipping_threshold: 1.0,
         }
@@ -69,12 +85,12 @@ impl Default for TemporalAntiAliasingConfig {
 
 impl TemporalAntiAliasingRenderCommands {
     pub(super) fn new(
+        config: TemporalAntiAliasingConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
-        config: &TemporalAntiAliasingConfig,
     ) -> Result<Self> {
         let copy_command = create_temporal_anti_aliasing_texture_copy_command();
 
@@ -91,7 +107,36 @@ impl TemporalAntiAliasingRenderCommands {
         Ok(Self {
             copy_command,
             blending_pass,
+            config,
         })
+    }
+
+    pub(super) fn enabled_mut(&mut self) -> &mut bool {
+        &mut self.config.enabled
+    }
+
+    pub(super) fn config(&self) -> &TemporalAntiAliasingConfig {
+        &self.config
+    }
+
+    pub(super) fn set_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        config: TemporalAntiAliasingConfig,
+    ) {
+        if self.config.new_config_requires_resource_update(&config) {
+            let parameters_uniform = TemporalAntiAliasingParameters::new(
+                config.current_frame_weight,
+                config.variance_clipping_threshold,
+            );
+            update_temporal_anti_aliasing_parameters_uniform(
+                graphics_device,
+                gpu_resource_group_manager,
+                &parameters_uniform,
+            );
+        }
+        self.config = config;
     }
 
     pub(super) fn record(
@@ -104,13 +149,12 @@ impl TemporalAntiAliasingRenderCommands {
         postprocessor: &Postprocessor,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-        enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.copy_command
             .record(render_attachment_texture_manager, command_encoder);
 
-        if enabled {
+        if self.config.enabled {
             self.blending_pass.record(
                 rendering_surface,
                 surface_texture_view,
@@ -171,10 +215,7 @@ fn create_temporal_anti_aliasing_blending_render_pass(
     current_frame_weight: f32,
     variance_clipping_threshold: f32,
 ) -> Result<PostprocessingRenderPass> {
-    let resource_group_id = GPUResourceGroupID(hash64!(format!(
-        "TemporalAntiAliasingParameters{{ current_frame_weight: {} }}",
-        current_frame_weight
-    )));
+    let resource_group_id = temporal_anti_aliasing_parameters_resource_group_id();
 
     gpu_resource_group_manager
         .resource_group_entry(resource_group_id)
@@ -213,4 +254,25 @@ fn create_temporal_anti_aliasing_blending_render_pass(
         &shader_template,
         Cow::Borrowed("Temporal anti-aliasing blend pass"),
     )
+}
+
+fn update_temporal_anti_aliasing_parameters_uniform(
+    graphics_device: &GraphicsDevice,
+    gpu_resource_group_manager: &GPUResourceGroupManager,
+    uniform: &TemporalAntiAliasingParameters,
+) {
+    let resource_group_id = temporal_anti_aliasing_parameters_resource_group_id();
+    let resource_group = gpu_resource_group_manager
+        .get_resource_group(resource_group_id)
+        .expect(
+            "Temporal anti-aliasing parameters resource group should not be missing during update",
+        );
+    let buffer = resource_group.single_uniform_buffer(0).expect(
+        "Temporal anti-aliasing parameters resource group should have single uniform buffer",
+    );
+    buffer.update_uniform(graphics_device, uniform);
+}
+
+fn temporal_anti_aliasing_parameters_resource_group_id() -> GPUResourceGroupID {
+    GPUResourceGroupID(hash64!("TemporalAntiAliasingParameters"))
 }

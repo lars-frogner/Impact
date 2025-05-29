@@ -16,6 +16,13 @@ use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 
+/// Configuration options for tone mapping.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ToneMappingConfig {
+    /// The method to use for tone mapping.
+    pub method: ToneMappingMethod,
+}
+
 /// The method to use for tone mapping.
 #[roc(parents = "Rendering")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -32,6 +39,7 @@ pub(super) struct ToneMappingRenderCommands {
     disabled_pass: PostprocessingRenderPass,
     aces_pass: PostprocessingRenderPass,
     khronos_pbr_neutral_pass: PostprocessingRenderPass,
+    config: ToneMappingConfig,
 }
 
 impl ToneMappingMethod {
@@ -57,6 +65,7 @@ impl Display for ToneMappingMethod {
 
 impl ToneMappingRenderCommands {
     pub(super) fn new(
+        config: ToneMappingConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
@@ -98,10 +107,19 @@ impl ToneMappingRenderCommands {
         )?;
 
         Ok(Self {
+            config,
             disabled_pass,
             aces_pass,
             khronos_pbr_neutral_pass,
         })
+    }
+
+    pub(super) fn config(&self) -> &ToneMappingConfig {
+        &self.config
+    }
+
+    pub(super) fn config_mut(&mut self) -> &mut ToneMappingConfig {
+        &mut self.config
     }
 
     pub(super) fn record(
@@ -114,10 +132,9 @@ impl ToneMappingRenderCommands {
         postprocessor: &Postprocessor,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-        method: ToneMappingMethod,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        match method {
+        match self.config.method {
             ToneMappingMethod::ACES => {
                 self.aces_pass.record(
                     rendering_surface,

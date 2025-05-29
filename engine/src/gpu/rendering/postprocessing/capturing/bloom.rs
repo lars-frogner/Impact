@@ -38,7 +38,7 @@ use std::{borrow::Cow, num::NonZeroU32};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BloomConfig {
     /// Whether bloom should be enabled when the scene loads.
-    pub initially_enabled: bool,
+    pub enabled: bool,
     /// The number of downsamplings to perform during blurring. More
     /// downsamplings will result in stronger blurring.
     pub n_downsamplings: NonZeroU32,
@@ -64,12 +64,13 @@ pub(super) struct BloomRenderCommands {
     upsampling_blur_pipeline: wgpu::RenderPipeline,
     blending_pipeline: wgpu::RenderPipeline,
     disabled_command: RenderAttachmentTextureCopyCommand,
+    config: BloomConfig,
 }
 
 impl Default for BloomConfig {
     fn default() -> Self {
         Self {
-            initially_enabled: true,
+            enabled: true,
             n_downsamplings: NonZeroU32::new(4).unwrap(),
             blur_filter_radius: 0.005,
             blurred_luminance_weight: 0.04,
@@ -81,10 +82,10 @@ const _: () = assert!(LuminanceAux.max_mip_level() > 0);
 
 impl BloomRenderCommands {
     pub(super) fn new(
+        config: BloomConfig,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
-        config: &BloomConfig,
     ) -> Result<Self> {
         let n_downsamplings = u32::min(config.n_downsamplings.get(), LuminanceAux.max_mip_level());
         let n_upsamplings = n_downsamplings - 1; // We don't upsample from mip level 1 to 0
@@ -231,7 +232,16 @@ impl BloomRenderCommands {
             upsampling_blur_pipeline,
             blending_pipeline,
             disabled_command,
+            config,
         })
+    }
+
+    pub(super) fn config(&self) -> &BloomConfig {
+        &self.config
+    }
+
+    pub(super) fn enabled_mut(&mut self) -> &mut bool {
+        &mut self.config.enabled
     }
 
     pub(super) fn record(
@@ -239,10 +249,9 @@ impl BloomRenderCommands {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-        enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        if !enabled {
+        if !self.config.enabled {
             self.disabled_command
                 .record(render_attachment_texture_manager, command_encoder);
             return Ok(());

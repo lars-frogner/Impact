@@ -167,7 +167,7 @@ define_task!(
                         .unwrap()
                         .as_mut(),
                         &light_storage,
-                        renderer.config(),
+                        renderer.shadow_mapping_config(),
                 );
             }
             Ok(())

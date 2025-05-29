@@ -5,7 +5,7 @@ pub mod tasks;
 use crate::{
     assets::Assets,
     camera::{SceneCamera, buffer::CameraGPUBufferManager},
-    gpu::{GraphicsDevice, rendering::RenderingConfig},
+    gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
     light::{LightStorage, buffer::LightGPUBufferManager},
     mesh::{MeshID, TriangleMesh, buffer::MeshGPUBufferManager},
     model::{InstanceFeatureManager, ModelID, buffer::InstanceFeatureGPUBufferManager},
@@ -391,7 +391,7 @@ impl DesynchronizedRenderResources {
         graphics_device: &GraphicsDevice,
         light_buffer_manager: &mut Option<LightGPUBufferManager>,
         light_storage: &LightStorage,
-        config: &RenderingConfig,
+        shadow_mapping_config: &ShadowMappingConfig,
     ) {
         if let Some(light_buffer_manager) = light_buffer_manager {
             light_buffer_manager.sync_with_light_storage(graphics_device, light_storage);
@@ -401,7 +401,7 @@ impl DesynchronizedRenderResources {
             *light_buffer_manager = Some(LightGPUBufferManager::for_light_storage(
                 graphics_device,
                 light_storage,
-                config,
+                shadow_mapping_config,
             ));
         }
     }

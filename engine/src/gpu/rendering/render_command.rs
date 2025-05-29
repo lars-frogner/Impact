@@ -11,8 +11,8 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
-            RenderingConfig, postprocessing::Postprocessor, resource::SynchronizedRenderResources,
-            surface::RenderingSurface,
+            BasicRenderingConfig, ShadowMappingConfig, postprocessing::Postprocessor,
+            resource::SynchronizedRenderResources, surface::RenderingSurface,
         },
         resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
         shader::{
@@ -255,7 +255,7 @@ impl RenderCommandManager {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
-        config: &RenderingConfig,
+        config: &BasicRenderingConfig,
     ) -> Self {
         let attachment_clearing_pass = AttachmentClearingPass::new(
             (RenderAttachmentQuantitySet::DEPTH_STENCIL
@@ -382,7 +382,7 @@ impl RenderCommandManager {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         postprocessor: &Postprocessor,
-        config: &RenderingConfig,
+        shadow_mapping_config: &ShadowMappingConfig,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -431,7 +431,7 @@ impl RenderCommandManager {
             &instance_feature_manager,
             render_resources,
             timestamp_recorder,
-            config.shadow_mapping_enabled,
+            shadow_mapping_config.enabled,
             &self.voxel_render_commands,
             command_encoder,
         )?;
@@ -441,7 +441,7 @@ impl RenderCommandManager {
             &instance_feature_manager,
             render_resources,
             timestamp_recorder,
-            config.shadow_mapping_enabled,
+            shadow_mapping_config.enabled,
             &self.voxel_render_commands,
             command_encoder,
         )?;
@@ -618,7 +618,7 @@ impl DepthPrepass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         write_stencil_value: StencilValue,
-        config: &RenderingConfig,
+        config: &BasicRenderingConfig,
     ) -> Self {
         let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
             graphics_device,
@@ -825,7 +825,7 @@ impl DepthPrepass {
 }
 
 impl GeometryPass {
-    fn new(graphics_device: &GraphicsDevice, config: &RenderingConfig) -> Self {
+    fn new(graphics_device: &GraphicsDevice, config: &BasicRenderingConfig) -> Self {
         let push_constants = ModelGeometryShaderTemplate::push_constants();
         let output_render_attachments = ModelGeometryShaderTemplate::output_render_attachments();
 

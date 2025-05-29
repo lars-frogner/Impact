@@ -52,11 +52,11 @@ pub enum ToRenderAttachmentQuantity {
 
 impl Postprocessor {
     pub fn set_ambient_occlusion(&mut self, to: ToActiveState) -> ModifiedActiveState {
-        to.set(&mut self.ambient_occlusion_enabled)
+        to.set(self.ambient_occlusion_commands.enabled_mut())
     }
 
     pub fn set_temporal_anti_aliasing(&mut self, to: ToActiveState) -> ModifiedActiveState {
-        to.set(&mut self.temporal_anti_aliasing_enabled)
+        to.set(self.temporal_anti_aliasing_commands.enabled_mut())
     }
 
     pub fn set_bloom(&mut self, to: ToActiveState) -> ModifiedActiveState {
@@ -64,7 +64,7 @@ impl Postprocessor {
     }
 
     pub fn set_tone_mapping_method(&mut self, to: ToToneMappingMethod) -> ToneMappingMethod {
-        let method = self.capturing_camera.tone_mapping_method_mut();
+        let method = &mut self.capturing_camera.tone_mapping_config_mut().method;
         *method = match to {
             ToToneMappingMethod::Next => match *method {
                 ToneMappingMethod::None => ToneMappingMethod::ACES,
@@ -79,14 +79,18 @@ impl Postprocessor {
     pub fn set_exposure(&mut self, to: ToExposure) {
         match to {
             ToExposure::DifferentByStops(f_stops) => {
-                self.capturing_camera.change_sensitivity_by_stops(f_stops);
+                self.capturing_camera
+                    .settings_mut()
+                    .sensitivity
+                    .change_by_stops(f_stops);
             }
-            ToExposure::Auto { ev_compensation } => self
-                .capturing_camera
-                .set_sensor_sensitivity(SensorSensitivity::Auto { ev_compensation }),
-            ToExposure::Manual { iso } => self
-                .capturing_camera
-                .set_sensor_sensitivity(SensorSensitivity::Manual { iso }),
+            ToExposure::Auto { ev_compensation } => {
+                self.capturing_camera.settings_mut().sensitivity =
+                    SensorSensitivity::Auto { ev_compensation }
+            }
+            ToExposure::Manual { iso } => {
+                self.capturing_camera.settings_mut().sensitivity = SensorSensitivity::Manual { iso }
+            }
         }
     }
 

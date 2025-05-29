@@ -8,7 +8,7 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         query::TimestampQueryRegistry,
         rendering::{
-            RenderingConfig,
+            BasicRenderingConfig,
             postprocessing::Postprocessor,
             render_command::{self, STANDARD_FRONT_FACE},
             resource::SynchronizedRenderResources,
@@ -506,7 +506,7 @@ impl VoxelGeometryPipeline {
         graphics_device: &GraphicsDevice,
         color_target_states: Vec<Option<wgpu::ColorTargetState>>,
         depth_stencil_state: Option<wgpu::DepthStencilState>,
-        config: &RenderingConfig,
+        config: &BasicRenderingConfig,
     ) -> Self {
         let push_constants = VoxelGeometryShaderTemplate::push_constants();
 

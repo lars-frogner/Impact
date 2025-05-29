@@ -78,26 +78,26 @@ impl RenderingSystem {
     }
 
     pub fn set_shadow_mapping(&mut self, to: ToActiveState) -> ModifiedActiveState {
-        to.set(&mut self.config.shadow_mapping_enabled)
+        to.set(self.shadow_mapping_enabled_mut())
     }
 
     pub fn set_wireframe_mode(&mut self, to: ToActiveState) -> ModifiedActiveState {
-        let state = to.set(&mut self.config.wireframe_mode_on);
+        let state = to.set(&mut self.basic_config.wireframe_mode_on);
         if state.changed {
             *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
                 &self.graphics_device,
                 &mut self.shader_manager.write().unwrap(),
                 &mut self.render_attachment_texture_manager.write().unwrap(),
-                &self.config,
+                &self.basic_config,
             );
         }
         state
     }
 
     pub fn set_render_pass_timings(&mut self, to: ToActiveState) -> ModifiedActiveState {
-        let state = to.set(&mut self.config.timings_enabled);
+        let state = to.set(&mut self.basic_config.timings_enabled);
         self.timestamp_query_manager
-            .set_enabled(self.config.timings_enabled);
+            .set_enabled(self.basic_config.timings_enabled);
         state
     }
 }
