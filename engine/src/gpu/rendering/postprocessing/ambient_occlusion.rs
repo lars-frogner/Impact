@@ -26,6 +26,7 @@ use crate::{
     num::Float,
 };
 use anyhow::Result;
+use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{ConstStringHash64, HaltonSequence, hash64};
 use nalgebra::Vector4;
@@ -39,8 +40,8 @@ pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 16;
 /// Configuration options for ambient occlusion.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AmbientOcclusionConfig {
-    /// Whether ambient occlusion should be enabled when the scene loads.
-    pub initially_enabled: bool,
+    /// Whether ambient occlusion is enabled.
+    pub enabled: bool,
     /// The number of samples to use for computing ambient occlusion.
     pub sample_count: u32,
     /// The sampling radius to use when computing ambient occlusion.
@@ -56,6 +57,7 @@ pub(super) struct AmbientOcclusionRenderCommands {
     computation_pass: PostprocessingRenderPass,
     application_pass: PostprocessingRenderPass,
     disabled_pass: PostprocessingRenderPass,
+    config: AmbientOcclusionConfig,
 }
 
 /// Uniform holding horizontal offsets for the ambient occlusion samples. Only
@@ -77,7 +79,7 @@ struct AmbientOcclusionSamples {
 impl Default for AmbientOcclusionConfig {
     fn default() -> Self {
         Self {
-            initially_enabled: true,
+            enabled: true,
             sample_count: 4,
             sample_radius: 1.0,
             intensity: 2.0,
@@ -88,12 +90,12 @@ impl Default for AmbientOcclusionConfig {
 
 impl AmbientOcclusionRenderCommands {
     pub(super) fn new(
+        config: AmbientOcclusionConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
-        config: &AmbientOcclusionConfig,
     ) -> Result<Self> {
         let computation_pass = create_ambient_occlusion_computation_render_pass(
             graphics_device,
@@ -127,7 +129,38 @@ impl AmbientOcclusionRenderCommands {
             computation_pass,
             application_pass,
             disabled_pass,
+            config,
         })
+    }
+
+    pub(super) fn enabled_mut(&mut self) -> &mut bool {
+        &mut self.config.enabled
+    }
+
+    pub(super) fn config(&self) -> &AmbientOcclusionConfig {
+        &self.config
+    }
+
+    pub(super) fn set_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        config: AmbientOcclusionConfig,
+    ) {
+        if self.config.new_config_requires_resource_update(&config) {
+            let sample_uniform = AmbientOcclusionSamples::new(
+                config.sample_count,
+                config.sample_radius,
+                config.intensity,
+                config.contrast,
+            );
+            update_ambient_occlusion_samples_uniform(
+                graphics_device,
+                gpu_resource_group_manager,
+                &sample_uniform,
+            );
+        }
+        self.config = config;
     }
 
     pub(super) fn record(
@@ -140,10 +173,9 @@ impl AmbientOcclusionRenderCommands {
         postprocessor: &Postprocessor,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-        enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        if enabled {
+        if self.config.enabled {
             self.computation_pass.record(
                 rendering_surface,
                 surface_texture_view,
@@ -234,6 +266,15 @@ impl UniformBufferable for AmbientOcclusionSamples {
 }
 assert_uniform_valid!(AmbientOcclusionSamples);
 
+impl AmbientOcclusionConfig {
+    fn new_config_requires_resource_update(&self, other: &Self) -> bool {
+        self.sample_count != other.sample_count
+            || abs_diff_ne!(self.sample_radius, other.sample_radius, epsilon = 1e-6)
+            || abs_diff_ne!(self.intensity, other.intensity, epsilon = 1e-6)
+            || abs_diff_ne!(self.contrast, other.contrast, epsilon = 1e-6)
+    }
+}
+
 /// Creates a [`PostprocessingRenderPass`] that computes ambient occlusion and
 /// writes it to the occlusion attachment.
 ///
@@ -252,10 +293,7 @@ fn create_ambient_occlusion_computation_render_pass(
     intensity_scale: f32,
     contrast: f32,
 ) -> Result<PostprocessingRenderPass> {
-    let resource_group_id = GPUResourceGroupID(hash64!(format!(
-        "AmbientOcclusionSamples{{ sample_count: {}, sample_radius: {} }}",
-        sample_count, sample_radius,
-    )));
+    let resource_group_id = ambient_occlusion_samples_resource_group_id();
     gpu_resource_group_manager
         .resource_group_entry(resource_group_id)
         .or_insert_with(|| {
@@ -339,4 +377,23 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
         &shader_template,
         Cow::Borrowed("Ambient light application pass without occlusion"),
     )
+}
+
+fn update_ambient_occlusion_samples_uniform(
+    graphics_device: &GraphicsDevice,
+    gpu_resource_group_manager: &GPUResourceGroupManager,
+    uniform: &AmbientOcclusionSamples,
+) {
+    let resource_group_id = ambient_occlusion_samples_resource_group_id();
+    let resource_group = gpu_resource_group_manager
+        .get_resource_group(resource_group_id)
+        .expect("Ambient occlusion samples resource group should not be missing during update");
+    let buffer = resource_group
+        .single_uniform_buffer(0)
+        .expect("Ambient occlusion samples resource group should have single uniform buffer");
+    buffer.update_uniform(graphics_device, uniform);
+}
+
+fn ambient_occlusion_samples_resource_group_id() -> GPUResourceGroupID {
+    GPUResourceGroupID(hash64!("AmbientOcclusionSamples"))
 }

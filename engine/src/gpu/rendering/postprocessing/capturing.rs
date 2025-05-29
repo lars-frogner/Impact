@@ -22,21 +22,21 @@ use bloom::{BloomConfig, BloomRenderCommands};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::mem;
-use tone_mapping::{ToneMappingMethod, ToneMappingRenderCommands};
+use tone_mapping::{ToneMappingConfig, ToneMappingRenderCommands};
 
 /// Configuration options for a capturing camera.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CapturingCameraConfig {
-    /// The initial settings for the camera.
-    pub initial_settings: CameraSettings,
+    /// The settings for the camera.
+    pub settings: CameraSettings,
     /// Configuration options for bloom.
     pub bloom: BloomConfig,
     /// Configuration options for the computation of the average luminance for
     /// automatic sensitivity.
     pub average_luminance_computation: AverageLuminanceComputationConfig,
-    /// The initial tone mapping method to use.
-    pub initial_tone_mapping: ToneMappingMethod,
+    /// Configuration options for tone mapping.
+    pub tone_mapping: ToneMappingConfig,
 }
 
 /// Capturing settings for a camera.
@@ -47,18 +47,18 @@ pub struct CameraSettings {
     ///
     /// # Unit
     /// F-stops.
-    relative_aperture: f32,
+    pub relative_aperture: f32,
     /// The duration the sensor is exposed.
     ///
     /// # Unit
     /// Seconds.
-    shutter_speed: f32,
+    pub shutter_speed: f32,
     /// The sensitivity of the camera sensor.
-    sensitivity: SensorSensitivity,
+    pub sensitivity: SensorSensitivity,
     /// The maximum exposure of the camera sensor. This corresponds to the
     /// reciprocal of the minimum incident luminance in cd/m² that can saturate
     /// the sensor.
-    max_exposure: f32,
+    pub max_exposure: f32,
 }
 
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
@@ -76,8 +76,6 @@ pub enum SensorSensitivity {
 pub struct CapturingCamera {
     settings: CameraSettings,
     exposure: f32,
-    produces_bloom: bool,
-    tone_mapping_method: ToneMappingMethod,
     average_luminance_commands: AverageLuminanceComputeCommands,
     bloom_commands: BloomRenderCommands,
     tone_mapping_commands: ToneMappingRenderCommands,
@@ -116,26 +114,6 @@ impl CameraSettings {
             sensitivity,
             max_exposure,
         }
-    }
-
-    /// Returns the relative aperture in f-stops.
-    pub fn relative_aperture(&self) -> f32 {
-        self.relative_aperture
-    }
-
-    /// Returns the camera shutter speed in seconds.
-    pub fn shutter_speed(&self) -> f32 {
-        self.shutter_speed
-    }
-
-    /// Returns the sensor sensitivity.
-    pub fn sensitivity(&self) -> SensorSensitivity {
-        self.sensitivity
-    }
-
-    /// Returns a mutable reference to the sensor sensitivity.
-    pub fn sensitivity_mut(&mut self) -> &mut SensorSensitivity {
-        &mut self.sensitivity
     }
 
     /// Computes the exposure with which to scale the incident scene luminance
@@ -187,37 +165,51 @@ impl SensorSensitivity {
     pub fn is_auto(&self) -> bool {
         matches!(self, Self::Auto { .. })
     }
+
+    /// Changes the sensor sensitivity by the given number of F-stops (can be
+    /// positive or negative).
+    pub fn change_by_stops(&mut self, f_stops: f32) {
+        match self {
+            SensorSensitivity::Auto { ev_compensation } => {
+                *ev_compensation += f_stops;
+            }
+            SensorSensitivity::Manual { iso } => {
+                *iso *= f_stops.exp2();
+            }
+        }
+    }
 }
 
 impl CapturingCamera {
     /// Creates a new capturing camera along with the required render commands
     /// according to the given configuration.
     pub(super) fn new(
+        config: CapturingCameraConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-        config: &CapturingCameraConfig,
     ) -> Result<Self> {
         let average_luminance_commands = AverageLuminanceComputeCommands::new(
+            config.average_luminance_computation,
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             storage_gpu_buffer_manager,
-            &config.average_luminance_computation,
         )?;
 
         let bloom_commands = BloomRenderCommands::new(
+            config.bloom,
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
-            &config.bloom,
         )?;
 
         let tone_mapping_commands = ToneMappingRenderCommands::new(
+            config.tone_mapping,
             graphics_device,
             rendering_surface,
             shader_manager,
@@ -225,18 +217,16 @@ impl CapturingCamera {
             gpu_resource_group_manager,
         )?;
 
-        let settings = config.initial_settings.clone();
-
-        let initial_exposure = match settings.sensitivity() {
+        let initial_exposure = match config.settings.sensitivity {
             SensorSensitivity::Auto { .. } => 0.0,
-            SensorSensitivity::Manual { iso } => settings.compute_exposure_value_at_100_iso(iso),
+            SensorSensitivity::Manual { iso } => {
+                config.settings.compute_exposure_value_at_100_iso(iso)
+            }
         };
 
         Ok(Self {
-            settings,
+            settings: config.settings,
             exposure: initial_exposure,
-            produces_bloom: config.bloom.initially_enabled,
-            tone_mapping_method: config.initial_tone_mapping,
             average_luminance_commands,
             bloom_commands,
             tone_mapping_commands,
@@ -288,14 +278,13 @@ impl CapturingCamera {
             render_attachment_texture_manager,
             postprocessor,
             timestamp_recorder,
-            self.settings.sensitivity().is_auto(),
+            self.settings.sensitivity.is_auto(),
             command_encoder,
         )?;
         self.bloom_commands.record(
             render_resources,
             render_attachment_texture_manager,
             timestamp_recorder,
-            self.produces_bloom,
             command_encoder,
         )
     }
@@ -326,7 +315,6 @@ impl CapturingCamera {
             postprocessor,
             frame_counter,
             timestamp_recorder,
-            self.tone_mapping_method,
             command_encoder,
         )
     }
@@ -348,28 +336,42 @@ impl CapturingCamera {
         Ok(())
     }
 
-    pub(super) fn produces_bloom_mut(&mut self) -> &mut bool {
-        &mut self.produces_bloom
+    pub fn average_luminance_computation_config(&self) -> &AverageLuminanceComputationConfig {
+        self.average_luminance_commands.config()
     }
 
-    pub(super) fn tone_mapping_method_mut(&mut self) -> &mut ToneMappingMethod {
-        &mut self.tone_mapping_method
+    /// Sets the given average luminance computation configuration parameters
+    /// and updates the appropriate render resources.
+    pub fn set_average_luminance_computation_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        config: AverageLuminanceComputationConfig,
+    ) {
+        self.average_luminance_commands.set_config(
+            graphics_device,
+            gpu_resource_group_manager,
+            config,
+        );
     }
 
-    pub fn set_sensor_sensitivity(&mut self, sensitivity: SensorSensitivity) {
-        *self.settings.sensitivity_mut() = sensitivity;
+    pub fn bloom_config(&self) -> &BloomConfig {
+        self.bloom_commands.config()
     }
 
-    /// Changes the sensor sensitivity by the given number of F-stops (can be
-    /// positive or negative).
-    pub fn change_sensitivity_by_stops(&mut self, f_stops: f32) {
-        match self.settings.sensitivity_mut() {
-            SensorSensitivity::Auto { ev_compensation } => {
-                *ev_compensation += f_stops;
-            }
-            SensorSensitivity::Manual { iso } => {
-                *iso *= f_stops.exp2();
-            }
-        }
+    pub fn produces_bloom_mut(&mut self) -> &mut bool {
+        self.bloom_commands.enabled_mut()
+    }
+
+    pub fn tone_mapping_config(&self) -> &ToneMappingConfig {
+        self.tone_mapping_commands.config()
+    }
+
+    pub fn tone_mapping_config_mut(&mut self) -> &mut ToneMappingConfig {
+        self.tone_mapping_commands.config_mut()
+    }
+
+    pub fn settings_mut(&mut self) -> &mut CameraSettings {
+        &mut self.settings
     }
 }

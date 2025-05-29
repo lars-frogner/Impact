@@ -109,6 +109,12 @@ impl GPUResourceGroup {
         }
     }
 
+    /// Returns the single uniform buffer at the given index, or
+    /// [`None`] if the index is out of bounds.
+    pub fn single_uniform_buffer(&self, idx: usize) -> Option<&SingleUniformGPUBuffer> {
+        self.single_uniform_buffers.get(idx)
+    }
+
     /// Returns the binding for the single uniform buffer at the given index, or
     /// [`None`] if the index is out of bounds.
     pub fn single_uniform_buffer_binding(&self, idx: usize) -> Option<u32> {

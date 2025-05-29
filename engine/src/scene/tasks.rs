@@ -195,7 +195,7 @@ define_task!(
     execute_on = [RenderingTag],
     |engine: &Engine| {
         with_trace_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
-            if engine.renderer().read().unwrap().config().shadow_mapping_enabled {
+            if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
                 let scene = engine.scene().read().unwrap();
                 let scene_camera = scene.scene_camera().read().unwrap();
                 if let Some(scene_camera) = scene_camera.as_ref() {
@@ -235,7 +235,7 @@ define_task!(
     execute_on = [RenderingTag],
     |engine: &Engine| {
         with_trace_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
-            if engine.renderer().read().unwrap().config().shadow_mapping_enabled {
+            if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
                 let scene = engine.scene().read().unwrap();
                 let scene_camera = scene.scene_camera().read().unwrap();
                 if let Some(scene_camera) = scene_camera.as_ref() {

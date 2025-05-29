@@ -48,6 +48,7 @@ pub struct UniformBuffer<ID, U> {
 /// GPU buffer for a single uniform.
 #[derive(Debug)]
 pub struct SingleUniformGPUBuffer {
+    uniform_id: ConstStringHash64,
     gpu_buffer: GPUBuffer,
     template_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
 }
@@ -299,6 +300,7 @@ impl SingleUniformGPUBuffer {
         let template_bind_group_layout_entry = U::create_bind_group_layout_entry(0, visibility);
 
         Self {
+            uniform_id: U::ID,
             gpu_buffer,
             template_bind_group_layout_entry,
         }
@@ -314,6 +316,23 @@ impl SingleUniformGPUBuffer {
     /// Creates a bind group entry for the uniform.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         create_single_uniform_bind_group_entry(binding, &self.gpu_buffer)
+    }
+
+    /// Queues a write of the given uniform into the GPU buffer.
+    ///
+    /// # Panics
+    /// If `U` is a different type than the buffer was created with.
+    pub fn update_uniform<U>(&self, graphics_device: &GraphicsDevice, uniform: &U)
+    where
+        U: UniformBufferable,
+    {
+        assert_eq!(
+            U::ID,
+            self.uniform_id,
+            "Tried to update single uniform GPU buffer with new uniform type"
+        );
+        self.gpu_buffer
+            .update_all_bytes(graphics_device, bytemuck::bytes_of(uniform));
     }
 }
 

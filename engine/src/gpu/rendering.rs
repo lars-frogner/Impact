@@ -40,7 +40,6 @@ use surface::RenderingSurface;
 /// Container for data and systems required for rendering.
 #[derive(Debug)]
 pub struct RenderingSystem {
-    config: RenderingConfig,
     graphics_device: Arc<GraphicsDevice>,
     rendering_surface: RenderingSurface,
     surface_texture_to_present: Option<wgpu::SurfaceTexture>,
@@ -55,29 +54,45 @@ pub struct RenderingSystem {
     gui_renderer: RwLock<GUIRenderer>,
     frame_counter: u32,
     timestamp_query_manager: TimestampQueryManager,
+    basic_config: BasicRenderingConfig,
+    shadow_mapping_config: ShadowMappingConfig,
 }
 
-/// Global rendering configuration options.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Rendering configuration options.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RenderingConfig {
-    /// The width and height of each face of the omnidirectional light shadow
-    /// cubemap in number of texels.
-    pub omnidirectional_light_shadow_map_resolution: u32,
-    /// The width and height of the unidirectional light shadow map in number of
-    /// texels.
-    pub unidirectional_light_shadow_map_resolution: u32,
-    /// Whether shadow mapping is enabled.
-    pub shadow_mapping_enabled: bool,
+    #[serde(default)]
+    pub basic: BasicRenderingConfig,
+    #[serde(default)]
+    pub shadow_mapping: ShadowMappingConfig,
     #[serde(default)]
     pub ambient_occlusion: AmbientOcclusionConfig,
     #[serde(default)]
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     #[serde(default)]
     pub capturing_camera: CapturingCameraConfig,
-    pub wireframe_mode_on: bool,
     #[serde(default)]
     pub gui: GUIRenderingConfig,
+}
+
+/// Basic rendering configuration options.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BasicRenderingConfig {
+    pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
+}
+
+/// Configuration options for shadow mapping.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ShadowMappingConfig {
+    /// Whether shadow mapping is enabled.
+    pub enabled: bool,
+    /// The width and height of each face of the omnidirectional light shadow
+    /// cubemap in number of texels.
+    pub omnidirectional_light_shadow_map_resolution: u32,
+    /// The width and height of the unidirectional light shadow map in number of
+    /// texels.
+    pub unidirectional_light_shadow_map_resolution: u32,
 }
 
 impl RenderingSystem {
@@ -102,7 +117,7 @@ impl RenderingSystem {
             &graphics_device,
             &mut shader_manager,
             &mut render_attachment_texture_manager,
-            &config,
+            &config.basic,
         );
 
         let mut gpu_resource_group_manager = GPUResourceGroupManager::new();
@@ -110,27 +125,26 @@ impl RenderingSystem {
         let mut storage_gpu_buffer_manager = StorageGPUBufferManager::new();
 
         let postprocessor = Postprocessor::new(
+            config.ambient_occlusion,
+            config.temporal_anti_aliasing,
+            config.capturing_camera,
             &graphics_device,
             &rendering_surface,
             &mut shader_manager,
             &mut render_attachment_texture_manager,
             &mut gpu_resource_group_manager,
             &mut storage_gpu_buffer_manager,
-            &config.ambient_occlusion,
-            &config.temporal_anti_aliasing,
-            &config.capturing_camera,
         )?;
 
-        let gui_renderer = GUIRenderer::new(&graphics_device, &rendering_surface, &config.gui);
+        let gui_renderer = GUIRenderer::new(config.gui, &graphics_device, &rendering_surface);
 
         let timestamp_query_manager = TimestampQueryManager::new(
             &graphics_device,
             NonZeroU32::new(128).unwrap(),
-            config.timings_enabled,
+            config.basic.timings_enabled,
         );
 
         Ok(Self {
-            config,
             graphics_device,
             rendering_surface,
             surface_texture_to_present: None,
@@ -145,12 +159,9 @@ impl RenderingSystem {
             gui_renderer: RwLock::new(gui_renderer),
             frame_counter: 1,
             timestamp_query_manager,
+            basic_config: config.basic,
+            shadow_mapping_config: config.shadow_mapping,
         })
-    }
-
-    /// Returns a reference to the global rendering configuration.
-    pub fn config(&self) -> &RenderingConfig {
-        &self.config
     }
 
     /// Returns a reference to the graphics device used for rendering.
@@ -206,6 +217,18 @@ impl RenderingSystem {
     /// Returns a reference to the [`Postprocessor`], guarded by a [`RwLock`].
     pub fn postprocessor(&self) -> &RwLock<Postprocessor> {
         &self.postprocessor
+    }
+
+    pub fn basic_config(&self) -> &BasicRenderingConfig {
+        &self.basic_config
+    }
+
+    pub fn shadow_mapping_config(&self) -> &ShadowMappingConfig {
+        &self.shadow_mapping_config
+    }
+
+    pub fn shadow_mapping_enabled_mut(&mut self) -> &mut bool {
+        &mut self.shadow_mapping_config.enabled
     }
 
     /// Presents the last surface texture that was rendered to.
@@ -288,7 +311,7 @@ impl RenderingSystem {
             &self.gpu_resource_group_manager.read().unwrap(),
             &self.storage_gpu_buffer_manager.read().unwrap(),
             &self.postprocessor.read().unwrap(),
-            &self.config,
+            &self.shadow_mapping_config,
             self.frame_counter,
             &mut timestamp_recorder,
             &mut command_encoder,
@@ -354,18 +377,22 @@ impl RenderingSystem {
     }
 }
 
-impl Default for RenderingConfig {
+#[allow(clippy::derivable_impls)]
+impl Default for BasicRenderingConfig {
     fn default() -> Self {
         Self {
+            wireframe_mode_on: false,
+            timings_enabled: false,
+        }
+    }
+}
+
+impl Default for ShadowMappingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
-            shadow_mapping_enabled: true,
-            ambient_occlusion: AmbientOcclusionConfig::default(),
-            temporal_anti_aliasing: TemporalAntiAliasingConfig::default(),
-            capturing_camera: CapturingCameraConfig::default(),
-            wireframe_mode_on: false,
-            gui: GUIRenderingConfig::default(),
-            timings_enabled: false,
         }
     }
 }

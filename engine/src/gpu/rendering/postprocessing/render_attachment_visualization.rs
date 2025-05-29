@@ -26,7 +26,7 @@ pub struct RenderAttachmentVisualizationPasses {
 }
 
 impl RenderAttachmentVisualizationPasses {
-    const SUPPRTED_QUANTITIES: [RenderAttachmentQuantity; 10] = [
+    const SUPPORTED_QUANTITIES: [RenderAttachmentQuantity; 10] = [
         RenderAttachmentQuantity::LinearDepth,
         RenderAttachmentQuantity::NormalVector,
         RenderAttachmentQuantity::MotionVector,
@@ -46,8 +46,8 @@ impl RenderAttachmentVisualizationPasses {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
     ) -> Result<Self> {
-        let mut passes = HashMap::with_capacity(Self::SUPPRTED_QUANTITIES.len());
-        for quantity in Self::SUPPRTED_QUANTITIES {
+        let mut passes = HashMap::with_capacity(Self::SUPPORTED_QUANTITIES.len());
+        for quantity in Self::SUPPORTED_QUANTITIES {
             let shader_template = RenderAttachmentVisualizationShaderTemplate::new(quantity);
             passes.insert(
                 quantity,
@@ -77,11 +77,11 @@ impl RenderAttachmentVisualizationPasses {
     }
 
     pub(super) fn quantity(&self) -> RenderAttachmentQuantity {
-        Self::SUPPRTED_QUANTITIES[self.idx_of_quantity_to_visualize]
+        Self::SUPPORTED_QUANTITIES[self.idx_of_quantity_to_visualize]
     }
 
     pub(super) fn set_quantity(&mut self, to: RenderAttachmentQuantity) -> Result<()> {
-        self.idx_of_quantity_to_visualize = Self::SUPPRTED_QUANTITIES
+        self.idx_of_quantity_to_visualize = Self::SUPPORTED_QUANTITIES
             .iter()
             .position(|&quantity| quantity == to)
             .ok_or_else(|| {
@@ -92,13 +92,13 @@ impl RenderAttachmentVisualizationPasses {
 
     pub(super) fn cycle_quantity_forward(&mut self) {
         self.idx_of_quantity_to_visualize =
-            (self.idx_of_quantity_to_visualize + 1) % Self::SUPPRTED_QUANTITIES.len();
+            (self.idx_of_quantity_to_visualize + 1) % Self::SUPPORTED_QUANTITIES.len();
     }
 
     pub(super) fn cycle_quantity_backward(&mut self) {
         self.idx_of_quantity_to_visualize =
-            (self.idx_of_quantity_to_visualize + Self::SUPPRTED_QUANTITIES.len() - 1)
-                % Self::SUPPRTED_QUANTITIES.len();
+            (self.idx_of_quantity_to_visualize + Self::SUPPORTED_QUANTITIES.len() - 1)
+                % Self::SUPPORTED_QUANTITIES.len();
     }
 
     pub(super) fn record(

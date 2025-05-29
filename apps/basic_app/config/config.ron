@@ -4,23 +4,29 @@
         asset_file_path: Some("assets.ron"),
     ),
     rendering: (
-        omnidirectional_light_shadow_map_resolution: 1024,
-        unidirectional_light_shadow_map_resolution: 1024,
-        shadow_mapping_enabled: true,
+        basic: (
+            wireframe_mode_on: false,
+            timings_enabled: false,
+        ),
+        shadow_mapping: (
+            enabled: true,
+            omnidirectional_light_shadow_map_resolution: 1024,
+            unidirectional_light_shadow_map_resolution: 1024,
+        ),
         ambient_occlusion: (
-            initially_enabled: true,
+            enabled: true,
             sample_count: 4,
             sample_radius: 1.0,
             intensity: 2.0,
             contrast: 0.75,
         ),
         temporal_anti_aliasing: (
-            initially_enabled: true,
+            enabled: true,
             current_frame_weight: 0.1,
             variance_clipping_threshold: 1.0,
         ),
         capturing_camera: (
-            initial_settings: (
+            settings: (
                 relative_aperture: 0.25,
                 shutter_speed: 0.005,
                 sensitivity: Auto(
@@ -29,7 +35,7 @@
                 max_exposure: 0.01,
             ),
             bloom: (
-                initially_enabled: true,
+                enabled: true,
                 n_downsamplings: 4,
                 blur_filter_radius: 0.005,
                 blurred_luminance_weight: 0.04,
@@ -42,10 +48,10 @@
                 current_frame_weight: 0.02,
                 fetch_histogram: false,
             ),
-            initial_tone_mapping: ACES,
+            tone_mapping: (
+                method: ACES,
+            ),
         ),
-        wireframe_mode_on: false,
-        timings_enabled: false,
     ),
     physics: (
         simulator: (
