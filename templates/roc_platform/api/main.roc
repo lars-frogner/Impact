@@ -45,18 +45,18 @@ setup_scene_extern! = |_|
 
 handle_keyboard_event_extern! : List U8 => Result {} Str
 handle_keyboard_event_extern! = |bytes|
-    event = KeyboardEvent.from_bytes(bytes) |> map_err_to_str?
+    event = KeyboardEvent.from_bytes(bytes) |> map_err_to_str!?
     callbacks.handle_keyboard_event!(event)
 
 handle_mouse_button_event_extern! : List U8 => Result {} Str
 handle_mouse_button_event_extern! = |bytes|
-    event = MouseButtonEvent.from_bytes(bytes) |> map_err_to_str?
+    event = MouseButtonEvent.from_bytes(bytes) |> map_err_to_str!?
     callbacks.handle_mouse_button_event!(event)
 
 command_roundtrip_extern! : List U8 => Result (List U8) Str
 command_roundtrip_extern! = |bytes|
-    command = EngineCommand.from_bytes(bytes) |> map_err_to_str?
+    command = EngineCommand.from_bytes(bytes) |> map_err_to_str!?
     Ok(EngineCommand.write_bytes([], command))
 
-map_err_to_str = |result|
+map_err_to_str! = |result|
     result |> Result.map_err(|err| Inspect.to_str(err))
