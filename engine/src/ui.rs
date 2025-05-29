@@ -4,8 +4,8 @@ pub mod command;
 pub mod input;
 
 use crate::{
-    application::Application, engine::Engine, gpu::rendering::gui::GUIRenderingInput,
-    window::Window,
+    application::Application, engine::Engine, game_loop::GameLoop,
+    gpu::rendering::gui::GUIRenderingInput, window::Window,
 };
 use input::{UIEventHandlingResponse, UserInterfaceInputManager};
 use serde::{Deserialize, Serialize};
@@ -53,9 +53,11 @@ impl UserInterface {
         self.input_manager.handle_window_event(event)
     }
 
-    pub fn run(&mut self, engine: &Engine) -> RawUserInterfaceOutput {
+    pub fn run(&mut self, game_loop: &GameLoop, engine: &Engine) -> RawUserInterfaceOutput {
         let input = self.input_manager.take_raw_input();
-        let output = self.egui_ctx.run(input, |ctx| self.app.run_ui(ctx, engine));
+        let output = self
+            .egui_ctx
+            .run(input, |ctx| self.app.run_ui(ctx, game_loop, engine));
         RawUserInterfaceOutput { output }
     }
 

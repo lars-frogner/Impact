@@ -2,6 +2,7 @@
 
 use crate::{
     engine::{Engine, EngineConfig},
+    game_loop::GameLoop,
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
@@ -17,7 +18,7 @@ pub trait Application: Send + Sync + std::fmt::Debug {
 
     fn engine_config(&self) -> EngineConfig;
 
-    fn run_ui(&self, ctx: &egui::Context, engine: &Engine);
+    fn run_ui(&self, ctx: &egui::Context, game_loop: &GameLoop, engine: &Engine);
 
     fn setup_scene(&self) -> Result<()>;
 
