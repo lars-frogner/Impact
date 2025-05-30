@@ -52,7 +52,7 @@ pub struct CameraSettings {
     ///
     /// # Unit
     /// Seconds.
-    pub shutter_speed: f32,
+    pub shutter_duration: f32,
     /// The sensitivity of the camera sensor.
     pub sensitivity: SensorSensitivity,
     /// The maximum exposure of the camera sensor. This corresponds to the
@@ -85,7 +85,7 @@ impl Default for CameraSettings {
     fn default() -> Self {
         Self {
             relative_aperture: 1.0 / 4.0,
-            shutter_speed: 1.0 / 200.0,
+            shutter_duration: 1.0 / 200.0,
             sensitivity: SensorSensitivity::Auto {
                 ev_compensation: 0.0,
             },
@@ -104,13 +104,13 @@ impl CameraSettings {
     /// Groups the given camera settings.
     pub fn new(
         relative_aperture: f32,
-        shutter_speed: f32,
+        shutter_duration: f32,
         sensitivity: SensorSensitivity,
         max_exposure: f32,
     ) -> Self {
         Self {
             relative_aperture,
-            shutter_speed,
+            shutter_duration,
             sensitivity,
             max_exposure,
         }
@@ -146,7 +146,7 @@ impl CameraSettings {
     }
 
     fn compute_exposure_value_at_100_iso(&self, iso: f32) -> f32 {
-        f32::log2(self.relative_aperture.powi(2) * 100.0 / (self.shutter_speed * iso))
+        f32::log2(self.relative_aperture.powi(2) * 100.0 / (self.shutter_duration * iso))
     }
 
     fn compute_exposure_value_at_100_iso_for_correct_exposure_with_average_luminance(
