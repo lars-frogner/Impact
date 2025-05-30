@@ -6,8 +6,8 @@ mod time_counters;
 
 use impact::{
     egui::{
-        Align, Color32, ComboBox, Context, Frame, Grid, Layout, Response, ScrollArea, Separator,
-        SidePanel, Slider, Ui, WidgetText, emath::Numeric,
+        Align, Color32, ComboBox, Context, CursorIcon, Frame, Grid, Layout, Response, ScrollArea,
+        Separator, SidePanel, Slider, Ui, emath::Numeric,
     },
     engine::Engine,
     game_loop::GameLoop,
@@ -24,6 +24,12 @@ enum OptionView {
     #[default]
     Rendering,
     Physics,
+}
+
+#[derive(Debug)]
+struct LabelAndHoverText {
+    label: &'static str,
+    hover_text: &'static str,
 }
 
 const OPTIONS_LEFT_MARGIN: f32 = 6.0;
@@ -81,22 +87,26 @@ fn option_group(ui: &mut Ui, name: impl Hash, add_contents: impl FnOnce(&mut Ui)
     ui.add(Separator::default());
 }
 
-fn option_checkbox(ui: &mut Ui, checked: &mut bool, text: impl Into<WidgetText>) -> Response {
-    let response = ui.checkbox(checked, text);
+fn option_checkbox(ui: &mut Ui, checked: &mut bool, text: LabelAndHoverText) -> Response {
+    let response = ui
+        .checkbox(checked, text.label)
+        .on_hover_text(text.hover_text);
     ui.end_row();
     response
 }
 
-fn option_slider(ui: &mut Ui, text: impl Into<WidgetText>, slider: Slider<'_>) -> Response {
+fn option_slider(ui: &mut Ui, text: LabelAndHoverText, slider: Slider<'_>) -> Response {
     labeled_option(ui, text, |ui| ui.add(slider))
 }
 
 fn labeled_option<R>(
     ui: &mut Ui,
-    text: impl Into<WidgetText>,
+    text: LabelAndHoverText,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    ui.label(text);
+    ui.label(text.label)
+        .on_hover_cursor(CursorIcon::Help)
+        .on_hover_text(text.hover_text);
 
     let response = ui
         .horizontal(|ui| {

@@ -7,6 +7,36 @@ use impact::{
 };
 
 mod simulation {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Simulating",
+            hover_text: "Whether the physics simulation is running.",
+        };
+        pub const REALTIME: LabelAndHoverText = LabelAndHoverText {
+            label: "Real-time",
+            hover_text: "\
+                If enabled, the time step duration will be updated regularly to match the \
+                frame duration.",
+        };
+        pub const SPEED_MULTIPLIER: LabelAndHoverText = LabelAndHoverText {
+            label: "Speed multiplier",
+            hover_text: "\
+                The multiplier applied the base time step duration to \
+                change the speed of the simulation.",
+        };
+        pub const TIME_STEP_DURATION: LabelAndHoverText = LabelAndHoverText {
+            label: "Time step",
+            hover_text: "The base duration of each simulation time step.",
+        };
+        pub const N_SUBSTEPS: LabelAndHoverText = LabelAndHoverText {
+            label: "Substeps",
+            hover_text: "\
+                The number of substeps to perform each simulation step. Increase to \
+                improve accuracy.",
+        };
+    }
     pub mod ranges {
         use std::ops::RangeInclusive;
 
@@ -17,6 +47,39 @@ mod simulation {
 }
 
 mod constraint_solving {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Constraint solver",
+            hover_text: "Whether constraints will be solved.",
+        };
+        pub const N_ITERATIONS: LabelAndHoverText = LabelAndHoverText {
+            label: "Velocity iterations",
+            hover_text: "\
+                The number of sequential impulse iterations to perform for solving the \
+                velocity constraints.",
+        };
+        pub const OLD_IMPULSE_WEIGHT: LabelAndHoverText = LabelAndHoverText {
+            label: "Warm starting weight",
+            hover_text: "\
+                How to scale the still-valid accumulated impulses from the previous \
+                frame before using them as the initial impulses for the current frame. \
+                Set to zero to disable warm starting.",
+        };
+        pub const N_POSITIONAL_CORRECTION_ITERATIONS: LabelAndHoverText = LabelAndHoverText {
+            label: "Position iterations",
+            hover_text: "\
+                The number of iterations to use for positional correction after the \
+                velocity constraints have been solved.",
+        };
+        pub const POSITIONAL_CORRECTION_FACTOR: LabelAndHoverText = LabelAndHoverText {
+            label: "Position correction",
+            hover_text: "\
+                The fraction of the current positional error the solver should try to \
+                correct.",
+        };
+    }
     pub mod ranges {
         use std::ops::RangeInclusive;
 
@@ -40,19 +103,19 @@ pub(super) fn physics_option_panel(ui: &mut Ui, engine: &Engine) {
 
 fn simulation_options(ui: &mut Ui, engine: &Engine) {
     let mut running = engine.simulation_running();
-    if option_checkbox(ui, &mut running, "Simulating").changed() {
+    if option_checkbox(ui, &mut running, simulation::docs::ENABLED).changed() {
         engine.set_simulation_running(running);
     }
 
     let mut simulator = engine.simulator().write().unwrap();
 
     let matches_frame_duration = simulator.matches_frame_duration_mut();
-    option_checkbox(ui, matches_frame_duration, "Real-time");
+    option_checkbox(ui, matches_frame_duration, simulation::docs::REALTIME);
 
     if *matches_frame_duration {
         option_slider(
             ui,
-            "Speed multiplier",
+            simulation::docs::SPEED_MULTIPLIER,
             Slider::new(
                 simulator.simulation_speed_multiplier_mut(),
                 simulation::ranges::SPEED_MULTIPLIER,
@@ -64,7 +127,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine) {
         *simulator.simulation_speed_multiplier_mut() = 1.0;
         option_slider(
             ui,
-            "Time step",
+            simulation::docs::TIME_STEP_DURATION,
             Slider::new(
                 simulator.time_step_duration_mut(),
                 simulation::ranges::TIME_STEP_DURATION,
@@ -77,7 +140,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine) {
 
     option_slider(
         ui,
-        "Substeps",
+        simulation::docs::N_SUBSTEPS,
         Slider::new(simulator.n_substeps_mut(), simulation::ranges::N_SUBSTEPS),
     );
 }
@@ -88,11 +151,11 @@ fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
     let constraint_solver = constraint_manager.solver_mut();
     let config = constraint_solver.config_mut();
 
-    option_checkbox(ui, &mut config.enabled, "Constraint solver");
+    option_checkbox(ui, &mut config.enabled, constraint_solving::docs::ENABLED);
 
     option_slider(
         ui,
-        "Velocity iterations",
+        constraint_solving::docs::N_ITERATIONS,
         Slider::new(
             &mut config.n_iterations,
             constraint_solving::ranges::N_ITERATIONS,
@@ -100,7 +163,7 @@ fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
     );
     option_slider(
         ui,
-        "Warm starting weight",
+        constraint_solving::docs::OLD_IMPULSE_WEIGHT,
         Slider::new(
             &mut config.old_impulse_weight,
             constraint_solving::ranges::OLD_IMPULSE_WEIGHT,
@@ -108,7 +171,7 @@ fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
     );
     option_slider(
         ui,
-        "Position iterations",
+        constraint_solving::docs::N_POSITIONAL_CORRECTION_ITERATIONS,
         Slider::new(
             &mut config.n_positional_correction_iterations,
             constraint_solving::ranges::N_POSITIONAL_CORRECTION_ITERATIONS,
@@ -116,7 +179,7 @@ fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
     );
     option_slider(
         ui,
-        "Position correction",
+        constraint_solving::docs::POSITIONAL_CORRECTION_FACTOR,
         Slider::new(
             &mut config.positional_correction_factor,
             constraint_solving::ranges::POSITIONAL_CORRECTION_FACTOR,
