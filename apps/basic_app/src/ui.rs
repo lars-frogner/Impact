@@ -2,11 +2,12 @@
 
 mod physics_options;
 mod rendering_options;
+mod time_counters;
 
 use impact::{
     egui::{
-        Align, Align2, Area, Color32, ComboBox, Context, Frame, Grid, Id, Layout, Response,
-        ScrollArea, Separator, SidePanel, Slider, TextStyle, Ui, WidgetText, emath::Numeric,
+        Align, Color32, ComboBox, Context, Frame, Grid, Layout, Response, ScrollArea, Separator,
+        SidePanel, Slider, Ui, WidgetText, emath::Numeric,
     },
     engine::Engine,
     game_loop::GameLoop,
@@ -28,8 +29,6 @@ enum OptionView {
 const OPTIONS_LEFT_MARGIN: f32 = 6.0;
 const OPTIONS_RIGHT_MARGIN: f32 = 6.0;
 const OPTIONS_SPACING: f32 = 6.0;
-
-const TIME_COUNTERS_OFFSET: [f32; 2] = [-10.0, 6.0];
 
 impl UserInterface {
     pub fn run(&mut self, ctx: &Context, game_loop: &GameLoop, engine: &Engine) {
@@ -63,19 +62,8 @@ impl UserInterface {
                     });
             });
 
-        Area::new(Id::new("time_counters"))
-            .anchor(Align2::RIGHT_TOP, TIME_COUNTERS_OFFSET)
-            .show(ctx, |ui| {
-                time_counters(ui, game_loop, engine);
-            });
+        time_counters::time_counters(ctx, game_loop, engine);
     }
-}
-
-fn time_counters(ui: &mut Ui, game_loop: &GameLoop, engine: &Engine) {
-    let simulation_time = engine.simulator().read().unwrap().current_simulation_time();
-    let fps = game_loop.smooth_fps();
-    right_aligned_label(ui, format!("{simulation_time:.1} s"));
-    right_aligned_label(ui, format!("{fps:.0} FPS"));
 }
 
 fn option_panel_options(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
@@ -156,27 +144,6 @@ fn with_left_space(ui: &mut Ui, amount: f32, add_contents: impl FnOnce(&mut Ui))
         ui.vertical(|ui| {
             add_contents(ui);
         });
-    });
-}
-
-fn right_aligned_label(ui: &mut Ui, text: String) {
-    let text_width = ui
-        .fonts(|f| {
-            f.layout_no_wrap(
-                text.clone(),
-                TextStyle::Body.resolve(ui.style()),
-                ui.visuals().text_color(),
-            )
-        })
-        .rect
-        .width();
-
-    let total_width = ui.available_width();
-    let left_padding = (total_width - text_width).max(0.0);
-
-    ui.horizontal(|ui| {
-        ui.add_space(left_padding);
-        ui.label(text);
     });
 }
 
