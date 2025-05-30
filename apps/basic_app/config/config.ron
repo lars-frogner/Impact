@@ -34,12 +34,6 @@
                 ),
                 max_exposure: 0.01,
             ),
-            bloom: (
-                enabled: true,
-                n_downsamplings: 4,
-                blur_filter_radius: 0.005,
-                blurred_luminance_weight: 0.04,
-            ),
             average_luminance_computation: (
                 luminance_bounds: (
                     lower: 100.0,
@@ -47,6 +41,12 @@
                 ),
                 current_frame_weight: 0.02,
                 fetch_histogram: false,
+            ),
+            bloom: (
+                enabled: true,
+                n_downsamplings: 4,
+                blur_filter_radius: 0.005,
+                blurred_luminance_weight: 0.04,
             ),
             tone_mapping: (
                 method: ACES,

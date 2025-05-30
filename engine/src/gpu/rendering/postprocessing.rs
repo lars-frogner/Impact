@@ -14,7 +14,7 @@ use crate::gpu::{
     resource_group::GPUResourceGroupManager,
     shader::ShaderManager,
     storage::StorageGPUBufferManager,
-    texture::attachment::RenderAttachmentTextureManager,
+    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
 use anyhow::Result;
@@ -186,6 +186,10 @@ impl Postprocessor {
         );
     }
 
+    pub fn ambient_occlusion_enabled_mut(&mut self) -> &mut bool {
+        self.ambient_occlusion_commands.enabled_mut()
+    }
+
     pub fn temporal_anti_aliasing_config(&self) -> &TemporalAntiAliasingConfig {
         self.temporal_anti_aliasing_commands.config()
     }
@@ -205,7 +209,33 @@ impl Postprocessor {
         );
     }
 
+    pub fn temporal_anti_aliasing_enabled_mut(&mut self) -> &mut bool {
+        self.temporal_anti_aliasing_commands.enabled_mut()
+    }
+
     pub fn capturing_camera_mut(&mut self) -> &mut CapturingCamera {
         &mut self.capturing_camera
+    }
+
+    pub fn visualized_render_attachment_quantity(&self) -> Option<RenderAttachmentQuantity> {
+        if self.render_attachment_visualization_passes.enabled() {
+            Some(self.render_attachment_visualization_passes.quantity())
+        } else {
+            None
+        }
+    }
+
+    pub fn visualize_render_attachment_quantity(
+        &mut self,
+        quantity: Option<RenderAttachmentQuantity>,
+    ) -> Result<()> {
+        if let Some(quantity) = quantity {
+            *self.render_attachment_visualization_passes.enabled_mut() = true;
+            self.render_attachment_visualization_passes
+                .set_quantity(quantity)?;
+        } else {
+            *self.render_attachment_visualization_passes.enabled_mut() = false;
+        }
+        Ok(())
     }
 }
