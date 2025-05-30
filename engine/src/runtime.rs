@@ -4,7 +4,7 @@ use crate::{
     engine::{Engine, tasks::EngineTaskScheduler},
     game_loop::{GameLoop, GameLoopConfig},
     thread::ThreadPoolResult,
-    ui::{UserInterface, input::UIEventHandlingResponse},
+    ui::{UserInterface, window::UIEventHandlingResponse},
     window::{Window, WindowConfig},
 };
 use anyhow::Result;

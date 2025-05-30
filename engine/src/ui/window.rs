@@ -1,10 +1,10 @@
-//! Input management for user interface.
+//! Window integration for user interface.
 
 use crate::window::Window;
 use std::fmt;
 use winit::event::{DeviceEvent, WindowEvent};
 
-pub struct UserInterfaceInputManager {
+pub struct UserInterfaceWindowIntegration {
     window: Window,
     egui_ctx: egui::Context,
     state: egui_winit::State,
@@ -15,7 +15,7 @@ pub struct UIEventHandlingResponse {
     pub event_consumed: bool,
 }
 
-impl UserInterfaceInputManager {
+impl UserInterfaceWindowIntegration {
     pub fn new(window: Window, egui_ctx: egui::Context) -> Self {
         let state = egui_winit::State::new(
             egui_ctx.clone(),
@@ -63,7 +63,7 @@ impl UserInterfaceInputManager {
         self.state.take_egui_input(self.window.window())
     }
 
-    pub fn handle_output(&mut self, mut output: egui::FullOutput) -> egui::FullOutput {
+    pub fn handle_full_output(&mut self, mut output: egui::FullOutput) -> egui::FullOutput {
         self.state
             .handle_platform_output(self.window.window(), output.platform_output.take());
 
@@ -84,8 +84,8 @@ impl UserInterfaceInputManager {
     }
 }
 
-impl fmt::Debug for UserInterfaceInputManager {
+impl fmt::Debug for UserInterfaceWindowIntegration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UserInterfaceInputManager").finish()
+        f.debug_struct("UserInterfaceWindowIntegration").finish()
     }
 }
