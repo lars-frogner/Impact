@@ -1,22 +1,22 @@
 //! User interface.
 
 pub mod command;
-pub mod input;
+pub mod window;
 
 use crate::{
     application::Application, engine::Engine, game_loop::GameLoop,
     gpu::rendering::gui::GUIRenderingInput, window::Window,
 };
-use input::{UIEventHandlingResponse, UserInterfaceInputManager};
 use serde::{Deserialize, Serialize};
 use std::{fmt, sync::Arc};
+use window::{UIEventHandlingResponse, UserInterfaceWindowIntegration};
 use winit::event::{DeviceEvent, WindowEvent};
 
 #[derive(Debug)]
 pub struct UserInterface {
     app: Arc<dyn Application>,
     egui_ctx: egui::Context,
-    input_manager: UserInterfaceInputManager,
+    window_integration: UserInterfaceWindowIntegration,
 }
 
 /// Configuration parameters for the user interface.
@@ -40,31 +40,31 @@ impl UserInterface {
     pub fn new(app: Arc<dyn Application>, window: Window) -> Self {
         let egui_ctx = egui::Context::default();
 
-        let input_manager = UserInterfaceInputManager::new(window, egui_ctx.clone());
+        let window_integration = UserInterfaceWindowIntegration::new(window, egui_ctx.clone());
 
         Self {
             app,
             egui_ctx,
-            input_manager,
+            window_integration,
         }
     }
 
     pub fn handle_window_event(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
-        self.input_manager.handle_window_event(event)
+        self.window_integration.handle_window_event(event)
     }
 
     pub fn handle_device_event(&mut self, event: &DeviceEvent) {
-        self.input_manager.handle_device_event(event);
+        self.window_integration.handle_device_event(event);
     }
 
     pub fn run(&mut self, game_loop: &GameLoop, engine: &Engine) -> RawUserInterfaceOutput {
-        let input = self.input_manager.take_raw_input();
+        let input = self.window_integration.take_raw_input();
 
         let mut output = self
             .egui_ctx
             .run(input, |ctx| self.app.run_ui(ctx, game_loop, engine));
 
-        output = self.input_manager.handle_output(output);
+        output = self.window_integration.handle_full_output(output);
 
         RawUserInterfaceOutput { output }
     }
