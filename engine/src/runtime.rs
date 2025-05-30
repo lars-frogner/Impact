@@ -109,6 +109,10 @@ impl Runtime {
         }
     }
 
+    fn handle_device_event_for_ui(&mut self, event: &DeviceEvent) {
+        self.user_interface.handle_device_event(event);
+    }
+
     fn handle_window_event_for_engine(
         &self,
         event_loop_controller: &EventLoopController<'_>,
@@ -118,7 +122,7 @@ impl Runtime {
             .handle_window_event(event_loop_controller, event)
     }
 
-    fn handle_device_event(
+    fn handle_device_event_for_engine(
         &self,
         event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
@@ -272,7 +276,9 @@ impl winit::application::ApplicationHandler for RuntimeHandler {
 
         let event_loop_controller = EventLoopController(event_loop);
 
-        if let Err(error) = runtime.handle_device_event(&event_loop_controller, &event) {
+        runtime.handle_device_event_for_ui(&event);
+
+        if let Err(error) = runtime.handle_device_event_for_engine(&event_loop_controller, &event) {
             log::error!("Device event handling error: {:?}", error);
             event_loop_controller.exit();
         }

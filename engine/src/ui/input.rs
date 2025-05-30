@@ -1,9 +1,8 @@
 //! Input management for user interface.
 
-use winit::event::WindowEvent;
-
 use crate::window::Window;
 use std::fmt;
+use winit::event::{DeviceEvent, WindowEvent};
 
 pub struct UserInterfaceInputManager {
     window: Window,
@@ -44,6 +43,12 @@ impl UserInterfaceInputManager {
         }
     }
 
+    pub fn handle_device_event(&mut self, event: &DeviceEvent) {
+        if let DeviceEvent::MouseMotion { delta } = event {
+            self.state.on_mouse_motion(*delta);
+        }
+    }
+
     pub fn take_raw_input(&mut self) -> egui::RawInput {
         let input = self.state.egui_input_mut();
         let viewport_info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
@@ -56,6 +61,26 @@ impl UserInterfaceInputManager {
         );
 
         self.state.take_egui_input(self.window.window())
+    }
+
+    pub fn handle_output(&mut self, mut output: egui::FullOutput) -> egui::FullOutput {
+        self.state
+            .handle_platform_output(self.window.window(), output.platform_output.take());
+
+        if let Some(viewport_output) = output.viewport_output.remove(&egui::ViewportId::ROOT) {
+            let input = self.state.egui_input_mut();
+            let viewport_info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
+
+            egui_winit::process_viewport_commands(
+                &self.egui_ctx,
+                viewport_info,
+                viewport_output.commands,
+                self.window.window(),
+                &mut Default::default(),
+            );
+        }
+
+        output
     }
 }
 
