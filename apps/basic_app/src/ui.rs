@@ -6,7 +6,7 @@ mod rendering_options;
 use impact::{
     egui::{
         Align, Align2, Area, Color32, ComboBox, Context, Frame, Grid, Id, Layout, Response,
-        Separator, SidePanel, Slider, TextStyle, Ui, WidgetText, emath::Numeric,
+        ScrollArea, Separator, SidePanel, Slider, TextStyle, Ui, WidgetText, emath::Numeric,
     },
     engine::Engine,
     game_loop::GameLoop,
@@ -51,14 +51,16 @@ impl UserInterface {
                         ui.selectable_value(&mut self.option_view, OptionView::Physics, "Physics");
                     });
 
-                match self.option_view {
-                    OptionView::Rendering => {
-                        rendering_options::rendering_option_panel(ui, engine);
-                    }
-                    OptionView::Physics => {
-                        physics_options::physics_option_panel(ui, engine);
-                    }
-                }
+                ScrollArea::vertical()
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| match self.option_view {
+                        OptionView::Rendering => {
+                            rendering_options::rendering_option_panel(ui, engine);
+                        }
+                        OptionView::Physics => {
+                            physics_options::physics_option_panel(ui, engine);
+                        }
+                    });
             });
 
         Area::new(Id::new("time_counters"))
