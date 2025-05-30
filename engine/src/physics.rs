@@ -254,15 +254,19 @@ impl PhysicsSimulator {
 
         motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
-        with_timing_info_logging!("Preparing constraints"; {
-            constraint_manager.prepare_constraints(ecs_world, voxel_object_manager,&collision_world.read().unwrap());
-        });
+        if constraint_manager.solver().config().enabled {
+            with_timing_info_logging!("Preparing constraints"; {
+                constraint_manager.prepare_constraints(ecs_world, voxel_object_manager,&collision_world.read().unwrap());
+            });
+        }
 
         rigid_body::systems::advance_rigid_body_velocities(ecs_world, step_duration);
 
-        with_timing_info_logging!("Solving constraints"; {
-            constraint_manager.compute_and_apply_constrained_state(ecs_world);
-        });
+        if constraint_manager.solver().config().enabled {
+            with_timing_info_logging!("Solving constraints"; {
+                constraint_manager.compute_and_apply_constrained_state(ecs_world);
+            });
+        }
 
         rigid_body::systems::advance_rigid_body_configurations(ecs_world, step_duration);
 
