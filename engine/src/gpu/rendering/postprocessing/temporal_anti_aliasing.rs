@@ -36,6 +36,8 @@ pub struct TemporalAntiAliasingConfig {
     /// How much the luminance of the current frame should be weighted compared
     /// to the luminance reprojected from the previous frame.
     pub current_frame_weight: f32,
+    /// The maximum variance allowed between the current and previous frame's
+    /// luminance when performing temporal blending.
     pub variance_clipping_threshold: f32,
 }
 

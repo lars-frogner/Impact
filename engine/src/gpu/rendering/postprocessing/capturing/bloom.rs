@@ -38,7 +38,7 @@ use std::{borrow::Cow, num::NonZeroU32};
 /// Configuration options for bloom.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BloomConfig {
-    /// Whether bloom should be enabled when the scene loads.
+    /// Whether bloom is enabled.
     pub enabled: bool,
     /// The number of downsamplings to perform during blurring. More
     /// downsamplings will result in stronger blurring.
