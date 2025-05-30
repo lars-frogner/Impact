@@ -26,7 +26,7 @@ pub struct RenderAttachmentVisualizationPasses {
 }
 
 impl RenderAttachmentVisualizationPasses {
-    const SUPPORTED_QUANTITIES: [RenderAttachmentQuantity; 10] = [
+    pub const SUPPORTED_QUANTITIES: [RenderAttachmentQuantity; 10] = [
         RenderAttachmentQuantity::LinearDepth,
         RenderAttachmentQuantity::NormalVector,
         RenderAttachmentQuantity::MotionVector,
@@ -70,6 +70,10 @@ impl RenderAttachmentVisualizationPasses {
             idx_of_quantity_to_visualize: 0,
             enabled: false,
         })
+    }
+
+    pub(super) fn enabled(&self) -> bool {
+        self.enabled
     }
 
     pub(super) fn enabled_mut(&mut self) -> &mut bool {

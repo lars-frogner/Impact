@@ -107,31 +107,59 @@ impl PhysicsSimulator {
         })
     }
 
-    /// Returns the current base duration used for each time step (without the
+    /// The current base duration used for each time step (without the
     /// simulation speed multiplier).
     pub fn time_step_duration(&self) -> fph {
         self.time_step_duration
     }
 
-    /// Returns the current multiplier for the simulation speed.
+    /// The current base duration used for each time step (without the
+    /// simulation speed multiplier).
+    pub fn time_step_duration_mut(&mut self) -> &mut fph {
+        &mut self.time_step_duration
+    }
+
+    /// The current multiplier for the simulation speed.
     pub fn simulation_speed_multiplier(&self) -> fph {
         self.simulation_speed_multiplier
     }
 
-    /// Returns the actual duration used for each time step (including the
+    /// The current multiplier for the simulation speed.
+    pub fn simulation_speed_multiplier_mut(&mut self) -> &mut fph {
+        &mut self.simulation_speed_multiplier
+    }
+
+    /// The actual duration used for each time step (including the
     /// simulation speed multiplier).
     pub fn scaled_time_step_duration(&self) -> fph {
         self.time_step_duration * self.simulation_speed_multiplier
     }
 
-    /// Returns the time that have elapsed within the simulation.
+    /// The time that have elapsed within the simulation.
     pub fn current_simulation_time(&self) -> fph {
         self.simulation_time
     }
 
-    /// Returns the number of substeps performed each simulation step.
+    /// The number of substeps performed each simulation step.
     pub fn n_substeps(&self) -> u32 {
         self.config.n_substeps
+    }
+
+    /// The number of substeps performed each simulation step.
+    pub fn n_substeps_mut(&mut self) -> &mut u32 {
+        &mut self.config.n_substeps
+    }
+
+    /// Whether the time step duration is updated regularly to match the frame
+    /// duration.
+    pub fn matches_frame_duration(&self) -> bool {
+        self.config.match_frame_duration
+    }
+
+    /// Whether the time step duration is updated regularly to match the frame
+    /// duration.
+    pub fn matches_frame_duration_mut(&mut self) -> &mut bool {
+        &mut self.config.match_frame_duration
     }
 
     /// Returns a reference to the [`RigidBodyForceManager`], guarded by a

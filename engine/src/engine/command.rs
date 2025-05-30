@@ -426,6 +426,14 @@ impl Engine {
 }
 
 impl ToActiveState {
+    pub fn from_enabled(enabled: bool) -> Self {
+        if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+
     pub fn set(self, enabled: &mut bool) -> ModifiedActiveState {
         let was_enabled = *enabled;
         let state = self.apply(enabled);
