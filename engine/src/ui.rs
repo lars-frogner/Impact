@@ -10,7 +10,7 @@ use crate::{
 use input::{UIEventHandlingResponse, UserInterfaceInputManager};
 use serde::{Deserialize, Serialize};
 use std::{fmt, sync::Arc};
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, WindowEvent};
 
 #[derive(Debug)]
 pub struct UserInterface {
@@ -53,11 +53,19 @@ impl UserInterface {
         self.input_manager.handle_window_event(event)
     }
 
+    pub fn handle_device_event(&mut self, event: &DeviceEvent) {
+        self.input_manager.handle_device_event(event);
+    }
+
     pub fn run(&mut self, game_loop: &GameLoop, engine: &Engine) -> RawUserInterfaceOutput {
         let input = self.input_manager.take_raw_input();
-        let output = self
+
+        let mut output = self
             .egui_ctx
             .run(input, |ctx| self.app.run_ui(ctx, game_loop, engine));
+
+        output = self.input_manager.handle_output(output);
+
         RawUserInterfaceOutput { output }
     }
 
