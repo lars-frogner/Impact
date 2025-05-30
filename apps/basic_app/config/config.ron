@@ -72,6 +72,7 @@
             ),
         ),
         constraint_solver: (
+            enabled: true,
             n_iterations: 8,
             old_impulse_weight: 0.4,
             n_positional_correction_iterations: 3,

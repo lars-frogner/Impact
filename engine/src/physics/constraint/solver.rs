@@ -28,16 +28,18 @@ use std::{
 /// A Sequential Impulse constraint solver.
 #[derive(Clone, Debug)]
 pub struct ConstraintSolver {
-    config: ConstraintSolverConfig,
     bodies: Vec<ConstrainedBody>,
     body_index_map: KeyIndexMapper<EntityID>,
     contacts: ConstraintCache<ContactID, PreparedContact>,
     spherical_joints: ConstraintCache<ConstraintID, PreparedSphericalJoint>,
+    config: ConstraintSolverConfig,
 }
 
 /// Configuration parameters for the [`ConstraintSolver`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstraintSolverConfig {
+    /// Whether constraints will be solved.
+    pub enabled: bool,
     /// The number of sequential impulse iterations to perform for solving the
     /// velocity constraints.
     pub n_iterations: u32,
@@ -86,11 +88,11 @@ impl ConstraintSolver {
     /// parameters.
     pub fn new(config: ConstraintSolverConfig) -> Self {
         Self {
-            config,
             bodies: Vec::new(),
             body_index_map: KeyIndexMapper::new(),
             contacts: ConstraintCache::new(),
             spherical_joints: ConstraintCache::new(),
+            config,
         }
     }
 
@@ -104,6 +106,14 @@ impl ConstraintSolver {
 
     pub fn prepared_body_count(&self) -> usize {
         self.bodies.len()
+    }
+
+    pub fn config(&self) -> &ConstraintSolverConfig {
+        &self.config
+    }
+
+    pub fn config_mut(&mut self) -> &mut ConstraintSolverConfig {
+        &mut self.config
     }
 
     /// Prepares the given [`Contact`] between the given bodies for solution.
@@ -327,6 +337,7 @@ impl ConstraintSolver {
 impl Default for ConstraintSolverConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             n_iterations: 8,
             old_impulse_weight: 0.4,
             n_positional_correction_iterations: 3,
