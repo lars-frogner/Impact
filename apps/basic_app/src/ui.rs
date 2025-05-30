@@ -17,7 +17,7 @@ use impact::{
     },
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
-use std::{hash::Hash, ops::RangeInclusive};
+use std::{hash::Hash, num::NonZeroU32, ops::RangeInclusive};
 
 #[derive(Clone, Debug, Default)]
 pub struct UserInterface {
@@ -134,8 +134,6 @@ fn shadow_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
 fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut postprocessor = renderer.postprocessor().write().unwrap();
-    let graphics_device = renderer.graphics_device();
-    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
 
     let enabled = postprocessor.ambient_occlusion_enabled_mut();
 
@@ -171,8 +169,10 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
         || intensity.changed()
         || contrast.changed()
     {
+        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
+
         postprocessor.set_ambient_occlusion_config(
-            graphics_device,
+            renderer.graphics_device(),
             &gpu_resource_group_manager,
             config,
         );
@@ -181,8 +181,6 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
 fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut postprocessor = renderer.postprocessor().write().unwrap();
-    let graphics_device = renderer.graphics_device();
-    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
 
     let enabled = postprocessor.temporal_anti_aliasing_enabled_mut();
 
@@ -203,8 +201,10 @@ fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     );
 
     if current_frame_weight.changed() || variance_clipping_threshold.changed() {
+        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
+
         postprocessor.set_temporal_anti_aliasing_config(
-            graphics_device,
+            renderer.graphics_device(),
             &gpu_resource_group_manager,
             config,
         );
@@ -215,9 +215,6 @@ fn camera_settings(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut postprocessor = renderer.postprocessor().write().unwrap();
     let capturing_camera = postprocessor.capturing_camera_mut();
     let settings = capturing_camera.settings_mut();
-
-    let graphics_device = renderer.graphics_device();
-    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
 
     let mut exposure_mode = if settings.sensitivity.is_auto() {
         ExposureMode::Automatic
@@ -295,8 +292,11 @@ fn camera_settings(ui: &mut Ui, renderer: &mut RenderingSystem) {
                     max_luminance_value.max(min_luminance_value.next_up()),
                 );
 
+                let gpu_resource_group_manager =
+                    renderer.gpu_resource_group_manager().read().unwrap();
+
                 capturing_camera.set_average_luminance_computation_config(
-                    graphics_device,
+                    renderer.graphics_device(),
                     &gpu_resource_group_manager,
                     config,
                 );
@@ -315,7 +315,7 @@ fn camera_settings(ui: &mut Ui, renderer: &mut RenderingSystem) {
             );
 
             transform_slider_recip(&mut settings.shutter_duration, 1.0..=8000.0, |sl| {
-                option_slider(ui, "Shutter speed", sl.suffix(" 1/s"))
+                option_slider(ui, "Shutter speed", sl.suffix("/s"))
             });
 
             option_slider(
@@ -336,6 +336,47 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let enabled = capturing_camera.produces_bloom_mut();
 
     option_checkbox(ui, enabled, "Bloom");
+
+    let mut config = capturing_camera.bloom_config().clone();
+
+    let n_downsamplings = option_slider(
+        ui,
+        "Downsamplings",
+        Slider::new(
+            &mut config.n_downsamplings,
+            NonZeroU32::new(1).unwrap()..=NonZeroU32::new(16).unwrap(),
+        ),
+    );
+
+    let blur_filter_radius = option_slider(
+        ui,
+        "Blur radius",
+        Slider::new(&mut config.blur_filter_radius, 1e-4..=1e-1).logarithmic(true),
+    );
+
+    let blurred_luminance_weight = option_slider(
+        ui,
+        "Blur weight",
+        Slider::new(&mut config.blurred_luminance_weight, 0.0..=1.0),
+    );
+
+    if n_downsamplings.changed()
+        || blur_filter_radius.changed()
+        || blurred_luminance_weight.changed()
+    {
+        let mut shader_manager = renderer.shader_manager().write().unwrap();
+        let mut render_attachment_texture_manager = renderer
+            .render_attachment_texture_manager()
+            .write()
+            .unwrap();
+
+        capturing_camera.set_bloom_config(
+            renderer.graphics_device(),
+            &mut shader_manager,
+            &mut render_attachment_texture_manager,
+            config,
+        );
+    }
 }
 
 fn tone_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {

@@ -206,7 +206,7 @@ impl CapturingCamera {
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
-        )?;
+        );
 
         let tone_mapping_commands = ToneMappingRenderCommands::new(
             config.tone_mapping,
@@ -355,12 +355,29 @@ impl CapturingCamera {
         );
     }
 
+    pub fn produces_bloom_mut(&mut self) -> &mut bool {
+        self.bloom_commands.enabled_mut()
+    }
+
     pub fn bloom_config(&self) -> &BloomConfig {
         self.bloom_commands.config()
     }
 
-    pub fn produces_bloom_mut(&mut self) -> &mut bool {
-        self.bloom_commands.enabled_mut()
+    /// Sets the given bloom computation configuration parameters and updates
+    /// the appropriate render resources.
+    pub fn set_bloom_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        config: BloomConfig,
+    ) {
+        self.bloom_commands.set_config(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            config,
+        );
     }
 
     pub fn tone_mapping_config(&self) -> &ToneMappingConfig {
