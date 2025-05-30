@@ -15,7 +15,42 @@ use impact::{
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
 
+mod shadow_mapping {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Shadow mapping",
+            hover_text: "Whether shadow mapping is enabled.",
+        };
+    }
+}
+
 mod ambient_occlusion {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Ambient occlusion",
+            hover_text: "Whether ambient occlusion is enabled.",
+        };
+        pub const SAMPLE_COUNT: LabelAndHoverText = LabelAndHoverText {
+            label: "Sample count",
+            hover_text: "The number of samples to use for computing ambient occlusion.",
+        };
+        pub const SAMPLE_RADIUS: LabelAndHoverText = LabelAndHoverText {
+            label: "Sample radius",
+            hover_text: "The sampling radius to use when computing ambient occlusion.",
+        };
+        pub const INTENSITY: LabelAndHoverText = LabelAndHoverText {
+            label: "Intensity",
+            hover_text: "Factor for scaling the intensity of the ambient occlusion.",
+        };
+        pub const CONTRAST: LabelAndHoverText = LabelAndHoverText {
+            label: "Contrast",
+            hover_text: "Factor for scaling the contrast of the ambient occlusion.",
+        };
+    }
     pub mod ranges {
         use impact::gpu::rendering::postprocessing::ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT;
         use std::ops::RangeInclusive;
@@ -28,6 +63,26 @@ mod ambient_occlusion {
 }
 
 mod temporal_anti_aliasing {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Temporal AA",
+            hover_text: "Whether temporal anti-aliasing is enabled.",
+        };
+        pub const CURRENT_FRAME_WEIGHT: LabelAndHoverText = LabelAndHoverText {
+            label: "Current frame weight",
+            hover_text: "\
+                How much the luminance of the current frame should be weighted compared \
+                to the luminance reprojected from the previous frame.",
+        };
+        pub const VARIANCE_CLIPPING_THRESHOLD: LabelAndHoverText = LabelAndHoverText {
+            label: "Variance clipping",
+            hover_text: "\
+                The maximum variance allowed between the current and previous frame's \
+                luminance when performing temporal blending.",
+        };
+    }
     pub mod ranges {
         use std::ops::RangeInclusive;
 
@@ -37,6 +92,66 @@ mod temporal_anti_aliasing {
 }
 
 mod camera {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const EXPOSURE_MODE: LabelAndHoverText = LabelAndHoverText {
+            label: "Camera exposure",
+            hover_text: "\
+                Whether exposure is determined automatically based on incident \
+                luminance or manually from camera settings.",
+        };
+        pub const MAX_EXPOSURE: LabelAndHoverText = LabelAndHoverText {
+            label: "Max exposure",
+            hover_text: "\
+                The maximum exposure of the camera sensor. This corresponds to the \
+                reciprocal of the minimum incident luminance in cd/m² that can saturate \
+                the sensor.",
+        };
+        pub const EV_COMPENSATION: LabelAndHoverText = LabelAndHoverText {
+            label: "EV compensation",
+            hover_text: "\
+                The compensation in stops applied to the exposure value \
+                obtained from incident luminance.",
+        };
+        pub const MIN_LUMINANCE: LabelAndHoverText = LabelAndHoverText {
+            label: "Min luminance",
+            hover_text: "\
+                The minimum luminance value that the histogram used for computing \
+                average luminance should include (luminance values below this limit \
+                will be clipped).",
+        };
+        pub const MAX_LUMINANCE: LabelAndHoverText = LabelAndHoverText {
+            label: "Max luminance",
+            hover_text: "\
+                The maximum luminance value that the histogram used for computing \
+                average luminance should include (luminance values above this limit \
+                will be clipped).",
+        };
+        pub const CURRENT_FRAME_WEIGHT: LabelAndHoverText = LabelAndHoverText {
+            label: "Current frame weight",
+            hover_text: "\
+                How much the average luminance computed for the current frame will be \
+                weighted compared to the average luminance computed for the previous \
+                frame. A value of 0.0 reuses the previous luminance without \
+                modification, while a value of 1.0 uses the current luminance without \
+                any contribution from the previous frame.",
+        };
+        pub const RELATIVE_APERTURE: LabelAndHoverText = LabelAndHoverText {
+            label: "Aperture ratio (F-stop)",
+            hover_text: "\
+                The relative aperture of the camera, which is the ratio of the focal \
+                length to the aperture diameter.",
+        };
+        pub const SHUTTER_SPEED: LabelAndHoverText = LabelAndHoverText {
+            label: "Shutter speed",
+            hover_text: "The duration the sensor is exposed.",
+        };
+        pub const ISO: LabelAndHoverText = LabelAndHoverText {
+            label: "ISO",
+            hover_text: "The ISO speed of the camera sensor.",
+        };
+    }
     pub mod ranges {
         use std::ops::RangeInclusive;
 
@@ -44,7 +159,7 @@ mod camera {
         pub const EV_COMPENSATION: RangeInclusive<f32> = -10.0..=10.0;
         pub const MIN_LUMINANCE: f32 = 1e-1;
         pub const MAX_LUMINANCE: f32 = 1e12;
-        pub const LUMINANCE_FRAME_WEIGHT: RangeInclusive<f32> = 0.0..=1.0;
+        pub const CURRENT_FRAME_WEIGHT: RangeInclusive<f32> = 0.0..=1.0;
         pub const RELATIVE_APERTURE: RangeInclusive<f32> = 0.1..=10.0;
         pub const SHUTTER_SPEED: RangeInclusive<f64> = 1.0..=8000.0;
         pub const ISO: RangeInclusive<f32> = 1e1..=1e6;
@@ -55,6 +170,34 @@ mod camera {
 }
 
 mod bloom {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Bloom",
+            hover_text: "Whether bloom is enabled.",
+        };
+        pub const N_DOWNSAMPLINGS: LabelAndHoverText = LabelAndHoverText {
+            label: "Downsamplings",
+            hover_text: "\
+                The number of downsamplings to perform during blurring. More \
+                downsamplings will result in stronger blurring.",
+        };
+        pub const BLUR_FILTER_RADIUS: LabelAndHoverText = LabelAndHoverText {
+            label: "Blur radius",
+            hover_text: "\
+                The radius of the blur filter to apply during upsampling. A larger \
+                radius will result in stronger blurring.",
+        };
+        pub const BLURRED_LUMINANCE_WEIGHT: LabelAndHoverText = LabelAndHoverText {
+            label: "Blur weight",
+            hover_text: "\
+                How strongly the blurred luminance should be weighted when blending with \
+                the original luminance. A value of zero will result in no blending, \
+                effectively disabling bloom. A value of one will replace the original \
+                luminance with the blurred luminance.",
+        };
+    }
     pub mod ranges {
         use std::{num::NonZeroU32, ops::RangeInclusive};
 
@@ -62,6 +205,39 @@ mod bloom {
             NonZeroU32::new(1).unwrap()..=NonZeroU32::new(16).unwrap();
         pub const BLUR_FILTER_RADIUS: RangeInclusive<f32> = 1e-4..=1e-1;
         pub const BLURRED_LUMINANCE_WEIGHT: RangeInclusive<f32> = 0.0..=1.0;
+    }
+}
+
+mod tone_mapping {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const METHOD: LabelAndHoverText = LabelAndHoverText {
+            label: "Tone mapping",
+            hover_text: "The method to use for tone mapping.",
+        };
+    }
+}
+
+mod wireframe {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
+            label: "Wireframe mode",
+            hover_text: "Whether only triangle edges instead of faces should be rendered.",
+        };
+    }
+}
+
+mod render_attachment {
+    pub mod docs {
+        use crate::ui::LabelAndHoverText;
+
+        pub const ATTACHMENT: LabelAndHoverText = LabelAndHoverText {
+            label: "Render attachment",
+            hover_text: "Which specific render attachment texture to visualize.",
+        };
     }
 }
 
@@ -102,7 +278,11 @@ pub(super) fn rendering_option_panel(ui: &mut Ui, engine: &Engine) {
 }
 
 fn shadow_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    option_checkbox(ui, renderer.shadow_mapping_enabled_mut(), "Shadow mapping");
+    option_checkbox(
+        ui,
+        renderer.shadow_mapping_enabled_mut(),
+        shadow_mapping::docs::ENABLED,
+    );
 }
 
 fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
@@ -110,13 +290,13 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     let enabled = postprocessor.ambient_occlusion_enabled_mut();
 
-    option_checkbox(ui, enabled, "Ambient occlusion");
+    option_checkbox(ui, enabled, ambient_occlusion::docs::ENABLED);
 
     let mut config = postprocessor.ambient_occlusion_config().clone();
 
     let sample_count = option_slider(
         ui,
-        "Sample count",
+        ambient_occlusion::docs::SAMPLE_COUNT,
         Slider::new(
             &mut config.sample_count,
             ambient_occlusion::ranges::SAMPLE_COUNT,
@@ -124,7 +304,7 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     );
     let sample_radius = option_slider(
         ui,
-        "Sample radius ",
+        ambient_occlusion::docs::SAMPLE_RADIUS,
         Slider::new(
             &mut config.sample_radius,
             ambient_occlusion::ranges::SAMPLE_RADIUS,
@@ -132,12 +312,12 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     );
     let intensity = option_slider(
         ui,
-        "Intensity",
+        ambient_occlusion::docs::INTENSITY,
         Slider::new(&mut config.intensity, ambient_occlusion::ranges::INTENSITY),
     );
     let contrast = option_slider(
         ui,
-        "Contrast",
+        ambient_occlusion::docs::CONTRAST,
         Slider::new(&mut config.contrast, ambient_occlusion::ranges::CONTRAST),
     );
 
@@ -161,13 +341,13 @@ fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     let enabled = postprocessor.temporal_anti_aliasing_enabled_mut();
 
-    option_checkbox(ui, enabled, "Temporal AA");
+    option_checkbox(ui, enabled, temporal_anti_aliasing::docs::ENABLED);
 
     let mut config = postprocessor.temporal_anti_aliasing_config().clone();
 
     let current_frame_weight = option_slider(
         ui,
-        "Current frame weight",
+        temporal_anti_aliasing::docs::CURRENT_FRAME_WEIGHT,
         Slider::new(
             &mut config.current_frame_weight,
             temporal_anti_aliasing::ranges::CURRENT_FRAME_WEIGHT,
@@ -176,7 +356,7 @@ fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     let variance_clipping_threshold = option_slider(
         ui,
-        "Variance clipping",
+        temporal_anti_aliasing::docs::VARIANCE_CLIPPING_THRESHOLD,
         Slider::new(
             &mut config.variance_clipping_threshold,
             temporal_anti_aliasing::ranges::VARIANCE_CLIPPING_THRESHOLD,
@@ -205,8 +385,8 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
         ExposureMode::Manual
     };
 
-    labeled_option(ui, "Camera exposure", |ui| {
-        ComboBox::from_id_salt("Camera exposure")
+    labeled_option(ui, camera::docs::EXPOSURE_MODE, |ui| {
+        ComboBox::from_id_salt(camera::docs::EXPOSURE_MODE.label)
             .selected_text(format!("{:?}", exposure_mode))
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut exposure_mode, ExposureMode::Automatic, "Automatic");
@@ -216,7 +396,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     option_slider(
         ui,
-        "Max exposure",
+        camera::docs::MAX_EXPOSURE,
         Slider::new(&mut settings.max_exposure, camera::ranges::MAX_EXPOSURE)
             .logarithmic(true)
             .suffix("/nit")
@@ -232,7 +412,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
             option_slider(
                 ui,
-                "EV compensation",
+                camera::docs::EV_COMPENSATION,
                 Slider::new(&mut ev_compensation, camera::ranges::EV_COMPENSATION).suffix(" stops"),
             );
 
@@ -246,7 +426,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
             let min_luminance = option_slider(
                 ui,
-                "Min luminance",
+                camera::docs::MIN_LUMINANCE,
                 Slider::new(
                     &mut min_luminance_value,
                     camera::ranges::MIN_LUMINANCE..=max_luminance_value,
@@ -258,7 +438,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
             let max_luminance = option_slider(
                 ui,
-                "Max luminance",
+                camera::docs::MAX_LUMINANCE,
                 Slider::new(
                     &mut max_luminance_value,
                     min_luminance_value..=camera::ranges::MAX_LUMINANCE,
@@ -270,10 +450,10 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
             let current_frame_weight = option_slider(
                 ui,
-                "Current frame weight",
+                camera::docs::CURRENT_FRAME_WEIGHT,
                 Slider::new(
                     &mut config.current_frame_weight,
-                    camera::ranges::LUMINANCE_FRAME_WEIGHT,
+                    camera::ranges::CURRENT_FRAME_WEIGHT,
                 ),
             );
 
@@ -302,7 +482,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
             option_slider(
                 ui,
-                "Aperture ratio (F-stop)",
+                camera::docs::RELATIVE_APERTURE,
                 Slider::new(
                     &mut settings.relative_aperture,
                     camera::ranges::RELATIVE_APERTURE,
@@ -312,12 +492,12 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
             transform_slider_recip(
                 &mut settings.shutter_duration,
                 camera::ranges::SHUTTER_SPEED,
-                |sl| option_slider(ui, "Shutter speed", sl.suffix("/s")),
+                |sl| option_slider(ui, camera::docs::SHUTTER_SPEED, sl.suffix("/s")),
             );
 
             option_slider(
                 ui,
-                "ISO",
+                camera::docs::ISO,
                 Slider::new(&mut iso, camera::ranges::ISO).logarithmic(true),
             );
 
@@ -332,19 +512,19 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     let enabled = capturing_camera.produces_bloom_mut();
 
-    option_checkbox(ui, enabled, "Bloom");
+    option_checkbox(ui, enabled, bloom::docs::ENABLED);
 
     let mut config = capturing_camera.bloom_config().clone();
 
     let n_downsamplings = option_slider(
         ui,
-        "Downsamplings",
+        bloom::docs::N_DOWNSAMPLINGS,
         Slider::new(&mut config.n_downsamplings, bloom::ranges::N_DOWNSAMPLINGS),
     );
 
     let blur_filter_radius = option_slider(
         ui,
-        "Blur radius",
+        bloom::docs::BLUR_FILTER_RADIUS,
         Slider::new(
             &mut config.blur_filter_radius,
             bloom::ranges::BLUR_FILTER_RADIUS,
@@ -354,7 +534,7 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     let blurred_luminance_weight = option_slider(
         ui,
-        "Blur weight",
+        bloom::docs::BLURRED_LUMINANCE_WEIGHT,
         Slider::new(
             &mut config.blurred_luminance_weight,
             bloom::ranges::BLURRED_LUMINANCE_WEIGHT,
@@ -385,8 +565,8 @@ fn tone_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let capturing_camera = postprocessor.capturing_camera_mut();
     let config = capturing_camera.tone_mapping_config_mut();
 
-    labeled_option(ui, "Tone mapping", |ui| {
-        ComboBox::from_id_salt("Tone mapping")
+    labeled_option(ui, tone_mapping::docs::METHOD, |ui| {
+        ComboBox::from_id_salt(tone_mapping::docs::METHOD.label)
             .selected_text(format!("{:?}", config.method))
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut config.method, ToneMappingMethod::ACES, "ACES");
@@ -402,7 +582,7 @@ fn tone_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
 fn wireframe_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut enabled = renderer.basic_config().wireframe_mode_on;
-    if option_checkbox(ui, &mut enabled, "Wireframe mode").changed() {
+    if option_checkbox(ui, &mut enabled, wireframe::docs::ENABLED).changed() {
         renderer.set_wireframe_mode(ToActiveState::from_enabled(enabled));
     }
 }
@@ -413,8 +593,8 @@ fn render_attachment_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut quantity = postprocessor.visualized_render_attachment_quantity();
     let original_quantity = quantity;
 
-    labeled_option(ui, "Render attachment", |ui| {
-        ComboBox::from_id_salt("Render attachment")
+    labeled_option(ui, render_attachment::docs::ATTACHMENT, |ui| {
+        ComboBox::from_id_salt(render_attachment::docs::ATTACHMENT.label)
             .selected_text(if let Some(quantity) = quantity {
                 format!("{quantity:?}")
             } else {
