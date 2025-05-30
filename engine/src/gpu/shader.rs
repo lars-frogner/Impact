@@ -98,6 +98,42 @@ impl ShaderManager {
         )
     }
 
+    /// Determines the shader ID for the given shader template, resolves it and
+    /// stores it as a rendering shader under the shader ID, replacing any
+    /// existing rendering shader under that ID. Returns the shader and ID.
+    ///
+    /// # Panics
+    /// If the shader template can not be compiled.
+    pub fn insert_and_get_rendering_shader_from_template(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        template: &impl SpecificShaderTemplate,
+    ) -> (ShaderID, &Shader) {
+        Self::insert_and_get_shader_with_template(
+            &mut self.rendering_shaders,
+            graphics_device,
+            template,
+        )
+    }
+
+    /// Determines the shader ID for the given shader template, resolves it and
+    /// stores it as a compute shader under the shader ID, replacing any
+    /// existing compute shader under that ID. Returns the shader and ID.
+    ///
+    /// # Panics
+    /// If the shader template can not be compiled.
+    pub fn insert_and_get_compute_shader_from_template(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        template: &impl SpecificShaderTemplate,
+    ) -> (ShaderID, &Shader) {
+        Self::insert_and_get_shader_with_template(
+            &mut self.compute_shaders,
+            graphics_device,
+            template,
+        )
+    }
+
     fn get_or_create_shader_from_template<'a>(
         shaders: &'a mut HashMap<ShaderID, Shader>,
         graphics_device: &GraphicsDevice,
@@ -113,6 +149,27 @@ impl ShaderManager {
             ),
         };
 
+        (shader_id, shader)
+    }
+
+    fn insert_and_get_shader_with_template<'a>(
+        shaders: &'a mut HashMap<ShaderID, Shader>,
+        graphics_device: &GraphicsDevice,
+        template: &impl SpecificShaderTemplate,
+    ) -> (ShaderID, &'a Shader) {
+        let shader_id = template.shader_id();
+
+        let new_shader = Shader::from_template(graphics_device, template)
+            .expect("Failed to create shader from template");
+
+        let shader = match shaders.entry(shader_id) {
+            Entry::Occupied(entry) => {
+                let shader = entry.into_mut();
+                *shader = new_shader;
+                shader
+            }
+            Entry::Vacant(entry) => entry.insert(new_shader),
+        };
         (shader_id, shader)
     }
 }

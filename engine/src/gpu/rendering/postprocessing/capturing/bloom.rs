@@ -14,7 +14,7 @@ use crate::{
             resource::SynchronizedRenderResources,
         },
         shader::{
-            ShaderManager,
+            ShaderID, ShaderManager,
             template::{
                 bloom_blending::BloomBlendingShaderTemplate,
                 bloom_downsampling::BloomDownsamplingShaderTemplate,
@@ -31,6 +31,7 @@ use crate::{
     mesh::{self, VertexAttributeSet},
 };
 use anyhow::{Result, anyhow};
+use approx::abs_diff_ne;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, num::NonZeroU32};
 
@@ -67,6 +68,22 @@ pub(super) struct BloomRenderCommands {
     config: BloomConfig,
 }
 
+impl BloomConfig {
+    fn new_config_requires_recreated_commands(&self, other: &Self) -> bool {
+        self.n_downsamplings != other.n_downsamplings
+            || abs_diff_ne!(
+                self.blur_filter_radius,
+                other.blur_filter_radius,
+                epsilon = 1e-6
+            )
+            || abs_diff_ne!(
+                self.blurred_luminance_weight,
+                other.blurred_luminance_weight,
+                epsilon = 1e-6
+            )
+    }
+}
+
 impl Default for BloomConfig {
     fn default() -> Self {
         Self {
@@ -86,7 +103,7 @@ impl BloomRenderCommands {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
-    ) -> Result<Self> {
+    ) -> Self {
         let n_downsamplings = u32::min(config.n_downsamplings.get(), LuminanceAux.max_mip_level());
         let n_upsamplings = n_downsamplings - 1; // We don't upsample from mip level 1 to 0
 
@@ -179,11 +196,21 @@ impl BloomRenderCommands {
             "bloom downsampling",
         );
 
-        let upsampling_blur_shader_template =
-            BloomUpsamplingBlurShaderTemplate::new(LuminanceAux, config.blur_filter_radius);
+        // We are deliberately assigning a shader ID that does not depend on the
+        // configuration parameters that the shader uses (the default generated
+        // ID does). This is so that we can update the parameters and overwrite
+        // the existing shader rather than creating a new entry.
+        let upsampling_blur_shader_template = BloomUpsamplingBlurShaderTemplate::new(
+            Self::upsampling_blur_shader_template_id(),
+            LuminanceAux,
+            config.blur_filter_radius,
+        );
 
+        // If the shader exists, it will be overwritten. This ensures that we
+        // will not keep using an invalidated shader after updating the
+        // configuration parameters.
         let (_, upsampling_blur_shader) = shader_manager
-            .get_or_create_rendering_shader_from_template(
+            .insert_and_get_rendering_shader_from_template(
                 graphics_device,
                 &upsampling_blur_shader_template,
             );
@@ -198,13 +225,14 @@ impl BloomRenderCommands {
         );
 
         let blending_shader_template = BloomBlendingShaderTemplate::new(
+            Self::blending_shader_template_id(),
             Luminance,
             LuminanceAux,
             blurred_luminance_normalization,
             config.blurred_luminance_weight,
         );
 
-        let (_, blending_shader) = shader_manager.get_or_create_rendering_shader_from_template(
+        let (_, blending_shader) = shader_manager.insert_and_get_rendering_shader_from_template(
             graphics_device,
             &blending_shader_template,
         );
@@ -223,7 +251,7 @@ impl BloomRenderCommands {
             RenderAttachmentQuantity::LuminanceAux,
         );
 
-        Ok(Self {
+        Self {
             n_downsamplings: n_downsamplings as usize,
             n_upsamplings: n_upsamplings as usize,
             push_constants,
@@ -233,15 +261,34 @@ impl BloomRenderCommands {
             blending_pipeline,
             disabled_command,
             config,
-        })
+        }
+    }
+
+    pub(super) fn enabled_mut(&mut self) -> &mut bool {
+        &mut self.config.enabled
     }
 
     pub(super) fn config(&self) -> &BloomConfig {
         &self.config
     }
 
-    pub(super) fn enabled_mut(&mut self) -> &mut bool {
-        &mut self.config.enabled
+    pub(super) fn set_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        config: BloomConfig,
+    ) {
+        if self.config.new_config_requires_recreated_commands(&config) {
+            *self = Self::new(
+                config,
+                graphics_device,
+                shader_manager,
+                render_attachment_texture_manager,
+            );
+        } else {
+            self.config = config;
+        }
     }
 
     pub(super) fn record(
@@ -501,6 +548,14 @@ impl BloomRenderCommands {
                 PushConstantVariant::InverseWindowDimensions,
                 || Self::compute_inverse_output_view_size(texture, output_mip_level),
             );
+    }
+
+    fn upsampling_blur_shader_template_id() -> ShaderID {
+        ShaderID::from_identifier("BloomUpsamplingBlurShaderTemplate")
+    }
+
+    fn blending_shader_template_id() -> ShaderID {
+        ShaderID::from_identifier("BloomBlendingShaderTemplate")
     }
 
     fn compute_inverse_output_view_size(

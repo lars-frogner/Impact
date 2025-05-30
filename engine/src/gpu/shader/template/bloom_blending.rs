@@ -2,7 +2,10 @@
 
 use crate::{
     gpu::{
-        shader::template::{ShaderTemplate, SpecificShaderTemplate},
+        shader::{
+            ShaderID,
+            template::{ShaderTemplate, SpecificShaderTemplate},
+        },
         texture::attachment::RenderAttachmentQuantity,
     },
     mesh::buffer::MeshVertexAttributeLocation,
@@ -15,6 +18,7 @@ use std::sync::LazyLock;
 /// effect.
 #[derive(Clone, Debug)]
 pub struct BloomBlendingShaderTemplate {
+    shader_id: ShaderID,
     luminance_quantity: RenderAttachmentQuantity,
     blurred_luminance_quantity: RenderAttachmentQuantity,
     blurred_luminance_normalization: f32,
@@ -29,12 +33,14 @@ impl BloomBlendingShaderTemplate {
     /// attachment quantities holding the original and blurred luminance and the
     /// given normalization factor and blend weight for the blurred luminance.
     pub fn new(
+        shader_id: ShaderID,
         luminance_quantity: RenderAttachmentQuantity,
         blurred_luminance_quantity: RenderAttachmentQuantity,
         blurred_luminance_normalization: f32,
         blurred_luminance_weight: f32,
     ) -> Self {
         Self {
+            shader_id,
             luminance_quantity,
             blurred_luminance_quantity,
             blurred_luminance_normalization,
@@ -62,6 +68,10 @@ impl SpecificShaderTemplate for BloomBlendingShaderTemplate {
             )
             .expect("Shader template resolution failed")
     }
+
+    fn shader_id(&self) -> ShaderID {
+        self.shader_id
+    }
 }
 
 #[cfg(test)]
@@ -72,6 +82,7 @@ mod tests {
     #[test]
     fn should_resolve_to_valid_wgsl() {
         validate_template(&BloomBlendingShaderTemplate::new(
+            ShaderID::from_identifier("BloomBlendingShaderTemplate"),
             RenderAttachmentQuantity::Luminance,
             RenderAttachmentQuantity::LuminanceAux,
             0.25,
