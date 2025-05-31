@@ -1,9 +1,10 @@
 use super::{
-    labeled_option, option_checkbox, option_group, option_panel_options, option_slider,
+    labeled_option, option_checkbox, option_group, option_panel, option_slider,
     scientific_formatter, transform_slider_recip,
 };
+use crate::ui::UserInterfaceConfig;
 use impact::{
-    egui::{ComboBox, Slider, Ui},
+    egui::{ComboBox, Context, Slider, Ui},
     engine::{Engine, command::ToActiveState},
     gpu::rendering::{
         RenderingSystem,
@@ -17,7 +18,7 @@ use impact::{
 
 mod shadow_mapping {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Shadow mapping",
@@ -28,7 +29,7 @@ mod shadow_mapping {
 
 mod ambient_occlusion {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Ambient occlusion",
@@ -64,7 +65,7 @@ mod ambient_occlusion {
 
 mod temporal_anti_aliasing {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Temporal AA",
@@ -93,7 +94,7 @@ mod temporal_anti_aliasing {
 
 mod camera {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const EXPOSURE_MODE: LabelAndHoverText = LabelAndHoverText {
             label: "Camera exposure",
@@ -171,7 +172,7 @@ mod camera {
 
 mod bloom {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Bloom",
@@ -210,7 +211,7 @@ mod bloom {
 
 mod dynamic_range_compression {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const TONE_MAPPING_METHOD: LabelAndHoverText = LabelAndHoverText {
             label: "Tone mapping",
@@ -221,7 +222,7 @@ mod dynamic_range_compression {
 
 mod wireframe {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Wireframe mode",
@@ -232,7 +233,7 @@ mod wireframe {
 
 mod render_attachment {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ATTACHMENT: LabelAndHoverText = LabelAndHoverText {
             label: "Render attachment",
@@ -241,40 +242,46 @@ mod render_attachment {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RenderingOptionPanel;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ExposureMode {
     Automatic,
     Manual,
 }
 
-pub(super) fn rendering_option_panel(ui: &mut Ui, engine: &Engine) {
-    let mut renderer = engine.renderer().write().unwrap();
-    option_panel_options(ui, |ui| {
-        option_group(ui, "shadow_mapping_options", |ui| {
-            shadow_mapping_options(ui, &mut renderer);
+impl RenderingOptionPanel {
+    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
+        let mut renderer = engine.renderer().write().unwrap();
+
+        option_panel(ctx, config, "rendering_option_panel", |ui| {
+            option_group(ui, "shadow_mapping_options", |ui| {
+                shadow_mapping_options(ui, &mut renderer);
+            });
+            option_group(ui, "ambient_occlusion_options", |ui| {
+                ambient_occlusion_options(ui, &mut renderer);
+            });
+            option_group(ui, "temporal_anti_aliasing_options", |ui| {
+                temporal_anti_aliasing_options(ui, &mut renderer);
+            });
+            option_group(ui, "camera_options", |ui| {
+                camera_options(ui, &mut renderer);
+            });
+            option_group(ui, "bloom_options", |ui| {
+                bloom_options(ui, &mut renderer);
+            });
+            option_group(ui, "dynamic_range_compression_options", |ui| {
+                dynamic_range_compression_options(ui, &mut renderer);
+            });
+            option_group(ui, "wireframe_options", |ui| {
+                wireframe_options(ui, &mut renderer);
+            });
+            option_group(ui, "render_attachment_options", |ui| {
+                render_attachment_options(ui, &mut renderer);
+            });
         });
-        option_group(ui, "ambient_occlusion_options", |ui| {
-            ambient_occlusion_options(ui, &mut renderer);
-        });
-        option_group(ui, "temporal_anti_aliasing_options", |ui| {
-            temporal_anti_aliasing_options(ui, &mut renderer);
-        });
-        option_group(ui, "camera_options", |ui| {
-            camera_options(ui, &mut renderer);
-        });
-        option_group(ui, "bloom_options", |ui| {
-            bloom_options(ui, &mut renderer);
-        });
-        option_group(ui, "dynamic_range_compression_options", |ui| {
-            dynamic_range_compression_options(ui, &mut renderer);
-        });
-        option_group(ui, "wireframe_options", |ui| {
-            wireframe_options(ui, &mut renderer);
-        });
-        option_group(ui, "render_attachment_options", |ui| {
-            render_attachment_options(ui, &mut renderer);
-        });
-    });
+    }
 }
 
 fn shadow_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {

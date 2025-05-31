@@ -1,14 +1,13 @@
-use super::{
-    option_checkbox, option_group, option_panel_options, option_slider, scientific_formatter,
-};
+use super::{option_checkbox, option_group, option_panel, option_slider, scientific_formatter};
+use crate::ui::UserInterfaceConfig;
 use impact::{
-    egui::{Slider, Ui},
+    egui::{Context, Slider, Ui},
     engine::Engine,
 };
 
 mod simulation {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Simulating",
@@ -48,7 +47,7 @@ mod simulation {
 
 mod constraint_solving {
     pub mod docs {
-        use crate::ui::LabelAndHoverText;
+        use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Constraint solver",
@@ -90,15 +89,20 @@ mod constraint_solving {
     }
 }
 
-pub(super) fn physics_option_panel(ui: &mut Ui, engine: &Engine) {
-    option_panel_options(ui, |ui| {
-        option_group(ui, "simulation_options", |ui| {
-            simulation_options(ui, engine);
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PhysicsOptionPanel;
+
+impl PhysicsOptionPanel {
+    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
+        option_panel(ctx, config, "physics_option_panel", |ui| {
+            option_group(ui, "simulation_options", |ui| {
+                simulation_options(ui, engine);
+            });
+            option_group(ui, "constraint_solving_options", |ui| {
+                constraint_solving_options(ui, engine);
+            });
         });
-        option_group(ui, "constraint_solving_options", |ui| {
-            constraint_solving_options(ui, engine);
-        });
-    });
+    }
 }
 
 fn simulation_options(ui: &mut Ui, engine: &Engine) {
