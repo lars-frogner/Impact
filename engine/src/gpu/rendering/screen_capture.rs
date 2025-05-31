@@ -79,6 +79,7 @@ impl ScreenCapturer {
                 &surface_texture.texture,
                 0,
                 0,
+                true,
                 format!("screenshot_{}.png", Utc::now().to_rfc3339()),
             )?;
         }

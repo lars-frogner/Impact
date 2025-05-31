@@ -128,6 +128,7 @@ impl ShadowCubemapTexture {
             &self.texture,
             0,
             face.as_idx_u32(),
+            false,
             output_path,
         )
     }
@@ -317,6 +318,7 @@ impl CascadedShadowMapTexture {
             &self.texture,
             0,
             cascade_idx,
+            false,
             output_path,
         )
     }
