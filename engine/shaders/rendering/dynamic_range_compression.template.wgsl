@@ -56,8 +56,12 @@ fn toneMapKhronosPBRNeutral(rgbaColor: vec4f) -> vec4f {
     return vec4f(color, rgbaColor.a);
 }
 
-fn gammaCorrect(color: vec4f) -> vec4f {
-    return vec4f(pow(color.rgb, vec3f(0.4545)), color.a);
+fn linearToSrgb(rgbaColor: vec4f) -> vec4f {
+    var color = rgbaColor.rgb;
+    let low = color * 12.92;
+    let high = (pow(abs(color), vec3f(1.0 / 2.4)) * 1.055) - 0.055;
+    color = select(high, low, color <= vec3f(0.0031308));
+    return vec4f(color, rgbaColor.a);
 }
 
 @vertex
@@ -73,6 +77,6 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let textureCoords = convertFramebufferPositionToScreenTextureCoords(input.projectedPosition);
     let rgbaColor = textureSampleLevel(inputColorTexture, inputColorSampler, textureCoords, 0.0);
     output.color = toneMap{{tone_mapping_method}}(rgbaColor);
-    output.color = gammaCorrect(output.color);
+    output.color = linearToSrgb(output.color);
     return output;
 }

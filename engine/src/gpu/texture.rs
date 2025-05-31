@@ -1236,18 +1236,22 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
         (float.clamp(0.0, 1.0) * 255.0) as u8
     }
 
-    fn gamma_corrected(linear_value: f32) -> f32 {
-        f32::powf(linear_value, 0.4545) // ^(1 / 2.2)
+    fn linear_to_srgb(linear_value: f32) -> f32 {
+        if linear_value <= 0.0031308 {
+            linear_value * 12.92
+        } else {
+            (linear_value.abs().powf(1.0 / 2.4) * 1.055) - 0.055
+        }
     }
 
-    fn gamma_corrected_depth(linear_value: f32) -> f32 {
+    fn linear_depth_to_srgb(linear_value: f32) -> f32 {
         // To make small depths darker, we invert before gamma correcting, then
         // invert back
-        1.0 - gamma_corrected(1.0 - linear_value)
+        1.0 - linear_to_srgb(1.0 - linear_value)
     }
 
-    fn gamma_corrected_byte(linear_value: u8) -> u8 {
-        float_to_byte(gamma_corrected(byte_to_float(linear_value)))
+    fn linear_byte_to_srgb(linear_value: u8) -> u8 {
+        float_to_byte(linear_to_srgb(byte_to_float(linear_value)))
     }
 
     if mip_level >= texture.mip_level_count() {
@@ -1299,7 +1303,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
 
                 if !already_gamma_corrected {
                     for p in image_buffer.pixels_mut() {
-                        p.0[0] = gamma_corrected_byte(p.0[0]);
+                        p.0[0] = linear_byte_to_srgb(p.0[0]);
                     }
                 }
 
@@ -1316,9 +1320,9 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 ) && !already_gamma_corrected
                 {
                     for p in image_buffer.pixels_mut() {
-                        p.0[0] = gamma_corrected_byte(p.0[0]);
-                        p.0[1] = gamma_corrected_byte(p.0[1]);
-                        p.0[2] = gamma_corrected_byte(p.0[2]);
+                        p.0[0] = linear_byte_to_srgb(p.0[0]);
+                        p.0[1] = linear_byte_to_srgb(p.0[1]);
+                        p.0[2] = linear_byte_to_srgb(p.0[2]);
                     }
                 }
 
@@ -1340,7 +1344,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
 
             if !already_gamma_corrected {
                 for value in &mut data {
-                    *value = gamma_corrected(value.clamp(0.0, 1.0));
+                    *value = linear_to_srgb(value.clamp(0.0, 1.0));
                 }
             }
 
@@ -1402,11 +1406,11 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 if !already_gamma_corrected {
                     if matches!(format, wgpu::TextureFormat::R32Float) {
                         for value in &mut data {
-                            *value = gamma_corrected(value.clamp(0.0, 1.0));
+                            *value = linear_to_srgb(value.clamp(0.0, 1.0));
                         }
                     } else {
                         for value in &mut data {
-                            *value = gamma_corrected_depth(*value);
+                            *value = linear_depth_to_srgb(*value);
                         }
                     }
                 }
@@ -1420,7 +1424,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
             } else {
                 if !already_gamma_corrected {
                     for value in &mut data {
-                        *value = gamma_corrected(value.clamp(0.0, 1.0));
+                        *value = linear_to_srgb(value.clamp(0.0, 1.0));
                     }
                 }
 
