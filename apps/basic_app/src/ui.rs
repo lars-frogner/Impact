@@ -6,10 +6,11 @@ mod time_counters;
 
 use impact::{
     egui::{
-        Align, Color32, ComboBox, Context, CursorIcon, Frame, Grid, Layout, Response, ScrollArea,
-        Separator, SidePanel, Slider, Ui, emath::Numeric,
+        Align, Color32, ComboBox, Context, CursorIcon, Frame, Grid, Layout, Margin, Response,
+        ScrollArea, Separator, SidePanel, Slider, TextStyle, Ui, emath::Numeric,
     },
-    engine::Engine,
+    egui_extras::{Column, TableBuilder},
+    engine::{Engine, command::ToActiveState},
     game_loop::GameLoop,
 };
 use std::{hash::Hash, ops::RangeInclusive};
@@ -64,6 +65,51 @@ impl UserInterface {
                         }
                         OptionView::Physics => {
                             physics_options::physics_option_panel(ui, engine);
+                        }
+                    });
+            });
+
+        SidePanel::left("timing_panel")
+            .frame(Frame {
+                ..Frame::side_top_panel(&ctx.style())
+            })
+            .show(ctx, |ui| {
+                engine.set_render_pass_timings(ToActiveState::Enabled);
+                let renderer = engine.renderer().read().unwrap();
+                let timestamp_query_manager = renderer.timestamp_query_manager();
+
+                let body_font = TextStyle::Body.resolve(ui.style());
+                let mono_font = TextStyle::Monospace.resolve(ui.style());
+
+                let mono_char_width = ctx.fonts(|fonts| fonts.glyph_width(&mono_font, 'a'));
+                let timing_col_width = 8.0 * mono_char_width;
+
+                let header_hight = ui.spacing().interact_size.y;
+                let row_height = body_font.size + 2.0;
+
+                TableBuilder::new(ui)
+                    .id_salt("render_pass_timings")
+                    .striped(true)
+                    .column(Column::remainder().resizable(true).clip(true))
+                    .column(Column::auto().at_least(timing_col_width))
+                    .header(header_hight, |mut header| {
+                        header.col(|ui| {
+                            ui.strong("Render pass");
+                        });
+                        header.col(|ui| {
+                            ui.strong("Time (µs)");
+                        });
+                    })
+                    .body(|mut body| {
+                        for (tag, duration) in timestamp_query_manager.last_timing_results() {
+                            body.row(row_height, |mut row| {
+                                row.col(|ui| {
+                                    ui.label(tag.as_ref());
+                                });
+                                row.col(|ui| {
+                                    ui.monospace(format!("{:>8.1}", 1e6 * duration.as_secs_f64()));
+                                });
+                            });
                         }
                     });
             });
