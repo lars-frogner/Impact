@@ -40,3 +40,4 @@ pub use impact_math;
 pub use roc_integration;
 
 pub use egui;
+pub use egui_extras;
