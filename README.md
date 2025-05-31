@@ -17,11 +17,10 @@ The engine does physically based 3D rendering. The graphics system is built on [
 
 ### Physics
 
-- Various integration schemes for motion (including 4'th order Runge-Kutta).
 - Full rigid body dynamics for objects of any shape.
 - Various force and torque generators.
 - A drag model that computes both forces and torques for objects of any shape.
-- Collision resolution using sequential impulses.
+- Collision resolution and constraint solving using sequential impulses.
 
 ### Voxels
 
@@ -51,8 +50,6 @@ In rough order of priority (which may change):
 
 ![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
 
-![screenshot_1](showcase/screenshot_1.png "Screenshot 1")
-
 ![screenshot_2](showcase/screenshot_2.png "Screenshot 2")
 
 ## How applications work
@@ -76,3 +73,99 @@ The Roc platform consists of a small Rust crate and a Roc package.
 **The Roc script**
 
 This is a standard Roc application that imports the platform package. But rather than having a `main` function, it implements the callback functions required by the platform, and during the execution of these functions it uses the scripting API to modify the application and engine state. When compiled, the script is statically linked with the platform crate, producing a shared library that the application crate can load and interact with.
+
+## Data transfer between Rust and Roc
+
+In order for the Roc script to interact with the engine, the Roc counterparts of many types defined in the engine, like ECS components and command enums, must be available to the script. Rust structs and enums can typically be directly translated to Roc records and tag unions. The engine has a procedural macro that allows this to be done automatically, which it applies to all types requiring a Roc counterpart.
+
+Although these types will have semantically identical Rust and Roc versions, their binary representations will in general differ between Rust and Roc. Even if Roc could, like Rust, be coerced to use the C ABI, that wouldn't apply to all relevant types (like enums with payloads).
+
+To handle this, the engine generates code for serializing the types to a common format before passing them across the FFI boundary, and for deserializing them on the other side. This format is a simple extension of the C ABI, so for structs with `repr(C)`, which includes all components, the (de)serialization involves no work on the Rust side.
+
+## Scripting API
+
+The following Roc snippets show the scripting API in action.
+
+Here is how the laser beam in the video above was created in the script's `setup_scene!` callback.
+
+```roc
+Entity.new
+    |> Comp.Parent.add_new(entity_ids.player)
+    |> Comp.ReferenceFrame.add_unscaled(
+        (0.15, -0.3, 0.0),
+        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+    )
+    |> Comp.CylinderMesh.add_new(100, 0.02, 16)
+    |> Comp.UniformColor.add((0.9, 0.05, 0.05))
+    |> Comp.UniformEmissiveLuminance.add(1e6)
+    |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3, 200)
+    |> Comp.SceneEntityFlags.add(
+        Scene.SceneEntityFlags.union(
+            Scene.SceneEntityFlags.is_disabled,
+            Scene.SceneEntityFlags.casts_no_shadows,
+        ),
+    )
+    |> Entity.create_with_id!(entity_ids.laser)?
+```
+
+Here is how the beam was enabled in the script's `handle_mouse_button_event!` callback when clicking the mouse.
+
+```roc
+entity_id = entity_ids.laser
+
+state =
+    when button_state is
+        Pressed -> Enabled
+        Released -> Disabled
+
+Command.execute!(Scene(SetSceneEntityActiveState({ entity_id, state })))
+```
+
+Here is an example of how entities can be created in batch.
+
+```roc
+Entity.new_multi(List.len(positions))
+    |> Comp.SphereMesh.add_multiple_new(
+        Same(100),
+    )?
+    |> Comp.ReferenceFrame.add_multiple_unoriented(
+        All(positions),
+    )?
+    |> Comp.Velocity.add_multiple_stationary
+    |> Comp.UniformRigidBody.add_multiple(
+        Same({ mass_density: 1.0 }),
+    )?
+    |> Comp.UniformContactResponse.add_multiple(
+        Same(
+            {
+                restitution_coef: 0.7,
+                static_friction_coef: 0.5,
+                dynamic_friction_coef: 0.3,
+            },
+        ),
+    )?
+    |> Comp.SphereCollidable.add_multiple_new(
+        Same(Dynamic),
+        Same(Sphere.new(Point3.origin, 1.0)),
+    )?
+    |> Comp.UniformGravity.add_multiple_earth
+    |> Comp.TexturedColor.add_multiple(
+        Same(texture_ids.color),
+    )?
+    |> Comp.UniformSpecularReflectance.add_multiple_in_range_of(
+        Same(Comp.UniformSpecularReflectance.plastic),
+        Same(0),
+    )?
+    |> Comp.TexturedRoughness.add_multiple_unscaled(
+        Same(texture_ids.roughness),
+    )?
+    |> Comp.NormalMap.add_multiple(
+        Same(texture_ids.normal),
+    )?
+    |> Comp.PlanarTextureProjection.add_multiple_for_rectangle(
+        Same(Comp.RectangleMesh.unit_square),
+        Same(0.2),
+        Same(0.2),
+    )?
+    |> Entity.create_multiple!?
+```
