@@ -1,8 +1,8 @@
-# Hash: 8c8495f636b4d9523ca2421807785b3f1fbb36727efad4016e8cccc0d04680f1
-# Generated: 2025-05-28T20:09:22+00:00
+# Hash: 39c433d364a13d83c87498b9f4544eea1d049b305f7ca649cbc067fba62f0755
+# Generated: 2025-05-31T22:51:11+00:00
 # Rust type: impact::ui::command::UICommand
 # Type category: Inline
-# Commit: ff9febb (dirty)
+# Commit: 4e0fe1e (dirty)
 module [
     UICommand,
     write_bytes,
@@ -12,7 +12,7 @@ module [
 import Command.ToActiveState
 
 UICommand : [
-    Set Command.ToActiveState.ToActiveState,
+    SetInteractivity Command.ToActiveState.ToActiveState,
 ]
 
 ## Serializes a value of [UICommand] into the binary representation
@@ -20,7 +20,7 @@ UICommand : [
 write_bytes : List U8, UICommand -> List U8
 write_bytes = |bytes, value|
     when value is
-        Set(val) ->
+        SetInteractivity(val) ->
             bytes
             |> List.reserve(2)
             |> List.append(0)
@@ -36,7 +36,7 @@ from_bytes = |bytes|
         when bytes is
             [0, .. as data_bytes] ->
                 Ok(
-                    Set(
+                    SetInteractivity(
                         data_bytes |> List.sublist({ start: 0, len: 1 }) |> Command.ToActiveState.from_bytes?,
                     ),
                 )

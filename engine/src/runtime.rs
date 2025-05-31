@@ -78,17 +78,13 @@ impl Runtime {
     }
 
     fn run_ui_processing(&mut self) {
-        if self.engine.ui_visible() {
-            // This could be moved into GameLoop::perform_iteration and the tesselation
-            // could be done in parallel with other tasks. The actual running must be
-            // done before beginning to execute other tasks since user interactions
-            // can affect the engine state.
-            let raw_ui_output = self.user_interface.run(&self.game_loop, &self.engine);
-            let ui_output = self.user_interface.process_raw_output(raw_ui_output);
-            *self.engine.ui_output().write().unwrap() = Some(ui_output);
-        } else {
-            *self.engine.ui_output().write().unwrap() = None;
-        }
+        // This could be moved into GameLoop::perform_iteration and the tesselation
+        // could be done in parallel with other tasks. The actual running must be
+        // done before beginning to execute other tasks since user interactions
+        // can affect the engine state.
+        let raw_ui_output = self.user_interface.run(&self.game_loop, &self.engine);
+        let ui_output = self.user_interface.process_raw_output(raw_ui_output);
+        *self.engine.ui_output().write().unwrap() = Some(ui_output);
     }
 
     fn perform_game_loop_iteration(
@@ -100,7 +96,7 @@ impl Runtime {
     }
 
     fn handle_window_event_for_ui(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
-        if self.engine.ui_visible() {
+        if self.engine.ui_interactive() {
             self.user_interface.handle_window_event(event)
         } else {
             UIEventHandlingResponse {

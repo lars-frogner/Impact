@@ -7,5 +7,5 @@ use roc_integration::roc;
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UICommand {
-    Set(ToActiveState),
+    SetInteractivity(ToActiveState),
 }
