@@ -15,6 +15,7 @@ pub struct TimestampQueryManager {
     query_resolve_buffer: GPUBuffer,
     timestamp_result_buffer: GPUBuffer,
     timestamp_pairs: Vec<Cow<'static, str>>,
+    last_timing_results: Vec<(Cow<'static, str>, Duration)>,
     enabled: bool,
 }
 
@@ -22,10 +23,11 @@ pub struct TimestampQueryManager {
 /// compute passes. Created by calling
 /// [`TimestampQueryManager::create_timestamp_query_registry`]. When all
 /// timestamp queries have been registered, the registry should be dropped by
-/// calling [`Self::finish`]. After [`wgpu::Queue::submit`] has been called
-/// and the render commands have been executed, the timings from the recorded
-/// timestamps can be retrieved by calling
-/// [`TimestampQueryManager::load_recorded_timing_results`].
+/// calling [`Self::finish`]. After [`wgpu::Queue::submit`] has been called and
+/// the render commands have been executed, the timings from the recorded
+/// timestamps can be computed by calling
+/// [`TimestampQueryManager::load_recorded_timing_results`], and retrieved by
+/// calling [`TimestampQueryManager::last_timing_results`].
 #[derive(Debug)]
 pub struct TimestampQueryRegistry<'a> {
     manager: &'a mut TimestampQueryManager,
@@ -71,6 +73,7 @@ impl TimestampQueryManager {
             query_resolve_buffer,
             timestamp_result_buffer,
             timestamp_pairs: Vec::new(),
+            last_timing_results: Vec::new(),
             enabled,
         }
     }
@@ -91,7 +94,8 @@ impl TimestampQueryManager {
     /// [`TimestampQueryRegistry::finish`] when all timestamp queries have been
     /// registered. After [`wgpu::Queue::submit`] has been called and the render
     /// commands have been executed, the timings from the recorded timestamps
-    /// can be retrieved by calling [`Self::load_recorded_timing_results`].
+    /// can be computed by calling [`Self::load_recorded_timing_results`], and
+    /// retrieved by calling [`Self::last_timing_results`].
     pub fn create_timestamp_query_registry(&mut self) -> TimestampQueryRegistry<'_> {
         self.timestamp_pairs.clear();
         TimestampQueryRegistry { manager: self }
@@ -99,10 +103,9 @@ impl TimestampQueryManager {
 
     /// Loads the timestamps pairs registered in the [`TimestampQueryRegistry`]
     /// obtained by the last call to [`Self::create_timestamp_query_registry`]
-    /// after they have been recorded on the GPU and returns the tag and
-    /// duration for each timestamp pair. The last two entries in the returned
-    /// vector are the aggregate duration of all timestamp pairs and the
-    /// duration between the first and last of all the timestamp.
+    /// after they have been recorded on the GPU and computes the duration
+    /// between each timestamp pair. The results can be obtained by calling
+    /// [`Self::last_timing_results`].
     ///
     /// This method must be called after [`wgpu::Queue::submit`] in order for
     /// the recorded timestamps to be available.
@@ -110,13 +113,15 @@ impl TimestampQueryManager {
     /// # Errors
     /// Returns an error if the recorded timestamps could not be read from the
     /// GPU buffer.
-    pub fn load_recorded_timing_results(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-    ) -> Result<Vec<(Cow<'static, str>, Duration)>> {
+    pub fn load_recorded_timing_results(&mut self, graphics_device: &GraphicsDevice) -> Result<()> {
+        self.last_timing_results.clear();
+
         if self.timestamp_pairs.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
+
+        self.last_timing_results
+            .reserve(self.timestamp_pairs.len() + 2);
 
         let timestamps = self.timestamp_result_buffer.map_and_process_buffer_bytes(
             graphics_device,
@@ -130,7 +135,6 @@ impl TimestampQueryManager {
 
         let timestamp_period = f64::from(graphics_device.queue().get_timestamp_period());
 
-        let mut tags_with_durations = Vec::with_capacity(self.timestamp_pairs.len() + 2);
         let mut aggregate_duration_nanos = 0.0;
 
         for (tag, start_and_end) in self
@@ -141,10 +145,11 @@ impl TimestampQueryManager {
             let duration_nanos =
                 timestamp_period * start_and_end[1].wrapping_sub(start_and_end[0]) as f64;
             aggregate_duration_nanos += duration_nanos;
-            tags_with_durations.push((tag, Duration::from_nanos(duration_nanos.round() as u64)));
+            self.last_timing_results
+                .push((tag, Duration::from_nanos(duration_nanos.round() as u64)));
         }
 
-        tags_with_durations.push((
+        self.last_timing_results.push((
             Cow::Borrowed("Aggregate"),
             Duration::from_nanos(aggregate_duration_nanos.round() as u64),
         ));
@@ -152,12 +157,21 @@ impl TimestampQueryManager {
         let start_to_end_duration_nanos =
             timestamp_period * timestamps.last().unwrap().wrapping_sub(timestamps[0]) as f64;
 
-        tags_with_durations.push((
+        self.last_timing_results.push((
             Cow::Borrowed("Start to end"),
             Duration::from_nanos(start_to_end_duration_nanos.round() as u64),
         ));
 
-        Ok(tags_with_durations)
+        Ok(())
+    }
+
+    /// Returns the tag and duration of each timestamp pair as computed in the
+    /// last call to [`Self::load_recorded_timing_results`].
+    ///
+    /// The last two entries are the aggregate duration of all timestamp pairs
+    /// and the duration between the first and last of all the timestamps.
+    pub fn last_timing_results(&self) -> &[(Cow<'static, str>, Duration)] {
+        &self.last_timing_results
     }
 
     fn finish_recording(&mut self, command_encoder: &mut wgpu::CommandEncoder) {
