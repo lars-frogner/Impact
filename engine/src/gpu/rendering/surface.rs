@@ -1,7 +1,7 @@
 //! Representation of surfaces to render to.
 
 use crate::{gpu::GraphicsDevice, window::Window};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use std::{mem, num::NonZeroU32};
 use wgpu::SurfaceTarget;
 
@@ -46,9 +46,10 @@ impl RenderingSurface {
     /// Creates the configuration for the rendering surface based on the given
     /// graphics device and uses it to initialize the surface for presentation
     /// through that device.
-    pub fn initialize_for_device(&mut self, graphics_device: &GraphicsDevice) {
-        self.initialize_surface_config_for_adapter(graphics_device.adapter());
+    pub fn initialize_for_device(&mut self, graphics_device: &GraphicsDevice) -> Result<()> {
+        self.initialize_surface_config_for_adapter(graphics_device.adapter())?;
         self.configure_surface_for_device(graphics_device);
+        Ok(())
     }
 
     /// Uses the current surface configuration to initialize the surface for
@@ -138,14 +139,15 @@ impl RenderingSurface {
         (u32::from(width) as f32) * (u32::from(height) as f32)
     }
 
-    fn initialize_surface_config_for_adapter(&mut self, adapter: &wgpu::Adapter) {
+    fn initialize_surface_config_for_adapter(&mut self, adapter: &wgpu::Adapter) -> Result<()> {
         let (width, height) = self.surface_config.surface_dimensions();
         self.surface_config = SurfaceConfiguration::Initialized(Self::create_surface_config(
             &self.surface,
             adapter,
             width,
             height,
-        ));
+        )?);
+        Ok(())
     }
 
     fn new_from_surface_target(
@@ -171,20 +173,38 @@ impl RenderingSurface {
         adapter: &wgpu::Adapter,
         width: NonZeroU32,
         height: NonZeroU32,
-    ) -> wgpu::SurfaceConfiguration {
+    ) -> Result<wgpu::SurfaceConfiguration> {
         let caps = surface.get_capabilities(adapter);
-        wgpu::SurfaceConfiguration {
+
+        let format = Self::select_surface_texture_format(&caps)?;
+
+        Ok(wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::COPY_DST,
-            format: caps.formats[0],
+            format,
             width: u32::from(width),
             height: u32::from(height),
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: Vec::new(),
             desired_maximum_frame_latency: 2,
-        }
+        })
+    }
+
+    fn select_surface_texture_format(
+        caps: &wgpu::SurfaceCapabilities,
+    ) -> Result<wgpu::TextureFormat> {
+        caps.formats
+            .iter()
+            .find(|format| !format.is_srgb())
+            .copied()
+            .ok_or_else(|| {
+                anyhow!(
+                    "No linear texture formats available for surface: {:?}",
+                    caps.formats
+                )
+            })
     }
 }
 

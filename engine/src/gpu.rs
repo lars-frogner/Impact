@@ -57,7 +57,7 @@ pub fn initialize_for_rendering(
         Some(rendering_surface.surface()),
     ))?;
 
-    rendering_surface.initialize_for_device(&graphics_device);
+    rendering_surface.initialize_for_device(&graphics_device)?;
 
     Ok((Arc::new(graphics_device), rendering_surface))
 }

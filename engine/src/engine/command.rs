@@ -10,7 +10,7 @@ use crate::{
         rendering::{
             command::RenderingCommand,
             postprocessing::{
-                capturing::tone_mapping::ToneMappingMethod,
+                capturing::dynamic_range_compression::ToneMappingMethod,
                 command::{
                     PostprocessingCommand, ToExposure, ToRenderAttachmentQuantity,
                     ToToneMappingMethod,

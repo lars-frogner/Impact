@@ -8,7 +8,7 @@ use impact::{
     gpu::rendering::{
         RenderingSystem,
         postprocessing::{
-            capturing::{SensorSensitivity, tone_mapping::ToneMappingMethod},
+            capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
             render_attachment_visualization::RenderAttachmentVisualizationPasses,
         },
     },
@@ -208,11 +208,11 @@ mod bloom {
     }
 }
 
-mod tone_mapping {
+mod dynamic_range_compression {
     pub mod docs {
         use crate::ui::LabelAndHoverText;
 
-        pub const METHOD: LabelAndHoverText = LabelAndHoverText {
+        pub const TONE_MAPPING_METHOD: LabelAndHoverText = LabelAndHoverText {
             label: "Tone mapping",
             hover_text: "The method to use for tone mapping.",
         };
@@ -265,8 +265,8 @@ pub(super) fn rendering_option_panel(ui: &mut Ui, engine: &Engine) {
         option_group(ui, "bloom_options", |ui| {
             bloom_options(ui, &mut renderer);
         });
-        option_group(ui, "tone_mapping_options", |ui| {
-            tone_mapping_options(ui, &mut renderer);
+        option_group(ui, "dynamic_range_compression_options", |ui| {
+            dynamic_range_compression_options(ui, &mut renderer);
         });
         option_group(ui, "wireframe_options", |ui| {
             wireframe_options(ui, &mut renderer);
@@ -560,24 +560,36 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     }
 }
 
-fn tone_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
+fn dynamic_range_compression_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut postprocessor = renderer.postprocessor().write().unwrap();
     let capturing_camera = postprocessor.capturing_camera_mut();
-    let config = capturing_camera.tone_mapping_config_mut();
+    let config = capturing_camera.dynamic_range_compression_config_mut();
 
-    labeled_option(ui, tone_mapping::docs::METHOD, |ui| {
-        ComboBox::from_id_salt(tone_mapping::docs::METHOD.label)
-            .selected_text(format!("{:?}", config.method))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut config.method, ToneMappingMethod::ACES, "ACES");
-                ui.selectable_value(
-                    &mut config.method,
-                    ToneMappingMethod::KhronosPBRNeutral,
-                    "KhronosPBRNeutral",
-                );
-                ui.selectable_value(&mut config.method, ToneMappingMethod::None, "None");
-            })
-    });
+    labeled_option(
+        ui,
+        dynamic_range_compression::docs::TONE_MAPPING_METHOD,
+        |ui| {
+            ComboBox::from_id_salt(dynamic_range_compression::docs::TONE_MAPPING_METHOD.label)
+                .selected_text(format!("{:?}", config.tone_mapping_method))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut config.tone_mapping_method,
+                        ToneMappingMethod::ACES,
+                        "ACES",
+                    );
+                    ui.selectable_value(
+                        &mut config.tone_mapping_method,
+                        ToneMappingMethod::KhronosPBRNeutral,
+                        "KhronosPBRNeutral",
+                    );
+                    ui.selectable_value(
+                        &mut config.tone_mapping_method,
+                        ToneMappingMethod::None,
+                        "None",
+                    );
+                })
+        },
+    );
 }
 
 fn wireframe_options(ui: &mut Ui, renderer: &mut RenderingSystem) {

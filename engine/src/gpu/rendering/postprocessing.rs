@@ -117,16 +117,17 @@ impl Postprocessor {
             timestamp_recorder,
             command_encoder,
         )?;
-        self.capturing_camera.record_commands_before_tone_mapping(
-            rendering_surface,
-            render_resources,
-            render_attachment_texture_manager,
-            gpu_resource_group_manager,
-            storage_gpu_buffer_manager,
-            self,
-            timestamp_recorder,
-            command_encoder,
-        )?;
+        self.capturing_camera
+            .record_commands_before_dynamic_range_compression(
+                rendering_surface,
+                render_resources,
+                render_attachment_texture_manager,
+                gpu_resource_group_manager,
+                storage_gpu_buffer_manager,
+                self,
+                timestamp_recorder,
+                command_encoder,
+            )?;
         self.temporal_anti_aliasing_commands.record(
             rendering_surface,
             surface_texture_view,
@@ -138,17 +139,18 @@ impl Postprocessor {
             timestamp_recorder,
             command_encoder,
         )?;
-        self.capturing_camera.record_tone_mapping_render_commands(
-            rendering_surface,
-            surface_texture_view,
-            render_resources,
-            render_attachment_texture_manager,
-            gpu_resource_group_manager,
-            self,
-            frame_counter,
-            timestamp_recorder,
-            command_encoder,
-        )?;
+        self.capturing_camera
+            .record_dynamic_range_compression_render_commands(
+                rendering_surface,
+                surface_texture_view,
+                render_resources,
+                render_attachment_texture_manager,
+                gpu_resource_group_manager,
+                self,
+                frame_counter,
+                timestamp_recorder,
+                command_encoder,
+            )?;
         self.render_attachment_visualization_passes.record(
             rendering_surface,
             surface_texture_view,
