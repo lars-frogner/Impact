@@ -48,8 +48,8 @@
                 blur_filter_radius: 0.005,
                 blurred_luminance_weight: 0.04,
             ),
-            tone_mapping: (
-                method: ACES,
+            dynamic_range_compression: (
+                tone_mapping_method: ACES,
             ),
         ),
     ),

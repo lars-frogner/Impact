@@ -4,7 +4,7 @@ use super::{Postprocessor, capturing::SensorSensitivity};
 use crate::{
     engine::command::{ModifiedActiveState, ToActiveState},
     gpu::{
-        rendering::postprocessing::capturing::tone_mapping::ToneMappingMethod,
+        rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
         texture::attachment::RenderAttachmentQuantity,
     },
 };
@@ -64,7 +64,10 @@ impl Postprocessor {
     }
 
     pub fn set_tone_mapping_method(&mut self, to: ToToneMappingMethod) -> ToneMappingMethod {
-        let method = &mut self.capturing_camera.tone_mapping_config_mut().method;
+        let method = &mut self
+            .capturing_camera
+            .dynamic_range_compression_config_mut()
+            .tone_mapping_method;
         *method = match to {
             ToToneMappingMethod::Next => match *method {
                 ToneMappingMethod::None => ToneMappingMethod::ACES,

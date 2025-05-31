@@ -2,7 +2,7 @@
 
 pub mod average_luminance;
 pub mod bloom;
-pub mod tone_mapping;
+pub mod dynamic_range_compression;
 
 use crate::gpu::{
     GraphicsDevice,
@@ -19,10 +19,12 @@ use crate::gpu::{
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
 use bloom::{BloomConfig, BloomRenderCommands};
+use dynamic_range_compression::{
+    DynamicRangeCompressionConfig, DynamicRangeCompressionRenderCommands,
+};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::mem;
-use tone_mapping::{ToneMappingConfig, ToneMappingRenderCommands};
 
 /// Configuration options for a capturing camera.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -35,8 +37,8 @@ pub struct CapturingCameraConfig {
     /// Configuration options for the computation of the average luminance for
     /// automatic sensitivity.
     pub average_luminance_computation: AverageLuminanceComputationConfig,
-    /// Configuration options for tone mapping.
-    pub tone_mapping: ToneMappingConfig,
+    /// Configuration options for dynamic range compression.
+    pub dynamic_range_compression: DynamicRangeCompressionConfig,
 }
 
 /// Capturing settings for a camera.
@@ -78,7 +80,7 @@ pub struct CapturingCamera {
     exposure: f32,
     average_luminance_commands: AverageLuminanceComputeCommands,
     bloom_commands: BloomRenderCommands,
-    tone_mapping_commands: ToneMappingRenderCommands,
+    dynamic_range_compression_commands: DynamicRangeCompressionRenderCommands,
 }
 
 impl Default for CameraSettings {
@@ -208,8 +210,8 @@ impl CapturingCamera {
             render_attachment_texture_manager,
         );
 
-        let tone_mapping_commands = ToneMappingRenderCommands::new(
-            config.tone_mapping,
+        let dynamic_range_compression_commands = DynamicRangeCompressionRenderCommands::new(
+            config.dynamic_range_compression,
             graphics_device,
             rendering_surface,
             shader_manager,
@@ -229,7 +231,7 @@ impl CapturingCamera {
             exposure: initial_exposure,
             average_luminance_commands,
             bloom_commands,
-            tone_mapping_commands,
+            dynamic_range_compression_commands,
         })
     }
 
@@ -255,12 +257,13 @@ impl CapturingCamera {
         self.exposure.recip()
     }
 
-    /// Records the render commands that should be performed before tone mapping
-    /// into the given command encoder.
+    /// Records the render commands that should be performed before dynamic
+    /// range compression (tone mapping and gamma correction) into the given
+    /// command encoder.
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
-    pub fn record_commands_before_tone_mapping(
+    pub fn record_commands_before_dynamic_range_compression(
         &self,
         rendering_surface: &RenderingSurface,
         render_resources: &SynchronizedRenderResources,
@@ -289,12 +292,12 @@ impl CapturingCamera {
         )
     }
 
-    /// Records the render commands for tone mapping into the given command
-    /// encoder.
+    /// Records the render commands for dynamic range compression (tone mapping
+    /// and gamma correction) into the given command encoder.
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
-    pub fn record_tone_mapping_render_commands(
+    pub fn record_dynamic_range_compression_render_commands(
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
@@ -306,7 +309,7 @@ impl CapturingCamera {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        self.tone_mapping_commands.record(
+        self.dynamic_range_compression_commands.record(
             rendering_surface,
             surface_texture_view,
             render_resources,
@@ -380,12 +383,12 @@ impl CapturingCamera {
         );
     }
 
-    pub fn tone_mapping_config(&self) -> &ToneMappingConfig {
-        self.tone_mapping_commands.config()
+    pub fn dynamic_range_compression_config(&self) -> &DynamicRangeCompressionConfig {
+        self.dynamic_range_compression_commands.config()
     }
 
-    pub fn tone_mapping_config_mut(&mut self) -> &mut ToneMappingConfig {
-        self.tone_mapping_commands.config_mut()
+    pub fn dynamic_range_compression_config_mut(&mut self) -> &mut DynamicRangeCompressionConfig {
+        self.dynamic_range_compression_commands.config_mut()
     }
 
     pub fn settings_mut(&mut self) -> &mut CameraSettings {

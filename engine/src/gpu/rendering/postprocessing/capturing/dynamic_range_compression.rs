@@ -8,7 +8,9 @@ use crate::gpu::{
         resource::SynchronizedRenderResources, surface::RenderingSurface,
     },
     resource_group::GPUResourceGroupManager,
-    shader::{ShaderManager, template::tone_mapping::ToneMappingShaderTemplate},
+    shader::{
+        ShaderManager, template::dynamic_range_compression::DynamicRangeCompressionShaderTemplate,
+    },
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
 use anyhow::Result;
@@ -16,11 +18,11 @@ use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 
-/// Configuration options for tone mapping.
+/// Configuration options for dynamic range compression.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ToneMappingConfig {
+pub struct DynamicRangeCompressionConfig {
     /// The method to use for tone mapping.
-    pub method: ToneMappingMethod,
+    pub tone_mapping_method: ToneMappingMethod,
 }
 
 /// The method to use for tone mapping.
@@ -35,11 +37,11 @@ pub enum ToneMappingMethod {
 }
 
 #[derive(Debug)]
-pub(super) struct ToneMappingRenderCommands {
-    disabled_pass: PostprocessingRenderPass,
-    aces_pass: PostprocessingRenderPass,
-    khronos_pbr_neutral_pass: PostprocessingRenderPass,
-    config: ToneMappingConfig,
+pub(super) struct DynamicRangeCompressionRenderCommands {
+    no_tone_mapping_pass: PostprocessingRenderPass,
+    aces_tone_mapping_pass: PostprocessingRenderPass,
+    khronos_pbr_neutral_tone_mapping_pass: PostprocessingRenderPass,
+    config: DynamicRangeCompressionConfig,
 }
 
 impl ToneMappingMethod {
@@ -63,20 +65,20 @@ impl Display for ToneMappingMethod {
     }
 }
 
-impl ToneMappingRenderCommands {
+impl DynamicRangeCompressionRenderCommands {
     pub(super) fn new(
-        config: ToneMappingConfig,
+        config: DynamicRangeCompressionConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
     ) -> Result<Self> {
-        // The last shader before tone mapping (the TAA shader) writes
-        // to the luminance history attachment
+        // The last shader before dynamic range compression (the TAA shader)
+        // writes to the luminance history attachment
         let input_render_attachment_quantity = RenderAttachmentQuantity::LuminanceHistory;
 
-        let disabled_pass = create_tone_mapping_render_pass(
+        let no_tone_mapping_pass = create_dynamic_range_compression_render_pass(
             graphics_device,
             rendering_surface,
             shader_manager,
@@ -86,7 +88,7 @@ impl ToneMappingRenderCommands {
             ToneMappingMethod::None,
         )?;
 
-        let aces_pass = create_tone_mapping_render_pass(
+        let aces_tone_mapping_pass = create_dynamic_range_compression_render_pass(
             graphics_device,
             rendering_surface,
             shader_manager,
@@ -96,7 +98,7 @@ impl ToneMappingRenderCommands {
             ToneMappingMethod::ACES,
         )?;
 
-        let khronos_pbr_neutral_pass = create_tone_mapping_render_pass(
+        let khronos_pbr_neutral_tone_mapping_pass = create_dynamic_range_compression_render_pass(
             graphics_device,
             rendering_surface,
             shader_manager,
@@ -108,17 +110,17 @@ impl ToneMappingRenderCommands {
 
         Ok(Self {
             config,
-            disabled_pass,
-            aces_pass,
-            khronos_pbr_neutral_pass,
+            no_tone_mapping_pass,
+            aces_tone_mapping_pass,
+            khronos_pbr_neutral_tone_mapping_pass,
         })
     }
 
-    pub(super) fn config(&self) -> &ToneMappingConfig {
+    pub(super) fn config(&self) -> &DynamicRangeCompressionConfig {
         &self.config
     }
 
-    pub(super) fn config_mut(&mut self) -> &mut ToneMappingConfig {
+    pub(super) fn config_mut(&mut self) -> &mut DynamicRangeCompressionConfig {
         &mut self.config
     }
 
@@ -134,9 +136,9 @@ impl ToneMappingRenderCommands {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        match self.config.method {
+        match self.config.tone_mapping_method {
             ToneMappingMethod::ACES => {
-                self.aces_pass.record(
+                self.aces_tone_mapping_pass.record(
                     rendering_surface,
                     surface_texture_view,
                     render_resources,
@@ -149,7 +151,7 @@ impl ToneMappingRenderCommands {
                 )?;
             }
             ToneMappingMethod::KhronosPBRNeutral => {
-                self.khronos_pbr_neutral_pass.record(
+                self.khronos_pbr_neutral_tone_mapping_pass.record(
                     rendering_surface,
                     surface_texture_view,
                     render_resources,
@@ -162,7 +164,7 @@ impl ToneMappingRenderCommands {
                 )?;
             }
             ToneMappingMethod::None => {
-                self.disabled_pass.record(
+                self.no_tone_mapping_pass.record(
                     rendering_surface,
                     surface_texture_view,
                     render_resources,
@@ -180,17 +182,21 @@ impl ToneMappingRenderCommands {
 }
 
 /// Creates a [`PostprocessingRenderPass`] that applies the given tone mapping
-/// to the input attachment and writes the result to the surface attachment.
-fn create_tone_mapping_render_pass(
+/// as well as gamma correction to the input attachment and writes the result to
+/// the surface attachment.
+fn create_dynamic_range_compression_render_pass(
     graphics_device: &GraphicsDevice,
     rendering_surface: &RenderingSurface,
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &GPUResourceGroupManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
-    method: ToneMappingMethod,
+    tone_mapping_method: ToneMappingMethod,
 ) -> Result<PostprocessingRenderPass> {
-    let shader_template = ToneMappingShaderTemplate::new(input_render_attachment_quantity, method);
+    let shader_template = DynamicRangeCompressionShaderTemplate::new(
+        input_render_attachment_quantity,
+        tone_mapping_method,
+    );
 
     PostprocessingRenderPass::new(
         graphics_device,
@@ -199,6 +205,9 @@ fn create_tone_mapping_render_pass(
         render_attachment_texture_manager,
         gpu_resource_group_manager,
         &shader_template,
-        Cow::Owned(format!("Tone mapping pass ({})", method)),
+        Cow::Owned(format!(
+            "Dynamic range compression pass ({})",
+            tone_mapping_method
+        )),
     )
 }
