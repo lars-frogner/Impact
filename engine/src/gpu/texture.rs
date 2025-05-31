@@ -1225,6 +1225,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
+    already_gamma_corrected: bool,
     output_path: P,
 ) -> Result<()> {
     fn byte_to_float(byte: u8) -> f32 {
@@ -1296,8 +1297,10 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 let mut image_buffer: ImageBuffer<Luma<u8>, _> =
                     ImageBuffer::from_raw(size.width, size.height, data).unwrap();
 
-                for p in image_buffer.pixels_mut() {
-                    p.0[0] = gamma_corrected_byte(p.0[0]);
+                if !already_gamma_corrected {
+                    for p in image_buffer.pixels_mut() {
+                        p.0[0] = gamma_corrected_byte(p.0[0]);
+                    }
                 }
 
                 let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
@@ -1310,7 +1313,8 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 if matches!(
                     format,
                     wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
-                ) {
+                ) && !already_gamma_corrected
+                {
                     for p in image_buffer.pixels_mut() {
                         p.0[0] = gamma_corrected_byte(p.0[0]);
                         p.0[1] = gamma_corrected_byte(p.0[1]);
@@ -1334,8 +1338,10 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 texture_array_idx,
             )?;
 
-            for value in &mut data {
-                *value = gamma_corrected(value.clamp(0.0, 1.0));
+            if !already_gamma_corrected {
+                for value in &mut data {
+                    *value = gamma_corrected(value.clamp(0.0, 1.0));
+                }
             }
 
             if matches!(format, wgpu::TextureFormat::R16Float) {
@@ -1393,13 +1399,15 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                     | wgpu::TextureFormat::Depth32FloatStencil8
                     | wgpu::TextureFormat::R32Float
             ) {
-                if matches!(format, wgpu::TextureFormat::R32Float) {
-                    for value in &mut data {
-                        *value = gamma_corrected(value.clamp(0.0, 1.0));
-                    }
-                } else {
-                    for value in &mut data {
-                        *value = gamma_corrected_depth(*value);
+                if !already_gamma_corrected {
+                    if matches!(format, wgpu::TextureFormat::R32Float) {
+                        for value in &mut data {
+                            *value = gamma_corrected(value.clamp(0.0, 1.0));
+                        }
+                    } else {
+                        for value in &mut data {
+                            *value = gamma_corrected_depth(*value);
+                        }
                     }
                 }
 
@@ -1410,8 +1418,10 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
 
                 image_buffer.save(output_path)?;
             } else {
-                for value in &mut data {
-                    *value = gamma_corrected(value.clamp(0.0, 1.0));
+                if !already_gamma_corrected {
+                    for value in &mut data {
+                        *value = gamma_corrected(value.clamp(0.0, 1.0));
+                    }
                 }
 
                 let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
