@@ -97,6 +97,6 @@
         )),
     ),
     user_interface: (
-        initially_visible: true,
+        initially_interactive: true,
     ),
 )

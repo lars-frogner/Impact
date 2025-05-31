@@ -50,7 +50,7 @@ handle_event! = |{ key, state }|
 
             Control(control_key) ->
                 when control_key is
-                    Escape -> on_released(state, UI(Set(Opposite)))
+                    Escape -> on_released(state, UI(SetInteractivity(Opposite)))
                     _ -> None
 
             _ -> None

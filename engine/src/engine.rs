@@ -58,7 +58,7 @@ pub struct Engine {
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
     simulation_running: AtomicBool,
-    ui_visible: AtomicBool,
+    ui_interactive: AtomicBool,
     shutdown_requested: AtomicBool,
 }
 
@@ -137,7 +137,7 @@ impl Engine {
         let (motion_controller, orientation_controller) =
             control::create_controllers(config.controller);
 
-        let ui_visible = config.user_interface.initially_visible;
+        let ui_interactive = config.user_interface.initially_interactive;
 
         let engine = Self {
             app,
@@ -154,7 +154,7 @@ impl Engine {
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
             simulation_running: AtomicBool::new(simulation_running),
-            ui_visible: AtomicBool::new(ui_visible),
+            ui_interactive: AtomicBool::new(ui_interactive),
             shutdown_requested: AtomicBool::new(false),
         };
 
@@ -458,12 +458,12 @@ impl Engine {
         }
     }
 
-    pub fn ui_visible(&self) -> bool {
-        self.ui_visible.load(Ordering::Relaxed)
+    pub fn ui_interactive(&self) -> bool {
+        self.ui_interactive.load(Ordering::Relaxed)
     }
 
-    pub fn set_ui_visible(&self, visible: bool) {
-        self.ui_visible.store(visible, Ordering::Relaxed);
+    pub fn set_ui_interactive(&self, interactive: bool) {
+        self.ui_interactive.store(interactive, Ordering::Relaxed);
 
         if self.controls_enabled() {
             self.window.hide_and_confine_cursor();
@@ -473,7 +473,7 @@ impl Engine {
     }
 
     pub fn controls_enabled(&self) -> bool {
-        self.simulation_running() && !self.ui_visible()
+        self.simulation_running() && !self.ui_interactive()
     }
 
     pub fn shutdown_requested(&self) -> bool {

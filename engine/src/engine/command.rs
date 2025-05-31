@@ -178,8 +178,8 @@ impl Engine {
 
     pub fn execute_ui_command(&self, command: UICommand) -> Result<()> {
         match command {
-            UICommand::Set(to) => {
-                self.set_ui(to);
+            UICommand::SetInteractivity(to) => {
+                self.set_ui_interactivity(to);
             }
         }
         Ok(())
@@ -385,14 +385,14 @@ impl Engine {
 
     // UI
 
-    pub fn set_ui(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting user interface to {to:?}");
+    pub fn set_ui_interactivity(&self, to: ToActiveState) -> ModifiedActiveState {
+        log::info!("Setting user interface interactivity to {to:?}");
 
         let controls_were_enabled = self.controls_enabled();
 
-        let mut visible_state = self.ui_visible();
-        let new_visible_state = to.set(&mut visible_state);
-        self.set_ui_visible(visible_state);
+        let mut interactive_state = self.ui_interactive();
+        let new_interactive_state = to.set(&mut interactive_state);
+        self.set_ui_interactive(interactive_state);
 
         let controls_are_enabled = self.controls_enabled();
 
@@ -400,7 +400,7 @@ impl Engine {
             self.stop_motion();
         }
 
-        new_visible_state
+        new_interactive_state
     }
 
     // Capture

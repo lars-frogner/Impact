@@ -22,9 +22,9 @@ pub struct UserInterface {
 /// Configuration parameters for the user interface.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserInterfaceConfig {
-    /// Whether the user interface should be visible as soon as the application
-    /// starts.
-    pub initially_visible: bool,
+    /// Whether the user interface should be interactive as soon as the
+    /// application starts.
+    pub initially_interactive: bool,
 }
 
 pub struct RawUserInterfaceOutput {
@@ -88,7 +88,7 @@ impl UserInterface {
 impl Default for UserInterfaceConfig {
     fn default() -> Self {
         Self {
-            initially_visible: true,
+            initially_interactive: true,
         }
     }
 }
