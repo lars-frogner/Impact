@@ -4,7 +4,7 @@ pub mod command;
 
 use crate::{
     geometry::CubemapFace,
-    gpu::rendering::{RenderingSystem, texture},
+    gpu::{rendering::RenderingSystem, texture},
     light::MAX_SHADOW_MAP_CASCADES,
 };
 use anyhow::{Result, anyhow};
