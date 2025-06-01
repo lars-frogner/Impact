@@ -57,9 +57,9 @@ pub struct PhysicsConfig {
 /// Configuration parameters for the physics simulation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SimulatorConfig {
-    /// Whether the physics simulation should begin running as soon as the
-    /// application starts.
-    pub initially_running: bool,
+    /// Whether physics simulation is enabled. Disabling the simulation will not
+    /// prevent controlled entities from moving.
+    pub enabled: bool,
     /// The number of substeps to perform each simulation step. Increase to
     /// improve accuracy.
     pub n_substeps: u32,
@@ -105,6 +105,16 @@ impl PhysicsSimulator {
             time_step_duration,
             simulation_speed_multiplier: 1.0,
         })
+    }
+
+    /// Whether physics simulation is enabled.
+    pub fn enabled(&self) -> bool {
+        self.config.enabled
+    }
+
+    /// Whether physics simulation is enabled.
+    pub fn enabled_mut(&mut self) -> &mut bool {
+        &mut self.config.enabled
     }
 
     /// The current base duration used for each time step (without the
@@ -188,7 +198,7 @@ impl PhysicsSimulator {
     /// If configured to do so, sets the time step duration to the given frame
     /// duration.
     pub fn update_time_step_duration(&mut self, frame_duration: &Duration) {
-        if self.config.match_frame_duration {
+        if self.config.enabled && self.config.match_frame_duration {
             self.set_time_step_duration(frame_duration.as_secs_f64());
         }
     }
@@ -198,22 +208,15 @@ impl PhysicsSimulator {
         self.time_step_duration = time_step_duration;
     }
 
-    /// Performs any setup required before starting the game loop.
-    pub fn perform_setup_for_game_loop(&self, ecs_world: &RwLock<ECSWorld>) {
-        motion::analytical::systems::apply_analytical_motion(
-            &ecs_world.read().unwrap(),
-            self.simulation_time,
-        );
-
-        self.apply_forces_and_torques(ecs_world);
-    }
-
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(
         &mut self,
         ecs_world: &RwLock<ECSWorld>,
         voxel_object_manager: &VoxelObjectManager,
     ) {
+        if !self.config.enabled {
+            return;
+        }
         with_timing_info_logging!(
         "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
         self.scaled_time_step_duration(),
@@ -301,21 +304,6 @@ impl PhysicsSimulator {
         rigid_body_force_manager.apply_forces_and_torques(ecs_world, medium, entities_to_remove);
     }
 
-    fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
-        let mut entities_to_remove = Vec::new();
-
-        self.rigid_body_force_manager
-            .read()
-            .unwrap()
-            .apply_forces_and_torques(
-                &ecs_world.read().unwrap(),
-                &self.medium,
-                &mut entities_to_remove,
-            );
-
-        Self::remove_entities(ecs_world, &entities_to_remove);
-    }
-
     fn remove_entities(ecs_world: &RwLock<ECSWorld>, entities_to_remove: &Vec<EntityID>) {
         if !entities_to_remove.is_empty() {
             let mut ecs_world_write = ecs_world.write().unwrap();
@@ -354,7 +342,7 @@ impl SimulatorConfig {
 impl Default for SimulatorConfig {
     fn default() -> Self {
         Self {
-            initially_running: true,
+            enabled: true,
             n_substeps: 1,
             initial_time_step_duration: 0.015,
             match_frame_duration: true,

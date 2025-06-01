@@ -3,6 +3,7 @@ use crate::ui::UserInterfaceConfig;
 use impact::{
     egui::{Context, Slider, Ui},
     engine::Engine,
+    physics::PhysicsSimulator,
 };
 
 mod simulation {
@@ -10,8 +11,8 @@ mod simulation {
         use crate::ui::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
-            label: "Simulating",
-            hover_text: "Whether the physics simulation is running.",
+            label: "Simulation",
+            hover_text: "Whether physics simulation is enabled.",
         };
         pub const REALTIME: LabelAndHoverText = LabelAndHoverText {
             label: "Real-time",
@@ -94,24 +95,21 @@ pub struct PhysicsOptionPanel;
 
 impl PhysicsOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
+        let mut simulator = engine.simulator().write().unwrap();
+
         option_panel(ctx, config, "physics_option_panel", |ui| {
             option_group(ui, "simulation_options", |ui| {
-                simulation_options(ui, engine);
+                simulation_options(ui, &mut simulator);
             });
             option_group(ui, "constraint_solving_options", |ui| {
-                constraint_solving_options(ui, engine);
+                constraint_solving_options(ui, &simulator);
             });
         });
     }
 }
 
-fn simulation_options(ui: &mut Ui, engine: &Engine) {
-    let mut running = engine.simulation_running();
-    if option_checkbox(ui, &mut running, simulation::docs::ENABLED).changed() {
-        engine.set_simulation_running(running);
-    }
-
-    let mut simulator = engine.simulator().write().unwrap();
+fn simulation_options(ui: &mut Ui, simulator: &mut PhysicsSimulator) {
+    option_checkbox(ui, simulator.enabled_mut(), simulation::docs::ENABLED);
 
     let matches_frame_duration = simulator.matches_frame_duration_mut();
     option_checkbox(ui, matches_frame_duration, simulation::docs::REALTIME);
@@ -149,8 +147,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine) {
     );
 }
 
-fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
-    let simulator = engine.simulator().read().unwrap();
+fn constraint_solving_options(ui: &mut Ui, simulator: &PhysicsSimulator) {
     let mut constraint_manager = simulator.constraint_manager().write().unwrap();
     let constraint_solver = constraint_manager.solver_mut();
     let config = constraint_solver.config_mut();

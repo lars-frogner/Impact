@@ -57,7 +57,6 @@ pub struct Engine {
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
-    simulation_running: AtomicBool,
     ui_interactive: AtomicBool,
     shutdown_requested: AtomicBool,
 }
@@ -131,7 +130,6 @@ impl Engine {
             voxel_manager,
         );
 
-        let simulation_running = config.physics.simulator.initially_running;
         let simulator = PhysicsSimulator::new(config.physics)?;
 
         let (motion_controller, orientation_controller) =
@@ -153,7 +151,6 @@ impl Engine {
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
-            simulation_running: AtomicBool::new(simulation_running),
             ui_interactive: AtomicBool::new(ui_interactive),
             shutdown_requested: AtomicBool::new(false),
         };
@@ -423,17 +420,6 @@ impl Engine {
         }
     }
 
-    /// TODO: This should not be necessary since entities can no longer be
-    /// created before creating the game loop.
-    ///
-    /// Performs any setup required before starting the game loop.
-    pub fn perform_setup_for_game_loop(&self) {
-        self.simulator
-            .read()
-            .unwrap()
-            .perform_setup_for_game_loop(self.ecs_world());
-    }
-
     /// Resets the scene and ECS world to the initial empty state.
     pub fn clear_world(&self) {
         self.ecs_world.write().unwrap().remove_all_entities();
@@ -442,20 +428,6 @@ impl Engine {
             .read()
             .unwrap()
             .declare_render_resources_desynchronized();
-    }
-
-    pub fn simulation_running(&self) -> bool {
-        self.simulation_running.load(Ordering::Relaxed)
-    }
-
-    pub fn set_simulation_running(&self, running: bool) {
-        self.simulation_running.store(running, Ordering::Relaxed);
-
-        if self.controls_enabled() {
-            self.window.hide_and_confine_cursor();
-        } else {
-            self.window.show_and_unconfine_cursor();
-        }
     }
 
     pub fn ui_interactive(&self) -> bool {
@@ -473,7 +445,7 @@ impl Engine {
     }
 
     pub fn controls_enabled(&self) -> bool {
-        self.simulation_running() && !self.ui_interactive()
+        !self.ui_interactive()
     }
 
     pub fn shutdown_requested(&self) -> bool {

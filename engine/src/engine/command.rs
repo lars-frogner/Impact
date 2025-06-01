@@ -275,20 +275,8 @@ impl Engine {
 
     pub fn set_simulation(&self, to: ToActiveState) -> ModifiedActiveState {
         log::info!("Setting simulation to {to:?}");
-
-        let controls_were_enabled = self.controls_enabled();
-
-        let mut running_state = self.simulation_running();
-        let new_running_state = to.set(&mut running_state);
-        self.set_simulation_running(running_state);
-
-        let controls_are_enabled = self.controls_enabled();
-
-        if controls_were_enabled && !controls_are_enabled {
-            self.stop_motion();
-        }
-
-        new_running_state
+        let mut simulator = self.simulator.write().unwrap();
+        to.set(simulator.enabled_mut())
     }
 
     pub fn set_simulation_substep_count(&self, to: ToSubstepCount) -> u32 {
