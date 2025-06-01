@@ -13,11 +13,11 @@ pub mod tasks;
 use crate::{
     gpu::{
         GraphicsDevice,
-        query::{self, TimestampQueryManager},
+        query::TimestampQueryManager,
         resource_group::GPUResourceGroupManager,
         shader::ShaderManager,
         storage::StorageGPUBufferManager,
-        texture::{self, attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
+        texture::{attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
     },
     runtime::EventLoopController,
     scene::Scene,
@@ -344,8 +344,6 @@ impl RenderingSystem {
 
         self.timestamp_query_manager
             .load_recorded_timing_results(&self.graphics_device)?;
-
-        query::print_timing_results(self.timestamp_query_manager.last_timing_results());
 
         self.postprocessor
             .write()

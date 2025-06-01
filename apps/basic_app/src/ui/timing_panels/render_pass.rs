@@ -3,7 +3,7 @@ use crate::ui::UserInterfaceConfig;
 use impact::{
     egui::{Context, TextStyle},
     egui_extras::{Column, TableBuilder},
-    engine::{Engine, command::ToActiveState},
+    engine::Engine,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -31,8 +31,6 @@ impl RenderPassTimingPanel {
             "render_pass_timing_panel",
             default_panel_width,
             |ui| {
-                engine.set_render_pass_timings(ToActiveState::Enabled);
-
                 let renderer = engine.renderer().read().unwrap();
                 let timestamp_query_manager = renderer.timestamp_query_manager();
 

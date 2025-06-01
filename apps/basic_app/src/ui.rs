@@ -7,7 +7,11 @@ mod time_overlay;
 mod timing_panels;
 mod toolbar;
 
-use impact::{egui::Context, engine::Engine, game_loop::GameLoop};
+use impact::{
+    egui::Context,
+    engine::{Engine, command::ToActiveState},
+    game_loop::GameLoop,
+};
 use option_panels::{physics::PhysicsOptionPanel, rendering::RenderingOptionPanel};
 use time_overlay::TimeOverlay;
 use timing_panels::render_pass::RenderPassTimingPanel;
@@ -57,7 +61,10 @@ impl UserInterface {
                 self.physics_option_panel.run(ctx, &self.config, engine);
             }
             if self.config.show_render_pass_timings {
+                engine.set_render_pass_timings(ToActiveState::Enabled);
                 self.render_pass_timing_panel.run(ctx, &self.config, engine);
+            } else {
+                engine.set_render_pass_timings(ToActiveState::Disabled);
             }
         }
 
