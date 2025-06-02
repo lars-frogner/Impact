@@ -216,8 +216,7 @@ impl AbsDiffEq for RigidBody {
 mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use impact_geometry::Radians;
-    use impact_math::Float;
+    use impact_math::{Float, Radians};
     use nalgebra::{Vector3, point, vector};
     use proptest::prelude::*;
 

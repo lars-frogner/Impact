@@ -12,10 +12,9 @@ use crate::{
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{
-    Angle, AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox, OrthographicTransform,
-    Sphere,
+    AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox, OrthographicTransform, Sphere,
 };
-use impact_math::{Float, UpperExclusiveBounds};
+use impact_math::{Angle, Float, UpperExclusiveBounds};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };

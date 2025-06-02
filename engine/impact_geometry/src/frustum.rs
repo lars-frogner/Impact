@@ -486,8 +486,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Degrees, OrthographicTransform, PerspectiveTransform};
+    use crate::{OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
+    use impact_math::Degrees;
     use nalgebra::{Rotation3, Translation3, point};
 
     #[test]

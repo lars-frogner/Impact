@@ -17,7 +17,8 @@ use impact::{
     voxel::VoxelObjectManager,
 };
 use impact_ecs::world::{EntityID, World as ECSWorld};
-use impact_geometry::{Angle, Plane, Radians, Sphere};
+use impact_geometry::{Plane, Sphere};
+use impact_math::{Angle, Radians};
 use nalgebra::{point, vector};
 
 #[derive(Clone, Debug)]

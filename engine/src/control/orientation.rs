@@ -8,7 +8,7 @@ use crate::{
     physics::{fph, motion::Orientation},
     window::Window,
 };
-use impact_geometry::{Angle, Degrees, Radians};
+use impact_math::{Angle, Degrees, Radians};
 use nalgebra::{UnitQuaternion, Vector3};
 use serde::{Deserialize, Serialize};
 

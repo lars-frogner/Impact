@@ -3,7 +3,7 @@
 use crate::light::{Illumninance, LightID, LuminousIntensity};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use impact_geometry::Degrees;
+use impact_math::Degrees;
 use nalgebra::UnitVector3;
 use roc_integration::roc;
 

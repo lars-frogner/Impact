@@ -8,8 +8,7 @@ use crate::{
     },
 };
 use anyhow::Result;
-use impact_geometry::{Angle, Radians};
-use impact_math::Float;
+use impact_math::{Angle, Float, Radians};
 use nalgebra::{UnitVector3, Vector3, vector};
 use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned, ser::Serializer};
 use simba::scalar::SubsetOf;
