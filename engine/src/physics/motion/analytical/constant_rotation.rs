@@ -23,8 +23,9 @@ impl ConstantRotationComp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{geometry::Radians, physics::motion::Direction};
+    use crate::physics::motion::Direction;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
+    use impact_geometry::Radians;
     use impact_math::Float;
     use motion::AngularVelocity;
     use nalgebra::{Vector3, vector};

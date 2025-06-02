@@ -1,6 +1,6 @@
 //! Representation of planes.
 
-use crate::geometry::Sphere;
+use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;

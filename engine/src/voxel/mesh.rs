@@ -1,7 +1,6 @@
 //! Mesh representation of chunked voxel objects.
 
 use crate::{
-    geometry::{Frustum, OrientedBox, Plane},
     scene::RenderResourcesDesynchronized,
     voxel::chunks::{
         ChunkedVoxelObject, VoxelChunkFlags,
@@ -11,6 +10,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
 use impact_containers::KeyIndexMapper;
+use impact_geometry::{Frustum, OrientedBox, Plane};
 use nalgebra::{Point3, Similarity3, UnitVector3};
 use std::{array, collections::BTreeSet, ops::Range};
 

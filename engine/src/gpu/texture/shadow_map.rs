@@ -1,7 +1,8 @@
 //! Textures representing shadow maps.
 
-use crate::{geometry::CubemapFace, gpu::GraphicsDevice};
+use crate::gpu::GraphicsDevice;
 use anyhow::Result;
+use impact_geometry::CubemapFace;
 use std::path::Path;
 
 /// Index representing a cascade in a cascaded shadow map.

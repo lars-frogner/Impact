@@ -5,10 +5,10 @@ pub mod systems;
 
 use super::OrientationController;
 use crate::{
-    geometry::{Angle, Degrees, Radians},
     physics::{fph, motion::Orientation},
     window::Window,
 };
+use impact_geometry::{Angle, Degrees, Radians};
 use nalgebra::{UnitQuaternion, Vector3};
 use serde::{Deserialize, Serialize};
 

@@ -1,15 +1,13 @@
 //! [`Component`](impact_ecs::component::Component)s related to voxels.
 
-use crate::{
-    geometry::{Capsule, Sphere},
-    voxel::{
-        VoxelObjectID,
-        voxel_types::{VoxelType, VoxelTypeRegistry},
-    },
+use crate::voxel::{
+    VoxelObjectID,
+    voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
+use impact_geometry::{Capsule, Sphere};
 use impact_math::{Hash32, compute_hash_str_32};
 use nalgebra::{Point3, Vector3};
 use roc_integration::roc;

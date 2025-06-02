@@ -5,20 +5,18 @@ pub mod inertia;
 pub mod intersection;
 pub mod sdf;
 
-use crate::{
-    geometry::{AxisAlignedBox, Sphere},
-    voxel::{
-        Voxel, VoxelFlags,
-        generation::VoxelGenerator,
-        utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
-        voxel_types::{VoxelType, VoxelTypeRegistry},
-    },
+use crate::voxel::{
+    Voxel, VoxelFlags,
+    generation::VoxelGenerator,
+    utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
+    voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use bitflags::bitflags;
 use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
+use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::Float;
 use nalgebra::{Point3, Vector3, point, vector};
 use num_traits::{NumCast, PrimInt};

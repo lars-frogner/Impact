@@ -2,7 +2,6 @@
 
 use approx::assert_abs_diff_eq;
 use impact::{
-    geometry::{Angle, Plane, Radians, Sphere},
     physics::{
         collision::{CollidableKind, CollisionWorld, components::CollidableComp},
         constraint::{ConstraintManager, solver::ConstraintSolverConfig},
@@ -18,6 +17,7 @@ use impact::{
     voxel::VoxelObjectManager,
 };
 use impact_ecs::world::{EntityID, World as ECSWorld};
+use impact_geometry::{Angle, Plane, Radians, Sphere};
 use nalgebra::{point, vector};
 
 #[derive(Clone, Debug)]

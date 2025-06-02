@@ -1,6 +1,6 @@
 //! Representation of capsules.
 
-use crate::geometry::{AxisAlignedBox, Sphere};
+use crate::{AxisAlignedBox, Sphere};
 use impact_math::Float;
 use nalgebra::{Point3, Similarity3, Vector3};
 
@@ -150,7 +150,7 @@ impl<F: Float> CapsulePointContainmentTester<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::AxisAlignedBox;
+    use crate::AxisAlignedBox;
     use approx::assert_abs_diff_eq;
     use nalgebra::{Translation3, UnitQuaternion, Vector3};
 

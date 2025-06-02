@@ -3,7 +3,6 @@
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
-use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     ops::{Add, Div, Mul, Sub},
@@ -29,12 +28,14 @@ pub trait Angle<F>: Copy {
 
 // An angle in degrees.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod)]
 pub struct Degrees<F>(pub F);
 
 // An angle in radians.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod)]
 pub struct Radians<F>(pub F);
 
 impl<F> Degrees<F> {

@@ -1,7 +1,6 @@
 //! Calculation of forces and torques due to drag.
 
 use crate::{
-    geometry::{Angle, Radians},
     mesh::TriangleMesh,
     physics::{
         fph,
@@ -9,6 +8,7 @@ use crate::{
     },
 };
 use anyhow::Result;
+use impact_geometry::{Angle, Radians};
 use impact_math::Float;
 use nalgebra::{UnitVector3, Vector3, vector};
 use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned, ser::Serializer};

@@ -1,16 +1,14 @@
 //! Intersection of shapes with chunked voxel objects.
 
 use super::{chunk_voxels, chunk_voxels_mut};
-use crate::{
-    geometry::{AxisAlignedBox, Capsule, Plane, Sphere},
-    voxel::{
-        Voxel, VoxelPlacement, VoxelSurfacePlacement,
-        chunks::{
-            CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection::SplitDetector,
-            linear_voxel_idx_within_chunk_from_object_voxel_indices,
-        },
+use crate::voxel::{
+    Voxel, VoxelPlacement, VoxelSurfacePlacement,
+    chunks::{
+        CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection::SplitDetector,
+        linear_voxel_idx_within_chunk_from_object_voxel_indices,
     },
 };
+use impact_geometry::{AxisAlignedBox, Capsule, Plane, Sphere};
 use nalgebra::{self as na, Point3, point};
 use std::{array, collections::HashSet, ops::Range};
 

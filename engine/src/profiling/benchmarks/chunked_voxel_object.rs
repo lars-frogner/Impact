@@ -1,7 +1,6 @@
 //! Benchmarks for chunked voxel object functionality.
 
 use crate::{
-    geometry::Sphere,
     scene::RenderResourcesDesynchronized,
     voxel::{
         chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
@@ -13,6 +12,7 @@ use crate::{
         voxel_types::VoxelType,
     },
 };
+use impact_geometry::Sphere;
 use impact_profiling::Profiler;
 use nalgebra::{UnitVector3, vector};
 use std::hint::black_box;

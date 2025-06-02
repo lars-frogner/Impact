@@ -1,11 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
-use crate::{
-    geometry::Degrees,
-    light::{Illumninance, LightID, LuminousIntensity},
-};
+use crate::light::{Illumninance, LightID, LuminousIntensity};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use impact_geometry::Degrees;
 use nalgebra::UnitVector3;
 use roc_integration::roc;
 

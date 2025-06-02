@@ -1,6 +1,6 @@
 //! Representation of spheres.
 
-use crate::geometry::AxisAlignedBox;
+use crate::AxisAlignedBox;
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
