@@ -11,11 +11,11 @@ use crate::{
         RenderResourcesDesynchronized, SceneGraph,
         components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
     },
-    util::bounds::UpperExclusiveBounds,
     window::Window,
 };
 use anyhow::{Result, bail};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_math::UpperExclusiveBounds;
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the required

@@ -14,8 +14,8 @@ use impact::{
             render_attachment_visualization::RenderAttachmentVisualizationPasses,
         },
     },
-    util::bounds::{Bounds, UpperExclusiveBounds},
 };
+use impact_math::{Bounds, UpperExclusiveBounds};
 
 mod shadow_mapping {
     pub mod docs {

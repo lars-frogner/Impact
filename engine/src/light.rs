@@ -12,11 +12,10 @@ use crate::{
     gpu::{texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
     model::InstanceFeatureBufferRangeID,
     scene::SceneEntityFlags,
-    util::bounds::UpperExclusiveBounds,
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
+use impact_math::{Float, UpperExclusiveBounds};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };

@@ -1,12 +1,9 @@
 //! Projection transformations.
 
-use crate::{
-    geometry::{Angle, AxisAlignedBox, Frustum, Radians},
-    util::bounds::{Bounds, UpperExclusiveBounds},
-};
+use crate::geometry::{Angle, AxisAlignedBox, Frustum, Radians};
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
+use impact_math::{Bounds, Float, UpperExclusiveBounds};
 use nalgebra::{
     Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
     UnitQuaternion, Vector3, point, vector,

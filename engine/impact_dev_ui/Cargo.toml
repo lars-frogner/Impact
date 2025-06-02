@@ -15,6 +15,7 @@ inventory = { workspace = true, optional = true }
 impact = { path = ".." }
 serde = { version = "1.0", features = ["derive"] }
 
+impact_math = { path = "../impact_math" }
 roc_integration = { path = "../../roc_integration" }
 
 [lints]

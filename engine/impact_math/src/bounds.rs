@@ -1,16 +1,16 @@
 //! Lower and upper bounds.
 
-use serde::{Deserialize, Serialize};
-
 /// Inclusive lower and upper bounds.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct InclusiveBounds<T> {
     lower: T,
     upper: T,
 }
 
 /// A lower inclusive and upper exlusive set of bounds.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct UpperExclusiveBounds<T> {
     lower: T,
     upper: T,

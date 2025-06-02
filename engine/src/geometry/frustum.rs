@@ -1,11 +1,8 @@
 //! Representation of frustums.
 
-use crate::{
-    geometry::{AxisAlignedBox, Plane, Sphere},
-    util::bounds::{Bounds, UpperExclusiveBounds},
-};
+use crate::geometry::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
-use impact_math::Float;
+use impact_math::{Bounds, Float, UpperExclusiveBounds};
 use nalgebra::{
     Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3, point, vector,
 };

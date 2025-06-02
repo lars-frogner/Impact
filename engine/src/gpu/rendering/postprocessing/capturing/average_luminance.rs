@@ -22,12 +22,11 @@ use crate::{
         texture::attachment::RenderAttachmentTextureManager,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     },
-    util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use anyhow::{Result, bail};
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{ConstStringHash64, hash64};
+use impact_math::{Bounds, ConstStringHash64, UpperExclusiveBounds, hash64};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, mem};
