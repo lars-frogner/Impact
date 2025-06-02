@@ -29,9 +29,9 @@ impl UserInterface {
             UICommand::SetInteractivity(to) => {
                 if to.set(&mut self.config.interactive).changed {
                     if self.config.interactive {
-                        ui::append_show_and_unconfine_cursor_commands(output);
+                        ui::unconfine_cursor(output);
                     } else {
-                        ui::append_hide_and_confine_cursor_commands(output);
+                        ui::confine_cursor(output);
                     }
                     engine.set_controls_enabled(!self.config.interactive);
                 }
