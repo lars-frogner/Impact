@@ -10,10 +10,10 @@ use crate::{
         VertexAttributeSet, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
         VertexTextureCoords,
     },
-    util::tracking::CollectionChange,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::Pod;
+use impact_containers::CollectionChange;
 use std::{borrow::Cow, mem};
 
 /// Represents types that can be written to a vertex buffer.

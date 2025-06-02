@@ -1,14 +1,12 @@
 //! Management of uniform buffers for GPU computation or rendering.
 
-use crate::{
-    gpu::{
-        GraphicsDevice,
-        buffer::{Count, CountedGPUBuffer, GPUBuffer, GPUBufferType},
-    },
-    util::tracking::{CollectionChange, CollectionChangeTracker},
+use crate::gpu::{
+    GraphicsDevice,
+    buffer::{Count, CountedGPUBuffer, GPUBuffer, GPUBufferType},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{Alignment, KeyIndexMapper};
+use impact_containers::{CollectionChange, CollectionChangeTracker};
 use impact_math::ConstStringHash64;
 use std::{
     borrow::Cow,

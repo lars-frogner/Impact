@@ -14,8 +14,8 @@ use crate::{
         AmbientLight, LightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
         ShadowableOmnidirectionalLight, ShadowableUnidirectionalLight, UnidirectionalLight,
     },
-    util::tracking::CollectionChange,
 };
+use impact_containers::CollectionChange;
 use impact_math::ConstStringHash64;
 use std::sync::OnceLock;
 

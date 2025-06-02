@@ -8,6 +8,7 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
+atomic_enum = "0.3"
 bytemuck = { workspace = true }
 inventory = { workspace = true, optional = true }
 
