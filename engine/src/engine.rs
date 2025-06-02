@@ -80,9 +80,7 @@ pub struct ECSConfig {
 
 impl Engine {
     /// Creates a new instance of the engine.
-    pub fn new(app: Arc<dyn Application>, window: Window) -> Result<Self> {
-        let config = app.engine_config();
-
+    pub fn new(config: EngineConfig, app: Arc<dyn Application>, window: Window) -> Result<Self> {
         let mut component_registry = ComponentRegistry::new();
         components::register_all_components(&mut component_registry)?;
 

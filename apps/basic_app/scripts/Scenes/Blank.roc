@@ -35,7 +35,7 @@ entity_ids = {
 
 setup! : {} => Result {} Str
 setup! = |_|
-    Command.execute!(Scene(SetSkybox(Skybox.new(skybox, 1e5))))?
+    Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox, 1e5)))))?
 
     Entity.create_with_id!(entity_ids.player, player)?
     Entity.create_with_id!(entity_ids.ground, ground)?

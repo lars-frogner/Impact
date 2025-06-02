@@ -13,6 +13,13 @@ pub extern "C" fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> Roc
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn roc_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
+    to_roc_result(
+        api::execute_ui_command(command_bytes.as_slice()).context("Failed executing UI command"),
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn roc_create_entity_with_id(
     entity_id: u64,
     component_bytes: &RocList<u8>,

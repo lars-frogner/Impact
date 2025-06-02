@@ -2,7 +2,7 @@
 
 use super::{Postprocessor, capturing::SensorSensitivity};
 use crate::{
-    engine::command::{ModifiedActiveState, ToActiveState},
+    command::{ModifiedActiveState, ToActiveState},
     gpu::{
         rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
         texture::attachment::RenderAttachmentQuantity,

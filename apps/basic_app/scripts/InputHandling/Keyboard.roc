@@ -15,37 +15,33 @@ handle_event! = |{ key, state }|
                     KeyD -> set_motion(state, Right)
                     KeyQ -> set_motion(state, Up)
                     KeyE -> set_motion(state, Down)
-                    KeyO -> on_released(state, Rendering(Postprocessing(SetAmbientOcclusion(Opposite))))
-                    KeyY -> on_released(state, Rendering(Postprocessing(SetTemporalAntiAliasing(Opposite))))
-                    KeyU -> on_released(state, Rendering(Postprocessing(SetBloom(Opposite))))
-                    KeyT -> on_released(state, Rendering(Postprocessing(SetToneMappingMethod(Next))))
-                    KeyX -> on_released(state, Rendering(Postprocessing(SetExposure(DifferentByStops(0.1)))))
-                    KeyZ -> on_released(state, Rendering(Postprocessing(SetExposure(DifferentByStops(-0.1)))))
-                    KeyV -> on_released(state, Rendering(Postprocessing(SetRenderAttachmentVisualization(Opposite))))
-                    KeyB -> on_released(state, Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Next))))
-                    KeyC -> on_released(state, Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Previous))))
-                    KeyI -> on_released(state, Rendering(SetShadowMapping(Opposite)))
-                    KeyF -> on_released(state, Rendering(SetWireframeMode(Opposite)))
-                    KeyP -> on_released(state, Physics(SetSimulation(Opposite)))
-                    KeyM -> on_released(state, Physics(SetSimulationSubstepCount(HigherBy(1))))
-                    KeyN -> on_released(state, Physics(SetSimulationSubstepCount(LowerBy(1))))
+                    KeyO -> on_released(state, Engine(Rendering(Postprocessing(SetAmbientOcclusion(Opposite)))))
+                    KeyY -> on_released(state, Engine(Rendering(Postprocessing(SetTemporalAntiAliasing(Opposite)))))
+                    KeyU -> on_released(state, Engine(Rendering(Postprocessing(SetBloom(Opposite)))))
+                    KeyT -> on_released(state, Engine(Rendering(Postprocessing(SetToneMappingMethod(Next)))))
+                    KeyX -> on_released(state, Engine(Rendering(Postprocessing(SetExposure(DifferentByStops(0.1))))))
+                    KeyZ -> on_released(state, Engine(Rendering(Postprocessing(SetExposure(DifferentByStops(-0.1))))))
+                    KeyV -> on_released(state, Engine(Rendering(Postprocessing(SetRenderAttachmentVisualization(Opposite)))))
+                    KeyB -> on_released(state, Engine(Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Next)))))
+                    KeyC -> on_released(state, Engine(Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Previous)))))
+                    KeyI -> on_released(state, Engine(Rendering(SetShadowMapping(Opposite))))
+                    KeyF -> on_released(state, Engine(Rendering(SetWireframeMode(Opposite))))
+                    KeyP -> on_released(state, Engine(Physics(SetSimulation(Opposite))))
+                    KeyM -> on_released(state, Engine(Physics(SetSimulationSubstepCount(HigherBy(1)))))
+                    KeyN -> on_released(state, Engine(Physics(SetSimulationSubstepCount(LowerBy(1)))))
                     _ -> None
 
             Symbol(symbol_key) ->
                 when symbol_key is
-                    Period -> on_released(state, Physics(SetSimulationSpeed(Higher)))
-                    Comma -> on_released(state, Physics(SetSimulationSpeed(Lower)))
+                    Period -> on_released(state, Engine(Physics(SetSimulationSpeed(Higher))))
+                    Comma -> on_released(state, Engine(Physics(SetSimulationSpeed(Lower))))
                     _ -> None
 
-            # Whitespace(whitspace_key) ->
-            #    when whitspace_key is
-            #        Tab -> on_released(state, UI(Set(Opposite)))
-            #        _ -> None
             Function(function_key) ->
                 when function_key is
-                    F12 -> on_released(state, Capture(SaveScreenshot))
-                    F10 -> on_released(state, Capture(SaveShadowMaps(OmnidirectionalLight)))
-                    F9 -> on_released(state, Capture(SaveShadowMaps(UnidirectionalLight)))
+                    F12 -> on_released(state, Engine(Capture(SaveScreenshot)))
+                    F10 -> on_released(state, Engine(Capture(SaveShadowMaps(OmnidirectionalLight))))
+                    F9 -> on_released(state, Engine(Capture(SaveShadowMaps(UnidirectionalLight))))
                     _ -> None
 
             Control(control_key) ->
@@ -65,7 +61,7 @@ set_motion = |key_state, direction|
             Pressed -> Moving
             Released -> Still
 
-    Some(Control(SetMotion { direction, state }))
+    Some(Engine(Control(SetMotion { direction, state })))
 
 on_released = |state, command|
     when state is

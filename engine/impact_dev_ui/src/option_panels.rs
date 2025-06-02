@@ -1,7 +1,7 @@
 pub mod physics;
 pub mod rendering;
 
-use crate::ui::UserInterfaceConfig;
+use crate::UserInterfaceConfig;
 use impact::egui::{
     Align, Color32, Context, CursorIcon, Frame, Grid, Id, Layout, Margin, Response, ScrollArea,
     Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32, emath::Numeric,

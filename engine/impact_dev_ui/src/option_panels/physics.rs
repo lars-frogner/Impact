@@ -1,5 +1,5 @@
 use super::{option_checkbox, option_group, option_panel, option_slider, scientific_formatter};
-use crate::ui::UserInterfaceConfig;
+use crate::UserInterfaceConfig;
 use impact::{
     egui::{Context, Slider, Ui},
     engine::Engine,
@@ -8,7 +8,7 @@ use impact::{
 
 mod simulation {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Simulation",
@@ -48,7 +48,7 @@ mod simulation {
 
 mod constraint_solving {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Constraint solver",

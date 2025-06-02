@@ -1,7 +1,7 @@
 //! Commands for scene manipulation.
 
 use super::Scene;
-use crate::{engine::command::ActiveState, skybox::Skybox};
+use crate::{command::ActiveState, skybox::Skybox};
 use impact_ecs::world::EntityID;
 use roc_integration::roc;
 

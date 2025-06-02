@@ -2,7 +2,7 @@
 
 use super::PhysicsSimulator;
 use crate::{
-    engine::command::ToActiveState,
+    command::ToActiveState,
     physics::{fph, medium::UniformMedium},
 };
 use roc_integration::roc;

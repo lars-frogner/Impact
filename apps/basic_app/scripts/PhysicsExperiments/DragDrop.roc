@@ -34,7 +34,7 @@ setup! = |_|
     create_entities!((0, 25, 30))
 
 set_medium! = |_|
-    Command.execute!(Physics(SetMedium(Physics.UniformMedium.moving_air((0, 3, 0)))))
+    Command.execute!(Engine(Physics(SetMedium(Physics.UniformMedium.moving_air((0, 3, 0))))))
 
 create_entities! = |position|
     cone_base =

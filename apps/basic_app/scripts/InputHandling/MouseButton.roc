@@ -13,7 +13,7 @@ toggle_scene_entity_active_state! = |entity_id, button_state|
         when button_state is
             Pressed -> Enabled
             Released -> Disabled
-    Command.execute!(Scene(SetSceneEntityActiveState({ entity_id, state })))
+    Command.execute!(Engine(Scene(SetSceneEntityActiveState({ entity_id, state }))))
 
 flip = |state|
     when state is

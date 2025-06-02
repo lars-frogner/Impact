@@ -8,7 +8,7 @@ use std::{num::NonZeroU32, sync::Arc};
 use winit::{
     dpi::PhysicalSize,
     event_loop::ActiveEventLoop,
-    window::{CursorGrabMode, Window as WinitWindow, WindowAttributes},
+    window::{Window as WinitWindow, WindowAttributes},
 };
 
 /// Wrapper for a window.
@@ -70,40 +70,6 @@ impl Window {
     pub fn aspect_ratio(&self) -> f32 {
         let (width, height) = self.dimensions();
         calculate_aspect_ratio(width, height)
-    }
-
-    /// Modifies the cursor's visibility.
-    ///
-    /// If `false`, this will hide the cursor. If `true`, this will show the
-    /// cursor.
-    pub fn set_cursor_visible(&self, visible: bool) {
-        self.window.set_cursor_visible(visible);
-    }
-
-    /// Confines the cursor to the window area.
-    pub fn confine_cursor(&self) {
-        self.window
-            .set_cursor_grab(CursorGrabMode::Confined)
-            .expect("Could not confine cursor");
-    }
-
-    /// Allows the cursor to leave the window area.
-    pub fn unconfine_cursor(&self) {
-        self.window
-            .set_cursor_grab(CursorGrabMode::None)
-            .expect("Could not unconfine cursor");
-    }
-
-    /// Hides the cursor and confines it to the window area.
-    pub fn hide_and_confine_cursor(&self) {
-        self.set_cursor_visible(false);
-        self.confine_cursor();
-    }
-
-    /// Shows the cursor and allows it to leave the window area.
-    pub fn show_and_unconfine_cursor(&self) {
-        self.set_cursor_visible(true);
-        self.unconfine_cursor();
     }
 
     pub fn request_redraw(&self) {
