@@ -49,8 +49,6 @@ impl Engine {
     }
 
     fn handle_mouse_motion_event(&self, mouse_displacement: (f64, f64)) {
-        if self.controls_enabled() {
-            self.update_orientation_controller(mouse_displacement);
-        }
+        self.update_orientation_controller(mouse_displacement);
     }
 }
