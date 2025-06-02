@@ -2,10 +2,11 @@ use super::{
     labeled_option, option_checkbox, option_group, option_panel, option_slider,
     scientific_formatter, transform_slider_recip,
 };
-use crate::ui::UserInterfaceConfig;
+use crate::UserInterfaceConfig;
 use impact::{
+    command::ToActiveState,
     egui::{ComboBox, Context, Slider, Ui},
-    engine::{Engine, command::ToActiveState},
+    engine::Engine,
     gpu::rendering::{
         RenderingSystem,
         postprocessing::{
@@ -18,7 +19,7 @@ use impact::{
 
 mod shadow_mapping {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Shadow mapping",
@@ -29,7 +30,7 @@ mod shadow_mapping {
 
 mod ambient_occlusion {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Ambient occlusion",
@@ -65,7 +66,7 @@ mod ambient_occlusion {
 
 mod temporal_anti_aliasing {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Temporal AA",
@@ -94,7 +95,7 @@ mod temporal_anti_aliasing {
 
 mod camera {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const EXPOSURE_MODE: LabelAndHoverText = LabelAndHoverText {
             label: "Camera exposure",
@@ -172,7 +173,7 @@ mod camera {
 
 mod bloom {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Bloom",
@@ -211,7 +212,7 @@ mod bloom {
 
 mod dynamic_range_compression {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const TONE_MAPPING_METHOD: LabelAndHoverText = LabelAndHoverText {
             label: "Tone mapping",
@@ -222,7 +223,7 @@ mod dynamic_range_compression {
 
 mod wireframe {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Wireframe mode",
@@ -233,7 +234,7 @@ mod wireframe {
 
 mod render_attachment {
     pub mod docs {
-        use crate::ui::option_panels::LabelAndHoverText;
+        use crate::option_panels::LabelAndHoverText;
 
         pub const ATTACHMENT: LabelAndHoverText = LabelAndHoverText {
             label: "Render attachment",

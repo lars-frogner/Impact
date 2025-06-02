@@ -2,7 +2,7 @@
 
 use super::RenderingSystem;
 use crate::{
-    engine::command::{ModifiedActiveState, ToActiveState},
+    command::{ModifiedActiveState, ToActiveState},
     gpu::{
         rendering::{
             RenderCommandManager,

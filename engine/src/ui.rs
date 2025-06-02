@@ -50,9 +50,7 @@ impl UserInterface {
     pub fn run(&mut self, game_loop: &GameLoop, engine: &Engine) -> RawUserInterfaceOutput {
         let input = self.window_integration.take_raw_input();
 
-        let mut output = self
-            .egui_ctx
-            .run(input, |ctx| self.app.run_ui(ctx, game_loop, engine));
+        let mut output = self.app.run_ui(&self.egui_ctx, input, game_loop, engine);
 
         output = self.window_integration.handle_full_output(output);
 
@@ -85,4 +83,33 @@ impl UserInterfaceOutput {
     pub fn rendering_input(&self) -> &GUIRenderingInput {
         &self.rendering_input
     }
+}
+
+pub fn append_viewport_commands(
+    output: &mut egui::FullOutput,
+    commands: impl IntoIterator<Item = egui::ViewportCommand>,
+) {
+    if let Some(viewport_output) = output.viewport_output.get_mut(&egui::ViewportId::ROOT) {
+        viewport_output.commands.extend(commands);
+    }
+}
+
+pub fn append_show_and_unconfine_cursor_commands(output: &mut egui::FullOutput) {
+    append_viewport_commands(
+        output,
+        [
+            egui::ViewportCommand::CursorVisible(true),
+            egui::ViewportCommand::CursorGrab(egui::CursorGrab::None),
+        ],
+    );
+}
+
+pub fn append_hide_and_confine_cursor_commands(output: &mut egui::FullOutput) {
+    append_viewport_commands(
+        output,
+        [
+            egui::ViewportCommand::CursorVisible(false),
+            egui::ViewportCommand::CursorGrab(egui::CursorGrab::Confined),
+        ],
+    );
 }

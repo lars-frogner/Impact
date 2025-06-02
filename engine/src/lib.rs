@@ -6,6 +6,7 @@ mod macros;
 pub mod application;
 pub mod assets;
 pub mod camera;
+pub mod command;
 pub mod component;
 pub mod control;
 pub mod engine;
@@ -40,4 +41,3 @@ pub use impact_math;
 pub use roc_integration;
 
 pub use egui;
-pub use egui_extras;

@@ -58,7 +58,7 @@ entity_ids = {
 
 setup! : {} => Result {} Str
 setup! = |_|
-    Command.execute!(Scene(SetSkybox(skybox)))?
+    Command.execute!(Engine(Scene(SetSkybox(skybox))))?
 
     Entity.create_with_id!(entity_ids.player, player)?
     Entity.create_with_id!(entity_ids.dragon, dragon)?

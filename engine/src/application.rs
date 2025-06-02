@@ -1,24 +1,22 @@
 //! Interfacing with the application using the engine.
 
 use crate::{
-    engine::{Engine, EngineConfig},
+    engine::Engine,
     game_loop::GameLoop,
-    runtime::RuntimeConfig,
-    window::{
-        WindowConfig,
-        input::{key::KeyboardEvent, mouse::MouseButtonEvent},
-    },
+    window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
 };
 use anyhow::Result;
 
 pub trait Application: Send + Sync + std::fmt::Debug {
-    fn window_config(&self) -> WindowConfig;
+    fn setup_ui(&self, engine: &Engine);
 
-    fn runtime_config(&self) -> RuntimeConfig;
-
-    fn engine_config(&self) -> EngineConfig;
-
-    fn run_ui(&self, ctx: &egui::Context, game_loop: &GameLoop, engine: &Engine);
+    fn run_ui(
+        &self,
+        ctx: &egui::Context,
+        input: egui::RawInput,
+        game_loop: &GameLoop,
+        engine: &Engine,
+    ) -> egui::FullOutput;
 
     fn setup_scene(&self) -> Result<()>;
 

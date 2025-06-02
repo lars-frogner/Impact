@@ -2,7 +2,6 @@
 
 pub mod api;
 pub mod scripting;
-pub mod ui;
 
 pub use impact;
 
@@ -15,40 +14,58 @@ use impact::{
     egui,
     engine::{Engine, EngineConfig},
     game_loop::GameLoop,
+    io::util as ui_util,
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
         input::{key::KeyboardEvent, mouse::MouseButtonEvent},
     },
 };
-use std::sync::RwLock;
-use ui::UserInterface;
+use impact_dev_ui::{UserInterface, UserInterfaceConfig};
+use serde::{Deserialize, Serialize};
+use std::{
+    path::{Path, PathBuf},
+    sync::RwLock,
+};
 
 #[derive(Debug)]
-pub struct Game {
-    pub engine_config: EngineConfig,
-    pub scripts: (),
-    pub user_interface: RwLock<UserInterface>,
+pub struct BasicApp {
+    user_interface: RwLock<UserInterface>,
 }
 
-impl Application for Game {
-    fn window_config(&self) -> WindowConfig {
-        WindowConfig::default()
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BasicAppConfig {
+    pub window: WindowConfig,
+    pub runtime: RuntimeConfig,
+    pub engine_config_path: PathBuf,
+    pub ui_config_path: PathBuf,
+}
+
+impl BasicApp {
+    pub fn new(user_interface: UserInterface) -> Self {
+        Self {
+            user_interface: RwLock::new(user_interface),
+        }
+    }
+}
+
+impl Application for BasicApp {
+    fn setup_ui(&self, engine: &Engine) {
+        self.user_interface.read().unwrap().setup(engine);
     }
 
-    fn runtime_config(&self) -> RuntimeConfig {
-        RuntimeConfig::default()
-    }
-
-    fn engine_config(&self) -> EngineConfig {
-        self.engine_config.clone()
-    }
-
-    fn run_ui(&self, ctx: &egui::Context, game_loop: &GameLoop, engine: &Engine) {
+    fn run_ui(
+        &self,
+        ctx: &egui::Context,
+        input: egui::RawInput,
+        game_loop: &GameLoop,
+        engine: &Engine,
+    ) -> egui::FullOutput {
         self.user_interface
             .write()
             .unwrap()
-            .run(ctx, game_loop, engine);
+            .run(ctx, input, game_loop, engine, &api::UI_COMMANDS)
     }
 
     fn setup_scene(&self) -> Result<()> {
@@ -64,5 +81,57 @@ impl Application for Game {
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
         log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
+    }
+}
+
+impl BasicAppConfig {
+    /// Parses the configuration from the RON file at the given path and
+    /// resolves any specified paths.
+    pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        let file_path = file_path.as_ref();
+        let mut config: Self = ui_util::parse_ron_file(file_path)?;
+        if let Some(root_path) = file_path.parent() {
+            config.resolve_paths(root_path);
+        }
+        Ok(config)
+    }
+
+    pub fn load(
+        self,
+    ) -> Result<(
+        WindowConfig,
+        RuntimeConfig,
+        EngineConfig,
+        UserInterfaceConfig,
+    )> {
+        let Self {
+            window,
+            runtime,
+            engine_config_path,
+            ui_config_path,
+        } = self;
+
+        let engine = EngineConfig::from_ron_file(engine_config_path)?;
+        let ui = UserInterfaceConfig::from_ron_file(ui_config_path)?;
+
+        Ok((window, runtime, engine, ui))
+    }
+
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    fn resolve_paths(&mut self, root_path: &Path) {
+        self.engine_config_path = root_path.join(&self.engine_config_path);
+        self.ui_config_path = root_path.join(&self.ui_config_path);
+    }
+}
+
+impl Default for BasicAppConfig {
+    fn default() -> Self {
+        Self {
+            window: WindowConfig::default(),
+            runtime: RuntimeConfig::default(),
+            engine_config_path: PathBuf::from("engine_config.roc"),
+            ui_config_path: PathBuf::from("ui_config.roc"),
+        }
     }
 }

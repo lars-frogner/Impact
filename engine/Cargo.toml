@@ -5,6 +5,7 @@ members = [
     "impact_ecs/impact_ecs_macros",
     "impact_math",
     "impact_profiling",
+    "impact_dev_ui",
 ]
 
 [workspace.package]
@@ -142,7 +143,6 @@ clap = { version = "4.5", features = ["derive"], optional = true }
 const-fnv1a-hash = { workspace = true }
 criterion = { version = "0.5.1", optional = true }
 egui = { version = "0.31", features = ["log"] }
-egui_extras = "0.31"
 egui-wgpu = "0.31"
 egui-winit = "0.31"
 glam = "0.30"

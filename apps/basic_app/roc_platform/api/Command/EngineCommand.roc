@@ -1,8 +1,8 @@
-# Hash: 5c4e012f8a7401efe9833481787bf46cb4cdd3550d9496455c24a2a7b16465c1
-# Generated: 2025-05-31T22:51:11+00:00
+# Hash: 3a5eb9f5cb402ff899def942002e6df89921a2fc782f42edc0a0bc6ec5f81e98
+# Generated: 2025-06-02T20:45:21+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: 4e0fe1e (dirty)
+# Commit: 1e44a75 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -14,14 +14,12 @@ import Command.ControlCommand
 import Command.PhysicsCommand
 import Command.RenderingCommand
 import Command.SceneCommand
-import Command.UICommand
 
 EngineCommand : [
     Rendering Command.RenderingCommand.RenderingCommand,
     Physics Command.PhysicsCommand.PhysicsCommand,
     Scene Command.SceneCommand.SceneCommand,
     Control Command.ControlCommand.ControlCommand,
-    UI Command.UICommand.UICommand,
     Capture Command.CaptureCommand.CaptureCommand,
 ]
 
@@ -57,17 +55,10 @@ write_bytes = |bytes, value|
             |> Command.ControlCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 24))
 
-        UI(val) ->
-            bytes
-            |> List.reserve(34)
-            |> List.append(4)
-            |> Command.UICommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 31))
-
         Capture(val) ->
             bytes
             |> List.reserve(34)
-            |> List.append(5)
+            |> List.append(4)
             |> Command.CaptureCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 31))
 
@@ -108,13 +99,6 @@ from_bytes = |bytes|
                 )
 
             [4, .. as data_bytes] ->
-                Ok(
-                    UI(
-                        data_bytes |> List.sublist({ start: 0, len: 2 }) |> Command.UICommand.from_bytes?,
-                    ),
-                )
-
-            [5, .. as data_bytes] ->
                 Ok(
                     Capture(
                         data_bytes |> List.sublist({ start: 0, len: 2 }) |> Command.CaptureCommand.from_bytes?,

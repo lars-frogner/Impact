@@ -1,4 +1,4 @@
-use crate::ui::UserInterfaceConfig;
+use crate::UserInterfaceConfig;
 use impact::egui::{Context, DragValue, Frame, TopBottomPanel};
 
 #[derive(Clone, Copy, Debug, Default)]

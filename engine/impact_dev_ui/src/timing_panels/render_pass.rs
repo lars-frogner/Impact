@@ -1,8 +1,8 @@
 use super::timing_panel;
-use crate::ui::UserInterfaceConfig;
+use crate::UserInterfaceConfig;
+use egui_extras::{Column, TableBuilder};
 use impact::{
     egui::{Context, TextStyle},
-    egui_extras::{Column, TableBuilder},
     engine::Engine,
 };
 
