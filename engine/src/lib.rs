@@ -27,7 +27,6 @@ pub mod scheduling;
 pub mod skybox;
 pub mod thread;
 pub mod ui;
-pub mod util;
 pub mod voxel;
 pub mod window;
 
