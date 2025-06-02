@@ -7,13 +7,10 @@ pub mod entity;
 use crate::{
     geometry::{Angle, Frustum, OrthographicTransform, PerspectiveTransform, Radians},
     scene::CameraNodeID,
-    util::{
-        bounds::{Bounds, UpperExclusiveBounds},
-        tracking::EntityChangeTracker,
-    },
+    util::tracking::EntityChangeTracker,
 };
 use approx::assert_abs_diff_ne;
-use impact_math::Float;
+use impact_math::{Bounds, Float, UpperExclusiveBounds};
 use nalgebra::{Projective3, Similarity3};
 use std::fmt::Debug;
 
