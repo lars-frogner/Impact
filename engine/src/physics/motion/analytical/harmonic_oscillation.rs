@@ -2,15 +2,13 @@
 
 pub mod components;
 
-use crate::{
-    num::Float,
-    physics::{
-        fph,
-        motion::{Position, Velocity},
-    },
+use crate::physics::{
+    fph,
+    motion::{Position, Velocity},
 };
 use approx::abs_diff_ne;
 use components::HarmonicOscillatorTrajectoryComp;
+use impact_math::Float;
 
 impl HarmonicOscillatorTrajectoryComp {
     /// Computes the position and velocity for the trajectory at the given time.
@@ -41,8 +39,9 @@ impl HarmonicOscillatorTrajectoryComp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{num::Float, physics::motion::Direction};
+    use crate::physics::motion::Direction;
     use approx::abs_diff_eq;
+    use impact_math::Float;
     use nalgebra::{Vector3, point, vector};
     use proptest::prelude::*;
 

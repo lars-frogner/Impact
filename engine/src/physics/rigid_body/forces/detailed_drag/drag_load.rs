@@ -3,13 +3,13 @@
 use crate::{
     geometry::{Angle, Radians},
     mesh::TriangleMesh,
-    num::Float,
     physics::{
         fph,
         motion::{Direction, Force, Orientation, Position, Torque},
     },
 };
 use anyhow::Result;
+use impact_math::Float;
 use nalgebra::{UnitVector3, Vector3, vector};
 use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned, ser::Serializer};
 use simba::scalar::SubsetOf;

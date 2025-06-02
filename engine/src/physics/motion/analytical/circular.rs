@@ -2,15 +2,13 @@
 
 pub mod components;
 
-use crate::{
-    num::Float,
-    physics::{
-        fph,
-        motion::{Position, Velocity},
-    },
+use crate::physics::{
+    fph,
+    motion::{Position, Velocity},
 };
 use approx::abs_diff_ne;
 use components::CircularTrajectoryComp;
+use impact_math::Float;
 use nalgebra::{point, vector};
 
 impl CircularTrajectoryComp {
@@ -81,11 +79,9 @@ impl CircularTrajectoryComp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        num::Float,
-        physics::motion::{Direction, Orientation},
-    };
+    use crate::physics::motion::{Direction, Orientation};
     use approx::abs_diff_eq;
+    use impact_math::Float;
     use nalgebra::{point, vector};
     use proptest::prelude::*;
 

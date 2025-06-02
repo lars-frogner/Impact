@@ -1,8 +1,8 @@
 //! Different units for angles.
 
-use crate::num::Float;
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
+use impact_math::Float;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,

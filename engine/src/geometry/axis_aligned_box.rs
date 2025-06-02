@@ -1,10 +1,8 @@
 //! Representation of axis-aligned boxes.
 
-use crate::{
-    geometry::{Plane, Point},
-    num::Float,
-};
+use crate::geometry::{Plane, Point};
 use approx::AbsDiffEq;
+use impact_math::Float;
 use na::point;
 use nalgebra::{self as na, Point3, Vector3};
 

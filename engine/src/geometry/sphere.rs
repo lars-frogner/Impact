@@ -1,8 +1,9 @@
 //! Representation of spheres.
 
-use crate::{geometry::AxisAlignedBox, num::Float};
+use crate::geometry::AxisAlignedBox;
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
+use impact_math::Float;
 use na::{Similarity3, UnitQuaternion, vector};
 use nalgebra::{self as na, Point3};
 

@@ -18,7 +18,7 @@ pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
 pub use sphere::Sphere;
 
-use crate::num::Float;
+use impact_math::Float;
 use nalgebra::Point3;
 
 /// Anything that represents a 3D point.

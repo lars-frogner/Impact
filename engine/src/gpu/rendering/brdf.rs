@@ -2,10 +2,8 @@
 
 #![allow(non_snake_case)]
 
-use crate::{
-    gpu::texture::{DepthOrArrayLayers, TextureLookupTable},
-    num::Float,
-};
+use crate::gpu::texture::{DepthOrArrayLayers, TextureLookupTable};
+use impact_math::Float;
 use std::num::NonZeroU32;
 
 /// Creates two tables of the specular GGX microfacet BRDF reflectance values

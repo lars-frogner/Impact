@@ -3,10 +3,10 @@
 use crate::{
     geometry::{Angle, Radians},
     io,
-    num::Float,
     physics::fph,
 };
 use anyhow::Result;
+use impact_math::Float;
 use rmp_serde::{Serializer as RmpSerializer, from_read};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{fs::File, io::BufReader, path::Path};

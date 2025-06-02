@@ -2,10 +2,10 @@
 
 use crate::{
     geometry::{AxisAlignedBox, Plane, Sphere},
-    num::Float,
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use approx::AbsDiffEq;
+use impact_math::Float;
 use nalgebra::{
     Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3, point, vector,
 };

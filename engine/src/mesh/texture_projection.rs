@@ -2,9 +2,9 @@
 
 pub mod components;
 
-use crate::num::Float;
 use anyhow::{Result, bail};
 use approx::abs_diff_eq;
+use impact_math::Float;
 use nalgebra::{Point3, UnitVector3, Vector2, Vector3, vector};
 use serde::{Deserialize, Serialize};
 

@@ -2,11 +2,11 @@
 
 use crate::{
     mesh::TriangleMesh,
-    num::Float,
     physics::{fph, motion::Position},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
+use impact_math::Float;
 use nalgebra::{Matrix3, Point3, Similarity3, UnitQuaternion, Vector3, point, vector};
 use roc_integration::roc;
 use simba::scalar::SubsetOf;

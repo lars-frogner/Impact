@@ -1,9 +1,7 @@
 //! Representation of boxes with arbitrary orientations.
 
-use crate::{
-    geometry::{AxisAlignedBox, Plane},
-    num::Float,
-};
+use crate::geometry::{AxisAlignedBox, Plane};
+use impact_math::Float;
 use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 
 /// A box with arbitrary position, orientation and extents.

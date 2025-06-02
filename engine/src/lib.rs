@@ -19,7 +19,6 @@ pub mod light;
 pub mod material;
 pub mod mesh;
 pub mod model;
-mod num;
 pub mod physics;
 pub mod run;
 pub mod runtime;

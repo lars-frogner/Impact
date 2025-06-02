@@ -1,10 +1,8 @@
 //! Generation of meshes representing geometrical objects.
 
-use crate::{
-    mesh::{FrontFaceSide, TriangleMesh},
-    num::Float,
-};
+use crate::mesh::{FrontFaceSide, TriangleMesh};
 use approx::{abs_diff_eq, abs_diff_ne};
+use impact_math::Float;
 use nalgebra::{UnitVector3, Vector3, vector};
 
 macro_rules! pos {
