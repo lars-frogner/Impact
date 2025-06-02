@@ -1,6 +1,5 @@
 //! Geometrical objects.
 
-mod angle;
 mod axis_aligned_box;
 mod capsule;
 mod frustum;
@@ -9,7 +8,6 @@ mod plane;
 mod projection;
 mod sphere;
 
-pub use angle::{Angle, Degrees, Radians};
 pub use axis_aligned_box::AxisAlignedBox;
 pub use capsule::Capsule;
 pub use frustum::Frustum;

@@ -2,8 +2,7 @@
 
 use crate::{io, physics::fph};
 use anyhow::Result;
-use impact_geometry::{Angle, Radians};
-use impact_math::Float;
+use impact_math::{Angle, Float, Radians};
 use rmp_serde::{Serializer as RmpSerializer, from_read};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{fs::File, io::BufReader, path::Path};

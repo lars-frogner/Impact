@@ -1,9 +1,9 @@
 //! Projection transformations.
 
-use crate::{Angle, AxisAlignedBox, Frustum, Radians};
+use crate::{AxisAlignedBox, Frustum};
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Bounds, Float, UpperExclusiveBounds};
+use impact_math::{Angle, Bounds, Float, Radians, UpperExclusiveBounds};
 use nalgebra::{
     Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
     UnitQuaternion, Vector3, point, vector,
@@ -562,8 +562,8 @@ impl CubemapFace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Degrees;
     use approx::assert_abs_diff_eq;
+    use impact_math::Degrees;
     use nalgebra::{point, vector};
 
     #[test]

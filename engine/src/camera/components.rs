@@ -2,7 +2,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::SetupComponent;
-use impact_geometry::{Angle, Radians};
+use impact_math::{Angle, Radians};
 use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing

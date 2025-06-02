@@ -18,8 +18,7 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow, bail};
-use impact_geometry::{Angle, Radians};
-use impact_math::Float;
+use impact_math::{Angle, Float, Radians};
 use simba::scalar::SubsetOf;
 use std::collections::{HashMap, hash_map::Entry};
 

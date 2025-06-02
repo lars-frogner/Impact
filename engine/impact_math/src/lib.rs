@@ -3,11 +3,13 @@
 #[macro_use]
 mod macros;
 
+mod angle;
 mod bounds;
 mod halton;
 mod hash;
 mod num;
 
+pub use angle::{Angle, Degrees, Radians};
 pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
 pub use halton::HaltonSequence;
 pub use hash::{

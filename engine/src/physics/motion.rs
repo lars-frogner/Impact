@@ -8,7 +8,7 @@ pub mod tasks;
 use crate::physics::{fph, inertia::InertialProperties};
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::{Angle, Radians};
+use impact_math::{Angle, Radians};
 use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
@@ -285,7 +285,7 @@ pub fn compute_rotational_kinetic_energy(
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_geometry::Radians;
+    use impact_math::Radians;
 
     #[test]
     fn advancing_orientation_with_zero_angular_speed_gives_same_orientation() {
