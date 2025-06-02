@@ -1,13 +1,11 @@
 //! User interface.
 
-pub mod command;
 pub mod window;
 
 use crate::{
     application::Application, engine::Engine, game_loop::GameLoop,
     gpu::rendering::gui::GUIRenderingInput, window::Window,
 };
-use serde::{Deserialize, Serialize};
 use std::{fmt, sync::Arc};
 use window::{UIEventHandlingResponse, UserInterfaceWindowIntegration};
 use winit::event::{DeviceEvent, WindowEvent};
@@ -17,14 +15,6 @@ pub struct UserInterface {
     app: Arc<dyn Application>,
     egui_ctx: egui::Context,
     window_integration: UserInterfaceWindowIntegration,
-}
-
-/// Configuration parameters for the user interface.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UserInterfaceConfig {
-    /// Whether the user interface should be interactive as soon as the
-    /// application starts.
-    pub initially_interactive: bool,
 }
 
 pub struct RawUserInterfaceOutput {
@@ -82,14 +72,6 @@ impl UserInterface {
         };
 
         UserInterfaceOutput { rendering_input }
-    }
-}
-
-impl Default for UserInterfaceConfig {
-    fn default() -> Self {
-        Self {
-            initially_interactive: true,
-        }
     }
 }
 

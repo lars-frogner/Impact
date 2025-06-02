@@ -27,7 +27,6 @@ use crate::{
     },
     scene::command::SceneCommand,
     skybox::Skybox,
-    ui::command::UICommand,
 };
 use anyhow::Result;
 use impact_ecs::world::EntityID;
@@ -41,7 +40,6 @@ pub enum EngineCommand {
     Physics(PhysicsCommand),
     Scene(SceneCommand),
     Control(ControlCommand),
-    UI(UICommand),
     Capture(CaptureCommand),
 }
 
@@ -75,7 +73,6 @@ impl Engine {
             EngineCommand::Physics(command) => self.execute_physics_command(command),
             EngineCommand::Scene(command) => self.execute_scene_command(command),
             EngineCommand::Control(command) => self.execute_control_command(command),
-            EngineCommand::UI(command) => self.execute_ui_command(command),
             EngineCommand::Capture(command) => self.execute_capture_command(command),
         }
     }
@@ -171,15 +168,6 @@ impl Engine {
             }
             ControlCommand::SetMovementSpeed(speed) => {
                 self.set_movement_speed(speed);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn execute_ui_command(&self, command: UICommand) -> Result<()> {
-        match command {
-            UICommand::SetInteractivity(to) => {
-                self.set_ui_interactivity(to);
             }
         }
         Ok(())
@@ -369,26 +357,6 @@ impl Engine {
         } else {
             log::info!("Not setting movement speed since there is no motion controller");
         }
-    }
-
-    // UI
-
-    pub fn set_ui_interactivity(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting user interface interactivity to {to:?}");
-
-        let controls_were_enabled = self.controls_enabled();
-
-        let mut interactive_state = self.ui_interactive();
-        let new_interactive_state = to.set(&mut interactive_state);
-        self.set_ui_interactive(interactive_state);
-
-        let controls_are_enabled = self.controls_enabled();
-
-        if controls_were_enabled && !controls_are_enabled {
-            self.stop_motion();
-        }
-
-        new_interactive_state
     }
 
     // Capture

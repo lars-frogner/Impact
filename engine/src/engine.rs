@@ -20,7 +20,7 @@ use crate::{
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
-    ui::{UserInterfaceConfig, UserInterfaceOutput},
+    ui::UserInterfaceOutput,
     voxel::{self, VoxelConfig, VoxelManager},
     window::Window,
 };
@@ -57,7 +57,7 @@ pub struct Engine {
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
-    ui_interactive: AtomicBool,
+    controls_enabled: AtomicBool,
     shutdown_requested: AtomicBool,
 }
 
@@ -70,7 +70,6 @@ pub struct EngineConfig {
     pub voxel: VoxelConfig,
     pub controller: ControllerConfig,
     pub ecs: ECSConfig,
-    pub user_interface: UserInterfaceConfig,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -135,8 +134,6 @@ impl Engine {
         let (motion_controller, orientation_controller) =
             control::create_controllers(config.controller);
 
-        let ui_interactive = config.user_interface.initially_interactive;
-
         let engine = Self {
             app,
             window,
@@ -151,15 +148,9 @@ impl Engine {
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
-            ui_interactive: AtomicBool::new(ui_interactive),
+            controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
         };
-
-        if engine.controls_enabled() {
-            engine.window.hide_and_confine_cursor();
-        } else {
-            engine.window.show_and_unconfine_cursor();
-        }
 
         Ok(engine)
     }
@@ -384,6 +375,9 @@ impl Engine {
 
     /// Updates the orientation controller with the given mouse displacement.
     pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
+        if !self.controls_enabled() {
+            return;
+        }
         if let Some(orientation_controller) = &self.orientation_controller {
             log::trace!(
                 "Updating orientation controller by mouse delta ({}, {})",
@@ -400,6 +394,9 @@ impl Engine {
 
     /// Updates the orientations and motion of all controlled entities.
     pub fn update_controlled_entities(&self) {
+        if !self.controls_enabled() {
+            return;
+        }
         let ecs_world = self.ecs_world().read().unwrap();
         let time_step_duration = self.simulator.read().unwrap().scaled_time_step_duration();
 
@@ -430,22 +427,18 @@ impl Engine {
             .declare_render_resources_desynchronized();
     }
 
-    pub fn ui_interactive(&self) -> bool {
-        self.ui_interactive.load(Ordering::Relaxed)
-    }
-
-    pub fn set_ui_interactive(&self, interactive: bool) {
-        self.ui_interactive.store(interactive, Ordering::Relaxed);
-
-        if self.controls_enabled() {
-            self.window.hide_and_confine_cursor();
-        } else {
-            self.window.show_and_unconfine_cursor();
-        }
-    }
-
     pub fn controls_enabled(&self) -> bool {
-        !self.ui_interactive()
+        self.controls_enabled.load(Ordering::Relaxed)
+    }
+
+    pub fn set_controls_enabled(&self, enabled: bool) {
+        self.controls_enabled.store(enabled, Ordering::Relaxed);
+
+        if !enabled {
+            if let Some(motion_controller) = &self.motion_controller {
+                motion_controller.lock().unwrap().stop();
+            }
+        }
     }
 
     pub fn shutdown_requested(&self) -> bool {

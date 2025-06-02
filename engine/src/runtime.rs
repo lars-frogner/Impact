@@ -96,13 +96,7 @@ impl Runtime {
     }
 
     fn handle_window_event_for_ui(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
-        if self.engine.ui_interactive() {
-            self.user_interface.handle_window_event(event)
-        } else {
-            UIEventHandlingResponse {
-                event_consumed: false,
-            }
-        }
+        self.user_interface.handle_window_event(event)
     }
 
     fn handle_device_event_for_ui(&mut self, event: &DeviceEvent) {
