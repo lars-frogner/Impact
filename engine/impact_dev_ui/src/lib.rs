@@ -19,6 +19,7 @@ use impact::{
     engine::Engine,
     game_loop::GameLoop,
     io::util as io_util,
+    ui,
 };
 use option_panels::{physics::PhysicsOptionPanel, rendering::RenderingOptionPanel};
 use serde::{Deserialize, Serialize};
@@ -91,6 +92,12 @@ impl UserInterface {
                 self.time_overlay.run(ctx, game_loop, engine);
             }
         });
+
+        // The cursor icon will be reset each run, so it won't stay hidden
+        // unless we make it
+        if !self.config.interactive {
+            ui::ensure_cursor_hidden(&mut output);
+        }
 
         self.execute_commands(&mut output, engine, command_queue);
 

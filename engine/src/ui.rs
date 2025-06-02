@@ -85,6 +85,26 @@ impl UserInterfaceOutput {
     }
 }
 
+pub fn ensure_cursor_hidden(output: &mut egui::FullOutput) {
+    output.platform_output.cursor_icon = egui::CursorIcon::None;
+}
+
+pub fn confine_cursor(output: &mut egui::FullOutput) {
+    append_viewport_commands(
+        output,
+        [egui::ViewportCommand::CursorGrab(
+            egui::CursorGrab::Confined,
+        )],
+    );
+}
+
+pub fn unconfine_cursor(output: &mut egui::FullOutput) {
+    append_viewport_commands(
+        output,
+        [egui::ViewportCommand::CursorGrab(egui::CursorGrab::None)],
+    );
+}
+
 pub fn append_viewport_commands(
     output: &mut egui::FullOutput,
     commands: impl IntoIterator<Item = egui::ViewportCommand>,
@@ -92,24 +112,4 @@ pub fn append_viewport_commands(
     if let Some(viewport_output) = output.viewport_output.get_mut(&egui::ViewportId::ROOT) {
         viewport_output.commands.extend(commands);
     }
-}
-
-pub fn append_show_and_unconfine_cursor_commands(output: &mut egui::FullOutput) {
-    append_viewport_commands(
-        output,
-        [
-            egui::ViewportCommand::CursorVisible(true),
-            egui::ViewportCommand::CursorGrab(egui::CursorGrab::None),
-        ],
-    );
-}
-
-pub fn append_hide_and_confine_cursor_commands(output: &mut egui::FullOutput) {
-    append_viewport_commands(
-        output,
-        [
-            egui::ViewportCommand::CursorVisible(false),
-            egui::ViewportCommand::CursorGrab(egui::CursorGrab::Confined),
-        ],
-    );
 }
