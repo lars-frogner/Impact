@@ -2,7 +2,6 @@
 
 use crate::{
     camera::SceneCamera,
-    geometry::Degrees,
     light::{
         AmbientLight, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
         ShadowableUnidirectionalLight, UnidirectionalLight,
@@ -17,6 +16,7 @@ use crate::{
     scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_geometry::Degrees;
 use nalgebra::{Similarity3, UnitVector3};
 use std::sync::RwLock;
 

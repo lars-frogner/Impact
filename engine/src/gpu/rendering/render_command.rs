@@ -5,7 +5,6 @@ pub mod tasks;
 use crate::{
     assets::lookup_table,
     camera::buffer::CameraGPUBufferManager,
-    geometry::CubemapFace,
     gpu::{
         GraphicsDevice,
         push_constant::{PushConstantGroup, PushConstantVariant},
@@ -60,6 +59,7 @@ use crate::{
     voxel::render_commands::{VoxelGeometryPipeline, VoxelRenderCommands},
 };
 use anyhow::{Result, anyhow};
+use impact_geometry::CubemapFace;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, hash_map::Entry},

@@ -1,7 +1,6 @@
 //! Benchmarks for constraint resolution.
 
 use crate::{
-    geometry::Sphere,
     physics::{
         collision::{CollidableKind, Collision, CollisionWorld, components::CollidableComp},
         constraint::{ConstraintManager, solver::ConstraintSolverConfig},
@@ -17,6 +16,7 @@ use crate::{
     voxel::VoxelObjectManager,
 };
 use impact_ecs::world::{EntityID, World as ECSWorld};
+use impact_geometry::Sphere;
 use impact_profiling::Profiler;
 use nalgebra::point;
 

@@ -12,7 +12,6 @@ pub mod control;
 pub mod engine;
 pub mod ffi;
 pub mod game_loop;
-pub mod geometry;
 pub mod gpu;
 pub mod io;
 pub mod light;

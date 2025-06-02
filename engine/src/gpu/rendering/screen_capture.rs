@@ -3,12 +3,12 @@
 pub mod command;
 
 use crate::{
-    geometry::CubemapFace,
     gpu::{rendering::RenderingSystem, texture},
     light::MAX_SHADOW_MAP_CASCADES,
 };
 use anyhow::{Result, anyhow};
 use chrono::Utc;
+use impact_geometry::CubemapFace;
 use std::sync::{
     RwLock,
     atomic::{AtomicBool, Ordering},

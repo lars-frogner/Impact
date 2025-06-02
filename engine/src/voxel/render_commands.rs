@@ -2,7 +2,6 @@
 
 use crate::{
     camera::{SceneCamera, buffer::CameraGPUBufferManager},
-    geometry::{Frustum, OrientedBox},
     gpu::{
         GraphicsDevice, compute,
         push_constant::{PushConstantGroup, PushConstantVariant},
@@ -40,6 +39,7 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
+use impact_geometry::{Frustum, OrientedBox};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
 

@@ -1,6 +1,6 @@
 //! Representation of axis-aligned boxes.
 
-use crate::geometry::{Plane, Point};
+use crate::{Plane, Point};
 use approx::AbsDiffEq;
 use impact_math::Float;
 use na::point;

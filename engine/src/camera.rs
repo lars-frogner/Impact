@@ -4,12 +4,10 @@ pub mod buffer;
 pub mod components;
 pub mod entity;
 
-use crate::{
-    geometry::{Angle, Frustum, OrthographicTransform, PerspectiveTransform, Radians},
-    scene::CameraNodeID,
-};
+use crate::scene::CameraNodeID;
 use approx::assert_abs_diff_ne;
 use impact_containers::EntityChangeTracker;
+use impact_geometry::{Angle, Frustum, OrthographicTransform, PerspectiveTransform, Radians};
 use impact_math::{Bounds, Float, UpperExclusiveBounds};
 use nalgebra::{Projective3, Similarity3};
 use std::fmt::Debug;
@@ -319,8 +317,8 @@ impl<F: Float> Camera<F> for OrthographicCamera<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::Degrees;
     use approx::assert_abs_diff_eq;
+    use impact_geometry::Degrees;
 
     #[test]
     #[should_panic]

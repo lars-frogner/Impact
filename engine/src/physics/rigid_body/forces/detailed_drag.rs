@@ -11,7 +11,6 @@ pub use drag_load::DragLoad;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    geometry::{Angle, Radians},
     mesh::{MeshID, TriangleMesh},
     physics::{
         fph,
@@ -19,6 +18,7 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow, bail};
+use impact_geometry::{Angle, Radians};
 use impact_math::Float;
 use simba::scalar::SubsetOf;
 use std::collections::{HashMap, hash_map::Entry};

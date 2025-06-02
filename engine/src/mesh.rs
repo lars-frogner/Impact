@@ -6,15 +6,13 @@ pub mod entity;
 pub mod generation;
 pub mod texture_projection;
 
-use crate::{
-    geometry::{AxisAlignedBox, Point, Sphere},
-    io,
-};
+use crate::io;
 use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{CollectionChange, CollectionChangeTracker};
+use impact_geometry::{AxisAlignedBox, Point, Sphere};
 use impact_math::{Float, hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use log::debug;

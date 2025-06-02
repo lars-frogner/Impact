@@ -2,7 +2,6 @@
 
 use crate::{
     camera::SceneCamera,
-    geometry::{CubemapFace, Frustum, Sphere},
     gpu::texture::shadow_map::CascadeIdx,
     light::{
         LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
@@ -21,6 +20,7 @@ use crate::{
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{GenerationalIdx, GenerationalReusingVec};
+use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_math::Float;
 use nalgebra::Similarity3;
 use roc_integration::roc;

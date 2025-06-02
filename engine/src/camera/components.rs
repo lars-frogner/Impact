@@ -1,8 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to cameras.
 
-use crate::geometry::{Angle, Radians};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::SetupComponent;
+use impact_geometry::{Angle, Radians};
 use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing

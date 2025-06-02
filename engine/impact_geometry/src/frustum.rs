@@ -1,6 +1,6 @@
 //! Representation of frustums.
 
-use crate::geometry::{AxisAlignedBox, Plane, Sphere};
+use crate::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
 use impact_math::{Bounds, Float, UpperExclusiveBounds};
 use nalgebra::{
@@ -486,7 +486,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::{Degrees, OrthographicTransform, PerspectiveTransform};
+    use crate::{Degrees, OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
     use nalgebra::{Rotation3, Translation3, point};
 

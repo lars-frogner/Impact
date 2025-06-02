@@ -1,6 +1,6 @@
 //! Representation of boxes with arbitrary orientations.
 
-use crate::geometry::{AxisAlignedBox, Plane};
+use crate::{AxisAlignedBox, Plane};
 use impact_math::Float;
 use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 
@@ -144,7 +144,7 @@ impl<F: Float> OrientedBox<F> {
     /// Computes the six planes that bound the oriented box.
     ///
     /// The order and orientation of the planes are consistent with the planes
-    /// in a [`Frustum`](crate::geometry::Frustum).
+    /// in a [`Frustum`](crate::Frustum).
     pub fn compute_bounding_planes(&self) -> [Plane<F>; 6] {
         let width_axis = self.compute_width_axis();
         let height_axis = self.compute_height_axis();
@@ -165,7 +165,7 @@ impl<F: Float> OrientedBox<F> {
 
 #[cfg(test)]
 mod tests {
-    use crate::geometry::{Frustum, OrthographicTransform};
+    use crate::{Frustum, OrthographicTransform};
 
     use super::*;
     use approx::assert_abs_diff_eq;

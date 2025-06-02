@@ -3,7 +3,6 @@
 use crate::{
     assert_uniform_valid,
     camera::SceneCamera,
-    geometry::Frustum,
     gpu::{
         GraphicsDevice,
         buffer::GPUBuffer,
@@ -11,6 +10,7 @@ use crate::{
     },
 };
 use bytemuck::{Pod, Zeroable};
+use impact_geometry::Frustum;
 use impact_math::{ConstStringHash64, HaltonSequence};
 use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
 use std::{

@@ -5,7 +5,6 @@ pub mod entity;
 pub mod systems;
 
 use crate::{
-    geometry::{Plane, Sphere},
     physics::{
         constraint::contact::{Contact, ContactGeometry, ContactID, ContactManifold},
         fph,
@@ -14,6 +13,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::world::EntityID;
+use impact_geometry::{Plane, Sphere};
 use nalgebra::{Similarity3, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::collections::HashMap;
