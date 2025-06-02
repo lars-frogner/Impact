@@ -1,9 +1,7 @@
 //! Representation of capsules.
 
-use crate::{
-    geometry::{AxisAlignedBox, Sphere},
-    num::Float,
-};
+use crate::geometry::{AxisAlignedBox, Sphere};
+use impact_math::Float;
 use nalgebra::{Point3, Similarity3, Vector3};
 
 /// A capsule represented by the starting point and displacement vector of the

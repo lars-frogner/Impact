@@ -7,7 +7,6 @@ pub mod sdf;
 
 use crate::{
     geometry::{AxisAlignedBox, Sphere},
-    num::Float,
     voxel::{
         Voxel, VoxelFlags,
         generation::VoxelGenerator,
@@ -20,6 +19,7 @@ use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
+use impact_math::Float;
 use nalgebra::{Point3, Vector3, point, vector};
 use num_traits::{NumCast, PrimInt};
 use std::{array, collections::HashSet, iter, ops::Range};

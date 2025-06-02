@@ -2,11 +2,11 @@
 
 use crate::{
     geometry::{Angle, AxisAlignedBox, Frustum, Radians},
-    num::Float,
     util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
+use impact_math::Float;
 use nalgebra::{
     Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
     UnitQuaternion, Vector3, point, vector,

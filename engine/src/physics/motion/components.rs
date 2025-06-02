@@ -1,14 +1,12 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion.
 
-use crate::{
-    num::Float,
-    physics::{
-        fph,
-        motion::{AngularVelocity, Orientation, Position, Velocity},
-    },
+use crate::physics::{
+    fph,
+    motion::{AngularVelocity, Orientation, Position, Velocity},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use impact_math::Float;
 use nalgebra::{Similarity3, Translation3, Vector3};
 use roc_integration::roc;
 

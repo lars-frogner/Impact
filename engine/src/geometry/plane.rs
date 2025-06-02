@@ -1,8 +1,9 @@
 //! Representation of planes.
 
-use crate::{geometry::Sphere, num::Float};
+use crate::geometry::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
+use impact_math::Float;
 use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
 use num_traits::Signed;
 

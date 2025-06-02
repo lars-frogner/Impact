@@ -2,7 +2,6 @@
 
 use super::chunk_voxels;
 use crate::{
-    num::Float,
     physics::{
         fph,
         inertia::{InertiaTensor, InertialProperties},
@@ -13,6 +12,7 @@ use crate::{
     },
 };
 use approx::{AbsDiffEq, RelativeEq};
+use impact_math::Float;
 use nalgebra::{Matrix3, Point3, Vector3, vector};
 use std::ops::Range;
 

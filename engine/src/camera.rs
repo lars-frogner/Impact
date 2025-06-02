@@ -6,7 +6,6 @@ pub mod entity;
 
 use crate::{
     geometry::{Angle, Frustum, OrthographicTransform, PerspectiveTransform, Radians},
-    num::Float,
     scene::CameraNodeID,
     util::{
         bounds::{Bounds, UpperExclusiveBounds},
@@ -14,6 +13,7 @@ use crate::{
     },
 };
 use approx::assert_abs_diff_ne;
+use impact_math::Float;
 use nalgebra::{Projective3, Similarity3};
 use std::fmt::Debug;
 

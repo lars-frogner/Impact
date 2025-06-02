@@ -15,13 +15,13 @@ use crate::{
             InstanceModelViewTransformWithPrevious,
         },
     },
-    num::Float,
     scene::SceneEntityFlags,
     voxel::{VoxelObjectID, entity::VOXEL_MODEL_ID},
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{GenerationalIdx, GenerationalReusingVec};
+use impact_math::Float;
 use nalgebra::Similarity3;
 use roc_integration::roc;
 use std::collections::HashSet;
