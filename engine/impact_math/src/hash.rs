@@ -20,7 +20,7 @@ use std::{
 )]
 #[repr(transparent)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct Hash32(u32);
 
 /// A 64-bit hash.
@@ -32,7 +32,7 @@ pub struct Hash32(u32);
 )]
 #[repr(transparent)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct Hash64(u64);
 
 /// A 32-bit hash of a string.
@@ -73,7 +73,7 @@ pub struct StringHash64(Hash64);
 /// This object remembers the original string and can be
 /// formatted into it by means of the [`Display`](fmt::Display)
 /// trait.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug)]
 pub struct ConstStringHash64 {
     hash: Hash64,
     string: &'static str,
@@ -223,11 +223,27 @@ pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> H
     ))
 }
 
+impl Hash for Hash32 {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u32(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for Hash32 {}
+
 impl fmt::Display for Hash32 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
+
+impl Hash for Hash64 {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u64(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for Hash64 {}
 
 impl fmt::Display for Hash64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -279,15 +295,21 @@ impl PartialOrd for ConstStringHash64 {
     }
 }
 
-// Disabling this error because the requirement for `Hash`,
-// `k1 == k2 -> hash(k1) == hash(k2)`, is still upheld
-// even though we only hash one of the fields
-#[allow(clippy::derived_hash_with_manual_eq)]
-impl Hash for ConstStringHash64 {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.hash.hash(state);
+impl PartialEq for ConstStringHash64 {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash.eq(&other.hash)
     }
 }
+
+impl Eq for ConstStringHash64 {}
+
+impl Hash for ConstStringHash64 {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u64(self.hash.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for ConstStringHash64 {}
 
 #[cfg(test)]
 mod tests {
