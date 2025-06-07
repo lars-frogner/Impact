@@ -129,7 +129,6 @@ impl fmt::Debug for GUIRenderer {
     }
 }
 
-#[allow(clippy::derivable_impls)]
 impl Default for GUIRenderingConfig {
     fn default() -> Self {
         Self { dithering: false }

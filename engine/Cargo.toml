@@ -38,6 +38,7 @@ too_many_arguments = "allow"
 let_and_return = "allow"
 multiple_bound_locations = "allow"
 too_long_first_doc_paragrap = "allow"
+derivable_impls = "allow"
 
 await_holding_lock = "warn"
 box_collection = "warn"

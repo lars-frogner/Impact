@@ -379,7 +379,6 @@ impl RenderingSystem {
     }
 }
 
-#[allow(clippy::derivable_impls)]
 impl Default for BasicRenderingConfig {
     fn default() -> Self {
         Self {
