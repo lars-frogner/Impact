@@ -2,15 +2,13 @@
 
 ## Graphics
 
-- Generalize tone mapping pass to dynamic range compression pass and include high-quality gamma correction.
-
-- Integrate `egui` for dev GUI.
+- Support clicking on rendered entities to display info based on their components.
 
 ## Physics
 
 - Implement sphere-based voxel collision detection.
 
-- Implement collision resolution.
+- Add more constraints.
 
 - Implement Voronoi fracturing.
 
@@ -28,9 +26,7 @@
 
 - Consider using `wgpu::TextureFormat::Rg11b10Float` for appropriate attachments.
 
-- Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
-
-- Define consistent locking order for all lock-protected resources under `Application` to avoid deadlocks in parallel `Tasks` (with optional run-time verification to identify violations).
+- Define consistent locking order for all lock-protected resources under `Engine` to avoid deadlocks in parallel `Tasks` (with optional run-time verification to identify violations).
 
 - Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
 
