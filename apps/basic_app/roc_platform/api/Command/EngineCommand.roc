@@ -1,8 +1,8 @@
-# Hash: 3a5eb9f5cb402ff899def942002e6df89921a2fc782f42edc0a0bc6ec5f81e98
-# Generated: 2025-06-02T20:45:21+00:00
+# Hash: 1be6d7a3fd6a222a12d57dfff2aa5ef6e17c765393eeabb802983a4058eadf44
+# Generated: 2025-06-07T21:41:51+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: 1e44a75 (dirty)
+# Commit: 29cdb79 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -11,6 +11,7 @@ module [
 
 import Command.CaptureCommand
 import Command.ControlCommand
+import Command.InstrumentationCommand
 import Command.PhysicsCommand
 import Command.RenderingCommand
 import Command.SceneCommand
@@ -21,6 +22,7 @@ EngineCommand : [
     Scene Command.SceneCommand.SceneCommand,
     Control Command.ControlCommand.ControlCommand,
     Capture Command.CaptureCommand.CaptureCommand,
+    Instrumentation Command.InstrumentationCommand.InstrumentationCommand,
 ]
 
 ## Serializes a value of [EngineCommand] into the binary representation
@@ -60,6 +62,13 @@ write_bytes = |bytes, value|
             |> List.reserve(34)
             |> List.append(4)
             |> Command.CaptureCommand.write_bytes(val)
+            |> List.concat(List.repeat(0, 31))
+
+        Instrumentation(val) ->
+            bytes
+            |> List.reserve(34)
+            |> List.append(5)
+            |> Command.InstrumentationCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 31))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
@@ -102,6 +111,13 @@ from_bytes = |bytes|
                 Ok(
                     Capture(
                         data_bytes |> List.sublist({ start: 0, len: 2 }) |> Command.CaptureCommand.from_bytes?,
+                    ),
+                )
+
+            [5, .. as data_bytes] ->
+                Ok(
+                    Instrumentation(
+                        data_bytes |> List.sublist({ start: 0, len: 2 }) |> Command.InstrumentationCommand.from_bytes?,
                     ),
                 )
 
