@@ -35,13 +35,9 @@ use crate::gpu::{
     },
 };
 use anyhow::{Result, bail};
+use impact_containers::{HashMap, HashSet};
 use regex::Regex;
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    fmt, iter,
-    sync::LazyLock,
-};
+use std::{borrow::Cow, fmt, iter, sync::LazyLock};
 
 /// Specific shader template that can be resolved to generate a shader.
 pub trait SpecificShaderTemplate: fmt::Debug {
@@ -245,7 +241,7 @@ impl<'a> ShaderTemplate<'a> {
     ) -> Result<String> {
         let mut resolved_source_code = Cow::Borrowed(self.source_code);
 
-        let mut set_flags = HashSet::new();
+        let mut set_flags = HashSet::default();
         for flag in flags_to_set {
             set_flags.insert(Flag::new(flag)?);
         }
@@ -417,7 +413,7 @@ fn create_flag_and_replacement_list_string<'b>(
 }
 
 fn find_replacement_labels(source_code: &str) -> Result<HashSet<&str>> {
-    let mut labels = HashSet::new();
+    let mut labels = HashSet::default();
     for captures in REPLACEMENT_LABEL_CAPTURE_REGEX.captures_iter(source_code) {
         if let Some(label) = captures.get(1) {
             let label = label.as_str();
@@ -455,7 +451,7 @@ fn find_conditional_blocks(source_code: &str) -> Result<Vec<ConditionalBlock<'_>
 }
 
 fn extract_flags<'a>(conditional_blocks: &[ConditionalBlock<'a>]) -> HashSet<Flag<'a>> {
-    let mut flags = HashSet::with_capacity(conditional_blocks.len());
+    let mut flags = HashSet::with_capacity_and_hasher(conditional_blocks.len(), Default::default());
     for conditional_block in conditional_blocks {
         flags.extend(conditional_block.flags());
     }

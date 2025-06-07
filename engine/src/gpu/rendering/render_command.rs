@@ -59,11 +59,9 @@ use crate::{
     voxel::render_commands::{VoxelGeometryPipeline, VoxelRenderCommands},
 };
 use anyhow::{Result, anyhow};
+use impact_containers::{HashMap, HashSet};
 use impact_geometry::CubemapFace;
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, hash_map::Entry},
-};
+use std::{borrow::Cow, collections::hash_map::Entry};
 
 /// Manager of commands for rendering the scene. Postprocessing commands are
 /// managed by the [`Postprocessor`], but evoked by this manager.
@@ -659,7 +657,7 @@ impl DepthPrepass {
         Self {
             push_constants,
             pipeline,
-            models: HashSet::new(),
+            models: HashSet::default(),
             write_stencil_value,
         }
     }
@@ -855,7 +853,7 @@ impl GeometryPass {
             color_target_states,
             depth_stencil_state,
             polygon_mode,
-            model_pipelines: HashMap::new(),
+            model_pipelines: HashMap::default(),
             voxel_pipeline,
         }
     }
@@ -993,7 +991,8 @@ impl GeometryPass {
                                 ),
                             );
 
-                            let mut models = HashSet::with_capacity(4);
+                            let mut models =
+                                HashSet::with_capacity_and_hasher(4, Default::default());
                             models.insert(*model_id);
 
                             entry.insert(GeometryPassPipeline {
@@ -1360,7 +1359,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             pipeline_layout,
             pipeline,
             max_light_count,
-            models: HashSet::new(),
+            models: HashSet::default(),
         }
     }
 
@@ -1708,7 +1707,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             pipeline_layout,
             pipeline,
             max_light_count,
-            models: HashSet::new(),
+            models: HashSet::default(),
         }
     }
 

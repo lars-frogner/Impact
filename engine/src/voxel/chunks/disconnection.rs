@@ -15,8 +15,9 @@ use crate::voxel::{
     utils::{DataLoop3, Dimension, Side},
 };
 use cfg_if::cfg_if;
+use impact_containers::HashSet;
 use nalgebra::vector;
-use std::{array, cmp::Ordering, collections::HashSet, iter, mem, ops::Range};
+use std::{array, cmp::Ordering, iter, mem, ops::Range};
 
 /// Represents a helper for keeping track of the transferral of some aggregate
 /// voxel property when a voxel object is split into multiple objects.
@@ -869,7 +870,7 @@ impl ChunkedVoxelObject {
             chunks,
             voxels,
             split_detector,
-            invalidated_mesh_chunk_indices: HashSet::new(),
+            invalidated_mesh_chunk_indices: HashSet::default(),
         };
 
         // We have already computed the internal adjacencies and local region

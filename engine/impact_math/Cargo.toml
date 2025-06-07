@@ -5,7 +5,11 @@ edition = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]
-roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
+roc_codegen = [
+    "dep:inventory",
+    "impact_containers/roc_codegen",
+    "roc_integration/roc_codegen",
+]
 serde = ["dep:serde"]
 
 [dependencies]
@@ -21,6 +25,7 @@ nohash-hasher = { workspace = true }
 num-traits = { workspace = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
+impact_containers = { path = "../impact_containers" }
 roc_integration = { path = "../../roc_integration" }
 
 [lints]

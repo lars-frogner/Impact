@@ -6,8 +6,9 @@ use crate::gpu::{
     texture::{Sampler, Texture},
     uniform::SingleUniformGPUBuffer,
 };
+use impact_containers::HashMap;
 use impact_math::stringhash64_newtype;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::hash_map::Entry;
 
 stringhash64_newtype!(
     /// Identifier for a specific GPU resource group. Wraps a
@@ -173,7 +174,7 @@ impl GPUResourceGroupManager {
     /// Creates a new empty resource group manager.
     pub fn new() -> Self {
         Self {
-            resource_groups: HashMap::new(),
+            resource_groups: HashMap::default(),
         }
     }
 

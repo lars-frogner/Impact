@@ -9,13 +9,11 @@ pub use transform::register_model_feature_types;
 use crate::{gpu::GraphicsDevice, material::MaterialHandle, mesh::MeshID};
 use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{AlignedByteVec, Alignment, KeyIndexMapper};
+use impact_containers::{AlignedByteVec, Alignment, HashMap, KeyIndexMapper, NoHashKeyIndexMapper};
 use impact_math::{self, Hash64};
-use nohash_hasher::BuildNoHashHasher;
 use std::{
     borrow::Cow,
     cmp,
-    collections::HashMap,
     fmt::{self},
     hash::{Hash, Hasher},
     mem,
@@ -131,7 +129,7 @@ pub struct InstanceFeatureStorage {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     bytes: AlignedByteVec,
-    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
+    index_map: NoHashKeyIndexMapper<usize>,
     feature_id_count: usize,
 }
 
@@ -245,8 +243,8 @@ impl InstanceFeatureManager {
     /// Creates a new empty instance feature manager.
     pub fn new() -> Self {
         Self {
-            feature_storages: HashMap::new(),
-            instance_buffers: HashMap::new(),
+            feature_storages: HashMap::default(),
+            instance_buffers: HashMap::default(),
         }
     }
 

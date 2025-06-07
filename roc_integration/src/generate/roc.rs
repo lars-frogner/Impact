@@ -4,9 +4,9 @@
 use super::get_field_type;
 use crate::{RegisteredType, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
     fmt::{Display, Write},
 };
 
@@ -112,7 +112,7 @@ impl OptionalImports {
     pub fn new(current_package_name: impl ToString) -> Self {
         Self {
             current_package_name: current_package_name.to_string(),
-            import_paths: HashSet::new(),
+            import_paths: HashSet::default(),
         }
     }
 

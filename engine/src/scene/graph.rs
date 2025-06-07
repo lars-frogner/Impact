@@ -19,12 +19,11 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{GenerationalIdx, GenerationalReusingVec};
+use impact_containers::{GenerationalIdx, GenerationalReusingVec, HashSet};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_math::Float;
 use nalgebra::Similarity3;
 use roc_integration::roc;
-use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
 /// and enables useful operations on them.
@@ -1158,9 +1157,9 @@ impl<F: Float> GroupNode<F> {
         Self {
             parent_node_id,
             group_to_parent_transform,
-            child_group_node_ids: HashSet::new(),
-            child_model_instance_node_ids: HashSet::new(),
-            child_camera_node_ids: HashSet::new(),
+            child_group_node_ids: HashSet::default(),
+            child_model_instance_node_ids: HashSet::default(),
+            child_camera_node_ids: HashSet::default(),
             bounding_sphere: None,
             group_to_root_transform: NodeTransform::identity(),
         }

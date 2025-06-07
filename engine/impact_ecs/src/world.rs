@@ -1,9 +1,6 @@
 //! Overarching container and coordinator for ECS.
 
-use crate::NoHashMap;
-
 use super::{
-    NoHashKeyIndexMapper,
     archetype::{
         Archetype, ArchetypeComponentStorage, ArchetypeComponents, ArchetypeID, ArchetypeTable,
         ComponentStorageEntry, ComponentStorageEntryMut,
@@ -12,8 +9,9 @@ use super::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
+use impact_containers::{NoHashKeyIndexMapper, NoHashMap};
 use std::{
-    collections::hash_map,
+    collections::hash_map::Entry,
     fmt,
     hash::{self, Hash},
     sync::{RwLock, RwLockReadGuard},
@@ -471,10 +469,10 @@ impl World {
         archetype_id: ArchetypeID,
     ) -> Result<()> {
         match self.entity_archetypes.entry(entity_id) {
-            hash_map::Entry::Vacant(entry) => {
+            Entry::Vacant(entry) => {
                 entry.insert(archetype_id);
             }
-            hash_map::Entry::Occupied(_) => {
+            Entry::Occupied(_) => {
                 bail!("Entity with ID {entity_id} already exists");
             }
         }

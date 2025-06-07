@@ -16,11 +16,12 @@ use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
+use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::Float;
 use nalgebra::{Point3, Vector3, point, vector};
 use num_traits::{NumCast, PrimInt};
-use std::{array, collections::HashSet, iter, ops::Range};
+use std::{array, iter, ops::Range};
 
 /// An object represented by a grid of voxels.
 ///
@@ -276,7 +277,7 @@ impl ChunkedVoxelObject {
             chunks,
             voxels,
             split_detector,
-            invalidated_mesh_chunk_indices: HashSet::new(),
+            invalidated_mesh_chunk_indices: HashSet::default(),
         })
     }
 

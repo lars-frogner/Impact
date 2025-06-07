@@ -11,7 +11,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{CollectionChange, CollectionChangeTracker};
+use impact_containers::{CollectionChange, CollectionChangeTracker, HashMap, HashSet};
 use impact_geometry::{AxisAlignedBox, Point, Sphere};
 use impact_math::{Float, hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
@@ -20,7 +20,7 @@ use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vect
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::hash_map::Entry,
     fmt::Debug,
     ops::Neg,
     path::{Path, PathBuf},
@@ -186,7 +186,7 @@ impl MeshRepository {
     /// Creates a new empty mesh repository.
     pub fn new() -> Self {
         Self {
-            meshes: HashMap::new(),
+            meshes: HashMap::default(),
         }
     }
 

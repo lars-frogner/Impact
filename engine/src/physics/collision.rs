@@ -12,11 +12,11 @@ use crate::{
     voxel::{VoxelObjectID, VoxelObjectManager},
 };
 use bytemuck::{Pod, Zeroable};
+use impact_containers::HashMap;
 use impact_ecs::world::EntityID;
 use impact_geometry::{Plane, Sphere};
 use nalgebra::{Similarity3, UnitVector3, Vector3};
 use roc_integration::roc;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CollisionWorld {
@@ -99,7 +99,7 @@ enum CollidableOrder {
 impl CollisionWorld {
     pub fn new() -> Self {
         Self {
-            collidable_descriptors: HashMap::new(),
+            collidable_descriptors: HashMap::default(),
             collidables: [Vec::new(), Vec::new(), Vec::new()],
             collidable_id_counter: 0,
         }

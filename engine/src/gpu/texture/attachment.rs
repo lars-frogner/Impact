@@ -6,12 +6,10 @@ use crate::gpu::{
     texture::{Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig},
 };
 use bitflags::bitflags;
+use impact_containers::{HashMap, HashSet};
 use num_traits::AsPrimitive;
 use roc_integration::roc;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-};
+use std::fmt::Display;
 
 bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
@@ -675,7 +673,7 @@ impl RenderAttachmentTextureManager {
         let mut manager = Self {
             quantity_textures,
             samplers,
-            bind_groups_and_layouts: HashMap::new(),
+            bind_groups_and_layouts: HashMap::default(),
         };
 
         manager.recreate_bind_groups(graphics_device);

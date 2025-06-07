@@ -7,9 +7,9 @@ use crate::{RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{SecondsFormat, Utc};
 use roc::OptionalExports;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
     fmt::{self, Display},
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Write},
@@ -165,7 +165,7 @@ pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>)
 }
 
 pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
-    let type_map = gather_type_map(inventory::iter::<RegisteredType>(), &HashSet::new())?;
+    let type_map = gather_type_map(inventory::iter::<RegisteredType>(), &HashSet::default())?;
     let associated_constant_map =
         gather_associated_constant_map(inventory::iter::<ir::AssociatedConstant>());
     let associated_function_map =
@@ -384,7 +384,7 @@ fn gather_type_map<'a>(
     type_iter: impl IntoIterator<Item = &'a RegisteredType>,
     component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<HashMap<RocTypeID, RegisteredType>> {
-    let mut type_map = HashMap::new();
+    let mut type_map = HashMap::default();
 
     for ty in type_iter {
         let mut ty = ty.clone();
@@ -405,7 +405,7 @@ fn gather_type_map<'a>(
 fn gather_associated_dependencies_map<'a>(
     associated_dependencies_iter: impl IntoIterator<Item = &'a ir::AssociatedDependencies>,
 ) -> HashMap<RocTypeID, Vec<ir::AssociatedDependencies>> {
-    let mut associated_dependencies_map = HashMap::new();
+    let mut associated_dependencies_map = HashMap::default();
     for associated_dependencies in associated_dependencies_iter {
         associated_dependencies_map
             .entry(associated_dependencies.for_type_id)
@@ -418,7 +418,7 @@ fn gather_associated_dependencies_map<'a>(
 fn gather_associated_constant_map<'a>(
     associated_constant_iter: impl IntoIterator<Item = &'a ir::AssociatedConstant>,
 ) -> HashMap<RocTypeID, Vec<ir::AssociatedConstant>> {
-    let mut associated_constant_map = HashMap::new();
+    let mut associated_constant_map = HashMap::default();
     for associated_constant in associated_constant_iter {
         associated_constant_map
             .entry(associated_constant.for_type_id)
@@ -434,7 +434,7 @@ fn gather_associated_constant_map<'a>(
 fn gather_associated_function_map<'a>(
     associated_function_iter: impl IntoIterator<Item = &'a ir::AssociatedFunction>,
 ) -> HashMap<RocTypeID, Vec<ir::AssociatedFunction>> {
-    let mut associated_function_map = HashMap::new();
+    let mut associated_function_map = HashMap::default();
     for associated_function in associated_function_iter {
         associated_function_map
             .entry(associated_function.for_type_id)

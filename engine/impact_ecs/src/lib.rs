@@ -84,8 +84,7 @@ pub use impact_ecs_macros::archetype_of;
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
-/// # use const_fnv1a_hash;
-/// # use std::collections::HashSet;
+/// # use impact_containers::HashSet;
 /// #
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
@@ -108,7 +107,7 @@ pub use impact_ecs_macros::archetype_of;
 /// let entity_2_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
 /// let entity_3_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;
 ///
-/// let mut matched_entities = HashSet::new();
+/// let mut matched_entities = HashSet::default();
 ///
 /// query!(
 ///     world,
@@ -244,8 +243,6 @@ pub use impact_ecs_macros::query;
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
-/// # use const_fnv1a_hash;
-/// # use std::collections::HashSet;
 /// #
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
@@ -311,8 +308,3 @@ pub use impact_ecs_macros::query;
 /// ```
 ///
 pub use impact_ecs_macros::setup;
-
-type NoHashMap<K, V> = std::collections::HashMap<K, V, nohash_hasher::BuildNoHashHasher<K>>;
-type NoHashSet<K> = std::collections::HashSet<K, nohash_hasher::BuildNoHashHasher<K>>;
-type NoHashKeyIndexMapper<K> =
-    impact_containers::KeyIndexMapper<K, nohash_hasher::BuildNoHashHasher<K>>;

@@ -6,12 +6,9 @@ use crate::gpu::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
+use impact_containers::HashMap;
 use impact_math::stringhash64_newtype;
-use std::{
-    borrow::Cow,
-    collections::{HashMap, hash_map::Entry},
-    mem,
-};
+use std::{borrow::Cow, collections::hash_map::Entry, mem};
 
 stringhash64_newtype!(
     /// Identifier for a specific storage buffer on the GPU. Wraps a
@@ -200,7 +197,7 @@ impl StorageGPUBufferManager {
     /// Creates a new manager with no buffers.
     pub fn new() -> Self {
         Self {
-            buffers: HashMap::new(),
+            buffers: HashMap::default(),
         }
     }
 

@@ -16,9 +16,10 @@ use crate::{
     },
 };
 use anyhow::Result;
+use impact_containers::HashMap;
 use std::{
     borrow::Cow,
-    collections::{HashMap, hash_map::Entry},
+    collections::hash_map::Entry,
     hash::Hash,
     sync::{Mutex, RwLock},
 };

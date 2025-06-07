@@ -18,12 +18,12 @@ use anyhow::Result;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
+use impact_containers::HashMap;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityID};
 use mesh::MeshedChunkedVoxelObject;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     fmt,
     path::{Path, PathBuf},
 };
@@ -390,8 +390,8 @@ impl VoxelObjectManager {
     /// Creates a new voxel object manager with no objects.
     pub fn new() -> Self {
         Self {
-            objects: HashMap::new(),
-            inertial_property_managers: HashMap::new(),
+            objects: HashMap::default(),
+            inertial_property_managers: HashMap::default(),
             emptied_object_entities: Vec::new(),
             staged_objects: Vec::new(),
             id_counter: 1,

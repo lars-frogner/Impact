@@ -1,8 +1,9 @@
 //! Management of [`Component`](impact_ecs::component::Component)s.
 
 use anyhow::{Result, bail};
+use impact_containers::HashMap;
 use impact_ecs::component::{ComponentCategory, ComponentDescriptor, ComponentID};
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::hash_map::Entry;
 
 /// Registry for holding metadata about all
 /// [`Component`](impact_ecs::component::Component)s.
@@ -24,7 +25,7 @@ impl ComponentRegistry {
     /// Creates a new empty component registry.
     pub fn new() -> Self {
         Self {
-            components: HashMap::new(),
+            components: HashMap::default(),
         }
     }
 
@@ -72,7 +73,7 @@ impl Default for ComponentRegistry {
 /// trait) into a hash set.
 #[cfg(feature = "roc_codegen")]
 pub fn gather_roc_type_ids_for_all_components()
--> std::collections::HashSet<roc_integration::RocTypeID> {
+-> impact_containers::HashSet<roc_integration::RocTypeID> {
     inventory::iter::<ComponentDescriptor>()
         .map(|descriptor| roc_integration::RocTypeID::from_u64(descriptor.id.as_u64()))
         .collect()

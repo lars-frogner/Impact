@@ -4,13 +4,14 @@ use crate::thread::{
     TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };
 use anyhow::{Result, anyhow, bail};
+use impact_containers::{DefaultHasher, HashMap, HashSet};
 use impact_math::Hash64;
 use petgraph::{
+    Directed,
     algo::{self, DfsSpace},
-    graphmap::DiGraphMap,
+    graphmap::GraphMap,
 };
 use std::{
-    collections::{HashMap, HashSet},
     fmt::Debug,
     marker::PhantomData,
     num::NonZeroUsize,
@@ -84,8 +85,11 @@ type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
 /// A graph describing the dependencies between separate tasks.
 #[derive(Debug)]
 struct TaskDependencyGraph<S> {
-    graph: DiGraphMap<TaskID, ()>,
-    space: DfsSpace<TaskID, HashSet<TaskID>>,
+    graph: GraphMap<TaskID, (), Directed, DefaultHasher>,
+    // Seems to be a `petgraph` bug that the implementation of `Visitable` for
+    // `GraphMap` uses a `HashSet` with the standard hasher rather than the
+    // hasher used by the `GraphMap`
+    space: DfsSpace<TaskID, std::collections::HashSet<TaskID>>,
     independent_tasks: HashSet<TaskID>,
     _phantom: PhantomData<S>,
 }
@@ -261,7 +265,7 @@ macro_rules! define_execution_tag_set {
         $([$pub:ident])? $name:ident, [$($tag:ident),*]
     ) => {
         lazy_static::lazy_static! {
-            $($pub)? static ref $name: ::std::sync::Arc<$crate::scheduling::ExecutionTags> = ::std::sync::Arc::new($crate::scheduling::ExecutionTags::from([$($tag::EXECUTION_TAG),*]));
+            $($pub)? static ref $name: ::std::sync::Arc<$crate::scheduling::ExecutionTags> = ::std::sync::Arc::new($crate::scheduling::ExecutionTags::from_iter([$($tag::EXECUTION_TAG),*]));
         }
     };
 }
@@ -275,7 +279,7 @@ where
     pub fn new(n_workers: NonZeroUsize, external_state: Arc<S>) -> Self {
         Self {
             n_workers,
-            tasks: HashMap::new(),
+            tasks: HashMap::default(),
             dependency_graph: TaskDependencyGraph::new(),
             executor: None,
             external_state,
@@ -441,9 +445,9 @@ where
 
 impl<S> TaskDependencyGraph<S> {
     fn new() -> Self {
-        let graph = DiGraphMap::new();
+        let graph = GraphMap::new();
         let space = DfsSpace::new(&graph);
-        let independent_tasks = HashSet::new();
+        let independent_tasks = HashSet::default();
         Self {
             graph,
             space,
@@ -1018,7 +1022,7 @@ mod tests {
     fn executing_before_completing_task_reg_fails() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(Task1).unwrap();
-        scheduler.execute(&Arc::new(ExecutionTags::new()));
+        scheduler.execute(&Arc::new(ExecutionTags::default()));
     }
 
     #[test]
@@ -1046,7 +1050,7 @@ mod tests {
         scheduler.complete_task_registration().unwrap();
 
         scheduler
-            .execute_and_wait(&Arc::new(ExecutionTags::from([EXEC_ALL])))
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
             .unwrap();
         let recorded_worker_ids = scheduler.external_state().get_recorded_worker_ids();
         let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
@@ -1148,7 +1152,7 @@ mod tests {
         scheduler.complete_task_registration().unwrap();
 
         scheduler
-            .execute_and_wait(&Arc::new(ExecutionTags::from([
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([
                 Task2::EXEC_TAG,
                 DepTask1::EXEC_TAG,
                 DepDepTask1Task2::EXEC_TAG,

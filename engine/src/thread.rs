@@ -1,9 +1,9 @@
 //! Utilities for multithreading.
 
 use anyhow::Error;
+use impact_containers::HashMap;
 use impact_math::Hash64;
 use std::{
-    collections::HashMap,
     fmt,
     num::NonZeroUsize,
     sync::{
@@ -522,7 +522,7 @@ impl ExecutionProgress {
 impl TaskStatus {
     fn new() -> Self {
         let some_task_failed = Arc::new(AtomicBool::new(false));
-        let errors_of_failed_tasks = Arc::new(Mutex::new(HashMap::new()));
+        let errors_of_failed_tasks = Arc::new(Mutex::new(HashMap::default()));
         Self {
             some_task_failed,
             errors_of_failed_tasks,

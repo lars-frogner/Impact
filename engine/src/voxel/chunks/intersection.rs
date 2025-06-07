@@ -8,9 +8,10 @@ use crate::voxel::{
         linear_voxel_idx_within_chunk_from_object_voxel_indices,
     },
 };
+use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Capsule, Plane, Sphere};
 use nalgebra::{self as na, Point3, point};
-use std::{array, collections::HashSet, ops::Range};
+use std::{array, ops::Range};
 
 impl ChunkedVoxelObject {
     pub fn for_each_surface_voxel_maybe_intersecting_plane(
@@ -624,7 +625,7 @@ pub mod fuzzing {
     };
     use arbitrary::{Arbitrary, Result, Unstructured};
     use nalgebra::vector;
-    use std::{collections::HashSet, mem};
+    use std::mem;
 
     #[derive(Clone, Debug)]
     pub struct ArbitrarySphere(Sphere<f64>);
@@ -675,7 +676,7 @@ pub mod fuzzing {
         (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
     ) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_touched_voxels = HashSet::new();
+            let mut indices_of_touched_voxels = HashSet::default();
 
             object.for_each_surface_voxel_maybe_intersecting_sphere(
                 &sphere.0,
@@ -704,7 +705,7 @@ pub mod fuzzing {
         (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_inside_voxels = HashSet::new();
+            let mut indices_of_inside_voxels = HashSet::default();
 
             object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
                 if !voxel.is_empty() {
@@ -733,7 +734,7 @@ pub mod fuzzing {
         (generator, capsule): (ArbitrarySDFVoxelGenerator, ArbitraryCapsule),
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_inside_voxels = HashSet::new();
+            let mut indices_of_inside_voxels = HashSet::default();
 
             object.modify_voxels_within_capsule(&capsule.0, &mut |indices, _, voxel| {
                 if !voxel.is_empty() {
@@ -862,7 +863,6 @@ mod tests {
         voxel_types::VoxelType,
     };
     use nalgebra::{UnitVector3, vector};
-    use std::collections::HashSet;
 
     #[test]
     fn finding_surface_voxels_intersecting_sphere_finds_correct_voxels() {
@@ -882,7 +882,7 @@ mod tests {
             sphere_radius,
         );
 
-        let mut indices_of_touched_voxels = HashSet::new();
+        let mut indices_of_touched_voxels = HashSet::default();
 
         object.for_each_surface_voxel_maybe_intersecting_sphere(
             &sphere,
@@ -921,7 +921,7 @@ mod tests {
             sphere_radius,
         );
 
-        let mut indices_of_inside_voxels = HashSet::new();
+        let mut indices_of_inside_voxels = HashSet::default();
 
         object.modify_voxels_within_sphere(&sphere, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
@@ -962,7 +962,7 @@ mod tests {
             capsule_radius,
         );
 
-        let mut indices_of_inside_voxels = HashSet::new();
+        let mut indices_of_inside_voxels = HashSet::default();
 
         object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {

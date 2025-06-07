@@ -1,12 +1,11 @@
 //! Hash-related utilities.
 
 use bytemuck::{Pod, Zeroable};
+use impact_containers::HashMap;
 use lazy_static::lazy_static;
 use roc_integration::roc;
 use std::{
-    cmp,
-    collections::HashMap,
-    fmt,
+    cmp, fmt,
     hash::{Hash, Hasher},
     sync::Mutex,
 };
@@ -80,8 +79,10 @@ pub struct ConstStringHash64 {
 }
 
 lazy_static! {
-    static ref STRING_HASH_32_REGISTRY: Mutex<HashMap<Hash32, String>> = Mutex::new(HashMap::new());
-    static ref STRING_HASH_64_REGISTRY: Mutex<HashMap<Hash64, String>> = Mutex::new(HashMap::new());
+    static ref STRING_HASH_32_REGISTRY: Mutex<HashMap<Hash32, String>> =
+        Mutex::new(HashMap::default());
+    static ref STRING_HASH_64_REGISTRY: Mutex<HashMap<Hash64, String>> =
+        Mutex::new(HashMap::default());
 }
 
 impl Hash32 {

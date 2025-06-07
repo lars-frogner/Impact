@@ -7,6 +7,7 @@ mod features;
 pub use features::{
     MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, register_material_feature_types,
 };
+use impact_containers::{HashMap, HashSet};
 use roc_integration::roc;
 
 use crate::{
@@ -20,10 +21,7 @@ use bytemuck::{Pod, Zeroable};
 use entity::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};
 use impact_math::{Hash64, StringHash64, hash64, stringhash64_newtype};
 use nalgebra::Vector3;
-use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
-    fmt,
-};
+use std::{collections::hash_map::Entry, fmt};
 
 /// A color with RGB components.
 pub type RGBColor = Vector3<f32>;
@@ -260,8 +258,8 @@ impl MaterialLibrary {
     /// Creates a new empty material library.
     pub fn new() -> Self {
         Self {
-            material_specifications: HashMap::new(),
-            material_property_texture_groups: HashMap::new(),
+            material_specifications: HashMap::default(),
+            material_property_texture_groups: HashMap::default(),
         }
     }
 
