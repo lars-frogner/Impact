@@ -3,7 +3,7 @@
 use crate::io::util::parse_ron_file;
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Hash32, compute_hash_str_32};
+use impact_math::Hash32;
 use nalgebra::{Vector4, vector};
 use nohash_hasher::BuildNoHashHasher;
 use roc_integration::roc;
@@ -122,7 +122,7 @@ impl VoxelTypeRegistry {
         let name_lookup_table: HashMap<_, _, _> = names
             .iter()
             .enumerate()
-            .map(|(idx, name)| (compute_hash_str_32(name).into(), VoxelType::from_idx(idx)))
+            .map(|(idx, name)| (Hash32::from_str(name).into(), VoxelType::from_idx(idx)))
             .collect();
 
         if name_lookup_table.len() != names.len() {
@@ -148,7 +148,7 @@ impl VoxelTypeRegistry {
     /// Returns the voxel type with the given name, or [`None`] if no voxel type
     /// with the given name has been registered.
     pub fn voxel_type_for_name(&self, name: &str) -> Option<VoxelType> {
-        self.voxel_type_for_name_hash(compute_hash_str_32(name))
+        self.voxel_type_for_name_hash(Hash32::from_str(name))
     }
 
     /// Returns the voxel type with the given name hash, or [`None`] if no voxel
