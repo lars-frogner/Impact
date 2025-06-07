@@ -11,6 +11,8 @@ anyhow = { workspace = true }
 atomic_enum = "0.3"
 bytemuck = { workspace = true }
 inventory = { workspace = true, optional = true }
+nohash-hasher = { workspace = true }
+rustc-hash = "2.1"
 
 roc_integration = { path = "../../roc_integration" }
 

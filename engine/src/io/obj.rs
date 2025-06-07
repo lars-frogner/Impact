@@ -15,17 +15,14 @@ use crate::{
     },
 };
 use anyhow::{Result, bail};
+use impact_containers::HashMap;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentStorage, SingleInstance},
 };
 use impact_math::hash64;
 use nalgebra::{UnitVector3, point, vector};
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    fmt::Debug,
-    path::Path,
-};
+use std::{collections::hash_map::Entry, fmt::Debug, path::Path};
 use tobj::{GPU_LOAD_OPTIONS, Material as ObjMaterial, Mesh as ObjMesh};
 
 /// Reads the Wavefront OBJ file at the given path and creates a corresponding
@@ -78,7 +75,7 @@ where
     let materials = materials?;
 
     let mut model_components = Vec::with_capacity(models.len());
-    let mut material_components = HashMap::new();
+    let mut material_components = HashMap::default();
 
     for model in models {
         let material_id = model.mesh.material_id;

@@ -1,7 +1,8 @@
 //! Mipmapping.
 
 use crate::gpu::GraphicsDevice;
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use impact_containers::HashMap;
+use std::{borrow::Cow, sync::Arc};
 
 /// Helper for generating [`Mipmapper`]s for specific textures.
 #[derive(Debug)]

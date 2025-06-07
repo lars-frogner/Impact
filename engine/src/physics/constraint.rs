@@ -18,13 +18,13 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use contact::Contact;
+use impact_containers::HashMap;
 use impact_ecs::world::{EntityID, World as ECSWorld};
 use nalgebra::{Matrix3, Vector3};
 use num_traits::Zero;
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
 use std::{
-    collections::HashMap,
     fmt,
     ops::{Add, Mul, Sub},
 };
@@ -129,7 +129,7 @@ impl ConstraintManager {
     pub fn new(solver_config: ConstraintSolverConfig) -> Self {
         Self {
             solver: ConstraintSolver::new(solver_config),
-            spherical_joints: HashMap::new(),
+            spherical_joints: HashMap::default(),
             constraint_id_counter: 0,
         }
     }

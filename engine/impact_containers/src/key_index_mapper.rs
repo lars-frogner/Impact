@@ -2,9 +2,9 @@
 //! an underlying [`Vec`].
 
 use anyhow::{Result, anyhow};
-use std::collections::HashMap;
-use std::collections::hash_map::{Entry, RandomState};
-use std::fmt::Debug;
+use rustc_hash::FxBuildHasher;
+use std::collections::{HashMap, hash_map::Entry};
+use std::fmt::{self, Debug};
 use std::hash::{BuildHasher, Hash};
 use std::iter;
 
@@ -15,13 +15,13 @@ use std::iter;
 /// don't want to sacrifice the compact data storage provided by a `Vec`. It
 /// also enables us to reorder items in the `Vec` (like doing a swap remove)
 /// without invalidating the keys used to access the items.
-#[derive(Clone, Debug)]
-pub struct KeyIndexMapper<K, S = RandomState> {
+#[derive(Clone)]
+pub struct KeyIndexMapper<K, S = FxBuildHasher> {
     indices_for_keys: HashMap<K, usize, S>,
     keys_at_indices: Vec<K>,
 }
 
-impl<K> KeyIndexMapper<K, RandomState>
+impl<K> KeyIndexMapper<K, FxBuildHasher>
 where
     K: Copy + Hash + Eq + Debug,
 {
@@ -32,12 +32,12 @@ where
 
     /// Creates a new mapper with at least the specificed capacity and no keys.
     pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_capacity_and_hasher(capacity, RandomState::default())
+        Self::with_capacity_and_hasher(capacity, FxBuildHasher)
     }
 
     /// Creates a new mapper with the given key.
     pub fn new_with_key(key: K) -> Self {
-        Self::with_hasher_and_key(RandomState::default(), key)
+        Self::with_hasher_and_key(FxBuildHasher, key)
     }
 
     /// Creates a new mapper with the given set of keys. The index of each key
@@ -46,7 +46,7 @@ where
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
     pub fn new_with_keys(key_iter: impl IntoIterator<Item = K>) -> Self {
-        Self::with_hasher_and_keys(RandomState::default(), key_iter)
+        Self::with_hasher_and_keys(FxBuildHasher, key_iter)
     }
 }
 
@@ -243,6 +243,15 @@ where
 {
     fn default() -> Self {
         Self::with_capacity_and_hasher(0, S::default())
+    }
+}
+
+impl<K: fmt::Debug, S> fmt::Debug for KeyIndexMapper<K, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyIndexMapper")
+            .field("indices_for_keys", &self.indices_for_keys)
+            .field("keys_at_indices", &self.keys_at_indices)
+            .finish()
     }
 }
 

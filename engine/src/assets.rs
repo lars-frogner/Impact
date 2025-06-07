@@ -14,11 +14,12 @@ use crate::{
     mesh::MeshSpecification,
 };
 use anyhow::{Result, bail};
+use impact_containers::HashMap;
 use impact_math::hash32;
 use log::debug;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::hash_map::Entry,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -89,8 +90,8 @@ impl Assets {
             config,
             graphics_device,
             mipmapper_generator,
-            textures: HashMap::new(),
-            samplers: HashMap::new(),
+            textures: HashMap::default(),
+            samplers: HashMap::default(),
         }
     }
 

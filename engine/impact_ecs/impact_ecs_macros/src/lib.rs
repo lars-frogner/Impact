@@ -149,8 +149,6 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
-/// # use const_fnv1a_hash;
-/// # use std::collections::HashSet;
 /// #
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
@@ -288,8 +286,7 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
-/// # use const_fnv1a_hash;
-/// # use std::collections::HashSet;
+/// # use impact_containers::HashSet;
 /// #
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
@@ -312,7 +309,7 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// let entity_2_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
 /// let entity_3_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;
 ///
-/// let mut matched_entities = HashSet::new();
+/// let mut matched_entities = HashSet::default();
 ///
 /// query!(
 ///     world,

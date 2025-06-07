@@ -3,14 +3,13 @@
 use crate::io::util::parse_ron_file;
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
+use impact_containers::NoHashMap;
 use impact_math::Hash32;
 use nalgebra::{Vector4, vector};
-use nohash_hasher::BuildNoHashHasher;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
-    collections::HashMap,
     path::{Path, PathBuf},
 };
 
@@ -40,7 +39,7 @@ pub struct VoxelTypeSpecification {
 /// Registry containing the names and properties of all voxel types.
 #[derive(Clone, Debug)]
 pub struct VoxelTypeRegistry {
-    name_lookup_table: HashMap<u32, VoxelType, BuildNoHashHasher<u32>>,
+    name_lookup_table: NoHashMap<u32, VoxelType>,
     names: Vec<Cow<'static, str>>,
     mass_densities: Vec<f32>,
     fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
@@ -119,7 +118,7 @@ impl VoxelTypeRegistry {
             normal_texture_paths,
         ) = voxel_types.unzip();
 
-        let name_lookup_table: HashMap<_, _, _> = names
+        let name_lookup_table: NoHashMap<_, _> = names
             .iter()
             .enumerate()
             .map(|(idx, name)| (Hash32::from_str(name).into(), VoxelType::from_idx(idx)))

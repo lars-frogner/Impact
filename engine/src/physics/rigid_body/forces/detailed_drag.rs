@@ -8,6 +8,7 @@ mod equirectangular_map;
 pub mod systems;
 
 pub use drag_load::DragLoad;
+use impact_containers::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -20,7 +21,7 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use impact_math::{Angle, Float, Radians};
 use simba::scalar::SubsetOf;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::hash_map::Entry;
 
 use drag_load::AveragingDragLoad;
 use equirectangular_map::EquirectangularMap;
@@ -79,7 +80,7 @@ impl<F: Float> DragLoadMapRepository<F> {
         config.validate()?;
         Ok(Self {
             config,
-            drag_load_maps: HashMap::new(),
+            drag_load_maps: HashMap::default(),
         })
     }
 

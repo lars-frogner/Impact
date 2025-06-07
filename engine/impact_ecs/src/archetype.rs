@@ -1,7 +1,6 @@
 //! Organization of ECS entities into archetypes.
 
 use super::{
-    NoHashKeyIndexMapper, NoHashMap, NoHashSet,
     component::{
         CanHaveSingleInstance, Component, ComponentArray, ComponentID, ComponentSlice,
         ComponentStorage, ComponentView, SingleInstance,
@@ -10,7 +9,7 @@ use super::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::KeyIndexMapper;
+use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap, NoHashSet};
 use impact_ecs_macros::archetype_of;
 use paste::paste;
 use std::{
@@ -353,7 +352,7 @@ where
 {
     fn new(archetype: Archetype, component_arrays: Vec<A>, component_count: usize) -> Self {
         let component_index_map = KeyIndexMapper::with_hasher_and_keys(
-            nohash_hasher::BuildNoHashHasher::default(),
+            Default::default(),
             component_arrays.iter().map(A::component_id),
         );
 

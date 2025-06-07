@@ -5,17 +5,10 @@ pub mod template;
 use crate::gpu::GraphicsDevice;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use impact_containers::HashMap;
+use impact_math::Hash64;
 use naga::{Module, ShaderStage};
-use std::{
-    borrow::Cow,
-    collections::{
-        HashMap,
-        hash_map::{DefaultHasher, Entry},
-    },
-    fs,
-    hash::{Hash, Hasher},
-    path::Path,
-};
+use std::{borrow::Cow, collections::hash_map::Entry, fs, hash::Hash, path::Path};
 use template::SpecificShaderTemplate;
 
 /// Identifier for specific shaders.
@@ -57,8 +50,8 @@ impl ShaderManager {
     /// Creates a new empty shader library.
     pub fn new() -> Self {
         Self {
-            rendering_shaders: HashMap::new(),
-            compute_shaders: HashMap::new(),
+            rendering_shaders: HashMap::default(),
+            compute_shaders: HashMap::default(),
         }
     }
 
@@ -183,9 +176,7 @@ impl Default for ShaderManager {
 impl ShaderID {
     /// Generates a [`ShaderID`] from the given string identifying the shader.
     pub fn from_identifier(identifier: &str) -> Self {
-        let mut hasher = DefaultHasher::new();
-        identifier.hash(&mut hasher);
-        Self(hasher.finish())
+        Self(Hash64::from_str(identifier).into())
     }
 }
 

@@ -15,7 +15,8 @@ use crate::gpu::{
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
 };
 use anyhow::{Result, anyhow};
-use std::{borrow::Cow, collections::HashMap};
+use impact_containers::HashMap;
+use std::borrow::Cow;
 
 /// Render passes for visualizing render attachments.
 #[derive(Debug)]
@@ -46,7 +47,8 @@ impl RenderAttachmentVisualizationPasses {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
     ) -> Result<Self> {
-        let mut passes = HashMap::with_capacity(Self::SUPPORTED_QUANTITIES.len());
+        let mut passes =
+            HashMap::with_capacity_and_hasher(Self::SUPPORTED_QUANTITIES.len(), Default::default());
         for quantity in Self::SUPPORTED_QUANTITIES {
             let shader_template = RenderAttachmentVisualizationShaderTemplate::new(quantity);
             passes.insert(
