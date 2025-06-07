@@ -23,39 +23,33 @@ use std::{
 #[cfg(test)]
 use crate::thread::WorkerID;
 
-/// Represents a piece of work to be performed by a
-/// worker thread in a [`TaskScheduler`].
+/// Represents a piece of work to be performed by a worker thread in a
+/// [`TaskScheduler`].
 ///
-/// # Type parameters
-/// `S` is the type of an object representing the state
-/// of the world that the task can modify.
+/// # Type parameters `S` is the type of an object representing the external
+/// state that the task can modify.
 pub trait Task<S>: Sync + Send + Debug {
-    /// Returns a unique ID identifying this task.
-    /// This could be generated from a task name
-    /// by calling [`task_name_to_id`].
+    /// Returns a unique ID identifying this task. This could be generated from
+    /// a task name by calling [`task_name_to_id`].
     fn id(&self) -> TaskID;
 
-    /// Returns the ID of every other task that must
-    /// have been completed before this task can be
-    /// executed.
+    /// Returns the ID of every other task that must have been completed before
+    /// this task can be executed.
     fn depends_on(&self) -> &[TaskID];
 
-    /// Executes the task and modifies the given world
-    /// state accordingly. This method may fail and return
-    /// an error.
-    fn execute(&self, world_state: &S) -> Result<(), TaskError>;
+    /// Executes the task and modifies the given state accordingly. This method
+    /// may fail and return an error.
+    fn execute(&self, external_state: &S) -> Result<(), TaskError>;
 
-    /// Whether this task should be included in a
-    /// [`TaskScheduler`] execution tagged with the given
-    /// tags.
+    /// Whether this task should be included in a [`TaskScheduler`] execution
+    /// tagged with the given tags.
     fn should_execute(&self, execution_tags: &ExecutionTags) -> bool;
 
-    /// Like [`execute`](Self::execute), but the ID of the
-    /// worker executing the task is included as an argument.
-    /// Useful for testing.
+    /// Like [`execute`](Self::execute), but the ID of the worker executing the
+    /// task is included as an argument. Useful for testing.
     #[cfg(test)]
-    fn execute_with_worker(&self, _worker_id: WorkerID, world_state: &S) -> Result<()> {
-        self.execute(world_state)
+    fn execute_with_worker(&self, _worker_id: WorkerID, external_state: &S) -> Result<()> {
+        self.execute(external_state)
     }
 }
 
@@ -67,7 +61,7 @@ pub struct TaskScheduler<S> {
     tasks: TaskPool<S>,
     dependency_graph: TaskDependencyGraph<S>,
     executor: Option<TaskExecutor<S>>,
-    world_state: Arc<S>,
+    external_state: Arc<S>,
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
@@ -105,7 +99,7 @@ struct TaskExecutor<S> {
 #[derive(Debug)]
 struct TaskExecutionState<S> {
     task_ordering: TaskOrdering<S>,
-    world_state: Arc<S>,
+    external_state: Arc<S>,
 }
 
 /// A list of tasks ordered according to the following criteria:
@@ -138,7 +132,7 @@ enum TaskReady {
 /// The macro takes as input the name of the new task type, the other tasks
 /// (also defined with this macro) this task depends on, the execution tags
 /// (defined with the [`define_execution_tag`] macro) that should trigger this
-/// task, and a closure that takes a reference to some world object and executes
+/// task, and a closure that takes a reference to some state object and executes
 /// the task on it.
 ///
 /// # Examples
@@ -203,7 +197,7 @@ macro_rules! define_task {
         $([$pub:ident])? $name:ident,
         depends_on = [$($dep:ident),*],
         execute_on = [$($tag:ident),*],
-        |$engine:ident: &$engine_ty:ty| $execute:expr
+        |$state:ident: &$state_ty:ty| $execute:expr
     ) => {
         $(#[$attributes])*
         #[derive(Copy, Clone, Debug)]
@@ -219,7 +213,7 @@ macro_rules! define_task {
             const EXECUTION_TAGS: [$crate::scheduling::ExecutionTag; Self::N_EXECUTION_TAGS] = [$($tag::EXECUTION_TAG),*];
         }
 
-        impl $crate::scheduling::Task<$engine_ty> for $name {
+        impl $crate::scheduling::Task<$state_ty> for $name {
             fn id(&self) -> $crate::thread::TaskID {
                 Self::TASK_ID
             }
@@ -228,7 +222,7 @@ macro_rules! define_task {
                 &Self::DEPENDENCY_IDS
             }
 
-            fn execute(&self, $engine: &$engine_ty) -> anyhow::Result<()> {
+            fn execute(&self, $state: &$state_ty) -> anyhow::Result<()> {
                 $execute
             }
 
@@ -276,15 +270,15 @@ impl<S> TaskScheduler<S>
 where
     S: Sync + Send + 'static,
 {
-    /// Creates a new task scheduler that will operate with the
-    /// given number of worker threads on the given world state.
-    pub fn new(n_workers: NonZeroUsize, world_state: Arc<S>) -> Self {
+    /// Creates a new task scheduler that will operate with the given number of
+    /// worker threads on the given external state.
+    pub fn new(n_workers: NonZeroUsize, external_state: Arc<S>) -> Self {
         Self {
             n_workers,
             tasks: HashMap::new(),
             dependency_graph: TaskDependencyGraph::new(),
             executor: None,
-            world_state,
+            external_state,
         }
     }
 
@@ -294,9 +288,9 @@ where
         self.n_workers.get()
     }
 
-    /// Returns the state of the world that the tasks can modify.
-    pub fn world_state(&self) -> &S {
-        self.world_state.as_ref()
+    /// Returns the external state that the tasks can modify.
+    pub fn external_state(&self) -> &S {
+        self.external_state.as_ref()
     }
 
     /// Whether the given task is registered in the scheduler.
@@ -349,7 +343,7 @@ where
             self.n_workers,
             &self.tasks,
             &mut self.dependency_graph,
-            Arc::clone(&self.world_state),
+            Arc::clone(&self.external_state),
         )?);
         Ok(())
     }
@@ -526,12 +520,12 @@ where
         n_workers: NonZeroUsize,
         task_pool: &TaskPool<S>,
         dependency_graph: &mut TaskDependencyGraph<S>,
-        world_state: Arc<S>,
+        external_state: Arc<S>,
     ) -> Result<Self> {
         let state = Arc::new(TaskExecutionState::new(
             task_pool,
             dependency_graph,
-            world_state,
+            external_state,
         )?);
         let thread_pool = ThreadPool::new(n_workers, &Self::execute_task_and_schedule_dependencies);
         Ok(Self { state, thread_pool })
@@ -547,7 +541,8 @@ where
         for ordered_task in self.task_ordering().tasks() {
             let task = ordered_task.task();
             if task.should_execute(execution_tags) {
-                task.execute(self.state.world_state()).expect("Task failed");
+                task.execute(self.state.external_state())
+                    .expect("Task failed");
             }
         }
     }
@@ -602,9 +597,9 @@ where
                     let result = {
                         cfg_if::cfg_if! {
                             if #[cfg(test)] {
-                                task.execute_with_worker(channel.owning_worker_id(), state.world_state())
+                                task.execute_with_worker(channel.owning_worker_id(), state.external_state())
                             } else {
-                                task.execute(state.world_state())
+                                task.execute(state.external_state())
                             }
                         }
                     };
@@ -688,12 +683,12 @@ impl<S> TaskExecutionState<S> {
     fn new(
         task_pool: &TaskPool<S>,
         dependency_graph: &mut TaskDependencyGraph<S>,
-        world_state: Arc<S>,
+        external_state: Arc<S>,
     ) -> Result<Self> {
         let task_ordering = TaskOrdering::new(task_pool, dependency_graph)?;
         Ok(Self {
             task_ordering,
-            world_state,
+            external_state,
         })
     }
 
@@ -701,8 +696,8 @@ impl<S> TaskExecutionState<S> {
         &self.task_ordering
     }
 
-    fn world_state(&self) -> &S {
-        self.world_state.as_ref()
+    fn external_state(&self) -> &S {
+        self.external_state.as_ref()
     }
 }
 
@@ -1062,8 +1057,8 @@ mod tests {
         scheduler
             .execute_and_wait(&Arc::new(ExecutionTags::from([EXEC_ALL])))
             .unwrap();
-        let recorded_worker_ids = scheduler.world_state().get_recorded_worker_ids();
-        let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
+        let recorded_worker_ids = scheduler.external_state().get_recorded_worker_ids();
+        let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
 
         match recorded_task_ids[..] {
             [
@@ -1168,7 +1163,7 @@ mod tests {
                 DepDepTask1Task2::EXEC_TAG,
             ])))
             .unwrap();
-        let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
+        let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
 
         for task_id in [Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] {
             assert!(recorded_task_ids.contains(&task_id));
