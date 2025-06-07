@@ -56,6 +56,8 @@ impl GameLoop {
         task_scheduler: &TaskScheduler<Engine>,
         event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
+        engine.task_timer().clear();
+
         let execution_result = with_timing_info_logging!("Game loop iteration"; {
             task_scheduler.execute_and_wait(&PHYSICS_AND_RENDERING_TAGS)
         });

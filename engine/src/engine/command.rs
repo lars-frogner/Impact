@@ -21,6 +21,7 @@ use crate::{
         },
         texture::attachment::RenderAttachmentQuantity,
     },
+    instrumentation::command::InstrumentationCommand,
     physics::{
         command::{PhysicsCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
         fph,
@@ -42,6 +43,7 @@ pub enum EngineCommand {
     Scene(SceneCommand),
     Control(ControlCommand),
     Capture(CaptureCommand),
+    Instrumentation(InstrumentationCommand),
 }
 
 impl Engine {
@@ -52,6 +54,9 @@ impl Engine {
             EngineCommand::Scene(command) => self.execute_scene_command(command),
             EngineCommand::Control(command) => self.execute_control_command(command),
             EngineCommand::Capture(command) => self.execute_capture_command(command),
+            EngineCommand::Instrumentation(command) => {
+                self.execute_instrumentation_command(command)
+            }
         }
     }
 
@@ -158,6 +163,15 @@ impl Engine {
             }
             CaptureCommand::SaveShadowMaps(save_for) => {
                 self.save_shadow_maps(save_for);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn execute_instrumentation_command(&self, command: InstrumentationCommand) -> Result<()> {
+        match command {
+            InstrumentationCommand::SetTaskTimings(to) => {
+                self.set_task_timings(to);
             }
         }
         Ok(())
@@ -355,6 +369,15 @@ impl Engine {
                 self.screen_capturer()
                     .request_unidirectional_light_shadow_map_save();
             }
+        }
+    }
+
+    // Instrumentation
+
+    pub fn set_task_timings(&self, to: ToActiveState) {
+        let mut enabled = self.task_timer.enabled();
+        if to.set(&mut enabled).changed {
+            self.task_timer.set_enabled(enabled);
         }
     }
 }

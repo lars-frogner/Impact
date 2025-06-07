@@ -17,7 +17,7 @@ define_task!(
     depends_on = [AdvanceSimulation],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_trace_logging!("Logging kinetic energy"; {
+        instrument_engine_task!("Logging kinetic energy", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             motion::systems::log_kinetic_energies(&ecs_world);
             Ok(())
@@ -32,7 +32,7 @@ define_task!(
     depends_on = [AdvanceSimulation],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_trace_logging!("Logging momentum"; {
+        instrument_engine_task!("Logging momentum", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             motion::systems::log_momenta(&ecs_world);
             Ok(())

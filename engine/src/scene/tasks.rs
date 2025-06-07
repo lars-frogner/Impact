@@ -21,7 +21,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing scene graph node transforms and flags"; {
+        instrument_engine_task!("Synchronizing scene graph node transforms and flags", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut scene_graph = scene.scene_graph().write().unwrap();
@@ -42,7 +42,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing lights in storage"; {
+        instrument_engine_task!("Synchronizing lights in storage", engine, {
             let scene = engine.scene().read().unwrap();
             let ecs_world = engine.ecs_world().read().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
@@ -65,7 +65,7 @@ define_task!(
     depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Updating scene object group-to-world transforms"; {
+        instrument_engine_task!("Updating scene object group-to-world transforms", engine, {
             let scene = engine.scene().read().unwrap();
             scene.scene_graph()
                 .write()
@@ -88,7 +88,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing scene camera view transform"; {
+        instrument_engine_task!("Synchronizing scene camera view transform", engine, {
             let scene = engine.scene().read().unwrap();
             if let Some(scene_camera) = scene.scene_camera().write().unwrap().as_mut() {
                 scene.scene_graph()
@@ -114,7 +114,7 @@ define_task!(
     depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Updating scene object bounding spheres"; {
+        instrument_engine_task!("Updating scene object bounding spheres", engine, {
             let scene = engine.scene().read().unwrap();
             scene.scene_graph()
                 .write()
@@ -134,7 +134,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Clearing model instance buffers"; {
+        instrument_engine_task!("Clearing model instance buffers", engine, {
             let scene = engine.scene().read().unwrap();
             scene.instance_feature_manager().write().unwrap().clear_buffer_contents();
             Ok(())
@@ -156,7 +156,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Buffering visible model instances"; {
+        instrument_engine_task!("Buffering visible model instances", engine, {
             let scene = engine.scene().read().unwrap();
             let scene_camera = scene.scene_camera().read().unwrap();
             if let Some(scene_camera) = scene_camera.as_ref() {
@@ -194,7 +194,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
+        instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
             if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
                 let scene = engine.scene().read().unwrap();
                 let scene_camera = scene.scene_camera().read().unwrap();
@@ -234,7 +234,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
+        instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
             if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
                 let scene = engine.scene().read().unwrap();
                 let scene_camera = scene.scene_camera().read().unwrap();

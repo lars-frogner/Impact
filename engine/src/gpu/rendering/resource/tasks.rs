@@ -32,7 +32,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Completing synchronization of render resources"; {
+        instrument_engine_task!("Completing synchronization of render resources", engine, {
             let renderer = engine.renderer().read().unwrap();
             let mut render_resource_manager = renderer.render_resource_manager().write().unwrap();
             render_resource_manager.declare_synchronized();
@@ -46,7 +46,7 @@ define_task!(
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing camera and skybox GPU resources"; {
+        instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
             let renderer = engine.renderer().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
@@ -59,11 +59,7 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                        scene
-                            .scene_camera()
-                            .read()
-                            .unwrap()
-                            .as_ref(),
+                    scene.scene_camera().read().unwrap().as_ref(),
                 );
                 DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
                     renderer.graphics_device(),
@@ -74,13 +70,8 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    scene
-                        .skybox()
-                        .read()
-                        .unwrap()
-                        .as_ref(),
+                    scene.skybox().read().unwrap().as_ref(),
                 )?;
-
             }
             Ok(())
         })
@@ -92,7 +83,7 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing mesh GPU buffers"; {
+        instrument_engine_task!("Synchronizing mesh GPU buffers", engine, {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -105,8 +96,12 @@ define_task!(
                         .unwrap()
                         .as_mut(),
                     engine
-                        .scene().read().unwrap()
-                        .mesh_repository().read().unwrap()
+                        .scene()
+                        .read()
+                        .unwrap()
+                        .mesh_repository()
+                        .read()
+                        .unwrap()
                         .meshes(),
                 );
             }
@@ -120,7 +115,7 @@ define_task!(
     depends_on = [SyncVoxelObjectMeshes],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing voxel object GPU buffers"; {
+        instrument_engine_task!("Synchronizing voxel object GPU buffers", engine, {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -134,8 +129,12 @@ define_task!(
                         .unwrap()
                         .as_mut(),
                     &mut engine
-                        .scene().read().unwrap()
-                        .voxel_manager().write().unwrap()
+                        .scene()
+                        .read()
+                        .unwrap()
+                        .voxel_manager()
+                        .write()
+                        .unwrap(),
                 )?;
             }
             Ok(())
@@ -152,7 +151,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing light GPU buffers"; {
+        instrument_engine_task!("Synchronizing light GPU buffers", engine, {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -166,8 +165,8 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                        &light_storage,
-                        renderer.shadow_mapping_config(),
+                    &light_storage,
+                    renderer.shadow_mapping_config(),
                 );
             }
             Ok(())
@@ -184,25 +183,33 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing model instance feature GPU buffers"; {
-            let renderer = engine.renderer().read().unwrap();
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
-            if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
-                    renderer.graphics_device(),
-                    render_resource_manager
-                        .desynchronized()
-                        .instance_feature_buffer_managers
-                        .lock()
-                        .unwrap()
-                        .as_mut(),
-                    &mut engine
-                        .scene().read().unwrap()
-                        .instance_feature_manager().write().unwrap(),
-                );
+        instrument_engine_task!(
+            "Synchronizing model instance feature GPU buffers",
+            engine,
+            {
+                let renderer = engine.renderer().read().unwrap();
+                let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+                if render_resource_manager.is_desynchronized() {
+                    DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
+                        renderer.graphics_device(),
+                        render_resource_manager
+                            .desynchronized()
+                            .instance_feature_buffer_managers
+                            .lock()
+                            .unwrap()
+                            .as_mut(),
+                        &mut engine
+                            .scene()
+                            .read()
+                            .unwrap()
+                            .instance_feature_manager()
+                            .write()
+                            .unwrap(),
+                    );
+                }
+                Ok(())
             }
-            Ok(())
-        })
+        )
     }
 );
 

@@ -25,7 +25,7 @@ define_task!(
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Rendering"; {
+        instrument_engine_task!("Rendering", engine, {
             let scene = engine.scene().read().unwrap();
             let ui_output = engine.ui_output().read().unwrap();
             engine.renderer().write().unwrap().render_to_surface(

@@ -1,4 +1,5 @@
 pub mod render_pass;
+pub mod task;
 
 use super::UserInterfaceConfig;
 use impact::egui::{Color32, Context, Frame, Id, SidePanel, Ui, ecolor::linear_u8_from_linear_f32};

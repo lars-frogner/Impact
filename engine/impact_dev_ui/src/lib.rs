@@ -8,8 +8,6 @@ mod time_overlay;
 mod timing_panels;
 mod toolbar;
 
-use std::path::Path;
-
 pub use command::{UICommand, UICommandQueue};
 
 use anyhow::Result;
@@ -23,8 +21,9 @@ use impact::{
 };
 use option_panels::{physics::PhysicsOptionPanel, rendering::RenderingOptionPanel};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use time_overlay::TimeOverlay;
-use timing_panels::render_pass::RenderPassTimingPanel;
+use timing_panels::{render_pass::RenderPassTimingPanel, task::TaskTimingPanel};
 use toolbar::Toolbar;
 
 /// The development user interface for the Impact engine.
@@ -33,6 +32,7 @@ pub struct UserInterface {
     toolbar: Toolbar,
     rendering_option_panel: RenderingOptionPanel,
     physics_option_panel: PhysicsOptionPanel,
+    task_timing_panel: TaskTimingPanel,
     render_pass_timing_panel: RenderPassTimingPanel,
     time_overlay: TimeOverlay,
     config: UserInterfaceConfig,
@@ -46,6 +46,7 @@ pub struct UserInterfaceConfig {
     pub alpha: f32,
     pub show_rendering_options: bool,
     pub show_physics_options: bool,
+    pub show_task_timings: bool,
     pub show_render_pass_timings: bool,
     pub show_time_overlay: bool,
 }
@@ -79,6 +80,12 @@ impl UserInterface {
                 }
                 if self.config.show_physics_options {
                     self.physics_option_panel.run(ctx, &self.config, engine);
+                }
+                if self.config.show_task_timings {
+                    engine.set_task_timings(ToActiveState::Enabled);
+                    self.task_timing_panel.run(ctx, &self.config, engine);
+                } else {
+                    engine.set_task_timings(ToActiveState::Disabled);
                 }
                 if self.config.show_render_pass_timings {
                     engine.set_render_pass_timings(ToActiveState::Enabled);
@@ -118,9 +125,10 @@ impl Default for UserInterfaceConfig {
         Self {
             interactive: true,
             alpha: 0.85,
-            show_rendering_options: true,
+            show_rendering_options: false,
             show_physics_options: false,
-            show_render_pass_timings: true,
+            show_task_timings: false,
+            show_render_pass_timings: false,
             show_time_overlay: true,
         }
     }
