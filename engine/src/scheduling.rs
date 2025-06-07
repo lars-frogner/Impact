@@ -4,7 +4,7 @@ use crate::thread::{
     TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };
 use anyhow::{Result, anyhow, bail};
-use impact_math::ConstStringHash64;
+use impact_math::Hash64;
 use petgraph::{
     algo::{self, DfsSpace},
     graphmap::DiGraphMap,
@@ -65,7 +65,7 @@ pub struct TaskScheduler<S> {
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
-pub type ExecutionTag = ConstStringHash64;
+pub type ExecutionTag = Hash64;
 
 /// A set of unique [`ExecutionTag`]s.
 pub type ExecutionTags = HashSet<ExecutionTag>;
@@ -204,7 +204,7 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: $crate::thread::TaskID = impact_math::ConstStringHash64::new(stringify!($name));
+            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::thread::TaskID::from_str(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
             const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
@@ -246,7 +246,7 @@ macro_rules! define_execution_tag {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = impact_math::ConstStringHash64::new(stringify!($name));
+            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::scheduling::ExecutionTag::from_str(stringify!($name));
         }
     };
 }
@@ -743,14 +743,6 @@ impl<S> TaskOrdering<S> {
     ) -> Result<Vec<OrderedTask<S>>> {
         let ordered_task_ids = dependency_graph.obtain_ordered_task_ids()?;
 
-        log::trace!(
-            "Ordered tasks: {:?}",
-            ordered_task_ids
-                .iter()
-                .map(|task_id| task_pool[task_id].id().string())
-                .collect::<Vec<_>>()
-        );
-
         // Create map from task ID to index in `ordered_task_ids`
         let indices_of_task_ids: HashMap<_, _> = ordered_task_ids
             .iter()
@@ -843,10 +835,9 @@ impl<S> OrderedTask<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use impact_math::ConstStringHash64;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
-    const EXEC_ALL: ExecutionTag = ExecutionTag::new("all");
+    const EXEC_ALL: ExecutionTag = ExecutionTag::from_str("all");
 
     #[derive(Debug)]
     struct TaskRecorder {
@@ -893,8 +884,8 @@ mod tests {
             struct $task;
 
             impl $task {
-                const ID: TaskID = ConstStringHash64::new(stringify!($task));
-                const EXEC_TAG: ExecutionTag = ConstStringHash64::new(stringify!($task));
+                const ID: TaskID = TaskID::from_str(stringify!($task));
+                const EXEC_TAG: ExecutionTag = ExecutionTag::from_str(stringify!($task));
             }
 
             impl Task<TaskRecorder> for $task

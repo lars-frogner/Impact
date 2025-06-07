@@ -1,7 +1,7 @@
 //! Utilities for multithreading.
 
 use anyhow::Error;
-use impact_math::ConstStringHash64;
+use impact_math::Hash64;
 use std::{
     collections::HashMap,
     fmt,
@@ -84,7 +84,7 @@ pub struct WorkerID(pub usize);
 
 /// Type of ID used for identifying tasks that can be performed
 /// by worker threads in a [`ThreadPool`].
-pub type TaskID = ConstStringHash64;
+pub type TaskID = Hash64;
 
 /// [`Result`] produced by the task closure executed by worker
 /// threads in a [`ThreadPool`]. The [`Err`] variant contains
@@ -714,8 +714,8 @@ mod tests {
         });
         let result = pool.execute_and_wait(
             [
-                (Arc::clone(&count), TaskID::new("0")),
-                (Arc::clone(&count), TaskID::new("1")),
+                (Arc::clone(&count), TaskID::from_str("0")),
+                (Arc::clone(&count), TaskID::from_str("1")),
             ]
             .into_iter(),
             2,
@@ -727,8 +727,8 @@ mod tests {
         assert_eq!(errors.n_errors(), 1);
 
         match (
-            errors.take_result_of(TaskID::new("0")),
-            errors.take_result_of(TaskID::new("1")),
+            errors.take_result_of(TaskID::from_str("0")),
+            errors.take_result_of(TaskID::from_str("1")),
         ) {
             (Err(err), Ok(_)) | (Ok(_), Err(err)) => assert_eq!(err.to_string(), "Underflow!"),
             _ => unreachable!(),
