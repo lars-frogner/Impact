@@ -15,7 +15,7 @@ define_task!(
     depends_on = [SyncRenderResources],
     execute_on = [RenderingTag],
     |engine: &Engine| {
-        with_trace_logging!("Synchronizing render commands"; {
+        instrument_engine_task!("Synchronizing render commands", engine, {
             let renderer = engine.renderer().read().unwrap();
             let mut shader_manager = renderer.shader_manager().write().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();

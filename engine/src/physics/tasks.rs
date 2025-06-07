@@ -26,7 +26,7 @@ define_task!(
     ],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_trace_logging!("Updating controlled entities"; {
+        instrument_engine_task!("Updating controlled entities", engine, {
             engine.update_controlled_entities();
             Ok(())
         })
@@ -44,7 +44,7 @@ define_task!(
     ],
     execute_on = [PhysicsTag],
     |engine: &Engine| {
-        with_trace_logging!("Advancing simulation"; {
+        instrument_engine_task!("Advancing simulation", engine, {
             engine.simulator()
                 .write()
                 .unwrap()

@@ -13,6 +13,7 @@ pub mod engine;
 pub mod ffi;
 pub mod game_loop;
 pub mod gpu;
+pub mod instrumentation;
 pub mod io;
 pub mod light;
 pub mod material;

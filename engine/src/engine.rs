@@ -14,6 +14,7 @@ use crate::{
         self, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
+    instrumentation::{InstrumentationConfig, timing::TaskTimer},
     io::{self, util::parse_ron_file},
     material::{self, MaterialLibrary},
     mesh::{MeshRepository, components::MeshComp, texture_projection::TextureProjection},
@@ -57,6 +58,7 @@ pub struct Engine {
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
+    task_timer: TaskTimer,
     controls_enabled: AtomicBool,
     shutdown_requested: AtomicBool,
 }
@@ -70,6 +72,7 @@ pub struct EngineConfig {
     pub voxel: VoxelConfig,
     pub controller: ControllerConfig,
     pub ecs: ECSConfig,
+    pub instrumentation: InstrumentationConfig,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -146,6 +149,7 @@ impl Engine {
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
+            task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
             controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
         };
@@ -210,6 +214,11 @@ impl Engine {
     /// Returns a reference to the [`ScreenCapturer`].
     pub fn screen_capturer(&self) -> &ScreenCapturer {
         &self.screen_capturer
+    }
+
+    /// Returns a reference to the [`TaskTimer`].
+    pub fn task_timer(&self) -> &TaskTimer {
+        &self.task_timer
     }
 
     /// Captures any screenshots or related textures requested through the
