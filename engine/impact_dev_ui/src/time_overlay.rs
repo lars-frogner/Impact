@@ -7,7 +7,8 @@ use impact::{
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct TimeOverlay;
 
-const OFFSET_FROM_CORNER: [f32; 2] = [-10.0, 6.0];
+const OFFSET_FROM_CORNER: [f32; 2] = [-10.0, 3.0];
+const SPACING: f32 = 12.0;
 
 impl TimeOverlay {
     pub(super) fn run(&mut self, ctx: &Context, game_loop: &GameLoop, engine: &Engine) {
@@ -26,18 +27,16 @@ impl TimeOverlay {
             )
         });
 
-        let spacing = 2.0;
-        let total_height = galley1.rect.height() + galley2.rect.height() + spacing;
-        let max_width = galley1.rect.width().max(galley2.rect.width());
+        let total_width = galley1.rect.width() + galley2.rect.width() + SPACING;
+        let max_height = galley1.rect.height().max(galley2.rect.height());
 
         Area::new(Id::new("time_overlay"))
-            .anchor(Align2::RIGHT_TOP, OFFSET_FROM_CORNER) // Top right of screen, with padding
+            .anchor(Align2::RIGHT_TOP, OFFSET_FROM_CORNER)
             .interactable(false)
             .show(ctx, |ui| {
                 let right = ui.max_rect().right();
                 let top = ui.max_rect().top();
 
-                // Draw each label right-aligned
                 ui.painter().text(
                     Pos2::new(right, top),
                     Align2::RIGHT_TOP,
@@ -46,7 +45,7 @@ impl TimeOverlay {
                     ui.visuals().text_color(),
                 );
                 ui.painter().text(
-                    Pos2::new(right, top + galley1.rect.height() + spacing),
+                    Pos2::new(right - (galley1.rect.width() + SPACING), top),
                     Align2::RIGHT_TOP,
                     &label2,
                     font_id.clone(),
@@ -54,7 +53,7 @@ impl TimeOverlay {
                 );
 
                 // Reserve space so nothing overlaps
-                ui.allocate_space(vec2(max_width, total_height));
+                ui.allocate_space(vec2(total_width, max_height));
             });
     }
 }
