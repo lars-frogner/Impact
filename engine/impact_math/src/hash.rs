@@ -84,9 +84,23 @@ lazy_static! {
     static ref STRING_HASH_64_REGISTRY: Mutex<HashMap<Hash64, String>> = Mutex::new(HashMap::new());
 }
 
+impl Hash32 {
+    /// Computes a 32-bit hash of the given string literal.
+    pub const fn from_str(string: &str) -> Self {
+        Self(const_fnv1a_hash::fnv1a_hash_str_32(string))
+    }
+}
+
 impl From<Hash32> for u32 {
     fn from(hash: Hash32) -> Self {
         hash.0
+    }
+}
+
+impl Hash64 {
+    /// Computes a 64-bit hash of the given string literal.
+    pub const fn from_str(string: &str) -> Self {
+        Self(const_fnv1a_hash::fnv1a_hash_str_64(string))
     }
 }
 
@@ -107,7 +121,7 @@ impl StringHash32 {
     /// string registry in order to record the hash and string pair.
     pub fn new<S: ToString>(string: S) -> Self {
         let string = string.to_string();
-        let hash = compute_hash_str_32(&string);
+        let hash = Hash32::from_str(&string);
         Self::new_with_hash(string, hash)
     }
 
@@ -146,7 +160,7 @@ impl StringHash64 {
     /// string registry in order to record the hash and string pair.
     pub fn new<S: ToString>(string: S) -> Self {
         let string = string.to_string();
-        let hash = compute_hash_str_64(&string);
+        let hash = Hash64::from_str(&string);
         Self::new_with_hash(string, hash)
     }
 
@@ -182,7 +196,7 @@ impl ConstStringHash64 {
     /// with the hash so that it can be retrieved.
     pub const fn new(string: &'static str) -> Self {
         Self {
-            hash: compute_hash_str_64(string),
+            hash: Hash64::from_str(string),
             string,
         }
     }
@@ -197,16 +211,6 @@ impl ConstStringHash64 {
         let Self { hash, string: _ } = self;
         hash
     }
-}
-
-/// Computes a 64-bit hash of the given string literal.
-pub const fn compute_hash_str_64(string: &str) -> Hash64 {
-    Hash64(const_fnv1a_hash::fnv1a_hash_str_64(string))
-}
-
-/// Computes a 32-bit hash of the given string literal.
-pub const fn compute_hash_str_32(string: &str) -> Hash32 {
-    Hash32(const_fnv1a_hash::fnv1a_hash_str_32(string))
 }
 
 /// Computes a 64-bit hash of the concatenated bytes of the

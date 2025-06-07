@@ -5,7 +5,7 @@
 #[macro_export]
 macro_rules! hash32 {
     ($string:literal) => {
-        $crate::StringHash32::new_with_hash($string, $crate::compute_hash_str_32($string))
+        $crate::StringHash32::new_with_hash($string, $crate::Hash32::from_str($string))
     };
     ($string:expr) => {
         $crate::StringHash32::new($string)
@@ -17,7 +17,7 @@ macro_rules! hash32 {
 #[macro_export]
 macro_rules! hash64 {
     ($string:literal) => {
-        $crate::StringHash64::new_with_hash($string, $crate::compute_hash_str_64($string))
+        $crate::StringHash64::new_with_hash($string, $crate::Hash64::from_str($string))
     };
     ($string:expr) => {
         $crate::StringHash64::new($string)
@@ -63,20 +63,5 @@ macro_rules! stringhash64_newtype {
                 write!(f, "{}", self.0)
             }
         }
-    };
-}
-
-/// Defines a new type with the given name that is a wrapper
-/// around a [`Hash64`](crate::Hash64).
-#[macro_export]
-macro_rules! hash64_newtype {
-    (
-        $(#[$attributes:meta])*
-        $([$pub:ident])? $name:ident
-    ) => {
-        $(#[$attributes])*
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Zeroable, bytemuck::Pod)]
-        $($pub)? struct $name($($pub)? $crate::Hash64);
     };
 }

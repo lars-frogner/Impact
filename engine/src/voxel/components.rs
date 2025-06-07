@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use impact_geometry::{Capsule, Sphere};
-use impact_math::{Hash32, compute_hash_str_32};
+use impact_math::Hash32;
 use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 
@@ -273,7 +273,7 @@ impl GradientNoiseVoxelTypesComp {
 
         let mut voxel_type_name_hashes = [Hash32::zeroed(); Self::VOXEL_TYPE_ARRAY_SIZE];
         for (idx, name) in voxel_type_names.iter().enumerate() {
-            voxel_type_name_hashes[idx] = compute_hash_str_32(name);
+            voxel_type_name_hashes[idx] = Hash32::from_str(name);
         }
 
         Self {
