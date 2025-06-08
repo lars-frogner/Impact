@@ -368,7 +368,7 @@ impl BloomRenderCommands {
             let mesh_id = mesh::screen_filling_quad_mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -446,7 +446,7 @@ impl BloomRenderCommands {
             let mesh_id = mesh::screen_filling_quad_mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -510,7 +510,7 @@ impl BloomRenderCommands {
         let mesh_id = mesh::screen_filling_quad_mesh_id();
 
         let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
+            .get_triangle_mesh_buffer_manager(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_buffer_manager

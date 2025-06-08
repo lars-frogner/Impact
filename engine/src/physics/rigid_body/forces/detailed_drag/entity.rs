@@ -2,7 +2,7 @@
 
 use super::DragLoadMapRepository;
 use crate::{
-    mesh::{MeshID, MeshRepository, components::MeshComp},
+    mesh::{MeshID, MeshRepository, components::TriangleMeshComp},
     physics::rigid_body::{
         components::RigidBodyComp,
         forces::detailed_drag::{
@@ -33,7 +33,7 @@ pub fn setup_drag_load_map_for_new_entity(
         let center_of_mass = rigid_body.0.inertial_properties().center_of_mass();
 
         let mesh_repository = mesh_repository.read().unwrap();
-        let mesh = mesh_repository.get_mesh(mesh_id).ok_or_else(|| {
+        let mesh = mesh_repository.get_triangle_mesh(mesh_id).ok_or_else(|| {
             anyhow!("Tried to generate drag load map for missing mesh (mesh ID {mesh_id})")
         })?;
 
@@ -62,7 +62,7 @@ pub fn setup_drag_load_map_for_new_entity(
     }
 
     setup!(components, |drag: &DetailedDragComp,
-                        mesh: &MeshComp,
+                        mesh: &TriangleMeshComp,
                         rigid_body: &RigidBodyComp|
      -> Result<DragLoadMapComp> {
         let mesh_id = mesh.id;

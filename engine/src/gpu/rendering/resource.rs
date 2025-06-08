@@ -7,7 +7,7 @@ use crate::{
     camera::{SceneCamera, buffer::CameraGPUBufferManager},
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
     light::{LightStorage, buffer::LightGPUBufferManager},
-    mesh::{MeshID, TriangleMesh, buffer::MeshGPUBufferManager},
+    mesh::{MeshID, buffer::TriangleMeshGPUBufferManager, triangle::TriangleMesh},
     model::{InstanceFeatureManager, ModelID, buffer::InstanceFeatureGPUBufferManager},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
     voxel::{
@@ -52,7 +52,7 @@ pub struct RenderResourceManager {
 pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraGPUBufferManager>>,
     skybox_resource_manager: Box<Option<SkyboxGPUResourceManager>>,
-    mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
+    triangle_mesh_buffer_managers: Box<TriangleMeshGPUBufferManagerMap>,
     voxel_resource_managers: Box<(
         Option<VoxelMaterialGPUResourceManager>,
         VoxelObjectGPUBufferManagerMap,
@@ -68,7 +68,7 @@ pub struct SynchronizedRenderResources {
 struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
     skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
-    mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
+    triangle_mesh_buffer_managers: Mutex<Box<TriangleMeshGPUBufferManagerMap>>,
     voxel_resource_managers: Mutex<
         Box<(
             Option<VoxelMaterialGPUResourceManager>,
@@ -79,7 +79,7 @@ struct DesynchronizedRenderResources {
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
 
-type MeshGPUBufferManagerMap = HashMap<MeshID, MeshGPUBufferManager>;
+type TriangleMeshGPUBufferManagerMap = HashMap<MeshID, TriangleMeshGPUBufferManager>;
 type VoxelObjectGPUBufferManagerMap = HashMap<VoxelObjectID, VoxelObjectGPUBufferManager>;
 type InstanceFeatureGPUBufferManagerMap = HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>>;
 
@@ -170,10 +170,13 @@ impl SynchronizedRenderResources {
         self.skybox_resource_manager.as_ref().as_ref()
     }
 
-    /// Returns the GPU buffer manager for the given mesh identifier if the
-    /// mesh exists, otherwise returns [`None`].
-    pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager> {
-        self.mesh_buffer_managers.get(&mesh_id)
+    /// Returns the GPU buffer manager for the given triangle mesh identifier if
+    /// the triangle mesh exists, otherwise returns [`None`].
+    pub fn get_triangle_mesh_buffer_manager(
+        &self,
+        mesh_id: MeshID,
+    ) -> Option<&TriangleMeshGPUBufferManager> {
+        self.triangle_mesh_buffer_managers.get(&mesh_id)
     }
 
     /// Returns the GPU resource manager for voxel materials, or [`None`] if it
@@ -222,7 +225,7 @@ impl DesynchronizedRenderResources {
         Self {
             camera_buffer_manager: Mutex::new(Box::new(None)),
             skybox_resource_manager: Mutex::new(Box::new(None)),
-            mesh_buffer_managers: Mutex::new(Box::default()),
+            triangle_mesh_buffer_managers: Mutex::new(Box::default()),
             voxel_resource_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
@@ -233,7 +236,7 @@ impl DesynchronizedRenderResources {
         let SynchronizedRenderResources {
             camera_buffer_manager,
             skybox_resource_manager,
-            mesh_buffer_managers,
+            triangle_mesh_buffer_managers,
             voxel_resource_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
@@ -241,7 +244,7 @@ impl DesynchronizedRenderResources {
         Self {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             skybox_resource_manager: Mutex::new(skybox_resource_manager),
-            mesh_buffer_managers: Mutex::new(mesh_buffer_managers),
+            triangle_mesh_buffer_managers: Mutex::new(triangle_mesh_buffer_managers),
             voxel_resource_managers: Mutex::new(voxel_resource_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
@@ -252,7 +255,7 @@ impl DesynchronizedRenderResources {
         let DesynchronizedRenderResources {
             camera_buffer_manager,
             skybox_resource_manager,
-            mesh_buffer_managers,
+            triangle_mesh_buffer_managers,
             voxel_resource_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
@@ -260,7 +263,7 @@ impl DesynchronizedRenderResources {
         SynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
             skybox_resource_manager: skybox_resource_manager.into_inner().unwrap(),
-            mesh_buffer_managers: mesh_buffer_managers.into_inner().unwrap(),
+            triangle_mesh_buffer_managers: triangle_mesh_buffer_managers.into_inner().unwrap(),
             voxel_resource_managers: voxel_resource_managers.into_inner().unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
             instance_feature_buffer_managers: instance_feature_buffer_managers
@@ -327,14 +330,16 @@ impl DesynchronizedRenderResources {
     /// for new source data will be created.
     fn sync_mesh_buffers_with_meshes(
         graphics_device: &GraphicsDevice,
-        mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
+        mesh_gpu_buffers: &mut TriangleMeshGPUBufferManagerMap,
         meshes: &HashMap<MeshID, TriangleMesh<f32>>,
     ) {
         for (&mesh_id, mesh) in meshes {
             mesh_gpu_buffers
                 .entry(mesh_id)
                 .and_modify(|mesh_buffers| mesh_buffers.sync_with_mesh(graphics_device, mesh))
-                .or_insert_with(|| MeshGPUBufferManager::for_mesh(graphics_device, mesh_id, mesh));
+                .or_insert_with(|| {
+                    TriangleMeshGPUBufferManager::for_mesh(graphics_device, mesh_id, mesh)
+                });
         }
         Self::remove_unmatched_render_resources(mesh_gpu_buffers, meshes);
     }

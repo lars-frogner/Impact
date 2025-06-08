@@ -10,7 +10,7 @@ use crate::{
             RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
         },
     },
-    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
+    mesh::{VertexAttributeSet, buffer::TriangleMeshVertexAttributeLocation},
     rendering_template_source,
     skybox::resource::SkyboxGPUResourceManager,
     template_replacements,
@@ -70,7 +70,7 @@ impl SpecificShaderTemplate for SkyboxShaderTemplate {
                     "skybox_texture_group" => 1,
                     "skybox_texture_binding" => SkyboxGPUResourceManager::texture_binding(),
                     "skybox_sampler_binding" => SkyboxGPUResourceManager::sampler_binding(),
-                    "position_location" => MeshVertexAttributeLocation::Position as u32,
+                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")

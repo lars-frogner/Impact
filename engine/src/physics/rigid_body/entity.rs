@@ -4,7 +4,7 @@ use crate::{
     mesh::{
         MeshRepository,
         components::{
-            BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp,
+            BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, TriangleMeshComp,
             SphereMeshComp,
         },
     },
@@ -182,7 +182,7 @@ pub fn setup_rigid_body_for_new_entity(
 
     setup!(
         components,
-        |mesh: &MeshComp,
+        |mesh: &TriangleMeshComp,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
@@ -194,12 +194,14 @@ pub fn setup_rigid_body_for_new_entity(
             SceneEntityFlagsComp
         )> {
             let mesh_repository_readonly = mesh_repository.read().unwrap();
-            let triangle_mesh = mesh_repository_readonly.get_mesh(mesh.id).ok_or_else(|| {
-                anyhow!(
-                    "Tried to create rigid body for missing mesh (mesh ID {})",
-                    mesh.id
-                )
-            })?;
+            let triangle_mesh = mesh_repository_readonly
+                .get_triangle_mesh(mesh.id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Tried to create rigid body for missing mesh (mesh ID {})",
+                        mesh.id
+                    )
+                })?;
             let inertial_properties = InertialProperties::of_uniform_triangle_mesh(
                 triangle_mesh,
                 uniform_rigid_body.mass_density,

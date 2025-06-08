@@ -47,7 +47,7 @@ pub struct CameraGPUBufferManager {
 pub struct CameraProjectionUniform {
     transform: Projective3<f32>,
     /// The corners are listed in the order consistent with
-    /// [`TriangleMesh::create_screen_filling_quad`](`crate::mesh::TriangleMesh::create_screen_filling_quad`),
+    /// [`TriangleMesh::create_screen_filling_quad`](`crate::mesh::triangle::TriangleMesh::create_screen_filling_quad`),
     /// which means it can be indexed into using the `vertex_index` built-in in
     /// the vertex shader when rendering a screen-filling quad to obtain the
     /// far-plane corner for the current screen corner. When passed to the

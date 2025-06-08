@@ -15,7 +15,7 @@ use crate::{
         uniform::{self, UniformBufferable},
     },
     mesh::buffer::{
-        MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
+        TriangleMeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
     },
     voxel::{
         VoxelObjectID,
@@ -64,11 +64,11 @@ pub struct VoxelObjectGPUBufferManager {
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum VoxelMeshVertexAttributeLocation {
-    Position = MeshVertexAttributeLocation::Position as u32,
-    NormalVector = MeshVertexAttributeLocation::NormalVector as u32,
-    Indices = MeshVertexAttributeLocation::NormalVector as u32 + 1,
-    MaterialWeights = MeshVertexAttributeLocation::NormalVector as u32 + 2,
-    MaterialIndices = MeshVertexAttributeLocation::NormalVector as u32 + 3,
+    Position = TriangleMeshVertexAttributeLocation::Position as u32,
+    NormalVector = TriangleMeshVertexAttributeLocation::NormalVector as u32,
+    Indices = TriangleMeshVertexAttributeLocation::NormalVector as u32 + 1,
+    MaterialWeights = TriangleMeshVertexAttributeLocation::NormalVector as u32 + 2,
+    MaterialIndices = TriangleMeshVertexAttributeLocation::NormalVector as u32 + 3,
 }
 
 static MATERIAL_RESOURCES_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();

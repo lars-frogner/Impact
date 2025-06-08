@@ -17,7 +17,7 @@ use crate::{
     instrumentation::{InstrumentationConfig, timing::TaskTimer},
     io::{self, util::parse_ron_file},
     material::{self, MaterialLibrary},
-    mesh::{MeshRepository, components::MeshComp, texture_projection::TextureProjection},
+    mesh::{MeshRepository, components::TriangleMeshComp, texture_projection::TextureProjection},
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
@@ -114,7 +114,7 @@ impl Engine {
 
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
-        mesh_repository.load_specified_meshes(&asset_specs.meshes)?;
+        mesh_repository.load_specified_meshes(&asset_specs.triangle_meshes)?;
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
         model::register_model_feature_types(&mut instance_feature_manager);
@@ -267,7 +267,7 @@ impl Engine {
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
-    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<MeshComp>
+    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<TriangleMeshComp>
     where
         P: AsRef<Path> + Debug,
     {
@@ -291,7 +291,7 @@ impl Engine {
         &self,
         obj_file_path: P,
         projection: &impl TextureProjection<f32>,
-    ) -> Result<MeshComp>
+    ) -> Result<TriangleMeshComp>
     where
         P: AsRef<Path> + Debug,
     {
@@ -313,7 +313,7 @@ impl Engine {
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
-    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<MeshComp>
+    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<TriangleMeshComp>
     where
         P: AsRef<Path> + Debug,
     {
@@ -336,7 +336,7 @@ impl Engine {
         &self,
         ply_file_path: P,
         projection: &impl TextureProjection<f32>,
-    ) -> Result<MeshComp>
+    ) -> Result<TriangleMeshComp>
     where
         P: AsRef<Path> + Debug,
     {

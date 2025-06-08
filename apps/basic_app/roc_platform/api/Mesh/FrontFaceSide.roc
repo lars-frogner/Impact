@@ -1,16 +1,16 @@
-# Hash: 434b50d217addfea7c75e69c90ee91fe756c9d0d6de42acf32c40562632c7850
-# Generated: 2025-05-23T18:55:01+00:00
+# Hash: 8d030dbc4e374b4225793153a41b1ae5f818e6ca6c5cdf0edc8348bd8872a4af
+# Generated: 2025-06-08T10:54:00+00:00
 # Rust type: impact::mesh::FrontFaceSide
 # Type category: Inline
-# Commit: 31f3514 (dirty)
+# Commit: 5118a70 (dirty)
 module [
     FrontFaceSide,
     write_bytes,
     from_bytes,
 ]
 
-## Whether the front faces of a mesh are oriented toward the outside or the
-## inside.
+## Whether the front faces of a triangle mesh are oriented toward the outside
+## or the inside.
 FrontFaceSide : [
     Outside,
     Inside,

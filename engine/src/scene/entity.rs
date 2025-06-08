@@ -6,7 +6,7 @@ use crate::{
     gpu::{GraphicsDevice, rendering::RenderingSystem},
     light,
     material::{self, components::MaterialComp},
-    mesh::{self, components::MeshComp},
+    mesh::{self, components::TriangleMeshComp},
     model::{
         InstanceFeature, ModelID,
         transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -215,7 +215,7 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |mesh: &MeshComp,
+            |mesh: &TriangleMeshComp,
              material: &MaterialComp,
              frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>,
@@ -231,7 +231,7 @@ impl Scene {
                 } else {
                     Some(
                         mesh_repository
-                            .get_mesh(mesh.id)
+                            .get_triangle_mesh(mesh.id)
                             .ok_or_else(|| anyhow!("Tried to create renderable entity with missing mesh (mesh ID {})", mesh.id))?
                             .compute_bounding_sphere()
                             .ok_or_else(|| anyhow!("Tried to create renderable entity with empty mesh (mesh ID {})", mesh.id))?

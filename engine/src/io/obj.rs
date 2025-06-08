@@ -10,8 +10,9 @@ use crate::{
         },
     },
     mesh::{
-        MeshID, MeshRepository, TriangleMesh, VertexNormalVector, VertexPosition,
-        VertexTextureCoords, components::MeshComp, texture_projection::TextureProjection,
+        MeshID, MeshRepository, VertexNormalVector, VertexPosition, VertexTextureCoords,
+        components::TriangleMeshComp, texture_projection::TextureProjection,
+        triangle::TriangleMesh,
     },
 };
 use anyhow::{Result, bail};
@@ -85,13 +86,14 @@ where
             &model.name, &obj_file_path_string
         )));
 
-        if !mesh_repository.has_mesh(mesh_id) {
+        if !mesh_repository.has_triangle_mesh(mesh_id) {
             let mesh = create_mesh_from_tobj_mesh(model.mesh);
 
-            mesh_repository.add_mesh_unless_present(mesh_id, mesh);
+            mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
         }
 
-        let mesh_component = ComponentStorage::from_single_instance_view(&MeshComp { id: mesh_id });
+        let mesh_component =
+            ComponentStorage::from_single_instance_view(&TriangleMeshComp { id: mesh_id });
 
         let components = if let Some(material_idx) = material_id {
             let material_components = match material_components.entry(material_idx) {
@@ -137,7 +139,7 @@ where
 pub fn load_mesh_from_obj_file<P>(
     mesh_repository: &mut MeshRepository,
     obj_file_path: P,
-) -> Result<MeshComp>
+) -> Result<TriangleMeshComp>
 where
     P: AsRef<Path> + Debug,
 {
@@ -152,17 +154,17 @@ where
 
     let mesh_id = MeshID(hash64!(obj_file_path_string));
 
-    if !mesh_repository.has_mesh(mesh_id) {
+    if !mesh_repository.has_triangle_mesh(mesh_id) {
         let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
 
         for model in models {
             mesh.merge_with(&create_mesh_from_tobj_mesh(model.mesh));
         }
 
-        mesh_repository.add_mesh_unless_present(mesh_id, mesh);
+        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(MeshComp { id: mesh_id })
+    Ok(TriangleMeshComp { id: mesh_id })
 }
 
 /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
@@ -179,7 +181,7 @@ pub fn load_mesh_from_obj_file_with_projection<P>(
     mesh_repository: &mut MeshRepository,
     obj_file_path: P,
     projection: &impl TextureProjection<f32>,
-) -> Result<MeshComp>
+) -> Result<TriangleMeshComp>
 where
     P: AsRef<Path> + Debug,
 {
@@ -198,7 +200,7 @@ where
         projection.identifier()
     )));
 
-    if !mesh_repository.has_mesh(mesh_id) {
+    if !mesh_repository.has_triangle_mesh(mesh_id) {
         let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
 
         for model in models {
@@ -207,10 +209,10 @@ where
 
         mesh.generate_texture_coords(projection);
 
-        mesh_repository.add_mesh_unless_present(mesh_id, mesh);
+        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(MeshComp { id: mesh_id })
+    Ok(TriangleMeshComp { id: mesh_id })
 }
 
 fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {

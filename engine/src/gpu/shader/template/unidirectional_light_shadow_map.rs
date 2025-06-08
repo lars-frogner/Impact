@@ -6,7 +6,7 @@ use crate::{
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
     },
     light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
-    mesh::buffer::MeshVertexAttributeLocation,
+    mesh::buffer::TriangleMeshVertexAttributeLocation,
     model::transform::InstanceModelLightTransform,
     rendering_template_source, template_replacements,
 };
@@ -56,7 +56,7 @@ impl SpecificShaderTemplate for UnidirectionalLightShadowMapShaderTemplate {
                     "model_light_transform_translation_location" => InstanceModelLightTransform::translation_and_scaling_location(),
                     "light_uniform_group" => 0,
                     "light_uniform_binding" => LightGPUBufferManager::light_binding(),
-                    "position_location" => MeshVertexAttributeLocation::Position as u32,
+                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
                 )
             )
             .expect("Shader template resolution failed")

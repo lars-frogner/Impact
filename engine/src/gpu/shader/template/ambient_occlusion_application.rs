@@ -16,7 +16,7 @@ use crate::{
             RenderAttachmentSampler,
         },
     },
-    mesh::buffer::MeshVertexAttributeLocation,
+    mesh::buffer::TriangleMeshVertexAttributeLocation,
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -84,7 +84,7 @@ impl SpecificShaderTemplate for AmbientOcclusionApplicationShaderTemplate {
                     "occlusion_texture_group" => 2,
                     "occlusion_texture_binding" => Occlusion.texture_binding(),
                     "occlusion_sampler_binding" => Occlusion.sampler_binding(),
-                    "position_location" => MeshVertexAttributeLocation::Position as u32,
+                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")

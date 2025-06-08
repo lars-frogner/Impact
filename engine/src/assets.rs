@@ -11,7 +11,7 @@ use crate::{
         },
     },
     io::util::parse_ron_file,
-    mesh::MeshSpecification,
+    mesh::TriangleMeshSpecification,
 };
 use anyhow::{Result, bail};
 use impact_containers::HashMap;
@@ -49,7 +49,7 @@ pub struct AssetConfig {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AssetSpecifications {
     pub textures: Vec<TextureSpecification>,
-    pub meshes: Vec<MeshSpecification>,
+    pub triangle_meshes: Vec<TriangleMeshSpecification>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -478,7 +478,7 @@ impl AssetSpecifications {
         for specification in &mut self.textures {
             specification.resolve_paths(root_path);
         }
-        for specification in &mut self.meshes {
+        for specification in &mut self.triangle_meshes {
             specification.resolve_paths(root_path);
         }
     }
