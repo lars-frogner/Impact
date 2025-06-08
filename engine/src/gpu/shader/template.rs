@@ -8,6 +8,7 @@ pub mod bloom_downsampling;
 pub mod bloom_upsampling_blur;
 pub mod dynamic_range_compression;
 pub mod gaussian_blur;
+pub mod line;
 pub mod luminance_histogram;
 pub mod luminance_histogram_average;
 pub mod model_depth_prepass;

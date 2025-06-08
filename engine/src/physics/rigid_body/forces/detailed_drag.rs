@@ -12,7 +12,7 @@ use impact_containers::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    mesh::{MeshID, TriangleMesh},
+    mesh::{MeshID, triangle::TriangleMesh},
     physics::{
         fph,
         motion::{Direction, Position},

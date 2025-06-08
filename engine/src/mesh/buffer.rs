@@ -36,9 +36,9 @@ impl IndexBufferable for u32 {
     const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
 }
 
-/// Owner and manager of GPU buffers for mesh geometry.
+/// Owner and manager of GPU buffers for triangle mesh geometry.
 #[derive(Debug)]
-pub struct MeshGPUBufferManager {
+pub struct TriangleMeshGPUBufferManager {
     available_attributes: VertexAttributeSet,
     vertex_buffers: [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
     vertex_buffer_layouts: [Option<wgpu::VertexBufferLayout<'static>>; N_VERTEX_ATTRIBUTES],
@@ -50,19 +50,19 @@ pub struct MeshGPUBufferManager {
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
 
-/// Binding location of a specific type of mesh vertex attribute.
+/// Binding location of a specific type of triangle mesh vertex attribute.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum MeshVertexAttributeLocation {
+pub enum TriangleMeshVertexAttributeLocation {
     Position = MESH_VERTEX_BINDING_START,
     NormalVector = (MESH_VERTEX_BINDING_START + 1),
     TextureCoords = (MESH_VERTEX_BINDING_START + 2),
     TangentSpaceQuaternion = (MESH_VERTEX_BINDING_START + 3),
 }
 
-impl MeshGPUBufferManager {
+impl TriangleMeshGPUBufferManager {
     /// Creates a new manager with GPU buffers initialized
-    /// from the given mesh.
+    /// from the given triangle mesh.
     pub fn for_mesh(
         graphics_device: &GraphicsDevice,
         mesh_id: MeshID,
@@ -126,7 +126,7 @@ impl MeshGPUBufferManager {
         }
     }
 
-    /// Ensures that the GPU buffers are in sync with the given mesh.
+    /// Ensures that the GPU buffers are in sync with the given triangle mesh.
     pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<f32>) {
         self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
         self.sync_vertex_buffer(
@@ -569,28 +569,28 @@ impl GPUBuffer {
 impl VertexBufferable for VertexPosition<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MeshVertexAttributeLocation::Position as u32 => Float32x3,
+            TriangleMeshVertexAttributeLocation::Position as u32 => Float32x3,
         ]);
 }
 
 impl VertexBufferable for VertexNormalVector<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
+            TriangleMeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
         ]);
 }
 
 impl VertexBufferable for VertexTextureCoords<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
+            TriangleMeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
         ]);
 }
 
 impl VertexBufferable for VertexTangentSpaceQuaternion<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
+            TriangleMeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
         ]);
 }
 

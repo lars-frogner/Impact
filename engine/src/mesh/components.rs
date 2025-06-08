@@ -133,19 +133,19 @@ pub struct HemisphereMeshComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
-/// [`TriangleMesh`](crate::mesh::TriangleMesh).
-#[roc(parents = "Comp", name = "Mesh")]
+/// [`TriangleMesh`](crate::mesh::triangle::TriangleMesh).
+#[roc(parents = "Comp", name = "TriangleMesh")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct MeshComp {
-    /// The ID of the entity's [`TriangleMesh`](crate::mesh::TriangleMesh).
+pub struct TriangleMeshComp {
+    /// The ID of the entity's [`TriangleMesh`](crate::mesh::triangle::TriangleMesh).
     pub id: MeshID,
 }
 
 #[roc]
-impl MeshComp {
+impl TriangleMeshComp {
     /// Creates a new component representing a
-    /// [`TriangleMesh`](crate::mesh::TriangleMesh) with the given ID.
+    /// [`TriangleMesh`](crate::mesh::triangle::TriangleMesh) with the given ID.
     #[roc(body = "{ id: mesh_id }")]
     pub fn new(mesh_id: MeshID) -> Self {
         Self { id: mesh_id }

@@ -790,7 +790,7 @@ impl DepthPrepass {
             let mesh_id = model_id.mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -1041,7 +1041,7 @@ impl GeometryPass {
 
         let mesh_id = model_id.mesh_id();
         let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
+            .get_triangle_mesh_buffer_manager(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
         layouts.extend(mesh_buffer_manager.request_vertex_buffer_layouts(vertex_attributes)?);
@@ -1259,7 +1259,7 @@ impl GeometryPass {
                 let mesh_id = model_id.mesh_id();
 
                 let mesh_buffer_manager = render_resources
-                    .get_mesh_buffer_manager(mesh_id)
+                    .get_triangle_mesh_buffer_manager(mesh_id)
                     .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
                 for vertex_buffer in
@@ -1616,7 +1616,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                     let mesh_id = model_id.mesh_id();
 
                     let mesh_buffer_manager = render_resources
-                        .get_mesh_buffer_manager(mesh_id)
+                        .get_triangle_mesh_buffer_manager(mesh_id)
                         .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
                     let position_buffer = mesh_buffer_manager
@@ -1977,7 +1977,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                     let mesh_id = model_id.mesh_id();
 
                     let mesh_buffer_manager = render_resources
-                        .get_mesh_buffer_manager(mesh_id)
+                        .get_triangle_mesh_buffer_manager(mesh_id)
                         .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
                     let position_buffer = mesh_buffer_manager
@@ -2285,7 +2285,7 @@ impl AmbientLightPass {
         let mesh_id = AmbientLightShaderTemplate::light_volume_mesh_id();
 
         let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
+            .get_triangle_mesh_buffer_manager(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_buffer_manager
@@ -2651,7 +2651,7 @@ impl DirectionalLightPass {
             let mesh_id = OmnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -2698,7 +2698,7 @@ impl DirectionalLightPass {
             let mesh_id = ShadowableOmnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -2766,7 +2766,7 @@ impl DirectionalLightPass {
             let mesh_id = UnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -2813,7 +2813,7 @@ impl DirectionalLightPass {
             let mesh_id = ShadowableUnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
             let mesh_buffer_manager = render_resources
-                .get_mesh_buffer_manager(mesh_id)
+                .get_triangle_mesh_buffer_manager(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_buffer_manager
@@ -3375,7 +3375,7 @@ impl SkyboxPass {
         let mesh_id = mesh::skybox_mesh_id();
 
         let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
+            .get_triangle_mesh_buffer_manager(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_buffer_manager
@@ -3727,7 +3727,7 @@ impl PostprocessingRenderPass {
         let mesh_id = mesh::screen_filling_quad_mesh_id();
 
         let mesh_buffer_manager = render_resources
-            .get_mesh_buffer_manager(mesh_id)
+            .get_triangle_mesh_buffer_manager(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_buffer_manager

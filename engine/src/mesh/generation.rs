@@ -645,15 +645,13 @@ impl<F: Float> TriangleMesh<F> {
         let mut mesh = Self::create_sphere(n_rings);
 
         // Normal vectors are not needed for light volumes
-        mesh.normal_vectors.clear();
+        mesh.remove_normal_vectors();
 
         // Scale to unit radius
         mesh.scale(F::TWO);
 
         // Flip triangle winding order to make the front faces point inward
-        for triangle in mesh.indices.chunks_exact_mut(3) {
-            triangle.swap(1, 2);
-        }
+        mesh.flip_triangle_winding_order();
 
         mesh
     }

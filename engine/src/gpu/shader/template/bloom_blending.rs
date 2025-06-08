@@ -8,7 +8,7 @@ use crate::{
         },
         texture::attachment::RenderAttachmentQuantity,
     },
-    mesh::buffer::MeshVertexAttributeLocation,
+    mesh::buffer::TriangleMeshVertexAttributeLocation,
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -63,7 +63,7 @@ impl SpecificShaderTemplate for BloomBlendingShaderTemplate {
                     "blurred_luminance_texture_group" => 1,
                     "blurred_luminance_texture_binding" => self.blurred_luminance_quantity.texture_binding(),
                     "blurred_luminance_sampler_binding" => self.blurred_luminance_quantity.sampler_binding(),
-                    "position_location" => MeshVertexAttributeLocation::Position as u32,
+                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")

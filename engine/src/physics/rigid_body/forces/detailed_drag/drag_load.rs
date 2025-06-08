@@ -1,7 +1,7 @@
 //! Calculation of forces and torques due to drag.
 
 use crate::{
-    mesh::TriangleMesh,
+    mesh::triangle::TriangleMesh,
     physics::{
         fph,
         motion::{Direction, Force, Orientation, Position, Torque},

@@ -91,7 +91,7 @@ define_task!(
                     renderer.graphics_device(),
                     render_resource_manager
                         .desynchronized()
-                        .mesh_buffer_managers
+                        .triangle_mesh_buffer_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
@@ -102,7 +102,7 @@ define_task!(
                         .mesh_repository()
                         .read()
                         .unwrap()
-                        .meshes(),
+                        .triangle_meshes(),
                 );
             }
             Ok(())

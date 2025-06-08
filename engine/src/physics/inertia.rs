@@ -1,7 +1,7 @@
 //! Computation and representation of inertia-related properties.
 
 use crate::{
-    mesh::TriangleMesh,
+    mesh::triangle::TriangleMesh,
     physics::{fph, motion::Position},
 };
 use approx::{AbsDiffEq, RelativeEq};
