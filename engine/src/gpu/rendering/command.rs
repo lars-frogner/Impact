@@ -86,6 +86,7 @@ impl RenderingSystem {
         if state.changed {
             *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
                 &self.graphics_device,
+                &self.rendering_surface,
                 &mut self.shader_manager.write().unwrap(),
                 &mut self.render_attachment_texture_manager.write().unwrap(),
                 &self.basic_config,

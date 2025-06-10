@@ -294,6 +294,17 @@ impl InstanceFeatureManager {
         self.feature_storages.get_mut(&feature_type_id)
     }
 
+    /// Returns a reference to the value of the feature stored under the given ID.
+    ///
+    /// # Panics
+    /// - If the feature's type has not been registered.
+    /// - If no feature with the given ID exists in the associated storage.
+    pub fn feature<Fe: InstanceFeature>(&self, feature_id: InstanceFeatureID) -> &Fe {
+        self.get_storage::<Fe>()
+            .expect("Missing storage for instance feature type")
+            .feature::<Fe>(feature_id)
+    }
+
     /// Returns a mutable reference to the value of the feature stored under the
     /// given ID.
     ///
@@ -335,6 +346,34 @@ impl InstanceFeatureManager {
         &mut self,
     ) -> impl Iterator<Item = (&ModelID, &'_ mut ModelInstanceBuffer)> {
         self.instance_buffers.iter_mut()
+    }
+
+    /// Initialize the [`ModelInstanceBuffer`] associated with the given model
+    /// for the given feature types.
+    ///
+    /// # Panics
+    /// - If the `ModelInstanceBuffer` for the model has already been
+    ///   initialized with a different set of feature types than provided.
+    /// - If any of the model's feature types have not been registered with
+    ///   [`Self::register_feature_type`].
+    pub fn initialize_instance_buffer(
+        &mut self,
+        model_id: ModelID,
+        feature_type_ids: &[InstanceFeatureTypeID],
+    ) {
+        self.instance_buffers
+                .entry(model_id)
+                .and_modify(|instance_buffer| {
+                    assert_eq!(instance_buffer.n_feature_types(), feature_type_ids.len());
+                })
+                .or_insert_with(|| {
+                    ModelInstanceBuffer::new(feature_type_ids.iter().map(|feature_type_id| {
+                        self.feature_storages.get(feature_type_id).expect(
+                            "Missing storage for instance feature type \
+                                 (all feature types must be registered with `register_feature_type`)",
+                        )
+                    }))
+                });
     }
 
     /// Registers the existence of a new instance of the model with the given

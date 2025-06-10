@@ -50,7 +50,7 @@ bitflags! {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct SceneEntityFlags: u8 {
         /// The entity should not affect the scene in any way.
-        const IS_DISABLED    = 1 << 0;
+        const IS_DISABLED      = 1 << 0;
         /// The entity should not participate in shadow maps.
         const CASTS_NO_SHADOWS = 1 << 1;
     }

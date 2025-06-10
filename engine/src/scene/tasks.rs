@@ -3,6 +3,7 @@
 use crate::{
     define_task,
     engine::{Engine, tasks::EngineTaskScheduler},
+    gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
     runtime::EventLoopController,
     scene::{self, Scene},
@@ -157,6 +158,7 @@ define_task!(
     execute_on = [RenderingTag],
     |engine: &Engine| {
         instrument_engine_task!("Buffering visible model instances", engine, {
+            let renderer = engine.renderer().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let scene_camera = scene.scene_camera().read().unwrap();
             if let Some(scene_camera) = scene_camera.as_ref() {
@@ -166,13 +168,10 @@ define_task!(
                     .buffer_transforms_of_visible_model_instances(
                         &mut scene.instance_feature_manager().write().unwrap(),
                         scene_camera,
+                        renderer.current_frame_count(),
                     );
 
-                engine
-                    .renderer()
-                    .read()
-                    .unwrap()
-                    .declare_render_resources_desynchronized();
+                renderer.declare_render_resources_desynchronized();
             }
 
             Ok(())
@@ -190,7 +189,10 @@ define_task!(
     depends_on = [
         SyncLightsInStorage,
         ClearModelInstanceBuffers,
-        BufferVisibleModelInstances
+        // The current task begins new ranges in the instance feature buffers,
+        // so all tasks writing to the initial range have to be completed first
+        BufferVisibleModelInstances,
+        BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
@@ -230,7 +232,10 @@ define_task!(
     depends_on = [
         SyncLightsInStorage,
         ClearModelInstanceBuffers,
-        BufferVisibleModelInstances
+        // The current task begins new ranges in the instance feature buffers,
+        // so all tasks writing to the initial range have to be completed first
+        BufferVisibleModelInstances,
+        BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {

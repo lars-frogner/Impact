@@ -10,6 +10,7 @@ use crate::{
     assets::{AssetConfig, Assets, lookup_table},
     component::ComponentRegistry,
     control::{self, ControllerConfig, MotionController, OrientationController},
+    gizmo::{self, GizmoConfig, GizmoManager},
     gpu::{
         self, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
@@ -54,6 +55,7 @@ pub struct Engine {
     assets: RwLock<Assets>,
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
+    gizmo_manager: RwLock<GizmoManager>,
     ui_output: RwLock<Option<UserInterfaceOutput>>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
@@ -72,6 +74,7 @@ pub struct EngineConfig {
     pub voxel: VoxelConfig,
     pub controller: ControllerConfig,
     pub ecs: ECSConfig,
+    pub gizmo: GizmoConfig,
     pub instrumentation: InstrumentationConfig,
 }
 
@@ -120,6 +123,7 @@ impl Engine {
         model::register_model_feature_types(&mut instance_feature_manager);
         material::register_material_feature_types(&mut instance_feature_manager);
         voxel::register_voxel_feature_types(&mut instance_feature_manager);
+        gizmo::initialize_buffers_for_gizmo_models(&mut instance_feature_manager);
 
         let voxel_manager = VoxelManager::from_config(config.voxel)?;
 
@@ -131,6 +135,8 @@ impl Engine {
         );
 
         let simulator = PhysicsSimulator::new(config.physics)?;
+
+        let gizmo_manager = GizmoManager::new(config.gizmo);
 
         let (motion_controller, orientation_controller) =
             control::create_controllers(config.controller);
@@ -145,6 +151,7 @@ impl Engine {
             assets: RwLock::new(assets),
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
+            gizmo_manager: RwLock::new(gizmo_manager),
             ui_output: RwLock::new(None),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
@@ -203,6 +210,11 @@ impl Engine {
     /// [`RwLock`].
     pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
+    }
+
+    /// Returns a reference to the [`GizmoManager`], guarded by a [`RwLock`].
+    pub fn gizmo_manager(&self) -> &RwLock<GizmoManager> {
+        &self.gizmo_manager
     }
 
     /// Returns a reference to the [`UserInterfaceOutput`] (or `None` if

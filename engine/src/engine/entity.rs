@@ -1,8 +1,9 @@
 //! Management of entities in the engine.
 
 use super::Engine;
-use crate::scene::{
-    RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp,
+use crate::{
+    gizmo,
+    scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -144,6 +145,11 @@ impl Engine {
             components,
             &mut render_resources_desynchronized,
         )?;
+
+        gizmo::entity::setup_gizmos_for_new_entity(
+            &self.gizmo_manager().read().unwrap(),
+            components,
+        );
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()

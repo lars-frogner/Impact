@@ -24,6 +24,7 @@ use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_math::Float;
 use nalgebra::Similarity3;
 use roc_integration::roc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
 /// and enables useful operations on them.
@@ -33,7 +34,7 @@ use roc_integration::roc;
 /// node as a parent and may have any number and type of children. Each node
 /// holds a transform from the model space of the object or group it represents
 /// to the space of the parent.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct SceneGraph<F: Float> {
     root_node_id: GroupNodeID,
     group_nodes: NodeStorage<GroupNode<F>>,
@@ -111,7 +112,7 @@ pub struct GroupNode<F: Float> {
 /// A [`SceneGraph`] leaf node representing a model instance. It holds a
 /// transform representing the instance's spatial relationship with its parent
 /// group, as well as a list of instance feature IDs.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ModelInstanceNode<F: Float> {
     parent_node_id: GroupNodeID,
     model_bounding_sphere: Option<Sphere<F>>,
@@ -119,6 +120,7 @@ pub struct ModelInstanceNode<F: Float> {
     model_id: ModelID,
     feature_ids: Vec<InstanceFeatureID>,
     flags: ModelInstanceFlags,
+    frame_count_when_last_visible: AtomicU32,
 }
 
 /// A [`SceneGraph`] leaf node representing a [`Camera`](crate::camera::Camera).
@@ -446,6 +448,7 @@ impl<F: Float> SceneGraph<F> {
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
         scene_camera: &SceneCamera<F>,
+        current_frame_count: u32,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
         F: simba::scalar::SubsetOf<f32>,
@@ -475,6 +478,7 @@ impl<F: Float> SceneGraph<F> {
             if should_buffer {
                 self.buffer_transforms_of_visible_model_instances_in_group(
                     instance_feature_manager,
+                    current_frame_count,
                     camera_space_view_frustum,
                     group_node,
                     &group_to_camera_transform,
@@ -510,6 +514,7 @@ impl<F: Float> SceneGraph<F> {
             if should_buffer {
                 Self::buffer_model_view_transform_of_model_instance(
                     instance_feature_manager,
+                    current_frame_count,
                     model_instance_node,
                     &model_view_transform,
                 );
@@ -624,6 +629,7 @@ impl<F: Float> SceneGraph<F> {
     fn buffer_transforms_of_visible_model_instances_in_group(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
+        current_frame_count: u32,
         camera_space_view_frustum: &Frustum<F>,
         group_node: &GroupNode<F>,
         group_to_camera_transform: &NodeTransform<F>,
@@ -652,6 +658,7 @@ impl<F: Float> SceneGraph<F> {
             if should_buffer {
                 self.buffer_transforms_of_visible_model_instances_in_group(
                     instance_feature_manager,
+                    current_frame_count,
                     camera_space_view_frustum,
                     child_group_node,
                     &child_group_to_camera_transform,
@@ -689,6 +696,7 @@ impl<F: Float> SceneGraph<F> {
             if should_buffer {
                 Self::buffer_model_view_transform_of_model_instance(
                     instance_feature_manager,
+                    current_frame_count,
                     child_model_instance_node,
                     &child_model_view_transform,
                 );
@@ -703,6 +711,7 @@ impl<F: Float> SceneGraph<F> {
     /// If the specified model instance node does not exist.
     fn buffer_model_view_transform_of_model_instance(
         instance_feature_manager: &mut InstanceFeatureManager,
+        current_frame_count: u32,
         model_instance_node: &ModelInstanceNode<F>,
         model_view_transform: &NodeTransform<F>,
     ) where
@@ -722,6 +731,8 @@ impl<F: Float> SceneGraph<F> {
             model_instance_node.model_id(),
             model_instance_node.feature_ids(),
         );
+
+        model_instance_node.declare_visible_this_frame(current_frame_count);
     }
 
     #[cfg(test)]
@@ -1294,6 +1305,7 @@ impl<F: Float> ModelInstanceNode<F> {
             model_id,
             feature_ids,
             flags,
+            frame_count_when_last_visible: AtomicU32::new(0),
         }
     }
 
@@ -1344,6 +1356,11 @@ impl<F: Float> ModelInstanceNode<F> {
         self.flags
     }
 
+    /// Returns the frame count when the model instance was last visible.
+    pub fn frame_count_when_last_visible(&self) -> u32 {
+        self.frame_count_when_last_visible.load(Ordering::Relaxed)
+    }
+
     /// Returns the bounding sphere of the model instance, or [`None`] if it has
     /// no bounding sphere.
     fn get_model_bounding_sphere(&self) -> Option<&Sphere<F>> {
@@ -1356,6 +1373,11 @@ impl<F: Float> ModelInstanceNode<F> {
 
     fn set_flags(&mut self, flags: ModelInstanceFlags) {
         self.flags = flags;
+    }
+
+    fn declare_visible_this_frame(&self, current_frame_count: u32) {
+        self.frame_count_when_last_visible
+            .store(current_frame_count, Ordering::Relaxed);
     }
 }
 
