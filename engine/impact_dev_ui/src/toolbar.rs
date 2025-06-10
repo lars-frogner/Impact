@@ -20,6 +20,7 @@ impl Toolbar {
                     );
                     ui.toggle_value(&mut config.show_rendering_options, "Rendering options");
                     ui.toggle_value(&mut config.show_physics_options, "Physics options");
+                    ui.toggle_value(&mut config.show_gizmo_options, "Gizmos");
                     ui.toggle_value(&mut config.show_task_timings, "Task timings");
                     ui.toggle_value(&mut config.show_render_pass_timings, "Render pass timings");
                     ui.toggle_value(&mut config.show_time_overlay, "Time overlay");

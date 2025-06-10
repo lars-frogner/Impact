@@ -19,7 +19,9 @@ use impact::{
     io::util as io_util,
     ui,
 };
-use option_panels::{physics::PhysicsOptionPanel, rendering::RenderingOptionPanel};
+use option_panels::{
+    gizmo::GizmoOptionPanel, physics::PhysicsOptionPanel, rendering::RenderingOptionPanel,
+};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use time_overlay::TimeOverlay;
@@ -32,6 +34,7 @@ pub struct UserInterface {
     toolbar: Toolbar,
     rendering_option_panel: RenderingOptionPanel,
     physics_option_panel: PhysicsOptionPanel,
+    gizmo_option_panel: GizmoOptionPanel,
     task_timing_panel: TaskTimingPanel,
     render_pass_timing_panel: RenderPassTimingPanel,
     time_overlay: TimeOverlay,
@@ -46,6 +49,7 @@ pub struct UserInterfaceConfig {
     pub alpha: f32,
     pub show_rendering_options: bool,
     pub show_physics_options: bool,
+    pub show_gizmo_options: bool,
     pub show_task_timings: bool,
     pub show_render_pass_timings: bool,
     pub show_time_overlay: bool,
@@ -80,6 +84,9 @@ impl UserInterface {
                 }
                 if self.config.show_physics_options {
                     self.physics_option_panel.run(ctx, &self.config, engine);
+                }
+                if self.config.show_gizmo_options {
+                    self.gizmo_option_panel.run(ctx, &self.config, engine);
                 }
                 if self.config.show_task_timings {
                     engine.set_task_timings(ToActiveState::Enabled);
@@ -127,6 +134,7 @@ impl Default for UserInterfaceConfig {
             alpha: 0.85,
             show_rendering_options: false,
             show_physics_options: false,
+            show_gizmo_options: false,
             show_task_timings: false,
             show_render_pass_timings: false,
             show_time_overlay: true,

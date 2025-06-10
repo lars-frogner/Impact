@@ -147,7 +147,7 @@
             )),
         ),
     ],
-    meshes: [
+    triangle_meshes: [
         (
             name: "dragon",
             file_path: "../assets/Dragon_1.obj",

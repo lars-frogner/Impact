@@ -1,8 +1,8 @@
 //! Management of tasks in the engine.
 
 use crate::{
-    engine::Engine, gpu, physics, runtime::EventLoopController, scene, scheduling::TaskScheduler,
-    thread::ThreadPoolTaskErrors, voxel,
+    engine::Engine, gizmo, gpu, physics, runtime::EventLoopController, scene,
+    scheduling::TaskScheduler, thread::ThreadPoolTaskErrors, voxel,
 };
 use anyhow::Result;
 use std::{num::NonZeroUsize, sync::Arc};
@@ -57,5 +57,6 @@ pub fn register_all_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()
     gpu::rendering::tasks::register_rendering_tasks(task_scheduler)?;
     physics::tasks::register_physics_tasks(task_scheduler)?;
     voxel::tasks::register_voxel_tasks(task_scheduler)?;
+    gizmo::tasks::register_gizmo_tasks(task_scheduler)?;
     task_scheduler.complete_task_registration()
 }

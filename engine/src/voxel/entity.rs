@@ -3,7 +3,7 @@
 use crate::{
     engine::Engine,
     impl_InstanceFeature,
-    material::{MaterialHandle, MaterialID},
+    material::MaterialHandle,
     mesh::MeshID,
     model::{
         InstanceFeature, InstanceFeatureManager, ModelID,
@@ -51,7 +51,7 @@ use std::sync::{LazyLock, RwLock};
 pub static VOXEL_MODEL_ID: LazyLock<ModelID> = LazyLock::new(|| {
     ModelID::for_mesh_and_material(
         MeshID(hash64!("Voxel mesh")),
-        MaterialHandle::new(MaterialID(hash64!("Voxel material")), None, None),
+        MaterialHandle::not_applicable(),
     )
 });
 

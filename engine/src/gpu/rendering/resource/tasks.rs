@@ -4,6 +4,7 @@ use super::DesynchronizedRenderResources;
 use crate::{
     define_task,
     engine::{Engine, tasks::EngineTaskScheduler},
+    gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
     scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
@@ -195,6 +196,7 @@ define_task!(
     SyncInstanceFeatureBuffers,
     depends_on = [
         BufferVisibleModelInstances,
+        BufferTransformsForGizmos,
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],

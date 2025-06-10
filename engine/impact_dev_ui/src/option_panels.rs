@@ -1,3 +1,4 @@
+pub mod gizmo;
 pub mod physics;
 pub mod rendering;
 

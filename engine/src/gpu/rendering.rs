@@ -115,6 +115,7 @@ impl RenderingSystem {
 
         let render_command_manager = RenderCommandManager::new(
             &graphics_device,
+            &rendering_surface,
             &mut shader_manager,
             &mut render_attachment_texture_manager,
             &config.basic,
@@ -222,6 +223,11 @@ impl RenderingSystem {
     /// Returns a reference to the [`TimestampQueryManager`].
     pub fn timestamp_query_manager(&self) -> &TimestampQueryManager {
         &self.timestamp_query_manager
+    }
+
+    /// The frame count wraps around after [`u32::MAX`].
+    pub fn current_frame_count(&self) -> u32 {
+        self.frame_counter
     }
 
     pub fn basic_config(&self) -> &BasicRenderingConfig {

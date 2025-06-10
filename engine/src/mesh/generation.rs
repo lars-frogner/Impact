@@ -1,6 +1,6 @@
 //! Generation of meshes representing geometrical objects.
 
-use crate::mesh::{FrontFaceSide, TriangleMesh};
+use crate::mesh::{FrontFaceSide, LineSegmentMesh, TriangleMesh};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::Float;
 use nalgebra::{UnitVector3, Vector3, vector};
@@ -17,6 +17,15 @@ macro_rules! pos {
 macro_rules! normal {
     ($normal:expr) => {
         $crate::mesh::VertexNormalVector($normal)
+    };
+}
+
+macro_rules! color {
+    [$r:expr, $g:expr, $b:expr, $a:expr] => {
+        $crate::mesh::VertexColor(nalgebra::vector![$r, $g, $b, $a])
+    };
+    ($color:expr) => {
+        $crate::mesh::VertexColor($color)
     };
 }
 
@@ -654,5 +663,32 @@ impl<F: Float> TriangleMesh<F> {
         mesh.flip_triangle_winding_order();
 
         mesh
+    }
+}
+
+impl<F: Float> LineSegmentMesh<F> {
+    /// Creates a mesh with three line segments corresponding to the x, y and z
+    /// unit vectors rooted at the origin, respectively colored red, green and
+    /// blue.
+    pub fn create_reference_frame_axes() -> Self {
+        let positions = vec![
+            pos![F::ZERO, F::ZERO, F::ZERO],
+            pos![F::ONE, F::ZERO, F::ZERO],
+            pos![F::ZERO, F::ZERO, F::ZERO],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![F::ZERO, F::ZERO, F::ZERO],
+            pos![F::ZERO, F::ZERO, F::ONE],
+        ];
+
+        let colors = vec![
+            color![F::ONE, F::ZERO, F::ZERO, F::ONE],
+            color![F::ONE, F::ZERO, F::ZERO, F::ONE],
+            color![F::ZERO, F::ONE, F::ZERO, F::ONE],
+            color![F::ZERO, F::ONE, F::ZERO, F::ONE],
+            color![F::ZERO, F::ZERO, F::ONE, F::ONE],
+            color![F::ZERO, F::ZERO, F::ONE, F::ONE],
+        ];
+
+        Self::new(positions, colors)
     }
 }
