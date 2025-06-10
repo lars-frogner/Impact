@@ -379,8 +379,10 @@ impl BloomRenderCommands {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             render_pass.draw_indexed(
@@ -457,8 +459,10 @@ impl BloomRenderCommands {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             render_pass.draw_indexed(
@@ -521,8 +525,10 @@ impl BloomRenderCommands {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-            mesh_buffer_manager.index_format(),
+            mesh_buffer_manager
+                .triangle_mesh_index_gpu_buffer()
+                .valid_buffer_slice(),
+            mesh_buffer_manager.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(

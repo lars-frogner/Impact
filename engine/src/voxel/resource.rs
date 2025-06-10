@@ -15,7 +15,8 @@ use crate::{
         uniform::{self, UniformBufferable},
     },
     mesh::buffer::{
-        TriangleMeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
+        TriangleMeshVertexAttributeLocation, VertexBufferable,
+        create_vertex_buffer_layout_for_vertex,
     },
     voxel::{
         VoxelObjectID,

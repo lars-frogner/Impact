@@ -13,9 +13,9 @@ use std::fmt::Debug;
 
 /// A 3D mesh of triangles represented by vertices and indices.
 ///
-/// The vertices are unique, and they have associated positions and potentially
-/// other attributes. Each index refers to a vertex, and the sequence of indices
-/// describes the triangles making up the mesh faces.
+/// The vertices are typically unique, and they have associated positions and
+/// potentially other attributes. Each index refers to a vertex, and the
+/// sequence of indices describes the triangles making up the mesh faces.
 #[derive(Debug)]
 pub struct TriangleMesh<F: Float> {
     positions: Vec<VertexPosition<F>>,
@@ -48,15 +48,15 @@ impl<F: Float> TriangleMesh<F> {
 
         assert!(
             normal_vectors.is_empty() || normal_vectors.len() == n_vertices,
-            "Mismatching number of normal vectors and positions in mesh"
+            "Mismatching number of normal vectors and positions in triangle mesh"
         );
         assert!(
             texture_coords.is_empty() || texture_coords.len() == n_vertices,
-            "Mismatching number of texture coordinates and positions in mesh"
+            "Mismatching number of texture coordinates and positions in triangle mesh"
         );
         assert!(
             tangent_space_quaternions.is_empty() || tangent_space_quaternions.len() == n_vertices,
-            "Mismatching number of tangent space quaternions and positions in mesh"
+            "Mismatching number of tangent space quaternions and positions in triangle mesh"
         );
 
         Self {
@@ -193,7 +193,7 @@ impl<F: Float> TriangleMesh<F> {
         })
     }
 
-    /// Computes the axis-aligned boundtobjing box enclosing all vertices in the
+    /// Computes the axis-aligned bounding box enclosing all vertices in the
     /// mesh, or returns [`None`] if the mesh has no vertices.
     pub fn compute_aabb(&self) -> Option<AxisAlignedBox<F>> {
         if self.has_positions() {
@@ -528,7 +528,7 @@ impl<F: Float> TriangleMesh<F> {
         self.tangent_space_quaternion_change_tracker.reset();
     }
 
-    /// Forgets any recorded changes to the vertices.
+    /// Forgets any recorded changes to the indices.
     pub fn reset_index_change_tracking(&self) {
         self.index_change_tracker.reset();
     }
