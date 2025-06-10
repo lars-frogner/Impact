@@ -7,7 +7,9 @@ use crate::{
     camera::{SceneCamera, buffer::CameraGPUBufferManager},
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
     light::{LightStorage, buffer::LightGPUBufferManager},
-    mesh::{MeshID, buffer::TriangleMeshGPUBufferManager, triangle::TriangleMesh},
+    mesh::{
+        MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
+    },
     model::{InstanceFeatureManager, ModelID, buffer::InstanceFeatureGPUBufferManager},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
     voxel::{
@@ -52,7 +54,8 @@ pub struct RenderResourceManager {
 pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraGPUBufferManager>>,
     skybox_resource_manager: Box<Option<SkyboxGPUResourceManager>>,
-    triangle_mesh_buffer_managers: Box<TriangleMeshGPUBufferManagerMap>,
+    triangle_mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
+    line_segment_mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
     voxel_resource_managers: Box<(
         Option<VoxelMaterialGPUResourceManager>,
         VoxelObjectGPUBufferManagerMap,
@@ -68,7 +71,8 @@ pub struct SynchronizedRenderResources {
 struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
     skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
-    triangle_mesh_buffer_managers: Mutex<Box<TriangleMeshGPUBufferManagerMap>>,
+    triangle_mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
+    line_segment_mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
     voxel_resource_managers: Mutex<
         Box<(
             Option<VoxelMaterialGPUResourceManager>,
@@ -79,7 +83,7 @@ struct DesynchronizedRenderResources {
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
 
-type TriangleMeshGPUBufferManagerMap = HashMap<MeshID, TriangleMeshGPUBufferManager>;
+type MeshGPUBufferManagerMap = HashMap<MeshID, MeshGPUBufferManager>;
 type VoxelObjectGPUBufferManagerMap = HashMap<VoxelObjectID, VoxelObjectGPUBufferManager>;
 type InstanceFeatureGPUBufferManagerMap = HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>>;
 
@@ -175,8 +179,17 @@ impl SynchronizedRenderResources {
     pub fn get_triangle_mesh_buffer_manager(
         &self,
         mesh_id: MeshID,
-    ) -> Option<&TriangleMeshGPUBufferManager> {
+    ) -> Option<&MeshGPUBufferManager> {
         self.triangle_mesh_buffer_managers.get(&mesh_id)
+    }
+
+    /// Returns the GPU buffer manager for the given line segment mesh
+    /// identifier if the line segment mesh exists, otherwise returns [`None`].
+    pub fn get_line_segment_mesh_buffer_manager(
+        &self,
+        mesh_id: MeshID,
+    ) -> Option<&MeshGPUBufferManager> {
+        self.line_segment_mesh_buffer_managers.get(&mesh_id)
     }
 
     /// Returns the GPU resource manager for voxel materials, or [`None`] if it
@@ -226,6 +239,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(Box::new(None)),
             skybox_resource_manager: Mutex::new(Box::new(None)),
             triangle_mesh_buffer_managers: Mutex::new(Box::default()),
+            line_segment_mesh_buffer_managers: Mutex::new(Box::default()),
             voxel_resource_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
@@ -237,6 +251,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             skybox_resource_manager,
             triangle_mesh_buffer_managers,
+            line_segment_mesh_buffer_managers,
             voxel_resource_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
@@ -245,6 +260,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             skybox_resource_manager: Mutex::new(skybox_resource_manager),
             triangle_mesh_buffer_managers: Mutex::new(triangle_mesh_buffer_managers),
+            line_segment_mesh_buffer_managers: Mutex::new(line_segment_mesh_buffer_managers),
             voxel_resource_managers: Mutex::new(voxel_resource_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
@@ -256,6 +272,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             skybox_resource_manager,
             triangle_mesh_buffer_managers,
+            line_segment_mesh_buffer_managers,
             voxel_resource_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
@@ -264,6 +281,9 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
             skybox_resource_manager: skybox_resource_manager.into_inner().unwrap(),
             triangle_mesh_buffer_managers: triangle_mesh_buffer_managers.into_inner().unwrap(),
+            line_segment_mesh_buffer_managers: line_segment_mesh_buffer_managers
+                .into_inner()
+                .unwrap(),
             voxel_resource_managers: voxel_resource_managers.into_inner().unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
             instance_feature_buffer_managers: instance_feature_buffer_managers
@@ -321,27 +341,50 @@ impl DesynchronizedRenderResources {
         Ok(())
     }
 
-    /// Performs any required updates for keeping the given map
-    /// of mesh GPU buffers in sync with the given map of
-    /// meshes.
+    /// Performs any required updates for keeping the given map of triangle mesh
+    /// GPU buffers in sync with the given map of triangle meshes.
     ///
-    /// GPU buffers whose source data no longer
-    /// exists will be removed, and missing GPU buffers
-    /// for new source data will be created.
-    fn sync_mesh_buffers_with_meshes(
+    /// GPU buffers whose source data no longer exists will be removed, and
+    /// missing GPU buffers for new source data will be created.
+    fn sync_triangle_mesh_buffers_with_triangle_meshes(
         graphics_device: &GraphicsDevice,
-        mesh_gpu_buffers: &mut TriangleMeshGPUBufferManagerMap,
-        meshes: &HashMap<MeshID, TriangleMesh<f32>>,
+        triangle_mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
+        triangle_meshes: &HashMap<MeshID, TriangleMesh<f32>>,
     ) {
-        for (&mesh_id, mesh) in meshes {
-            mesh_gpu_buffers
+        for (&mesh_id, mesh) in triangle_meshes {
+            triangle_mesh_gpu_buffers
                 .entry(mesh_id)
-                .and_modify(|mesh_buffers| mesh_buffers.sync_with_mesh(graphics_device, mesh))
+                .and_modify(|mesh_buffers| {
+                    mesh_buffers.sync_with_triangle_mesh(graphics_device, mesh);
+                })
                 .or_insert_with(|| {
-                    TriangleMeshGPUBufferManager::for_mesh(graphics_device, mesh_id, mesh)
+                    MeshGPUBufferManager::for_triangle_mesh(graphics_device, mesh_id, mesh)
                 });
         }
-        Self::remove_unmatched_render_resources(mesh_gpu_buffers, meshes);
+        Self::remove_unmatched_render_resources(triangle_mesh_gpu_buffers, triangle_meshes);
+    }
+
+    /// Performs any required updates for keeping the given map of line segment
+    /// mesh GPU buffers in sync with the given map of line segment meshes.
+    ///
+    /// GPU buffers whose source data no longer exists will be removed, and
+    /// missing GPU buffers for new source data will be created.
+    fn sync_line_segment_mesh_buffers_with_line_segment_meshes(
+        graphics_device: &GraphicsDevice,
+        line_segment_mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
+        line_segment_meshes: &HashMap<MeshID, LineSegmentMesh<f32>>,
+    ) {
+        for (&mesh_id, mesh) in line_segment_meshes {
+            line_segment_mesh_gpu_buffers
+                .entry(mesh_id)
+                .and_modify(|mesh_buffers| {
+                    mesh_buffers.sync_with_line_segment_mesh(graphics_device, mesh);
+                })
+                .or_insert_with(|| {
+                    MeshGPUBufferManager::for_line_segment_mesh(graphics_device, mesh_id, mesh)
+                });
+        }
+        Self::remove_unmatched_render_resources(line_segment_mesh_gpu_buffers, line_segment_meshes);
     }
 
     /// Performs any required updates for keeping the given voxel GPU resources

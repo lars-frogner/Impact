@@ -87,7 +87,7 @@ define_task!(
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_mesh_buffers_with_meshes(
+                DesynchronizedRenderResources::sync_triangle_mesh_buffers_with_triangle_meshes(
                     renderer.graphics_device(),
                     render_resource_manager
                         .desynchronized()
@@ -103,6 +103,23 @@ define_task!(
                         .read()
                         .unwrap()
                         .triangle_meshes(),
+                );
+                DesynchronizedRenderResources::sync_line_segment_mesh_buffers_with_line_segment_meshes(
+                    renderer.graphics_device(),
+                    render_resource_manager
+                        .desynchronized()
+                        .line_segment_mesh_buffer_managers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    engine
+                        .scene()
+                        .read()
+                        .unwrap()
+                        .mesh_repository()
+                        .read()
+                        .unwrap()
+                        .line_segment_meshes(),
                 );
             }
             Ok(())

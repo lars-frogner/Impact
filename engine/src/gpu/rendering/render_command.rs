@@ -801,8 +801,10 @@ impl DepthPrepass {
             render_pass.set_vertex_buffer(1, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             render_pass.draw_indexed(
@@ -1272,8 +1274,10 @@ impl GeometryPass {
                 }
 
                 render_pass.set_index_buffer(
-                    mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                    mesh_buffer_manager.index_format(),
+                    mesh_buffer_manager
+                        .triangle_mesh_index_gpu_buffer()
+                        .valid_buffer_slice(),
+                    mesh_buffer_manager.triangle_mesh_index_format(),
                 );
 
                 render_pass.draw_indexed(
@@ -1627,8 +1631,10 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                     render_pass.set_vertex_buffer(1, position_buffer.valid_buffer_slice());
 
                     render_pass.set_index_buffer(
-                        mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                        mesh_buffer_manager.index_format(),
+                        mesh_buffer_manager
+                            .triangle_mesh_index_gpu_buffer()
+                            .valid_buffer_slice(),
+                        mesh_buffer_manager.triangle_mesh_index_format(),
                     );
 
                     render_pass.draw_indexed(
@@ -1988,8 +1994,10 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                     render_pass.set_vertex_buffer(1, position_buffer.valid_buffer_slice());
 
                     render_pass.set_index_buffer(
-                        mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                        mesh_buffer_manager.index_format(),
+                        mesh_buffer_manager
+                            .triangle_mesh_index_gpu_buffer()
+                            .valid_buffer_slice(),
+                        mesh_buffer_manager.triangle_mesh_index_format(),
                     );
 
                     render_pass.draw_indexed(
@@ -2296,8 +2304,10 @@ impl AmbientLightPass {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-            mesh_buffer_manager.index_format(),
+            mesh_buffer_manager
+                .triangle_mesh_index_gpu_buffer()
+                .valid_buffer_slice(),
+            mesh_buffer_manager.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(
@@ -2662,8 +2672,10 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
@@ -2709,8 +2721,10 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
@@ -2777,8 +2791,10 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
@@ -2824,8 +2840,10 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-                mesh_buffer_manager.index_format(),
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
             );
 
             let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
@@ -3386,8 +3404,10 @@ impl SkyboxPass {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-            mesh_buffer_manager.index_format(),
+            mesh_buffer_manager
+                .triangle_mesh_index_gpu_buffer()
+                .valid_buffer_slice(),
+            mesh_buffer_manager.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(
@@ -3738,8 +3758,10 @@ impl PostprocessingRenderPass {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
-            mesh_buffer_manager.index_format(),
+            mesh_buffer_manager
+                .triangle_mesh_index_gpu_buffer()
+                .valid_buffer_slice(),
+            mesh_buffer_manager.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(

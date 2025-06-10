@@ -7,8 +7,8 @@ use crate::{
     },
     mesh::{
         MeshID, N_VERTEX_ATTRIBUTES, TriangleMesh, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute,
-        VertexAttributeSet, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
-        VertexTextureCoords,
+        VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
+        VertexTangentSpaceQuaternion, VertexTextureCoords, line_segment::LineSegmentMesh,
     },
 };
 use anyhow::{Result, anyhow};
@@ -36,14 +36,15 @@ impl IndexBufferable for u32 {
     const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
 }
 
-/// Owner and manager of GPU buffers for triangle mesh geometry.
+/// Owner and manager of GPU buffers for triangle or line segment meshes.
 #[derive(Debug)]
-pub struct TriangleMeshGPUBufferManager {
+pub struct MeshGPUBufferManager {
     available_attributes: VertexAttributeSet,
     vertex_buffers: [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
     vertex_buffer_layouts: [Option<wgpu::VertexBufferLayout<'static>>; N_VERTEX_ATTRIBUTES],
-    index_buffer: GPUBuffer,
-    index_format: wgpu::IndexFormat,
+    index_buffer: Option<GPUBuffer>,
+    index_format: Option<wgpu::IndexFormat>,
+    n_vertices: usize,
     n_indices: usize,
     mesh_id: MeshID,
 }
@@ -60,27 +61,37 @@ pub enum TriangleMeshVertexAttributeLocation {
     TangentSpaceQuaternion = (MESH_VERTEX_BINDING_START + 3),
 }
 
-impl TriangleMeshGPUBufferManager {
-    /// Creates a new manager with GPU buffers initialized
-    /// from the given triangle mesh.
-    pub fn for_mesh(
+/// Binding location of a specific type of line segment mesh vertex attribute.
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LineSegmentMeshVertexAttributeLocation {
+    Position = MESH_VERTEX_BINDING_START,
+    Color = (MESH_VERTEX_BINDING_START + 4),
+}
+
+impl MeshGPUBufferManager {
+    /// Creates a new manager with GPU buffers initialized from the given
+    /// triangle mesh.
+    pub fn for_triangle_mesh(
         graphics_device: &GraphicsDevice,
         mesh_id: MeshID,
         mesh: &TriangleMesh<f32>,
     ) -> Self {
         assert!(
             mesh.has_indices(),
-            "Tried to create GPU buffer manager for mesh with no indices"
+            "Tried to create GPU buffer manager for triangle mesh with no indices"
         );
 
         let mut available_attributes = VertexAttributeSet::empty();
-        let mut vertex_buffers = [None, None, None, None];
-        let mut vertex_buffer_layouts = [None, None, None, None];
+        let mut vertex_buffers = [None, None, None, None, None];
+        let mut vertex_buffer_layouts = [None, None, None, None, None];
 
         let indices = mesh.indices();
-        let n_indices = indices.len();
         let (index_format, index_buffer) =
             Self::create_index_buffer(graphics_device, mesh_id, indices);
+
+        let n_vertices = mesh.n_vertices();
+        let n_indices = indices.len();
 
         Self::add_vertex_attribute_if_available(
             graphics_device,
@@ -119,15 +130,60 @@ impl TriangleMeshGPUBufferManager {
             available_attributes,
             vertex_buffers,
             vertex_buffer_layouts,
-            index_buffer,
-            index_format,
+            index_buffer: Some(index_buffer),
+            index_format: Some(index_format),
+            n_vertices,
             n_indices,
             mesh_id,
         }
     }
 
+    /// Creates a new manager with GPU buffers initialized from the given
+    /// line segment mesh.
+    pub fn for_line_segment_mesh(
+        graphics_device: &GraphicsDevice,
+        mesh_id: MeshID,
+        mesh: &LineSegmentMesh<f32>,
+    ) -> Self {
+        let mut available_attributes = VertexAttributeSet::empty();
+        let mut vertex_buffers = [None, None, None, None, None];
+        let mut vertex_buffer_layouts = [None, None, None, None, None];
+
+        Self::add_vertex_attribute_if_available(
+            graphics_device,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            mesh_id,
+            mesh.positions(),
+        );
+        Self::add_vertex_attribute_if_available(
+            graphics_device,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            mesh_id,
+            mesh.colors(),
+        );
+
+        Self {
+            available_attributes,
+            vertex_buffers,
+            vertex_buffer_layouts,
+            index_buffer: None,
+            index_format: None,
+            n_vertices: mesh.n_vertices(),
+            n_indices: 0,
+            mesh_id,
+        }
+    }
+
     /// Ensures that the GPU buffers are in sync with the given triangle mesh.
-    pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<f32>) {
+    pub fn sync_with_triangle_mesh(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        mesh: &TriangleMesh<f32>,
+    ) {
         self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
         self.sync_vertex_buffer(
             graphics_device,
@@ -147,6 +203,18 @@ impl TriangleMeshGPUBufferManager {
 
         self.sync_index_buffer(graphics_device, mesh.indices(), mesh.index_change());
 
+        mesh.reset_change_tracking();
+    }
+
+    /// Ensures that the GPU buffers are in sync with the given line segment
+    /// mesh.
+    pub fn sync_with_line_segment_mesh(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        mesh: &LineSegmentMesh<f32>,
+    ) {
+        self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
+        self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
         mesh.reset_change_tracking();
     }
 
@@ -233,14 +301,30 @@ impl TriangleMeshGPUBufferManager {
         self.request_vertex_gpu_buffers(requested_attributes | VertexAttributeSet::POSITION)
     }
 
-    /// Returns the GPU buffer of indices.
-    pub fn index_gpu_buffer(&self) -> &GPUBuffer {
-        &self.index_buffer
+    /// Returns the GPU buffer of indices, assuming this is for a triangle mesh,
+    /// which will always have an index buffer.
+    ///
+    /// # Panics
+    /// If there is no index buffer.
+    pub fn triangle_mesh_index_gpu_buffer(&self) -> &GPUBuffer {
+        self.index_buffer
+            .as_ref()
+            .expect("Triangle meshes should have an index buffer")
     }
 
-    /// Returns the format of the indices in the index buffer.
-    pub fn index_format(&self) -> wgpu::IndexFormat {
+    /// Returns the format of the indices in the index buffer, assuming this is
+    /// for a triangle mesh, which will always have an index buffer.
+    ///
+    /// # Panics
+    /// If there is no index format.
+    pub fn triangle_mesh_index_format(&self) -> wgpu::IndexFormat {
         self.index_format
+            .expect("Triangle meshes should have an index buffer")
+    }
+
+    /// Returns the number of vertices in the vertex buffers.
+    pub fn n_vertices(&self) -> usize {
+        self.n_vertices
     }
 
     /// Returns the number of indices in the index buffer.
@@ -338,6 +422,8 @@ impl TriangleMeshGPUBufferManager {
                     data,
                 );
             }
+
+            self.n_vertices = data.len();
         }
     }
 
@@ -350,19 +436,28 @@ impl TriangleMeshGPUBufferManager {
         I: IndexBufferable,
     {
         if index_change != CollectionChange::None {
-            let index_bytes = bytemuck::cast_slice(indices);
+            if indices.is_empty() {
+                self.index_buffer = None;
+                self.index_format = None;
+            } else if let Some(index_buffer) = &mut self.index_buffer {
+                let index_bytes = bytemuck::cast_slice(indices);
 
-            if index_bytes.len() > self.index_buffer.buffer_size() {
-                // If the new number of indices exceeds the size of the existing buffer,
-                // we create a new one that is large enough
-                self.index_buffer = GPUBuffer::new_full_index_buffer(
-                    graphics_device,
-                    indices,
-                    self.index_buffer.label().clone(),
-                );
+                if index_bytes.len() > index_buffer.buffer_size() {
+                    // If the new number of indices exceeds the size of the existing buffer,
+                    // we create a new one that is large enough
+                    *index_buffer = GPUBuffer::new_full_index_buffer(
+                        graphics_device,
+                        indices,
+                        index_buffer.label().clone(),
+                    );
+                } else {
+                    index_buffer.update_valid_bytes(graphics_device, index_bytes);
+                }
             } else {
-                self.index_buffer
-                    .update_valid_bytes(graphics_device, index_bytes);
+                let (index_format, index_buffer) =
+                    Self::create_index_buffer(graphics_device, self.mesh_id, indices);
+                self.index_buffer = Some(index_buffer);
+                self.index_format = Some(index_format);
             }
 
             self.n_indices = indices.len();
@@ -591,6 +686,13 @@ impl VertexBufferable for VertexTangentSpaceQuaternion<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             TriangleMeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
+        ]);
+}
+
+impl VertexBufferable for VertexColor<f32> {
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+            LineSegmentMeshVertexAttributeLocation::Color as u32 => Float32x4,
         ]);
 }
 
