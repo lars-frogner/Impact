@@ -3,7 +3,7 @@
 use crate::{
     define_task,
     engine::{Engine, tasks::EngineTaskScheduler},
-    gizmo::{self, GizmoSet},
+    gizmo::{self, GizmoSet, GizmoType},
     gpu::rendering::tasks::RenderingTag,
     scene::tasks::{BufferVisibleModelInstances, ClearModelInstanceBuffers},
 };
@@ -25,11 +25,14 @@ define_task!(
 
             let ecs_world = engine.ecs_world().read().unwrap();
 
-            if gizmo_manager.global_visibility_changed_for_any_of_gizmos(GizmoSet::REFERENCE_FRAME_AXES) {
-                gizmo::systems::update_visibility_flags_for_reference_frame_gizmo(
-                    &ecs_world,
-                    &gizmo_manager,
-                );
+            for gizmo in GizmoType::all() {
+                if gizmo_manager.global_visibility_changed_for_any_of_gizmos(gizmo.as_set()) {
+                    gizmo::systems::update_visibility_flags_for_gizmo(
+                        &ecs_world,
+                        &gizmo_manager,
+                        gizmo,
+                    );
+                }
             }
             gizmo_manager.declare_visibilities_synchronized();
             Ok(())
@@ -56,7 +59,7 @@ define_task!(
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
 
-            gizmo::systems::buffer_transforms_for_reference_frame_gizmos(
+            gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
                 &mut instance_feature_manager,
                 &scene_graph,

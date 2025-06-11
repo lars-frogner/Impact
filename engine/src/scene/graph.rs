@@ -1363,7 +1363,7 @@ impl<F: Float> ModelInstanceNode<F> {
 
     /// Returns the bounding sphere of the model instance, or [`None`] if it has
     /// no bounding sphere.
-    fn get_model_bounding_sphere(&self) -> Option<&Sphere<F>> {
+    pub fn get_model_bounding_sphere(&self) -> Option<&Sphere<F>> {
         self.model_bounding_sphere.as_ref()
     }
 

@@ -1,7 +1,7 @@
 //! Management of gizmo visibility for entities.
 
 use crate::{
-    gizmo::{GizmoManager, GizmoSet, GizmoVisibility, components::GizmosComp},
+    gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp},
     physics::motion::components::ReferenceFrameComp,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -19,14 +19,16 @@ pub fn setup_gizmos_for_new_entity(
             let mut visible_gizmos =
                 gizmos.map_or_else(GizmoSet::empty, |gizmos| gizmos.visible_gizmos);
 
-            match gizmo_manager.config().reference_frame_visibility {
-                GizmoVisibility::Hidden => {
-                    visible_gizmos.remove(GizmoSet::REFERENCE_FRAME_AXES);
+            for gizmo in GizmoType::all() {
+                match gizmo_manager.config().visibility(gizmo) {
+                    GizmoVisibility::Hidden => {
+                        visible_gizmos.remove(gizmo.as_set());
+                    }
+                    GizmoVisibility::VisibleForAll => {
+                        visible_gizmos.insert(gizmo.as_set());
+                    }
+                    GizmoVisibility::VisibleForSelected => {}
                 }
-                GizmoVisibility::VisibleForAll => {
-                    visible_gizmos.insert(GizmoSet::REFERENCE_FRAME_AXES);
-                }
-                GizmoVisibility::VisibleForSelected => {}
             }
 
             GizmosComp { visible_gizmos }
