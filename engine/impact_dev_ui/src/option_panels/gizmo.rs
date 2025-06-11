@@ -1,23 +1,10 @@
-use super::{option_checkbox, option_group, option_panel};
+use super::{LabelAndHoverText, option_checkbox, option_group, option_panel};
 use crate::UserInterfaceConfig;
 use impact::{
     egui::{Context, Ui},
     engine::Engine,
-    gizmo::{GizmoManager, GizmoVisibility},
+    gizmo::{GizmoManager, GizmoType, GizmoVisibility},
 };
-
-mod docs {
-    use crate::option_panels::LabelAndHoverText;
-
-    pub const REFERENCE_FRAME_VISIBLE: LabelAndHoverText = LabelAndHoverText {
-        label: "Reference frame axes",
-        hover_text: "\
-            When enabled, a red, green and blue line segment representing the x- y- \
-            and z-axis (respectively) of the local reference frame will be shown \
-            atop applicable entities. The lines are of unit length in the local \
-            reference frame.",
-    };
-}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GizmoOptionPanel;
@@ -35,22 +22,30 @@ impl GizmoOptionPanel {
 }
 
 fn gizmo_options(ui: &mut Ui, gizmo_manager: &mut GizmoManager) {
-    let mut reference_frames_visible = gizmo_manager
-        .config()
-        .reference_frame_visibility
-        .is_visible_for_all();
+    for gizmo in GizmoType::all() {
+        let mut visible = gizmo_manager
+            .config()
+            .visibility(gizmo)
+            .is_visible_for_all();
 
-    if option_checkbox(
-        ui,
-        &mut reference_frames_visible,
-        docs::REFERENCE_FRAME_VISIBLE,
-    )
-    .changed()
-    {
-        gizmo_manager.set_visibility_for_reference_frame_gizmo(if reference_frames_visible {
-            GizmoVisibility::VisibleForAll
-        } else {
-            GizmoVisibility::Hidden
-        });
+        if option_checkbox(
+            ui,
+            &mut visible,
+            LabelAndHoverText {
+                label: gizmo.label(),
+                hover_text: gizmo.description(),
+            },
+        )
+        .changed()
+        {
+            gizmo_manager.set_visibility_for_gizmo(
+                gizmo,
+                if visible {
+                    GizmoVisibility::VisibleForAll
+                } else {
+                    GizmoVisibility::Hidden
+                },
+            );
+        }
     }
 }

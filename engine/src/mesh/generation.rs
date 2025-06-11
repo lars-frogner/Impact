@@ -1,9 +1,9 @@
 //! Generation of meshes representing geometrical objects.
 
-use crate::mesh::{FrontFaceSide, LineSegmentMesh, TriangleMesh};
+use crate::mesh::{FrontFaceSide, LineSegmentMesh, TriangleMesh, VertexColor};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::Float;
-use nalgebra::{UnitVector3, Vector3, vector};
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
@@ -17,15 +17,6 @@ macro_rules! pos {
 macro_rules! normal {
     ($normal:expr) => {
         $crate::mesh::VertexNormalVector($normal)
-    };
-}
-
-macro_rules! color {
-    [$r:expr, $g:expr, $b:expr, $a:expr] => {
-        $crate::mesh::VertexColor(nalgebra::vector![$r, $g, $b, $a])
-    };
-    ($color:expr) => {
-        $crate::mesh::VertexColor($color)
     };
 }
 
@@ -681,14 +672,77 @@ impl<F: Float> LineSegmentMesh<F> {
         ];
 
         let colors = vec![
-            color![F::ONE, F::ZERO, F::ZERO, F::ONE],
-            color![F::ONE, F::ZERO, F::ZERO, F::ONE],
-            color![F::ZERO, F::ONE, F::ZERO, F::ONE],
-            color![F::ZERO, F::ONE, F::ZERO, F::ONE],
-            color![F::ZERO, F::ZERO, F::ONE, F::ONE],
-            color![F::ZERO, F::ZERO, F::ONE, F::ONE],
+            VertexColor::RED,
+            VertexColor::RED,
+            VertexColor::GREEN,
+            VertexColor::GREEN,
+            VertexColor::BLUE,
+            VertexColor::BLUE,
         ];
 
         Self::new(positions, colors)
+    }
+
+    /// Creates a mesh containing the three circles formed by the intersection
+    /// of the three Cartesian coordinate planes with the unit radius circle
+    /// centered on the origin. Each circle will consist of the given number of
+    /// line segments. If provided, a color will be applied to all three
+    /// circles.
+    pub fn create_unit_sphere_great_circles(
+        n_circumference_segments: usize,
+        color: Option<VertexColor<F>>,
+    ) -> Self {
+        let xz_circle = Self::create_horizontal_unit_circle(n_circumference_segments);
+
+        let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
+        xy_circle.rotate(&UnitQuaternion::from_axis_angle(
+            &Vector3::x_axis(),
+            <F as Float>::FRAC_PI_2,
+        ));
+
+        let mut yz_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
+        yz_circle.rotate(&UnitQuaternion::from_axis_angle(
+            &Vector3::z_axis(),
+            <F as Float>::FRAC_PI_2,
+        ));
+
+        let mut sphere = xz_circle;
+        sphere.merge_with(&xy_circle);
+        sphere.merge_with(&yz_circle);
+
+        if let Some(color) = color {
+            sphere.set_same_color(color);
+        }
+
+        sphere
+    }
+
+    /// Creates a mesh corresponding to a unit radius circle centered on the
+    /// origin in the xz-plane, with the given number of line segment.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_horizontal_unit_circle(n_segments: usize) -> Self {
+        let mut positions = Vec::with_capacity(2 * n_segments);
+
+        let angle_between_vertices = F::TWO_PI / F::from_usize(n_segments).unwrap();
+
+        positions.push(pos![F::ONE, F::ZERO, F::ZERO]);
+
+        let mut polar_angle = angle_between_vertices;
+
+        for _ in 1..n_segments {
+            let cos_polar_angle = F::cos(polar_angle);
+            let sin_polar_angle = F::sin(polar_angle);
+
+            let position = pos![cos_polar_angle, F::ZERO, sin_polar_angle];
+            positions.push(position);
+            positions.push(position);
+
+            polar_angle += angle_between_vertices;
+        }
+
+        positions.push(positions[0]);
+
+        Self::new(positions, Vec::new())
     }
 }

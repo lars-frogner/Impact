@@ -88,6 +88,16 @@ impl InstanceModelViewTransform {
     }
 }
 
+impl From<Similarity3<f32>> for InstanceModelViewTransform {
+    fn from(transform: Similarity3<f32>) -> Self {
+        InstanceModelViewTransform {
+            rotation: transform.isometry.rotation,
+            translation: transform.isometry.translation.vector,
+            scaling: transform.scaling(),
+        }
+    }
+}
+
 impl From<InstanceModelViewTransform> for Similarity3<f32> {
     fn from(transform: InstanceModelViewTransform) -> Self {
         let InstanceModelViewTransform {
