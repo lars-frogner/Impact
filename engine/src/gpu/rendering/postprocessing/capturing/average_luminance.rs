@@ -7,7 +7,8 @@ use crate::{
         compute::ComputePass,
         query::TimestampQueryRegistry,
         rendering::{
-            postprocessing::Postprocessor, render_command::StorageBufferResultCopyCommand,
+            postprocessing::Postprocessor,
+            render_command::storage_buffer_result_copy_command::StorageBufferResultCopyCommand,
             surface::RenderingSurface,
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},

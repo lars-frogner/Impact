@@ -7,9 +7,12 @@ use crate::{
         query::TimestampQueryRegistry,
         rendering::{
             render_command::{
-                RenderAttachmentTextureCopyCommand, additive_blend_state,
-                create_postprocessing_render_pipeline,
-                create_postprocessing_render_pipeline_layout,
+                additive_blend_state,
+                postprocessing_pass::{
+                    create_postprocessing_render_pipeline,
+                    create_postprocessing_render_pipeline_layout,
+                },
+                render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
             },
             resource::SynchronizedRenderResources,
         },
