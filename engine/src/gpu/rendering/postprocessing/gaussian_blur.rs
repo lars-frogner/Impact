@@ -4,7 +4,10 @@ use crate::{
     assert_uniform_valid,
     gpu::{
         GraphicsDevice,
-        rendering::{render_command::PostprocessingRenderPass, surface::RenderingSurface},
+        rendering::{
+            render_command::postprocessing_pass::PostprocessingRenderPass,
+            surface::RenderingSurface,
+        },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{ShaderManager, template::gaussian_blur::GaussianBlurShaderTemplate},
         texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},

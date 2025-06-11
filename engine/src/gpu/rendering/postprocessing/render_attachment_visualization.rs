@@ -4,7 +4,8 @@ use crate::gpu::{
     GraphicsDevice,
     query::TimestampQueryRegistry,
     rendering::{
-        postprocessing::Postprocessor, render_command::PostprocessingRenderPass,
+        postprocessing::Postprocessor,
+        render_command::postprocessing_pass::PostprocessingRenderPass,
         resource::SynchronizedRenderResources, surface::RenderingSurface,
     },
     resource_group::GPUResourceGroupManager,

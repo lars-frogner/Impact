@@ -14,7 +14,10 @@ use crate::{
         query::TimestampQueryRegistry,
         rendering::{
             postprocessing::Postprocessor,
-            render_command::{PostprocessingRenderPass, RenderAttachmentTextureCopyCommand},
+            render_command::{
+                postprocessing_pass::PostprocessingRenderPass,
+                render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
+            },
             resource::SynchronizedRenderResources,
             surface::RenderingSurface,
         },

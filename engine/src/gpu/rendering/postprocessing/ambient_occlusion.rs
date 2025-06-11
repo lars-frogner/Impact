@@ -7,7 +7,7 @@ use crate::{
         query::TimestampQueryRegistry,
         rendering::{
             postprocessing::Postprocessor,
-            render_command::{PostprocessingRenderPass, StencilValue},
+            render_command::{StencilValue, postprocessing_pass::PostprocessingRenderPass},
             resource::SynchronizedRenderResources,
             surface::RenderingSurface,
         },
