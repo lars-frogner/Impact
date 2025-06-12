@@ -11,11 +11,11 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
-arbitrary = { version = "1.4", features = ["derive"], optional = true }
+arbitrary = { workspace = true, optional = true }
 egui_extras = "0.31"
 inventory = { workspace = true, optional = true }
 impact = { path = ".." }
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true }
 
 impact_math = { path = "../impact_math" }
 roc_integration = { path = "../../roc_integration" }

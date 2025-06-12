@@ -10,7 +10,7 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
-approx = "0.5"
+approx = { workspace = true }
 bytemuck = { workspace = true }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
