@@ -228,12 +228,14 @@ impl<F: Float> TriangleMesh<F> {
         }
     }
 
-    /// Computes the smallest sphere enclosing all vertices in the mesh, or
-    /// returns [`None`] if the mesh has no vertices.
+    /// Finds a sphere enclosing all vertices in the mesh, or returns [`None`]
+    /// if the mesh has no vertices.
     pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
-        self.compute_aabb()
-            .as_ref()
-            .map(Sphere::bounding_sphere_from_aabb)
+        if self.has_positions() {
+            Some(Sphere::bounding_sphere_for_points(self.positions()))
+        } else {
+            None
+        }
     }
 
     /// Computes new vertex normal vectors for the mesh. Each vertex normal
