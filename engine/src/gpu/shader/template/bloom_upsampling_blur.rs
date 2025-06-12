@@ -67,7 +67,7 @@ impl SpecificShaderTemplate for BloomUpsamplingBlurShaderTemplate {
 mod tests {
     use crate::gpu::shader::ShaderID;
 
-    use super::super::tests::validate_template;
+    use super::super::validate_template;
     use super::*;
 
     #[test]

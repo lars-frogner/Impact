@@ -467,35 +467,39 @@ fn is_valid_identifier(identifier: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(unreachable_code, unused)]
+pub fn validate_template(template: &impl SpecificShaderTemplate) {
+    // Skip validation when using `miri` since `wgsl::parse_str` and `regex`
+    // is too slow
+    #[cfg(miri)]
+    return;
+
+    let source = template.resolve();
+
+    println!("{}\n", &source);
+    let module = naga::front::wgsl::parse_str(&source).expect("Parsing resolved template failed");
+    validate_module(&module);
+}
+
+#[cfg(test)]
+#[allow(clippy::dbg_macro)]
+fn validate_module(module: &naga::Module) {
+    let mut validator = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    );
+    if let Err(err) = validator.validate(module) {
+        dbg!(module);
+        eprintln!("{}", err.emit_to_string("test"));
+        panic!("Shader validation failed");
+    }
+}
+
+// `regex` gets very slow under `miri`
+#[cfg(not(miri))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use naga::{
-        Module,
-        front::wgsl,
-        valid::{Capabilities, ValidationFlags, Validator},
-    };
-
-    pub fn validate_template(template: &impl SpecificShaderTemplate) {
-        let source = template.resolve();
-
-        // Skip validation when using `miri` since `wgsl::parse_str` is too slow
-        #[cfg(miri)]
-        return;
-
-        println!("{}\n", &source);
-        let module = wgsl::parse_str(&source).expect("Parsing resolved template failed");
-        validate_module(&module);
-    }
-
-    #[allow(clippy::dbg_macro)]
-    fn validate_module(module: &Module) {
-        let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-        if let Err(err) = validator.validate(module) {
-            dbg!(module);
-            eprintln!("{}", err.emit_to_string("test"));
-            panic!("Shader validation failed");
-        }
-    }
 
     #[test]
     fn should_find_no_flags_for_empty_template() {
