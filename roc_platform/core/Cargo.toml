@@ -4,6 +4,7 @@ members = ["roc_io_error"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 
 [workspace.lints.rust]
 future_incompatible = "warn"
@@ -17,6 +18,10 @@ too_many_arguments = "allow"
 let_and_return = "allow"
 multiple_bound_locations = "allow"
 too_long_first_doc_paragrap = "allow"
+
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
+cargo_common_metadata = "allow"
 
 await_holding_lock = "warn"
 box_collection = "warn"
@@ -95,8 +100,10 @@ roc_std = { git = "https://github.com/roc-lang/roc.git" }
 
 [package]
 name = "roc_platform_core"
+description = "Core platform funtionality for Roc integration with the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [lib]
 crate-type = ["rlib"]

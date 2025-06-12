@@ -1,7 +1,9 @@
 [package]
 name = "impact_ecs"
+description = "Entity-Component-System library for the Impact game engine"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]

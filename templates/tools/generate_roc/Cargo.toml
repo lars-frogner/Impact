@@ -1,5 +1,6 @@
 [package]
 name = "generate_roc"
+description = "Template code generation tool for creating Roc language bindings"
 version = "0.1.0"
 edition = "2024"
 

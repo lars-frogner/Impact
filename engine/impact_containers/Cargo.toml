@@ -1,7 +1,9 @@
 [package]
 name = "impact_containers"
+description = "Container data structures for the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [features]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]

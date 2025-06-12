@@ -1,5 +1,6 @@
 [package]
 name = "generate_roc"
+description = "Code generation tool for Roc language bindings in the basic Impact application"
 version = "0.1.0"
 edition = "2024"
 

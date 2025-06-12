@@ -1,7 +1,9 @@
 [package]
 name = "impact_profiling"
+description = "Performance profiling utilities for the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
 criterion = { version = "0.5.1" }
