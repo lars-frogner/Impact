@@ -7,12 +7,12 @@ use crate::{
     light::MAX_SHADOW_MAP_CASCADES,
 };
 use anyhow::{Result, anyhow};
-use chrono::Utc;
 use impact_geometry::CubemapFace;
 use std::sync::{
     RwLock,
     atomic::{AtomicBool, Ordering},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Helper for capturing screenshots and related textures.
 #[derive(Debug)]
@@ -80,7 +80,13 @@ impl ScreenCapturer {
                 0,
                 0,
                 true,
-                format!("screenshot_{}.png", Utc::now().to_rfc3339()),
+                format!(
+                    "screenshot_{}.png",
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                ),
             )?;
         }
 
@@ -121,7 +127,10 @@ impl ScreenCapturer {
                                 "omnidirectional_light_{}_shadow_map_{:?}_{}.png",
                                 light_idx,
                                 face,
-                                Utc::now().to_rfc3339(),
+                                SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
                             ),
                         )?;
                     }
@@ -169,7 +178,10 @@ impl ScreenCapturer {
                                 "unidirectional_light_{}_shadow_map_{}_{}.png",
                                 light_idx,
                                 cascade_idx,
-                                Utc::now().to_rfc3339(),
+                                SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
                             ),
                         )?;
                     }
