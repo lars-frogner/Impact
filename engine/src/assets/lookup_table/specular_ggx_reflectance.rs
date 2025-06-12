@@ -50,7 +50,7 @@ pub(super) fn load_lookup_table_into_assets(assets: &mut Assets) -> Result<()> {
     let file_path = assets
         .lookup_table_dir()
         .join(TEXTURE_NAME)
-        .with_extension("mpk");
+        .with_extension("bc");
 
     assets.load_texture_from_stored_or_computed_lookup_table(
         TEXTURE_NAME,
