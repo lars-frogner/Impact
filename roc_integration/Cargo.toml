@@ -118,10 +118,10 @@ roc_codegen = [
 anyhow = "1.0"
 bitflags = { version = "2.6", optional = true }
 blake3 = { version = "1.8", optional = true }
-bytemuck = { version = "1.22", features = ["derive"] }
+bytemuck = { version = "1.23", features = ["derive"] }
 chrono = { version = "0.4", optional = true }
 clap = { version = "4.5", features = ["derive"], optional = true }
-const-fnv1a-hash = { version = "1.1" }
+const-fnv1a-hash = "1.1"
 inventory = { version = "0.3", optional = true }
 nalgebra = { version = "0.33", features = ["bytemuck"] }
 rustc-hash = "2.1"

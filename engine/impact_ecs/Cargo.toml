@@ -13,7 +13,7 @@ roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
-arbitrary = { version = "1.3", features = ["derive"], optional = true }
+arbitrary = { version = "1.4", features = ["derive"], optional = true }
 bytemuck = { workspace = true }
 clap = { version = "4.5", features = ["derive"], optional = true }
 const-fnv1a-hash = { workspace = true }
