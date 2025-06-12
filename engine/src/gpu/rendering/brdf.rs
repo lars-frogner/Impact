@@ -4,6 +4,7 @@
 
 use crate::gpu::texture::{DepthOrArrayLayers, TextureLookupTable};
 use impact_math::Float;
+use log::info;
 use std::num::NonZeroU32;
 
 /// Creates two tables of the specular GGX microfacet BRDF reflectance values
@@ -23,6 +24,8 @@ pub fn create_specular_ggx_reflectance_lookup_tables(
     num_v_dot_n_samples: usize,
     num_roughness_samples: usize,
 ) -> TextureLookupTable<f32> {
+    info!("Computing lookup table for specular GGX reflectance");
+
     const MIN_ROUGHNESS: f32 = 0.05;
 
     assert!(num_v_dot_n_samples > 1);

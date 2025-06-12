@@ -13,6 +13,7 @@ use crate::{
 };
 use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use log::info;
 use std::{path::PathBuf, sync::RwLock};
 
 /// Checks if the entity-to-be with the given components has the components
@@ -30,6 +31,8 @@ pub fn setup_drag_load_map_for_new_entity(
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,
     ) -> Result<DragLoadMap<f32>> {
+        info!("Generating drag load map for mesh: {mesh_id}");
+
         let center_of_mass = rigid_body.0.inertial_properties().center_of_mass();
 
         let mesh_repository = mesh_repository.read().unwrap();
