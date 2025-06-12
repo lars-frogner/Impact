@@ -318,6 +318,7 @@ impl RenderCommandManager {
         self.gizmo_pass.record(
             surface_texture_view,
             render_resources,
+            render_attachment_texture_manager,
             timestamp_recorder,
             command_encoder,
         )?;
@@ -432,6 +433,16 @@ pub fn create_line_list_render_pipeline(
         cache: None,
         label: Some(label),
     })
+}
+
+pub fn depth_stencil_state_for_depth_test_without_write() -> wgpu::DepthStencilState {
+    wgpu::DepthStencilState {
+        format: RenderAttachmentQuantity::depth_texture_format(),
+        depth_write_enabled: false,
+        depth_compare: wgpu::CompareFunction::Less,
+        stencil: wgpu::StencilState::default(),
+        bias: wgpu::DepthBiasState::default(),
+    }
 }
 
 pub fn depth_stencil_state_for_depth_stencil_write() -> wgpu::DepthStencilState {

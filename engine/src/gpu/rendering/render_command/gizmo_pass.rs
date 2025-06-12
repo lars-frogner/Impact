@@ -11,6 +11,7 @@ use crate::{
             surface::RenderingSurface,
         },
         shader::{ShaderManager, template::line::LineShaderTemplate},
+        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     },
     mesh::{VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable},
     model::{InstanceFeature, transform::InstanceModelViewTransform},
@@ -33,8 +34,11 @@ impl GizmoPass {
     ) -> Self {
         let camera_bind_group_layout =
             CameraGPUBufferManager::get_or_create_bind_group_layout(graphics_device);
+
         let vertex_buffer_layouts = Self::vertex_buffer_layouts();
+
         let color_target_state = Self::color_target_state(rendering_surface);
+        let depth_stencil_state = super::depth_stencil_state_for_depth_test_without_write();
 
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &LineShaderTemplate);
@@ -52,7 +56,7 @@ impl GizmoPass {
             shader,
             &vertex_buffer_layouts,
             &[Some(color_target_state)],
-            None,
+            Some(depth_stencil_state),
             "Gizmo pass render pipeline",
         );
 
@@ -88,10 +92,26 @@ impl GizmoPass {
         }
     }
 
+    fn depth_stencil_attachment(
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+    ) -> wgpu::RenderPassDepthStencilAttachment<'_> {
+        wgpu::RenderPassDepthStencilAttachment {
+            view: render_attachment_texture_manager
+                .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
+                .base_texture_view(),
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }
+    }
+
     pub fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
         render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -101,11 +121,14 @@ impl GizmoPass {
 
         let color_attachment = Self::color_attachment(surface_texture_view);
 
+        let depth_stencil_attachment =
+            Self::depth_stencil_attachment(render_attachment_texture_manager);
+
         let mut render_pass = begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
             &[Some(color_attachment)],
-            None,
+            Some(depth_stencil_attachment),
             Cow::Borrowed("Gizmo pass"),
         );
 
