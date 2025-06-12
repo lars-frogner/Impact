@@ -1,7 +1,9 @@
 [package]
 name = "impact_geometry"
+description = "Geometric primitives for the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [features]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]

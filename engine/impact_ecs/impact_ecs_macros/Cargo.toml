@@ -1,7 +1,9 @@
 [package]
 name = "impact_ecs_macros"
+description = "Procedural macros for the Impact ECS library"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [lib]
 proc-macro = true

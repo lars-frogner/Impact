@@ -1,7 +1,9 @@
 [package]
 name = "roc_integration_macros"
+description = "Procedural macros for Roc integration with the Impact engine"
 version = "0.1.0"
 edition = { workspace = true }
+license = { workspace = true }
 
 [lib]
 proc-macro = true

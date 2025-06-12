@@ -1,7 +1,9 @@
 [package]
 name = "impact_dev_ui"
+description = "Developer UI for the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]
