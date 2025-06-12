@@ -226,6 +226,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_normal_vectors,
         vertex_texture_coords,
         Vec::new(),
+        Vec::new(),
         triangle_vertex_indices,
     )
 }

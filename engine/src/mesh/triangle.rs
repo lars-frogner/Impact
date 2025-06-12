@@ -1,8 +1,8 @@
 //! Triangle meshes.
 
 use crate::mesh::{
-    VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords,
-    texture_projection::TextureProjection,
+    VertexColor, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
+    VertexTextureCoords, texture_projection::TextureProjection,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::{CollectionChange, CollectionChangeTracker};
@@ -22,11 +22,13 @@ pub struct TriangleMesh<F: Float> {
     normal_vectors: Vec<VertexNormalVector<F>>,
     texture_coords: Vec<VertexTextureCoords<F>>,
     tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
+    colors: Vec<VertexColor<F>>,
     indices: Vec<u32>,
     position_change_tracker: CollectionChangeTracker,
     normal_vector_change_tracker: CollectionChangeTracker,
     texture_coord_change_tracker: CollectionChangeTracker,
     tangent_space_quaternion_change_tracker: CollectionChangeTracker,
+    color_change_tracker: CollectionChangeTracker,
     index_change_tracker: CollectionChangeTracker,
 }
 
@@ -34,14 +36,15 @@ impl<F: Float> TriangleMesh<F> {
     /// Creates a new mesh described by the given vertex attributes and indices.
     ///
     /// # Panics
-    /// If the length of `normal_vectors`, `texture_coords` and
-    /// `tangent_space_quaternions` are neither zero nor equal to the length of
-    /// `positions`.
+    /// If the length of `normal_vectors`, `texture_coords`,
+    /// `tangent_space_quaternions` and `colors` are neither zero nor equal to
+    /// the length of `positions`.
     pub fn new(
         positions: Vec<VertexPosition<F>>,
         normal_vectors: Vec<VertexNormalVector<F>>,
         texture_coords: Vec<VertexTextureCoords<F>>,
         tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
+        colors: Vec<VertexColor<F>>,
         indices: Vec<u32>,
     ) -> Self {
         let n_vertices = positions.len();
@@ -58,17 +61,23 @@ impl<F: Float> TriangleMesh<F> {
             tangent_space_quaternions.is_empty() || tangent_space_quaternions.len() == n_vertices,
             "Mismatching number of tangent space quaternions and positions in triangle mesh"
         );
+        assert!(
+            colors.is_empty() || colors.len() == n_vertices,
+            "Mismatching number of colors and positions in triangle mesh"
+        );
 
         Self {
             positions,
             normal_vectors,
             texture_coords,
             tangent_space_quaternions,
+            colors,
             indices,
             position_change_tracker: CollectionChangeTracker::default(),
             normal_vector_change_tracker: CollectionChangeTracker::default(),
             texture_coord_change_tracker: CollectionChangeTracker::default(),
             tangent_space_quaternion_change_tracker: CollectionChangeTracker::default(),
+            color_change_tracker: CollectionChangeTracker::default(),
             index_change_tracker: CollectionChangeTracker::default(),
         }
     }
@@ -108,6 +117,11 @@ impl<F: Float> TriangleMesh<F> {
         &self.tangent_space_quaternions
     }
 
+    /// Returns a slice with the colors of the mesh vertices.
+    pub fn colors(&self) -> &[VertexColor<F>] {
+        &self.colors
+    }
+
     /// Returns a slice with the vertex indices describing the faces of the
     /// mesh.
     pub fn indices(&self) -> &[u32] {
@@ -139,6 +153,11 @@ impl<F: Float> TriangleMesh<F> {
         !self.tangent_space_quaternions.is_empty()
     }
 
+    /// Whether the vertices have associated colors.
+    pub fn has_colors(&self) -> bool {
+        !self.colors.is_empty()
+    }
+
     /// Returns the kind of change that has been made to the vertex positions
     /// since the last reset of change tracking.
     pub fn position_change(&self) -> CollectionChange {
@@ -161,6 +180,12 @@ impl<F: Float> TriangleMesh<F> {
     /// space quaternions since the last reset of change tracking.
     pub fn tangent_space_quaternion_change(&self) -> CollectionChange {
         self.tangent_space_quaternion_change_tracker.change()
+    }
+
+    /// Returns the kind of change that has been made to the vertex colors
+    /// since the last reset of change tracking.
+    pub fn color_change(&self) -> CollectionChange {
+        self.color_change_tracker.change()
     }
 
     /// Returns the kind of change that has been made to the mesh
@@ -465,6 +490,12 @@ impl<F: Float> TriangleMesh<F> {
         }
     }
 
+    /// Sets the color of every vertex to the given color.
+    pub fn set_same_color(&mut self, color: VertexColor<F>) {
+        self.colors = vec![color; self.positions.len()];
+        self.color_change_tracker.notify_count_change();
+    }
+
     /// Merges the given mesh into this mesh.
     ///
     /// # Panics
@@ -502,6 +533,12 @@ impl<F: Float> TriangleMesh<F> {
                 .notify_count_change();
         }
 
+        if self.has_colors() {
+            assert!(other.has_colors());
+            self.colors.extend_from_slice(&other.colors);
+            self.color_change_tracker.notify_count_change();
+        }
+
         let offset = u32::try_from(original_n_vertices).unwrap();
         for idx in &mut self.indices[original_n_indices..] {
             *idx += offset;
@@ -528,6 +565,11 @@ impl<F: Float> TriangleMesh<F> {
         self.tangent_space_quaternion_change_tracker.reset();
     }
 
+    /// Forgets any recorded changes to the vertex colors.
+    pub fn reset_color_change_tracking(&self) {
+        self.color_change_tracker.reset();
+    }
+
     /// Forgets any recorded changes to the indices.
     pub fn reset_index_change_tracking(&self) {
         self.index_change_tracker.reset();
@@ -539,6 +581,7 @@ impl<F: Float> TriangleMesh<F> {
         self.reset_normal_vector_change_tracking();
         self.reset_texture_coord_change_tracking();
         self.reset_tangent_space_quaternion_change_tracking();
+        self.reset_color_change_tracking();
         self.reset_index_change_tracking();
     }
 }
