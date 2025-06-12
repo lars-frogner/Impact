@@ -6,7 +6,7 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
     },
-    mesh::{VertexAttributeSet, buffer::TriangleMeshVertexAttributeLocation},
+    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source, template_replacements,
 };
@@ -49,7 +49,7 @@ impl SpecificShaderTemplate for ModelDepthPrepassShaderTemplate {
                     "previous_model_view_transform_translation_location" => InstanceModelViewTransformWithPrevious::previous_translation_and_scaling_location(),
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
-                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
                 )
             )
             .expect("Shader template resolution failed")

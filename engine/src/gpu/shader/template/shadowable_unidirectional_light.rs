@@ -18,7 +18,7 @@ use crate::{
         },
     },
     light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
-    mesh::{self, MeshID, VertexAttributeSet, buffer::TriangleMeshVertexAttributeLocation},
+    mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -122,7 +122,7 @@ impl SpecificShaderTemplate for ShadowableUnidirectionalLightShaderTemplate {
                     "shadow_map_texture_group" => 6,
                     "shadow_map_texture_binding" => CascadedShadowMapTexture::texture_binding(),
                     "shadow_map_sampler_binding" => CascadedShadowMapTexture::sampler_binding(),
-                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")

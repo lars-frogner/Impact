@@ -15,7 +15,7 @@ use crate::{
         },
     },
     light::buffer::LightGPUBufferManager,
-    mesh::{self, MeshID, VertexAttributeSet, buffer::TriangleMeshVertexAttributeLocation},
+    mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -109,7 +109,7 @@ impl SpecificShaderTemplate for OmnidirectionalLightShaderTemplate {
                     "material_properties_sampler_binding" => MaterialProperties.sampler_binding(),
                     "light_uniform_group" => 5,
                     "light_uniform_binding" => LightGPUBufferManager::light_binding(),
-                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")

@@ -16,7 +16,7 @@ use crate::{
         },
     },
     light::buffer::LightGPUBufferManager,
-    mesh::{self, MeshID, VertexAttributeSet, buffer::TriangleMeshVertexAttributeLocation},
+    mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -110,7 +110,7 @@ impl SpecificShaderTemplate for AmbientLightShaderTemplate {
                     "specular_reflectance_lookup_texture_group" => 6,
                     "specular_reflectance_lookup_texture_binding" => 0,
                     "specular_reflectance_lookup_sampler_binding" => 1,
-                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")
