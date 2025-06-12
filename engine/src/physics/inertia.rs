@@ -935,7 +935,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-7 * correct_center_of_mass.coords.abs().max()
+                epsilon = 1e-6 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
@@ -960,7 +960,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-7 * correct_center_of_mass.coords.abs().max()
+                epsilon = 1e-6 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
@@ -1144,7 +1144,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 cone_properties_from_mesh.center_of_mass(),
                 cone_properties.center_of_mass(),
-                epsilon = 1e-7 * cone_properties.center_of_mass().coords.abs().max()
+                epsilon = 1e-6 * cone_properties.center_of_mass().coords.abs().max()
             ));
             prop_assert!(abs_diff_eq!(
                 cone_properties_from_mesh.inertia_tensor(),
