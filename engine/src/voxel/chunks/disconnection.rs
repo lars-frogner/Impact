@@ -2833,6 +2833,8 @@ mod tests {
         object.validate_region_count();
     }
 
+    // Too slow for `miri`
+    #[cfg(not(miri))]
     #[test]
     fn should_split_off_disconnected_sphere() {
         let generator = SDFVoxelGenerator::new(
