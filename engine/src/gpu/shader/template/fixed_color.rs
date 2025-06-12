@@ -1,29 +1,29 @@
-//! Shader template for rendering lines.
+//! Shader template for rendering geometry with fixed vertex colors.
 
 use crate::{
     camera::buffer::CameraProjectionUniform,
     gpu::shader::template::{ShaderTemplate, SpecificShaderTemplate},
-    mesh::{VertexAttributeSet, buffer::LineSegmentMeshVertexAttributeLocation},
+    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     model::transform::InstanceModelViewTransform,
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
 
-/// Shader template for rendering colored lines in 3D.
+/// Shader template for rendering geometry with fixed vertex colors.
 #[derive(Clone, Copy, Debug)]
-pub struct LineShaderTemplate;
+pub struct FixedColorShaderTemplate;
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
-    LazyLock::new(|| ShaderTemplate::new(rendering_template_source!("line")).unwrap());
+    LazyLock::new(|| ShaderTemplate::new(rendering_template_source!("fixed_color")).unwrap());
 
-impl LineShaderTemplate {
+impl FixedColorShaderTemplate {
     /// Returns the set of vertex attributes used by the shader.
     pub fn vertex_attributes() -> VertexAttributeSet {
         VertexAttributeSet::POSITION | VertexAttributeSet::COLOR
     }
 }
 
-impl SpecificShaderTemplate for LineShaderTemplate {
+impl SpecificShaderTemplate for FixedColorShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
@@ -33,8 +33,8 @@ impl SpecificShaderTemplate for LineShaderTemplate {
                     "model_view_transform_translation_location" => InstanceModelViewTransform::translation_and_scaling_location(),
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
-                    "position_location" => LineSegmentMeshVertexAttributeLocation::Position as u32,
-                    "color_location" => LineSegmentMeshVertexAttributeLocation::Color as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
+                    "color_location" => MeshVertexAttributeLocation::Color as u32,
                 )
             )
             .expect("Shader template resolution failed")
@@ -48,6 +48,6 @@ mod tests {
 
     #[test]
     fn should_resolve_to_valid_wgsl() {
-        validate_template(&LineShaderTemplate);
+        validate_template(&FixedColorShaderTemplate);
     }
 }

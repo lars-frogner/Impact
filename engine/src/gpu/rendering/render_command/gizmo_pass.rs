@@ -10,7 +10,7 @@ use crate::{
             render_command::begin_single_render_pass, resource::SynchronizedRenderResources,
             surface::RenderingSurface,
         },
-        shader::{ShaderManager, template::line::LineShaderTemplate},
+        shader::{ShaderManager, template::fixed_color::FixedColorShaderTemplate},
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     },
     mesh::{VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable},
@@ -40,8 +40,10 @@ impl GizmoPass {
         let color_target_state = Self::color_target_state(rendering_surface);
         let depth_stencil_state = super::depth_stencil_state_for_depth_test_without_write();
 
-        let (_, shader) = shader_manager
-            .get_or_create_rendering_shader_from_template(graphics_device, &LineShaderTemplate);
+        let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
+            graphics_device,
+            &FixedColorShaderTemplate,
+        );
 
         let pipeline_layout = super::create_render_pipeline_layout(
             graphics_device.device(),
