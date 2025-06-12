@@ -58,7 +58,7 @@ impl SpecificShaderTemplate for ModelDepthPrepassShaderTemplate {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::validate_template;
+    use super::super::validate_template;
     use super::*;
 
     #[test]
