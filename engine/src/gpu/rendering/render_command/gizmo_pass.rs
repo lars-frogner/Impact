@@ -63,7 +63,7 @@ impl GizmoPass {
             &vertex_buffer_layouts,
             &[Some(color_target_state.clone())],
             STANDARD_FRONT_FACE,
-            Some(wgpu::Face::Back),
+            None,
             wgpu::PolygonMode::Fill,
             Some(depth_stencil_state.clone()),
             "Gizmo pass render pipeline for triangles",
@@ -96,7 +96,7 @@ impl GizmoPass {
     fn color_target_state(rendering_surface: &RenderingSurface) -> wgpu::ColorTargetState {
         wgpu::ColorTargetState {
             format: rendering_surface.texture_format(),
-            blend: Some(wgpu::BlendState::REPLACE),
+            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
             write_mask: wgpu::ColorWrites::all(),
         }
     }
