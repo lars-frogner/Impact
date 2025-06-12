@@ -9,6 +9,7 @@ use crate::{
     io,
 };
 use anyhow::{Context, Result, anyhow, bail};
+use bincode;
 use bytemuck::Pod;
 use image::{
     self, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma, Rgba,
@@ -17,14 +18,13 @@ use image::{
 use impact_math::{hash32, stringhash32_newtype};
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
-use rmp_serde::{Serializer, from_read};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     borrow::Cow,
     fs::File,
     hash::{DefaultHasher, Hash, Hasher},
-    io::BufReader,
+    io::{BufReader, Read},
     num::NonZeroU32,
     path::Path,
 };
@@ -1140,8 +1140,7 @@ impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
     /// Serializes the lookup table into the `MessagePack` format and saves it
     /// at the given path.
     pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
-        let mut byte_buffer = Vec::new();
-        self.serialize(&mut Serializer::new(&mut byte_buffer))?;
+        let byte_buffer = bincode::serialize(self)?;
         io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
         Ok(())
     }
@@ -1156,8 +1155,10 @@ impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
                 file_path.display()
             )
         })?;
-        let reader = BufReader::new(file);
-        let table = from_read(reader)?;
+        let mut reader = BufReader::new(file);
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+        let table = bincode::deserialize(&buffer)?;
         Ok(table)
     }
 }
