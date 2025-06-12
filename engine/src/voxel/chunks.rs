@@ -462,7 +462,47 @@ impl ChunkedVoxelObject {
 
     /// Computes a sphere enclosing all non-empty voxels in the object.
     pub fn compute_bounding_sphere<F: Float>(&self) -> Sphere<F> {
-        Sphere::bounding_sphere_from_aabb(&self.compute_aabb())
+        let bounding_sphere_for_chunk_centers =
+            Sphere::bounding_sphere_for_points(&self.compute_occupied_chunk_center_positions());
+
+        // If we add the distance from the center to the corner of a chunk, the
+        // bounding sphere will encompass all voxels
+        let additional_radius =
+            F::ONE_HALF * F::THREE.sqrt() * F::from_f64(self.chunk_extent()).unwrap();
+
+        Sphere::new(
+            *bounding_sphere_for_chunk_centers.center(),
+            bounding_sphere_for_chunk_centers.radius() + additional_radius,
+        )
+    }
+
+    fn compute_occupied_chunk_center_positions<F: Float>(&self) -> Vec<Point3<F>> {
+        let max_occupied_chunk_count: usize =
+            self.occupied_chunk_ranges.iter().map(Range::len).product();
+
+        let mut center_positions = Vec::with_capacity(max_occupied_chunk_count);
+
+        let chunk_extent = self.chunk_extent();
+
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+                    if !self.chunks[chunk_idx].is_empty() {
+                        center_positions.push(
+                            point![
+                                (chunk_i as f64 + 0.5) * chunk_extent,
+                                (chunk_j as f64 + 0.5) * chunk_extent,
+                                (chunk_k as f64 + 0.5) * chunk_extent
+                            ]
+                            .cast(),
+                        );
+                    }
+                }
+            }
+        }
+        center_positions
     }
 
     /// Calls the given closure for each voxel in the given non-uniform chunk,

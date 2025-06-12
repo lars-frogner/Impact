@@ -1,6 +1,6 @@
 //! Representation of spheres.
 
-use crate::AxisAlignedBox;
+use crate::{AxisAlignedBox, Point};
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
@@ -78,6 +78,35 @@ impl<F: Float> Sphere<F> {
         let center = aabb.center();
         let radius = F::ONE_HALF * na::distance(aabb.lower_corner(), aabb.upper_corner());
         Self::new(center, radius)
+    }
+
+    /// Finds a sphere enclosing the given points.
+    ///
+    /// # Panics
+    /// If the point slice is empty.
+    pub fn bounding_sphere_for_points(points: &[impl Point<F>]) -> Self {
+        assert!(
+            !points.is_empty(),
+            "Tried to create bounding sphere for empty point slice"
+        );
+
+        let one_over_count = F::from_usize(points.len()).unwrap().recip();
+
+        let first_point = points[0].point().coords;
+
+        let centroid: Point3<F> = points
+            .iter()
+            .skip(1)
+            .fold(first_point, |sum, point| sum + point.point().coords)
+            .scale(one_over_count)
+            .into();
+
+        let max_squared_dist_from_centroid =
+            points.iter().fold(F::ZERO, |max_squared_dist, point| {
+                na::distance_squared(point.point(), &centroid).max(max_squared_dist)
+            });
+
+        Self::new(centroid, max_squared_dist_from_centroid.sqrt())
     }
 
     /// Returns the center point of the sphere.
@@ -202,7 +231,7 @@ mod tests {
     use na::vector;
     use nalgebra::point;
 
-    macro_rules! test_bounding_sphere {
+    macro_rules! test_bounding_sphere_from_pair {
         (
             sphere_1 = ($center_1:expr, $radius_1:expr),
             sphere_2 = ($center_2:expr, $radius_2:expr),
@@ -235,17 +264,17 @@ mod tests {
 
     #[test]
     fn computing_bounding_sphere_works() {
-        test_bounding_sphere!(
+        test_bounding_sphere_from_pair!(
             sphere_1 = (Point3::origin(), 42.0),
             sphere_2 = (Point3::origin(), 42.0),
             bounding_sphere = (Point3::origin(), 42.0)
         );
-        test_bounding_sphere!(
+        test_bounding_sphere_from_pair!(
             sphere_1 = (Point3::origin(), 0.5),
             sphere_2 = (Point3::origin(), 2.0),
             bounding_sphere = (Point3::origin(), 2.0)
         );
-        test_bounding_sphere!(
+        test_bounding_sphere_from_pair!(
             sphere_1 = (point![3.0, 4.0, 0.0], 0.0),
             sphere_2 = (Point3::origin(), 2.0),
             bounding_sphere = (
@@ -253,7 +282,7 @@ mod tests {
                 3.5
             )
         );
-        test_bounding_sphere!(
+        test_bounding_sphere_from_pair!(
             sphere_1 = (Point3::origin(), 1.5),
             sphere_2 = (point![1.0, 0.0, 0.0], 2.0),
             bounding_sphere = (point![0.75, 0.0, 0.0], 2.25)
@@ -273,6 +302,28 @@ mod tests {
         assert!(bounding_sphere.contains_point(&(upper_corner - small_displacement)));
         assert!(!bounding_sphere.contains_point(&(lower_corner - small_displacement)));
         assert!(!bounding_sphere.contains_point(&(upper_corner + small_displacement)));
+    }
+
+    #[test]
+    fn bounding_sphere_for_single_point_is_correct() {
+        let point = point![0.1, 0.2, 0.3];
+        let bounding_sphere = Sphere::bounding_sphere_for_points(&[point]);
+        assert_abs_diff_eq!(bounding_sphere.center(), &point);
+        assert_abs_diff_eq!(bounding_sphere.radius(), 0.0);
+    }
+
+    #[test]
+    fn bounding_sphere_for_two_points_is_correct() {
+        let points = [point![0.1, 0.2, 0.3], point![-0.3, 0.6, 0.7]];
+        let bounding_sphere = Sphere::bounding_sphere_for_points(&points);
+        assert_abs_diff_eq!(
+            bounding_sphere.center(),
+            &(points[0].coords + points[1].coords).unscale(2.0).into()
+        );
+        assert_abs_diff_eq!(
+            bounding_sphere.radius(),
+            0.5 * na::distance(&points[0], &points[1])
+        );
     }
 
     #[test]

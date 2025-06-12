@@ -30,6 +30,8 @@
 
 - Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
 
+- Consider using Welzl's algorithm to compute better bounding spheres.
+
 ## ECS
 
 - Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
