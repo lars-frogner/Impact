@@ -10,7 +10,7 @@ use crate::{
             RenderAttachmentQuantity,
         },
     },
-    mesh::buffer::TriangleMeshVertexAttributeLocation,
+    mesh::buffer::MeshVertexAttributeLocation,
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -64,7 +64,7 @@ impl SpecificShaderTemplate for DynamicRangeCompressionShaderTemplate {
                     "tone_mapping_method" => self.tone_mapping_method,
                     "input_texture_binding" => self.input_render_attachment_quantity.texture_binding(),
                     "input_sampler_binding" => self.input_render_attachment_quantity.sampler_binding(),
-                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")

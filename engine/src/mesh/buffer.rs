@@ -51,21 +51,14 @@ pub struct MeshGPUBufferManager {
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
 
-/// Binding location of a specific type of triangle mesh vertex attribute.
+/// Binding location of a specific type of mesh vertex attribute.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum TriangleMeshVertexAttributeLocation {
+pub enum MeshVertexAttributeLocation {
     Position = MESH_VERTEX_BINDING_START,
     NormalVector = (MESH_VERTEX_BINDING_START + 1),
     TextureCoords = (MESH_VERTEX_BINDING_START + 2),
     TangentSpaceQuaternion = (MESH_VERTEX_BINDING_START + 3),
-}
-
-/// Binding location of a specific type of line segment mesh vertex attribute.
-#[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum LineSegmentMeshVertexAttributeLocation {
-    Position = MESH_VERTEX_BINDING_START,
     Color = (MESH_VERTEX_BINDING_START + 4),
 }
 
@@ -664,35 +657,35 @@ impl GPUBuffer {
 impl VertexBufferable for VertexPosition<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            TriangleMeshVertexAttributeLocation::Position as u32 => Float32x3,
+            MeshVertexAttributeLocation::Position as u32 => Float32x3,
         ]);
 }
 
 impl VertexBufferable for VertexNormalVector<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            TriangleMeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
+            MeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
         ]);
 }
 
 impl VertexBufferable for VertexTextureCoords<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            TriangleMeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
+            MeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
         ]);
 }
 
 impl VertexBufferable for VertexTangentSpaceQuaternion<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            TriangleMeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
+            MeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
         ]);
 }
 
 impl VertexBufferable for VertexColor<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            LineSegmentMeshVertexAttributeLocation::Color as u32 => Float32x4,
+            MeshVertexAttributeLocation::Color as u32 => Float32x4,
         ]);
 }
 

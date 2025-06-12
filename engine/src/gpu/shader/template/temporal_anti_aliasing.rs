@@ -18,7 +18,7 @@ use crate::{
             RenderAttachmentQuantitySet, RenderAttachmentSampler,
         },
     },
-    mesh::buffer::TriangleMeshVertexAttributeLocation,
+    mesh::buffer::MeshVertexAttributeLocation,
     rendering_template_source, template_replacements,
 };
 use std::sync::LazyLock;
@@ -87,7 +87,7 @@ impl SpecificShaderTemplate for TemporalAntiAliasingShaderTemplate {
                     "previous_luminance_sampler_binding" => PreviousLuminanceHistory.sampler_binding(),
                     "params_group" => 4,
                     "params_binding" => 0,
-                    "position_location" => TriangleMeshVertexAttributeLocation::Position as u32,
+                    "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )
             .expect("Shader template resolution failed")
