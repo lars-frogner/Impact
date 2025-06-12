@@ -96,11 +96,8 @@ fn compute_transform_for_bounding_sphere_gizmo(
     let center = bounding_sphere.center();
     let radius = bounding_sphere.radius();
 
-    let bounding_sphere_from_unit_sphere = Similarity3::from_parts(
-        center.coords.unscale(radius).into(),
-        UnitQuaternion::identity(),
-        radius,
-    );
+    let bounding_sphere_from_unit_sphere =
+        Similarity3::from_parts(center.coords.into(), UnitQuaternion::identity(), radius);
 
     let model_view_transform: Similarity3<_> = model_view_transform.into();
 
