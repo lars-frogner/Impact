@@ -30,7 +30,7 @@ pipeline {
             steps {
                 dir('engine') {
                     sh 'cargo clean'
-                    sh 'PROPTEST_CASES=1 MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test --all'
+                    sh 'PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 PROPTEST_CASES=1 MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test --all'
                 }
             }
         }
