@@ -1,34 +1,37 @@
 pipeline {
     agent {
         dockerfile {
-            dir 'Jenkins'
+            dir 'engine/Jenkins'
         }
     }
     stages {
         stage('build') {
             steps {
-                sh 'cargo build'
+                dir('engine') {
+                    sh 'cargo build'
+                }
             }
         }
         stage('build-release') {
             steps {
-                sh 'cargo build --release'
+                dir('engine') {
+                    sh 'cargo build --release'
+                }
             }
         }
         stage('test') {
             steps {
-                sh 'cargo test --all'
-            }
-        }
-        stage('test-release') {
-            steps {
-                sh 'cargo test --release --all'
+                dir('engine') {
+                    sh 'cargo test --all'
+                }
             }
         }
         stage('test-miri') {
             steps {
-                sh 'cargo clean'
-                sh 'PROPTEST_CASES=1 MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test --all'
+                dir('engine') {
+                    sh 'cargo clean'
+                    sh 'PROPTEST_CASES=1 MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test --all'
+                }
             }
         }
     }
@@ -37,7 +40,7 @@ pipeline {
             emailext subject: '${DEFAULT_SUBJECT}',
                 body: '${DEFAULT_CONTENT}',
                 recipientProviders: [developers(), requestor()]
-            
+
         }
     }
 }
