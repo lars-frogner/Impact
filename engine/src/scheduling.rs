@@ -255,7 +255,7 @@ macro_rules! define_execution_tag {
     };
 }
 
-/// Macro that creates a [`lazy_static`] [`Arc<ExecutionTags>`]
+/// Macro that creates a static [`Arc<ExecutionTags>`]
 /// variable with the given name containing the given list of
 /// execution tags (defined with the [`define_execution_tag`]
 /// macro).
@@ -264,9 +264,7 @@ macro_rules! define_execution_tag_set {
     (
         $([$pub:ident])? $name:ident, [$($tag:ident),*]
     ) => {
-        lazy_static::lazy_static! {
-            $($pub)? static ref $name: ::std::sync::Arc<$crate::scheduling::ExecutionTags> = ::std::sync::Arc::new($crate::scheduling::ExecutionTags::from_iter([$($tag::EXECUTION_TAG),*]));
-        }
+        $($pub)? static $name: ::std::sync::LazyLock<::std::sync::Arc<$crate::scheduling::ExecutionTags>> = ::std::sync::LazyLock::new(|| ::std::sync::Arc::new($crate::scheduling::ExecutionTags::from_iter([$($tag::EXECUTION_TAG),*])));
     };
 }
 

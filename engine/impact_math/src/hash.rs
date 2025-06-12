@@ -2,12 +2,11 @@
 
 use bytemuck::{Pod, Zeroable};
 use impact_containers::HashMap;
-use lazy_static::lazy_static;
 use roc_integration::roc;
 use std::{
     cmp, fmt,
     hash::{Hash, Hasher},
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
 };
 
 /// A 32-bit hash.
@@ -78,12 +77,10 @@ pub struct ConstStringHash64 {
     string: &'static str,
 }
 
-lazy_static! {
-    static ref STRING_HASH_32_REGISTRY: Mutex<HashMap<Hash32, String>> =
-        Mutex::new(HashMap::default());
-    static ref STRING_HASH_64_REGISTRY: Mutex<HashMap<Hash64, String>> =
-        Mutex::new(HashMap::default());
-}
+static STRING_HASH_32_REGISTRY: LazyLock<Mutex<HashMap<Hash32, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::default()));
+static STRING_HASH_64_REGISTRY: LazyLock<Mutex<HashMap<Hash64, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::default()));
 
 impl Hash32 {
     /// Computes a 32-bit hash of the given string literal.

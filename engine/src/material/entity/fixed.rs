@@ -17,8 +17,10 @@ use crate::{
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_math::hash64;
-use lazy_static::lazy_static;
-use std::{collections::hash_map::Entry, sync::RwLock};
+use std::{
+    collections::hash_map::Entry,
+    sync::{LazyLock, RwLock},
+};
 
 /// Binding locations for textures used in a fixed material.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,10 +28,10 @@ pub struct FixedMaterialTextureBindings {
     pub color_texture_and_sampler_bindings: Option<(u32, u32)>,
 }
 
-lazy_static! {
-    static ref FIXED_COLOR_MATERIAL_ID: MaterialID = MaterialID(hash64!("FixedColorMaterial"));
-    static ref FIXED_TEXTURE_MATERIAL_ID: MaterialID = MaterialID(hash64!("FixedTextureMaterial"));
-}
+static FIXED_COLOR_MATERIAL_ID: LazyLock<MaterialID> =
+    LazyLock::new(|| MaterialID(hash64!("FixedColorMaterial")));
+static FIXED_TEXTURE_MATERIAL_ID: LazyLock<MaterialID> =
+    LazyLock::new(|| MaterialID(hash64!("FixedTextureMaterial")));
 
 /// Checks if the entity-to-be with the given components has the component
 /// for this material, and if so, registers the material in the given

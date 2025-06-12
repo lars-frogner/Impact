@@ -27,7 +27,6 @@ pub struct GameLoopConfig {
 }
 
 define_execution_tag_set!(PHYSICS_AND_RENDERING_TAGS, [PhysicsTag, RenderingTag]);
-define_execution_tag_set!(RENDERING_TAGS, [RenderingTag]);
 
 #[derive(Clone, Debug)]
 struct GenericFrameDurationTracker<const N_FRAMES: usize> {
