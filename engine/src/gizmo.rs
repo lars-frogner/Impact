@@ -8,7 +8,7 @@ pub mod tasks;
 
 use crate::{
     material::MaterialHandle,
-    mesh::{self, MeshID},
+    mesh::{self, MeshID, MeshPrimitive},
     model::{
         InstanceFeature, InstanceFeatureManager, ModelID, transform::InstanceModelViewTransform,
     },
@@ -117,6 +117,14 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => mesh::reference_frame_axes_mesh_id(),
             Self::BoundingSphere => mesh::bounding_sphere_mesh_id(),
+        }
+    }
+
+    /// The geometric primitive used for this gizmo's mesh.
+    pub fn mesh_primitive(&self) -> MeshPrimitive {
+        match self {
+            Self::ReferenceFrameAxes => MeshPrimitive::LineSegment,
+            Self::BoundingSphere => MeshPrimitive::Triangle,
         }
     }
 
@@ -242,6 +250,22 @@ static GIZMO_MODEL_IDS: LazyLock<[ModelID; GizmoType::count()]> = LazyLock::new(
         ModelID::for_mesh_and_material(gizmo.mesh_id(), MaterialHandle::not_applicable())
     })
 });
+
+/// The model ID used by each gizmo whose mesh is of the given type.
+pub fn gizmo_model_ids_for_mesh_primitive(
+    primitive: MeshPrimitive,
+) -> impl IntoIterator<Item = &'static ModelID> {
+    gizmo_model_ids()
+        .iter()
+        .zip(GizmoType::all())
+        .filter_map(move |(model_id, gizmo)| {
+            if gizmo.mesh_primitive() == primitive {
+                Some(model_id)
+            } else {
+                None
+            }
+        })
+}
 
 /// Initializes the instance buffers used for the model-view transforms of the
 /// gizmo instances.
