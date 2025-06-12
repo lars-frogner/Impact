@@ -34,7 +34,14 @@ impl<F: Float> TriangleMesh<F> {
 
         let indices = vec![1, 3, 0, 2, 3, 1];
 
-        Self::new(positions, Vec::new(), Vec::new(), Vec::new(), indices)
+        Self::new(
+            positions,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a rectangle centered at the origin with the
@@ -68,7 +75,14 @@ impl<F: Float> TriangleMesh<F> {
 
         let indices = vec![0, 3, 1, 1, 3, 2];
 
-        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
+        Self::new(
+            positions,
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a box with the given extents, centered at
@@ -180,7 +194,14 @@ impl<F: Float> TriangleMesh<F> {
         normal_vectors.extend_from_slice(&[normal![Vector3::z_axis()]; 4]);
         add_face_indices();
 
-        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
+        Self::new(
+            positions,
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a cylinder with the given length and
@@ -398,7 +419,14 @@ impl<F: Float> TriangleMesh<F> {
             create_horizontal_disk(top_radius, length, true);
         }
 
-        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
+        Self::new(
+            positions,
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a sphere with diameter 1.0, centered at the
@@ -508,7 +536,14 @@ impl<F: Float> TriangleMesh<F> {
         }
         indices.extend_from_slice(&[1, idx, idx - n_circumference_vertices + 1]);
 
-        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
+        Self::new(
+            positions,
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a hemisphere with diameter 1.0, with the
@@ -627,7 +662,14 @@ impl<F: Float> TriangleMesh<F> {
         }
         indices.extend_from_slice(&[1, idx, idx - n_circumference_vertices + 1]);
 
-        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
+        Self::new(
+            positions,
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a sphere with radius 1.0, centered at the

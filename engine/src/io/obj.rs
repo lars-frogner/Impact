@@ -248,6 +248,7 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {
         normal_vectors,
         texture_coords,
         Vec::new(),
+        Vec::new(),
         mesh.indices,
     )
 }

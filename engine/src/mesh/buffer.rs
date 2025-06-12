@@ -118,6 +118,14 @@ impl MeshGPUBufferManager {
             mesh_id,
             mesh.tangent_space_quaternions(),
         );
+        Self::add_vertex_attribute_if_available(
+            graphics_device,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            mesh_id,
+            mesh.colors(),
+        );
 
         Self {
             available_attributes,
@@ -193,6 +201,7 @@ impl MeshGPUBufferManager {
             mesh.tangent_space_quaternions(),
             mesh.tangent_space_quaternion_change(),
         );
+        self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
 
         self.sync_index_buffer(graphics_device, mesh.indices(), mesh.index_change());
 
