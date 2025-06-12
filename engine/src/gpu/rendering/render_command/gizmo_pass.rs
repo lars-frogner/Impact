@@ -1,5 +1,6 @@
 //! Pass for rendering gizmos.
 
+use super::STANDARD_FRONT_FACE;
 use crate::{
     camera::buffer::CameraGPUBufferManager,
     gizmo,
@@ -13,7 +14,9 @@ use crate::{
         shader::{ShaderManager, template::fixed_color::FixedColorShaderTemplate},
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     },
-    mesh::{VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable},
+    mesh::{
+        MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
+    },
     model::{InstanceFeature, transform::InstanceModelViewTransform},
     scene::ModelInstanceNode,
 };
@@ -23,7 +26,8 @@ use std::borrow::Cow;
 /// Pass for rendering gizmos.
 #[derive(Debug)]
 pub struct GizmoPass {
-    pipeline: wgpu::RenderPipeline,
+    triangle_pipeline: wgpu::RenderPipeline,
+    line_pipeline: wgpu::RenderPipeline,
 }
 
 impl GizmoPass {
@@ -52,17 +56,33 @@ impl GizmoPass {
             "Gizmo pass render pipeline layout",
         );
 
-        let pipeline = super::create_line_list_render_pipeline(
+        let triangle_pipeline = super::create_render_pipeline(
+            graphics_device.device(),
+            &pipeline_layout,
+            shader,
+            &vertex_buffer_layouts,
+            &[Some(color_target_state.clone())],
+            STANDARD_FRONT_FACE,
+            Some(wgpu::Face::Back),
+            wgpu::PolygonMode::Fill,
+            Some(depth_stencil_state.clone()),
+            "Gizmo pass render pipeline for triangles",
+        );
+
+        let line_pipeline = super::create_line_list_render_pipeline(
             graphics_device.device(),
             &pipeline_layout,
             shader,
             &vertex_buffer_layouts,
             &[Some(color_target_state)],
             Some(depth_stencil_state),
-            "Gizmo pass render pipeline",
+            "Gizmo pass render pipeline for lines",
         );
 
-        Self { pipeline }
+        Self {
+            triangle_pipeline,
+            line_pipeline,
+        }
     }
 
     const fn vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 3] {
@@ -134,11 +154,77 @@ impl GizmoPass {
             Cow::Borrowed("Gizmo pass"),
         );
 
-        render_pass.set_pipeline(&self.pipeline);
+        // **** Triangles ****
+
+        render_pass.set_pipeline(&self.triangle_pipeline);
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        for model_id in gizmo::gizmo_model_ids() {
+        for model_id in gizmo::gizmo_model_ids_for_mesh_primitive(MeshPrimitive::Triangle) {
+            let instance_feature_buffer_managers = render_resources
+                .get_instance_feature_buffer_managers(model_id)
+                .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
+
+            let transform_buffer_manager = instance_feature_buffer_managers
+                .get(ModelInstanceNode::model_view_transform_feature_idx())
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Missing model-view transform GPU buffer for model {}",
+                        model_id
+                    )
+                })?;
+
+            let instance_range = transform_buffer_manager.initial_feature_range();
+
+            if instance_range.is_empty() {
+                continue;
+            }
+
+            render_pass.set_vertex_buffer(
+                0,
+                transform_buffer_manager
+                    .vertex_gpu_buffer()
+                    .valid_buffer_slice(),
+            );
+
+            let mut vertex_buffer_slot = 1;
+
+            let mesh_id = model_id.mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_triangle_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            for vertex_buffer in mesh_buffer_manager.request_vertex_gpu_buffers(
+                VertexAttributeSet::POSITION | VertexAttributeSet::COLOR,
+            )? {
+                render_pass
+                    .set_vertex_buffer(vertex_buffer_slot, vertex_buffer.valid_buffer_slice());
+
+                vertex_buffer_slot += 1;
+            }
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager
+                    .triangle_mesh_index_gpu_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.triangle_mesh_index_format(),
+            );
+
+            render_pass.draw_indexed(
+                0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                0,
+                instance_range,
+            );
+        }
+
+        // **** Lines ****
+
+        render_pass.set_pipeline(&self.line_pipeline);
+
+        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+
+        for model_id in gizmo::gizmo_model_ids_for_mesh_primitive(MeshPrimitive::LineSegment) {
             let instance_feature_buffer_managers = render_resources
                 .get_instance_feature_buffer_managers(model_id)
                 .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;

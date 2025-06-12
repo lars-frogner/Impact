@@ -697,6 +697,24 @@ impl<F: Float> TriangleMesh<F> {
 
         mesh
     }
+
+    /// Creates a mesh representing a sphere with radius 1.0, centered at the
+    /// origin, with all vertices having the given color.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    ///
+    /// See [`Self::create_sphere`] for an explanation of the `n_rings`
+    /// argument.
+    ///
+    /// # Panics
+    /// - If `n_rings` is zero.
+    pub fn create_colored_unit_sphere(n_rings: usize, color: VertexColor<F>) -> Self {
+        let mut sphere = Self::create_sphere(n_rings);
+        sphere.remove_normal_vectors();
+        sphere.scale(F::TWO);
+        sphere.set_same_color(color);
+        sphere
+    }
 }
 
 impl<F: Float> LineSegmentMesh<F> {
