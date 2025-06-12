@@ -6,10 +6,10 @@ mod query;
 mod querying_util;
 mod setup;
 
-use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use proc_macro_crate::{self, FoundCrate};
 use proc_macro2::{Ident, Span};
+use std::sync::LazyLock;
 use syn::{DeriveInput, parse_macro_input};
 
 /// Derive macro generating an impl of the trait
@@ -376,9 +376,7 @@ pub fn query_doctest(input: TokenStream) -> TokenStream {
 
 const CRATE_NAME: &str = "impact_ecs";
 
-lazy_static! {
-    static ref CRATE_IMPORT_ROOT: String = determine_crate_import_root();
-}
+static CRATE_IMPORT_ROOT: LazyLock<String> = LazyLock::new(determine_crate_import_root);
 
 /// Determines whether to use `crate` or the actual crate name as root
 /// for `use` statements.

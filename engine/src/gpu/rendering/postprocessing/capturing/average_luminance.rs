@@ -28,9 +28,8 @@ use anyhow::{Result, bail};
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{Bounds, ConstStringHash64, UpperExclusiveBounds, hash64};
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, mem, sync::LazyLock};
 
 /// Configuration options for computing average captured luminance.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -94,15 +93,14 @@ const HISTOGRAM_THREADS_PER_SIDE: usize = 1 << LOG2_HISTOGRAM_THREADS_PER_SIDE;
 
 const HISTOGRAM_BIN_COUNT: usize = HISTOGRAM_THREADS_PER_SIDE * HISTOGRAM_THREADS_PER_SIDE;
 
-lazy_static! {
-    pub static ref LUMINANCE_HISTOGRAM_STORAGE_BUFFER_ID: StorageBufferID =
-        StorageBufferID(hash64!(format!(
-            "LuminanceHistogramBuffer{{ bin_count: {} }}",
-            HISTOGRAM_BIN_COUNT
-        )));
-    pub static ref AVERAGE_LUMINANCE_STORAGE_BUFFER_ID: StorageBufferID =
-        StorageBufferID(hash64!(format!("AverageLuminanceBuffer")));
-}
+pub static LUMINANCE_HISTOGRAM_STORAGE_BUFFER_ID: LazyLock<StorageBufferID> = LazyLock::new(|| {
+    StorageBufferID(hash64!(format!(
+        "LuminanceHistogramBuffer{{ bin_count: {} }}",
+        HISTOGRAM_BIN_COUNT
+    )))
+});
+pub static AVERAGE_LUMINANCE_STORAGE_BUFFER_ID: LazyLock<StorageBufferID> =
+    LazyLock::new(|| StorageBufferID(hash64!(format!("AverageLuminanceBuffer"))));
 
 impl AverageLuminanceComputationConfig {
     fn new_config_requires_parameters_update(&self, other: &Self) -> bool {

@@ -20,7 +20,7 @@ bitflags = "2.6"
 bytemuck = { version = "1.22", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
-lazy_static = "1.5"
+
 nalgebra = "0.33"
 nohash-hasher = "0.2.0"
 num-traits = "0.2"
@@ -162,7 +162,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 inventory = { workspace = true }
 half = { version = "2.1", features = ["bytemuck"] }
-lazy_static = { workspace = true }
+
 log = "0.4"
 naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
