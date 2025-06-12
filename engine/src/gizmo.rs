@@ -53,7 +53,9 @@ pub struct GizmoConfig {
     /// When visible, a red, green and blue line segment representing the x- y-
     /// and z-axis (respectively) of the local reference frame will be shown
     /// atop applicable entities. The lines are of unit length in the local
-    /// reference frame.
+    /// reference frame. They meet at the original origin of the entity, so any
+    /// origin offset (typically used to shift the origin to the center of mass)
+    /// is not accounted for.
     pub reference_frame_visibility: GizmoVisibility,
     /// The visibility of the gizmo showing bounding spheres.
     ///
@@ -134,7 +136,9 @@ impl GizmoType {
                 When enabled, a red, green and blue line segment representing the x- y- \
                 and z-axis (respectively) of the local reference frame will be shown \
                 atop applicable entities. The lines are of unit length in the local \
-                reference frame."
+                reference frame. They meet at the original origin of the entity, so any \
+                origin offset (typically used to shift the origin to the center of mass) \
+                is not accounted for."
             }
             Self::BoundingSphere => {
                 "\
