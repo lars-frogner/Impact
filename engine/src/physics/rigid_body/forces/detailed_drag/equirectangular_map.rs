@@ -3,9 +3,12 @@
 use crate::{io, physics::fph};
 use anyhow::Result;
 use impact_math::{Angle, Float, Radians};
-use rmp_serde::{Serializer as RmpSerializer, from_read};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{fs::File, io::BufReader, path::Path};
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::Path,
+};
 
 /// A map of values as a function of all directions. The directions are
 /// discretized onto a 2D grid using an equirectangular projection (meaning the
@@ -201,8 +204,7 @@ impl<D: Serialize + DeserializeOwned> EquirectangularMap<D> {
     /// Serializes the map into the `MessagePack` format and saves it at the
     /// given path.
     pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
-        let mut byte_buffer = Vec::new();
-        self.serialize(&mut RmpSerializer::new(&mut byte_buffer))?;
+        let byte_buffer = bincode::serialize(self)?;
         io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
         Ok(())
     }
@@ -210,8 +212,10 @@ impl<D: Serialize + DeserializeOwned> EquirectangularMap<D> {
     /// Loads and returns the `MessagePack` serialized map at the given path.
     pub fn read_from_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file = File::open(file_path)?;
-        let reader = BufReader::new(file);
-        let table = from_read(reader)?;
+        let mut reader = BufReader::new(file);
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+        let table = bincode::deserialize(&buffer)?;
         Ok(table)
     }
 }
