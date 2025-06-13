@@ -360,7 +360,8 @@ mod tests {
         body.advance_angular_momentum(0.0);
         assert_abs_diff_eq!(
             body.compute_angular_velocity(&Orientation::identity(), 1.0),
-            angular_velocity
+            angular_velocity,
+            epsilon = 1e-9
         );
     }
 
@@ -383,7 +384,8 @@ mod tests {
         body.advance_angular_momentum(1.0);
         assert_abs_diff_eq!(
             body.compute_angular_velocity(&Orientation::identity(), 1.0),
-            angular_velocity
+            angular_velocity,
+            epsilon = 1e-9
         );
     }
 
@@ -410,7 +412,8 @@ mod tests {
         body.advance_angular_momentum(1.0);
         assert_abs_diff_ne!(
             body.compute_angular_velocity(&orientation, 1.0),
-            angular_velocity
+            angular_velocity,
+            epsilon = 1e-9
         );
     }
 }

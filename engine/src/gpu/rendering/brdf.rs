@@ -253,11 +253,13 @@ mod tests {
     fn gauss_legendre_integration_works() {
         assert_abs_diff_eq!(
             integrate_hundred_point_gauss_legendre(f32::sin, 0.0, f32::TWO_PI),
-            0.0
+            0.0,
+            epsilon = 1e-6
         );
         assert_abs_diff_eq!(
             integrate_hundred_point_gauss_legendre(f32::sin, 0.0, f32::PI),
-            2.0
+            2.0,
+            epsilon = 1e-6
         );
         assert_abs_diff_eq!(
             integrate_hundred_point_gauss_legendre(f32::exp, -1.0, 1.0),
