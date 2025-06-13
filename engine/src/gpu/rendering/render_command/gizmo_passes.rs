@@ -1,9 +1,9 @@
-//! Pass for rendering gizmos.
+//! Passes for rendering gizmos.
 
 use super::STANDARD_FRONT_FACE;
 use crate::{
     camera::buffer::CameraGPUBufferManager,
-    gizmo,
+    gizmo::{self, GizmoObscurability},
     gpu::{
         GraphicsDevice,
         query::TimestampQueryRegistry,
@@ -11,26 +11,40 @@ use crate::{
             render_command::begin_single_render_pass, resource::SynchronizedRenderResources,
             surface::RenderingSurface,
         },
-        shader::{ShaderManager, template::fixed_color::FixedColorShaderTemplate},
+        shader::{Shader, ShaderManager, template::fixed_color::FixedColorShaderTemplate},
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     },
     mesh::{
         MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
     },
-    model::{InstanceFeature, transform::InstanceModelViewTransform},
+    model::{InstanceFeature, ModelID, transform::InstanceModelViewTransform},
     scene::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
 use std::borrow::Cow;
 
-/// Pass for rendering gizmos.
+/// Passes for rendering gizmos.
 #[derive(Debug)]
-pub struct GizmoPass {
-    triangle_pipeline: wgpu::RenderPipeline,
-    line_pipeline: wgpu::RenderPipeline,
+pub struct GizmoPasses {
+    depth_tested_pass: GizmoPass,
+    non_depth_tested_pass: GizmoPass,
 }
 
-impl GizmoPass {
+#[derive(Debug)]
+struct GizmoPass {
+    obscurability: GizmoObscurability,
+    triangle_pipeline: GizmoPassPipeline,
+    line_pipeline: GizmoPassPipeline,
+}
+
+#[derive(Debug)]
+struct GizmoPassPipeline {
+    obscurability: GizmoObscurability,
+    mesh_primitive: MeshPrimitive,
+    pipeline: wgpu::RenderPipeline,
+}
+
+impl GizmoPasses {
     pub fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
@@ -42,7 +56,7 @@ impl GizmoPass {
         let vertex_buffer_layouts = Self::vertex_buffer_layouts();
 
         let color_target_state = Self::color_target_state(rendering_surface);
-        let depth_stencil_state = super::depth_stencil_state_for_depth_test_without_write();
+        let color_target_states = [Some(color_target_state)];
 
         let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
             graphics_device,
@@ -56,32 +70,27 @@ impl GizmoPass {
             "Gizmo pass render pipeline layout",
         );
 
-        let triangle_pipeline = super::create_render_pipeline(
-            graphics_device.device(),
+        let depth_tested_pass = GizmoPass::new(
+            graphics_device,
             &pipeline_layout,
             shader,
             &vertex_buffer_layouts,
-            &[Some(color_target_state.clone())],
-            STANDARD_FRONT_FACE,
-            None,
-            wgpu::PolygonMode::Fill,
-            Some(depth_stencil_state.clone()),
-            "Gizmo pass render pipeline for triangles",
+            &color_target_states,
+            GizmoObscurability::Obscurable,
         );
 
-        let line_pipeline = super::create_line_list_render_pipeline(
-            graphics_device.device(),
+        let non_depth_tested_pass = GizmoPass::new(
+            graphics_device,
             &pipeline_layout,
             shader,
             &vertex_buffer_layouts,
-            &[Some(color_target_state)],
-            Some(depth_stencil_state),
-            "Gizmo pass render pipeline for lines",
+            &color_target_states,
+            GizmoObscurability::NonObscurable,
         );
 
         Self {
-            triangle_pipeline,
-            line_pipeline,
+            depth_tested_pass,
+            non_depth_tested_pass,
         }
     }
 
@@ -98,6 +107,72 @@ impl GizmoPass {
             format: rendering_surface.texture_format(),
             blend: Some(wgpu::BlendState::ALPHA_BLENDING),
             write_mask: wgpu::ColorWrites::all(),
+        }
+    }
+
+    pub fn record(
+        &self,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.depth_tested_pass.record(
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            timestamp_recorder,
+            command_encoder,
+        )?;
+
+        self.non_depth_tested_pass.record(
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            timestamp_recorder,
+            command_encoder,
+        )?;
+
+        log::trace!("Recorded gizmo passes");
+
+        Ok(())
+    }
+}
+
+impl GizmoPass {
+    fn new(
+        graphics_device: &GraphicsDevice,
+        pipeline_layout: &wgpu::PipelineLayout,
+        shader: &Shader,
+        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        obscurability: GizmoObscurability,
+    ) -> Self {
+        let triangle_pipeline = GizmoPassPipeline::new(
+            graphics_device,
+            pipeline_layout,
+            shader,
+            vertex_buffer_layouts,
+            color_target_states,
+            obscurability,
+            MeshPrimitive::Triangle,
+        );
+
+        let line_pipeline = GizmoPassPipeline::new(
+            graphics_device,
+            pipeline_layout,
+            shader,
+            vertex_buffer_layouts,
+            color_target_states,
+            obscurability,
+            MeshPrimitive::LineSegment,
+        );
+
+        Self {
+            obscurability,
+            triangle_pipeline,
+            line_pipeline,
         }
     }
 
@@ -129,7 +204,7 @@ impl GizmoPass {
         }
     }
 
-    pub fn record(
+    fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
         render_resources: &SynchronizedRenderResources,
@@ -143,24 +218,127 @@ impl GizmoPass {
 
         let color_attachment = Self::color_attachment(surface_texture_view);
 
-        let depth_stencil_attachment =
-            Self::depth_stencil_attachment(render_attachment_texture_manager);
+        let (label, depth_stencil_attachment) = match self.obscurability {
+            GizmoObscurability::Obscurable => (
+                "Gizmo pass with depth testing",
+                Some(Self::depth_stencil_attachment(
+                    render_attachment_texture_manager,
+                )),
+            ),
+            GizmoObscurability::NonObscurable => ("Gizmo pass without depth testing", None),
+        };
 
         let mut render_pass = begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
             &[Some(color_attachment)],
-            Some(depth_stencil_attachment),
-            Cow::Borrowed("Gizmo pass"),
+            depth_stencil_attachment,
+            Cow::Borrowed(label),
         );
 
-        // **** Triangles ****
+        self.triangle_pipeline
+            .record(render_resources, camera_buffer_manager, &mut render_pass)?;
 
-        render_pass.set_pipeline(&self.triangle_pipeline);
+        self.line_pipeline
+            .record(render_resources, camera_buffer_manager, &mut render_pass)?;
+
+        Ok(())
+    }
+}
+
+impl GizmoPassPipeline {
+    fn new(
+        graphics_device: &GraphicsDevice,
+        pipeline_layout: &wgpu::PipelineLayout,
+        shader: &Shader,
+        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        obscurability: GizmoObscurability,
+        mesh_primitive: MeshPrimitive,
+    ) -> Self {
+        let depth_stencil_state = match obscurability {
+            GizmoObscurability::Obscurable => {
+                Some(super::depth_stencil_state_for_depth_test_without_write())
+            }
+            GizmoObscurability::NonObscurable => None,
+        };
+
+        let label = format!(
+            "Gizmo pass render pipeline {{ mesh_primitive: {mesh_primitive:?}, obscurability: {obscurability:?} }}"
+        );
+
+        let pipeline = match mesh_primitive {
+            MeshPrimitive::Triangle => super::create_render_pipeline(
+                graphics_device.device(),
+                pipeline_layout,
+                shader,
+                vertex_buffer_layouts,
+                color_target_states,
+                STANDARD_FRONT_FACE,
+                None,
+                wgpu::PolygonMode::Fill,
+                depth_stencil_state,
+                &label,
+            ),
+            MeshPrimitive::LineSegment => super::create_line_list_render_pipeline(
+                graphics_device.device(),
+                pipeline_layout,
+                shader,
+                vertex_buffer_layouts,
+                color_target_states,
+                depth_stencil_state,
+                &label,
+            ),
+        };
+
+        Self {
+            obscurability,
+            mesh_primitive,
+            pipeline,
+        }
+    }
+
+    fn record(
+        &self,
+        render_resources: &SynchronizedRenderResources,
+        camera_buffer_manager: &CameraGPUBufferManager,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) -> Result<()> {
+        let model_ids = gizmo::gizmo_model_ids_for_mesh_primitive_and_obscurability(
+            self.mesh_primitive,
+            self.obscurability,
+        );
+
+        match self.mesh_primitive {
+            MeshPrimitive::Triangle => Self::record_for_triangles(
+                render_resources,
+                camera_buffer_manager,
+                render_pass,
+                &self.pipeline,
+                model_ids,
+            ),
+            MeshPrimitive::LineSegment => Self::record_for_lines(
+                render_resources,
+                camera_buffer_manager,
+                render_pass,
+                &self.pipeline,
+                model_ids,
+            ),
+        }
+    }
+
+    fn record_for_triangles<'a>(
+        render_resources: &SynchronizedRenderResources,
+        camera_buffer_manager: &CameraGPUBufferManager,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        pipeline: &wgpu::RenderPipeline,
+        model_ids: impl IntoIterator<Item = &'a ModelID>,
+    ) -> Result<()> {
+        render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        for model_id in gizmo::gizmo_model_ids_for_mesh_primitive(MeshPrimitive::Triangle) {
+        for model_id in model_ids {
             let instance_feature_buffer_managers = render_resources
                 .get_instance_feature_buffer_managers(model_id)
                 .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
@@ -218,13 +396,21 @@ impl GizmoPass {
             );
         }
 
-        // **** Lines ****
+        Ok(())
+    }
 
-        render_pass.set_pipeline(&self.line_pipeline);
+    fn record_for_lines<'a>(
+        render_resources: &SynchronizedRenderResources,
+        camera_buffer_manager: &CameraGPUBufferManager,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        pipeline: &wgpu::RenderPipeline,
+        model_ids: impl IntoIterator<Item = &'a ModelID>,
+    ) -> Result<()> {
+        render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        for model_id in gizmo::gizmo_model_ids_for_mesh_primitive(MeshPrimitive::LineSegment) {
+        for model_id in model_ids {
             let instance_feature_buffer_managers = render_resources
                 .get_instance_feature_buffer_managers(model_id)
                 .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
@@ -273,8 +459,6 @@ impl GizmoPass {
                 instance_range,
             );
         }
-
-        log::trace!("Recorded gizmo pass");
 
         Ok(())
     }

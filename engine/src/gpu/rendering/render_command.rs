@@ -5,7 +5,7 @@ pub mod clearing_pass;
 pub mod depth_prepass;
 pub mod directional_light_pass;
 pub mod geometry_pass;
-pub mod gizmo_pass;
+pub mod gizmo_passes;
 pub mod postprocessing_pass;
 pub mod render_attachment_texture_copy_command;
 pub mod shadow_map_update_passes;
@@ -38,7 +38,7 @@ use clearing_pass::AttachmentClearingPass;
 use depth_prepass::DepthPrepass;
 use directional_light_pass::DirectionalLightPass;
 use geometry_pass::GeometryPass;
-use gizmo_pass::GizmoPass;
+use gizmo_passes::GizmoPasses;
 use shadow_map_update_passes::{
     OmnidirectionalLightShadowMapUpdatePasses, UnidirectionalLightShadowMapUpdatePasses,
 };
@@ -58,7 +58,7 @@ pub struct RenderCommandManager {
     directional_light_pass: DirectionalLightPass,
     skybox_pass: SkyboxPass,
     voxel_render_commands: VoxelRenderCommands,
-    gizmo_pass: GizmoPass,
+    gizmo_passes: GizmoPasses,
 }
 
 /// The meaning of a specific value in the stencil buffer.
@@ -121,7 +121,7 @@ impl RenderCommandManager {
 
         let voxel_render_commands = VoxelRenderCommands::new(graphics_device, shader_manager);
 
-        let gizmo_pass = GizmoPass::new(graphics_device, rendering_surface, shader_manager);
+        let gizmo_passes = GizmoPasses::new(graphics_device, rendering_surface, shader_manager);
 
         Self {
             attachment_clearing_pass,
@@ -133,7 +133,7 @@ impl RenderCommandManager {
             directional_light_pass,
             skybox_pass,
             voxel_render_commands,
-            gizmo_pass,
+            gizmo_passes,
         }
     }
 
@@ -315,7 +315,7 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        self.gizmo_pass.record(
+        self.gizmo_passes.record(
             surface_texture_view,
             render_resources,
             render_attachment_texture_manager,
