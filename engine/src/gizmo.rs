@@ -86,6 +86,15 @@ pub enum GizmoVisibility {
     VisibleForSelected,
 }
 
+/// Whether a gizmo should be visible through obscuring geometry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GizmoObscurability {
+    /// The gizmo is can be obscured by geometry in front of it.
+    Obscurable,
+    /// The gizmo is can be seen through geometry in front of it.
+    NonObscurable,
+}
+
 impl GizmoType {
     /// The number of different gizmo types.
     pub const fn count() -> usize {
@@ -125,6 +134,14 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => MeshPrimitive::LineSegment,
             Self::BoundingSphere => MeshPrimitive::Triangle,
+        }
+    }
+
+    /// Whether this gizmo can be obscured by geometry in front of it.
+    pub fn obscurability(&self) -> GizmoObscurability {
+        match self {
+            Self::ReferenceFrameAxes => GizmoObscurability::NonObscurable,
+            Self::BoundingSphere => GizmoObscurability::Obscurable,
         }
     }
 
@@ -251,15 +268,17 @@ static GIZMO_MODEL_IDS: LazyLock<[ModelID; GizmoType::count()]> = LazyLock::new(
     })
 });
 
-/// The model ID used by each gizmo whose mesh is of the given type.
-pub fn gizmo_model_ids_for_mesh_primitive(
+/// The model ID used by each gizmo whose mesh is of the given type and who has
+/// the given obscurability.
+pub fn gizmo_model_ids_for_mesh_primitive_and_obscurability(
     primitive: MeshPrimitive,
+    obscurability: GizmoObscurability,
 ) -> impl IntoIterator<Item = &'static ModelID> {
     gizmo_model_ids()
         .iter()
         .zip(GizmoType::all())
         .filter_map(move |(model_id, gizmo)| {
-            if gizmo.mesh_primitive() == primitive {
+            if gizmo.mesh_primitive() == primitive && gizmo.obscurability() == obscurability {
                 Some(model_id)
             } else {
                 None
