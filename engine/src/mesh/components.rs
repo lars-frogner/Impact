@@ -11,7 +11,7 @@ use std::fmt::Display;
 /// entities whose mesh is an axis-aligned horizontal rectangle centered on the
 /// origin, whose front face is on the positive y side.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "RectangleMesh")]
 #[repr(C)]
@@ -26,7 +26,7 @@ pub struct RectangleMeshComp {
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is an axis-aligned box centered on the origin.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "BoxMesh")]
 #[repr(C)]
@@ -45,7 +45,7 @@ pub struct BoxMeshComp {
 /// entities whose mesh is a vertical cylinder with the bottom centered on
 /// the origin.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "CylinderMesh")]
 #[repr(C)]
@@ -64,7 +64,7 @@ pub struct CylinderMeshComp {
 /// entities whose mesh is an upward-pointing cone with the bottom centered on
 /// the origin.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "ConeMesh")]
 #[repr(C)]
@@ -83,7 +83,7 @@ pub struct ConeMeshComp {
 /// entities whose mesh is a vertical circular frustum with the bottom centered
 /// on the origin.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "CircularFrustumMesh")]
 #[repr(C)]
@@ -103,7 +103,7 @@ pub struct CircularFrustumMeshComp {
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 /// entities whose mesh is a unit diameter sphere centered on the origin.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "SphereMesh")]
 #[repr(C)]
@@ -119,7 +119,7 @@ pub struct SphereMeshComp {
 /// entities whose mesh is a unit diameter hemisphere whose disk lies in the
 /// xz-plane and is centered on the origin.
 ///
-/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 /// the entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "HemisphereMesh")]
 #[repr(C)]

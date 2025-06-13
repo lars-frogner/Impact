@@ -175,8 +175,7 @@ impl MeshedChunkedVoxelObject {
             .sync_with_voxel_object(&mut self.object, desynchronized);
     }
 
-    /// Signaling that the mesh modifications from [`Self::mesh_modifications`]
-    /// have been synchronized with the GPU.
+    /// Signaling that the mesh modifications have been synchronized with the GPU.
     pub fn report_gpu_resources_synchronized(&mut self) {
         self.mesh.report_gpu_resources_synchronized();
     }

@@ -132,7 +132,7 @@ where
 /// meshes in the file, they are merged into a single mesh.
 ///
 /// # Returns
-/// The [`MeshComp`] representing the mesh.
+/// The [`TriangleMeshComp`] representing the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
@@ -173,7 +173,7 @@ where
 /// multiple meshes in the file, they are merged into a single mesh.
 ///
 /// # Returns
-/// The [`MeshComp`] representing the mesh.
+/// The [`TriangleMeshComp`] representing the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.

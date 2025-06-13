@@ -8,8 +8,8 @@ pub mod systems;
 pub mod tasks;
 
 pub use graph::{
-    CameraNodeID, GroupNodeID, ModelInstanceNode, ModelInstanceNodeID, NodeStorage, NodeTransform,
-    SceneGraph, SceneGraphNodeID,
+    CameraNode, CameraNodeID, GroupNodeID, ModelInstanceNode, ModelInstanceNodeID, NodeStorage,
+    NodeTransform, SceneGraph, SceneGraphNodeID,
 };
 
 use crate::{

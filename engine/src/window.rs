@@ -40,12 +40,12 @@ impl Window {
         })
     }
 
-    /// Returns the underlying [`winit::Window`].
+    /// Returns the underlying [`winit::window::Window`].
     pub fn window(&self) -> &WinitWindow {
         &self.window
     }
 
-    /// Returns the underlying [`winit::Window`] wrapped in an [`Arc`].
+    /// Returns the underlying [`winit::window::Window`] wrapped in an [`Arc`].
     pub fn arc_window(&self) -> Arc<WinitWindow> {
         Arc::clone(&self.window)
     }

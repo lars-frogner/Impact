@@ -1038,11 +1038,11 @@ impl DynamicInstanceFeatureBuffer {
     }
 
     /// Returns the range of valid feature indices with the given ID. Ranges are
-    /// defined by calling [`begin_range`]. The range spans from and including
-    /// the first feature added after the `begin_range` call to and including
-    /// the last feature added before the next `begin_range` call, or to the
-    /// last valid feature if the `begin_range` call was the last one. Calling
-    /// [`clear`] removes all range information.
+    /// defined by calling [`Self::begin_range`]. The range spans from and
+    /// including the first feature added after the `begin_range` call to and
+    /// including the last feature added before the next `begin_range` call, or
+    /// to the last valid feature if the `begin_range` call was the last one.
+    /// Calling [`Self::clear`] removes all range information.
     ///
     /// # Panics
     /// If no range with the given ID exists.
@@ -1052,13 +1052,13 @@ impl DynamicInstanceFeatureBuffer {
     }
 
     /// Returns the range of valid feature indices encompassing all features
-    /// added before defining any explicit ranges with [`begin_range`].
+    /// added before defining any explicit ranges with [`Self::begin_range`].
     pub fn initial_valid_feature_range(&self) -> Range<u32> {
         self.valid_feature_range(InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID)
     }
 
     /// Creates an [`InstanceFeatureBufferRangeMap`] containing the information
-    /// describing the ranges that have been defined with [`begin_range`].
+    /// describing the ranges that have been defined with [`Self::begin_range`].
     pub fn create_range_map(&self) -> InstanceFeatureBufferRangeMap {
         InstanceFeatureBufferRangeMap::from_manager(&self.range_manager)
     }
@@ -1089,11 +1089,11 @@ impl DynamicInstanceFeatureBuffer {
     }
 
     /// Returns the range with the given ID and a slice with the features in
-    /// that range. Ranges are defined by calling [`begin_range`]. The range
-    /// spans from and including the first feature added after the
-    /// `begin_range` call to and including the last feature added before
-    /// the next `begin_range` call, or to the last valid feature if the
-    /// `begin_range` call was the last one. Calling [`clear`] removes all
+    /// that range. Ranges are defined by calling [`Self::begin_range`]. The
+    /// range spans from and including the first feature added after the
+    /// `begin_range` call to and including the last feature added before the
+    /// next `begin_range` call, or to the last valid feature if the
+    /// `begin_range` call was the last one. Calling [`Self::clear`] removes all
     /// range information.
     ///
     /// # Panics
@@ -1110,7 +1110,7 @@ impl DynamicInstanceFeatureBuffer {
     }
 
     /// Returns a slice with the currently valid features added before defining
-    /// any explicit ranges with [`begin_range`]
+    /// any explicit ranges with [`Self::begin_range`]
     ///
     /// # Panics
     /// - If `Fe` is not the feature type the buffer was initialized with.
@@ -1221,7 +1221,7 @@ impl DynamicInstanceFeatureBuffer {
     /// Begins a new range in the buffer starting at the location just after the
     /// current last feature (or at the beginning if the buffer is empty). The
     /// range is assigned the given ID. All features added between this and the
-    /// next [`begin_range`] call will be considered part of this new range.
+    /// next `begin_range` call will be considered part of this new range.
     ///
     /// # Panics
     /// If a range with the given ID already exists.
@@ -1312,11 +1312,12 @@ impl DynamicInstanceFeatureBuffer {
 }
 
 impl InstanceFeatureBufferRangeManager {
-    /// ID of the initial range created when calling [`new_with_initial_range`].
+    /// ID of the initial range created when calling
+    /// [`Self::new_with_initial_range`].
     pub const INITIAL_RANGE_ID: InstanceFeatureBufferRangeID = InstanceFeatureBufferRangeID::MAX;
 
-    /// Creates a new [`BufferRangeManager`] with a single range starting at
-    /// index 0. The ID of the initial range is available in the
+    /// Creates a new `InstanceFeatureBufferRangeManager` with a single range
+    /// starting at index 0. The ID of the initial range is available in the
     /// [`Self::INITIAL_RANGE_ID`] constant.
     pub fn new_with_initial_range() -> Self {
         Self {

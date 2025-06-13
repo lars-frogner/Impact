@@ -44,7 +44,7 @@ impl ScreenCapturer {
     }
 
     /// Schedule a capture of the omnidirectional light shadow map texture for
-    /// the next [`Self::save_omnidirectional_light_shadow_map_if_requested`]
+    /// the next [`Self::save_omnidirectional_light_shadow_maps_if_requested`]
     /// call.
     pub fn request_omnidirectional_light_shadow_map_save(&self) {
         self.omnidirectional_light_shadow_map_save_requested
@@ -52,7 +52,7 @@ impl ScreenCapturer {
     }
 
     /// Schedule a capture of the unidirectional light shadow map texture for
-    /// the next [`Self::save_unidirectional_light_shadow_map_if_requested`]
+    /// the next [`Self::save_unidirectional_light_shadow_maps_if_requested`]
     /// call.
     pub fn request_unidirectional_light_shadow_map_save(&self) {
         self.unidirectional_light_shadow_map_save_requested

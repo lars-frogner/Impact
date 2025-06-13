@@ -10,7 +10,7 @@ use roc_integration::roc;
 /// [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
+/// [`SceneGraphCameraNodeComp`](crate::scene::components::SceneGraphCameraNodeComp) for the
 /// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
@@ -28,7 +28,7 @@ pub struct PerspectiveCameraComp {
 /// [`OrthographicCamera`](crate::camera::OrthographicCamera).
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
+/// [`SceneGraphCameraNodeComp`](crate::scene::components::SceneGraphCameraNodeComp) for the
 /// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.

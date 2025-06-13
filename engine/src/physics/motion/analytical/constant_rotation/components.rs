@@ -13,7 +13,7 @@ use roc_integration::roc;
 /// with a constant angular velocity over time.
 ///
 /// For this component to have an effect, the entity also needs a
-/// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp).
+/// [`ReferenceFrameComp`](crate::physics::motion::components::ReferenceFrameComp).
 #[roc(parents = "Comp", name = "ConstantRotation")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]

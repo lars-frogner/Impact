@@ -73,7 +73,7 @@ pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
 /// it does not already exist.
 ///
 /// # Returns
-/// The [`MeshComp`] representing the mesh.
+/// The [`TriangleMeshComp`] representing the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
@@ -103,7 +103,7 @@ where
 /// using the given projection.
 ///
 /// # Returns
-/// The [`MeshComp`] representing the mesh.
+/// The [`TriangleMeshComp`] representing the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.

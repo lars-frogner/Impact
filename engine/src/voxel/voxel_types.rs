@@ -104,7 +104,7 @@ impl VoxelTypeRegistry {
     /// # Errors
     /// Returns an error if:
     /// - The number of voxel types is not smaller than
-    ///   [`Self::max_voxel_types`].
+    ///   [`Self::max_n_voxel_types`].
     /// - There are duplicate names.
     pub fn new(voxel_types: VoxelTypeSpecifications) -> Result<Self> {
         voxel_types.validate()?;

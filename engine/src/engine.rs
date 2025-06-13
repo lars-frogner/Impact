@@ -275,7 +275,7 @@ impl Engine {
     /// are multiple meshes in the file, they are merged into a single mesh.
     ///
     /// # Returns
-    /// The [`MeshComp`] representing the mesh.
+    /// The [`TriangleMeshComp`] representing the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
@@ -295,7 +295,7 @@ impl Engine {
     /// merged into a single mesh.
     ///
     /// # Returns
-    /// The [`MeshComp`] representing the mesh.
+    /// The [`TriangleMeshComp`] representing the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
@@ -321,7 +321,7 @@ impl Engine {
     /// repository if it does not already exist.
     ///
     /// # Returns
-    /// The [`MeshComp`] representing the mesh.
+    /// The [`TriangleMeshComp`] representing the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
@@ -340,7 +340,7 @@ impl Engine {
     /// texture coordinates for the mesh using the given projection.
     ///
     /// # Returns
-    /// The [`MeshComp`] representing the mesh.
+    /// The [`TriangleMeshComp`] representing the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.

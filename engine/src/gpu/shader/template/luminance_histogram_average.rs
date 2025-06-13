@@ -18,8 +18,10 @@ use std::sync::LazyLock;
 
 /// Shader template for the luminance histogram average computation pass, which
 /// computes the weighted average of the luminance histogram in the storage
-/// buffer computed by the [`LuminanceHistogramShaderTemplate`] and writes the
-/// result to a storage buffer that can be mapped for reading by the CPU.
+/// buffer computed by the
+/// [`LuminanceHistogramShaderTemplate`](super::luminance_histogram::LuminanceHistogramShaderTemplate)
+/// and writes the result to a storage buffer that can be mapped for reading by
+/// the CPU.
 #[derive(Clone, Debug)]
 pub struct LuminanceHistogramAverageShaderTemplate {
     bin_count: usize,

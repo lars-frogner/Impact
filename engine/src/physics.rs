@@ -69,10 +69,7 @@ pub struct SimulatorConfig {
     /// frame duration. This gives "real-time" simulation.
     pub match_frame_duration: bool,
     /// The factor by which to increase or decrease the simulation speed
-    /// multiplyer when calling
-    /// [`increment_simulation_speed_multiplier`](PhysicsSimulator::increment_simulation_speed_multiplier)
-    /// or
-    /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
+    /// multiplier when requested.
     pub simulation_speed_multiplier_increment_factor: fph,
 }
 

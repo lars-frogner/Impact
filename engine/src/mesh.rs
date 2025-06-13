@@ -206,7 +206,7 @@ impl MeshRepository {
     /// repository
     ///
     /// # Errors
-    /// See [`Self::load_specified_mesh`].
+    /// See [`Self::load_specified_triangle_mesh`].
     pub fn load_specified_meshes(
         &mut self,
         triangle_mesh_specifications: &[TriangleMeshSpecification],

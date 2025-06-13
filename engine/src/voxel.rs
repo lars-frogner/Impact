@@ -450,7 +450,7 @@ impl VoxelObjectManager {
     /// Adds the given [`MeshedChunkedVoxelObject`] to the manager.
     ///
     /// # Returns
-    /// A new [`ChunkedVoxelObjectID`] representing the added voxel object.
+    /// A new [`VoxelObjectID`] representing the added voxel object.
     pub fn add_voxel_object(&mut self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
         let voxel_object_id = self.create_new_voxel_object_id();
         self.objects.insert(voxel_object_id, voxel_object);

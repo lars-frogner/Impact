@@ -71,7 +71,7 @@ impl GaussianBlurSamples {
     ///
     /// # Panics
     /// - If `samples_per_side` is not smaller than
-    ///   [`MAX_GAUSSIAN_BLUR_SAMPLE_COUNT`].
+    ///   [`MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS`].
     /// - If `tail_samples_to_truncate` is larger than `samples_per_side`.
     pub fn new(samples_per_side: u32, tail_samples_to_truncate: u32) -> Self {
         assert!(samples_per_side < MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS as u32);

@@ -44,8 +44,9 @@ pub fn resource_group_id() -> GPUResourceGroupID {
 /// texture array. The tables are read from file or computed.
 ///
 /// # Errors
-/// Returns an error if a computed table can not be saved to file.
-/// Additionally, see [`Texture::from_lookup_table`].
+/// Returns an error if a computed table can not be saved to file. Additionally,
+/// see
+/// [`Texture::from_lookup_table`](crate::gpu::texture::Texture::from_lookup_table).
 pub(super) fn load_lookup_table_into_assets(assets: &mut Assets) -> Result<()> {
     let file_path = assets
         .lookup_table_dir()
