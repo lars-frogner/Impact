@@ -15,8 +15,7 @@ use crate::{
         uniform::{self, UniformBufferable},
     },
     mesh::buffer::{
-        MeshVertexAttributeLocation, VertexBufferable,
-        create_vertex_buffer_layout_for_vertex,
+        MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
     },
     voxel::{
         VoxelObjectID,
@@ -42,7 +41,8 @@ pub struct VoxelMaterialGPUResourceManager {
     bind_group: wgpu::BindGroup,
 }
 
-/// Owner and manager of GPU buffers for a [`ChunkedVoxelObject`].
+/// Owner and manager of GPU buffers for a
+/// [`ChunkedVoxelObject`](crate::voxel::chunks::ChunkedVoxelObject).
 #[derive(Debug)]
 pub struct VoxelObjectGPUBufferManager {
     chunk_extent: f64,
@@ -251,8 +251,9 @@ impl VoxelMaterialGPUResourceManager {
 
 impl VoxelObjectGPUBufferManager {
     /// Creates a new manager of GPU resources for the given
-    /// [`MeshedChunkedVoxelObject`]. This involves initializing GPU buffers
-    /// for the relevant data in the object's [`ChunkedVoxelObjectMesh`].
+    /// [`MeshedChunkedVoxelObject`]. This involves initializing GPU buffers for
+    /// the relevant data in the object's
+    /// [`ChunkedVoxelObjectMesh`](crate::voxel::mesh::ChunkedVoxelObjectMesh).
     pub fn for_voxel_object(
         graphics_device: &GraphicsDevice,
         voxel_object_id: VoxelObjectID,

@@ -24,10 +24,11 @@ use impact_ecs::{query, world::World as ECSWorld};
 use nalgebra::{Similarity3, UnitVector3};
 
 /// Updates the model transform of each [`SceneGraph`](crate::scene::SceneGraph)
-/// node representing an entity that also has the [`ReferenceFrameComp`]
-/// component so that the translational, rotational and scaling parts match the
-/// origin offset, position, orientation and scaling. Also updates any flags for
-/// the node to match the entity's [`SceneEntityFlags`].
+/// node representing an entity that also has the
+/// [`crate::physics::motion::components::ReferenceFrameComp`] component so that
+/// the translational, rotational and scaling parts match the origin offset,
+/// position, orientation and scaling. Also updates any flags for the node to
+/// match the entity's [`crate::scene::SceneEntityFlags`].
 pub fn sync_scene_object_transforms_and_flags(
     ecs_world: &ECSWorld,
     scene_graph: &mut SceneGraph<f32>,

@@ -19,7 +19,7 @@ pub trait VoxelGenerator {
 
     /// Returns the voxel at the given indices in a voxel grid. If the indices
     /// are outside the bounds of the grid, this should return
-    /// [`Voxel::fully_outside`].
+    /// [`Voxel::maximally_outside`].
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
 }
 

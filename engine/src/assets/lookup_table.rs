@@ -10,8 +10,9 @@ use anyhow::Result;
 /// lookup table textures and their samplers.
 ///
 /// # Errors
-/// Returns an error if a computed table can not be saved to file.
-/// Additionally, see [`Texture::from_lookup_table`].
+/// Returns an error if a computed table can not be saved to file. Additionally,
+/// see
+/// [`Texture::from_lookup_table`](crate::gpu::texture::Texture::from_lookup_table).
 pub fn initialize_default_lookup_tables(
     assets: &mut Assets,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,

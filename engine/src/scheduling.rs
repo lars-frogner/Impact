@@ -30,8 +30,7 @@ use crate::thread::WorkerID;
 /// # Type parameters `S` is the type of an object representing the external
 /// state that the task can modify.
 pub trait Task<S>: Sync + Send + Debug {
-    /// Returns a unique ID identifying this task. This could be generated from
-    /// a task name by calling [`task_name_to_id`].
+    /// Returns a unique ID identifying this task.
     fn id(&self) -> TaskID;
 
     /// Returns the ID of every other task that must have been completed before
@@ -135,7 +134,7 @@ enum TaskReady {
 ///
 /// The macro takes as input the name of the new task type, the other tasks
 /// (also defined with this macro) this task depends on, the execution tags
-/// (defined with the [`define_execution_tag`] macro) that should trigger this
+/// (defined with the `define_execution_tag` macro) that should trigger this
 /// task, and a closure that takes a reference to some state object and executes
 /// the task on it.
 ///
@@ -257,7 +256,7 @@ macro_rules! define_execution_tag {
 
 /// Macro that creates a static [`Arc<ExecutionTags>`]
 /// variable with the given name containing the given list of
-/// execution tags (defined with the [`define_execution_tag`]
+/// execution tags (defined with the `define_execution_tag`
 /// macro).
 #[macro_export]
 macro_rules! define_execution_tag_set {

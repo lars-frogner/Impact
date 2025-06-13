@@ -22,8 +22,10 @@ pub struct DetailedDragComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
-/// associated [`DragLoadMap`](crate::physics::DragLoadMap) in the
-/// [`DragLoadMapRepository`](crate::physics::rigid_body::forces::DragLoadMapRepository).
+/// associated
+/// [`DragLoadMap`](crate::physics::rigid_body::forces::detailed_drag::DragLoadMap)
+/// in the
+/// [`DragLoadMapRepository`](crate::physics::rigid_body::forces::detailed_drag::DragLoadMapRepository).
 #[roc(parents = "Comp", name = "DragLoadMap")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]

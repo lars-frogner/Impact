@@ -38,7 +38,7 @@ pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
     fn reset_projection_change_tracking(&self);
 }
 
-/// Represents a [`Camera`] that has a camera node in a [`SceneGraph`].
+/// Represents a [`Camera`] that has a camera node in a [`SceneGraph`](crate::scene::SceneGraph).
 #[derive(Debug)]
 pub struct SceneCamera<F: Float> {
     camera: Box<dyn Camera<F>>,
@@ -70,7 +70,7 @@ pub struct OrthographicCamera<F: Float> {
 
 impl<F: Float> SceneCamera<F> {
     /// Creates a new [`SceneCamera`] representing the given [`Camera`] in the
-    /// camera node with the given ID in the [`SceneGraph`].
+    /// camera node with the given ID in the [`SceneGraph`](crate::scene::SceneGraph).
     pub fn new(
         camera: impl Camera<F>,
         scene_graph_node_id: CameraNodeID,
@@ -94,7 +94,7 @@ impl<F: Float> SceneCamera<F> {
         &self.view_transform
     }
 
-    /// Returns the ID of the [`CameraNode`](crate::scene::graph::CameraNode)
+    /// Returns the ID of the [`CameraNode`](crate::scene::CameraNode)
     /// for the camera in the [`SceneGraph`](crate::scene::SceneGraph).
     pub fn scene_graph_node_id(&self) -> CameraNodeID {
         self.scene_graph_node_id

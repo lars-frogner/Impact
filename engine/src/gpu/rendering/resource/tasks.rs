@@ -17,7 +17,7 @@ use anyhow::Result;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) performs any required
-    /// updates for keeping the [`World`]s render resources in sync with
+    /// updates for keeping the engine's render resources in sync with
     /// the source data.
     ///
     /// GPU resources whose source data no longer exists will

@@ -13,8 +13,8 @@ use roc_integration::roc;
 /// entities that use a [`PlanarTextureProjection`].
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`MeshComp`](crate::mesh::components::MeshComp) for the entity. It is
-/// therefore not kept after entity creation.
+/// [`TriangleMeshComp`](crate::mesh::components::TriangleMeshComp) for the
+/// entity. It is therefore not kept after entity creation.
 #[roc(parents = "Comp", name = "PlanarTextureProjection")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]

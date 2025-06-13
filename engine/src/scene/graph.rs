@@ -422,7 +422,7 @@ impl<F: Float> SceneGraph<F> {
     /// the transforms of its node and parent nodes.
     ///
     /// # Warning
-    /// Make sure to [`update_all_group_to_root_transforms`]  before calling
+    /// Make sure to [`Self::update_all_group_to_root_transforms`] before calling
     /// this method if any group nodes have changed.
     pub fn sync_camera_view_transform(&self, scene_camera: &mut SceneCamera<F>) {
         let camera_node = self.camera_nodes.node(scene_camera.scene_graph_node_id());
@@ -441,8 +441,8 @@ impl<F: Float> SceneGraph<F> {
     /// them to the given instance feature manager.
     ///
     /// # Warning
-    /// Make sure to [`update_all_bounding_spheres`] and
-    /// [`compute_view_transform`] before calling this method if any nodes have
+    /// Make sure to [`Self::update_all_bounding_spheres`] and
+    /// compute the view transform before calling this method if any nodes have
     /// changed.
     pub fn buffer_transforms_of_visible_model_instances(
         &self,
@@ -783,7 +783,7 @@ impl SceneGraph<f32> {
     /// particular light.
     ///
     /// # Warning
-    /// Make sure to [`buffer_transforms_of_visible_model_instances`] before
+    /// Make sure to [`Self::buffer_transforms_of_visible_model_instances`] before
     /// calling this method, so that the ranges of model to cubemap face
     /// transforms in the model instance buffers come after the initial range
     /// containing model to camera transforms.
@@ -870,7 +870,7 @@ impl SceneGraph<f32> {
     /// light and cascade.
     ///
     /// # Warning
-    /// Make sure to [`buffer_transforms_of_visible_model_instances`] before
+    /// Make sure to [`Self::buffer_transforms_of_visible_model_instances`] before
     /// calling this method, so that the ranges of model to light transforms in
     /// the model instance buffers come after the initial range containing model
     /// to camera transforms.

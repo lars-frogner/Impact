@@ -20,7 +20,7 @@ pub struct DrawIndirectArgs {
     /// The instance ID of the first instance to draw.
     ///
     /// Has to be 0, unless
-    /// [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE)
+    /// [`Features::INDIRECT_FIRST_INSTANCE`](wgpu::Features::INDIRECT_FIRST_INSTANCE)
     /// is enabled.
     pub first_instance: u32,
 }
@@ -41,7 +41,7 @@ pub struct DrawIndexedIndirectArgs {
     /// The instance ID of the first instance to draw.
     ///
     /// Has to be 0, unless
-    /// [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE)
+    /// [`Features::INDIRECT_FIRST_INSTANCE`](wgpu::Features::INDIRECT_FIRST_INSTANCE)
     /// is enabled.
     pub first_instance: u32,
 }

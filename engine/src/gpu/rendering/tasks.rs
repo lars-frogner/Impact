@@ -20,7 +20,7 @@ define_execution_tag!(
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) executes the
-    /// [`RenderingSystem::render`] method.
+    /// [`RenderingSystem::render_to_surface`] method.
     [pub] Render,
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],

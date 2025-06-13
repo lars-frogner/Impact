@@ -184,7 +184,8 @@ pub struct VoxelObjectComp {
 /// is highest at the center of the sphere and decreases quadratically to zero
 /// at the full radius.
 ///
-/// Does nothing if the entity does not have a [`ReferenceFrameComp`].
+/// Does nothing if the entity does not have a
+/// [`crate::physics::motion::components::ReferenceFrameComp`].
 #[roc(parents = "Comp", name = "VoxelAbsorbingSphere")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
@@ -202,7 +203,8 @@ pub struct VoxelAbsorbingSphereComp {
 /// is highest at the central line segment of the capsule and decreases
 /// quadratically to zero at the capsule boundary.
 ///
-/// Does nothing if the entity does not have a [`ReferenceFrameComp`].
+/// Does nothing if the entity does not have a
+/// [`crate::physics::motion::components::ReferenceFrameComp`].
 #[roc(parents = "Comp", name = "VoxelAbsorbingCapsule")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]

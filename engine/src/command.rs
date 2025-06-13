@@ -52,7 +52,7 @@ impl<C> CommandQueue<C> {
     ///
     /// # Concurrency
     /// If the closure causes [`Self::enqueue_command`] or
-    /// [`Self::execute_command`] to be called, it will deadlock.
+    /// [`Self::execute_commands`] to be called, it will deadlock.
     pub fn execute_commands(&self, mut execute: impl FnMut(C)) {
         let mut commands = self.commands.write().unwrap();
         while let Some(command) = commands.pop_front() {
@@ -67,7 +67,7 @@ impl<C> CommandQueue<C> {
     ///
     /// # Concurrency
     /// If the closure causes [`Self::enqueue_command`] or
-    /// [`Self::execute_command`] to be called, it will deadlock.
+    /// [`Self::execute_commands`] to be called, it will deadlock.
     pub fn try_execute_commands(&self, mut execute: impl FnMut(C) -> Result<()>) -> Result<()> {
         let mut commands = self.commands.write().unwrap();
         while let Some(command) = commands.pop_front() {

@@ -192,7 +192,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::from_path`].
+    /// - See also [`Texture::from_path`](crate::gpu::texture::Texture::from_path).
     pub fn load_texture_from_path(
         &mut self,
         texture_name: impl ToString,
@@ -248,7 +248,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::from_cubemap_image_paths`].
+    /// - See also [`Texture::from_cubemap_image_paths`](crate::gpu::texture::Texture::from_cubemap_image_paths).
     pub fn load_cubemap_texture_from_paths<P: AsRef<Path>>(
         &mut self,
         texture_name: impl ToString,
@@ -308,7 +308,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::array_from_image_paths`].
+    /// - See also [`Texture::array_from_image_paths`](crate::gpu::texture::Texture::array_from_image_paths).
     pub fn load_texture_array_from_paths<I, P>(
         &mut self,
         texture_name: impl AsRef<str>,
@@ -365,7 +365,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::from_lookup_table`].
+    /// - See also [`Texture::from_lookup_table`](crate::gpu::texture::Texture::from_lookup_table).
     pub fn load_texture_from_generated_lookup_table<T: TexelType>(
         &mut self,
         texture_name: impl AsRef<str>,
@@ -412,7 +412,7 @@ impl Assets {
     /// Returns an error if:
     /// - A texture with the same name already has been loaded.
     /// - The computed table can not be saved to file.
-    /// - See also [`Texture::from_lookup_table`].
+    /// - See also [`Texture::from_lookup_table`](crate::gpu::texture::Texture::from_lookup_table).
     pub fn load_texture_from_stored_or_computed_lookup_table<T>(
         &mut self,
         texture_name: impl AsRef<str>,
