@@ -5,7 +5,7 @@ use crate::{
     engine::{Engine, tasks::EngineTaskScheduler},
     gizmo::{self, GizmoSet, GizmoType},
     gpu::rendering::tasks::RenderingTag,
-    scene::tasks::{BufferVisibleModelInstances, ClearModelInstanceBuffers},
+    scene::tasks::{BufferVisibleModelInstances, ClearModelInstanceBuffers, SyncLightsInStorage},
 };
 use anyhow::Result;
 
@@ -48,7 +48,8 @@ define_task!(
     depends_on = [
         UpdateVisibilityFlagsForGizmos,
         ClearModelInstanceBuffers,
-        BufferVisibleModelInstances
+        BufferVisibleModelInstances,
+        SyncLightsInStorage
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
@@ -58,11 +59,13 @@ define_task!(
             let scene = engine.scene().read().unwrap();
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
+            let light_storage = scene.light_storage().read().unwrap();
 
             gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
                 &mut instance_feature_manager,
                 &scene_graph,
+                &light_storage,
                 current_frame_count,
             );
             Ok(())
