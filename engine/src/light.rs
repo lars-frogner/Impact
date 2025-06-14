@@ -443,14 +443,29 @@ impl LightStorage {
         self.update_max_reach_for_omnidirectional_lights();
     }
 
+    /// Returns a reference to the [`OmnidirectionalLight`] with the given
+    /// ID, or [`None`] if it does not exist.
+    pub fn get_omnidirectional_light(&self, light_id: LightID) -> Option<&OmnidirectionalLight> {
+        self.omnidirectional_light_buffer.get_uniform(light_id)
+    }
+
     /// Returns a reference to the [`OmnidirectionalLight`] with the given ID.
     ///
     /// # Panics
     /// If no omnidirectional light with the given ID exists.
     pub fn omnidirectional_light(&self, light_id: LightID) -> &OmnidirectionalLight {
-        self.omnidirectional_light_buffer
-            .get_uniform(light_id)
+        self.get_omnidirectional_light(light_id)
             .expect("Requested missing omnidirectional light")
+    }
+
+    /// Returns a reference to the [`ShadowableOmnidirectionalLight`] with the
+    /// given ID, or [`None`] if it does not exist.
+    pub fn get_shadowable_omnidirectional_light(
+        &self,
+        light_id: LightID,
+    ) -> Option<&ShadowableOmnidirectionalLight> {
+        self.shadowable_omnidirectional_light_buffer
+            .get_uniform(light_id)
     }
 
     /// Returns a mutable reference to the [`OmnidirectionalLight`] with the
@@ -473,8 +488,7 @@ impl LightStorage {
         &self,
         light_id: LightID,
     ) -> &ShadowableOmnidirectionalLight {
-        self.shadowable_omnidirectional_light_buffer
-            .get_uniform(light_id)
+        self.get_shadowable_omnidirectional_light(light_id)
             .expect("Requested missing shadowable omnidirectional light")
     }
 
@@ -492,13 +506,18 @@ impl LightStorage {
             .expect("Requested missing shadowable omnidirectional light")
     }
 
+    /// Returns a reference to the [`UnidirectionalLight`] with the given
+    /// ID, or [`None`] if it does not exist.
+    pub fn get_unidirectional_light(&self, light_id: LightID) -> Option<&UnidirectionalLight> {
+        self.unidirectional_light_buffer.get_uniform(light_id)
+    }
+
     /// Returns a reference to the [`UnidirectionalLight`] with the given ID.
     ///
     /// # Panics
     /// If no unidirectional light with the given ID exists.
     pub fn unidirectional_light(&self, light_id: LightID) -> &UnidirectionalLight {
-        self.unidirectional_light_buffer
-            .get_uniform(light_id)
+        self.get_unidirectional_light(light_id)
             .expect("Requested missing unidirectional light")
     }
 
@@ -513,6 +532,16 @@ impl LightStorage {
             .expect("Requested missing unidirectional light")
     }
 
+    /// Returns a reference to the [`ShadowableUnidirectionalLight`] with the given
+    /// ID, or [`None`] if it does not exist.
+    pub fn get_shadowable_unidirectional_light(
+        &self,
+        light_id: LightID,
+    ) -> Option<&ShadowableUnidirectionalLight> {
+        self.shadowable_unidirectional_light_buffer
+            .get_uniform(light_id)
+    }
+
     /// Returns a reference to the [`ShadowableUnidirectionalLight`] with the
     /// given ID.
     ///
@@ -522,8 +551,7 @@ impl LightStorage {
         &self,
         light_id: LightID,
     ) -> &ShadowableUnidirectionalLight {
-        self.shadowable_unidirectional_light_buffer
-            .get_uniform(light_id)
+        self.get_shadowable_unidirectional_light(light_id)
             .expect("Requested missing shadowable unidirectional light")
     }
 
@@ -704,13 +732,24 @@ impl OmnidirectionalLight {
         &self.camera_space_position
     }
 
+    /// Returns the distance above which incident luminance from the light is
+    /// clamped to zero.
+    pub fn max_reach(&self) -> f32 {
+        self.max_reach
+    }
+
     /// Sets the camera space position of the light to the given position.
     pub fn set_camera_space_position(&mut self, camera_space_position: Point3<f32>) {
         self.camera_space_position = camera_space_position;
     }
 
-    /// Sets the luminous intensity of the light to the given value.
+    /// Sets the luminous intensity of the light to the given value. This also
+    /// updates the max reach of the light.
     pub fn set_luminous_intensity(&mut self, luminous_intensity: LuminousIntensity) {
+        self.max_reach *= Self::compute_max_reach_change_factor_due_to_change_in_luminius_intensity(
+            &self.luminous_intensity,
+            &luminous_intensity,
+        );
         self.luminous_intensity = luminous_intensity;
     }
 
@@ -726,6 +765,19 @@ impl OmnidirectionalLight {
             &self.luminous_intensity,
             min_incident_luminance,
         );
+    }
+
+    /// Computes the multiplicative factor by which the max reach of a light
+    /// changes when going from the old to a new luminous intensity.
+    fn compute_max_reach_change_factor_due_to_change_in_luminius_intensity(
+        old_luminous_intensity: &LuminousIntensity,
+        new_luminous_intensity: &LuminousIntensity,
+    ) -> f32 {
+        let old_scalar_luminous_intensity =
+            compute_scalar_luminance_from_rgb_luminance(old_luminous_intensity);
+        let new_scalar_luminous_intensity =
+            compute_scalar_luminance_from_rgb_luminance(new_luminous_intensity);
+        f32::sqrt(new_scalar_luminous_intensity / old_scalar_luminous_intensity)
     }
 
     /// Computes the distance at which the incident scalar luminance from an
@@ -806,13 +858,24 @@ impl ShadowableOmnidirectionalLight {
         &self.camera_space_position
     }
 
+    /// Returns the distance above which incident luminance from the light is
+    /// clamped to zero.
+    pub fn max_reach(&self) -> f32 {
+        self.max_reach
+    }
+
     /// Sets the camera space position of the light to the given position.
     pub fn set_camera_space_position(&mut self, camera_space_position: Point3<f32>) {
         self.camera_space_position = camera_space_position;
     }
 
-    /// Sets the luminous intensity of the light to the given value.
+    /// Sets the luminous intensity of the light to the given value. This also
+    /// updates the max reach of the light.
     pub fn set_luminous_intensity(&mut self, luminous_intensity: LuminousIntensity) {
+        self.max_reach *= OmnidirectionalLight::compute_max_reach_change_factor_due_to_change_in_luminius_intensity(
+            &self.luminous_intensity,
+            &luminous_intensity,
+        );
         self.luminous_intensity = luminous_intensity;
     }
 

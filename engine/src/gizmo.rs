@@ -3,18 +3,20 @@
 
 pub mod components;
 pub mod entity;
+pub mod mesh;
 pub mod systems;
 pub mod tasks;
 
 use crate::{
     material::MaterialHandle,
-    mesh::{self, MeshID, MeshPrimitive},
+    mesh::{MeshID, MeshPrimitive},
     model::{
         InstanceFeature, InstanceFeatureManager, ModelID, transform::InstanceModelViewTransform,
     },
 };
 use bitflags::{Flags, bitflags};
 use bytemuck::{Pod, Zeroable};
+use impact_math::hash64;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
@@ -26,6 +28,7 @@ use std::sync::LazyLock;
 pub enum GizmoType {
     ReferenceFrameAxes = 0,
     BoundingSphere = 1,
+    LightSphere = 2,
 }
 
 bitflags! {
@@ -35,9 +38,10 @@ bitflags! {
     /// information.
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
-    pub struct GizmoSet: u8 {
-        const REFERENCE_FRAME_AXES = 1 << 0;
-        const BOUNDING_SPHERE      = 1 << 1;
+    pub struct GizmoSet: u16 {
+        const REFERENCE_FRAME_AXES       = 1 << 0;
+        const BOUNDING_SPHERE            = 1 << 1;
+        const LIGHT_SPHERE               = 1 << 2;
     }
 }
 
@@ -56,12 +60,16 @@ pub struct GizmoConfig {
     /// reference frame. They meet at the original origin of the entity, so any
     /// origin offset (typically used to shift the origin to the center of mass)
     /// is not accounted for.
-    pub reference_frame_visibility: GizmoVisibility,
+    pub reference_frame_axes_visibility: GizmoVisibility,
     /// The visibility of the gizmo showing bounding spheres.
     ///
-    /// When visible, the bounding spheres of models in the scene graph will be
-    /// outlined by orthogonal yellow circles.
+    /// When visible, the bounding spheres of models in the scene graph will
+    /// be rendered as semi-transparent cyan spheres.
     pub bounding_sphere_visibility: GizmoVisibility,
+    /// When enabled, the boundaries at which the light from omnidirectional
+    /// light sources is cut off will be rendered as semi-transparent yellow
+    /// spheres."
+    pub light_sphere_visibility: GizmoVisibility,
 }
 
 /// Manager controlling the display of gizmos.
@@ -102,8 +110,12 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 2] {
-        [Self::ReferenceFrameAxes, Self::BoundingSphere]
+    pub const fn all() -> [Self; 3] {
+        [
+            Self::ReferenceFrameAxes,
+            Self::BoundingSphere,
+            Self::LightSphere,
+        ]
     }
 
     /// Returns an iterator over all gizmos in the given set.
@@ -118,14 +130,7 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => GizmoSet::REFERENCE_FRAME_AXES,
             Self::BoundingSphere => GizmoSet::BOUNDING_SPHERE,
-        }
-    }
-
-    /// The ID of the line segment mesh used for the gizmo.
-    pub fn mesh_id(&self) -> MeshID {
-        match self {
-            Self::ReferenceFrameAxes => mesh::reference_frame_axes_mesh_id(),
-            Self::BoundingSphere => mesh::bounding_sphere_mesh_id(),
+            Self::LightSphere => GizmoSet::LIGHT_SPHERE,
         }
     }
 
@@ -133,7 +138,7 @@ impl GizmoType {
     pub fn mesh_primitive(&self) -> MeshPrimitive {
         match self {
             Self::ReferenceFrameAxes => MeshPrimitive::LineSegment,
-            Self::BoundingSphere => MeshPrimitive::Triangle,
+            Self::BoundingSphere | Self::LightSphere => MeshPrimitive::Triangle,
         }
     }
 
@@ -141,7 +146,7 @@ impl GizmoType {
     pub fn obscurability(&self) -> GizmoObscurability {
         match self {
             Self::ReferenceFrameAxes => GizmoObscurability::NonObscurable,
-            Self::BoundingSphere => GizmoObscurability::Obscurable,
+            Self::BoundingSphere | Self::LightSphere => GizmoObscurability::Obscurable,
         }
     }
 
@@ -150,6 +155,7 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => "Reference frame axes",
             Self::BoundingSphere => "Bounding spheres",
+            Self::LightSphere => "Light spheres",
         }
     }
 
@@ -168,7 +174,13 @@ impl GizmoType {
             Self::BoundingSphere => {
                 "\
                 When enabled, the bounding spheres of models in the scene graph will be \
-                outlined by orthogonal yellow circles."
+                rendered as semi-transparent cyan spheres."
+            }
+            Self::LightSphere => {
+                "\
+                When enabled, the boundaries at which the light from omnidirectional \
+                light sources is cut off will be rendered as semi-transparent yellow \
+                spheres."
             }
         }
     }
@@ -186,16 +198,18 @@ impl GizmoConfig {
     /// Returns the visibility of the given gizmo.
     pub fn visibility(&self, gizmo: GizmoType) -> GizmoVisibility {
         match gizmo {
-            GizmoType::ReferenceFrameAxes => self.reference_frame_visibility,
+            GizmoType::ReferenceFrameAxes => self.reference_frame_axes_visibility,
             GizmoType::BoundingSphere => self.bounding_sphere_visibility,
+            GizmoType::LightSphere => self.light_sphere_visibility,
         }
     }
 
     /// Returns a mutable reference to the visibility of the given gizmo.
     pub fn visibility_mut(&mut self, gizmo: GizmoType) -> &mut GizmoVisibility {
         match gizmo {
-            GizmoType::ReferenceFrameAxes => &mut self.reference_frame_visibility,
+            GizmoType::ReferenceFrameAxes => &mut self.reference_frame_axes_visibility,
             GizmoType::BoundingSphere => &mut self.bounding_sphere_visibility,
+            GizmoType::LightSphere => &mut self.light_sphere_visibility,
         }
     }
 }
@@ -264,7 +278,10 @@ pub fn gizmo_model_ids() -> &'static [ModelID; GizmoType::count()] {
 
 static GIZMO_MODEL_IDS: LazyLock<[ModelID; GizmoType::count()]> = LazyLock::new(|| {
     GizmoType::all().map(|gizmo| {
-        ModelID::for_mesh_and_material(gizmo.mesh_id(), MaterialHandle::not_applicable())
+        ModelID::for_mesh_and_material(
+            MeshID(hash64!(gizmo.label())),
+            MaterialHandle::not_applicable(),
+        )
     })
 });
 

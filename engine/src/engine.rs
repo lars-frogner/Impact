@@ -118,6 +118,7 @@ impl Engine {
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
         mesh_repository.load_specified_meshes(&asset_specs.triangle_meshes)?;
+        gizmo::mesh::generate_gizmo_meshes(&mut mesh_repository)?;
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
         model::register_model_feature_types(&mut instance_feature_manager);
