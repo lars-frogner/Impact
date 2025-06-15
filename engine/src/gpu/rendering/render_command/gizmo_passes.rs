@@ -304,7 +304,7 @@ impl GizmoPassPipeline {
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()> {
-        let model_ids = gizmo::gizmo_model_ids_for_mesh_primitive_and_obscurability(
+        let model_ids = gizmo::model::gizmo_model_ids_for_mesh_primitive_and_obscurability(
             self.mesh_primitive,
             self.obscurability,
         );

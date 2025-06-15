@@ -492,10 +492,18 @@ impl<F: Float> TriangleMesh<F> {
         }
     }
 
+    /// Assigns the given colors to the mesh vertices.
+    ///
+    /// # Panics
+    /// If the number of colors differs from the number of vertices.
+    pub fn set_colors(&mut self, colors: Vec<VertexColor<F>>) {
+        self.colors = colors;
+        self.color_change_tracker.notify_count_change();
+    }
+
     /// Sets the color of every vertex to the given color.
     pub fn set_same_color(&mut self, color: VertexColor<F>) {
-        self.colors = vec![color; self.positions.len()];
-        self.color_change_tracker.notify_count_change();
+        self.set_colors(vec![color; self.positions.len()]);
     }
 
     /// Merges the given mesh into this mesh.

@@ -3,7 +3,7 @@
 use crate::mesh::{FrontFaceSide, LineSegmentMesh, TriangleMesh, VertexColor};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::Float;
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
@@ -698,6 +698,25 @@ impl<F: Float> TriangleMesh<F> {
         mesh
     }
 
+    /// Creates a mesh representing a cube with the given extent, centered on
+    /// the origin and with the width, height and depth axes aligned with the
+    /// x-, y- and z-axis. The six given colors will be assigned to the left,
+    /// right, bottom, top, front and back face respectively.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    pub fn create_cube_with_face_colors(extent: F, face_colors: &[VertexColor<F>; 6]) -> Self {
+        let mut cube = Self::create_box(extent, extent, extent, FrontFaceSide::Outside);
+        cube.remove_normal_vectors();
+
+        let mut colors = Vec::with_capacity(cube.n_vertices());
+        for face_color in face_colors {
+            colors.extend_from_slice(&[*face_color; 4]);
+        }
+        cube.set_colors(colors);
+
+        cube
+    }
+
     /// Creates a mesh representing a sphere with radius 1.0, centered at the
     /// origin, with all vertices having the given color.
     ///
@@ -708,7 +727,7 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// - If `n_rings` is zero.
-    pub fn create_colored_unit_sphere(n_rings: usize, color: VertexColor<F>) -> Self {
+    pub fn create_unit_sphere_with_color(n_rings: usize, color: VertexColor<F>) -> Self {
         let mut sphere = Self::create_sphere(n_rings);
         sphere.remove_normal_vectors();
         sphere.scale(F::TWO);
@@ -743,15 +762,147 @@ impl<F: Float> LineSegmentMesh<F> {
         Self::new(positions, colors)
     }
 
+    /// Creates a mesh containing the edges of the six frusta of a cubemap. The
+    /// frusta are aligned with the Cartesian axes, the far planes are at
+    /// distance one and the near planes are at distance zero.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_unit_cubemap_frusta() -> Self {
+        let mut down_diagonals = Self::create_baseless_unit_pyramid();
+        down_diagonals.translate(&vector![F::ZERO, -F::ONE, F::ZERO]);
+
+        let mut up_diagonals = Self::create_baseless_unit_pyramid();
+        up_diagonals.transform(&Similarity3::from_parts(
+            vector![F::ZERO, F::ONE, F::ZERO].into(),
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::PI),
+            F::ONE,
+        ));
+
+        let mut far_plane_edges = Self::create_unit_cube();
+        far_plane_edges.scale(F::TWO);
+
+        let mut frusta = down_diagonals;
+        frusta.merge_with(&up_diagonals);
+        frusta.merge_with(&far_plane_edges);
+
+        frusta
+    }
+
+    /// Creates a mesh containing the edges of the unit cube centered on the
+    /// origin.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_unit_cube() -> Self {
+        let corners = [
+            [
+                [
+                    pos![-F::ONE_HALF, -F::ONE_HALF, -F::ONE_HALF],
+                    pos![-F::ONE_HALF, -F::ONE_HALF, F::ONE_HALF],
+                ],
+                [
+                    pos![-F::ONE_HALF, F::ONE_HALF, -F::ONE_HALF],
+                    pos![-F::ONE_HALF, F::ONE_HALF, F::ONE_HALF],
+                ],
+            ],
+            [
+                [
+                    pos![F::ONE_HALF, -F::ONE_HALF, -F::ONE_HALF],
+                    pos![F::ONE_HALF, -F::ONE_HALF, F::ONE_HALF],
+                ],
+                [
+                    pos![F::ONE_HALF, F::ONE_HALF, -F::ONE_HALF],
+                    pos![F::ONE_HALF, F::ONE_HALF, F::ONE_HALF],
+                ],
+            ],
+        ];
+
+        let positions = vec![
+            // Bottom face edges
+            corners[0][0][0],
+            corners[0][0][1],
+            corners[0][0][1],
+            corners[1][0][1],
+            corners[1][0][1],
+            corners[1][0][0],
+            corners[1][0][0],
+            corners[0][0][0],
+            // Top face edges
+            corners[0][1][0],
+            corners[0][1][1],
+            corners[0][1][1],
+            corners[1][1][1],
+            corners[1][1][1],
+            corners[1][1][0],
+            corners[1][1][0],
+            corners[0][1][0],
+            // Vertical edges connecting bottom to top
+            corners[0][0][0],
+            corners[0][1][0],
+            corners[0][0][1],
+            corners[0][1][1],
+            corners[1][0][1],
+            corners[1][1][1],
+            corners[1][0][0],
+            corners[1][1][0],
+        ];
+
+        Self::new(positions, Vec::new())
+    }
+
+    /// Creates a mesh containing the edges of a vertical pyramid whose base has
+    /// unit extents and is centered on the origin.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_unit_pyramid() -> Self {
+        let positions = vec![
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![-F::ONE, F::ZERO, -F::ONE],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![-F::ONE, F::ZERO, F::ONE],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![F::ONE, F::ZERO, -F::ONE],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![F::ONE, F::ZERO, F::ONE],
+            pos![-F::ONE, F::ZERO, -F::ONE],
+            pos![-F::ONE, F::ZERO, F::ONE],
+            pos![-F::ONE, F::ZERO, F::ONE],
+            pos![F::ONE, F::ZERO, F::ONE],
+            pos![F::ONE, F::ZERO, F::ONE],
+            pos![F::ONE, F::ZERO, -F::ONE],
+            pos![F::ONE, F::ZERO, -F::ONE],
+            pos![-F::ONE, F::ZERO, -F::ONE],
+        ];
+
+        Self::new(positions, Vec::new())
+    }
+
+    /// Creates a mesh containing the diagonal edges of a vertical pyramid
+    /// whose base has unit extents and is centered on the origin. The base
+    /// edges are not included.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_baseless_unit_pyramid() -> Self {
+        let positions = vec![
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![-F::ONE, F::ZERO, -F::ONE],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![-F::ONE, F::ZERO, F::ONE],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![F::ONE, F::ZERO, -F::ONE],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![F::ONE, F::ZERO, F::ONE],
+        ];
+
+        Self::new(positions, Vec::new())
+    }
+
     /// Creates a mesh containing the three circles formed by the intersection
     /// of the three Cartesian coordinate planes with the unit radius circle
     /// centered on the origin. Each circle will consist of the given number of
-    /// line segments. If provided, a color will be applied to all three
-    /// circles.
-    pub fn create_unit_sphere_great_circles(
-        n_circumference_segments: usize,
-        color: Option<VertexColor<F>>,
-    ) -> Self {
+    /// line segments.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_unit_sphere_great_circles(n_circumference_segments: usize) -> Self {
         let xz_circle = Self::create_horizontal_unit_circle(n_circumference_segments);
 
         let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
@@ -769,10 +920,6 @@ impl<F: Float> LineSegmentMesh<F> {
         let mut sphere = xz_circle;
         sphere.merge_with(&xy_circle);
         sphere.merge_with(&yz_circle);
-
-        if let Some(color) = color {
-            sphere.set_same_color(color);
-        }
 
         sphere
     }

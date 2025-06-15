@@ -16,7 +16,9 @@ use impact_containers::{HashMap, HashSet};
 use impact_geometry::Point;
 use impact_math::{Float, hash64, stringhash64_newtype};
 use log::debug;
-use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector4, vector};
+use nalgebra::{
+    Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
+};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -428,6 +430,11 @@ impl<F: Float> VertexPosition<F> {
         Self(rotation * self.0)
     }
 
+    /// Returns the position translated by the given displacement vector.
+    pub fn translated(&self, translation: &Vector3<F>) -> Self {
+        Self(self.0 + translation)
+    }
+
     /// Returns the position transformed by the given similarity transform.
     pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
         Self(transform * self.0)
@@ -460,6 +467,7 @@ impl<F: Float> VertexTangentSpaceQuaternion<F> {
 
 impl<F: Float> VertexColor<F> {
     pub const BLACK: Self = Self(vector![F::ZERO, F::ZERO, F::ZERO, F::ONE]);
+    pub const WHITE: Self = Self(vector![F::ONE, F::ONE, F::ONE, F::ONE]);
     pub const RED: Self = Self(vector![F::ONE, F::ZERO, F::ZERO, F::ONE]);
     pub const GREEN: Self = Self(vector![F::ZERO, F::ONE, F::ZERO, F::ONE]);
     pub const BLUE: Self = Self(vector![F::ZERO, F::ZERO, F::ONE, F::ONE]);
