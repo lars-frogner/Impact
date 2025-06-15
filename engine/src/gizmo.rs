@@ -4,21 +4,17 @@
 pub mod components;
 pub mod entity;
 pub mod mesh;
+pub mod model;
 pub mod systems;
 pub mod tasks;
 
-use crate::{
-    material::MaterialHandle,
-    mesh::{MeshID, MeshPrimitive},
-    model::{
-        InstanceFeature, InstanceFeatureManager, ModelID, transform::InstanceModelViewTransform,
-    },
+use crate::model::{
+    InstanceFeature, InstanceFeatureManager, transform::InstanceModelViewTransform,
 };
 use bitflags::{Flags, bitflags};
 use bytemuck::{Pod, Zeroable};
-use impact_math::hash64;
+use model::{GizmoModel, gizmo_models};
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
 
 /// A specific gizmo type.
 ///
@@ -29,6 +25,7 @@ pub enum GizmoType {
     ReferenceFrameAxes = 0,
     BoundingSphere = 1,
     LightSphere = 2,
+    ShadowCubemapFaces = 3,
 }
 
 bitflags! {
@@ -42,6 +39,7 @@ bitflags! {
         const REFERENCE_FRAME_AXES       = 1 << 0;
         const BOUNDING_SPHERE            = 1 << 1;
         const LIGHT_SPHERE               = 1 << 2;
+        const SHADOW_CUBEMAP_FACES       = 1 << 3;
     }
 }
 
@@ -66,10 +64,21 @@ pub struct GizmoConfig {
     /// When visible, the bounding spheres of models in the scene graph will
     /// be rendered as semi-transparent cyan spheres.
     pub bounding_sphere_visibility: GizmoVisibility,
-    /// When enabled, the boundaries at which the light from omnidirectional
+    /// The visibility of the gizmo showing spheres of influence for
+    /// omnidirectional lights.
+    ///
+    /// When visible, the boundaries at which the light from omnidirectional
     /// light sources is cut off will be rendered as semi-transparent yellow
     /// spheres."
     pub light_sphere_visibility: GizmoVisibility,
+    /// The visibility of the gizmo indicating the faces of shadow cubemaps for
+    /// omnidirectional lights.
+    ///
+    /// When visible, the far and near planes of the six "view" frusta used when
+    /// rendering the shadow cubemap of each omnidirectional light are rendered
+    /// in different semi-transparent colors, and the edges of the frusta are
+    /// shown as white lines.
+    pub shadow_cubemap_face_visibility: GizmoVisibility,
 }
 
 /// Manager controlling the display of gizmos.
@@ -110,11 +119,12 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 3] {
+    pub const fn all() -> [Self; 4] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingSphere,
             Self::LightSphere,
+            Self::ShadowCubemapFaces,
         ]
     }
 
@@ -131,22 +141,7 @@ impl GizmoType {
             Self::ReferenceFrameAxes => GizmoSet::REFERENCE_FRAME_AXES,
             Self::BoundingSphere => GizmoSet::BOUNDING_SPHERE,
             Self::LightSphere => GizmoSet::LIGHT_SPHERE,
-        }
-    }
-
-    /// The geometric primitive used for this gizmo's mesh.
-    pub fn mesh_primitive(&self) -> MeshPrimitive {
-        match self {
-            Self::ReferenceFrameAxes => MeshPrimitive::LineSegment,
-            Self::BoundingSphere | Self::LightSphere => MeshPrimitive::Triangle,
-        }
-    }
-
-    /// Whether this gizmo can be obscured by geometry in front of it.
-    pub fn obscurability(&self) -> GizmoObscurability {
-        match self {
-            Self::ReferenceFrameAxes => GizmoObscurability::NonObscurable,
-            Self::BoundingSphere | Self::LightSphere => GizmoObscurability::Obscurable,
+            Self::ShadowCubemapFaces => GizmoSet::SHADOW_CUBEMAP_FACES,
         }
     }
 
@@ -156,6 +151,7 @@ impl GizmoType {
             Self::ReferenceFrameAxes => "Reference frame axes",
             Self::BoundingSphere => "Bounding spheres",
             Self::LightSphere => "Light spheres",
+            Self::ShadowCubemapFaces => "Shadow cubemap faces",
         }
     }
 
@@ -182,15 +178,20 @@ impl GizmoType {
                 light sources is cut off will be rendered as semi-transparent yellow \
                 spheres."
             }
+            Self::ShadowCubemapFaces => {
+                "\
+                When enabled, the far and near planes of the six \"view\" frusta used when \
+                rendering the shadow cubemap of each omnidirectional light are rendered \
+                in different semi-transparent colors, and the edges of the frusta are \
+                shown as white lines."
+            }
         }
     }
 
-    /// The model ID used by this gizmo type. It holds the ID of the line
-    /// segment mesh used for the gizmo. It is also the key under which the
-    /// model-view transforms to apply to the mesh during rendering are buffered
-    /// in the instance feature manager.
-    pub fn model_id(&self) -> &'static ModelID {
-        &gizmo_model_ids()[*self as usize]
+    /// Returns the [`GizmoModel`]s defining the geometric and visual attributes
+    /// of this gizmo.
+    pub fn models(&self) -> &'static [GizmoModel] {
+        &gizmo_models()[*self as usize]
     }
 }
 
@@ -201,6 +202,7 @@ impl GizmoConfig {
             GizmoType::ReferenceFrameAxes => self.reference_frame_axes_visibility,
             GizmoType::BoundingSphere => self.bounding_sphere_visibility,
             GizmoType::LightSphere => self.light_sphere_visibility,
+            GizmoType::ShadowCubemapFaces => self.shadow_cubemap_face_visibility,
         }
     }
 
@@ -210,6 +212,7 @@ impl GizmoConfig {
             GizmoType::ReferenceFrameAxes => &mut self.reference_frame_axes_visibility,
             GizmoType::BoundingSphere => &mut self.bounding_sphere_visibility,
             GizmoType::LightSphere => &mut self.light_sphere_visibility,
+            GizmoType::ShadowCubemapFaces => &mut self.shadow_cubemap_face_visibility,
         }
     }
 }
@@ -271,43 +274,11 @@ impl GizmoVisibility {
     }
 }
 
-/// The model ID used by each gizmo.
-pub fn gizmo_model_ids() -> &'static [ModelID; GizmoType::count()] {
-    &GIZMO_MODEL_IDS
-}
-
-static GIZMO_MODEL_IDS: LazyLock<[ModelID; GizmoType::count()]> = LazyLock::new(|| {
-    GizmoType::all().map(|gizmo| {
-        ModelID::for_mesh_and_material(
-            MeshID(hash64!(gizmo.label())),
-            MaterialHandle::not_applicable(),
-        )
-    })
-});
-
-/// The model ID used by each gizmo whose mesh is of the given type and who has
-/// the given obscurability.
-pub fn gizmo_model_ids_for_mesh_primitive_and_obscurability(
-    primitive: MeshPrimitive,
-    obscurability: GizmoObscurability,
-) -> impl IntoIterator<Item = &'static ModelID> {
-    gizmo_model_ids()
-        .iter()
-        .zip(GizmoType::all())
-        .filter_map(move |(model_id, gizmo)| {
-            if gizmo.mesh_primitive() == primitive && gizmo.obscurability() == obscurability {
-                Some(model_id)
-            } else {
-                None
-            }
-        })
-}
-
 /// Initializes the instance buffers used for the model-view transforms of the
 /// gizmo instances.
 pub fn initialize_buffers_for_gizmo_models(instance_feature_manager: &mut InstanceFeatureManager) {
-    for model_id in gizmo_model_ids() {
+    for model_id in gizmo_models().iter().flatten().map(|model| model.model_id) {
         instance_feature_manager
-            .initialize_instance_buffer(*model_id, &[InstanceModelViewTransform::FEATURE_TYPE_ID]);
+            .initialize_instance_buffer(model_id, &[InstanceModelViewTransform::FEATURE_TYPE_ID]);
     }
 }

@@ -1,7 +1,15 @@
 //! ECS systems for gizmo management.
 
 use crate::{
-    gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp},
+    gizmo::{
+        GizmoManager, GizmoSet, GizmoType, GizmoVisibility,
+        components::GizmosComp,
+        model::{
+            BOUNDING_SPHERE_GIZMO_MODEL_IDX, LIGHT_SPHERE_GIZMO_MODEL_IDX,
+            REFERENCE_FRAME_AXES_GIZMO_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
+            SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+        },
+    },
     light::{
         LightID, LightStorage,
         components::{OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp},
@@ -84,15 +92,27 @@ pub fn buffer_transforms_for_gizmos(
         |gizmos: &GizmosComp,
          omnidirectional_light: &ShadowableOmnidirectionalLightComp,
          flags: &SceneEntityFlagsComp| {
-            if !gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) || flags.is_disabled() {
+            if flags.is_disabled() {
                 return;
             }
-            buffer_transform_for_light_sphere_gizmo(
-                instance_feature_manager,
-                light_storage,
-                omnidirectional_light.id,
-                true,
-            );
+            if gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) {
+                buffer_transform_for_light_sphere_gizmo(
+                    instance_feature_manager,
+                    light_storage,
+                    omnidirectional_light.id,
+                    true,
+                );
+            }
+            if gizmos
+                .visible_gizmos
+                .contains(GizmoSet::SHADOW_CUBEMAP_FACES)
+            {
+                buffer_transforms_for_shadow_cubemap_frusta_gizmo(
+                    instance_feature_manager,
+                    light_storage,
+                    omnidirectional_light.id,
+                );
+            }
         }
     );
 }
@@ -117,25 +137,40 @@ fn buffer_transforms_for_model_instance_gizmos(
         .current;
 
     for gizmo in GizmoType::all_in_set(visible_gizmos) {
-        if let Some(gizmo_transform) =
-            obtain_transform_for_model_instance_gizmo(node, model_view_transform, gizmo)
-        {
-            instance_feature_manager.buffer_instance_feature(gizmo.model_id(), &gizmo_transform);
-        }
+        obtain_transforms_for_model_instance_gizmo(
+            instance_feature_manager,
+            node,
+            model_view_transform,
+            gizmo,
+        );
     }
 }
 
-fn obtain_transform_for_model_instance_gizmo(
+fn obtain_transforms_for_model_instance_gizmo(
+    instance_feature_manager: &mut InstanceFeatureManager,
     node: &ModelInstanceNode<f32>,
     model_view_transform: InstanceModelViewTransform,
     gizmo: GizmoType,
-) -> Option<InstanceModelViewTransform> {
+) {
+    let models = gizmo.models();
     match gizmo {
-        GizmoType::ReferenceFrameAxes => Some(model_view_transform),
-        GizmoType::BoundingSphere => {
-            compute_transform_for_bounding_sphere_gizmo(node, model_view_transform)
+        GizmoType::ReferenceFrameAxes => {
+            instance_feature_manager.buffer_instance_feature(
+                &models[REFERENCE_FRAME_AXES_GIZMO_MODEL_IDX].model_id,
+                &model_view_transform,
+            );
         }
-        GizmoType::LightSphere => None,
+        GizmoType::BoundingSphere => {
+            if let Some(transform) =
+                compute_transform_for_bounding_sphere_gizmo(node, model_view_transform)
+            {
+                instance_feature_manager.buffer_instance_feature(
+                    &models[BOUNDING_SPHERE_GIZMO_MODEL_IDX].model_id,
+                    &transform,
+                );
+            }
+        }
+        GizmoType::LightSphere | GizmoType::ShadowCubemapFaces => {}
     }
 }
 
@@ -182,7 +217,45 @@ fn buffer_transform_for_light_sphere_gizmo(
     };
 
     instance_feature_manager.buffer_instance_feature(
-        GizmoType::LightSphere.model_id(),
+        &GizmoType::LightSphere.models()[LIGHT_SPHERE_GIZMO_MODEL_IDX].model_id,
         &light_sphere_from_unit_sphere,
+    );
+}
+
+fn buffer_transforms_for_shadow_cubemap_frusta_gizmo(
+    instance_feature_manager: &mut InstanceFeatureManager,
+    light_storage: &LightStorage,
+    light_id: LightID,
+) {
+    let Some(light) = light_storage.get_shadowable_omnidirectional_light(light_id) else {
+        return;
+    };
+
+    let light_space_to_camera_transform = light.create_light_space_to_camera_transform();
+
+    let cubemap_near_plane_transform: InstanceModelViewTransform = light_space_to_camera_transform
+        .prepend_scaling(light.near_distance())
+        .into();
+
+    instance_feature_manager.buffer_instance_feature(
+        &GizmoType::ShadowCubemapFaces.models()[SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX]
+            .model_id,
+        &cubemap_near_plane_transform,
+    );
+
+    let cubemap_far_plane_transform: InstanceModelViewTransform = light_space_to_camera_transform
+        .prepend_scaling(light.far_distance())
+        .into();
+
+    instance_feature_manager.buffer_instance_feature(
+        &GizmoType::ShadowCubemapFaces.models()[SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX]
+            .model_id,
+        &cubemap_far_plane_transform,
+    );
+
+    instance_feature_manager.buffer_instance_feature(
+        &GizmoType::ShadowCubemapFaces.models()[SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX]
+            .model_id,
+        &cubemap_far_plane_transform,
     );
 }

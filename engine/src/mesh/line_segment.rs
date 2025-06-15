@@ -3,7 +3,7 @@
 use crate::mesh::{VertexColor, VertexPosition};
 use impact_containers::{CollectionChange, CollectionChangeTracker};
 use impact_math::Float;
-use nalgebra::{Point3, Similarity3, UnitQuaternion};
+use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
 
 /// A 3D mesh of line segments represented by pairs of vertices.
 ///
@@ -98,15 +98,23 @@ impl<F: Float> LineSegmentMesh<F> {
         }
     }
 
-    /// Applies the given rotation to the mesh, rotating vertex positions.
+    /// Applies the given rotation to the mesh, rotating the vertex positions.
     pub fn rotate(&mut self, rotation: &UnitQuaternion<F>) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }
     }
 
-    /// Applies the given similarity transform to the mesh, transforming vertex
-    /// positions.
+    /// Applies the given displacement vector to the mesh, translating the
+    /// vertex positions.
+    pub fn translate(&mut self, translation: &Vector3<F>) {
+        for position in &mut self.positions {
+            *position = position.translated(translation);
+        }
+    }
+
+    /// Applies the given similarity transform to the mesh, transforming the
+    /// vertex positions.
     pub fn transform(&mut self, transform: &Similarity3<F>) {
         for position in &mut self.positions {
             *position = position.transformed(transform);

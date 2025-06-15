@@ -864,6 +864,16 @@ impl ShadowableOmnidirectionalLight {
         self.max_reach
     }
 
+    /// Returns the near plane distance of the shadow cubemap frusta.
+    pub fn near_distance(&self) -> f32 {
+        self.near_distance
+    }
+
+    /// Returns the far plane distance of the shadow cubemap frusta.
+    pub fn far_distance(&self) -> f32 {
+        self.far_distance
+    }
+
     /// Sets the camera space position of the light to the given position.
     pub fn set_camera_space_position(&mut self, camera_space_position: Point3<f32>) {
         self.camera_space_position = camera_space_position;
@@ -959,6 +969,23 @@ impl ShadowableOmnidirectionalLight {
         )
     }
 
+    /// Returns the transform from camera space to the local space of the light.
+    pub fn create_camera_to_light_space_transform(&self) -> Similarity3<f32> {
+        Similarity3::from_isometry(
+            self.camera_to_light_space_rotation * Translation3::from(-self.camera_space_position),
+            1.0,
+        )
+    }
+
+    /// Returns the transform from the local space of the light to camera space.
+    pub fn create_light_space_to_camera_transform(&self) -> Similarity3<f32> {
+        Similarity3::from_isometry(
+            Translation3::from(self.camera_space_position)
+                * self.camera_to_light_space_rotation.inverse(),
+            1.0,
+        )
+    }
+
     /// Whether the given cubemap face frustum may contain any visible models.
     pub fn camera_space_frustum_for_face_may_contain_visible_models(
         camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<f32>>,
@@ -981,13 +1008,6 @@ impl ShadowableOmnidirectionalLight {
             &self.luminous_intensity,
             min_incident_luminance,
         );
-    }
-
-    fn create_camera_to_light_space_transform(&self) -> Similarity3<f32> {
-        Similarity3::from_isometry(
-            self.camera_to_light_space_rotation * Translation3::from(-self.camera_space_position),
-            1.0,
-        )
     }
 
     fn compute_camera_to_light_space_rotation(
