@@ -727,6 +727,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn box_voxel_object_has_box_inertial_properties() {
         let voxel_extent = 0.1;
         let extents = [22.0, 27.0, 19.0];
@@ -772,6 +773,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn chunk_has_zero_moments_after_removing_each_voxel() {
         let voxel_extent = 0.1;
         let voxel = Voxel::maximally_inside(VoxelType::from_idx(0));
@@ -827,6 +829,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn fuzz_fail() {
         let generator = SDFVoxelGenerator::new(
             1.0,

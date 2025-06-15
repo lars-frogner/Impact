@@ -2629,6 +2629,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_for_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
@@ -2637,6 +2638,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_for_single_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
@@ -2645,6 +2647,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_for_barely_two_chunks() {
         let generator =
             OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE + 1, CHUNK_SIZE, CHUNK_SIZE]);
@@ -2666,6 +2669,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_with_column_taking_barely_two_chunks() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE + 1, 1, 1]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
@@ -2796,6 +2800,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn should_compute_correct_aabb_for_different_numbers_of_chunks_along_each_axis() {
         let generator =
             OffsetBoxVoxelGenerator::with_default([2 * CHUNK_SIZE, 3 * CHUNK_SIZE, 4 * CHUNK_SIZE]);

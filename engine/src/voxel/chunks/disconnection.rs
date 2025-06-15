@@ -2795,7 +2795,7 @@ pub mod fuzzing {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod tests {
     use super::*;
     use crate::voxel::{
@@ -2833,8 +2833,6 @@ mod tests {
         object.validate_region_count();
     }
 
-    // Too slow for `miri`
-    #[cfg(not(miri))]
     #[test]
     fn should_split_off_disconnected_sphere() {
         let generator = SDFVoxelGenerator::new(
