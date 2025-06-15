@@ -855,7 +855,7 @@ pub mod fuzzing {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod tests {
     use super::*;
     use crate::voxel::{

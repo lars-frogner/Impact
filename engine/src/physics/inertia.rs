@@ -890,6 +890,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(miri))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(50))]
         #[test]
@@ -965,6 +966,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(miri))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(15))]
         #[test]
@@ -989,6 +991,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(miri))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(20))]
         #[test]
@@ -1014,6 +1017,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(miri))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(20))]
         #[test]

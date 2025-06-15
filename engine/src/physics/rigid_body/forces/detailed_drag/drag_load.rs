@@ -329,6 +329,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(miri))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
         #[test]
