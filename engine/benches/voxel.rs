@@ -1,4 +1,3 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use impact::{
     profiling::benchmarks::chunked_voxel_object,
     voxel::{
@@ -7,8 +6,10 @@ use impact::{
         voxel_types::VoxelType,
     },
 };
-use impact_profiling::define_criterion_target;
-use pprof::criterion::{Output, PProfProfiler};
+use impact_profiling::{
+    criterion::{self, Criterion, black_box},
+    define_criterion_target,
+};
 
 pub fn clone_object(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
@@ -91,9 +92,9 @@ define_criterion_target!(
 );
 define_criterion_target!(chunked_voxel_object, update_mesh);
 
-criterion_group!(
+criterion::criterion_group!(
     name = benches;
-    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    config = criterion::config();
     targets =
         construction,
         clone_object,
@@ -110,4 +111,4 @@ criterion_group!(
         split_off_disconnected_region_with_inertial_property_transfer,
         update_mesh,
 );
-criterion_main!(benches);
+criterion::criterion_main!(benches);

@@ -22,13 +22,11 @@ bitflags = "2.6"
 bytemuck = { version = "1.23", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"] }
 const-fnv1a-hash = "1.1"
-criterion = "0.5.1"
 inventory = "0.3"
 nalgebra = "0.33"
 nohash-hasher = "0.2"
 num-traits = "0.2"
 paste = "1.0"
-pprof = { version = "0.15", features = ["criterion", "flamegraph"] }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 
@@ -133,11 +131,11 @@ license = { workspace = true }
 build = "build.rs"
 
 [features]
-cli = ["dep:clap"]
-profiling = ["dep:criterion", "impact_profiling"]
 arbitrary = ["dep:arbitrary", "impact_ecs/arbitrary", "impact_math/arbitrary"]
+cli = ["dep:clap"]
+flamegraph = ["profiling", "impact_profiling/flamegraph"]
 fuzzing = ["arbitrary"]
-unchecked = []
+profiling = ["impact_profiling"]
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_ecs/roc_codegen",
@@ -145,6 +143,7 @@ roc_codegen = [
     "impact_math/roc_codegen",
     "roc_integration/roc_codegen",
 ]
+unchecked = []
 
 [dependencies]
 anyhow = { workspace = true }
@@ -159,7 +158,6 @@ bytemuck = { workspace = true }
 cfg-if = "1.0"
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
-criterion = { workspace = true, optional = true }
 egui = { version = "0.31", features = ["log"] }
 egui-wgpu = "0.31"
 egui-winit = "0.31"
@@ -206,8 +204,6 @@ roc_integration = { path = "../roc_integration" }
 
 [dev-dependencies]
 clap = { workspace = true }
-criterion = { workspace = true }
-pprof = { workspace = true }
 naga = { version = "24.0", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.7"
 

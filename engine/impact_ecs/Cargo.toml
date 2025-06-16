@@ -8,7 +8,8 @@ license = { workspace = true }
 [features]
 arbitrary = ["dep:arbitrary"]
 cli = ["dep:clap"]
-profiling = ["dep:criterion", "impact_profiling"]
+flamegraph = ["profiling", "impact_profiling/flamegraph"]
+profiling = ["impact_profiling"]
 roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
@@ -17,7 +18,6 @@ arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
-criterion = { workspace = true, optional = true }
 fastrand = "2.3"
 inventory = { workspace = true }
 nohash-hasher = { workspace = true }
@@ -28,9 +28,6 @@ impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }
 impact_profiling = { path = "../impact_profiling", optional = true }
 roc_integration = { path = "../../roc_integration" }
-
-[dev-dependencies]
-pprof = { workspace = true }
 
 [lints]
 workspace = true
