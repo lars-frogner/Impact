@@ -31,17 +31,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - uses: dtolnay/rust-toolchain@stable
-      with:
-        profile: minimal
-        override: true
-
-    - name: Install build deps
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y mold
-
-    #- name: Install build deps
-    #  run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev cmake
 
     - name: Build (debug)
       working-directory: engine
@@ -68,17 +57,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - uses: dtolnay/rust-toolchain@stable
-      with:
-        profile: minimal
-        override: true
-
-    - name: Install build deps
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y mold
-
-    #- name: Install runtime deps
-    #  run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev
 
     - name: cargo test
       working-directory: engine
@@ -101,20 +79,8 @@ jobs:
 
     - uses: dtolnay/rust-toolchain@nightly
       with:
-        profile: minimal
         components: rust-src
         targets: x86_64-unknown-linux-gnu
-        override: true
-
-    - name: Install build deps
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y mold
-
-    #- name: Ensure ASan prerequisites
-    #  run: |
-    #    sudo apt-get update
-    #    sudo apt-get install -y clang lld
 
     - name: cargo test (ASan)
       working-directory: engine
@@ -122,7 +88,7 @@ jobs:
         RUSTFLAGS: -Zsanitizer=address
       run: |
         cargo clean
-        cargo +nightly test --workspace --target x86_64-unknown-linux-gnu
+        cargo test --workspace --target x86_64-unknown-linux-gnu
 
 # ---------- 4. Miri tests ----------------------------------------------------
   test-miri:
@@ -142,13 +108,11 @@ jobs:
 
     - uses: dtolnay/rust-toolchain@nightly
       with:
-        profile: minimal
         components: miri
         targets: x86_64-unknown-linux-gnu
-        override: true
 
     - name: cargo miri setup
-      run: cargo +nightly miri setup
+      run: cargo miri setup
 
     - name: cargo miri test
       working-directory: engine
@@ -158,4 +122,4 @@ jobs:
         MIRIFLAGS: -Zmiri-disable-isolation
       run: |
         cargo clean
-        cargo +nightly miri test --workspace
+        cargo miri test --workspace
