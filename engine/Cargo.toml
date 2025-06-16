@@ -24,12 +24,11 @@ clap = { version = "4.5", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 criterion = "0.5.1"
 inventory = "0.3"
-
 nalgebra = "0.33"
 nohash-hasher = "0.2"
 num-traits = "0.2"
 paste = "1.0"
-pprof = { version = "0.14", features = ["criterion", "flamegraph"] }
+pprof = { version = "0.15", features = ["criterion", "flamegraph"] }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 
