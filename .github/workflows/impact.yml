@@ -90,8 +90,9 @@ jobs:
       - name: cargo test (ASan)
         working-directory: engine
         env:
-          RUSTFLAGS: "-C linker=clang -Zsanitizer=address"
-          RUSTDOCFLAGS: "${RUSTFLAGS}"
+          ASAN_RUST_FLAGS: "-C linker=clang -Zsanitizer=address"
+          RUSTFLAGS: ${{ env.ASAN_RUST_FLAGS }}
+          RUSTDOCFLAGS: ${{ env.ASAN_RUST_FLAGS }}
         run: |
           cargo clean
           cargo test --workspace --target x86_64-unknown-linux-gnu
