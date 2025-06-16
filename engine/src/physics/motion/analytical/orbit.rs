@@ -233,8 +233,7 @@ impl OrbitalTrajectoryComp {
     }
 }
 
-// These tests are flaky when run under `miri`
-#[cfg(all(test, not(miri)))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::physics::motion::{Direction, Orientation};
