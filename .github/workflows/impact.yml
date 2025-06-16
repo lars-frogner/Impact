@@ -12,114 +12,119 @@ env:
   MIRI_SYSROOT: ${{ github.workspace }}/.miri-sysroot
 
 jobs:
-# ---------- 1. Fast debug & release builds ----------------------------------
+  # ---------- 1. Fast debug & release builds ----------------------------------
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    # Re-use Cargo, target and Miri sysroot across jobs to speed things up
-    - name: Cache Cargo & target
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-          .miri-sysroot
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      # Re-use Cargo, target and Miri sysroot across jobs to speed things up
+      - name: Cache Cargo & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            .miri-sysroot
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
-    - name: Build (debug)
-      working-directory: engine
-      run: cargo build
+      - name: Build (debug)
+        working-directory: engine
+        run: cargo build
 
-    - name: Build (release)
-      working-directory: engine
-      run: cargo build --release
+      - name: Build (release)
+        working-directory: engine
+        run: cargo build --release
 
-# ---------- 2. Unit & integration tests -------------------------------------
+  # ---------- 2. Unit & integration tests -------------------------------------
   test:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-          .miri-sysroot
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            .miri-sysroot
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
-    - name: cargo test
-      working-directory: engine
-      run: cargo test --workspace
+      - name: cargo test
+        working-directory: engine
+        run: cargo test --workspace
 
-# ---------- 3. Address-Sanitizer tests --------------------------------------
+  # ---------- 3. Address-Sanitizer tests --------------------------------------
   test-asan:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@nightly
-      with:
-        components: rust-src
-        targets: x86_64-unknown-linux-gnu
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: x86_64-unknown-linux-gnu
 
-    - name: cargo test (ASan)
-      working-directory: engine
-      env:
-        RUSTFLAGS: -Zsanitizer=address
-      run: |
-        cargo clean
-        cargo test --workspace --target x86_64-unknown-linux-gnu
+      - name: Install AddressSanitizer runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasan8
 
-# ---------- 4. Miri tests ----------------------------------------------------
+      - name: cargo test (ASan)
+        working-directory: engine
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+        run: |
+          cargo clean
+          cargo test --workspace --target x86_64-unknown-linux-gnu
+
+  # ---------- 4. Miri tests ----------------------------------------------------
   test-miri:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-          .miri-sysroot
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            .miri-sysroot
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@nightly
-      with:
-        components: miri
-        targets: x86_64-unknown-linux-gnu
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+          targets: x86_64-unknown-linux-gnu
 
-    - name: cargo miri setup
-      run: cargo miri setup
+      - name: cargo miri setup
+        run: cargo miri setup
 
-    - name: cargo miri test
-      working-directory: engine
-      env:
-        PROPTEST_DISABLE_FAILURE_PERSISTENCE: 1
-        PROPTEST_CASES: 1
-        MIRIFLAGS: -Zmiri-disable-isolation
-      run: |
-        cargo clean
-        cargo miri test --workspace
+      - name: cargo miri test
+        working-directory: engine
+        env:
+          PROPTEST_DISABLE_FAILURE_PERSISTENCE: 1
+          PROPTEST_CASES: 1
+          MIRIFLAGS: -Zmiri-disable-isolation
+        run: |
+          cargo clean
+          cargo miri test --workspace
