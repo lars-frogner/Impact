@@ -125,7 +125,7 @@ jobs:
         env:
           PROPTEST_DISABLE_FAILURE_PERSISTENCE: 1
           PROPTEST_CASES: 1
-          MIRIFLAGS: -Zmiri-disable-isolation
+          MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-deterministic-floats"
         run: |
           cargo clean
           cargo miri test --workspace
