@@ -13,12 +13,17 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> str
             _ -> "."
 
+    linker =
+        when Env.var!("MOLD") is
+            Ok(str) if !(Str.is_empty(str)) -> Mold
+            _ -> Ld
+
     debug_mode =
         when Env.var!("DEBUG") is
             Ok(str) if !(Str.is_empty(str)) -> Debug
             _ -> Release
 
-    cargo_build_platform!(platform_dir, debug_mode)?
+    cargo_build_platform!(platform_dir, linker, debug_mode)?
 
     rust_target_folder = get_rust_target_folder!(debug_mode)
 
@@ -40,15 +45,29 @@ get_rust_target_folder! = |debug_mode|
         Err(_) ->
             "target/${debug_or_release}/"
 
-cargo_build_platform! : Str, [Debug, Release] => Result {} _
-cargo_build_platform! = |platform_dir, debug_mode|
-    Stdout.line!("Building platform crate")?
-    base_args = ["build", "--manifest-path", "${platform_dir}/Cargo.toml"]
-    opt_args =
+cargo_build_platform! : Str, [Ld, Mold], [Debug, Release] => Result {} _
+cargo_build_platform! = |platform_dir, linker, debug_mode|
+    Stdout.line!("Building platform crate with options: ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}")?
+
+    base_args = ["--manifest-path", "${platform_dir}/Cargo.toml"]
+
+    debug_args =
         when debug_mode is
             Debug -> []
             Release -> ["--release"]
-    Cmd.exec!("cargo", List.concat(base_args, opt_args))
+
+    linker_env_vars =
+        when linker is
+            Ld -> []
+            Mold -> ["RUSTFLAGS=-C link-arg=-fuse-ld=mold"]
+
+    Cmd.exec!(
+        "env",
+        linker_env_vars
+        |> List.concat(["cargo", "build"])
+        |> List.concat(base_args)
+        |> List.concat(debug_args),
+    )
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
 copy_platform_lib! : Str, Str => Result {} _
