@@ -23,6 +23,11 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Cranelift
             _ -> LLVM
 
+    linker =
+        when Env.var!("MOLD") is
+            Ok(str) if !(Str.is_empty(str)) -> Mold
+            _ -> Ld
+
     debug_mode =
         when Env.var!("DEBUG") is
             Ok(str) if !(Str.is_empty(str)) -> Debug
@@ -42,7 +47,7 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, backend, debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, debug_mode, os_and_arch)?
 
@@ -89,9 +94,9 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [LLVM, Cranelift], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, backend, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
@@ -122,6 +127,11 @@ cargo_build_app! = |app_dir, backend, debug_mode, asan_mode, fuzzing_mode, os_an
             LLVM -> []
             Cranelift -> ["CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift"]
 
+    linker_env_vars =
+        when linker is
+            Ld -> []
+            Mold -> ["RUSTFLAGS=-C link-arg=-fuse-ld=mold"]
+
     asan_env_vars =
         when asan_mode is
             NoAddressSanitizer -> []
@@ -133,6 +143,7 @@ cargo_build_app! = |app_dir, backend, debug_mode, asan_mode, fuzzing_mode, os_an
     Cmd.exec!(
         "env",
         backend_env_vars
+        |> List.concat(linker_env_vars)
         |> List.concat(asan_env_vars)
         |> List.append("cargo")
         |> List.concat(nightly_arg)
