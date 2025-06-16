@@ -167,6 +167,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 inventory = { workspace = true }
 half = { version = "2.6", features = ["bytemuck"] }
+hashbrown = "0.15"
 log = "0.4"
 naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
@@ -176,7 +177,7 @@ num-derive = "0.4"
 num-traits = { workspace = true }
 ordered-float = "5.0"
 paste = { workspace = true }
-petgraph = { version = "0.7", default-features = false, features = [
+petgraph = { version = "0.8", default-features = false, features = [
     "graphmap",
 ] }
 ply-rs = "0.1"

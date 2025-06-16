@@ -85,10 +85,7 @@ type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
 #[derive(Debug)]
 struct TaskDependencyGraph<S> {
     graph: GraphMap<TaskID, (), Directed, DefaultHasher>,
-    // Seems to be a `petgraph` bug that the implementation of `Visitable` for
-    // `GraphMap` uses a `HashSet` with the standard hasher rather than the
-    // hasher used by the `GraphMap`
-    space: DfsSpace<TaskID, std::collections::HashSet<TaskID>>,
+    space: DfsSpace<TaskID, hashbrown::HashSet<TaskID>>,
     independent_tasks: HashSet<TaskID>,
     _phantom: PhantomData<S>,
 }
