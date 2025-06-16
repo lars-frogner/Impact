@@ -36,8 +36,8 @@ jobs:
         toolchain: stable
         override: true
 
-    - name: Install build deps
-      run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev cmake
+    #- name: Install build deps
+    #  run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev cmake
 
     - name: Build (debug)
       working-directory: engine
@@ -69,8 +69,8 @@ jobs:
         toolchain: stable
         override: true
 
-    - name: Install runtime deps
-      run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev
+    #- name: Install runtime deps
+    #  run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev
 
     - name: cargo test
       working-directory: engine
@@ -98,11 +98,11 @@ jobs:
         profile: minimal
         components: rust-src
 
-    - name: Ensure target & ASan prerequisites
-      run: |
-        rustup target add x86_64-unknown-linux-gnu
-        sudo apt-get update
-        sudo apt-get install -y clang lld
+    #- name: Ensure target & ASan prerequisites
+    #  run: |
+    #    rustup target add x86_64-unknown-linux-gnu
+    #    sudo apt-get update
+    #    sudo apt-get install -y clang lld
 
     - name: cargo test (ASan)
       working-directory: engine
