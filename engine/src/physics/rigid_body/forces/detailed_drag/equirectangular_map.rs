@@ -201,21 +201,21 @@ impl<V: Clone + Default> EquirectangularMap<V> {
 }
 
 impl<D: Serialize + DeserializeOwned> EquirectangularMap<D> {
-    /// Serializes the map into the `MessagePack` format and saves it at the
-    /// given path.
+    /// Serializes the map into the `Bincode` format and saves it at the given
+    /// path.
     pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
-        let byte_buffer = bincode::serialize(self)?;
+        let byte_buffer = bincode::serde::encode_to_vec(self, bincode::config::standard())?;
         io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
         Ok(())
     }
 
-    /// Loads and returns the `MessagePack` serialized map at the given path.
+    /// Loads and returns the `Bincode` serialized map at the given path.
     pub fn read_from_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file = File::open(file_path)?;
         let mut reader = BufReader::new(file);
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer)?;
-        let table = bincode::deserialize(&buffer)?;
+        let (table, _) = bincode::serde::decode_from_slice(&buffer, bincode::config::standard())?;
         Ok(table)
     }
 }
