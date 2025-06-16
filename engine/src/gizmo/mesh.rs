@@ -9,6 +9,7 @@ use crate::{
             SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
         },
     },
+    light::MAX_SHADOW_MAP_CASCADES,
     mesh::{MeshRepository, VertexColor, line_segment::LineSegmentMesh, triangle::TriangleMesh},
 };
 use anyhow::Result;
@@ -65,6 +66,27 @@ impl GizmoType {
                     outlines_mesh,
                 )
             }
+            Self::ShadowMapCascades => {
+                const CASCADE_COLORS: [VertexColor<f32>; 4] = [
+                    VertexColor::RED,
+                    VertexColor::YELLOW,
+                    VertexColor::GREEN,
+                    VertexColor::CYAN,
+                ];
+                const _: () = assert!(CASCADE_COLORS.len() == MAX_SHADOW_MAP_CASCADES as usize);
+
+                assert_eq!(models.len(), CASCADE_COLORS.len());
+
+                for (model, color) in models
+                    .iter()
+                    .zip(CASCADE_COLORS.map(|color| color.with_alpha(0.2)))
+                {
+                    let mesh = TriangleMesh::create_vertical_square_with_color(1.0, color);
+                    mesh_repository.add_triangle_mesh(model.mesh_id(), mesh)?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 }

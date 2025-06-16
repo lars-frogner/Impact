@@ -476,6 +476,22 @@ impl<F: Float> TriangleMesh<F> {
         }
     }
 
+    /// Applies the given rotation quaternion to the mesh, rotating vertex
+    /// positions, normal vectors and tangent space quaternions.
+    pub fn rotate(&mut self, rotation: &UnitQuaternion<F>) {
+        for position in &mut self.positions {
+            *position = position.rotated(rotation);
+        }
+
+        for normal_vector in &mut self.normal_vectors {
+            *normal_vector = normal_vector.rotated(rotation);
+        }
+
+        for tangent_space_quaternion in &mut self.tangent_space_quaternions {
+            *tangent_space_quaternion = tangent_space_quaternion.rotated(rotation);
+        }
+    }
+
     /// Applies the given similarity transform to the mesh, transforming vertex
     /// positions, normal vectors and tangent space quaternions.
     pub fn transform(&mut self, transform: &Similarity3<F>) {

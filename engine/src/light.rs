@@ -1150,6 +1150,26 @@ impl ShadowableUnidirectionalLight {
         )
     }
 
+    /// Returns the array of linear depths (not the non-linear clip space
+    /// depths) representing the boundaries between the shadow map cascades.
+    pub fn partition_depths(&self) -> &[f32; MAX_SHADOW_MAP_CASCADES_USIZE - 1] {
+        &self.partition_depths
+    }
+
+    /// Returns linear depth (not the non-linear clip space depth) of the near
+    /// plane of the first view frustum partition used in the cascaded shadow
+    /// map.
+    pub fn near_partition_depth(&self) -> f32 {
+        self.near_partition_depth
+    }
+
+    /// Returns linear depth (not the non-linear clip space depth) of the far
+    /// plane of the last view frustum partition used in the cascaded shadow
+    /// map.
+    pub fn far_partition_depth(&self) -> f32 {
+        self.far_partition_depth
+    }
+
     /// Sets the camera space direction of the light to the given direction.
     pub fn set_camera_space_direction(&mut self, camera_space_direction: UnitVector3<f32>) {
         self.camera_space_direction = camera_space_direction;
