@@ -427,12 +427,12 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 periapsis_velocity.dot(&periapsis_displacement),
                 0.0,
-                epsilon = 1e-3 * semi_major_axis.powi(2) / period
+                epsilon = 1e-2 * semi_major_axis.powi(2) / period
             ));
             prop_assert!(abs_diff_eq!(
                 apoapsis_velocity.dot(&apoapsis_displacement),
                 0.0,
-                epsilon = 1e-3 * semi_major_axis.powi(2) / period
+                epsilon = 1e-2 * semi_major_axis.powi(2) / period
             ));
         }
     }

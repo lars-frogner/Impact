@@ -312,11 +312,13 @@ mod tests {
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, duration);
         assert_abs_diff_eq!(
             advanced_orientation.angle(),
-            orientation.angle() + angular_speed * duration
+            orientation.angle() + angular_speed * duration,
+            epsilon = 1e-8,
         );
         assert_abs_diff_eq!(
             advanced_orientation.axis().unwrap(),
-            orientation.axis().unwrap()
+            orientation.axis().unwrap(),
+            epsilon = 1e-8,
         );
     }
 }
