@@ -1,0 +1,149 @@
+name: Impact CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep Miri sysroot inside the workspace so the cache can pick it up
+  MIRI_SYSROOT: ${{ github.workspace }}/.miri-sysroot
+
+jobs:
+# ---------- 1. Fast debug & release builds ----------------------------------
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # Re-use Cargo, target and Miri sysroot across jobs to speed things up
+    - name: Cache Cargo & target
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          .miri-sysroot
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Install build deps
+      run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev cmake
+
+    - name: Build (debug)
+      working-directory: engine
+      run: cargo build
+
+    - name: Build (release)
+      working-directory: engine
+      run: cargo build --release
+
+# ---------- 2. Unit & integration tests -------------------------------------
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          .miri-sysroot
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Install runtime deps
+      run: sudo apt-get update && sudo apt-get install -y pkg-config fontconfig1-dev
+
+    - name: cargo test
+      working-directory: engine
+      run: cargo test --workspace
+
+# ---------- 3. Address-Sanitizer tests --------------------------------------
+  test-asan:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+        profile: minimal
+        components: rust-src
+
+    - name: Ensure target & ASan prerequisites
+      run: |
+        rustup target add x86_64-unknown-linux-gnu
+        sudo apt-get update
+        sudo apt-get install -y clang lld
+
+    - name: cargo test (ASan)
+      working-directory: engine
+      env:
+        RUSTFLAGS: -Zsanitizer=address
+      run: |
+        cargo clean
+        cargo +nightly test --workspace --target x86_64-unknown-linux-gnu
+
+# ---------- 4. Miri tests ----------------------------------------------------
+  test-miri:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          .miri-sysroot
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+        profile: minimal
+        components: miri
+
+    - name: cargo miri setup
+      run: cargo +nightly miri setup
+
+    - name: cargo miri test
+      working-directory: engine
+      env:
+        PROPTEST_DISABLE_FAILURE_PERSISTENCE: 1
+        PROPTEST_CASES: 1
+        MIRIFLAGS: -Zmiri-disable-isolation
+      run: |
+        cargo clean
+        cargo +nightly miri test --workspace
