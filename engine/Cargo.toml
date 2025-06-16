@@ -187,7 +187,7 @@ ply-rs = "0.1"
 pollster = "0.4"
 rand = { workspace = true }
 regex = "1.11"
-ron = "0.9"
+ron = "0.10"
 roots = "0.0.8"
 serde = { workspace = true }
 simba = "0.9"
