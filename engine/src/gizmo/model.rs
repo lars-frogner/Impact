@@ -67,6 +67,15 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
                 define_non_obscurable_line_segment_model(format!("{} outlines", gizmo.label())),
             ]
         }
+        GizmoType::ShadowMapCascades => {
+            vec![
+                define_obscurable_triangle_model(format!("{} plane 0", gizmo.label())),
+                define_obscurable_triangle_model(format!("{} plane 1", gizmo.label())),
+                define_obscurable_triangle_model(format!("{} plane 2", gizmo.label())),
+                define_obscurable_triangle_model(format!("{} plane 3", gizmo.label())),
+            ]
+        }
+        _ => Vec::new(),
     }
 }
 

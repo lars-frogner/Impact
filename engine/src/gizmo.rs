@@ -26,6 +26,7 @@ pub enum GizmoType {
     BoundingSphere = 1,
     LightSphere = 2,
     ShadowCubemapFaces = 3,
+    ShadowMapCascades = 4,
 }
 
 bitflags! {
@@ -36,10 +37,11 @@ bitflags! {
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct GizmoSet: u16 {
-        const REFERENCE_FRAME_AXES       = 1 << 0;
-        const BOUNDING_SPHERE            = 1 << 1;
-        const LIGHT_SPHERE               = 1 << 2;
-        const SHADOW_CUBEMAP_FACES       = 1 << 3;
+        const REFERENCE_FRAME_AXES = 1 << 0;
+        const BOUNDING_SPHERE      = 1 << 1;
+        const LIGHT_SPHERE         = 1 << 2;
+        const SHADOW_CUBEMAP_FACES = 1 << 3;
+        const SHADOW_MAP_CASCADES  = 1 << 4;
     }
 }
 
@@ -79,6 +81,15 @@ pub struct GizmoConfig {
     /// in different semi-transparent colors, and the edges of the frusta are
     /// shown as white lines.
     pub shadow_cubemap_face_visibility: GizmoVisibility,
+    /// The visibility of the gizmo visualizing the partition of the view
+    /// frustum for the cascaded shadow maps for unidirectional lights.
+    ///
+    /// When visible, a semi-transparent colored plane is rendered at each view
+    /// distance corresponding to a partition between the cascades used for the
+    /// shadow map of a unidirectional light. The result is that geometry
+    /// falling within each cascade will be tinted red (closest), yellow, green
+    /// or cyan (farthest).
+    pub shadow_map_cascade_visibility: GizmoVisibility,
 }
 
 /// Manager controlling the display of gizmos.
@@ -119,12 +130,13 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 4] {
+    pub const fn all() -> [Self; 5] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingSphere,
             Self::LightSphere,
             Self::ShadowCubemapFaces,
+            Self::ShadowMapCascades,
         ]
     }
 
@@ -142,6 +154,7 @@ impl GizmoType {
             Self::BoundingSphere => GizmoSet::BOUNDING_SPHERE,
             Self::LightSphere => GizmoSet::LIGHT_SPHERE,
             Self::ShadowCubemapFaces => GizmoSet::SHADOW_CUBEMAP_FACES,
+            Self::ShadowMapCascades => GizmoSet::SHADOW_MAP_CASCADES,
         }
     }
 
@@ -152,6 +165,7 @@ impl GizmoType {
             Self::BoundingSphere => "Bounding spheres",
             Self::LightSphere => "Light spheres",
             Self::ShadowCubemapFaces => "Shadow cubemap faces",
+            Self::ShadowMapCascades => "Shadow map cascades",
         }
     }
 
@@ -185,6 +199,15 @@ impl GizmoType {
                 in different semi-transparent colors, and the edges of the frusta are \
                 shown as white lines."
             }
+            Self::ShadowMapCascades => {
+                "\
+                When enabled, a semi-transparent colored plane is rendered at each view \
+                distance corresponding to a partition between the cascades used for the \
+                shadow map of a unidirectional light. The result is that geometry \
+                falling within each cascade will be tinted red (closest), yellow, green \
+                or cyan (farthest)."
+            }
+            _ => "",
         }
     }
 
@@ -203,6 +226,7 @@ impl GizmoConfig {
             GizmoType::BoundingSphere => self.bounding_sphere_visibility,
             GizmoType::LightSphere => self.light_sphere_visibility,
             GizmoType::ShadowCubemapFaces => self.shadow_cubemap_face_visibility,
+            GizmoType::ShadowMapCascades => self.shadow_map_cascade_visibility,
         }
     }
 
@@ -213,6 +237,7 @@ impl GizmoConfig {
             GizmoType::BoundingSphere => &mut self.bounding_sphere_visibility,
             GizmoType::LightSphere => &mut self.light_sphere_visibility,
             GizmoType::ShadowCubemapFaces => &mut self.shadow_cubemap_face_visibility,
+            GizmoType::ShadowMapCascades => &mut self.shadow_map_cascade_visibility,
         }
     }
 }

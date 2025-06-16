@@ -1,6 +1,7 @@
 //! ECS systems for gizmo management.
 
 use crate::{
+    camera::SceneCamera,
     gizmo::{
         GizmoManager, GizmoSet, GizmoType, GizmoVisibility,
         components::GizmosComp,
@@ -12,7 +13,10 @@ use crate::{
     },
     light::{
         LightID, LightStorage,
-        components::{OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp},
+        components::{
+            OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp,
+            ShadowableUnidirectionalLightComp,
+        },
     },
     model::{
         InstanceFeatureManager,
@@ -24,7 +28,8 @@ use crate::{
     },
 };
 use impact_ecs::{query, world::World as ECSWorld};
-use nalgebra::{Similarity3, UnitQuaternion};
+use nalgebra::{Similarity3, UnitQuaternion, vector};
+use std::iter;
 
 pub fn update_visibility_flags_for_gizmo(
     ecs_world: &ECSWorld,
@@ -51,6 +56,7 @@ pub fn buffer_transforms_for_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
     scene_graph: &SceneGraph<f32>,
     light_storage: &LightStorage,
+    scene_camera: Option<&SceneCamera<f32>>,
     current_frame_count: u32,
 ) {
     query!(
@@ -87,6 +93,7 @@ pub fn buffer_transforms_for_gizmos(
             );
         }
     );
+
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
@@ -107,7 +114,7 @@ pub fn buffer_transforms_for_gizmos(
                 .visible_gizmos
                 .contains(GizmoSet::SHADOW_CUBEMAP_FACES)
             {
-                buffer_transforms_for_shadow_cubemap_frusta_gizmo(
+                buffer_transforms_for_shadow_cubemap_faces_gizmo(
                     instance_feature_manager,
                     light_storage,
                     omnidirectional_light.id,
@@ -115,6 +122,29 @@ pub fn buffer_transforms_for_gizmos(
             }
         }
     );
+
+    if let Some(scene_camera) = scene_camera {
+        query!(
+            ecs_world,
+            |gizmos: &GizmosComp,
+             unidirectional_light: &ShadowableUnidirectionalLightComp,
+             flags: &SceneEntityFlagsComp| {
+                if !gizmos
+                    .visible_gizmos
+                    .contains(GizmoSet::SHADOW_MAP_CASCADES)
+                    || flags.is_disabled()
+                {
+                    return;
+                }
+                buffer_transforms_for_shadow_map_cascades_gizmo(
+                    instance_feature_manager,
+                    light_storage,
+                    scene_camera,
+                    unidirectional_light.id,
+                );
+            }
+        );
+    }
 }
 
 fn buffer_transforms_for_model_instance_gizmos(
@@ -170,7 +200,7 @@ fn obtain_transforms_for_model_instance_gizmo(
                 );
             }
         }
-        GizmoType::LightSphere | GizmoType::ShadowCubemapFaces => {}
+        GizmoType::LightSphere | GizmoType::ShadowCubemapFaces | GizmoType::ShadowMapCascades => {}
     }
 }
 
@@ -222,7 +252,7 @@ fn buffer_transform_for_light_sphere_gizmo(
     );
 }
 
-fn buffer_transforms_for_shadow_cubemap_frusta_gizmo(
+fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     instance_feature_manager: &mut InstanceFeatureManager,
     light_storage: &LightStorage,
     light_id: LightID,
@@ -258,4 +288,43 @@ fn buffer_transforms_for_shadow_cubemap_frusta_gizmo(
             .model_id,
         &cubemap_far_plane_transform,
     );
+}
+
+fn buffer_transforms_for_shadow_map_cascades_gizmo(
+    instance_feature_manager: &mut InstanceFeatureManager,
+    light_storage: &LightStorage,
+    scene_camera: &SceneCamera<f32>,
+    light_id: LightID,
+) {
+    let Some(light) = light_storage.get_shadowable_unidirectional_light(light_id) else {
+        return;
+    };
+
+    let view_frustum = scene_camera.camera().view_frustum();
+
+    for (cascade_idx, near_partition_depth_for_cascade) in iter::once(light.near_partition_depth())
+        .chain(light.partition_depths().iter().copied())
+        .enumerate()
+    {
+        let plane_distance =
+            view_frustum.convert_linear_depth_to_view_distance(near_partition_depth_for_cascade);
+
+        // If the distance equals the near distance, we add a tiny offset to
+        // make the plane doesn't get clipped
+        let plane_z = -plane_distance.max(view_frustum.near_distance() + 1e-6);
+
+        let plane_height = view_frustum.height_at_distance(plane_distance);
+        let scaling = plane_height * scene_camera.camera().aspect_ratio().max(1.0);
+
+        let camera_cascade_from_vertical_square = InstanceModelViewTransform {
+            translation: vector![0.0, 0.0, plane_z],
+            rotation: UnitQuaternion::identity(),
+            scaling,
+        };
+
+        instance_feature_manager.buffer_instance_feature(
+            &GizmoType::ShadowMapCascades.models()[cascade_idx].model_id,
+            &camera_cascade_from_vertical_square,
+        );
+    }
 }

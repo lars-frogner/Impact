@@ -60,12 +60,14 @@ define_task!(
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
             let light_storage = scene.light_storage().read().unwrap();
+            let scene_camera = scene.scene_camera().read().unwrap();
 
             gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
                 &mut instance_feature_manager,
                 &scene_graph,
                 &light_storage,
+                scene_camera.as_ref(),
                 current_frame_count,
             );
             Ok(())

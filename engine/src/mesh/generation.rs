@@ -698,6 +698,22 @@ impl<F: Float> TriangleMesh<F> {
         mesh
     }
 
+    /// Creates a mesh representing a vertical square with the given extent
+    /// along the x- and y-axis, the front face pointing in the z-direction,
+    /// centered on the origin and with all vertices having the given color.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    pub fn create_vertical_square_with_color(extent: F, color: VertexColor<F>) -> Self {
+        let mut square = Self::create_rectangle(extent, extent);
+        square.remove_normal_vectors();
+        square.rotate(&UnitQuaternion::from_axis_angle(
+            &Vector3::x_axis(),
+            <F as Float>::FRAC_PI_2,
+        ));
+        square.set_same_color(color);
+        square
+    }
+
     /// Creates a mesh representing a cube with the given extent, centered on
     /// the origin and with the width, height and depth axes aligned with the
     /// x-, y- and z-axis. The six given colors will be assigned to the left,

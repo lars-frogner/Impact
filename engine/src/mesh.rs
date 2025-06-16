@@ -442,17 +442,22 @@ impl<F: Float> VertexPosition<F> {
 }
 
 impl<F: Float> VertexNormalVector<F> {
+    /// Returns the normal vector rotated by the given unit quaternion.
+    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+        Self(rotation * self.0)
+    }
+
     /// Returns the normal vector transformed by the given similarity transform.
     pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
-        Self(transform.isometry.rotation * self.0)
+        self.rotated(&transform.isometry.rotation)
     }
 }
 
 impl<F: Float> VertexTangentSpaceQuaternion<F> {
-    /// Returns the tangent space quaternion transformed by the given similarity
-    /// transform.
-    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
-        let mut rotated_tangent_space_quaternion = transform.isometry.rotation * self.0;
+    /// Returns the tangent space quaternion rotated by the given unit
+    /// quaternion.
+    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+        let mut rotated_tangent_space_quaternion = rotation * self.0;
 
         // Preserve encoding of tangent space handedness in real component of
         // tangent space quaternion
@@ -462,6 +467,12 @@ impl<F: Float> VertexTangentSpaceQuaternion<F> {
         }
 
         Self(rotated_tangent_space_quaternion)
+    }
+
+    /// Returns the tangent space quaternion transformed by the given similarity
+    /// transform.
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+        self.rotated(&transform.isometry.rotation)
     }
 }
 

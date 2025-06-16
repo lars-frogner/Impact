@@ -112,6 +112,25 @@ impl<F: Float> Frustum<F> {
         -self.far_plane().displacement()
     }
 
+    /// Computes the vertical height of the frustum at the given distance from
+    /// the apex towards the far plane.
+    pub fn height_at_distance(&self, distance: F) -> F {
+        let clip_space_depth = self.convert_view_distance_to_clip_space_depth(distance);
+
+        let top_point = self.inverse_transform_matrix.transform_point(&point![
+            F::ZERO,
+            F::ONE,
+            clip_space_depth
+        ]);
+        let bottom_point = self.inverse_transform_matrix.transform_point(&point![
+            F::ZERO,
+            -F::ONE,
+            clip_space_depth
+        ]);
+
+        (top_point.y - bottom_point.y).abs()
+    }
+
     /// Whether the given point is strictly inside the frustum.
     pub fn contains_point(&self, point: &Point3<F>) -> bool {
         self.planes
@@ -872,5 +891,38 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn computing_frustum_height_at_distance_works() {
+        // Test with perspective frustum with 90 degree FOV
+        let frustum = Frustum::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
+                .as_projective(),
+        );
+
+        // At distance 1.0 (near plane), the height should be 2.0 for 90 degree FOV
+        // Since tan(45°) = 1, and height = 2 * distance * tan(half_fov)
+        let height_at_near = frustum.height_at_distance(1.0);
+        assert_abs_diff_eq!(height_at_near, 2.0, epsilon = 1e-9);
+
+        // At distance 2.0, the height should be 4.0
+        let height_at_double_distance = frustum.height_at_distance(2.0);
+        assert_abs_diff_eq!(height_at_double_distance, 4.0, epsilon = 1e-9);
+
+        // Test with orthographic frustum - height should be constant
+        let (left, right, bottom, top, near, far) = (-1.0, 1.0, -2.0, 2.0, 1.0, 10.0);
+        let ortho_frustum = Frustum::from_transform(
+            OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
+        );
+
+        let expected_height = top - bottom; // 4.0
+        let height_at_near_ortho = ortho_frustum.height_at_distance(near);
+        let height_at_mid_ortho = ortho_frustum.height_at_distance((near + far) / 2.0);
+        let height_at_far_ortho = ortho_frustum.height_at_distance(far);
+
+        assert_abs_diff_eq!(height_at_near_ortho, expected_height, epsilon = 1e-9);
+        assert_abs_diff_eq!(height_at_mid_ortho, expected_height, epsilon = 1e-9);
+        assert_abs_diff_eq!(height_at_far_ortho, expected_height, epsilon = 1e-9);
     }
 }
