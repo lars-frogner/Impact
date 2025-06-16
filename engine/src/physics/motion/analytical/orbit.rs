@@ -233,7 +233,8 @@ impl OrbitalTrajectoryComp {
     }
 }
 
-#[cfg(test)]
+// These tests are flaky when run under `miri`
+#[cfg(all(test, not(miri)))]
 mod tests {
     use super::*;
     use crate::physics::motion::{Direction, Orientation};
@@ -384,12 +385,12 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 periapsis_position,
                 correct_periapsis_position,
-                epsilon = 1e-5 * semi_major_axis
+                epsilon = 1e-6 * semi_major_axis
             ));
             prop_assert!(abs_diff_eq!(
                 apoapsis_position,
                 correct_apoapsis_position,
-                epsilon = 1e-5 * semi_major_axis
+                epsilon = 1e-6 * semi_major_axis
             ));
         }
     }
@@ -427,12 +428,12 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 periapsis_velocity.dot(&periapsis_displacement),
                 0.0,
-                epsilon = 1e-2 * semi_major_axis.powi(2) / period
+                epsilon = 1e-4 * semi_major_axis.powi(2) / period
             ));
             prop_assert!(abs_diff_eq!(
                 apoapsis_velocity.dot(&apoapsis_displacement),
                 0.0,
-                epsilon = 1e-2 * semi_major_axis.powi(2) / period
+                epsilon = 1e-4 * semi_major_axis.powi(2) / period
             ));
         }
     }
@@ -507,7 +508,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 periapsis_velocity_direction.dot(&apoapsis_velocity_direction),
                 -1.0,
-                epsilon = 1e-4
+                epsilon = 1e-5
             ));
         }
     }
