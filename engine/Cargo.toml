@@ -150,7 +150,10 @@ roc_codegen = [
 anyhow = { workspace = true }
 approx = { workspace = true }
 arbitrary = { workspace = true, optional = true }
-bincode = { version = "2.0", features = ["serde"] }
+bincode = { version = "2.0", default-features = false, features = [
+    "std",
+    "serde",
+] }
 bitflags = { workspace = true, features = ["bytemuck"] }
 bytemuck = { workspace = true }
 cfg-if = "1.0"
