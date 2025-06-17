@@ -65,6 +65,10 @@ impl UserInterface {
 
     pub fn setup(&self, engine: &Engine) {
         engine.set_controls_enabled(!self.config.interactive);
+        engine.set_task_timings(ToActiveState::from_enabled(self.config.show_time_overlay));
+        engine.set_render_pass_timings(ToActiveState::from_enabled(
+            self.config.show_render_pass_timings,
+        ));
     }
 
     pub fn run(
@@ -77,7 +81,7 @@ impl UserInterface {
     ) -> FullOutput {
         let mut output = ctx.run(input, |ctx| {
             if self.config.interactive {
-                self.toolbar.run(&mut self.config, ctx);
+                self.toolbar.run(ctx, &mut self.config, engine);
 
                 if self.config.show_rendering_options {
                     self.rendering_option_panel.run(ctx, &self.config, engine);
@@ -89,16 +93,10 @@ impl UserInterface {
                     self.gizmo_option_panel.run(ctx, &self.config, engine);
                 }
                 if self.config.show_task_timings {
-                    engine.set_task_timings(ToActiveState::Enabled);
                     self.task_timing_panel.run(ctx, &self.config, engine);
-                } else {
-                    engine.set_task_timings(ToActiveState::Disabled);
                 }
                 if self.config.show_render_pass_timings {
-                    engine.set_render_pass_timings(ToActiveState::Enabled);
                     self.render_pass_timing_panel.run(ctx, &self.config, engine);
-                } else {
-                    engine.set_render_pass_timings(ToActiveState::Disabled);
                 }
             }
 
