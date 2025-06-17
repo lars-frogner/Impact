@@ -14,7 +14,7 @@ import pf.Comp.AmbientEmission
 import pf.Comp.BoxMesh
 import pf.Comp.ConstantRotation
 import pf.Comp.CylinderMesh
-import pf.Comp.Mesh
+import pf.Comp.TriangleMesh
 import pf.Comp.MotionControl
 import pf.Comp.NormalMap
 import pf.Comp.OrientationControl
@@ -93,7 +93,7 @@ player =
 
 dragon =
     Entity.new
-    |> Comp.Mesh.add_new(MeshID.from_name("dragon"))
+    |> Comp.TriangleMesh.add_new(MeshID.from_name("dragon"))
     |> Comp.ReferenceFrame.add_new(
         (0.0, 3.5, 11.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
@@ -117,7 +117,7 @@ pole =
 
 abstract_object =
     Entity.new
-    |> Comp.Mesh.add_new(MeshID.from_name("abstract_object"))
+    |> Comp.TriangleMesh.add_new(MeshID.from_name("abstract_object"))
     |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((7.0, 9.7, 5.0), 0.02)
     |> Comp.ConstantRotation.add_new(
         0,
@@ -131,7 +131,7 @@ abstract_object =
 
 abstract_pyramid =
     Entity.new
-    |> Comp.Mesh.add_new(MeshID.from_name("abstract_pyramid"))
+    |> Comp.TriangleMesh.add_new(MeshID.from_name("abstract_pyramid"))
     |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((-1.0, 11.0, 9.0), 0.035)
     |> Comp.ConstantRotation.add_new(
         0,
@@ -165,7 +165,7 @@ sphere =
 
 abstract_cube =
     Entity.new
-    |> Comp.Mesh.add_new(MeshID.from_name("abstract_cube"))
+    |> Comp.TriangleMesh.add_new(MeshID.from_name("abstract_cube"))
     |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((-9.0, 7.8, 5.0), 0.016)
     |> Comp.ConstantRotation.add_new(
         0.0,
