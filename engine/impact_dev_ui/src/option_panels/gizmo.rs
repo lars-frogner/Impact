@@ -34,7 +34,7 @@ fn gizmo_parameter_options(
                     The scale factor used to calculate the length of the \
                     linear velocity arrow based on the entity's speed.",
             },
-            Slider::new(&mut parameters.linear_velocity_scale, 0.0..=1000.0).logarithmic(true),
+            Slider::new(&mut parameters.linear_velocity_scale, 0.0..=10000.0).logarithmic(true),
         )),
         GizmoType::AngularVelocity => Some(option_slider(
             ui,
@@ -56,7 +56,7 @@ fn gizmo_parameter_options(
                     angular momentum arrow based on the magnitude of the \
                     body's angular momentum.",
             },
-            Slider::new(&mut parameters.angular_momentum_scale, 0.0..=100.0).logarithmic(true),
+            Slider::new(&mut parameters.angular_momentum_scale, 0.0..=10000.0).logarithmic(true),
         )),
         GizmoType::Force => Some(option_slider(
             ui,
@@ -67,7 +67,7 @@ fn gizmo_parameter_options(
                     force arrow based on the magnitude of the force on the \
                     body.",
             },
-            Slider::new(&mut parameters.force_scale, 0.0..=1000.0).logarithmic(true),
+            Slider::new(&mut parameters.force_scale, 0.0..=10000.0).logarithmic(true),
         )),
         GizmoType::Torque => Some(option_slider(
             ui,
@@ -78,7 +78,7 @@ fn gizmo_parameter_options(
                     torque arrow based on the magnitude of the torque on \
                     the body.",
             },
-            Slider::new(&mut parameters.torque_scale, 0.0..=1000.0).logarithmic(true),
+            Slider::new(&mut parameters.torque_scale, 0.0..=10000.0).logarithmic(true),
         )),
         _ => None,
     }
