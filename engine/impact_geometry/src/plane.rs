@@ -123,6 +123,12 @@ impl<F: Float> Plane<F> {
         self.compute_signed_distance(point) < F::zero()
     }
 
+    /// Returns the projection of the given point onto this plane.
+    pub fn project_point_onto_plane(&self, point: &Point3<F>) -> Point3<F> {
+        let signed_distance = self.compute_signed_distance(point);
+        point - self.unit_normal.scale(signed_distance)
+    }
+
     /// Determines how the given sphere is positioned relative
     /// to the plane.
     pub fn determine_sphere_relation(&self, sphere: &Sphere<F>) -> SphereRelationToPlane {
@@ -240,5 +246,31 @@ mod tests {
         let transformed_plane = plane.transformed(&Similarity3::identity());
 
         assert_abs_diff_eq!(transformed_plane, plane, epsilon = 1e-9);
+    }
+
+    #[test]
+    fn projecting_point_on_plane_returns_same_point() {
+        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &point![1.0, 2.0, 0.0]);
+        let point_on_plane = point![5.0, 2.0, -3.0];
+        let projected_point = plane.project_point_onto_plane(&point_on_plane);
+
+        assert_abs_diff_eq!(projected_point, point_on_plane, epsilon = 1e-9);
+    }
+
+    #[test]
+    fn projecting_point_off_plane_moves_it_to_plane() {
+        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &point![0.0, 5.0, 0.0]);
+        let point_off_plane = point![2.0, 8.0, -1.0];
+        let projected_point = plane.project_point_onto_plane(&point_off_plane);
+
+        // The projected point should be on the plane (y = 5.0)
+        assert_abs_diff_eq!(projected_point, point![2.0, 5.0, -1.0], epsilon = 1e-9);
+
+        // Verify the projected point is actually on the plane
+        assert_abs_diff_eq!(
+            plane.compute_signed_distance(&projected_point),
+            0.0,
+            epsilon = 1e-9
+        );
     }
 }

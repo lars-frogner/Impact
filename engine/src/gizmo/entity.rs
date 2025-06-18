@@ -6,7 +6,7 @@ use crate::{
         OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp,
         ShadowableUnidirectionalLightComp,
     },
-    physics::motion::components::ReferenceFrameComp,
+    physics::{collision::components::CollidableComp, motion::components::ReferenceFrameComp},
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 
@@ -60,6 +60,17 @@ pub fn setup_gizmos_for_new_entity(
             ReferenceFrameComp,
             OmnidirectionalLightComp,
             ShadowableOmnidirectionalLightComp
+        ]
+    );
+    setup!(
+        components,
+        |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
+        [CollidableComp],
+        ![
+            ReferenceFrameComp,
+            OmnidirectionalLightComp,
+            ShadowableOmnidirectionalLightComp,
+            ShadowableUnidirectionalLightComp
         ]
     );
 }

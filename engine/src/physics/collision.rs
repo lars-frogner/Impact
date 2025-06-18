@@ -105,6 +105,20 @@ impl CollisionWorld {
         }
     }
 
+    pub fn get_collidable_descriptor(
+        &self,
+        collidable_id: CollidableID,
+    ) -> Option<&CollidableDescriptor> {
+        self.collidable_descriptors.get(&collidable_id)
+    }
+
+    pub fn get_collidable_with_descriptor(
+        &self,
+        descriptor: &CollidableDescriptor,
+    ) -> Option<&Collidable> {
+        self.collidables(descriptor.kind).get(descriptor.idx)
+    }
+
     pub fn add_sphere_collidable(
         &mut self,
         kind: CollidableKind,
@@ -256,13 +270,13 @@ impl CollisionWorld {
     }
 
     fn collidable_descriptor(&self, collidable_id: CollidableID) -> &CollidableDescriptor {
-        self.collidable_descriptors
-            .get(&collidable_id)
+        self.get_collidable_descriptor(collidable_id)
             .expect("Missing descriptor for collidable")
     }
 
     fn collidable_with_descriptor(&self, descriptor: &CollidableDescriptor) -> &Collidable {
-        &self.collidables(descriptor.kind)[descriptor.idx]
+        self.get_collidable_with_descriptor(descriptor)
+            .expect("Missing collidable for collidable descriptor")
     }
 
     fn add_collidable(
@@ -328,6 +342,10 @@ impl Collidable {
     fn new(id: CollidableID, geometry: WorldCollidableGeometry) -> Self {
         Self { id, geometry }
     }
+
+    pub fn geometry(&self) -> &WorldCollidableGeometry {
+        &self.geometry
+    }
 }
 
 impl WorldCollidableGeometry {
@@ -354,6 +372,10 @@ impl SphereCollidableGeometry {
         Self { sphere }
     }
 
+    pub fn sphere(&self) -> &Sphere<fph> {
+        &self.sphere
+    }
+
     fn to_world(&self, transform_to_world_space: &Similarity3<fph>) -> Self {
         Self {
             sphere: self.sphere.transformed(transform_to_world_space),
@@ -362,6 +384,10 @@ impl SphereCollidableGeometry {
 }
 
 impl PlaneCollidableGeometry {
+    pub fn plane(&self) -> &Plane<fph> {
+        &self.plane
+    }
+
     fn to_world(&self, transform_to_world_space: &Similarity3<fph>) -> Self {
         Self {
             plane: self.plane.transformed(transform_to_world_space),
