@@ -22,7 +22,7 @@ pub fn setup_gizmos_for_new_entity(
             gizmos.map_or_else(GizmoSet::empty, |gizmos| gizmos.visible_gizmos);
 
         for gizmo in GizmoType::all() {
-            match gizmo_manager.config().visibility(gizmo) {
+            match gizmo_manager.visibilities().get_for(gizmo) {
                 GizmoVisibility::Hidden => {
                     visible_gizmos.remove(gizmo.as_set());
                 }

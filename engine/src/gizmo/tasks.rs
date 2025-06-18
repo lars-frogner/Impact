@@ -56,6 +56,7 @@ define_task!(
         instrument_engine_task!("Buffering transforms for gizmos", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             let current_frame_count = engine.renderer().read().unwrap().current_frame_count();
+            let gizmo_manager = engine.gizmo_manager().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
@@ -65,6 +66,7 @@ define_task!(
             gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
                 &mut instance_feature_manager,
+                &gizmo_manager,
                 &scene_graph,
                 &light_storage,
                 scene_camera.as_ref(),

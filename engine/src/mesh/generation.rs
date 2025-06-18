@@ -753,6 +753,26 @@ impl<F: Float> TriangleMesh<F> {
 }
 
 impl<F: Float> LineSegmentMesh<F> {
+    /// Creates a mesh containing an arrow going from the origin to (0, 1, 0).
+    /// The two line segments making up the arrow head lie in the xy-plane.
+    ///
+    /// The generated mesh will only contain positions.
+    pub fn create_unit_arrow_y() -> Self {
+        let arrow_length = F::from_f64(0.1).unwrap();
+        let arrow_width = F::from_f64(0.05).unwrap();
+
+        let positions = vec![
+            pos![F::ZERO, F::ZERO, F::ZERO],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![-arrow_width, F::ONE - arrow_length, F::ZERO],
+            pos![F::ZERO, F::ONE, F::ZERO],
+            pos![arrow_width, F::ONE - arrow_length, F::ZERO],
+        ];
+
+        Self::new(positions, Vec::new())
+    }
+
     /// Creates a mesh with three line segments corresponding to the x, y and z
     /// unit vectors rooted at the origin, respectively colored red, green and
     /// blue.
