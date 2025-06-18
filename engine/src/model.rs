@@ -489,6 +489,25 @@ impl InstanceFeatureManager {
         instance_buffer.buffer_instance_feature::<Fe>(feature);
     }
 
+    /// Pushes a copy of the given slice of feature values onto the associated
+    /// buffer for the model with the given ID.
+    ///
+    /// # Panics
+    /// - If no [`ModelInstanceBuffer`] exists for the model with the given ID.
+    /// - If the model does not have a buffer for the feature type.
+    pub fn buffer_instance_feature_slice<Fe: InstanceFeature>(
+        &mut self,
+        model_id: &ModelID,
+        features: &[Fe],
+    ) {
+        let instance_buffer = self
+            .instance_buffers
+            .get_mut(model_id)
+            .expect("Tried to buffer instances of missing model");
+
+        instance_buffer.buffer_instance_feature_slice::<Fe>(features);
+    }
+
     /// Calls [`DynamicInstanceFeatureBuffer::begin_range`] with the given range
     /// ID for all instance feature buffers holding the given feature type
     /// (across all models).
@@ -719,6 +738,18 @@ impl ModelInstanceBuffer {
             .expect("Missing feature buffer for feature type");
 
         feature_buffer.add_feature(feature);
+    }
+
+    /// Pushes a copy of the given slice of feature values onto the associated buffer.
+    ///
+    /// # Panics
+    /// If the model does not have a buffer for the feature type.
+    fn buffer_instance_feature_slice<Fe: InstanceFeature>(&mut self, features: &[Fe]) {
+        let feature_buffer = self
+            .get_feature_buffer_mut(Fe::FEATURE_TYPE_ID)
+            .expect("Missing feature buffer for feature type");
+
+        feature_buffer.add_feature_slice(features);
     }
 
     /// Calls [`DynamicInstanceFeatureBuffer::begin_range`] with the given range

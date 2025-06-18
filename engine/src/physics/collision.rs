@@ -402,6 +402,14 @@ impl VoxelObjectCollidableGeometry {
             transform_to_object_space: transform_to_world_space.inverse(),
         }
     }
+
+    pub fn object_id(&self) -> VoxelObjectID {
+        self.object_id
+    }
+
+    pub fn transform_to_object_space(&self) -> &Similarity3<fph> {
+        &self.transform_to_object_space
+    }
 }
 
 impl CollidableOrder {

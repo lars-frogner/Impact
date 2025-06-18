@@ -175,29 +175,32 @@ pub struct GizmoVisibilities {
     /// The visibility of the gizmos showing collider geometry for dynamic
     /// collidables.
     ///
-    /// When visible, a semitransparent green sphere (for sphere collidables) or
-    /// infinite plane (for plane collidables) will be rendered for each
-    /// dynamically collidable entity, showing the shape used for collision
-    /// detection and resolution. The shape's position and orientation will be
-    /// delayed by one simulation step compared to the entity's visible mesh.
+    /// When visible, a semitransparent green sphere (for sphere collidables),
+    /// infinite plane (for plane collidables) or collection of voxel-sized
+    /// spheres (for voxel collidables) will be rendered for each dynamically
+    /// collidable entity, showing the shape used for collision detection and
+    /// resolution. The shape's position and orientation will be delayed by one
+    /// simulation step compared to the entity's visible mesh.
     pub dynamic_collider: GizmoVisibility,
     /// The visibility of the gizmos showing collider geometry for static
     /// collidables.
     ///
-    /// When visible, a semitransparent red sphere (for sphere collidables) or
-    /// infinite plane (for plane collidables) will be rendered for each
-    /// statically collidable entity, showing the shape used for collision
-    /// detection and resolution. The shape's position and orientation will be
-    /// delayed by one simulation step compared to the entity's visible mesh.
+    /// When visible, a semitransparent red sphere (for sphere collidables),
+    /// infinite plane (for plane collidables) or collection of voxel-sized
+    /// spheres (for voxel collidables) will be rendered for each statically
+    /// collidable entity, showing the shape used for collision detection and
+    /// resolution. The shape's position and orientation will be delayed by one
+    /// simulation step compared to the entity's visible mesh.
     pub static_collider: GizmoVisibility,
     /// The visibility of the gizmos showing collider geometry for phantom
     /// collidables.
     ///
-    /// When visible, a semitransparent magenta sphere (for sphere collidables)
-    /// or infinite plane (for plane collidables) will be rendered for each
-    /// entity with a phantom collidable, showing the shape used for collision
-    /// detection. The shape's position and orientation will be delayed by one
-    /// simulation step compared to the entity's visible mesh.
+    /// When visible, a semitransparent magenta sphere (for sphere collidables),
+    /// infinite plane (for plane collidables) or collection of voxel-sized
+    /// spheres (for voxel collidables) will be rendered for each entity with a
+    /// phantom collidable, showing the shape used for collision detection. The
+    /// shape's position and orientation will be delayed by one simulation step
+    /// compared to the entity's visible mesh.
     pub phantom_collider: GizmoVisibility,
     /// The visibility of the gizmos showing chunk boundaries for voxel objects.
     ///
@@ -426,27 +429,30 @@ impl GizmoType {
             }
             Self::DynamicCollider => {
                 "\
-                When enabled, a semitransparent green sphere (for sphere collidables) or \
-                infinite plane (for plane collidables) will be rendered for each \
+                When enabled, a semitransparent green sphere (for sphere collidables), \
+                infinite plane (for plane collidables) or collection of voxel-sized \
+                spheres (for voxel collidables) will be rendered for each \
                 dynamically collidable entity, showing the shape used for collision \
                 detection and resolution. The shape's position and orientation will be \
                 delayed by one simulation step compared to the entity's visible mesh."
             }
             Self::StaticCollider => {
                 "\
-                When enabled, a semitransparent red sphere (for sphere collidables) or \
-                infinite plane (for plane collidables) will be rendered for each \
+                When enabled, a semitransparent red sphere (for sphere collidables), \
+                infinite plane (for plane collidables) or collection of voxel-sized \
+                spheres (for voxel collidables) will be rendered for each \
                 statically collidable entity, showing the shape used for collision \
                 detection and resolution. The shape's position and orientation will be \
                 delayed by one simulation step compared to the entity's visible mesh."
             }
             Self::PhantomCollider => {
                 "\
-                When enabled, a semitransparent magenta sphere (for sphere collidables) \
-                or infinite plane (for plane collidables) will be rendered for each \
-                entity with a phantom collidable, showing the shape used for collision \
-                detection. The shape's position and orientation will be delayed by one \
-                simulation step compared to the entity's visible mesh."
+                When enabled, a semitransparent magenta sphere (for sphere collidables), \
+                infinite plane (for plane collidables) or collection of voxel-sized \
+                spheres (for voxel collidables) will be rendered for each entity with \
+                a phantom collidable, showing the shape used for collision detection. \
+                The shape's position and orientation will be delayed by one simulation \
+                step compared to the entity's visible mesh."
             }
             Self::VoxelChunks => {
                 "\

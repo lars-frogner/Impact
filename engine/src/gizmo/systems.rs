@@ -7,7 +7,7 @@ use crate::{
         components::GizmosComp,
         model::{
             COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
-            SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
+            COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
             VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
             VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
@@ -241,6 +241,7 @@ pub fn buffer_transforms_for_gizmos(
             buffer_transforms_for_collider_gizmos(
                 instance_feature_manager,
                 collision_world,
+                &voxel_manager.object_manager,
                 scene_camera,
                 &camera_position,
                 collidable.collidable_id,
@@ -634,6 +635,7 @@ fn compute_rotation_to_camera_space_for_cylindrical_billboard(
 fn buffer_transforms_for_collider_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
     collision_world: &CollisionWorld,
+    voxel_object_manager: &VoxelObjectManager,
     scene_camera: &SceneCamera<f32>,
     camera_position: &Point3<f32>,
     collidable_id: CollidableID,
@@ -662,9 +664,9 @@ fn buffer_transforms_for_collider_gizmos(
         return;
     };
 
-    let (model_id, model_to_world_transform) = match collidable.geometry() {
-        WorldCollidableGeometry::Sphere(sphere) => {
-            let sphere = sphere.sphere();
+    match collidable.geometry() {
+        WorldCollidableGeometry::Sphere(sphere_geometry) => {
+            let sphere = sphere_geometry.sphere();
 
             let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
                 sphere.center().coords.cast().into(),
@@ -672,12 +674,16 @@ fn buffer_transforms_for_collider_gizmos(
                 sphere.radius() as f32,
             );
 
-            let model_id = &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id;
+            let model_to_camera_transform =
+                scene_camera.view_transform() * unit_sphere_to_sphere_collider_transform;
 
-            (model_id, unit_sphere_to_sphere_collider_transform)
+            instance_feature_manager.buffer_instance_feature(
+                &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id,
+                &InstanceModelViewTransform::from(model_to_camera_transform),
+            );
         }
-        WorldCollidableGeometry::Plane(plane) => {
-            let plane = plane.plane();
+        WorldCollidableGeometry::Plane(plane_geometry) => {
+            let plane = plane_geometry.plane();
 
             // Make the plane appear infinite by putting the center of the mesh
             // at the camera position (projected so as not to change the plane
@@ -690,21 +696,61 @@ fn buffer_transforms_for_collider_gizmos(
             let unit_square_to_plane_collider_transform =
                 Similarity3::from_parts(translation.coords.cast().into(), rotation.cast(), scaling);
 
-            let model_id = &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id;
+            let model_to_camera_transform =
+                scene_camera.view_transform() * unit_square_to_plane_collider_transform;
 
-            (model_id, unit_square_to_plane_collider_transform)
+            instance_feature_manager.buffer_instance_feature(
+                &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id,
+                &InstanceModelViewTransform::from(model_to_camera_transform),
+            );
         }
-        WorldCollidableGeometry::VoxelObject(_) => {
-            return;
+        WorldCollidableGeometry::VoxelObject(voxel_object_geometry) => {
+            let Some(voxel_object) =
+                voxel_object_manager.get_voxel_object(voxel_object_geometry.object_id())
+            else {
+                return;
+            };
+            let voxel_object = voxel_object.object();
+
+            let voxel_radius = 0.5 * voxel_object.voxel_extent();
+
+            let transform_from_object_to_world_space =
+                voxel_object_geometry.transform_to_object_space().inverse();
+
+            let transform_from_object_to_camera_space =
+                scene_camera.view_transform().cast() * transform_from_object_to_world_space;
+
+            let rotation_from_object_to_camera_space = transform_from_object_to_camera_space
+                .isometry
+                .rotation
+                .cast();
+            let scaling_from_object_to_camera_space =
+                (transform_from_object_to_camera_space.scaling() * voxel_radius) as f32;
+
+            let mut transforms = Vec::with_capacity(voxel_object.surface_voxel_count_heuristic());
+
+            voxel_object.for_each_surface_voxel(&mut |[i, j, k], _, _| {
+                let voxel_center_in_object_space =
+                    voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
+
+                let voxel_center_in_camera_space = transform_from_object_to_camera_space
+                    .transform_point(&voxel_center_in_object_space);
+
+                let model_to_camera_transform = InstanceModelViewTransform {
+                    translation: voxel_center_in_camera_space.coords.cast(),
+                    rotation: rotation_from_object_to_camera_space,
+                    scaling: scaling_from_object_to_camera_space,
+                };
+
+                transforms.push(model_to_camera_transform);
+            });
+
+            instance_feature_manager.buffer_instance_feature_slice(
+                &models[COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX].model_id,
+                &transforms,
+            );
         }
-    };
-
-    let model_to_camera_transform = scene_camera.view_transform() * model_to_world_transform;
-
-    instance_feature_manager.buffer_instance_feature(
-        model_id,
-        &InstanceModelViewTransform::from(model_to_camera_transform),
-    );
+    }
 }
 
 fn rotation_between_axes(a: &UnitVector3<f64>, b: &UnitVector3<f64>) -> UnitQuaternion<f64> {
