@@ -341,7 +341,7 @@ impl Default for SimulatorConfig {
         Self {
             enabled: true,
             n_substeps: 1,
-            initial_time_step_duration: 0.015,
+            initial_time_step_duration: 0.001,
             match_frame_duration: true,
             simulation_speed_multiplier_increment_factor: 1.1,
         }
