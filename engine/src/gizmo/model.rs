@@ -66,6 +66,15 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
         GizmoType::BoundingSphere | GizmoType::LightSphere => {
             vec![define_obscurable_triangle_model(gizmo.label())]
         }
+        GizmoType::CenterOfMass => {
+            vec![define_non_obscurable_triangle_model(gizmo.label())]
+        }
+        GizmoType::DynamicCollider | GizmoType::StaticCollider | GizmoType::PhantomCollider => {
+            vec![
+                define_non_obscurable_triangle_model(format!("{} sphere", gizmo.label())),
+                define_non_obscurable_triangle_model(format!("{} plane", gizmo.label())),
+            ]
+        }
         GizmoType::ShadowCubemapFaces => {
             vec![
                 define_non_obscurable_triangle_model(format!("{} planes", gizmo.label())),
@@ -80,12 +89,14 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
                 define_obscurable_triangle_model(format!("{} plane 3", gizmo.label())),
             ]
         }
-        GizmoType::CenterOfMass => vec![define_non_obscurable_triangle_model(gizmo.label())],
     }
 }
 
 pub const SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX: usize = 0;
 pub const SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX: usize = 1;
+
+pub const COLLIDER_GIZMO_SPHERE_MODEL_IDX: usize = 0;
+pub const COLLIDER_GIZMO_PLANE_MODEL_IDX: usize = 1;
 
 fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
     GizmoModel {

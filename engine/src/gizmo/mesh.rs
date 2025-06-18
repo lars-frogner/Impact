@@ -4,6 +4,7 @@ use crate::{
     gizmo::{
         GizmoType,
         model::{
+            COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
         },
@@ -111,6 +112,27 @@ impl GizmoType {
                 let mut mesh = LineSegmentMesh::create_unit_arrow_y();
                 mesh.set_same_color(VertexColor::CYAN);
                 mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+            }
+            Self::DynamicCollider | Self::StaticCollider | Self::PhantomCollider => {
+                let color = match self {
+                    Self::DynamicCollider => VertexColor::GREEN,
+                    Self::StaticCollider => VertexColor::RED,
+                    Self::PhantomCollider => VertexColor::MAGENTA,
+                    _ => unreachable!(),
+                }
+                .with_alpha(0.1);
+
+                let sphere_mesh = TriangleMesh::create_unit_sphere_with_color(32, color);
+                mesh_repository.add_triangle_mesh(
+                    self.models()[COLLIDER_GIZMO_SPHERE_MODEL_IDX].mesh_id(),
+                    sphere_mesh,
+                )?;
+
+                let plane_mesh = TriangleMesh::create_vertical_square_with_color(1.0, color);
+                mesh_repository.add_triangle_mesh(
+                    self.models()[COLLIDER_GIZMO_PLANE_MODEL_IDX].mesh_id(),
+                    plane_mesh,
+                )
             }
         }
     }

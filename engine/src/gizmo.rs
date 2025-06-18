@@ -36,6 +36,9 @@ pub enum GizmoType {
     AngularMomentum = 8,
     Force = 9,
     Torque = 10,
+    DynamicCollider = 11,
+    StaticCollider = 12,
+    PhantomCollider = 13,
 }
 
 bitflags! {
@@ -57,6 +60,9 @@ bitflags! {
         const ANGULAR_MOMENTUM     = 1 << 8;
         const FORCE                = 1 << 9;
         const TORQUE               = 1 << 10;
+        const DYNAMIC_COLLIDER     = 1 << 11;
+        const STATIC_COLLIDER      = 1 << 12;
+        const PHANTOM_COLLIDER     = 1 << 13;
     }
 }
 
@@ -164,9 +170,33 @@ pub struct GizmoVisibilities {
     /// proportional to the magnitude of the axis, with the proportionality
     /// factor being equal to [`Self::torque_scale`].
     pub torque: GizmoVisibility,
-    // pub sphere_collider_visibility: GizmoVisibility,
-    // pub plane_collider_visibility: GizmoVisibility,
-    // pub voxel_chunks_visibility: GizmoVisibility,
+    /// The visibility of the gizmos showing collider geometry for dynamic
+    /// collidables.
+    ///
+    /// When visible, a semitransparent green sphere (for sphere collidables) or
+    /// infinite plane (for plane collidables) will be rendered for each
+    /// dynamically collidable entity, showing the shape used for collision
+    /// detection and resolution. The shape's position and orientation will be
+    /// delayed by one simulation step compared to the entity's visible mesh.
+    pub dynamic_collider: GizmoVisibility,
+    /// The visibility of the gizmos showing collider geometry for static
+    /// collidables.
+    ///
+    /// When visible, a semitransparent red sphere (for sphere collidables) or
+    /// infinite plane (for plane collidables) will be rendered for each
+    /// statically collidable entity, showing the shape used for collision
+    /// detection and resolution. The shape's position and orientation will be
+    /// delayed by one simulation step compared to the entity's visible mesh.
+    pub static_collider: GizmoVisibility,
+    /// The visibility of the gizmos showing collider geometry for phantom
+    /// collidables.
+    ///
+    /// When visible, a semitransparent magenta sphere (for sphere collidables)
+    /// or infinite plane (for plane collidables) will be rendered for each
+    /// entity with a phantom collidable, showing the shape used for collision
+    /// detection. The shape's position and orientation will be delayed by one
+    /// simulation step compared to the entity's visible mesh.
+    pub phantom_collider: GizmoVisibility,
 }
 
 /// The configuration parameters associated with each gizmo type.
@@ -231,7 +261,7 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 11] {
+    pub const fn all() -> [Self; 14] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingSphere,
@@ -244,6 +274,9 @@ impl GizmoType {
             Self::AngularMomentum,
             Self::Force,
             Self::Torque,
+            Self::DynamicCollider,
+            Self::StaticCollider,
+            Self::PhantomCollider,
         ]
     }
 
@@ -268,6 +301,9 @@ impl GizmoType {
             Self::AngularMomentum => GizmoSet::ANGULAR_MOMENTUM,
             Self::Force => GizmoSet::FORCE,
             Self::Torque => GizmoSet::TORQUE,
+            Self::DynamicCollider => GizmoSet::DYNAMIC_COLLIDER,
+            Self::StaticCollider => GizmoSet::STATIC_COLLIDER,
+            Self::PhantomCollider => GizmoSet::PHANTOM_COLLIDER,
         }
     }
 
@@ -285,6 +321,9 @@ impl GizmoType {
             Self::AngularMomentum => "Angular momenta",
             Self::Force => "Forces",
             Self::Torque => "Torques",
+            Self::DynamicCollider => "Dynamic colliders",
+            Self::StaticCollider => "Static colliders",
+            Self::PhantomCollider => "Phantom colliders",
         }
     }
 
@@ -371,6 +410,29 @@ impl GizmoType {
                 proportional to the magnitude of the axis, with the proportionality \
                 factor being set by the `Torque scale` parameter."
             }
+            Self::DynamicCollider => {
+                "\
+                When enabled, a semitransparent green sphere (for sphere collidables) or \
+                infinite plane (for plane collidables) will be rendered for each \
+                dynamically collidable entity, showing the shape used for collision \
+                detection and resolution. The shape's position and orientation will be \
+                delayed by one simulation step compared to the entity's visible mesh."
+            }
+            Self::StaticCollider => {
+                "\
+                When enabled, a semitransparent red sphere (for sphere collidables) or \
+                infinite plane (for plane collidables) will be rendered for each \
+                statically collidable entity, showing the shape used for collision \
+                detection and resolution. The shape's position and orientation will be \
+                delayed by one simulation step compared to the entity's visible mesh."
+            }
+            Self::PhantomCollider => {
+                "\
+                When enabled, a semitransparent magenta sphere (for sphere collidables) \
+                or infinite plane (for plane collidables) will be rendered for each \
+                entity with a phantom collidable, showing the shape used for collision \
+                detection. The shape's position and orientation will be delayed by one \
+                simulation step compared to the entity's visible mesh."
         }
     }
 
@@ -424,6 +486,9 @@ impl GizmoVisibilities {
             GizmoType::AngularMomentum => self.angular_momentum,
             GizmoType::Force => self.force,
             GizmoType::Torque => self.torque,
+            GizmoType::DynamicCollider => self.dynamic_collider,
+            GizmoType::StaticCollider => self.static_collider,
+            GizmoType::PhantomCollider => self.phantom_collider,
         }
     }
 
@@ -441,6 +506,9 @@ impl GizmoVisibilities {
             GizmoType::AngularMomentum => &mut self.angular_momentum,
             GizmoType::Force => &mut self.force,
             GizmoType::Torque => &mut self.torque,
+            GizmoType::DynamicCollider => &mut self.dynamic_collider,
+            GizmoType::StaticCollider => &mut self.static_collider,
+            GizmoType::PhantomCollider => &mut self.phantom_collider,
         }
     }
 }

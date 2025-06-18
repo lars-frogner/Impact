@@ -6,6 +6,7 @@ use crate::{
         GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
         components::GizmosComp,
         model::{
+            COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
         },
@@ -22,6 +23,10 @@ use crate::{
         transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
     },
     physics::{
+        collision::{
+            CollidableID, CollidableKind, CollisionWorld, WorldCollidableGeometry,
+            components::CollidableComp,
+        },
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::{RigidBody, components::RigidBodyComp},
     },
@@ -60,6 +65,7 @@ pub fn buffer_transforms_for_gizmos(
     ecs_world: &ECSWorld,
     instance_feature_manager: &mut InstanceFeatureManager,
     gizmo_manager: &GizmoManager,
+    collision_world: &CollisionWorld,
     scene_graph: &SceneGraph<f32>,
     light_storage: &LightStorage,
     scene_camera: Option<&SceneCamera<f32>>,
@@ -206,6 +212,28 @@ pub fn buffer_transforms_for_gizmos(
                 &camera_position,
                 frame,
                 &rigid_body.0,
+                gizmos.visible_gizmos,
+            );
+        }
+    );
+
+    query!(
+        ecs_world,
+        |gizmos: &GizmosComp, collidable: &CollidableComp, flags: &SceneEntityFlagsComp| {
+            if !gizmos.visible_gizmos.intersects(
+                GizmoSet::DYNAMIC_COLLIDER
+                    .union(GizmoSet::STATIC_COLLIDER)
+                    .union(GizmoSet::PHANTOM_COLLIDER),
+            ) || flags.is_disabled()
+            {
+                return;
+            }
+            buffer_transforms_for_collider_gizmos(
+                instance_feature_manager,
+                collision_world,
+                scene_camera,
+                &camera_position,
+                collidable.collidable_id,
                 gizmos.visible_gizmos,
             );
         }
@@ -570,4 +598,98 @@ fn compute_rotation_to_camera_space_for_cylindrical_billboard(
         y_axis.into_inner(),
         z_axis.into_inner(),
     ])
+}
+
+fn buffer_transforms_for_collider_gizmos(
+    instance_feature_manager: &mut InstanceFeatureManager,
+    collision_world: &CollisionWorld,
+    scene_camera: &SceneCamera<f32>,
+    camera_position: &Point3<f32>,
+    collidable_id: CollidableID,
+    visible_gizmos: GizmoSet,
+) {
+    let Some(descriptor) = collision_world.get_collidable_descriptor(collidable_id) else {
+        return;
+    };
+
+    let models = match descriptor.kind() {
+        CollidableKind::Dynamic if visible_gizmos.contains(GizmoType::DynamicCollider.as_set()) => {
+            GizmoType::DynamicCollider.models()
+        }
+        CollidableKind::Static if visible_gizmos.contains(GizmoType::StaticCollider.as_set()) => {
+            GizmoType::StaticCollider.models()
+        }
+        CollidableKind::Phantom if visible_gizmos.contains(GizmoType::PhantomCollider.as_set()) => {
+            GizmoType::PhantomCollider.models()
+        }
+        _ => {
+            return;
+        }
+    };
+
+    let Some(collidable) = collision_world.get_collidable_with_descriptor(descriptor) else {
+        return;
+    };
+
+    let (model_id, model_to_world_transform) = match collidable.geometry() {
+        WorldCollidableGeometry::Sphere(sphere) => {
+            let sphere = sphere.sphere();
+
+            let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
+                sphere.center().coords.cast().into(),
+                UnitQuaternion::identity(),
+                sphere.radius() as f32,
+            );
+
+            let model_id = &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id;
+
+            (model_id, unit_sphere_to_sphere_collider_transform)
+        }
+        WorldCollidableGeometry::Plane(plane) => {
+            let plane = plane.plane();
+
+            // Make the plane appear infinite by putting the center of the mesh
+            // at the camera position (projected so as not to change the plane
+            // displacement) and scaling the mesh to reach the camera's far
+            // distance
+            let translation = plane.project_point_onto_plane(&camera_position.cast());
+            let rotation = rotation_between_axes(&Vector3::z_axis(), plane.unit_normal());
+            let scaling = scene_camera.camera().view_frustum().far_distance();
+
+            let unit_square_to_plane_collider_transform =
+                Similarity3::from_parts(translation.coords.cast().into(), rotation.cast(), scaling);
+
+            let model_id = &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id;
+
+            (model_id, unit_square_to_plane_collider_transform)
+        }
+        WorldCollidableGeometry::VoxelObject(_) => {
+            return;
+        }
+    };
+
+    let model_to_camera_transform: InstanceModelViewTransform =
+        (scene_camera.view_transform() * model_to_world_transform).into();
+
+    instance_feature_manager.buffer_instance_feature(model_id, &model_to_camera_transform);
+}
+
+fn rotation_between_axes(a: &UnitVector3<f64>, b: &UnitVector3<f64>) -> UnitQuaternion<f64> {
+    if let Some(rotation) = UnitQuaternion::rotation_between_axis(a, b) {
+        rotation
+    } else {
+        // If the axes are antiparallel, we pick a suitable axis about which to
+        // flip `a`
+        let axis_most_orthogonal_to_a = if a.x.abs() < a.y.abs() && a.x.abs() < a.z.abs() {
+            Vector3::x()
+        } else if a.y.abs() < a.z.abs() {
+            Vector3::y()
+        } else {
+            Vector3::z()
+        };
+        let axis_perpendicular_to_a =
+            UnitVector3::new_normalize(a.cross(&axis_most_orthogonal_to_a));
+
+        UnitQuaternion::from_axis_angle(&axis_perpendicular_to_a, std::f64::consts::PI)
+    }
 }

@@ -5,6 +5,7 @@ use crate::{
     engine::{Engine, tasks::EngineTaskScheduler},
     gizmo::{self, GizmoSet, GizmoType},
     gpu::rendering::tasks::RenderingTag,
+    physics::tasks::AdvanceSimulation,
     scene::tasks::{BufferVisibleModelInstances, ClearModelInstanceBuffers, SyncLightsInStorage},
 };
 use anyhow::Result;
@@ -49,7 +50,8 @@ define_task!(
         UpdateVisibilityFlagsForGizmos,
         ClearModelInstanceBuffers,
         BufferVisibleModelInstances,
-        SyncLightsInStorage
+        SyncLightsInStorage,
+        AdvanceSimulation
     ],
     execute_on = [RenderingTag],
     |engine: &Engine| {
@@ -57,6 +59,8 @@ define_task!(
             let ecs_world = engine.ecs_world().read().unwrap();
             let current_frame_count = engine.renderer().read().unwrap().current_frame_count();
             let gizmo_manager = engine.gizmo_manager().read().unwrap();
+            let simulator = engine.simulator().read().unwrap();
+            let collision_world = simulator.collision_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
@@ -67,6 +71,7 @@ define_task!(
                 &ecs_world,
                 &mut instance_feature_manager,
                 &gizmo_manager,
+                &collision_world,
                 &scene_graph,
                 &light_storage,
                 scene_camera.as_ref(),
