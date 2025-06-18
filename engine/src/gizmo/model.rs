@@ -55,7 +55,12 @@ static GIZMO_MODELS: LazyLock<[Vec<GizmoModel>; GizmoType::count()]> =
 
 fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
     match gizmo {
-        GizmoType::ReferenceFrameAxes => {
+        GizmoType::ReferenceFrameAxes
+        | GizmoType::LinearVelocity
+        | GizmoType::AngularVelocity
+        | GizmoType::AngularMomentum
+        | GizmoType::Force
+        | GizmoType::Torque => {
             vec![define_non_obscurable_line_segment_model(gizmo.label())]
         }
         GizmoType::BoundingSphere | GizmoType::LightSphere => {
@@ -75,13 +80,10 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
                 define_obscurable_triangle_model(format!("{} plane 3", gizmo.label())),
             ]
         }
-        _ => Vec::new(),
+        GizmoType::CenterOfMass => vec![define_non_obscurable_triangle_model(gizmo.label())],
     }
 }
 
-pub const REFERENCE_FRAME_AXES_GIZMO_MODEL_IDX: usize = 0;
-pub const BOUNDING_SPHERE_GIZMO_MODEL_IDX: usize = 0;
-pub const LIGHT_SPHERE_GIZMO_MODEL_IDX: usize = 0;
 pub const SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX: usize = 0;
 pub const SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX: usize = 1;
 

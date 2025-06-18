@@ -9,7 +9,7 @@ use approx::assert_abs_diff_ne;
 use impact_containers::EntityChangeTracker;
 use impact_geometry::{Frustum, OrthographicTransform, PerspectiveTransform};
 use impact_math::{Angle, Bounds, Float, Radians, UpperExclusiveBounds};
-use nalgebra::{Projective3, Similarity3};
+use nalgebra::{Point3, Projective3, Similarity3};
 use std::fmt::Debug;
 
 /// Represents a 3D camera.
@@ -103,6 +103,13 @@ impl<F: Float> SceneCamera<F> {
     /// Returns whether jittering is enabled for the camera.
     pub fn jitter_enabled(&self) -> bool {
         self.jitter_enabled
+    }
+
+    /// Computes the world-space position of the camera based on the current
+    /// view transform.
+    pub fn compute_world_space_position(&self) -> Point3<F> {
+        let camera_to_world = self.view_transform.inverse();
+        camera_to_world.isometry.translation.vector.into()
     }
 
     /// Sets the transform from world space to camera space.
