@@ -15,7 +15,7 @@ fn gizmo_parameter_options(
         GizmoType::CenterOfMass => Some(option_slider(
             ui,
             LabelAndHoverText {
-                label: "Center of mass sphere density",
+                label: "COM sphere density",
                 hover_text: "\
                     The density used to calculate the size of the center \
                     of mass sphere from the mass of the body.",
@@ -79,6 +79,16 @@ fn gizmo_parameter_options(
                     the body.",
             },
             Slider::new(&mut parameters.torque_scale, 0.0..=10000.0).logarithmic(true),
+        )),
+        GizmoType::VoxelChunks => Some(option_checkbox(
+            ui,
+            &mut parameters.show_interior_chunks,
+            LabelAndHoverText {
+                label: "Show interior chunks",
+                hover_text: "\
+                    Whether the cubes outlining voxel chunks should show through obscuring \
+                    geometry, making the interior chunks visible.",
+            },
         )),
         _ => None,
     }

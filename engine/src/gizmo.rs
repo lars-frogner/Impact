@@ -39,6 +39,7 @@ pub enum GizmoType {
     DynamicCollider = 11,
     StaticCollider = 12,
     PhantomCollider = 13,
+    VoxelChunks = 14,
 }
 
 bitflags! {
@@ -63,6 +64,7 @@ bitflags! {
         const DYNAMIC_COLLIDER     = 1 << 11;
         const STATIC_COLLIDER      = 1 << 12;
         const PHANTOM_COLLIDER     = 1 << 13;
+        const VOXEL_CHUNKS         = 1 << 14;
     }
 }
 
@@ -197,6 +199,12 @@ pub struct GizmoVisibilities {
     /// detection. The shape's position and orientation will be delayed by one
     /// simulation step compared to the entity's visible mesh.
     pub phantom_collider: GizmoVisibility,
+    /// The visibility of the gizmos showing chunk boundaries for voxel objects.
+    ///
+    /// When visible, a semitransparent green (for non-uniform chunks) or blue
+    /// (for uniform chunks) cube is rendered for each non-empty chunk in voxel
+    /// objects, outlining the chunk boundaries.
+    pub voxel_chunks: GizmoVisibility,
 }
 
 /// The configuration parameters associated with each gizmo type.
@@ -221,6 +229,9 @@ pub struct GizmoParameters {
     /// The scale factor used to calculate the length of the torque arrow based
     /// on the magnitude of the torque on the body.
     pub torque_scale: f64,
+    /// Whether the cubes outlining voxel chunks should show through obscuring
+    /// geometry, making the interior chunks visible.
+    pub show_interior_chunks: bool,
 }
 
 /// The scope of visibility for a gizmo.
@@ -261,7 +272,7 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 14] {
+    pub const fn all() -> [Self; 15] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingSphere,
@@ -277,6 +288,7 @@ impl GizmoType {
             Self::DynamicCollider,
             Self::StaticCollider,
             Self::PhantomCollider,
+            Self::VoxelChunks,
         ]
     }
 
@@ -304,6 +316,7 @@ impl GizmoType {
             Self::DynamicCollider => GizmoSet::DYNAMIC_COLLIDER,
             Self::StaticCollider => GizmoSet::STATIC_COLLIDER,
             Self::PhantomCollider => GizmoSet::PHANTOM_COLLIDER,
+            Self::VoxelChunks => GizmoSet::VOXEL_CHUNKS,
         }
     }
 
@@ -324,6 +337,7 @@ impl GizmoType {
             Self::DynamicCollider => "Dynamic colliders",
             Self::StaticCollider => "Static colliders",
             Self::PhantomCollider => "Phantom colliders",
+            Self::VoxelChunks => "Voxel chunks",
         }
     }
 
@@ -433,6 +447,13 @@ impl GizmoType {
                 entity with a phantom collidable, showing the shape used for collision \
                 detection. The shape's position and orientation will be delayed by one \
                 simulation step compared to the entity's visible mesh."
+            }
+            Self::VoxelChunks => {
+                "\
+                When enabled, a semitransparent green (for non-uniform chunks) or blue \
+                (for uniform chunks) cube is rendered for each non-empty chunk in voxel \
+                objects, outlining the chunk boundaries."
+            }
         }
     }
 
@@ -489,6 +510,7 @@ impl GizmoVisibilities {
             GizmoType::DynamicCollider => self.dynamic_collider,
             GizmoType::StaticCollider => self.static_collider,
             GizmoType::PhantomCollider => self.phantom_collider,
+            GizmoType::VoxelChunks => self.voxel_chunks,
         }
     }
 
@@ -509,6 +531,7 @@ impl GizmoVisibilities {
             GizmoType::DynamicCollider => &mut self.dynamic_collider,
             GizmoType::StaticCollider => &mut self.static_collider,
             GizmoType::PhantomCollider => &mut self.phantom_collider,
+            GizmoType::VoxelChunks => &mut self.voxel_chunks,
         }
     }
 }
@@ -522,6 +545,7 @@ impl Default for GizmoParameters {
             angular_momentum_scale: 1.0,
             force_scale: 1.0,
             torque_scale: 1.0,
+            show_interior_chunks: false,
         }
     }
 }

@@ -393,6 +393,25 @@ impl ChunkedVoxelObject {
         &self.voxels
     }
 
+    /// Calls the given closure for each occupied chunk in the object, passing in
+    /// the chunk and its indices in the chunk grid.
+    pub fn for_each_occupied_chunk(&self, f: &mut impl FnMut([usize; 3], &VoxelChunk)) {
+        for chunk_i in self.occupied_chunk_ranges[0].clone() {
+            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+                    let chunk = &self.chunks[chunk_idx];
+
+                    if !chunk.is_empty() {
+                        f(chunk_indices, chunk);
+                    }
+                }
+            }
+        }
+    }
+
     /// Checks whether the object consists of fewer than
     /// [`NON_EMPTY_VOXEL_THRESHOLD`] non-empty voxels. Assumes that
     /// [`Self::shrink_occupied_ranges`] has been called since the last time a
