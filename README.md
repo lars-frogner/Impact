@@ -34,15 +34,18 @@ The engine uses its own Entity-Component-System (ECS) implementation, which also
 
 There is currently limited scripting support using the [Roc](https://www.roc-lang.org/) language. Roc is a very young language, but it shows great promise both for standalone applications and, thanks to its [platform](https://www.roc-lang.org/platforms) concept, for being embedded into larger systems. Since it compiles to machine code, it has the potential to be a very performant scripting language. The [How applications work](#how-applications-work) section describes how Roc is embedded into the Impact engine. At the moment, Roc scripts are responsible for scene setup and input handling.
 
+### GUI
+
+The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven development GUI.
+
 ## Planned features
 
-In rough order of priority (which may change):
-
-- GUI.
-- Collision detection for voxel objects.
+- Expanded scripting capabilities.
+- Expanded GUI.
+- General collision detection for voxel objects.
+- Voxel object fracturing.
 - N-body gravity simulation.
 - More options for procedural voxel generation.
-- Expanded scripting capabilities.
 - Audio.
 - Let's see when we get here...
 
@@ -51,6 +54,8 @@ In rough order of priority (which may change):
 ![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
 
 ![screenshot_2](showcase/screenshot_2.png "Screenshot 2")
+
+![screenshot_3](showcase/screenshot_3.png "Screenshot 3")
 
 ## How applications work
 
@@ -121,7 +126,7 @@ state =
 Command.execute!(Scene(SetSceneEntityActiveState({ entity_id, state })))
 ```
 
-Here is an example of how entities can be created in batch.
+Here is an example of how entities can be created in batch (these are the red balls in one of the screenshots).
 
 ```roc
 Entity.new_multi(List.len(positions))
