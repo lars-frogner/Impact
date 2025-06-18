@@ -449,11 +449,11 @@ impl Default for GizmoParameters {
     fn default() -> Self {
         Self {
             center_of_mass_sphere_density: 1e3,
-            linear_velocity_scale: 5.0,
-            angular_velocity_scale: 10.0,
-            angular_momentum_scale: 0.01,
-            force_scale: 10.0,
-            torque_scale: 10.0,
+            linear_velocity_scale: 1.0,
+            angular_velocity_scale: 1.0,
+            angular_momentum_scale: 1.0,
+            force_scale: 1.0,
+            torque_scale: 1.0,
         }
     }
 }
