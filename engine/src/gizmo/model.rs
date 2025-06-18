@@ -75,6 +75,26 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
                 define_non_obscurable_triangle_model(format!("{} plane", gizmo.label())),
             ]
         }
+        GizmoType::VoxelChunks => {
+            vec![
+                define_obscurable_triangle_model(format!(
+                    "{} (uniform, obscurable)",
+                    gizmo.label()
+                )),
+                define_obscurable_triangle_model(format!(
+                    "{} (non-uniform, obscurable)",
+                    gizmo.label()
+                )),
+                define_non_obscurable_triangle_model(format!(
+                    "{} (uniform, non-obscurable)",
+                    gizmo.label()
+                )),
+                define_non_obscurable_triangle_model(format!(
+                    "{} (non-uniform, non-obscurable)",
+                    gizmo.label()
+                )),
+            ]
+        }
         GizmoType::ShadowCubemapFaces => {
             vec![
                 define_non_obscurable_triangle_model(format!("{} planes", gizmo.label())),
@@ -97,6 +117,11 @@ pub const SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX: usize = 1;
 
 pub const COLLIDER_GIZMO_SPHERE_MODEL_IDX: usize = 0;
 pub const COLLIDER_GIZMO_PLANE_MODEL_IDX: usize = 1;
+
+pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 0;
+pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 1;
+pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 2;
+pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 3;
 
 fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
     GizmoModel {

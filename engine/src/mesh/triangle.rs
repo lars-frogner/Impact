@@ -476,6 +476,13 @@ impl<F: Float> TriangleMesh<F> {
         }
     }
 
+    /// Adds the given translation to the vertex positions of the mesh.
+    pub fn translate(&mut self, translation: &Vector3<F>) {
+        for position in &mut self.positions {
+            *position = position.translated(translation);
+        }
+    }
+
     /// Applies the given rotation quaternion to the mesh, rotating vertex
     /// positions, normal vectors and tangent space quaternions.
     pub fn rotate(&mut self, rotation: &UnitQuaternion<F>) {

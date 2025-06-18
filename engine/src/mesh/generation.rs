@@ -750,6 +750,23 @@ impl<F: Float> TriangleMesh<F> {
         sphere.set_same_color(color);
         sphere
     }
+
+    /// Creates a mesh representing the boundary of a cubic voxel chunk with the
+    /// given extent. The lower corner of the cube is at the origin, and the
+    /// width, height and depth axes are aligned with the x-, y- and z-axis.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    pub fn create_voxel_chunk_cube_with_color(extent: F, color: VertexColor<F>) -> Self {
+        let mut cube = Self::create_box(extent, extent, extent, FrontFaceSide::Outside);
+        cube.remove_normal_vectors();
+        cube.translate(&vector![
+            F::ONE_HALF * extent,
+            F::ONE_HALF * extent,
+            F::ONE_HALF * extent
+        ]);
+        cube.set_same_color(color);
+        cube
+    }
 }
 
 impl<F: Float> LineSegmentMesh<F> {

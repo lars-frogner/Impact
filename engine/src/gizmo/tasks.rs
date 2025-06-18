@@ -63,6 +63,7 @@ define_task!(
             let collision_world = simulator.collision_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
+            let voxel_manager = scene.voxel_manager().read().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
             let light_storage = scene.light_storage().read().unwrap();
             let scene_camera = scene.scene_camera().read().unwrap();
@@ -72,6 +73,7 @@ define_task!(
                 &mut instance_feature_manager,
                 &gizmo_manager,
                 &collision_world,
+                &voxel_manager,
                 &scene_graph,
                 &light_storage,
                 scene_camera.as_ref(),

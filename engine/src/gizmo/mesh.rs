@@ -7,10 +7,15 @@ use crate::{
             COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
     },
     light::MAX_SHADOW_MAP_CASCADES,
     mesh::{MeshRepository, VertexColor, line_segment::LineSegmentMesh, triangle::TriangleMesh},
+    voxel::chunks::CHUNK_SIZE,
 };
 use anyhow::Result;
 
@@ -133,6 +138,32 @@ impl GizmoType {
                     self.models()[COLLIDER_GIZMO_PLANE_MODEL_IDX].mesh_id(),
                     plane_mesh,
                 )
+            }
+            Self::VoxelChunks => {
+                for idx in [
+                    VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
+                    VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
+                ] {
+                    let uniform_chunk_mesh = TriangleMesh::create_voxel_chunk_cube_with_color(
+                        CHUNK_SIZE as f32,
+                        VertexColor::BLUE.with_alpha(0.05),
+                    );
+                    mesh_repository
+                        .add_triangle_mesh(self.models()[idx].mesh_id(), uniform_chunk_mesh)?;
+                }
+
+                for idx in [
+                    VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+                    VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+                ] {
+                    let non_uniform_chunk_mesh = TriangleMesh::create_voxel_chunk_cube_with_color(
+                        CHUNK_SIZE as f32,
+                        VertexColor::GREEN.with_alpha(0.05),
+                    );
+                    mesh_repository
+                        .add_triangle_mesh(self.models()[idx].mesh_id(), non_uniform_chunk_mesh)?;
+                }
+                Ok(())
             }
         }
     }
