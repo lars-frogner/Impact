@@ -337,6 +337,13 @@ impl ChunkedVoxelObject {
             + self.chunk_counts[2] * self.chunk_counts[0])
     }
 
+    /// Returns a guess for the rough number of surface voxels the object
+    /// contains based on its size.
+    pub fn surface_voxel_count_heuristic(&self) -> usize {
+        // Assuming one face is fully exposed
+        CHUNK_SIZE_SQUARED * self.exposed_chunk_count_heuristic()
+    }
+
     /// Returns the range of indices along each axis of the object's chunk
     /// grid that may contain non-empty chunks.
     pub fn occupied_chunk_ranges(&self) -> &[Range<usize>; 3] {

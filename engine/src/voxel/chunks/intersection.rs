@@ -86,6 +86,16 @@ impl ChunkedVoxelObject {
         self.for_each_surface_voxel_in_voxel_ranges(touched_voxel_ranges, f);
     }
 
+    /// Finds non-empty voxels with at least one exposed face and calls the
+    /// given closure with their indices, the voxels themselves and their
+    /// placement on the surface.
+    pub fn for_each_surface_voxel(
+        &self,
+        f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
+    ) {
+        self.for_each_surface_voxel_in_voxel_ranges(self.occupied_voxel_ranges.clone(), f);
+    }
+
     fn for_each_surface_voxel_in_voxel_ranges(
         &self,
         included_voxel_ranges: [Range<usize>; 3],
