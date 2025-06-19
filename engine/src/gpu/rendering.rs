@@ -19,10 +19,9 @@ use crate::{
         storage::StorageGPUBufferManager,
         texture::{attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
     },
-    runtime::EventLoopController,
     scene::Scene,
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
 use gui::{GUIRenderer, GUIRenderingConfig, GUIRenderingInput};
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
@@ -363,12 +362,10 @@ impl RenderingSystem {
         Ok(surface_texture)
     }
 
-    fn handle_render_error(&self, error: Error, _event_loop_controller: &EventLoopController<'_>) {
-        if let Some(wgpu::SurfaceError::Lost) = error.downcast_ref() {
-            // Reconfigure surface if lost
-            self.rendering_surface
-                .configure_surface_for_device(self.graphics_device());
-        }
+    fn handle_surface_lost(&self) {
+        // Reconfigure surface if lost
+        self.rendering_surface
+            .configure_surface_for_device(self.graphics_device());
     }
 
     fn create_render_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {

@@ -3,7 +3,7 @@
 use crate::{
     application::Application,
     engine::{Engine, EngineConfig},
-    runtime::{Runtime, RuntimeConfig, RuntimeHandler},
+    runtime::{Runtime, RuntimeConfig, window::WindowRuntimeHandler},
     ui::UserInterface,
     window::{Window, WindowConfig},
 };
@@ -17,7 +17,7 @@ pub fn run(
     engine_config: EngineConfig,
     on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
 ) -> Result<()> {
-    let mut runtime_handler = RuntimeHandler::new(
+    let mut runtime_handler = WindowRuntimeHandler::new(
         |window| {
             create_runtime(
                 app,
@@ -40,8 +40,8 @@ fn create_runtime(
     on_engine_created: impl FnOnce(Arc<Engine>),
 ) -> Result<Runtime> {
     let engine = Engine::new(engine_config, app.clone(), window.clone())?;
-    let user_interface = UserInterface::new(app, window.clone());
-    let runtime = Runtime::new(window, engine, user_interface, runtime_config)?;
+    let user_interface = UserInterface::new(app, window);
+    let runtime = Runtime::new(engine, user_interface, runtime_config)?;
     on_engine_created(runtime.arc_engine());
     runtime.engine().app().setup_scene()?;
     Ok(runtime)

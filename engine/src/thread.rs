@@ -330,6 +330,11 @@ impl ThreadPoolTaskErrors {
         self.errors.get(&task_id)
     }
 
+    /// Clears the error record for the task with the given ID.
+    pub fn clear_error_of(&mut self, task_id: TaskID) {
+        self.errors.remove(&task_id);
+    }
+
     /// Returns a [`Result`] that is either [`Ok`] if the task with
     /// the given ID succeeded or was never executed, or [`Err`]
     /// containing the resulting [`TaskError`] if it was executed

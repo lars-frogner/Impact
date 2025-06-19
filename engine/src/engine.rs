@@ -4,6 +4,7 @@ pub mod command;
 pub mod components;
 pub mod entity;
 pub mod tasks;
+pub mod window;
 
 use crate::{
     application::Application,

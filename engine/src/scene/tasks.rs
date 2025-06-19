@@ -5,7 +5,6 @@ use crate::{
     engine::{Engine, tasks::EngineTaskScheduler},
     gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
-    runtime::EventLoopController,
     scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
 };
@@ -270,16 +269,7 @@ define_task!(
 impl Scene {
     /// Identifies scene-related errors that need special handling in the given
     /// set of task errors and handles them.
-    pub fn handle_task_errors(
-        &self,
-        task_errors: &ThreadPoolTaskErrors,
-        event_loop_controller: &EventLoopController<'_>,
-    ) {
-        if task_errors.n_errors() > 0 {
-            log::error!("Aborting due to fatal errors");
-            event_loop_controller.exit();
-        }
-    }
+    pub fn handle_task_errors(&self, _task_errors: &mut ThreadPoolTaskErrors) {}
 }
 
 /// Registers all tasks needed for coordinate between systems in the scene in

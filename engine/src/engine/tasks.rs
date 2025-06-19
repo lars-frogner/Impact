@@ -1,8 +1,8 @@
 //! Management of tasks in the engine.
 
 use crate::{
-    engine::Engine, gizmo, gpu, physics, runtime::EventLoopController, scene,
-    scheduling::TaskScheduler, thread::ThreadPoolTaskErrors, voxel,
+    engine::Engine, gizmo, gpu, physics, scene, scheduling::TaskScheduler,
+    thread::ThreadPoolTaskErrors, voxel,
 };
 use anyhow::Result;
 use std::{num::NonZeroUsize, sync::Arc};
@@ -29,25 +29,18 @@ impl Engine {
 
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
-    pub fn handle_task_errors(
-        &self,
-        task_errors: &mut ThreadPoolTaskErrors,
-        event_loop_controller: &EventLoopController<'_>,
-    ) {
+    pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
         self.simulator
             .read()
             .unwrap()
-            .handle_task_errors(task_errors, event_loop_controller);
+            .handle_task_errors(task_errors);
 
-        self.scene
-            .read()
-            .unwrap()
-            .handle_task_errors(task_errors, event_loop_controller);
+        self.scene.read().unwrap().handle_task_errors(task_errors);
 
         self.renderer
             .read()
             .unwrap()
-            .handle_task_errors(task_errors, event_loop_controller);
+            .handle_task_errors(task_errors);
     }
 }
 
