@@ -20,7 +20,6 @@ use crate::{
         },
     },
     voxel,
-    window::Window,
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
@@ -80,7 +79,6 @@ impl Scene {
     /// entity's components.
     pub fn add_new_entity_to_scene_graph(
         &self,
-        window: &Window,
         renderer: &RwLock<RenderingSystem>,
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
@@ -90,7 +88,6 @@ impl Scene {
         self.add_group_node_component_for_new_entity(components);
 
         camera::entity::add_camera_to_scene_for_new_entity(
-            window,
             renderer,
             self.scene_graph(),
             self.scene_camera(),

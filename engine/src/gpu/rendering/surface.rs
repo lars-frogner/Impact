@@ -75,6 +75,12 @@ impl RenderingSurface {
         self.surface_config.surface_dimensions()
     }
 
+    /// Returns the ratio of width to height of the rendering surface.
+    pub fn surface_aspect_ratio(&self) -> f32 {
+        let (width, height) = self.surface_dimensions();
+        crate::window::calculate_aspect_ratio(width, height)
+    }
+
     /// Returns the number of physical pixels per point/logical pixel of the
     /// screen the surface is rendered to.
     pub fn pixels_per_point(&self) -> f64 {

@@ -22,6 +22,7 @@ use winit::{
 /// Top-level orchestrator of engine components.
 #[derive(Debug)]
 pub struct Runtime {
+    window: Window,
     engine: Arc<Engine>,
     task_scheduler: EngineTaskScheduler,
     game_loop: GameLoop,
@@ -49,6 +50,7 @@ pub struct EventLoopController<'a>(&'a ActiveEventLoop);
 
 impl Runtime {
     pub fn new(
+        window: Window,
         engine: Engine,
         user_interface: UserInterface,
         config: RuntimeConfig,
@@ -58,6 +60,7 @@ impl Runtime {
         let game_loop = GameLoop::new(config.game_loop);
 
         Ok(Self {
+            window,
             engine,
             task_scheduler,
             game_loop,
@@ -74,7 +77,7 @@ impl Runtime {
     }
 
     fn window(&self) -> &Window {
-        self.engine().window()
+        &self.window
     }
 
     fn run_ui_processing(&mut self) {

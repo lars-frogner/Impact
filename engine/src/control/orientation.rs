@@ -4,13 +4,11 @@ pub mod components;
 pub mod systems;
 
 use super::OrientationController;
-use crate::{
-    physics::{fph, motion::Orientation},
-    window::Window,
-};
+use crate::physics::{fph, motion::Orientation};
 use impact_math::{Angle, Degrees, Radians};
 use nalgebra::{UnitQuaternion, Vector3};
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 
 /// Orientation controller that updates the orientation
 /// in the way a first-person camera should respond to
@@ -103,10 +101,14 @@ impl OrientationController for CameraOrientationController {
         self.base.orientation_has_changed
     }
 
-    fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
+    fn update_orientation_change(
+        &mut self,
+        window_height: NonZeroU32,
+        mouse_displacement: (f64, f64),
+    ) {
         let (angular_displacement_x, angular_displacement_y) = self
             .base
-            .compute_angular_displacements(window, mouse_displacement);
+            .compute_angular_displacements(window_height, mouse_displacement);
 
         self.orientation_change *=
             CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y)
@@ -138,10 +140,14 @@ impl OrientationController for RollFreeCameraOrientationController {
         self.base.orientation_has_changed
     }
 
-    fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
+    fn update_orientation_change(
+        &mut self,
+        window_height: NonZeroU32,
+        mouse_displacement: (f64, f64),
+    ) {
         let (angular_displacement_x, angular_displacement_y) = self
             .base
-            .compute_angular_displacements(window, mouse_displacement);
+            .compute_angular_displacements(window_height, mouse_displacement);
 
         self.yaw_change =
             CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x)
@@ -189,11 +195,10 @@ impl CameraOrientationControllerBase {
 
     fn compute_angular_displacements(
         &self,
-        window: &Window,
+        window_height: NonZeroU32,
         mouse_displacement: (f64, f64),
     ) -> (Radians<f64>, Radians<f64>) {
-        let (_, height) = window.dimensions();
-        let degrees_per_pixel = self.vertical_field_of_view / f64::from(u32::from(height));
+        let degrees_per_pixel = self.vertical_field_of_view / f64::from(u32::from(window_height));
 
         let angular_displacement_x = degrees_per_pixel * (-mouse_displacement.0) * self.sensitivity;
         let angular_displacement_y = degrees_per_pixel * (-mouse_displacement.1) * self.sensitivity;

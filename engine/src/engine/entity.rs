@@ -139,7 +139,6 @@ impl Engine {
             )?;
 
         self.scene().read().unwrap().add_new_entity_to_scene_graph(
-            self.window(),
             self.renderer(),
             &self.ecs_world,
             components,
