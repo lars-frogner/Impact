@@ -47,7 +47,6 @@ use std::{
 #[derive(Debug)]
 pub struct Engine {
     app: Arc<dyn Application>,
-    window: Window,
     graphics_device: Arc<GraphicsDevice>,
     component_registry: RwLock<ComponentRegistry>,
     ecs_world: RwLock<ECSWorld>,
@@ -144,7 +143,6 @@ impl Engine {
 
         let engine = Self {
             app,
-            window,
             graphics_device,
             component_registry: RwLock::new(component_registry),
             ecs_world: RwLock::new(ecs_world),
@@ -168,11 +166,6 @@ impl Engine {
     /// Returns a reference to the [`Application`].
     pub fn app(&self) -> &dyn Application {
         self.app.as_ref()
-    }
-
-    /// Returns a reference to the [`Window`].
-    pub fn window(&self) -> &Window {
-        &self.window
     }
 
     /// Returns a reference to the [`GraphicsDevice`].
@@ -405,10 +398,17 @@ impl Engine {
                 mouse_displacement.1
             );
 
+            let (_, window_height) = self
+                .renderer
+                .read()
+                .unwrap()
+                .rendering_surface()
+                .surface_dimensions();
+
             orientation_controller
                 .lock()
                 .unwrap()
-                .update_orientation_change(self.window(), mouse_displacement);
+                .update_orientation_change(window_height, mouse_displacement);
         }
     }
 

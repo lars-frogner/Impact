@@ -40,8 +40,8 @@ fn create_runtime(
     on_engine_created: impl FnOnce(Arc<Engine>),
 ) -> Result<Runtime> {
     let engine = Engine::new(engine_config, app.clone(), window.clone())?;
-    let user_interface = UserInterface::new(app, window);
-    let runtime = Runtime::new(engine, user_interface, runtime_config)?;
+    let user_interface = UserInterface::new(app, window.clone());
+    let runtime = Runtime::new(window, engine, user_interface, runtime_config)?;
     on_engine_created(runtime.arc_engine());
     runtime.engine().app().setup_scene()?;
     Ok(runtime)

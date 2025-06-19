@@ -4,12 +4,9 @@ pub mod command;
 pub mod motion;
 pub mod orientation;
 
-use crate::{
-    physics::{
-        fph,
-        motion::{Orientation, Velocity},
-    },
-    window::Window,
+use crate::physics::{
+    fph,
+    motion::{Orientation, Velocity},
 };
 use motion::{
     MotionControllerConfig, MotionDirection, MotionState, SemiDirectionalMotionController,
@@ -18,6 +15,7 @@ use orientation::{
     CameraOrientationController, OrientationControllerConfig, RollFreeCameraOrientationController,
 };
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 
 /// Represents controllers that are used for controlling
 /// the movement of entities.
@@ -70,7 +68,11 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
 
     /// Determines and registers the change in orientation of the
     /// controlled entity based on the given displacement of the mouse.
-    fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64));
+    fn update_orientation_change(
+        &mut self,
+        window_height: NonZeroU32,
+        mouse_displacement: (f64, f64),
+    );
 
     /// Resets the change in orientation accumulated by
     /// [`update_orientation_change`](Self::update_orientation_change).

@@ -11,7 +11,6 @@ use crate::{
         RenderResourcesDesynchronized, SceneGraph,
         components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
     },
-    window::Window,
 };
 use anyhow::{Result, bail};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
@@ -28,7 +27,6 @@ use std::sync::RwLock;
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
 /// that the scene already has a camera.
 pub fn add_camera_to_scene_for_new_entity(
-    window: &Window,
     renderer: &RwLock<RenderingSystem>,
     scene_graph: &RwLock<SceneGraph<f32>>,
     scene_camera: &RwLock<Option<SceneCamera<f32>>>,
@@ -36,7 +34,6 @@ pub fn add_camera_to_scene_for_new_entity(
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
     add_perspective_camera_to_scene_for_new_entity(
-        window,
         renderer,
         scene_graph,
         scene_camera,
@@ -44,7 +41,6 @@ pub fn add_camera_to_scene_for_new_entity(
         desynchronized,
     )?;
     add_orthographic_camera_to_scene_for_new_entity(
-        window,
         renderer,
         scene_graph,
         scene_camera,
@@ -63,7 +59,6 @@ pub fn add_camera_to_scene_for_new_entity(
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
 /// that the scene already has a camera.
 pub fn add_perspective_camera_to_scene_for_new_entity(
-    window: &Window,
     renderer: &RwLock<RenderingSystem>,
     scene_graph: &RwLock<SceneGraph<f32>>,
     scene_camera: &RwLock<Option<SceneCamera<f32>>>,
@@ -89,7 +84,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
          parent: Option<&SceneGraphParentNodeComp>|
          -> SceneGraphCameraNodeComp {
             let camera = PerspectiveCamera::<f32>::new(
-                window.aspect_ratio(),
+                renderer.rendering_surface().surface_aspect_ratio(),
                 camera_comp.vertical_field_of_view(),
                 UpperExclusiveBounds::new(camera_comp.near_distance(), camera_comp.far_distance()),
             );
@@ -133,7 +128,6 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
 /// that the scene already has a camera.
 pub fn add_orthographic_camera_to_scene_for_new_entity(
-    window: &Window,
     renderer: &RwLock<RenderingSystem>,
     scene_graph: &RwLock<SceneGraph<f32>>,
     scene_camera: &RwLock<Option<SceneCamera<f32>>>,
@@ -159,7 +153,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
          parent: Option<&SceneGraphParentNodeComp>|
          -> SceneGraphCameraNodeComp {
             let camera = OrthographicCamera::<f32>::new(
-                window.aspect_ratio(),
+                renderer.rendering_surface().surface_aspect_ratio(),
                 camera_comp.vertical_field_of_view(),
                 UpperExclusiveBounds::new(camera_comp.near_distance(), camera_comp.far_distance()),
             );
