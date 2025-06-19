@@ -3,7 +3,6 @@
 use crate::{
     engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
-    runtime::EventLoopController,
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     {define_execution_tag, define_task},
@@ -40,17 +39,12 @@ define_task!(
 impl RenderingSystem {
     /// Identifies rendering-related errors that need special handling in the
     /// given set of task errors and handles them.
-    pub fn handle_task_errors(
-        &self,
-        task_errors: &mut ThreadPoolTaskErrors,
-        event_loop_controller: &EventLoopController<'_>,
-    ) {
-        if let Err(render_error) = task_errors.take_result_of(Render.id()) {
-            self.handle_render_error(render_error, event_loop_controller);
-        }
-        if task_errors.n_errors() > 0 {
-            log::error!("Aborting due to fatal errors");
-            event_loop_controller.exit();
+    pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
+        if let Some(render_error) = task_errors.get_error_of(Render.id()) {
+            if let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref() {
+                self.handle_surface_lost();
+                task_errors.clear_error_of(Render.id());
+            }
         }
     }
 }

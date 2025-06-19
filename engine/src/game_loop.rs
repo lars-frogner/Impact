@@ -2,8 +2,7 @@
 
 use crate::{
     define_execution_tag_set, engine::Engine, gpu::rendering::tasks::RenderingTag,
-    physics::tasks::PhysicsTag, runtime::EventLoopController, scheduling::TaskScheduler,
-    thread::ThreadPoolResult,
+    physics::tasks::PhysicsTag, scheduling::TaskScheduler, thread::ThreadPoolResult,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,7 +52,6 @@ impl GameLoop {
         &mut self,
         engine: &Engine,
         task_scheduler: &TaskScheduler<Engine>,
-        event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
         engine.task_timer().clear();
 
@@ -62,7 +60,7 @@ impl GameLoop {
         });
 
         if let Err(mut task_errors) = execution_result {
-            engine.handle_task_errors(&mut task_errors, event_loop_controller);
+            engine.handle_task_errors(&mut task_errors);
 
             // Pass any unhandled errors to caller
             if task_errors.n_errors() > 0 {
