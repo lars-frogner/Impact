@@ -29,6 +29,8 @@ pub mod skybox;
 pub mod thread;
 pub mod ui;
 pub mod voxel;
+
+#[cfg(feature = "window")]
 pub mod window;
 
 #[cfg(feature = "profiling")]

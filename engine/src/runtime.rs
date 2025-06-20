@@ -1,6 +1,8 @@
 //! The top-level orchestrator of engine components.
 
 pub mod tasks;
+
+#[cfg(feature = "window")]
 pub mod window;
 
 use crate::{

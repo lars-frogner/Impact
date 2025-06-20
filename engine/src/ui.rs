@@ -1,7 +1,10 @@
 //! Abstractions and helpers for UI systems.
 
-pub mod egui;
 pub mod tasks;
+
+#[cfg(feature = "window")]
+pub mod egui;
+#[cfg(feature = "window")]
 pub mod window;
 
 use crate::{

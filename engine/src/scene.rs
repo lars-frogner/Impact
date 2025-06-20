@@ -20,12 +20,11 @@ use crate::{
     model::InstanceFeatureManager,
     skybox::Skybox,
     voxel::VoxelManager,
-    window,
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use roc_integration::roc;
-use std::{num::NonZeroU32, sync::RwLock};
+use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
 #[derive(Debug)]
@@ -131,17 +130,14 @@ impl Scene {
         &self.skybox
     }
 
-    pub fn handle_window_resized(
+    pub fn handle_aspect_ratio_changed(
         &self,
-        _old_width: NonZeroU32,
-        _old_height: NonZeroU32,
-        new_width: NonZeroU32,
-        new_height: NonZeroU32,
+        new_aspect_ratio: f32,
     ) -> RenderResourcesDesynchronized {
         let mut desynchronized = RenderResourcesDesynchronized::No;
 
         if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
-            scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_width, new_height));
+            scene_camera.set_aspect_ratio(new_aspect_ratio);
             desynchronized = RenderResourcesDesynchronized::Yes;
         }
 

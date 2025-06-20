@@ -7,7 +7,7 @@ use anyhow::{Result, bail};
 use impact::{
     engine::{Engine, command::EngineCommand},
     roc_integration::Roc,
-    run::run as run_engine,
+    run::window::run as run_engine,
 };
 use impact_dev_ui::{UICommand, UICommandQueue, UserInterface};
 use impact_ecs::world::EntityID;
