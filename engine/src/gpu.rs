@@ -1,6 +1,6 @@
 pub mod buffer;
 pub mod compute;
-mod device;
+pub mod device;
 pub mod indirect;
 pub mod push_constant;
 pub mod query;
@@ -13,10 +13,15 @@ pub mod uniform;
 
 pub use device::GraphicsDevice;
 
-use crate::window::Window;
 use anyhow::Result;
 use rendering::surface::RenderingSurface;
-use std::sync::Arc;
+
+/// Interface to a graphics device and a surface that can be rendered to.
+#[derive(Debug)]
+pub struct GraphicsContext {
+    pub device: GraphicsDevice,
+    pub surface: RenderingSurface,
+}
 
 /// Creates a rendering surface for the given window, connects to a graphics
 /// device compatible with the surface and initializes the surface for
@@ -24,15 +29,41 @@ use std::sync::Arc;
 ///
 /// # Errors
 /// See [`RenderingSurface::new`] and [`GraphicsDevice::connect`].
-pub fn initialize_for_rendering(
-    window: &Window,
-) -> Result<(Arc<GraphicsDevice>, RenderingSurface)> {
+pub fn initialize_for_window_rendering(window: &crate::window::Window) -> Result<GraphicsContext> {
     let wgpu_instance = create_wgpu_instance();
 
-    let mut rendering_surface = RenderingSurface::new(&wgpu_instance, window)?;
+    let mut rendering_surface = RenderingSurface::new_for_window(&wgpu_instance, window)?;
 
+    let graphics_device =
+        connect_to_graphics_device_for_rendering(&wgpu_instance, &mut rendering_surface)?;
+
+    Ok(GraphicsContext {
+        device: graphics_device,
+        surface: rendering_surface,
+    })
+}
+
+/// Creates a new instance of `wgpu`.
+pub fn create_wgpu_instance() -> wgpu::Instance {
+    wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        flags: wgpu::InstanceFlags::default(),
+        backend_options: wgpu::BackendOptions::default(),
+    })
+}
+
+/// Connects to a graphics device compatible with the given surface and
+/// initializes the surface for presentation through the connected graphics
+/// device.
+///
+/// # Errors
+/// See [`GraphicsDevice::connect`].
+pub fn connect_to_graphics_device_for_rendering(
+    wgpu_instance: &wgpu::Instance,
+    rendering_surface: &mut RenderingSurface,
+) -> Result<GraphicsDevice> {
     let graphics_device = pollster::block_on(GraphicsDevice::connect(
-        &wgpu_instance,
+        wgpu_instance,
         wgpu::Features::PUSH_CONSTANTS
             | wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::POLYGON_MODE_LINE
@@ -54,19 +85,10 @@ pub fn initialize_for_rendering(
             ..wgpu::Limits::default()
         },
         wgpu::MemoryHints::Performance,
-        Some(rendering_surface.surface()),
+        rendering_surface.presentable_surface(),
     ))?;
 
     rendering_surface.initialize_for_device(&graphics_device)?;
 
-    Ok((Arc::new(graphics_device), rendering_surface))
-}
-
-/// Creates a new instance of `wgpu`.
-fn create_wgpu_instance() -> wgpu::Instance {
-    wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
-        flags: wgpu::InstanceFlags::default(),
-        backend_options: wgpu::BackendOptions::default(),
-    })
+    Ok(graphics_device)
 }

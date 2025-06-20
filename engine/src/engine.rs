@@ -13,7 +13,7 @@ use crate::{
     control::{self, ControllerConfig, MotionController, OrientationController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::{
-        self, GraphicsDevice,
+        GraphicsContext, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
@@ -24,7 +24,6 @@ use crate::{
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
     voxel::{self, VoxelConfig, VoxelManager},
-    window::Window,
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
@@ -86,13 +85,18 @@ pub struct ECSConfig {
 
 impl Engine {
     /// Creates a new instance of the engine.
-    pub fn new(config: EngineConfig, app: Arc<dyn Application>, window: Window) -> Result<Self> {
+    pub fn new(
+        config: EngineConfig,
+        app: Arc<dyn Application>,
+        graphics: GraphicsContext,
+    ) -> Result<Self> {
         let mut component_registry = ComponentRegistry::new();
         components::register_all_components(&mut component_registry)?;
 
         let ecs_world = ECSWorld::new(config.ecs.seed);
 
-        let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
+        let graphics_device = Arc::new(graphics.device);
+        let rendering_surface = graphics.surface;
 
         let renderer = RenderingSystem::new(
             config.rendering,

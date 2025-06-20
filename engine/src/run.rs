@@ -3,6 +3,7 @@
 use crate::{
     application::Application,
     engine::{Engine, EngineConfig},
+    gpu,
     runtime::{Runtime, RuntimeConfig, window::WindowRuntimeHandler},
     ui::egui::{EguiUserInterface, EguiUserInterfaceConfig},
     window::{Window, WindowConfig},
@@ -39,7 +40,9 @@ fn create_runtime(
     engine_config: EngineConfig,
     on_engine_created: impl FnOnce(Arc<Engine>),
 ) -> Result<Runtime<EguiUserInterface>> {
-    let engine = Engine::new(engine_config, app.clone(), window.clone())?;
+    let graphics = gpu::initialize_for_window_rendering(&window)?;
+
+    let engine = Engine::new(engine_config, app.clone(), graphics)?;
 
     let user_interface =
         EguiUserInterface::new(EguiUserInterfaceConfig::default(), app, &engine, window);
