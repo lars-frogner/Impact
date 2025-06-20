@@ -2,11 +2,12 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::EngineTaskScheduler},
     gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
+    ui::tasks::ProcessUserInterface,
 };
 use anyhow::Result;
 
@@ -20,9 +21,10 @@ define_task!(
     /// flags for the node to match the entity's
     /// [`SceneEntityFlags`](crate::scene::SceneEntityFlags).
     [pub] SyncSceneObjectTransformsAndFlags,
-    depends_on = [],
+    depends_on = [ProcessUserInterface],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing scene graph node transforms and flags", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
@@ -43,7 +45,8 @@ define_task!(
         SyncSceneCameraViewTransform
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing lights in storage", engine, {
             let scene = engine.scene().read().unwrap();
             let ecs_world = engine.ecs_world().read().unwrap();
@@ -66,7 +69,8 @@ define_task!(
     [pub] UpdateSceneGroupToWorldTransforms,
     depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Updating scene object group-to-world transforms", engine, {
             let scene = engine.scene().read().unwrap();
             scene.scene_graph()
@@ -89,7 +93,8 @@ define_task!(
         UpdateSceneGroupToWorldTransforms
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing scene camera view transform", engine, {
             let scene = engine.scene().read().unwrap();
             if let Some(scene_camera) = scene.scene_camera().write().unwrap().as_mut() {
@@ -115,7 +120,8 @@ define_task!(
     [pub] UpdateSceneObjectBoundingSpheres,
     depends_on = [SyncSceneObjectTransformsAndFlags],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Updating scene object bounding spheres", engine, {
             let scene = engine.scene().read().unwrap();
             scene.scene_graph()
@@ -135,7 +141,8 @@ define_task!(
     [pub] ClearModelInstanceBuffers,
     depends_on = [],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Clearing model instance buffers", engine, {
             let scene = engine.scene().read().unwrap();
             scene.instance_feature_manager().write().unwrap().clear_buffer_contents();
@@ -157,7 +164,8 @@ define_task!(
         ClearModelInstanceBuffers
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Buffering visible model instances", engine, {
             let renderer = engine.renderer().read().unwrap();
             let scene = engine.scene().read().unwrap();
@@ -196,7 +204,8 @@ define_task!(
         BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
             if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
                 let scene = engine.scene().read().unwrap();
@@ -239,7 +248,8 @@ define_task!(
         BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
             if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
                 let scene = engine.scene().read().unwrap();
@@ -274,7 +284,7 @@ impl Scene {
 
 /// Registers all tasks needed for coordinate between systems in the scene in
 /// the given task scheduler.
-pub fn register_scene_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_scene_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncSceneObjectTransformsAndFlags)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;

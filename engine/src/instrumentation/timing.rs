@@ -14,8 +14,10 @@ use std::{
 #[derive(Debug)]
 pub struct TaskTimer {
     enabled: AtomicBool,
-    task_execution_times: Mutex<Vec<(TimedTaskID, Duration)>>,
+    task_execution_times: Mutex<TaskExecutionTimes>,
 }
+
+pub type TaskExecutionTimes = Vec<(TimedTaskID, Duration)>;
 
 /// An ID for a task that can be timed.
 pub type TimedTaskID = ConstStringHash64;
@@ -58,17 +60,15 @@ impl TaskTimer {
         result
     }
 
-    /// Returns all timing measurements done by [`Self::time`] since this
-    /// function or [`Self::clear`] was last called.
-    pub fn take_task_execution_times(&self) -> Vec<(TimedTaskID, Duration)> {
+    /// If the timer is enabled, moves all timing measurements done by
+    /// [`Self::time`] since this function was last called into the given
+    /// [`TaskExecutionTimes`]. Any existing values will be overwritten.
+    pub fn report_task_execution_times(&self, times: &mut TaskExecutionTimes) {
+        if !self.enabled() {
+            return;
+        }
+        times.clear();
         let mut task_execution_times = self.task_execution_times.lock().unwrap();
-        let mut times_to_return = Vec::with_capacity(task_execution_times.len());
-        mem::swap(&mut *task_execution_times, &mut times_to_return);
-        times_to_return
-    }
-
-    /// Removes all currently stored timing measurements.
-    pub fn clear(&self) {
-        self.task_execution_times.lock().unwrap().clear();
+        mem::swap(&mut *task_execution_times, times);
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::{
     runtime::Runtime,
-    ui::window::UIEventHandlingResponse,
+    ui::window::{ResponsiveUserInterface, UIEventHandlingResponse},
     window::{Window, WindowConfig},
 };
 use anyhow::Result;
@@ -37,23 +37,15 @@ use winit::{
 /// );
 /// handler.run()?;
 /// ```
-pub struct WindowRuntimeHandler {
-    runtime_creator: Option<RuntimeCreator>,
-    runtime_and_window: Option<(Runtime, Window)>,
+pub struct WindowRuntimeHandler<UI> {
+    runtime_creator: Option<RuntimeCreator<UI>>,
+    runtime_and_window: Option<(Runtime<UI>, Window)>,
     window_config: WindowConfig,
 }
 
-type RuntimeCreator = Box<dyn FnOnce(Window) -> Result<Runtime>>;
+type RuntimeCreator<UI> = Box<dyn FnOnce(Window) -> Result<Runtime<UI>>>;
 
-impl Runtime {
-    fn handle_window_event_for_ui(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
-        self.user_interface.handle_window_event(event)
-    }
-
-    fn handle_device_event_for_ui(&mut self, event: &DeviceEvent) {
-        self.user_interface.handle_device_event(event);
-    }
-
+impl<UI> Runtime<UI> {
     fn handle_window_event_for_engine(&self, event: &WindowEvent) -> Result<()> {
         self.engine.handle_window_event(event)
     }
@@ -63,11 +55,27 @@ impl Runtime {
     }
 }
 
-impl WindowRuntimeHandler {
+impl<UI> Runtime<UI>
+where
+    UI: ResponsiveUserInterface,
+{
+    fn handle_window_event_for_ui(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
+        self.user_interface.handle_window_event(event)
+    }
+
+    fn handle_device_event_for_ui(&mut self, event: &DeviceEvent) {
+        self.user_interface.handle_device_event(event);
+    }
+}
+
+impl<UI> WindowRuntimeHandler<UI>
+where
+    UI: ResponsiveUserInterface,
+{
     /// Creates a handler that will use the given function to create the runtime
     /// after [`Self::run`] has been called.
     pub fn new(
-        create_runtime: impl FnOnce(Window) -> Result<Runtime> + 'static,
+        create_runtime: impl FnOnce(Window) -> Result<Runtime<UI>> + 'static,
         window_config: WindowConfig,
     ) -> Self {
         Self {
@@ -77,6 +85,25 @@ impl WindowRuntimeHandler {
         }
     }
 
+    fn window(&self) -> Option<&Window> {
+        self.runtime_and_window.as_ref().map(|(_, window)| window)
+    }
+
+    fn runtime_mut(&mut self) -> Option<&mut Runtime<UI>> {
+        self.runtime_and_window.as_mut().map(|(runtime, _)| runtime)
+    }
+
+    fn runtime_mut_and_window(&mut self) -> Option<(&mut Runtime<UI>, &Window)> {
+        self.runtime_and_window
+            .as_mut()
+            .map(|(runtime, window)| (runtime, &*window))
+    }
+}
+
+impl<UI> WindowRuntimeHandler<UI>
+where
+    UI: ResponsiveUserInterface + 'static,
+{
     /// Creates the window and runtime and begins executing the event loop.
     pub fn run(&mut self) -> Result<()> {
         let event_loop = EventLoop::new()?;
@@ -84,23 +111,12 @@ impl WindowRuntimeHandler {
         event_loop.run_app(self)?;
         Ok(())
     }
-
-    fn window(&self) -> Option<&Window> {
-        self.runtime_and_window.as_ref().map(|(_, window)| window)
-    }
-
-    fn runtime_mut(&mut self) -> Option<&mut Runtime> {
-        self.runtime_and_window.as_mut().map(|(runtime, _)| runtime)
-    }
-
-    fn runtime_mut_and_window(&mut self) -> Option<(&mut Runtime, &Window)> {
-        self.runtime_and_window
-            .as_mut()
-            .map(|(runtime, window)| (runtime, &*window))
-    }
 }
 
-impl winit::application::ApplicationHandler for WindowRuntimeHandler {
+impl<UI> winit::application::ApplicationHandler for WindowRuntimeHandler<UI>
+where
+    UI: ResponsiveUserInterface + 'static,
+{
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(window) = self.window() {
             // Window is already initialized
@@ -155,8 +171,6 @@ impl winit::application::ApplicationHandler for WindowRuntimeHandler {
 
         match event {
             WindowEvent::RedrawRequested => {
-                runtime.run_ui_processing();
-
                 let result = runtime.perform_game_loop_iteration();
 
                 if let Err(errors) = result {
@@ -214,7 +228,10 @@ impl winit::application::ApplicationHandler for WindowRuntimeHandler {
     }
 }
 
-impl std::fmt::Debug for WindowRuntimeHandler {
+impl<UI> std::fmt::Debug for WindowRuntimeHandler<UI>
+where
+    UI: std::fmt::Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.runtime_and_window.fmt(f)
     }

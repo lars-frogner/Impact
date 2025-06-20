@@ -1,10 +1,12 @@
 //! The top-level orchestrator of engine components.
 
+pub mod tasks;
 pub mod window;
 
 use crate::{
-    engine::{Engine, tasks::EngineTaskScheduler},
+    engine::Engine,
     game_loop::{GameLoop, GameLoopConfig},
+    runtime::tasks::RuntimeTaskScheduler,
     thread::ThreadPoolResult,
     ui::UserInterface,
 };
@@ -14,14 +16,15 @@ use std::{
     num::{NonZeroU32, NonZeroUsize},
     sync::Arc,
 };
+use tasks::RuntimeContext;
 
 /// Top-level orchestrator of engine components.
 #[derive(Debug)]
-pub struct Runtime {
+pub struct Runtime<UI> {
     engine: Arc<Engine>,
-    task_scheduler: EngineTaskScheduler,
+    user_interface: Arc<UI>,
+    task_scheduler: RuntimeTaskScheduler,
     game_loop: GameLoop,
-    user_interface: UserInterface,
 }
 
 /// Configuration parameters for the engine runtime.
@@ -31,21 +34,25 @@ pub struct RuntimeConfig {
     game_loop: GameLoopConfig,
 }
 
-impl Runtime {
-    pub fn new(
-        engine: Engine,
-        user_interface: UserInterface,
-        config: RuntimeConfig,
-    ) -> Result<Self> {
-        let (engine, task_scheduler) = engine.create_task_scheduler(config.n_worker_threads)?;
+impl<UI> Runtime<UI>
+where
+    UI: UserInterface + 'static,
+{
+    pub fn new(engine: Engine, user_interface: UI, config: RuntimeConfig) -> Result<Self> {
+        let engine = Arc::new(engine);
+        let user_interface = Arc::new(user_interface);
+
+        let ctx = RuntimeContext::new(engine.clone(), user_interface.clone());
+
+        let task_scheduler = tasks::create_task_scheduler(ctx, config.n_worker_threads)?;
 
         let game_loop = GameLoop::new(config.game_loop);
 
         Ok(Self {
             engine,
+            user_interface,
             task_scheduler,
             game_loop,
-            user_interface,
         })
     }
 
@@ -55,16 +62,6 @@ impl Runtime {
 
     pub fn arc_engine(&self) -> Arc<Engine> {
         Arc::clone(&self.engine)
-    }
-
-    fn run_ui_processing(&mut self) {
-        // This could be moved into GameLoop::perform_iteration and the tesselation
-        // could be done in parallel with other tasks. The actual running must be
-        // done before beginning to execute other tasks since user interactions
-        // can affect the engine state.
-        let raw_ui_output = self.user_interface.run(&self.game_loop, &self.engine);
-        let ui_output = self.user_interface.process_raw_output(raw_ui_output);
-        *self.engine.ui_output().write().unwrap() = Some(ui_output);
     }
 
     fn perform_game_loop_iteration(&mut self) -> ThreadPoolResult {

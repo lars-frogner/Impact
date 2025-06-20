@@ -2,8 +2,8 @@
 
 use crate::{
     define_execution_tag, define_task,
-    engine::{Engine, tasks::EngineTaskScheduler},
     physics::{PhysicsSimulator, motion},
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
     thread::ThreadPoolTaskErrors,
 };
@@ -24,7 +24,8 @@ define_task!(
         SyncLightsInStorage
     ],
     execute_on = [PhysicsTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Updating controlled entities", engine, {
             engine.update_controlled_entities();
             Ok(())
@@ -42,7 +43,8 @@ define_task!(
         UpdateControlledEntities
     ],
     execute_on = [PhysicsTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Advancing simulation", engine, {
             engine.simulator()
                 .write()
@@ -69,7 +71,7 @@ impl PhysicsSimulator {
 }
 
 /// Registers all tasks needed for physics in the given task scheduler.
-pub fn register_physics_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_physics_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(UpdateControlledEntities)?;
     task_scheduler.register_task(AdvanceSimulation)?;
     motion::tasks::register_motion_tasks(task_scheduler)

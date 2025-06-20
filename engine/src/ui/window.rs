@@ -1,91 +1,22 @@
-//! Window integration for user interface.
+//! User interface response to window and device events.
 
-use crate::window::Window;
-use std::fmt;
+use crate::ui::UserInterface;
 use winit::event::{DeviceEvent, WindowEvent};
 
-pub struct UserInterfaceWindowIntegration {
-    window: Window,
-    egui_ctx: egui::Context,
-    state: egui_winit::State,
+/// Extension trait for [`UserInterface`]s that respond to window and device
+/// events.
+pub trait ResponsiveUserInterface: UserInterface {
+    /// Handles the UI's reponse to a window event.
+    fn handle_window_event(&self, event: &WindowEvent) -> UIEventHandlingResponse;
+
+    /// Handles the UI's reponse to a evice input event.
+    fn handle_device_event(&self, event: &DeviceEvent);
 }
 
+/// Response indicating whether a UI event was consumed or should be passed
+/// through.
 #[derive(Clone, Debug)]
 pub struct UIEventHandlingResponse {
+    /// If true, the event was consumed and should not be processed further.
     pub event_consumed: bool,
-}
-
-impl UserInterfaceWindowIntegration {
-    pub fn new(window: Window, egui_ctx: egui::Context) -> Self {
-        let state = egui_winit::State::new(
-            egui_ctx.clone(),
-            egui::ViewportId::ROOT,
-            window.window(),
-            Some(window.pixels_per_point() as f32),
-            window.window().theme(),
-            None,
-        );
-        Self {
-            window,
-            egui_ctx,
-            state,
-        }
-    }
-
-    pub fn handle_window_event(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
-        let egui_winit::EventResponse {
-            consumed,
-            repaint: _, // We always repaint
-        } = self.state.on_window_event(self.window.window(), event);
-
-        UIEventHandlingResponse {
-            event_consumed: consumed,
-        }
-    }
-
-    pub fn handle_device_event(&mut self, event: &DeviceEvent) {
-        if let DeviceEvent::MouseMotion { delta } = event {
-            self.state.on_mouse_motion(*delta);
-        }
-    }
-
-    pub fn take_raw_input(&mut self) -> egui::RawInput {
-        let input = self.state.egui_input_mut();
-        let viewport_info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
-
-        egui_winit::update_viewport_info(
-            viewport_info,
-            &self.egui_ctx,
-            self.window.window(),
-            false,
-        );
-
-        self.state.take_egui_input(self.window.window())
-    }
-
-    pub fn handle_full_output(&mut self, mut output: egui::FullOutput) -> egui::FullOutput {
-        self.state
-            .handle_platform_output(self.window.window(), output.platform_output.take());
-
-        if let Some(viewport_output) = output.viewport_output.remove(&egui::ViewportId::ROOT) {
-            let input = self.state.egui_input_mut();
-            let viewport_info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
-
-            egui_winit::process_viewport_commands(
-                &self.egui_ctx,
-                viewport_info,
-                viewport_output.commands,
-                self.window.window(),
-                &mut Default::default(),
-            );
-        }
-
-        output
-    }
-}
-
-impl fmt::Debug for UserInterfaceWindowIntegration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UserInterfaceWindowIntegration").finish()
-    }
 }

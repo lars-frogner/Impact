@@ -2,11 +2,12 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::EngineTaskScheduler},
     gizmo::{self, GizmoSet, GizmoType},
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::AdvanceSimulation,
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{BufferVisibleModelInstances, ClearModelInstanceBuffers, SyncLightsInStorage},
+    ui::tasks::ProcessUserInterface,
 };
 use anyhow::Result;
 
@@ -15,9 +16,10 @@ define_task!(
     /// visibility flags for all applicable entities based on which gizmos have
     /// been newly configured to be globally visible or hidden.
     [pub] UpdateVisibilityFlagsForGizmos,
-    depends_on = [],
+    depends_on = [ProcessUserInterface],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Updating visibility flags for gizmos", engine, {
             let mut gizmo_manager = engine.gizmo_manager().write().unwrap();
             if !gizmo_manager.global_visibility_changed_for_any_of_gizmos(GizmoSet::all()) {
@@ -54,7 +56,8 @@ define_task!(
         AdvanceSimulation
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Buffering transforms for gizmos", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             let current_frame_count = engine.renderer().read().unwrap().current_frame_count();
@@ -84,7 +87,7 @@ define_task!(
     }
 );
 
-pub fn register_gizmo_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_gizmo_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(UpdateVisibilityFlagsForGizmos)?;
     task_scheduler.register_task(BufferTransformsForGizmos)
 }

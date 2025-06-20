@@ -20,9 +20,9 @@ use crate::{
         texture::{attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
     },
     scene::Scene,
+    ui::UserInterface,
 };
 use anyhow::Result;
-use gui::{GUIRenderer, GUIRenderingConfig, GUIRenderingInput};
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
     temporal_anti_aliasing::TemporalAntiAliasingConfig,
@@ -50,7 +50,6 @@ pub struct RenderingSystem {
     gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
-    gui_renderer: RwLock<GUIRenderer>,
     frame_counter: u32,
     timestamp_query_manager: TimestampQueryManager,
     basic_config: BasicRenderingConfig,
@@ -70,8 +69,6 @@ pub struct RenderingConfig {
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     #[serde(default)]
     pub capturing_camera: CapturingCameraConfig,
-    #[serde(default)]
-    pub gui: GUIRenderingConfig,
 }
 
 /// Basic rendering configuration options.
@@ -136,8 +133,6 @@ impl RenderingSystem {
             &mut storage_gpu_buffer_manager,
         )?;
 
-        let gui_renderer = GUIRenderer::new(config.gui, &graphics_device, &rendering_surface);
-
         let timestamp_query_manager = TimestampQueryManager::new(
             &graphics_device,
             NonZeroU32::new(128).unwrap(),
@@ -156,7 +151,6 @@ impl RenderingSystem {
             gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
-            gui_renderer: RwLock::new(gui_renderer),
             frame_counter: 1,
             timestamp_query_manager,
             basic_config: config.basic,
@@ -260,7 +254,7 @@ impl RenderingSystem {
     pub fn render_to_surface(
         &mut self,
         scene: &Scene,
-        gui_input: Option<&GUIRenderingInput>,
+        user_interface: &dyn UserInterface,
     ) -> Result<()> {
         with_timing_info_logging!("Rendering"; {
             self.surface_texture_to_present = Some(self.render_surface(scene, gui_input)?);
@@ -293,8 +287,8 @@ impl RenderingSystem {
     fn render_surface(
         &mut self,
         scene: &Scene,
-        gui_input: Option<&GUIRenderingInput>,
-    ) -> Result<wgpu::SurfaceTexture> {
+        user_interface: &dyn UserInterface,
+    ) -> Result<Option<wgpu::SurfaceTexture>> {
         self.render_attachment_texture_manager
             .write()
             .unwrap()
@@ -327,19 +321,13 @@ impl RenderingSystem {
             &mut command_encoder,
         )?;
 
-        if let Some(gui_input) = gui_input {
-            self.gui_renderer
-                .write()
-                .unwrap()
-                .update_resources_and_record_render_pass(
-                    &self.graphics_device,
-                    &self.rendering_surface,
-                    &surface_texture_view,
-                    gui_input,
-                    &mut timestamp_recorder,
-                    &mut command_encoder,
-                );
-        }
+        user_interface.render(
+            &self.graphics_device,
+            &self.rendering_surface,
+            &surface_texture_view,
+            &mut timestamp_recorder,
+            &mut command_encoder,
+        )?;
 
         timestamp_recorder.finish(&mut command_encoder);
 

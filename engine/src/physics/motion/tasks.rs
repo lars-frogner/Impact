@@ -2,11 +2,11 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::EngineTaskScheduler},
     physics::{
         motion,
         tasks::{AdvanceSimulation, PhysicsTag},
     },
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
 
@@ -16,7 +16,8 @@ define_task!(
     [pub] LogKineticEnergy,
     depends_on = [AdvanceSimulation],
     execute_on = [PhysicsTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Logging kinetic energy", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             motion::systems::log_kinetic_energies(&ecs_world);
@@ -31,7 +32,8 @@ define_task!(
     [pub] LogMomentum,
     depends_on = [AdvanceSimulation],
     execute_on = [PhysicsTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Logging momentum", engine, {
             let ecs_world = engine.ecs_world().read().unwrap();
             motion::systems::log_momenta(&ecs_world);
@@ -41,7 +43,7 @@ define_task!(
 );
 
 /// Registers all tasks related to motion in the given task scheduler.
-pub fn register_motion_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_motion_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(LogKineticEnergy)?;
     task_scheduler.register_task(LogMomentum)
 }
