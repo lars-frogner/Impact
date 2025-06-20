@@ -124,7 +124,7 @@ anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
-impact = { path = "../../engine", features = ["window"] }
+impact = { path = "../../engine", features = ["window", "egui"] }
 impact_dev_ui = { path = "../../engine/impact_dev_ui" }
 impact_ecs = { path = "../../engine/impact_ecs" }
 inventory = "0.3"

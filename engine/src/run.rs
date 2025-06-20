@@ -1,6 +1,6 @@
 //! Running the engine.
 
-#[cfg(feature = "window")]
+#[cfg(feature = "egui")]
 pub mod window {
     use crate::{
         application::Application,

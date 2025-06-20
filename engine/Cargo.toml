@@ -133,6 +133,7 @@ build = "build.rs"
 [features]
 arbitrary = ["dep:arbitrary", "impact_ecs/arbitrary", "impact_math/arbitrary"]
 cli = ["dep:clap"]
+egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
 flamegraph = ["profiling", "impact_profiling/flamegraph"]
 fuzzing = ["arbitrary"]
 profiling = ["impact_profiling"]
@@ -159,9 +160,9 @@ bytemuck = { workspace = true }
 cfg-if = "1.0"
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
-egui = { version = "0.31", features = ["log"] }
-egui-wgpu = "0.31"
-egui-winit = "0.31"
+egui = { version = "0.31", features = ["log"], optional = true }
+egui-wgpu = { version = "0.31", optional = true }
+egui-winit = { version = "0.31", optional = true }
 glam = "0.30"
 image = { version = "0.25", default-features = false, features = [
     "png",
