@@ -11,7 +11,7 @@ use winit::{
     window::{Window as WinitWindow, WindowAttributes},
 };
 
-/// Wrapper for a window.
+/// Handle to a window.
 #[derive(Clone, Debug)]
 pub struct Window {
     window: Arc<WinitWindow>,
@@ -22,11 +22,6 @@ pub struct Window {
 pub struct WindowConfig {
     /// The initial inner width and height of the window in physical pixels.
     pub initial_size: (NonZeroU32, NonZeroU32),
-}
-
-/// Calculates the ratio of width to height.
-pub fn calculate_aspect_ratio(width: NonZeroU32, height: NonZeroU32) -> f32 {
-    u32::from(width) as f32 / u32::from(height) as f32
 }
 
 impl Window {
@@ -66,12 +61,6 @@ impl Window {
         )
     }
 
-    /// Returns the ratio of width to height of the window.
-    pub fn aspect_ratio(&self) -> f32 {
-        let (width, height) = self.dimensions();
-        calculate_aspect_ratio(width, height)
-    }
-
     pub fn request_redraw(&self) {
         self.window.request_redraw();
     }
@@ -86,4 +75,9 @@ impl Default for WindowConfig {
             ),
         }
     }
+}
+
+/// Calculates the ratio of width to height.
+pub fn calculate_aspect_ratio(width: NonZeroU32, height: NonZeroU32) -> f32 {
+    u32::from(width) as f32 / u32::from(height) as f32
 }

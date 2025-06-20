@@ -235,7 +235,8 @@ impl RenderingSystem {
         &mut self.shadow_mapping_config.enabled
     }
 
-    /// Presents the last surface texture that was rendered to.
+    /// Presents the last surface texture that was rendered to. Does nothing if
+    /// there is no texture to present.
     pub fn present(&mut self) {
         if let Some(surface_texture) = self.surface_texture_to_present.take() {
             surface_texture.present();
@@ -244,8 +245,8 @@ impl RenderingSystem {
     }
 
     /// Renders to the surface using the current synchronized render resources.
-    /// The surface texture to present is stored for later presentation by
-    /// calling [`Self::present`].
+    /// The surface texture to present (if any) is stored for later presentation
+    /// by calling [`Self::present`].
     ///
     /// # Errors
     /// Returns an error if:
@@ -257,7 +258,7 @@ impl RenderingSystem {
         user_interface: &dyn UserInterface,
     ) -> Result<()> {
         with_timing_info_logging!("Rendering"; {
-            self.surface_texture_to_present = Some(self.render_surface(scene, gui_input)?);
+            self.surface_texture_to_present = self.render_surface(scene, user_interface)?;
         });
         Ok(())
     }
@@ -294,10 +295,9 @@ impl RenderingSystem {
             .unwrap()
             .swap_previous_and_current_attachment_variants(&self.graphics_device);
 
-        let surface_texture = self.rendering_surface.surface().get_current_texture()?;
-        let surface_texture_view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let (surface_texture_view, surface_texture) = self
+            .rendering_surface
+            .get_texture_view_with_presentable_texture()?;
 
         let mut timestamp_recorder = self
             .timestamp_query_manager
@@ -351,9 +351,8 @@ impl RenderingSystem {
     }
 
     fn handle_surface_lost(&self) {
-        // Reconfigure surface if lost
         self.rendering_surface
-            .configure_surface_for_device(self.graphics_device());
+            .reinitialize_lost_surface(self.graphics_device());
     }
 
     fn create_render_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
