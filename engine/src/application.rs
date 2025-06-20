@@ -17,7 +17,7 @@ pub trait Application: Send + Sync + std::fmt::Debug {
         event: crate::window::input::mouse::MouseButtonEvent,
     ) -> Result<()>;
 
-    #[cfg(feature = "window")]
+    #[cfg(feature = "egui")]
     fn run_egui_ui(
         &self,
         ctx: &egui::Context,

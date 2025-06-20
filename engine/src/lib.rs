@@ -41,4 +41,5 @@ pub use impact_ecs;
 pub use impact_math;
 pub use roc_integration;
 
+#[cfg(feature = "egui")]
 pub use egui;

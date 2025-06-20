@@ -2,7 +2,7 @@
 
 pub mod tasks;
 
-#[cfg(feature = "window")]
+#[cfg(feature = "egui")]
 pub mod egui;
 #[cfg(feature = "window")]
 pub mod window;
