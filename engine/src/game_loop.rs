@@ -1,8 +1,14 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
-    define_execution_tag_set, engine::Engine, gpu::rendering::tasks::RenderingTag,
-    physics::tasks::PhysicsTag, scheduling::TaskScheduler, thread::ThreadPoolResult,
+    define_execution_tag_set,
+    engine::Engine,
+    gpu::rendering::tasks::RenderingTag,
+    instrumentation::{self, FrameDurationTracker},
+    physics::tasks::PhysicsTag,
+    runtime::tasks::RuntimeTaskScheduler,
+    thread::ThreadPoolResult,
+    ui::tasks::UserInterfaceTag,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -25,15 +31,7 @@ pub struct GameLoopConfig {
     max_fps: Option<NonZeroU32>,
 }
 
-define_execution_tag_set!(PHYSICS_AND_RENDERING_TAGS, [PhysicsTag, RenderingTag]);
-
-#[derive(Clone, Debug)]
-struct GenericFrameDurationTracker<const N_FRAMES: usize> {
-    last_frame_durations: [Duration; N_FRAMES],
-    idx_of_oldest: usize,
-}
-
-type FrameDurationTracker = GenericFrameDurationTracker<10>;
+define_execution_tag_set!(ALL_SYSTEMS, [PhysicsTag, RenderingTag, UserInterfaceTag]);
 
 impl GameLoop {
     pub fn new(config: GameLoopConfig) -> Self {
@@ -51,12 +49,10 @@ impl GameLoop {
     pub fn perform_iteration(
         &mut self,
         engine: &Engine,
-        task_scheduler: &TaskScheduler<Engine>,
+        task_scheduler: &RuntimeTaskScheduler,
     ) -> ThreadPoolResult {
-        engine.task_timer().clear();
-
         let execution_result = with_timing_info_logging!("Game loop iteration"; {
-            task_scheduler.execute_and_wait(&PHYSICS_AND_RENDERING_TAGS)
+            task_scheduler.execute_and_wait(&ALL_SYSTEMS)
         });
 
         if let Err(mut task_errors) = execution_result {
@@ -78,16 +74,12 @@ impl GameLoop {
 
         let smooth_frame_duration = self.frame_rate_tracker.compute_smooth_frame_duration();
 
-        engine
-            .simulator()
-            .write()
-            .unwrap()
-            .update_time_step_duration(&smooth_frame_duration);
+        engine.gather_metrics_after_completed_frame(smooth_frame_duration);
 
         log::info!(
             "Completed game loop iteration after {:.1} ms (~{} FPS)",
             iter_duration.as_secs_f64() * 1e3,
-            frame_duration_to_fps(smooth_frame_duration)
+            instrumentation::frame_duration_to_fps(smooth_frame_duration)
         );
 
         log::info!(
@@ -96,14 +88,6 @@ impl GameLoop {
         );
 
         Ok(())
-    }
-
-    pub fn smooth_frame_duration(&self) -> Duration {
-        self.frame_rate_tracker.compute_smooth_frame_duration()
-    }
-
-    pub fn smooth_fps(&self) -> u32 {
-        frame_duration_to_fps(self.smooth_frame_duration())
     }
 
     pub fn elapsed_time(&self) -> Duration {
@@ -132,42 +116,9 @@ impl GameLoop {
     }
 }
 
-impl<const N_FRAMES: usize> GenericFrameDurationTracker<N_FRAMES> {
-    fn new(initial_frame_duration: Duration) -> Self {
-        let last_frame_durations = [initial_frame_duration; N_FRAMES];
-        Self {
-            last_frame_durations,
-            idx_of_oldest: 0,
-        }
-    }
-
-    fn compute_smooth_frame_duration(&self) -> Duration {
-        let total_duration: Duration = self.last_frame_durations.iter().sum();
-        total_duration.div_f64(N_FRAMES as f64)
-    }
-
-    fn add_frame_duration(&mut self, frame_duration: Duration) {
-        self.last_frame_durations[self.idx_of_oldest] = frame_duration;
-        self.idx_of_oldest = (self.idx_of_oldest + 1) % N_FRAMES;
-    }
-}
-
-impl<const N_FRAMES: usize> Default for GenericFrameDurationTracker<N_FRAMES> {
-    fn default() -> Self {
-        Self::new(fps_to_frame_duration(30))
-    }
-}
-
-fn frame_duration_to_fps(duration: Duration) -> u32 {
-    (1.0 / duration.as_secs_f64()).round() as u32
-}
-
-fn fps_to_frame_duration(fps: u32) -> Duration {
-    Duration::from_secs_f64(1.0 / f64::from(fps))
-}
-
 impl GameLoopConfig {
     fn min_frame_duration(&self) -> Option<Duration> {
-        self.max_fps.map(|fps| fps_to_frame_duration(fps.get()))
+        self.max_fps
+            .map(|fps| instrumentation::fps_to_frame_duration(fps.get()))
     }
 }

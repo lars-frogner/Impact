@@ -1,32 +1,12 @@
-//! Management of tasks in the engine.
+//! Tasks for all engine subsystems.
 
 use crate::{
-    engine::Engine, gizmo, gpu, physics, scene, scheduling::TaskScheduler,
+    engine::Engine, gizmo, gpu, physics, runtime::tasks::RuntimeTaskScheduler, scene,
     thread::ThreadPoolTaskErrors, voxel,
 };
 use anyhow::Result;
-use std::{num::NonZeroUsize, sync::Arc};
-
-pub type EngineTaskScheduler = TaskScheduler<Engine>;
 
 impl Engine {
-    /// Creates a new task scheduler with the given number of workers and
-    /// registers all tasks in it.
-    ///
-    /// # Errors
-    /// Returns an error the registration of any of the tasks failed.
-    pub fn create_task_scheduler(
-        self,
-        n_workers: NonZeroUsize,
-    ) -> Result<(Arc<Self>, EngineTaskScheduler)> {
-        let world = Arc::new(self);
-        let mut task_scheduler = EngineTaskScheduler::new(n_workers, Arc::clone(&world));
-
-        register_all_tasks(&mut task_scheduler)?;
-
-        Ok((world, task_scheduler))
-    }
-
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
@@ -44,12 +24,11 @@ impl Engine {
     }
 }
 
-/// Registers all tasks in the given task scheduler.
-pub fn register_all_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+/// Registers all tasks for engine subsystems in the given task scheduler.
+pub fn register_engine_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     scene::tasks::register_scene_tasks(task_scheduler)?;
     gpu::rendering::tasks::register_rendering_tasks(task_scheduler)?;
     physics::tasks::register_physics_tasks(task_scheduler)?;
     voxel::tasks::register_voxel_tasks(task_scheduler)?;
-    gizmo::tasks::register_gizmo_tasks(task_scheduler)?;
-    task_scheduler.complete_task_registration()
+    gizmo::tasks::register_gizmo_tasks(task_scheduler)
 }

@@ -3,9 +3,9 @@
 use super::DesynchronizedRenderResources;
 use crate::{
     define_task,
-    engine::{Engine, tasks::EngineTaskScheduler},
     gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
@@ -32,7 +32,8 @@ define_task!(
         SyncInstanceFeatureBuffers
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Completing synchronization of render resources", engine, {
             let renderer = engine.renderer().read().unwrap();
             let mut render_resource_manager = renderer.render_resource_manager().write().unwrap();
@@ -46,7 +47,8 @@ define_task!(
     SyncMinorResources,
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
             let renderer = engine.renderer().read().unwrap();
             let scene = engine.scene().read().unwrap();
@@ -83,7 +85,8 @@ define_task!(
     SyncMeshGPUBuffers,
     depends_on = [],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing mesh GPU buffers", engine, {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
@@ -132,7 +135,8 @@ define_task!(
     SyncVoxelObjectGPUBuffers,
     depends_on = [SyncVoxelObjectMeshes],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object GPU buffers", engine, {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
@@ -168,7 +172,8 @@ define_task!(
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing light GPU buffers", engine, {
             let renderer = engine.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
@@ -201,7 +206,8 @@ define_task!(
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!(
             "Synchronizing model instance feature GPU buffers",
             engine,
@@ -234,7 +240,7 @@ define_task!(
 
 /// Registers tasks for synchronizing render resources in the given task
 /// scheduler.
-pub fn register_render_resource_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_render_resource_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncMeshGPUBuffers)?;
     task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;

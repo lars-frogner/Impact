@@ -54,7 +54,7 @@ impl TaskTimingPanel {
                         });
                     })
                     .body(|mut body| {
-                        for (id, duration) in engine.task_timer().take_task_execution_times() {
+                        for (id, duration) in &engine.metrics().last_task_execution_times {
                             body.row(row_height, |mut row| {
                                 row.col(|ui| {
                                     ui.label(id.string());

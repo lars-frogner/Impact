@@ -13,7 +13,6 @@ use impact::{
     application::Application,
     egui,
     engine::{Engine, EngineConfig},
-    game_loop::GameLoop,
     io::util as ui_util,
     runtime::RuntimeConfig,
     window::{
@@ -55,19 +54,6 @@ impl Application for BasicApp {
         self.user_interface.read().unwrap().setup(engine);
     }
 
-    fn run_ui(
-        &self,
-        ctx: &egui::Context,
-        input: egui::RawInput,
-        game_loop: &GameLoop,
-        engine: &Engine,
-    ) -> egui::FullOutput {
-        self.user_interface
-            .write()
-            .unwrap()
-            .run(ctx, input, game_loop, engine, &api::UI_COMMANDS)
-    }
-
     fn setup_scene(&self) -> Result<()> {
         log::debug!("Setting up scene");
         scripting::setup_scene()
@@ -81,6 +67,18 @@ impl Application for BasicApp {
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
         log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
+    }
+
+    fn run_egui_ui(
+        &self,
+        ctx: &egui::Context,
+        input: egui::RawInput,
+        engine: &Engine,
+    ) -> egui::FullOutput {
+        self.user_interface
+            .write()
+            .unwrap()
+            .run(ctx, input, engine, &api::UI_COMMANDS)
     }
 }
 

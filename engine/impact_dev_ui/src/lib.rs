@@ -15,7 +15,6 @@ use impact::{
     command::ToActiveState,
     egui::{Context, FullOutput, RawInput},
     engine::Engine,
-    game_loop::GameLoop,
     io::util as io_util,
     ui,
 };
@@ -75,7 +74,6 @@ impl UserInterface {
         &mut self,
         ctx: &Context,
         input: RawInput,
-        game_loop: &GameLoop,
         engine: &Engine,
         command_queue: &UICommandQueue,
     ) -> FullOutput {
@@ -101,14 +99,14 @@ impl UserInterface {
             }
 
             if self.config.show_time_overlay {
-                self.time_overlay.run(ctx, game_loop, engine);
+                self.time_overlay.run(ctx, engine);
             }
         });
 
         // The cursor icon will be reset each run, so it won't stay hidden
         // unless we make it
         if !self.config.interactive {
-            ui::ensure_cursor_hidden(&mut output);
+            ui::egui::ensure_cursor_hidden(&mut output);
         }
 
         self.execute_commands(&mut output, engine, command_queue);

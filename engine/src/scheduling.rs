@@ -61,7 +61,7 @@ pub struct TaskScheduler<S> {
     tasks: TaskPool<S>,
     dependency_graph: TaskDependencyGraph<S>,
     executor: Option<TaskExecutor<S>>,
-    external_state: Arc<S>,
+    external_state: S,
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
@@ -99,7 +99,7 @@ struct TaskExecutor<S> {
 #[derive(Debug)]
 struct TaskExecutionState<S> {
     task_ordering: TaskOrdering<S>,
-    external_state: Arc<S>,
+    external_state: S,
 }
 
 /// A list of tasks ordered according to the following criteria:
@@ -266,11 +266,11 @@ macro_rules! define_execution_tag_set {
 
 impl<S> TaskScheduler<S>
 where
-    S: Sync + Send + 'static,
+    S: Sync + Send + Clone + 'static,
 {
     /// Creates a new task scheduler that will operate with the given number of
     /// worker threads on the given external state.
-    pub fn new(n_workers: NonZeroUsize, external_state: Arc<S>) -> Self {
+    pub fn new(n_workers: NonZeroUsize, external_state: S) -> Self {
         Self {
             n_workers,
             tasks: HashMap::default(),
@@ -288,7 +288,7 @@ where
 
     /// Returns the external state that the tasks can modify.
     pub fn external_state(&self) -> &S {
-        self.external_state.as_ref()
+        &self.external_state
     }
 
     /// Whether the given task is registered in the scheduler.
@@ -341,7 +341,7 @@ where
             self.n_workers,
             &self.tasks,
             &mut self.dependency_graph,
-            Arc::clone(&self.external_state),
+            self.external_state.clone(),
         )?);
         Ok(())
     }
@@ -512,13 +512,13 @@ impl<S> TaskDependencyGraph<S> {
 
 impl<S> TaskExecutor<S>
 where
-    S: Sync + Send + 'static,
+    S: Sync + Send + Clone + 'static,
 {
     fn new(
         n_workers: NonZeroUsize,
         task_pool: &TaskPool<S>,
         dependency_graph: &mut TaskDependencyGraph<S>,
-        external_state: Arc<S>,
+        external_state: S,
     ) -> Result<Self> {
         let state = Arc::new(TaskExecutionState::new(
             task_pool,
@@ -681,7 +681,7 @@ impl<S> TaskExecutionState<S> {
     fn new(
         task_pool: &TaskPool<S>,
         dependency_graph: &mut TaskDependencyGraph<S>,
-        external_state: Arc<S>,
+        external_state: S,
     ) -> Result<Self> {
         let task_ordering = TaskOrdering::new(task_pool, dependency_graph)?;
         Ok(Self {
@@ -695,7 +695,7 @@ impl<S> TaskExecutionState<S> {
     }
 
     fn external_state(&self) -> &S {
-        self.external_state.as_ref()
+        &self.external_state
     }
 }
 
@@ -886,7 +886,7 @@ mod tests {
                 const EXEC_TAG: ExecutionTag = ExecutionTag::from_str(stringify!($task));
             }
 
-            impl Task<TaskRecorder> for $task
+            impl Task<Arc<TaskRecorder>> for $task
             {
                 fn id(&self) -> TaskID {
                     Self::ID
@@ -900,11 +900,11 @@ mod tests {
                     [EXEC_ALL, Self::EXEC_TAG].iter().any(|tag| execution_tags.contains(tag))
                 }
 
-                fn execute(&self, _task_recorder: &TaskRecorder) -> Result<()> {
+                fn execute(&self, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
                     unreachable!()
                 }
 
-                fn execute_with_worker(&self, worker_id: WorkerID, task_recorder: &TaskRecorder) -> Result<()> {
+                fn execute_with_worker(&self, worker_id: WorkerID, task_recorder: &Arc<TaskRecorder>) -> Result<()> {
                     Ok(task_recorder.record_task(worker_id, self.id()))
                 }
             }
@@ -920,9 +920,9 @@ mod tests {
     create_task_type!(name = CircularTask1, deps = [CircularTask2]);
     create_task_type!(name = CircularTask2, deps = [CircularTask1]);
 
-    type TestTaskScheduler = TaskScheduler<TaskRecorder>;
-    type TestTaskDependencyGraph = TaskDependencyGraph<TaskRecorder>;
-    type TestOrderedTask = OrderedTask<TaskRecorder>;
+    type TestTaskScheduler = TaskScheduler<Arc<TaskRecorder>>;
+    type TestTaskDependencyGraph = TaskDependencyGraph<Arc<TaskRecorder>>;
+    type TestOrderedTask = OrderedTask<Arc<TaskRecorder>>;
 
     fn create_scheduler(n_workers: usize) -> TestTaskScheduler {
         TaskScheduler::new(

@@ -2,8 +2,8 @@
 
 use crate::{
     define_task,
-    engine::{Engine, tasks::EngineTaskScheduler},
     gpu::rendering::{resource::tasks::SyncRenderResources, tasks::RenderingTag},
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
 
@@ -14,7 +14,8 @@ define_task!(
     [pub] SyncRenderCommands,
     depends_on = [SyncRenderResources],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing render commands", engine, {
             let renderer = engine.renderer().read().unwrap();
             let mut shader_manager = renderer.shader_manager().write().unwrap();
@@ -35,6 +36,6 @@ define_task!(
 
 /// Registers tasks for synchronizing render commands in the given task
 /// scheduler.
-pub fn register_render_command_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_render_command_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncRenderCommands)
 }

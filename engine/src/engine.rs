@@ -16,14 +16,13 @@ use crate::{
         self, GraphicsDevice,
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
-    instrumentation::{InstrumentationConfig, timing::TaskTimer},
+    instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
     io::{self, util::parse_ron_file},
     material::{self, MaterialLibrary},
     mesh::{MeshRepository, components::TriangleMeshComp, texture_projection::TextureProjection},
     model::{self, InstanceFeatureManager},
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
-    ui::UserInterfaceOutput,
     voxel::{self, VoxelConfig, VoxelManager},
     window::Window,
 };
@@ -39,9 +38,10 @@ use std::{
     num::NonZeroU32,
     path::Path,
     sync::{
-        Arc, Mutex, RwLock,
+        Arc, Mutex, RwLock, RwLockReadGuard,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 
 /// Manager for all systems and data in the engine.
@@ -56,11 +56,11 @@ pub struct Engine {
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
     gizmo_manager: RwLock<GizmoManager>,
-    ui_output: RwLock<Option<UserInterfaceOutput>>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
     task_timer: TaskTimer,
+    metrics: RwLock<EngineMetrics>,
     controls_enabled: AtomicBool,
     shutdown_requested: AtomicBool,
 }
@@ -152,11 +152,11 @@ impl Engine {
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
             gizmo_manager: RwLock::new(gizmo_manager),
-            ui_output: RwLock::new(None),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
+            metrics: RwLock::new(EngineMetrics::default()),
             controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
         };
@@ -212,12 +212,6 @@ impl Engine {
         &self.gizmo_manager
     }
 
-    /// Returns a reference to the [`UserInterfaceOutput`] (or `None` if
-    /// absent), guarded by a [`RwLock`].
-    pub fn ui_output(&self) -> &RwLock<Option<UserInterfaceOutput>> {
-        &self.ui_output
-    }
-
     /// Returns a reference to the [`ScreenCapturer`].
     pub fn screen_capturer(&self) -> &ScreenCapturer {
         &self.screen_capturer
@@ -226,6 +220,11 @@ impl Engine {
     /// Returns a reference to the [`TaskTimer`].
     pub fn task_timer(&self) -> &TaskTimer {
         &self.task_timer
+    }
+
+    /// Returns the current [`EngineMetrics`], wrapped in a read guard.
+    pub fn metrics(&self) -> RwLockReadGuard<'_, EngineMetrics> {
+        self.metrics.read().unwrap()
     }
 
     /// Captures any screenshots or related textures requested through the
@@ -460,6 +459,19 @@ impl Engine {
                 motion_controller.lock().unwrap().stop();
             }
         }
+    }
+
+    pub fn gather_metrics_after_completed_frame(&self, smooth_frame_duration: Duration) {
+        let mut metrics = self.metrics.write().unwrap();
+        metrics.current_smooth_frame_duration = smooth_frame_duration;
+
+        self.task_timer
+            .report_task_execution_times(&mut metrics.last_task_execution_times);
+
+        self.simulator()
+            .write()
+            .unwrap()
+            .update_time_step_duration(&smooth_frame_duration);
     }
 
     pub fn shutdown_requested(&self) -> bool {

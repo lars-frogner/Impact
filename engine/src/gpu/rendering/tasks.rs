@@ -1,11 +1,11 @@
 //! Tasks for rendering.
 
 use crate::{
-    engine::{Engine, tasks::EngineTaskScheduler},
+    define_execution_tag, define_task,
     gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
+    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
-    {define_execution_tag, define_task},
 };
 use anyhow::Result;
 
@@ -23,13 +23,13 @@ define_task!(
     [pub] Render,
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
-    |engine: &Engine| {
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Rendering", engine, {
             let scene = engine.scene().read().unwrap();
-            let ui_output = engine.ui_output().read().unwrap();
             engine.renderer().write().unwrap().render_to_surface(
                 &scene,
-                ui_output.as_ref().map(|output| output.rendering_input()),
+                ctx.user_interface(),
             )?;
             engine.capture_screenshots()
         })
@@ -50,7 +50,7 @@ impl RenderingSystem {
 }
 
 /// Registers all tasks needed for rendering in the given task scheduler.
-pub fn register_rendering_tasks(task_scheduler: &mut EngineTaskScheduler) -> Result<()> {
+pub fn register_rendering_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     resource::tasks::register_render_resource_tasks(task_scheduler)?;
     render_command::tasks::register_render_command_tasks(task_scheduler)?;
     task_scheduler.register_task(Render)

@@ -4,7 +4,7 @@ use crate::{
     application::Application,
     engine::{Engine, EngineConfig},
     runtime::{Runtime, RuntimeConfig, window::WindowRuntimeHandler},
-    ui::UserInterface,
+    ui::egui::{EguiUserInterface, EguiUserInterfaceConfig},
     window::{Window, WindowConfig},
 };
 use anyhow::Result;
@@ -38,11 +38,17 @@ fn create_runtime(
     runtime_config: RuntimeConfig,
     engine_config: EngineConfig,
     on_engine_created: impl FnOnce(Arc<Engine>),
-) -> Result<Runtime> {
+) -> Result<Runtime<EguiUserInterface>> {
     let engine = Engine::new(engine_config, app.clone(), window.clone())?;
-    let user_interface = UserInterface::new(app, window);
+
+    let user_interface =
+        EguiUserInterface::new(EguiUserInterfaceConfig::default(), app, &engine, window);
+
     let runtime = Runtime::new(engine, user_interface, runtime_config)?;
+
     on_engine_created(runtime.arc_engine());
+
     runtime.engine().app().setup_scene()?;
+
     Ok(runtime)
 }
