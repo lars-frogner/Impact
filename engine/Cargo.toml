@@ -144,6 +144,7 @@ roc_codegen = [
     "roc_integration/roc_codegen",
 ]
 unchecked = []
+window = ["dep:winit"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -192,7 +193,7 @@ simba = "0.9"
 tinyvec = { version = "1.9", features = ["alloc"] }
 tobj = "4.0"
 wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
-winit = { version = "0.30", features = ["serde"] }
+winit = { version = "0.30", features = ["serde"], optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 impact_containers = { path = "impact_containers" }

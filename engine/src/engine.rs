@@ -4,6 +4,8 @@ pub mod command;
 pub mod components;
 pub mod entity;
 pub mod tasks;
+
+#[cfg(feature = "window")]
 pub mod window;
 
 use crate::{
@@ -364,16 +366,17 @@ impl Engine {
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
         let mut renderer = self.renderer().write().unwrap();
 
-        let (old_width, old_height) = renderer.rendering_surface().surface_dimensions();
-
         renderer.resize_rendering_surface(new_width, new_height);
+
+        let new_aspect_ratio = renderer.rendering_surface().surface_aspect_ratio();
+
         drop(renderer);
 
         let render_resources_desynchronized = self
             .scene()
             .read()
             .unwrap()
-            .handle_window_resized(old_width, old_height, new_width, new_height);
+            .handle_aspect_ratio_changed(new_aspect_ratio);
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()
