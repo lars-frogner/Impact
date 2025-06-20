@@ -2,7 +2,6 @@
 
 pub mod brdf;
 pub mod command;
-pub mod gui;
 pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
