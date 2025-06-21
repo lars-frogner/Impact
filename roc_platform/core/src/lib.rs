@@ -100,7 +100,7 @@ pub unsafe extern "C" fn roc_shm_open(
     oflag: libc::c_int,
     mode: libc::mode_t,
 ) -> libc::c_int {
-    unsafe { libc::shm_open(name, oflag, mode as libc::c_uint) }
+    unsafe { libc::shm_open(name, oflag, libc::c_uint::from(mode)) }
 }
 
 /// # Safety

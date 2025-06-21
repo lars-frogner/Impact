@@ -769,6 +769,7 @@ fn generate_registered_type_submit(
 }
 
 #[cfg(not(feature = "roc_codegen"))]
+#[allow(clippy::ptr_arg)]
 fn generate_registered_type_submit(
     _args: &ResolvedAttributeArgs,
     _rust_type_name: &Ident,
