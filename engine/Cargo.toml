@@ -131,6 +131,7 @@ license = { workspace = true }
 build = "build.rs"
 
 [features]
+default = ["window"]
 arbitrary = ["dep:arbitrary", "impact_ecs/arbitrary", "impact_math/arbitrary"]
 cli = ["dep:clap"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
