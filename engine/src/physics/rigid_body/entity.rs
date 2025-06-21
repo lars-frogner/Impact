@@ -4,8 +4,8 @@ use crate::{
     mesh::{
         MeshRepository,
         components::{
-            BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, TriangleMeshComp,
-            SphereMeshComp,
+            BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, SphereMeshComp,
+            TriangleMeshComp,
         },
     },
     physics::{
