@@ -5,15 +5,8 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
-[features]
-flamegraph = ["dep:pprof"]
-
 [dependencies]
 criterion = "0.5.1"
-pprof = { version = "0.15", features = [
-    "criterion",
-    "flamegraph",
-], optional = true }
 
 [lints]
 workspace = true

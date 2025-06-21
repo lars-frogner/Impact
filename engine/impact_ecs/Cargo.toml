@@ -8,7 +8,7 @@ license = { workspace = true }
 [features]
 arbitrary = ["dep:arbitrary"]
 cli = ["dep:clap"]
-flamegraph = ["profiling", "impact_profiling/flamegraph"]
+flamegraph = ["profiling"]
 profiling = ["impact_profiling"]
 roc_codegen = ["roc_integration/roc_codegen"]
 

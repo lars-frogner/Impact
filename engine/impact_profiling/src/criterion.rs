@@ -34,21 +34,6 @@ impl Profiler for CriterionFunctionProfiler<'_> {
     }
 }
 
-#[cfg(all(feature = "flamegraph", unix))]
-pub fn config() -> Criterion {
-    Criterion::default().with_profiler(pprof::criterion::PProfProfiler::new(
-        100,
-        pprof::criterion::Output::Flamegraph(None),
-    ))
-}
-
-#[cfg(all(feature = "flamegraph", not(unix)))]
-pub fn config() -> Criterion {
-    eprintln!("Warning (impact_profiling): The `flamegraph` feature is only supported on unix");
-    Criterion::default()
-}
-
-#[cfg(not(feature = "flamegraph"))]
 pub fn config() -> Criterion {
     Criterion::default()
 }
