@@ -57,7 +57,9 @@ where
             game_loop,
         })
     }
+}
 
+impl<UI> Runtime<UI> {
     pub fn engine(&self) -> &Engine {
         self.engine.as_ref()
     }
@@ -65,21 +67,24 @@ where
     pub fn arc_engine(&self) -> Arc<Engine> {
         Arc::clone(&self.engine)
     }
+    pub fn user_interface(&self) -> &UI {
+        self.user_interface.as_ref()
+    }
 
-    fn perform_game_loop_iteration(&mut self) -> ThreadPoolResult {
+    pub fn perform_game_loop_iteration(&mut self) -> ThreadPoolResult {
         self.game_loop
             .perform_iteration(&self.engine, &self.task_scheduler)
     }
 
-    fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
+    pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
         self.engine.resize_rendering_surface(new_width, new_height);
     }
 
-    fn update_pixels_per_point(&self, pixels_per_point: f64) {
+    pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
         self.engine.update_pixels_per_point(pixels_per_point);
     }
 
-    fn shutdown_requested(&self) -> bool {
+    pub fn shutdown_requested(&self) -> bool {
         self.engine.shutdown_requested()
     }
 }
