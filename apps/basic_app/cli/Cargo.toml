@@ -30,7 +30,7 @@ unexpected_cfgs = "warn"
 too_many_arguments = "allow"
 let_and_return = "allow"
 multiple_bound_locations = "allow"
-too_long_first_doc_paragrap = "allow"
+too_long_first_doc_paragraph = "allow"
 
 cargo = { level = "warn", priority = -1 }
 multiple_crate_versions = "allow"
