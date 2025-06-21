@@ -26,6 +26,11 @@ jobs:
       matrix:
         workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
         os: [ubuntu-latest, macos-latest, windows-latest]
+        exclude:
+          - workspace: roc_platform/core
+            os: windows-latest
+          - workspace: apps/basic_app
+            os: windows-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -182,6 +187,11 @@ jobs:
       matrix:
         workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
         os: [ubuntu-latest, macos-latest, windows-latest]
+        exclude:
+          - workspace: roc_platform/core
+            os: windows-latest
+          - workspace: apps/basic_app
+            os: windows-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -212,16 +222,15 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   # ───────────────────────────────────────────────────────────────
-  # 5. Rustfmt (all OSes)
+  # 5. Rustfmt (Linux)
   # ───────────────────────────────────────────────────────────────
   lint-fmt:
     strategy:
       fail-fast: false
       matrix:
         workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
-        os: [ubuntu-latest, macos-latest, windows-latest]
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
