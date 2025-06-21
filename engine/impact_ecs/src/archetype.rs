@@ -482,9 +482,9 @@ where
     }
 
     /// Returns an iterator with the number of items equal to
-    /// [`component_count`]. If `C` is the type of a contained component, each
-    /// item will be a [`Some`] holding a reference to a different component
-    /// instance. Otherwise, each item will be a [`None`].
+    /// [`Self::component_count`]. If `C` is the type of a contained component,
+    /// each item will be a [`Some`] holding a reference to a different
+    /// component instance. Otherwise, each item will be a [`None`].
     pub fn get_option_iter_for_component_of_type<C: Component>(
         &self,
     ) -> Box<dyn Iterator<Item = Option<&C>> + '_> {

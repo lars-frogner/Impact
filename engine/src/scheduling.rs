@@ -140,6 +140,7 @@ enum TaskReady {
 /// # use impact::{define_execution_tag, define_task, scheduling::TaskScheduler};
 /// # use std::{num::NonZeroUsize, sync::Arc};
 /// #
+/// # #[derive(Clone)]
 /// # struct Engine;
 /// #
 /// # impl Engine {
@@ -180,7 +181,7 @@ enum TaskReady {
 /// // Define the tag that will trigger execution of the tasks
 /// define_execution_tag!(Physics);
 ///
-/// let engine = Arc::new(Engine::new());
+/// let engine = Engine::new();
 /// let n_workers = NonZeroUsize::new(2).unwrap();
 ///
 /// let mut scheduler = TaskScheduler::new(n_workers, engine);
@@ -377,8 +378,8 @@ where
     ///
     /// # Errors
     /// A [`ThreadPoolTaskErrors`](crate::thread::ThreadPoolTaskErrors)
-    /// containing the [`TaskError`](crate::thread::TaskError) of each
-    /// failed task is returned if any of the executed tasks failed.
+    /// containing the [`TaskError`] of each failed task is returned if any of
+    /// the executed tasks failed.
     ///
     /// # Panics
     /// If [`complete_task_registration`](Self::complete_task_registration)
@@ -418,8 +419,8 @@ where
     ///
     /// # Errors
     /// A [`ThreadPoolTaskErrors`](crate::thread::ThreadPoolTaskErrors)
-    /// containing the [`TaskError`](crate::thread::TaskError) of each
-    /// failed task is returned if any of the executed tasks failed.
+    /// containing the [`TaskError`] of each failed task is returned if any of
+    /// the executed tasks failed.
     ///
     /// # Panics
     /// If [`complete_task_registration`](Self::complete_task_registration)

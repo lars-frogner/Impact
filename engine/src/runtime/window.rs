@@ -26,17 +26,6 @@ use winit::{
 /// 1. Creation with a runtime factory function and window configuration.
 /// 2. Execution via [`Self::run`] which creates the window and runtime and
 ///    starts the event loop.
-///
-/// # Example
-/// ```no_run
-/// let mut handler = WindowRuntimeHandler::new(
-///     |window| {
-///         create_runtime(window, ...)
-///     },
-///     WindowConfig::default(),
-/// );
-/// handler.run()?;
-/// ```
 pub struct WindowRuntimeHandler<UI> {
     runtime_creator: Option<RuntimeCreator<UI>>,
     runtime_and_window: Option<(Runtime<UI>, Window)>,

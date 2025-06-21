@@ -172,7 +172,7 @@ impl ConstraintSolver {
             .remove_unprepared_constraints_and_reset_flags();
     }
 
-    /// Updates the velocities of all prepared [`ConstrainedBody`]s to match
+    /// Updates the velocities of all prepared constrained bodies to match
     /// those of their associated entity. This should be called after advancing
     /// the rigid body velocities (but not configurations) based on the
     /// non-constraint forces.
@@ -256,7 +256,7 @@ impl ConstraintSolver {
         }
     }
 
-    /// Clears all [`ConstrainedBody`]s cached from the previous solve. This
+    /// Clears all constrained bodies cached from the previous solve. This
     /// should always be done before starting to prepare constraints for the
     /// next solve.
     pub fn clear_prepared_bodies(&mut self) {
