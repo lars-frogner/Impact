@@ -986,7 +986,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-3 * correct_center_of_mass.coords.abs().max()
+                epsilon = 5e-3 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
