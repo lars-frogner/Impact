@@ -68,8 +68,8 @@ trait PreparedTwoBodyConstraint {
         + Sub<Output = Self::Impulses>
         + Mul<fph, Output = Self::Impulses>;
 
-    /// Whether the accumulated [`Impulses`] from the other constraint can be
-    /// used to kick start the solution of this constraint. It should be
+    /// Whether the accumulated [`Self::Impulses`] from the other constraint can
+    /// be used to kick start the solution of this constraint. It should be
     /// assumed that the given constraint involves the same entities as this
     /// constraint.
     fn can_use_warm_impulses_from(&self, other: &Self) -> bool;

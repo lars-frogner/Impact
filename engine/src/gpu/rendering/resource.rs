@@ -35,13 +35,11 @@ use std::{
 /// access to the render resources. When the source data changes,
 /// the render resources should be marked as out of sync by calling the
 /// [`declare_desynchronized`](Self::declare_desynchronized) method.
-/// Access to the render resources is now only provided by the private
-/// [`desynchronized`](Self::desynchronized) method, which returns
-/// a [`DesynchronizedRenderResources`] that [`Mutex`]-wraps the resources
-/// and provides methods for re-synchronizing the render resources with
-/// the source data. When this is done, the
-/// [`declare_synchronized`](Self::declare_synchronized) method can
-/// be called to enable the `synchronized` method again.
+/// Access to the render resources is then provided through internal
+/// mechanisms that wrap the resources and provide methods for
+/// re-synchronizing the render resources with the source data.
+/// When synchronization is complete, the `synchronized` method
+/// becomes available again.
 #[derive(Debug)]
 pub struct RenderResourceManager {
     synchronized_resources: Option<SynchronizedRenderResources>,

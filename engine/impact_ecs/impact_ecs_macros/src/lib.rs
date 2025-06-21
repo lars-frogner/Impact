@@ -12,8 +12,7 @@ use proc_macro2::{Ident, Span};
 use std::sync::LazyLock;
 use syn::{DeriveInput, parse_macro_input};
 
-/// Derive macro generating an impl of the trait
-/// [`Component`](component::Component).
+/// Derive macro generating an impl of the trait `Component`.
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -27,21 +26,19 @@ pub fn derive_component_doctest(input: TokenStream) -> TokenStream {
     component::impl_component(input, &crate_root_ident_doctest()).into()
 }
 
-/// Derive macro generating an impl of the trait
-/// [`SetupComponent`](component::SetupComponent).
+/// Derive macro generating an impl of the trait `SetupComponent`.
 #[proc_macro_derive(SetupComponent)]
 pub fn derive_setup_component(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     component::impl_setup_component(input, &crate_root_ident()).into()
 }
 
-/// Creates a new [`Archetype`](archetype::Archetype) defined by
+/// Creates a new `Archetype` defined by
 /// the given component types.
 ///
-/// Providing no components still gives a valid archetype.
-/// All provided types must implement the [`Component`](component::Component)
-/// trait, and no type can be repeated. The order in which
-/// the component types are specified does not affect the result.
+/// Providing no components still gives a valid archetype. All provided types
+/// must implement the `Component` trait, and no type can be repeated. The order
+/// in which the component types are specified does not affect the result.
 ///
 /// ```ignore
 /// archetype_of!(Comp1, Comp2, ...)
@@ -90,20 +87,18 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 /// );
 /// ```
 ///
-/// The macro takes as input an
-/// [`ArchetypeComponentStorage`](archetype::ArchetypeComponentStorage) wrapping
-/// a set of component instances, followed by a closure definition whose type
-/// signature specifies the set of [`Component`](component::Component) types to
-/// look for in the set of existing components as well as the component types
-/// the closure will return instances of for inclusion in the
-/// `ArchetypeComponentStorage`. The type of each closure argument must be
-/// annotated, and has to be an immutable reference to a type implementing the
-/// `Component` trait, optionally wrapped in an [`Option`]. If the closure
-/// returns anything, the return type has to be annotated in the closure
-/// signature. It can be a single value or a tuple of values implementing the
-/// `Component` trait, or the unit type `()`, and optionally be wrapped in a
-/// `Result`. If the closure returns a `Result<C, E>`, the `setup!` expression
-/// will evaluate to a `Result<(), E>`.
+/// The macro takes as input an `ArchetypeComponentStorage` wrapping a set of
+/// component instances, followed by a closure definition whose type signature
+/// specifies the set of `Component` types to look for in the set of existing
+/// components as well as the component types the closure will return instances
+/// of for inclusion in the `ArchetypeComponentStorage`. type of each closure
+/// argument must be annotated, and has to be an immutable reference to a type
+/// implementing the `Component` trait, optionally wrapped in an [`Option`]. If
+/// the closure returns anything, the return type has to be annotated in the
+/// closure signature. It can be a single value or a tuple of values
+/// implementing the `Component` trait, or the unit type `()`, and optionally be
+/// wrapped in a `Result`. If the closure returns a `Result<C, E>`, the `setup!`
+/// expression will evaluate to a `Result<(), E>`.
 ///
 /// The body of the closure specifies what to do with each set of matching
 /// component instances present in the `ArchetypeComponentStorage`. The closure
@@ -247,14 +242,13 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// );
 /// ```
 ///
-/// The macro takes as input the [`World`](world::World) to query followed by a
-/// closure definition whose type signature specifies the set of
-/// [`Component`](component::Component) types to find matching instances of as
-/// well as whether immutable or mutable access to each component type is
-/// required. The type of each closure argument must be annotated, and has to be
-/// an immutable or mutable reference to a type implementing the `Component`
-/// trait. The exception is the first closure argument, which may be annotated
-/// with the [`EntityID`](world::EntityID) type, in which case the ID of the
+/// The macro takes as input the `World` to query followed by a closure
+/// definition whose type signature specifies the set of `Component` types to
+/// find matching instances of as well as whether immutable or mutable access to
+/// each component type is required. The type of each closure argument must be
+/// annotated, and has to be an immutable or mutable reference to a type
+/// implementing the `Component` trait. The exception is the first closure
+/// argument, which may be with the `EntityID` type, in which case the ID of the
 /// matching entity will be passed to the closure along with the component
 /// instances.
 ///
@@ -345,18 +339,15 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 ///
 /// # Concurrency
 ///
-/// When `query` is invoked, it loops through each
-/// [`ArchetypeTable`](archetype::ArchetypeTable) containing
-/// matching components and acquires its [`RwLock`](std::sync::RwLock)
-/// for shared access. This prevents concurrent changes to the table
-/// structure while the lock is held. Next, the `RwLock` guarding each
-/// of the table's [`ComponentStorage`](component::ComponentStorage)s
-/// matching the query is acquired for either shared or
-/// exclusive access depending on whether an immutable or
-/// mutable reference was used in front of the component type
-/// in the provided closure. The locks on the table and component
-/// storages are all released as soon as we move on to the next
-/// table.
+/// When `query` is invoked, it loops through each `ArchetypeTable` containing
+/// matching components and acquires its [`RwLock`](std::sync::RwLock) for
+/// shared access. This prevents concurrent changes to the table structure while
+/// the lock is held. Next, the `RwLock` guarding each of the table's
+/// `ComponentStorage`s matching the query is acquired for either shared or
+/// exclusive access depending on whether an immutable or mutable reference was
+/// used in front of the component type in the provided closure. The locks on
+/// the table and component storages are all released as soon as we move on to
+/// the next table.
 #[proc_macro]
 pub fn query(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as query::QueryInput);

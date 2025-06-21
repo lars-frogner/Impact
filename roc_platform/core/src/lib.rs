@@ -53,7 +53,7 @@ pub unsafe extern "C" fn roc_realloc(
 }
 
 /// # Safety
-/// This function delegates to [`libc::dealloc`], and so is equally unsafe.
+/// This function delegates to [`libc::free`], and so is equally unsafe.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_dealloc(c_ptr: *mut c_void, _alignment: u32) {
     unsafe {

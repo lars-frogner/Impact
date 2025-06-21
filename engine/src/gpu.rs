@@ -28,7 +28,7 @@ pub struct GraphicsContext {
 /// presentation through the connected graphics device.
 ///
 /// # Errors
-/// See [`RenderingSurface::new`] and [`GraphicsDevice::connect`].
+/// See [`RenderingSurface::new_for_window`] and [`GraphicsDevice::connect`].
 #[cfg(feature = "window")]
 pub fn initialize_for_window_rendering(window: &crate::window::Window) -> Result<GraphicsContext> {
     let wgpu_instance = create_wgpu_instance();

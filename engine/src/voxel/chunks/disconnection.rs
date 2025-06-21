@@ -151,12 +151,12 @@ type LocalRegionCount = u16;
 /// Label that ties together local voxel regions that make up a single connected
 /// voxel region within the whole voxel object. The value encodes the index of a
 /// chunk and the index of a local region within that chunk, identifying a
-/// particular [`LocalRegion`] globally.
+/// particular local region globally.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GlobalRegionLabel(u32);
 
-/// A one-sided connection from a [`LocalRegion`] in one chunk to another
-/// `LocalRegion` in an adjacent chunk. The value encodes the [`Dimension`] and
+/// A one-sided connection from a local region in one chunk to another
+/// local region in an adjacent chunk. The value encodes the [`Dimension`] and
 /// [`Side`] of the face of the chunk that the connection crosses, as well as
 /// the index of the local region connected to in the adjacent chunk.
 #[derive(Clone, Copy, Debug)]

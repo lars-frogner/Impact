@@ -5,20 +5,18 @@
 /// should be available in Roc.
 ///
 /// When applied to a Rust type, the macro will infer and register a
-/// corresponding [`RegisteredType`](crate::meta::RegisteredType), which is used to
-/// [`generate`](crate::generate) a Roc module with a type declaration and some
-/// associated utility functions.
+/// corresponding `RegisteredType`, which is used to generate a Roc module with
+/// a type declaration and some associated utility functions.
 ///
 /// The macro can additionally be applied to the type's `impl` block and
 /// selected associated constants and functions therein in order to register
-/// [`AssociatedConstant`](crate::meta::AssociatedConstant)s and
-/// [`AssociatedFunction`](crate::meta::AssociatedFunction)s whose generated
-/// Roc code will be included in the type's Roc module.
+/// associated constants and functions whose generated Roc code will be
+/// included in the type's Roc module.
 ///
 /// Note that the registration of types and associated items is only performed
 /// when the crate hosting the target type has an active feature named
 /// `roc_codegen` and the `roc_codegen` feature is active for the
-/// [`roc_integration`] crate.
+/// `roc_integration` crate.
 ///
 /// Three categories of types can be annotated with `roc`, and the requested
 /// category can be specified as an argument to the macro:

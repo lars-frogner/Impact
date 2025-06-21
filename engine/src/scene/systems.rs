@@ -23,8 +23,8 @@ use crate::{
 use impact_ecs::{query, world::World as ECSWorld};
 use nalgebra::{Similarity3, UnitVector3};
 
-/// Updates the model transform of each [`SceneGraph`](crate::scene::SceneGraph)
-/// node representing an entity that also has the
+/// Updates the model transform of each [`SceneGraph`] node representing an
+/// entity that also has the
 /// [`crate::physics::motion::components::ReferenceFrameComp`] component so that
 /// the translational, rotational and scaling parts match the origin offset,
 /// position, orientation and scaling. Also updates any flags for the node to
@@ -62,7 +62,7 @@ pub fn sync_scene_object_transforms_and_flags(
 }
 
 /// Updates the properties (position, direction, emission, extent and flags) of
-/// every light source in the [`LightStorage`](crate::light::LightStorage).
+/// every light source in the [`LightStorage`].
 pub fn sync_lights_in_storage(
     ecs_world: &ECSWorld,
     scene_graph: &SceneGraph<f32>,

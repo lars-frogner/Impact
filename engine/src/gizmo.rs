@@ -127,7 +127,7 @@ pub struct GizmoVisibilities {
     /// When visible, a semi-transparent blue sphere is rendered at the center
     /// of mass of each rigid body. The volume of the sphere is proportional to
     /// the mass of the body, with the proportionality factor (the sphere's
-    /// density) being equal to [`Self::center_of_mass_sphere_density`].
+    /// density) being equal to [`GizmoParameters::center_of_mass_sphere_density`].
     pub center_of_mass: GizmoVisibility,
     /// The visibility of the gizmo visualizing the linear velocity vector of
     /// moving entities.
@@ -136,7 +136,7 @@ pub struct GizmoVisibilities {
     /// rendered from the local origin (typically the center of mass) of moving
     /// entities. The length of the arrow is proportional to the magnitude of
     /// the velocity, with the proportionality factor being equal to
-    /// [`Self::linear_velocity_scale`].
+    /// [`GizmoParameters::linear_velocity_scale`].
     pub linear_velocity: GizmoVisibility,
     /// The visibility of the gizmo visualizing the angular velocity vector of
     /// rotating entities.
@@ -145,7 +145,7 @@ pub struct GizmoVisibilities {
     /// rendered from the local origin (typically the center of mass) of
     /// rotating entities. The length of the arrow is proportional to the
     /// magnitude of the angular velocity, with the proportionality factor being
-    /// equal to [`Self::angular_velocity_scale`].
+    /// equal to [`GizmoParameters::angular_velocity_scale`].
     pub angular_velocity: GizmoVisibility,
     /// The visibility of the gizmo visualizing the angular momentum vector of
     /// rotating rigid bodies.
@@ -154,7 +154,7 @@ pub struct GizmoVisibilities {
     /// is rendered from the center of mass of rotating rigid bodies. The length
     /// of the arrow is proportional to the magnitude of the angular momentum,
     /// with the proportionality factor being equal to
-    /// [`Self::angular_momentum_scale`].
+    /// [`GizmoParameters::angular_momentum_scale`].
     pub angular_momentum: GizmoVisibility,
     /// The visibility of the gizmo visualizing the total force on the center of
     /// mass of rigid bodies.
@@ -162,7 +162,7 @@ pub struct GizmoVisibilities {
     /// When visible, a green arrow aligned with the force direction is rendered
     /// from the center of mass of rigid bodies. The length of the arrow is
     /// proportional to the magnitude of the force, with the proportionality
-    /// factor being equal to [`Self::force_scale`].
+    /// factor being equal to [`GizmoParameters::force_scale`].
     pub force: GizmoVisibility,
     /// The visibility of the gizmo visualizing the total torque around the
     /// center of mass of rigid bodies.
@@ -170,7 +170,7 @@ pub struct GizmoVisibilities {
     /// When visible, a cyan arrow aligned with the torque axis is rendered
     /// from the center of mass of rigid bodies. The length of the arrow is
     /// proportional to the magnitude of the axis, with the proportionality
-    /// factor being equal to [`Self::torque_scale`].
+    /// factor being equal to [`GizmoParameters::torque_scale`].
     pub torque: GizmoVisibility,
     /// The visibility of the gizmos showing collider geometry for dynamic
     /// collidables.

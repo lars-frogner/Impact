@@ -403,8 +403,8 @@ impl MaterialPropertyTextureGroupID {
 
 impl MaterialHandle {
     /// Creates a new handle for a material with the given IDs for the
-    /// [`MaterialSpecification`](crate::material::MaterialSpecification),
-    /// per-instance material data and textures (the latter two are optional) .
+    /// [`MaterialSpecification`], per-instance material data and textures (the
+    /// latter two are optional) .
     pub fn new(
         material_id: MaterialID,
         material_property_feature_id: Option<InstanceFeatureID>,

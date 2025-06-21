@@ -63,7 +63,7 @@ pub trait SceneGraphNode {
 /// Represents the ID of a type of node in a [`SceneGraph`].
 pub trait SceneGraphNodeID: NodeIDToIdx + IdxToNodeID + Pod {}
 
-/// Identifier for a [`GroupNode`] in a [`SceneGraph`].
+/// Identifier for a group node in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -182,7 +182,7 @@ impl<F: Float> SceneGraph<F> {
         &self.camera_nodes
     }
 
-    /// Creates a new empty [`GroupNode`] with the given parent and
+    /// Creates a new empty group node with the given parent and
     /// parent-to-model transform and includes it in the scene graph.
     ///
     /// # Returns
@@ -293,7 +293,7 @@ impl<F: Float> SceneGraph<F> {
         camera_node_id
     }
 
-    /// Removes the [`GroupNode`] with the given ID and all its children from
+    /// Removes the group node with the given ID and all its children from
     /// the scene graph.
     ///
     /// # Panics
@@ -364,7 +364,7 @@ impl<F: Float> SceneGraph<F> {
     }
 
     /// Sets the given transform as the parent-to-model transform for the
-    /// [`GroupNode`] with the given ID.
+    /// group node with the given ID.
     pub fn set_group_to_parent_transform(
         &mut self,
         group_node_id: GroupNodeID,
