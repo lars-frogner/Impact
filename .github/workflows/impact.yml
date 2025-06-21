@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   # ───────────────────────────────────────────────────────────────
-  # Build (debug + release) and test on Linux, macOS, Windows
+  # Build (debug + release) on Linux, macOS, Windows
   # ───────────────────────────────────────────────────────────────
   build:
     strategy:
@@ -47,19 +47,19 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Build (debug, no default features)
+      - name: Debug build with no default features
         working-directory: ${{ matrix.workspace }}
         run: cargo build --no-default-features
 
-      - name: Build (debug, default features)
+      - name: Debug build with default features
         working-directory: ${{ matrix.workspace }}
         run: cargo build
 
-      - name: Build (debug, all features)
+      - name: Debug build with all features
         working-directory: ${{ matrix.workspace }}
         run: cargo build --all-features
 
-      - name: Build (release)
+      - name: Release build with default features
         working-directory: ${{ matrix.workspace }}
         run: cargo build --release
 
@@ -87,7 +87,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Test (all features)
+      - name: Test with all features
         working-directory: ${{ matrix.workspace }}
         run: cargo test --all-features --workspace
 
@@ -209,15 +209,15 @@ jobs:
         with:
           components: clippy
 
-      - name: Clippy (no default features)
+      - name: Clippy with no default features
         working-directory: ${{ matrix.workspace }}
         run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
-      - name: Clippy (default features)
+      - name: Clippy with default features
         working-directory: ${{ matrix.workspace }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Clippy (all features)
+      - name: Clippy with all features
         working-directory: ${{ matrix.workspace }}
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
@@ -273,6 +273,41 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: cargo doc
+      - name: Cargo doc
         working-directory: ${{ matrix.workspace }}
         run: cargo doc --workspace --no-deps --document-private-items
+
+  # ───────────────────────────────────────────────────────────────
+  # Check for all feature combinations (all OSes)
+  # ───────────────────────────────────────────────────────────────
+  check-features:
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        exclude:
+          - workspace: roc_platform/core
+            os: windows-latest
+          - workspace: apps/basic_app
+            os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r7kamura/rust-problem-matchers@v1
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            $HOME/.cargo/git
+            ci-target
+          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+
+      - name: Check all feature combinations
+        working-directory: ${{ matrix.workspace }}
+        run: cargo hack check --feature-powerset --no-dev-deps
