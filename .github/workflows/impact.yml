@@ -38,7 +38,7 @@ jobs:
           path: |
             $HOME/.cargo/git
             ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -78,7 +78,7 @@ jobs:
           path: |
             $HOME/.cargo/git
             ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -109,7 +109,7 @@ jobs:
         with:
           path: |
             $HOME/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-${{ matrix.target }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: ${{ runner.os }}-${{ matrix.workspace }}-${{ matrix.target }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -155,7 +155,7 @@ jobs:
             $HOME/.cargo/git
             ci-target
             .miri-sysroot
-          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: ${{ runner.os }}-${{ matrix.workspace }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -193,7 +193,7 @@ jobs:
           path: |
             $HOME/.cargo/git
             ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -231,7 +231,7 @@ jobs:
           path: |
             $HOME/.cargo/git
             ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -260,7 +260,7 @@ jobs:
           path: |
             $HOME/.cargo/git
             ci-target
-          key: docs-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          key: docs-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
 
