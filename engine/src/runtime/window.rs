@@ -36,11 +36,11 @@ type RuntimeCreator<UI> = Box<dyn FnOnce(Window) -> Result<Runtime<UI>>>;
 
 impl<UI> Runtime<UI> {
     fn handle_window_event_for_engine(&self, event: &WindowEvent) -> Result<()> {
-        self.engine.handle_window_event(event)
+        self.engine().handle_window_event(event)
     }
 
     fn handle_device_event_for_engine(&self, event: &DeviceEvent) -> Result<()> {
-        self.engine.handle_device_event(event)
+        self.engine().handle_device_event(event)
     }
 }
 
@@ -49,11 +49,11 @@ where
     UI: ResponsiveUserInterface,
 {
     fn handle_window_event_for_ui(&mut self, event: &WindowEvent) -> UIEventHandlingResponse {
-        self.user_interface.handle_window_event(event)
+        self.user_interface().handle_window_event(event)
     }
 
     fn handle_device_event_for_ui(&mut self, event: &DeviceEvent) {
-        self.user_interface.handle_device_event(event);
+        self.user_interface().handle_device_event(event);
     }
 }
 
