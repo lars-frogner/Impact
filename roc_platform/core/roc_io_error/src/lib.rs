@@ -1,5 +1,5 @@
 //! This crate provides common functionality for Roc to interface with `std::io::Error`
-use roc_std::{roc_refcounted_noop_impl, RocRefcounted, RocStr};
+use roc_std::{RocRefcounted, RocStr, roc_refcounted_noop_impl};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[repr(u8)]
