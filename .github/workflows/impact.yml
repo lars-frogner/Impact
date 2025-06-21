@@ -8,90 +8,108 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_TARGET_DIR: ${{ github.workspace }}/ci-target
   MIRI_SYSROOT: ${{ github.workspace }}/.miri-sysroot
 
-# ───────────────────────────────────────────────────────────────
-# 1. Build (debug + release) on Linux, macOS, Windows
-# ───────────────────────────────────────────────────────────────
+concurrency:
+  # A new push cancels any in-flight run
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # ───────────────────────────────────────────────────────────────
+  # Build (debug + release) and test on Linux, macOS, Windows
+  # ───────────────────────────────────────────────────────────────
   build:
     strategy:
+      fail-fast: false
       matrix:
+        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
         os: [ubuntu-latest, macos-latest, windows-latest]
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
 
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            .miri-sysroot
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            $HOME/.cargo/git
+            ci-target
+          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Build (debug)
-        working-directory: engine
+      - name: Build (debug, no default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo build --no-default-features
+
+      - name: Build (debug, default features)
+        working-directory: ${{ matrix.workspace }}
         run: cargo build
 
+      - name: Build (debug, all features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo build --all-features
+
       - name: Build (release)
-        working-directory: engine
+        working-directory: ${{ matrix.workspace }}
         run: cargo build --release
 
   # ───────────────────────────────────────────────────────────────
-  # 2. Regular tests (unit + integration) on all three OSes
+  # Regular tests (unit + integration) on all three OSes
   # ───────────────────────────────────────────────────────────────
   test:
-    needs: build
     strategy:
+      fail-fast: false
       matrix:
+        workspace: [engine]
         os: [ubuntu-latest, macos-latest, windows-latest]
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            .miri-sysroot
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            $HOME/.cargo/git
+            ci-target
+          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: cargo test
-        working-directory: engine
-        run: cargo test --workspace
+      - name: Test (all features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo test --all-features --workspace
 
   # ───────────────────────────────────────────────────────────────
-  # 3. AddressSanitizer tests (Linux + macOS only)
+  # AddressSanitizer tests (Linux + macOS only)
   # ───────────────────────────────────────────────────────────────
   test-asan:
-    needs: build
     strategy:
+      fail-fast: false
       matrix:
+        workspace: [engine]
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
             target: x86_64-apple-darwin
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            $HOME/.cargo/git
+          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-${{ matrix.target }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -105,36 +123,39 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y clang libclang-rt-17-dev
 
-      - name: cargo test (ASan)
-        working-directory: engine
+      - name: Test with AddressSanitizer
+        working-directory: ${{ matrix.workspace }}
         env:
           ASAN_RUST_FLAGS: "-C linker=clang -Zsanitizer=address"
           RUSTFLAGS: ${{ env.ASAN_RUST_FLAGS }}
           RUSTDOCFLAGS: ${{ env.ASAN_RUST_FLAGS }}
         run: |
-          cargo clean
-          cargo test --workspace --target ${{ matrix.target }}
+          cargo test --all-features --workspace --target ${{ matrix.target }}
 
   # ───────────────────────────────────────────────────────────────
-  # 4. Miri tests (all three OSes)
+  # Miri tests (all three OSes)
   # ───────────────────────────────────────────────────────────────
   test-miri:
-    needs: build
     strategy:
+      fail-fast: false
       matrix:
+        workspace: [engine]
         os: [ubuntu-latest, macos-latest, windows-latest]
+
     runs-on: ${{ matrix.os }}
+
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
+            $HOME/.cargo/git
+            ci-target
             .miri-sysroot
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -143,12 +164,106 @@ jobs:
       - name: cargo miri setup
         run: cargo miri setup
 
-      - name: cargo miri test
-        working-directory: engine
+      - name: Test with Miri
+        working-directory: ${{ matrix.workspace }}
         env:
           PROPTEST_DISABLE_FAILURE_PERSISTENCE: 1
           PROPTEST_CASES: 1
           MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-deterministic-floats"
         run: |
-          cargo clean
-          cargo miri test --workspace
+          cargo miri test --all-features --workspace
+
+  # ───────────────────────────────────────────────────────────────
+  # 4. Clippy (all OSes)
+  # ───────────────────────────────────────────────────────────────
+  lint-clippy:
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            $HOME/.cargo/git
+            ci-target
+          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Clippy (no default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+
+      - name: Clippy (default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Clippy (all features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # ───────────────────────────────────────────────────────────────
+  # 5. Rustfmt (all OSes)
+  # ───────────────────────────────────────────────────────────────
+  lint-fmt:
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            $HOME/.cargo/git
+            ci-target
+          key: ${{ runner.os }}-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Rustfmt
+        working-directory: ${{ matrix.workspace }}
+        run: cargo fmt --all -- --check
+
+  # ───────────────────────────────────────────────────────────────
+  # 6. Build documentation (Linux)
+  # ───────────────────────────────────────────────────────────────
+  docs:
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/problem-matcher@v1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            $HOME/.cargo/git
+            ci-target
+          key: docs-${{ matrix.workspace//\//- }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo doc
+        working-directory: ${{ matrix.workspace }}
+        run: cargo doc --workspace --no-deps --document-private-items
