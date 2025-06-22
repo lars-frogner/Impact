@@ -1,14 +1,9 @@
 //! Buffering of light source data for rendering.
 
 use crate::{
-    gpu::rendering::{
-        ShadowMappingConfig,
-        shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture},
-    },
-    light::{
-        AmbientLight, LightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
-        ShadowableOmnidirectionalLight, ShadowableUnidirectionalLight, UnidirectionalLight,
-    },
+    AmbientLight, LightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
+    ShadowableOmnidirectionalLight, ShadowableUnidirectionalLight, UnidirectionalLight,
+    shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
 };
 use impact_containers::CollectionChange;
 use impact_gpu::{
@@ -17,6 +12,7 @@ use impact_gpu::{
     uniform::{
         self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
     },
+    wgpu,
 };
 use impact_math::ConstStringHash64;
 use std::sync::OnceLock;

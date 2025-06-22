@@ -11,9 +11,7 @@ use crate::{
             RenderAttachmentQuantitySet,
         },
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-        shadow_map::ShadowCubemapTexture,
     },
-    light::buffer::LightGPUBufferManager,
     mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
@@ -22,6 +20,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_light::{buffer::LightGPUBufferManager, shadow_map::ShadowCubemapTexture};
 use std::sync::LazyLock;
 
 /// Shader template for the shadowable omnidirectional light pass, which

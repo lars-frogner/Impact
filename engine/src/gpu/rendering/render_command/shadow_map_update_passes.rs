@@ -10,9 +10,8 @@ use crate::{
             omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
             unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
         },
-        shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
     },
-    light::{LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
+    light,
     material::{MaterialLibrary, MaterialShaderInput},
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     model::{
@@ -26,6 +25,11 @@ use anyhow::{Result, anyhow};
 use impact_containers::HashSet;
 use impact_geometry::CubemapFace;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_light::{
+    LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
+    buffer::LightGPUBufferManager,
+    shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
+};
 use std::borrow::Cow;
 
 /// Passes for filling the faces of each omnidirectional light shadow cubemap.
@@ -278,7 +282,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 // Offset the light's buffer range ID with the face index to get the index for
                 // the range of transforms for the specific cubemap face
                 let instance_range_id =
-                    light_id.as_instance_feature_buffer_range_id() + cubemap_face.as_idx_u32();
+                    light::light_id_to_instance_feature_buffer_range_id(light_id)
+                        + cubemap_face.as_idx_u32();
 
                 if shadow_mapping_enabled {
                     voxel_render_commands
@@ -637,7 +642,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 // Offset the light's buffer range ID with the cascade index to get the index
                 // for the range of transforms for the specific cascade
                 let instance_range_id =
-                    light_id.as_instance_feature_buffer_range_id() + cascade_idx;
+                    light::light_id_to_instance_feature_buffer_range_id(light_id) + cascade_idx;
 
                 let cascade_frustum = unidirectional_light
                     .create_light_space_orthographic_obb_for_cascade(cascade_idx);

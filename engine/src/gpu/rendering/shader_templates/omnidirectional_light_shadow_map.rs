@@ -2,7 +2,6 @@
 
 use crate::{
     gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-    light::buffer::LightGPUBufferManager,
     mesh::buffer::MeshVertexAttributeLocation,
     model::transform::InstanceModelLightTransform,
     rendering_template_source,
@@ -11,6 +10,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_light::buffer::LightGPUBufferManager;
 use std::sync::LazyLock;
 
 /// Shader template for omnidirectional light shadow map update passes, which

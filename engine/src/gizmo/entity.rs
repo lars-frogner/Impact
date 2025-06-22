@@ -2,13 +2,12 @@
 
 use crate::{
     gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp},
-    light::components::{
-        OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp,
-        ShadowableUnidirectionalLightComp,
-    },
     physics::{collision::components::CollidableComp, motion::components::ReferenceFrameComp},
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_light::components::{
+    OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalLightComp,
+};
 
 /// Adds the [`GizmosComp`] component to the new entity if it has any of the
 /// relevant components. The component is initialized based on which gizmos are

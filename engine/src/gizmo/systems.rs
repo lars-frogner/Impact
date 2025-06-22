@@ -15,13 +15,6 @@ use crate::{
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
     },
-    light::{
-        LightID, LightStorage,
-        components::{
-            OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp,
-            ShadowableUnidirectionalLightComp,
-        },
-    },
     model::{
         InstanceFeatureManager,
         transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
@@ -47,6 +40,13 @@ use crate::{
 use approx::abs_diff_ne;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_light::{
+    LightID, LightStorage,
+    components::{
+        OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp,
+        ShadowableUnidirectionalLightComp,
+    },
+};
 use impact_math::Angle;
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::iter;

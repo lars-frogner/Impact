@@ -14,7 +14,6 @@ pub use graph::{
 
 use crate::{
     camera::SceneCamera,
-    light::LightStorage,
     material::{MaterialLibrary, MaterialLibraryState},
     mesh::{MeshRepository, MeshRepositoryState},
     model::InstanceFeatureManager,
@@ -23,6 +22,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_light::LightStorage;
 use roc_integration::roc;
 use std::sync::RwLock;
 

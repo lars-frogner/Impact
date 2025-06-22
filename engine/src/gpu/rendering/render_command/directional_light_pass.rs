@@ -22,18 +22,18 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    light::{
-        LightFlags, LightStorage,
-        buffer::{
-            LightGPUBufferManager, OmnidirectionalLightShadowMapManager,
-            UnidirectionalLightShadowMapManager,
-        },
-    },
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_light::{
+    LightFlags, LightStorage,
+    buffer::{
+        LightGPUBufferManager, OmnidirectionalLightShadowMapManager,
+        UnidirectionalLightShadowMapManager,
+    },
+};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to directional lights.

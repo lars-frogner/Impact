@@ -13,7 +13,6 @@ use crate::{
         },
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     },
-    light::buffer::LightGPUBufferManager,
     mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
@@ -23,6 +22,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_light::buffer::LightGPUBufferManager;
 use std::sync::LazyLock;
 
 /// Shader template for the ambient light pass, which computes the reflected

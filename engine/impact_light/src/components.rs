@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
-use crate::light::{Illumninance, LightID, LuminousIntensity};
+use crate::{Illumninance, LightID, LuminousIntensity};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use impact_math::Degrees;

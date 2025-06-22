@@ -6,7 +6,6 @@ use crate::{
     assets::Assets,
     camera::SceneCamera,
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
-    light::{LightStorage, buffer::LightGPUBufferManager},
     mesh::{
         MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
     },
@@ -20,6 +19,7 @@ use crate::{
 use anyhow::Result;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
+use impact_light::{LightStorage, buffer::LightGPUBufferManager};
 use std::{
     borrow::Cow,
     collections::hash_map::Entry,
