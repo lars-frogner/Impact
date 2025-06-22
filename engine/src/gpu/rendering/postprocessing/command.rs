@@ -1,11 +1,13 @@
 //! Commands for controlling post-processing.
 
-use super::{Postprocessor, capturing::SensorSensitivity};
 use crate::{
     command::{ModifiedActiveState, ToActiveState},
-    gpu::{
-        rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
-        texture::attachment::RenderAttachmentQuantity,
+    gpu::rendering::{
+        attachment::RenderAttachmentQuantity,
+        postprocessing::{
+            Postprocessor,
+            capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
+        },
     },
 };
 use anyhow::Result;

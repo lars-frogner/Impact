@@ -2,21 +2,15 @@
 
 use super::{INVERTED_FRONT_FACE, STANDARD_FRONT_FACE};
 use crate::{
-    gpu::{
-        GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
-        rendering::{
-            render_command::begin_single_render_pass, resource::SynchronizedRenderResources,
+    gpu::rendering::{
+        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        render_command::begin_single_render_pass,
+        resource::SynchronizedRenderResources,
+        shader_templates::{
+            omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
+            unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
         },
-        shader::{
-            ShaderManager,
-            template::{
-                omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
-                unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
-            },
-        },
-        texture::shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
+        shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
     },
     light::{LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
     material::{MaterialLibrary, MaterialShaderInput},
@@ -31,12 +25,13 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_containers::HashSet;
 use impact_geometry::CubemapFace;
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use std::borrow::Cow;
 
 /// Passes for filling the faces of each omnidirectional light shadow cubemap.
 #[derive(Debug)]
 pub struct OmnidirectionalLightShadowMapUpdatePasses {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
@@ -47,7 +42,7 @@ pub struct OmnidirectionalLightShadowMapUpdatePasses {
 /// Passes for filling the cascades of each unidirectional light shadow map.
 #[derive(Debug)]
 pub struct UnidirectionalLightShadowMapUpdatePasses {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
@@ -228,7 +223,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::LightIdx,
+                RenderingPushConstantVariant::LightIdx,
                 || light_idx,
             );
     }
@@ -583,14 +578,14 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::LightIdx,
+                RenderingPushConstantVariant::LightIdx,
                 || light_idx,
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::ShadowMapArrayIdx,
+                RenderingPushConstantVariant::ShadowMapArrayIdx,
                 || cascade_idx,
             );
     }

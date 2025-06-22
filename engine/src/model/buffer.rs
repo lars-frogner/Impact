@@ -1,12 +1,13 @@
 //! Buffering of model instance data for rendering.
 
 use crate::{
-    gpu::{GraphicsDevice, buffer::GPUBuffer},
+    mesh::buffer::new_vertex_gpu_buffer_with_bytes,
     model::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,
     },
 };
+use impact_gpu::{buffer::GPUBuffer, device::GraphicsDevice};
 use std::{borrow::Cow, ops::Range};
 
 /// Owner and manager of a vertex GPU buffer for model instance
@@ -35,7 +36,7 @@ impl InstanceFeatureGPUBufferManager {
             "Tried to create GPU buffer manager for empty instance feature buffer"
         );
 
-        let feature_gpu_buffer = GPUBuffer::new_vertex_buffer_with_bytes(
+        let feature_gpu_buffer = new_vertex_gpu_buffer_with_bytes(
             graphics_device,
             raw_buffer,
             feature_buffer.n_valid_bytes(),
@@ -116,7 +117,7 @@ impl InstanceFeatureGPUBufferManager {
             // If the number of valid features exceeds the capacity of the existing buffer,
             // we create a new one that is large enough for all the features (also the ones
             // not currently valid)
-            self.feature_gpu_buffer = GPUBuffer::new_vertex_buffer_with_bytes(
+            self.feature_gpu_buffer = new_vertex_gpu_buffer_with_bytes(
                 graphics_device,
                 bytemuck::cast_slice(feature_buffer.raw_buffer()),
                 n_valid_bytes,

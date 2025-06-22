@@ -3,22 +3,15 @@
 use crate::{
     camera::{SceneCamera, buffer::CameraGPUBufferManager},
     gpu::{
-        GraphicsDevice, compute,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
+        compute::{self, shader_templates::voxel_chunk_culling::VoxelChunkCullingShaderTemplate},
         rendering::{
             BasicRenderingConfig,
             postprocessing::Postprocessor,
+            push_constant::RenderingPushConstantVariant,
             render_command::{self, STANDARD_FRONT_FACE},
             resource::SynchronizedRenderResources,
+            shader_templates::voxel_geometry::VoxelGeometryShaderTemplate,
             surface::RenderingSurface,
-        },
-        shader::{
-            ShaderManager,
-            template::{
-                voxel_chunk_culling::VoxelChunkCullingShaderTemplate,
-                voxel_geometry::VoxelGeometryShaderTemplate,
-            },
         },
     },
     mesh::buffer::VertexBufferable,
@@ -35,11 +28,15 @@ use crate::{
         VoxelObjectID,
         entity::VOXEL_MODEL_ID,
         mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
-        resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
+        resource::{
+            VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager, VoxelPushConstantGroup,
+            VoxelPushConstantVariant,
+        },
     },
 };
 use anyhow::{Result, anyhow};
 use impact_geometry::{Frustum, OrientedBox};
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
 
@@ -53,7 +50,7 @@ pub struct VoxelRenderCommands {
 /// indirect draw call arguments for the chunks accordingly.
 #[derive(Debug)]
 struct VoxelChunkCullingPass {
-    push_constants: PushConstantGroup,
+    push_constants: VoxelPushConstantGroup,
     pipeline_for_non_indexed: wgpu::ComputePipeline,
     pipeline_for_indexed: wgpu::ComputePipeline,
 }
@@ -63,7 +60,7 @@ struct VoxelChunkCullingPass {
 /// [`GeometryPass`](crate::gpu::rendering::render_command::geometry_pass::GeometryPass).
 #[derive(Debug)]
 pub struct VoxelGeometryPipeline {
-    push_constants: PushConstantGroup,
+    push_constants: VoxelPushConstantGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     depth_stencil_state: Option<wgpu::DepthStencilState>,
     polygon_mode: wgpu::PolygonMode,
@@ -277,21 +274,21 @@ impl VoxelChunkCullingPass {
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::CullingFrustum,
+                VoxelPushConstantVariant::CullingFrustum,
                 || culling_frustum,
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::ChunkCount,
+                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::ChunkCount),
                 || chunk_count,
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::InstanceIdx,
+                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::InstanceIdx),
                 || instance_idx,
             );
     }
@@ -598,21 +595,23 @@ impl VoxelGeometryPipeline {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                VoxelPushConstantVariant::Rendering(
+                    RenderingPushConstantVariant::InverseWindowDimensions,
+                ),
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::FrameCounter,
+                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::FrameCounter),
                 || frame_counter,
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::Exposure,
+                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::Exposure),
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }
@@ -625,7 +624,7 @@ impl VoxelGeometryPipeline {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::GenericVec3f32,
+                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::GenericVec3f32),
                 || voxel_object_buffer_manager.origin_offset_in_root(),
             );
     }

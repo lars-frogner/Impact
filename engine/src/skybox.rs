@@ -2,7 +2,7 @@
 
 pub mod resource;
 
-use crate::gpu::texture::TextureID;
+use crate::assets::TextureID;
 use bytemuck::{Pod, Zeroable};
 use roc_integration::roc;
 

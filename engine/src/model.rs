@@ -3,14 +3,15 @@
 pub mod buffer;
 pub mod transform;
 
-use roc_integration::roc;
 pub use transform::register_model_feature_types;
 
-use crate::{gpu::GraphicsDevice, material::MaterialHandle, mesh::MeshID};
+use crate::{material::MaterialHandle, mesh::MeshID};
 use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{AlignedByteVec, Alignment, HashMap, KeyIndexMapper, NoHashKeyIndexMapper};
+use impact_gpu::device::GraphicsDevice;
 use impact_math::{self, Hash64};
+use roc_integration::roc;
 use std::{
     borrow::Cow,
     cmp,

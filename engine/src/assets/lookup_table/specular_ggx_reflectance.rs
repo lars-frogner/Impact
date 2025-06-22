@@ -1,18 +1,18 @@
 //! Specular GGX reflectance lookup table.
 
 use crate::{
-    assets::Assets,
-    gpu::{
-        GraphicsDevice,
-        rendering::brdf,
-        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        texture::{
-            self, SamplerConfig, SamplerID, TexelDescription, TextureAddressingConfig,
-            TextureFilteringConfig, TextureID,
-        },
-    },
+    assets::{Assets, TextureID},
+    gpu::rendering::brdf,
 };
 use anyhow::Result;
+use impact_gpu::{
+    device::GraphicsDevice,
+    resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+    texture::{
+        self, SamplerConfig, SamplerID, TexelDescription, TextureAddressingConfig,
+        TextureFilteringConfig,
+    },
+};
 use impact_math::{hash32, hash64};
 use std::sync::{LazyLock, OnceLock};
 

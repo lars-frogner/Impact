@@ -1,14 +1,9 @@
 //! Buffering of light source data for rendering.
 
 use crate::{
-    assert_uniform_valid,
-    gpu::{
-        GraphicsDevice,
-        rendering::ShadowMappingConfig,
-        texture::shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture},
-        uniform::{
-            self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
-        },
+    gpu::rendering::{
+        ShadowMappingConfig,
+        shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture},
     },
     light::{
         AmbientLight, LightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
@@ -16,6 +11,13 @@ use crate::{
     },
 };
 use impact_containers::CollectionChange;
+use impact_gpu::{
+    assert_uniform_valid,
+    device::GraphicsDevice,
+    uniform::{
+        self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
+    },
+};
 use impact_math::ConstStringHash64;
 use std::sync::OnceLock;
 

@@ -1,32 +1,31 @@
 //! Computation of the average luminance of the captured scene.
 
-use crate::{
-    assert_uniform_valid,
-    gpu::{
-        GraphicsDevice,
-        compute::ComputePass,
-        query::TimestampQueryRegistry,
-        rendering::{
-            postprocessing::Postprocessor,
-            render_command::storage_buffer_result_copy_command::StorageBufferResultCopyCommand,
-            surface::RenderingSurface,
+use crate::gpu::{
+    compute::{
+        ComputePass,
+        shader_templates::{
+            luminance_histogram::LuminanceHistogramShaderTemplate,
+            luminance_histogram_average::LuminanceHistogramAverageShaderTemplate,
         },
-        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{
-            ShaderManager,
-            template::{
-                luminance_histogram::LuminanceHistogramShaderTemplate,
-                luminance_histogram_average::LuminanceHistogramAverageShaderTemplate,
-            },
-        },
-        storage::{StorageBufferID, StorageGPUBuffer, StorageGPUBufferManager},
-        texture::attachment::RenderAttachmentTextureManager,
-        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+    },
+    rendering::{
+        attachment::RenderAttachmentTextureManager, postprocessing::Postprocessor,
+        render_command::storage_buffer_result_copy_command::StorageBufferResultCopyCommand,
+        surface::RenderingSurface,
     },
 };
 use anyhow::{Result, bail};
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::{
+    assert_uniform_valid,
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+    shader::ShaderManager,
+    storage::{StorageBufferID, StorageGPUBuffer, StorageGPUBufferManager},
+    uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+};
 use impact_math::{Bounds, ConstStringHash64, UpperExclusiveBounds, hash64};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, mem, sync::LazyLock};

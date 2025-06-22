@@ -2,27 +2,33 @@
 
 pub mod lookup_table;
 
-use crate::{
-    gpu::{
-        GraphicsDevice,
-        texture::{
-            Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
-            TextureLookupTable, mipmap::MipmapperGenerator,
-        },
-    },
-    io::util::parse_ron_file,
-    mesh::TriangleMeshSpecification,
-};
+use crate::{io::util::parse_ron_file, mesh::TriangleMeshSpecification};
 use anyhow::{Result, bail};
 use impact_containers::HashMap;
-use impact_math::hash32;
+use impact_gpu::{
+    device::GraphicsDevice,
+    texture::{
+        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureLookupTable,
+        mipmap::MipmapperGenerator,
+    },
+};
+use impact_math::{hash32, stringhash32_newtype};
 use log::debug;
+use roc_integration::roc;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::hash_map::Entry,
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+stringhash32_newtype!(
+    /// Identifier for specific textures.
+    /// Wraps a [`StringHash32`](impact_math::StringHash32).
+    #[roc(parents = "Rendering")]
+    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+    [pub] TextureID
+);
 
 /// Container for any rendering assets that never change.
 #[derive(Debug)]
@@ -77,6 +83,15 @@ pub enum TextureSpecification {
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
     },
+}
+
+#[roc(dependencies = [impact_math::Hash32])]
+impl TextureID {
+    #[roc(body = "Hashing.hash_str_32(name)")]
+    /// Creates a texture ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash32!(name))
+    }
 }
 
 impl Assets {
@@ -428,9 +443,9 @@ impl Assets {
         self.load_texture_from_generated_lookup_table(
             texture_name,
             || {
-                TextureLookupTable::<T>::read_from_file(table_file_path).or_else(|_| {
+                lookup_table::read_lookup_table_from_file(table_file_path).or_else(|_| {
                     let table = compute_table();
-                    table.save_to_file(table_file_path)?;
+                    lookup_table::save_lookup_table_to_file(&table, table_file_path)?;
                     Ok(table)
                 })
             },

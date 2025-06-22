@@ -1,19 +1,8 @@
-pub mod buffer;
 pub mod compute;
-pub mod device;
-pub mod indirect;
-pub mod push_constant;
-pub mod query;
 pub mod rendering;
-pub mod resource_group;
-pub mod shader;
-pub mod storage;
-pub mod texture;
-pub mod uniform;
-
-pub use device::GraphicsDevice;
 
 use anyhow::Result;
+use impact_gpu::device::GraphicsDevice;
 use rendering::surface::RenderingSurface;
 
 /// Interface to a graphics device and a surface that can be rendered to.

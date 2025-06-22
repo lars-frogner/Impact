@@ -4,17 +4,9 @@ pub mod average_luminance;
 pub mod bloom;
 pub mod dynamic_range_compression;
 
-use crate::gpu::{
-    GraphicsDevice,
-    query::TimestampQueryRegistry,
-    rendering::{
-        postprocessing::Postprocessor, resource::SynchronizedRenderResources,
-        surface::RenderingSurface,
-    },
-    resource_group::GPUResourceGroupManager,
-    shader::ShaderManager,
-    storage::StorageGPUBufferManager,
-    texture::attachment::RenderAttachmentTextureManager,
+use crate::gpu::rendering::{
+    attachment::RenderAttachmentTextureManager, postprocessing::Postprocessor,
+    resource::SynchronizedRenderResources, surface::RenderingSurface,
 };
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
@@ -22,9 +14,12 @@ use bloom::{BloomConfig, BloomRenderCommands};
 use dynamic_range_compression::{
     DynamicRangeCompressionConfig, DynamicRangeCompressionRenderCommands,
 };
+use impact_gpu::{
+    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
+    shader::ShaderManager, storage::StorageGPUBufferManager,
+};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
-use std::mem;
 
 /// Configuration options for a capturing camera.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -235,21 +230,9 @@ impl CapturingCamera {
         })
     }
 
-    /// Returns the size of the push constant obtained by calling
-    /// [`Self::exposure_push_constant`].
-    pub const fn exposure_push_constant_size() -> u32 {
-        mem::size_of::<f32>() as u32
-    }
-
     /// Returns the exposure push constant.
     pub fn exposure_push_constant(&self) -> f32 {
         self.exposure
-    }
-
-    /// Returns the size of the push constant obtained by calling
-    /// [`Self::inverse_exposure_push_constant`].
-    pub const fn inverse_exposure_push_constant_size() -> u32 {
-        mem::size_of::<f32>() as u32
     }
 
     /// Returns the inverse exposure push constant.

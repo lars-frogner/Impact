@@ -4,6 +4,7 @@ members = [
     "impact_ecs",
     "impact_ecs/impact_ecs_macros",
     "impact_geometry",
+    "impact_gpu",
     "impact_math",
     "impact_profiling",
     "impact_dev_ui",
@@ -165,13 +166,19 @@ egui = { version = "0.31", features = ["log"], optional = true }
 egui-wgpu = { version = "0.31", optional = true }
 egui-winit = { version = "0.31", optional = true }
 glam = "0.30"
+half = { version = "2.6", features = ["bytemuck"] }
+hashbrown = "0.15"
 image = { version = "0.25", default-features = false, features = [
     "png",
     "jpeg",
 ] }
+impact_containers = { path = "impact_containers" }
+impact_ecs = { path = "impact_ecs" }
+impact_geometry = { path = "impact_geometry" }
+impact_gpu = { path = "impact_gpu", features = ["serde"] }
+impact_math = { path = "impact_math", features = ["serde"] }
+impact_profiling = { path = "impact_profiling", optional = true }
 inventory = { workspace = true }
-half = { version = "2.6", features = ["bytemuck"] }
-hashbrown = "0.15"
 log = "0.4"
 naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
@@ -188,6 +195,7 @@ ply-rs = "0.1"
 pollster = "0.4"
 rand = { workspace = true }
 regex = "1.11"
+roc_integration = { path = "../roc_integration" }
 ron = "0.10"
 roots = "0.0.8"
 serde = { workspace = true }
@@ -197,13 +205,6 @@ tobj = "4.0"
 wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30", features = ["serde"], optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
-
-impact_containers = { path = "impact_containers" }
-impact_ecs = { path = "impact_ecs" }
-impact_geometry = { path = "impact_geometry" }
-impact_math = { path = "impact_math", features = ["serde"] }
-impact_profiling = { path = "impact_profiling", optional = true }
-roc_integration = { path = "../roc_integration" }
 
 [dev-dependencies]
 clap = { workspace = true }

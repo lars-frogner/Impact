@@ -3,27 +3,25 @@
 use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
     camera::buffer::CameraGPUBufferManager,
-    gpu::{
-        GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
-        rendering::{
-            postprocessing::Postprocessor, render_command::begin_single_render_pass,
-            resource::SynchronizedRenderResources,
-        },
-        shader::{ShaderManager, template::skybox::SkyboxShaderTemplate},
-        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    gpu::rendering::{
+        attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+        postprocessing::Postprocessor,
+        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        render_command::begin_single_render_pass,
+        resource::SynchronizedRenderResources,
+        shader_templates::skybox::SkyboxShaderTemplate,
     },
     mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     skybox::Skybox,
 };
 use anyhow::{Result, anyhow};
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use std::borrow::Cow;
 
 /// Pass for filling in emitted luminance from the skybox.
 #[derive(Debug)]
 pub struct SkyboxPass {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     push_constant_ranges: Vec<wgpu::PushConstantRange>,
     color_target_state: wgpu::ColorTargetState,
@@ -159,14 +157,14 @@ impl SkyboxPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::Exposure,
+                RenderingPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::CameraRotationQuaternion,
+                RenderingPushConstantVariant::CameraRotationQuaternion,
                 || camera_buffer_manager.camera_rotation_quaternion_push_constant(),
             );
     }

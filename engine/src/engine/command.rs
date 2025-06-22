@@ -8,6 +8,7 @@ use crate::{
         motion::{MotionDirection, MotionState},
     },
     gpu::{
+        rendering::attachment::RenderAttachmentQuantity,
         rendering::{
             command::RenderingCommand,
             postprocessing::{
@@ -19,7 +20,6 @@ use crate::{
             },
             screen_capture::command::{CaptureCommand, SaveShadowMapsFor},
         },
-        texture::attachment::RenderAttachmentQuantity,
     },
     instrumentation::command::InstrumentationCommand,
     physics::{

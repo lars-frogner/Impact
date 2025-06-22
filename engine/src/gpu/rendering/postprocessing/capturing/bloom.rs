@@ -1,40 +1,37 @@
 //! Render passes for applying bloom.
 
 use crate::{
-    gpu::{
-        GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
-        rendering::{
-            render_command::{
-                additive_blend_state,
-                postprocessing_pass::{
-                    create_postprocessing_render_pipeline,
-                    create_postprocessing_render_pipeline_layout,
-                },
-                render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
-            },
-            resource::SynchronizedRenderResources,
-        },
-        shader::{
-            ShaderID, ShaderManager,
-            template::{
-                bloom_blending::BloomBlendingShaderTemplate,
-                bloom_downsampling::BloomDownsamplingShaderTemplate,
-                bloom_upsampling_blur::BloomUpsamplingBlurShaderTemplate,
-            },
-        },
-        texture::attachment::{
+    gpu::rendering::{
+        attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,
             RenderAttachmentInputDescriptionSet,
             RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
             RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
+        },
+        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        render_command::{
+            additive_blend_state,
+            postprocessing_pass::{
+                create_postprocessing_render_pipeline, create_postprocessing_render_pipeline_layout,
+            },
+            render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
+        },
+        resource::SynchronizedRenderResources,
+        shader_templates::{
+            bloom_blending::BloomBlendingShaderTemplate,
+            bloom_downsampling::BloomDownsamplingShaderTemplate,
+            bloom_upsampling_blur::BloomUpsamplingBlurShaderTemplate,
         },
     },
     mesh::{self, VertexAttributeSet},
 };
 use anyhow::{Result, anyhow};
 use approx::abs_diff_ne;
+use impact_gpu::{
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    shader::{ShaderID, ShaderManager},
+};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, num::NonZeroU32};
 
@@ -62,7 +59,7 @@ pub struct BloomConfig {
 pub(super) struct BloomRenderCommands {
     n_downsamplings: usize,
     n_upsamplings: usize,
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     input_descriptions: RenderAttachmentInputDescriptionSet,
     downsampling_pipeline: wgpu::RenderPipeline,
     upsampling_blur_pipeline: wgpu::RenderPipeline,
@@ -121,8 +118,9 @@ impl BloomRenderCommands {
 
         // This is not necessarily the full window dimensions, but the dimensions of the
         // mip level we are outputting to
-        let push_constants =
-            PushConstantGroup::for_fragment([PushConstantVariant::InverseWindowDimensions]);
+        let push_constants = RenderingPushConstantGroup::for_fragment([
+            RenderingPushConstantVariant::InverseWindowDimensions,
+        ]);
         let push_constant_ranges = push_constants.create_ranges();
 
         let mut input_descriptions =
@@ -554,7 +552,7 @@ impl BloomRenderCommands {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                RenderingPushConstantVariant::InverseWindowDimensions,
                 || Self::compute_inverse_output_view_size(texture, output_mip_level),
             );
     }

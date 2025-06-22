@@ -1,32 +1,28 @@
 //! Render passes for computing and applying ambient occlusion.
 
-use crate::{
-    assert_uniform_valid,
-    gpu::{
-        GraphicsDevice,
-        query::TimestampQueryRegistry,
-        rendering::{
-            postprocessing::Postprocessor,
-            render_command::{StencilValue, postprocessing_pass::PostprocessingRenderPass},
-            resource::SynchronizedRenderResources,
-            surface::RenderingSurface,
-        },
-        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{
-            ShaderManager,
-            template::{
-                ambient_occlusion_application::AmbientOcclusionApplicationShaderTemplate,
-                ambient_occlusion_computation::AmbientOcclusionComputationShaderTemplate,
-                passthrough::PassthroughShaderTemplate,
-            },
-        },
-        texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+use crate::gpu::rendering::{
+    attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    render_command::{StencilValue, postprocessing_pass::PostprocessingRenderPass},
+    resource::SynchronizedRenderResources,
+    shader_templates::{
+        ambient_occlusion_application::AmbientOcclusionApplicationShaderTemplate,
+        ambient_occlusion_computation::AmbientOcclusionComputationShaderTemplate,
+        passthrough::PassthroughShaderTemplate,
     },
+    surface::RenderingSurface,
 };
 use anyhow::Result;
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::{
+    assert_uniform_valid,
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+    shader::ShaderManager,
+    uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+};
 use impact_math::{ConstStringHash64, Float, HaltonSequence, hash64};
 use nalgebra::Vector4;
 use serde::{Deserialize, Serialize};

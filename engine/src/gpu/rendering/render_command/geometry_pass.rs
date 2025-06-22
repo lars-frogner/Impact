@@ -5,20 +5,20 @@ use crate::{
     camera::buffer::CameraGPUBufferManager,
     gpu::{
         GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
         rendering::{
-            BasicRenderingConfig, postprocessing::Postprocessor,
-            render_command::begin_single_render_pass, resource::SynchronizedRenderResources,
+            BasicRenderingConfig,
+            attachment::{
+                Blending, RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+                RenderAttachmentTextureManager,
+            },
+            postprocessing::Postprocessor,
+            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+            render_command::begin_single_render_pass,
+            resource::SynchronizedRenderResources,
+            shader_templates::model_geometry::{
+                ModelGeometryShaderInput, ModelGeometryShaderTemplate,
+            },
             surface::RenderingSurface,
-        },
-        shader::{
-            ShaderManager,
-            template::model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
-        },
-        texture::attachment::{
-            Blending, RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
-            RenderAttachmentTextureManager,
         },
     },
     material::MaterialLibrary,
@@ -32,12 +32,13 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_containers::{HashMap, HashSet};
+use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
 use std::{borrow::Cow, collections::hash_map::Entry};
 
 /// Pass for filling the G-buffer attachments and the depth and stencil map.
 #[derive(Debug)]
 pub struct GeometryPass {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     push_constant_ranges: Vec<wgpu::PushConstantRange>,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
@@ -362,21 +363,21 @@ impl GeometryPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                RenderingPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::FrameCounter,
+                RenderingPushConstantVariant::FrameCounter,
                 || frame_counter,
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::Exposure,
+                RenderingPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }

@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to materials.
 
 use crate::{
-    gpu::texture::TextureID,
+    assets::TextureID,
     material::{MaterialHandle, RGBColor},
 };
 use bytemuck::{Pod, Zeroable};

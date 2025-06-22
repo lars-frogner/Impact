@@ -4,15 +4,12 @@ use super::STANDARD_FRONT_FACE;
 use crate::{
     camera::buffer::CameraGPUBufferManager,
     gizmo::{self, GizmoObscurability},
-    gpu::{
-        GraphicsDevice,
-        query::TimestampQueryRegistry,
-        rendering::{
-            render_command::begin_single_render_pass, resource::SynchronizedRenderResources,
-            surface::RenderingSurface,
-        },
-        shader::{Shader, ShaderManager, template::fixed_color::FixedColorShaderTemplate},
-        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    gpu::rendering::{
+        attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+        render_command::begin_single_render_pass,
+        resource::SynchronizedRenderResources,
+        shader_templates::fixed_color::FixedColorShaderTemplate,
+        surface::RenderingSurface,
     },
     mesh::{
         MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
@@ -21,6 +18,11 @@ use crate::{
     scene::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
+use impact_gpu::{
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    shader::{Shader, ShaderManager},
+};
 use std::borrow::Cow;
 
 /// Passes for rendering gizmos.

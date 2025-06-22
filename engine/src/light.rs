@@ -5,8 +5,7 @@ pub mod components;
 pub mod entity;
 
 use crate::{
-    gpu::{texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
-    model::InstanceFeatureBufferRangeID,
+    gpu::rendering::shadow_map::CascadeIdx, model::InstanceFeatureBufferRangeID,
     scene::SceneEntityFlags,
 };
 use bitflags::bitflags;
@@ -14,6 +13,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_geometry::{
     AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox, OrthographicTransform, Sphere,
 };
+use impact_gpu::uniform::UniformBuffer;
 use impact_math::{Angle, Float, UpperExclusiveBounds};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,

@@ -1,35 +1,31 @@
 //! Render passes for applying temporal anti-aliasing.
 
-use std::borrow::Cow;
-
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{ConstStringHash64, hash64};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
-use crate::{
-    assert_uniform_valid,
-    gpu::{
-        GraphicsDevice,
-        query::TimestampQueryRegistry,
-        rendering::{
-            postprocessing::Postprocessor,
-            render_command::{
-                postprocessing_pass::PostprocessingRenderPass,
-                render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
-            },
-            resource::SynchronizedRenderResources,
-            surface::RenderingSurface,
-        },
-        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{
-            ShaderManager, template::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate,
-        },
-        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+use crate::gpu::rendering::{
+    attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    render_command::{
+        postprocessing_pass::PostprocessingRenderPass,
+        render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
     },
+    resource::SynchronizedRenderResources,
+    shader_templates::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate,
+    surface::RenderingSurface,
 };
 use anyhow::Result;
+use impact_gpu::{
+    assert_uniform_valid,
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+    shader::ShaderManager,
+    uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+};
 
 /// Configuration options for temporal anti-aliasing.
 #[derive(Clone, Debug, Serialize, Deserialize)]

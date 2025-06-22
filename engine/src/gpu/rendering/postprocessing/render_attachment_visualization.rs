@@ -1,22 +1,19 @@
 //! Render passes for visualizing render attachments.
 
-use crate::gpu::{
-    GraphicsDevice,
-    query::TimestampQueryRegistry,
-    rendering::{
-        postprocessing::Postprocessor,
-        render_command::postprocessing_pass::PostprocessingRenderPass,
-        resource::SynchronizedRenderResources, surface::RenderingSurface,
-    },
-    resource_group::GPUResourceGroupManager,
-    shader::{
-        ShaderManager,
-        template::render_attachment_visualization::RenderAttachmentVisualizationShaderTemplate,
-    },
-    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+use crate::gpu::rendering::{
+    attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    render_command::postprocessing_pass::PostprocessingRenderPass,
+    resource::SynchronizedRenderResources,
+    shader_templates::render_attachment_visualization::RenderAttachmentVisualizationShaderTemplate,
+    surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
 use impact_containers::HashMap;
+use impact_gpu::{
+    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
+    shader::ShaderManager,
+};
 use std::borrow::Cow;
 
 /// Render passes for visualizing render attachments.

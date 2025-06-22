@@ -1,21 +1,20 @@
 //! Render passes for applying a Gaussian blur.
 
-use crate::{
-    assert_uniform_valid,
-    gpu::{
-        GraphicsDevice,
-        rendering::{
-            render_command::postprocessing_pass::PostprocessingRenderPass,
-            surface::RenderingSurface,
-        },
-        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{ShaderManager, template::gaussian_blur::GaussianBlurShaderTemplate},
-        texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
-    },
+use crate::gpu::rendering::{
+    attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    render_command::postprocessing_pass::PostprocessingRenderPass,
+    shader_templates::gaussian_blur::GaussianBlurShaderTemplate,
+    surface::RenderingSurface,
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::{
+    assert_uniform_valid,
+    device::GraphicsDevice,
+    resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+    shader::ShaderManager,
+    uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+};
 use impact_math::{ConstStringHash64, hash64};
 use nalgebra::Vector4;
 use std::{borrow::Cow, fmt::Display};

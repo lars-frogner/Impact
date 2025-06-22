@@ -3,9 +3,9 @@
 #[cfg(feature = "window")]
 pub mod window;
 
-use crate::gpu::GraphicsDevice;
 use anyhow::Result;
-use std::{mem, num::NonZeroU32};
+use impact_gpu::device::GraphicsDevice;
+use std::num::NonZeroU32;
 use wgpu;
 
 /// A surface that can be rendered to.
@@ -140,12 +140,6 @@ impl RenderingSurface {
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.update_pixels_per_point(pixels_per_point),
         }
-    }
-
-    /// Returns the size of the push constant obtained by calling
-    /// [`Self::inverse_window_dimensions_push_constant`].
-    pub const fn inverse_window_dimensions_push_constant_size() -> u32 {
-        2 * mem::size_of::<f32>() as u32
     }
 
     /// Returns the data for the push constant containing the reciprocals of the

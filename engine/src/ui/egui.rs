@@ -4,13 +4,11 @@ mod rendering;
 mod window;
 
 use crate::{
-    application::Application,
-    engine::Engine,
-    gpu::{GraphicsDevice, query::TimestampQueryRegistry, rendering::surface::RenderingSurface},
-    ui::UserInterface,
-    window::Window,
+    application::Application, engine::Engine, gpu::rendering::surface::RenderingSurface,
+    ui::UserInterface, window::Window,
 };
 use anyhow::Result;
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry};
 use rendering::{EguiRenderer, EguiRenderingInput};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};

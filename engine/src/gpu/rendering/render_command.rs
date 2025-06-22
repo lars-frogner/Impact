@@ -14,19 +14,14 @@ pub mod storage_buffer_result_copy_command;
 pub mod tasks;
 
 use crate::{
-    gpu::{
-        GraphicsDevice,
-        query::TimestampQueryRegistry,
-        rendering::{
-            BasicRenderingConfig, ShadowMappingConfig, postprocessing::Postprocessor,
-            resource::SynchronizedRenderResources, surface::RenderingSurface,
-        },
-        resource_group::GPUResourceGroupManager,
-        shader::{Shader, ShaderManager},
-        storage::StorageGPUBufferManager,
-        texture::attachment::{
+    gpu::rendering::{
+        BasicRenderingConfig, ShadowMappingConfig,
+        attachment::{
             RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
         },
+        postprocessing::Postprocessor,
+        resource::SynchronizedRenderResources,
+        surface::RenderingSurface,
     },
     material::MaterialLibrary,
     scene::Scene,
@@ -39,6 +34,13 @@ use depth_prepass::DepthPrepass;
 use directional_light_pass::DirectionalLightPass;
 use geometry_pass::GeometryPass;
 use gizmo_passes::GizmoPasses;
+use impact_gpu::{
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::GPUResourceGroupManager,
+    shader::{Shader, ShaderManager},
+    storage::StorageGPUBufferManager,
+};
 use shadow_map_update_passes::{
     OmnidirectionalLightShadowMapUpdatePasses, UnidirectionalLightShadowMapUpdatePasses,
 };

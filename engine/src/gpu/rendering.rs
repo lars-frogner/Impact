@@ -1,27 +1,25 @@
 //! Graphics rendering.
 
+pub mod attachment;
 pub mod brdf;
 pub mod command;
 pub mod postprocessing;
+pub mod push_constant;
 pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
+pub mod shader_templates;
+pub mod shadow_map;
 pub mod surface;
 pub mod tasks;
 
-use crate::{
-    gpu::{
-        GraphicsDevice,
-        query::TimestampQueryManager,
-        resource_group::GPUResourceGroupManager,
-        shader::ShaderManager,
-        storage::StorageGPUBufferManager,
-        texture::{attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
-    },
-    scene::Scene,
-    ui::UserInterface,
-};
+use crate::{scene::Scene, ui::UserInterface};
 use anyhow::Result;
+use attachment::RenderAttachmentTextureManager;
+use impact_gpu::{
+    device::GraphicsDevice, query::TimestampQueryManager, resource_group::GPUResourceGroupManager,
+    shader::ShaderManager, storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator,
+};
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
     temporal_anti_aliasing::TemporalAntiAliasingConfig,
