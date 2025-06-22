@@ -6,29 +6,33 @@ use crate::{
     camera::buffer::CameraGPUBufferManager,
     gpu::{
         GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
         rendering::{
-            postprocessing::Postprocessor, render_command::begin_single_render_pass,
-            resource::SynchronizedRenderResources, surface::RenderingSurface,
-        },
-        resource_group::GPUResourceGroupManager,
-        shader::{ShaderManager, template::ambient_light::AmbientLightShaderTemplate},
-        texture::attachment::{
-            Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity, RenderAttachmentTextureManager,
+            attachment::{
+                Blending, RenderAttachmentInputDescriptionSet,
+                RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+                RenderAttachmentTextureManager,
+            },
+            postprocessing::Postprocessor,
+            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+            render_command::begin_single_render_pass,
+            resource::SynchronizedRenderResources,
+            shader_templates::ambient_light::AmbientLightShaderTemplate,
+            surface::RenderingSurface,
         },
     },
     light::{LightStorage, buffer::LightGPUBufferManager},
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
+use impact_gpu::{
+    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to ambient light.
 #[derive(Debug)]
 pub struct AmbientLightPass {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
@@ -221,14 +225,14 @@ impl AmbientLightPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                RenderingPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::Exposure,
+                RenderingPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }

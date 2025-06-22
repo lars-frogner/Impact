@@ -1,7 +1,7 @@
 //! Command for copying the contents of one render attachment texture into
 //! another.
 
-use crate::gpu::texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager};
+use crate::gpu::rendering::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager};
 
 /// Recorder for a command copying the contents of one render attachment texture
 /// into another.

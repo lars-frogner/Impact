@@ -1,14 +1,14 @@
 //! Pass for clearing the render attachments.
 
 use super::StencilValue;
-use crate::gpu::{
-    query::TimestampQueryRegistry,
-    rendering::render_command::begin_single_render_pass,
-    texture::attachment::{
+use crate::gpu::rendering::{
+    attachment::{
         RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
     },
+    render_command::begin_single_render_pass,
 };
 use anyhow::Result;
+use impact_gpu::query::TimestampQueryRegistry;
 use std::borrow::Cow;
 
 /// Pass for clearing the render attachments.

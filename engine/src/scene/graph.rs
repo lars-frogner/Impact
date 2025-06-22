@@ -2,7 +2,7 @@
 
 use crate::{
     camera::SceneCamera,
-    gpu::texture::shadow_map::CascadeIdx,
+    gpu::rendering::shadow_map::CascadeIdx,
     light::{
         LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
         ShadowableUnidirectionalLight,

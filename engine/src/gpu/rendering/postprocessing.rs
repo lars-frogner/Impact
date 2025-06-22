@@ -7,20 +7,66 @@ pub mod gaussian_blur;
 pub mod render_attachment_visualization;
 pub mod temporal_anti_aliasing;
 
-use crate::gpu::{
-    GraphicsDevice,
-    query::TimestampQueryRegistry,
-    rendering::{resource::SynchronizedRenderResources, surface::RenderingSurface},
-    resource_group::GPUResourceGroupManager,
-    shader::ShaderManager,
-    storage::StorageGPUBufferManager,
-    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+use crate::gpu::rendering::{
+    attachment::{
+        RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+        RenderAttachmentQuantity, RenderAttachmentTextureManager,
+    },
+    push_constant::RenderingPushConstantGroup,
+    render_command::StencilValue,
+    resource::SynchronizedRenderResources,
+    surface::RenderingSurface,
 };
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
 use anyhow::Result;
 use capturing::{CapturingCamera, CapturingCameraConfig};
+use impact_gpu::{
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
+    shader::{ShaderManager, template::SpecificShaderTemplate},
+    storage::StorageGPUBufferManager,
+};
 use render_attachment_visualization::RenderAttachmentVisualizationPasses;
 use temporal_anti_aliasing::{TemporalAntiAliasingConfig, TemporalAntiAliasingRenderCommands};
+
+/// Specific shader template that can be resolved to generate a postprocessing
+/// shader.
+pub trait PostprocessingShaderTemplate: SpecificShaderTemplate {
+    /// Returns the group of push constants used by the shader.
+    fn push_constants(&self) -> RenderingPushConstantGroup;
+
+    /// Returns the set of render attachments used as input by the shader.
+    fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet;
+
+    /// Returns the descriptions of the render attachments that the shader will
+    /// write to.
+    fn output_render_attachments(&self) -> RenderAttachmentOutputDescriptionSet;
+
+    /// Whether the shader uses the camera projection uniform.
+    fn uses_camera(&self) -> bool {
+        false
+    }
+
+    /// Returns the ID of the GPU resource group used by the shader, or [`None`]
+    /// if the shader does not use a GPU resource group.
+    fn gpu_resource_group_id(&self) -> Option<GPUResourceGroupID> {
+        None
+    }
+
+    /// Returns the comparison function and stencil value to use for stencil
+    /// testing when using the shader, or [`None`] if stencil testing should not
+    /// be used.
+    fn stencil_test(&self) -> Option<(wgpu::CompareFunction, StencilValue)> {
+        None
+    }
+
+    /// Whether the shader writes to the actual surface texture that will be
+    /// displayed.
+    fn writes_to_surface(&self) -> bool {
+        false
+    }
+}
 
 /// Manager of GPU resources and render commands for postprocessing effects.
 #[derive(Debug)]

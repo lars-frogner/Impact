@@ -1,37 +1,39 @@
 //! Rendering resources for voxel objects.
 
 use crate::{
-    assert_uniform_valid,
     assets::Assets,
-    gpu::{
-        GraphicsDevice,
-        buffer::{GPUBuffer, GPUBufferType},
-        indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
-        storage,
-        texture::{
-            self, ColorSpace, Sampler, SamplerConfig, TexelDescription, Texture,
-            TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
-        },
-        uniform::{self, UniformBufferable},
-    },
+    gpu::rendering::push_constant::RenderingPushConstantVariant,
     mesh::buffer::{
         MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
+        new_vertex_gpu_buffer_with_spare_capacity,
     },
     voxel::{
         VoxelObjectID,
         mesh::{
-            ChunkSubmesh, MeshedChunkedVoxelObject, VoxelMeshIndex, VoxelMeshIndexMaterials,
-            VoxelMeshVertexNormalVector, VoxelMeshVertexPosition,
+            ChunkSubmesh, CullingFrustum, MeshedChunkedVoxelObject, VoxelMeshIndex,
+            VoxelMeshIndexMaterials, VoxelMeshModifications, VoxelMeshVertexNormalVector,
+            VoxelMeshVertexPosition,
         },
         voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
     },
 };
 use anyhow::Result;
 use bytemuck::Pod;
+use impact_gpu::{
+    assert_uniform_valid,
+    buffer::{GPUBuffer, GPUBufferType},
+    device::GraphicsDevice,
+    indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
+    push_constant::{PushConstant, PushConstantGroup, PushConstantVariant},
+    storage,
+    texture::{
+        self, ColorSpace, Sampler, SamplerConfig, TexelDescription, Texture,
+        TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
+    },
+    uniform::{self, UniformBufferable},
+};
 use impact_math::ConstStringHash64;
 use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
-
-use super::mesh::VoxelMeshModifications;
 
 /// Owner and manager of the GPU resources for all voxel materials.
 #[derive(Debug)]
@@ -70,6 +72,16 @@ pub enum VoxelMeshVertexAttributeLocation {
     Indices = MeshVertexAttributeLocation::NormalVector as u32 + 1,
     MaterialWeights = MeshVertexAttributeLocation::NormalVector as u32 + 2,
     MaterialIndices = MeshVertexAttributeLocation::NormalVector as u32 + 3,
+}
+
+pub type VoxelPushConstant = PushConstant<VoxelPushConstantVariant>;
+pub type VoxelPushConstantGroup = PushConstantGroup<VoxelPushConstantVariant>;
+
+/// The meaning of a push constant used for voxel rendering
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VoxelPushConstantVariant {
+    CullingFrustum,
+    Rendering(RenderingPushConstantVariant),
 }
 
 static MATERIAL_RESOURCES_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
@@ -669,7 +681,7 @@ impl VoxelObjectGPUBufferManager {
 
         // The the index material buffer is bound as a vertex buffer for the
         // geometry pass
-        GPUBuffer::new_vertex_buffer_with_spare_capacity(
+        new_vertex_gpu_buffer_with_spare_capacity(
             graphics_device,
             total_capacity,
             index_materials,
@@ -890,4 +902,13 @@ impl VertexBufferable for VoxelMeshIndex {
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             VoxelMeshVertexAttributeLocation::Indices as u32 => Uint32,
         ]);
+}
+
+impl PushConstantVariant for VoxelPushConstantVariant {
+    fn size(&self) -> u32 {
+        match self {
+            Self::CullingFrustum => mem::size_of::<CullingFrustum>() as u32,
+            Self::Rendering(variant) => variant.size(),
+        }
+    }
 }

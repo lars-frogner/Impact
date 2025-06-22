@@ -1,21 +1,18 @@
 //! Buffering of camera data for rendering.
 
-use crate::{
-    assert_uniform_valid,
-    camera::SceneCamera,
-    gpu::{
-        GraphicsDevice,
-        buffer::GPUBuffer,
-        uniform::{self, UniformBufferable},
-    },
-};
+use crate::camera::SceneCamera;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::Frustum;
+use impact_gpu::{
+    assert_uniform_valid,
+    buffer::GPUBuffer,
+    device::GraphicsDevice,
+    uniform::{self, UniformBufferable},
+};
 use impact_math::{ConstStringHash64, HaltonSequence};
 use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
 use std::{
     borrow::Cow,
-    mem,
     sync::{LazyLock, OnceLock},
 };
 
@@ -133,12 +130,6 @@ impl CameraGPUBufferManager {
             camera.camera().reset_projection_change_tracking();
             self.jitter_enabled = camera.jitter_enabled();
         }
-    }
-
-    /// Returns the size of the push constant obtained by calling
-    /// [`Self::camera_rotation_quaternion_push_constant`].
-    pub const fn camera_rotation_quaternion_push_constant_size() -> u32 {
-        mem::size_of::<UnitQuaternion<f32>>() as u32
     }
 
     /// Returns the camera rotation quaternion push constant.

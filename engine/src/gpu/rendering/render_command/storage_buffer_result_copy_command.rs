@@ -1,8 +1,8 @@
 //! Command for copying the contents of a storage buffer into its associated
 //! result buffer.
 
-use crate::gpu::storage::{StorageBufferID, StorageGPUBufferManager};
 use anyhow::{Result, anyhow};
+use impact_gpu::storage::{StorageBufferID, StorageGPUBufferManager};
 
 /// Recorder for a command copying the contents of a storage buffer into its
 /// associated result buffer (which can be mapped to the CPU).

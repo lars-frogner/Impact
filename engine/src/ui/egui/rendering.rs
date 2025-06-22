@@ -1,11 +1,8 @@
 //! Rendering of [`egui`] based user interfaces.
 
-use crate::gpu::{
-    GraphicsDevice,
-    query::TimestampQueryRegistry,
-    rendering::{render_command, surface::RenderingSurface},
-};
+use crate::gpu::rendering::{render_command, surface::RenderingSurface};
 use core::fmt;
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry};
 use std::borrow::Cow;
 
 #[allow(missing_debug_implementations)]

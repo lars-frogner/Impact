@@ -3,7 +3,6 @@
 use super::super::features::FixedColorMaterialFeature;
 use crate::{
     assets::Assets,
-    gpu::GraphicsDevice,
     material::{
         MaterialHandle, MaterialID, MaterialInstanceFeatureFlags, MaterialLibrary,
         MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialShaderInput,
@@ -16,6 +15,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
 use std::{
     collections::hash_map::Entry,

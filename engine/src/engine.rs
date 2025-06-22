@@ -15,7 +15,7 @@ use crate::{
     control::{self, ControllerConfig, MotionController, OrientationController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::{
-        GraphicsContext, GraphicsDevice,
+        GraphicsContext,
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
@@ -33,6 +33,7 @@ use impact_ecs::{
     component::{Component, SingleInstance},
     world::{EntityID, World as ECSWorld},
 };
+use impact_gpu::device::GraphicsDevice;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,

@@ -3,30 +3,32 @@
 use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
     camera::buffer::CameraGPUBufferManager,
-    gpu::{
-        GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
-        rendering::{
-            postprocessing::Postprocessor, render_command::begin_single_render_pass,
-            resource::SynchronizedRenderResources, surface::RenderingSurface,
-        },
-        resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{Shader, ShaderManager, template::PostprocessingShaderTemplate},
-        texture::attachment::{
+    gpu::rendering::{
+        attachment::{
             Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
             RenderAttachmentQuantity, RenderAttachmentTextureManager,
         },
+        postprocessing::{PostprocessingShaderTemplate, Postprocessor},
+        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        render_command::begin_single_render_pass,
+        resource::SynchronizedRenderResources,
+        surface::RenderingSurface,
     },
     mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
+use impact_gpu::{
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
+    shader::{Shader, ShaderManager},
+};
 use std::borrow::Cow;
 
 /// Generic pass for postprocessing effects.
 #[derive(Debug)]
 pub struct PostprocessingRenderPass {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     uses_camera: bool,
@@ -249,28 +251,28 @@ impl PostprocessingRenderPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                RenderingPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::PixelCount,
+                RenderingPushConstantVariant::PixelCount,
                 || rendering_surface.pixel_count_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::Exposure,
+                RenderingPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseExposure,
+                RenderingPushConstantVariant::InverseExposure,
                 || {
                     postprocessor
                         .capturing_camera()
@@ -281,7 +283,7 @@ impl PostprocessingRenderPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::FrameCounter,
+                RenderingPushConstantVariant::FrameCounter,
                 || frame_counter,
             );
     }

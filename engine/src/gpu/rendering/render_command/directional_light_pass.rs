@@ -5,24 +5,22 @@ use crate::{
     camera::buffer::CameraGPUBufferManager,
     gpu::{
         GraphicsDevice,
-        push_constant::{PushConstantGroup, PushConstantVariant},
-        query::TimestampQueryRegistry,
         rendering::{
-            postprocessing::Postprocessor, render_command::begin_single_render_pass,
-            resource::SynchronizedRenderResources, surface::RenderingSurface,
-        },
-        shader::{
-            ShaderManager,
-            template::{
+            attachment::{
+                RenderAttachmentInputDescriptionSet, RenderAttachmentQuantity,
+                RenderAttachmentTextureManager,
+            },
+            postprocessing::Postprocessor,
+            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+            render_command::begin_single_render_pass,
+            resource::SynchronizedRenderResources,
+            shader_templates::{
                 omnidirectional_light::OmnidirectionalLightShaderTemplate,
                 shadowable_omnidirectional_light::ShadowableOmnidirectionalLightShaderTemplate,
                 shadowable_unidirectional_light::ShadowableUnidirectionalLightShaderTemplate,
                 unidirectional_light::UnidirectionalLightShaderTemplate,
             },
-        },
-        texture::attachment::{
-            RenderAttachmentInputDescriptionSet, RenderAttachmentQuantity,
-            RenderAttachmentTextureManager,
+            surface::RenderingSurface,
         },
     },
     light::{
@@ -35,12 +33,13 @@ use crate::{
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
+use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to directional lights.
 #[derive(Debug)]
 pub struct DirectionalLightPass {
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     color_target_state: wgpu::ColorTargetState,
@@ -317,14 +316,14 @@ impl DirectionalLightPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                RenderingPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::Exposure,
+                RenderingPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }
@@ -333,7 +332,7 @@ impl DirectionalLightPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                PushConstantVariant::LightIdx,
+                RenderingPushConstantVariant::LightIdx,
                 || light_idx,
             );
     }

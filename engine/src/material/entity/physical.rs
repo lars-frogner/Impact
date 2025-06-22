@@ -3,7 +3,6 @@
 use super::super::features::create_physical_material_feature;
 use crate::{
     assets::Assets,
-    gpu::GraphicsDevice,
     material::{
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
         MaterialPropertyTextureGroupID, MaterialShaderInput, MaterialSpecification,
@@ -20,6 +19,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
 use std::{collections::hash_map::Entry, sync::RwLock};
 

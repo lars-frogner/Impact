@@ -2,7 +2,6 @@
 
 use crate::{
     assets::Assets,
-    gpu::texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     material::{
         RGBColor,
         components::{
@@ -21,6 +20,7 @@ use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentStorage, SingleInstance},
 };
+use impact_gpu::texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig};
 use impact_math::hash64;
 use nalgebra::{UnitVector3, point, vector};
 use std::{collections::hash_map::Entry, fmt::Debug, path::Path};

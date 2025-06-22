@@ -1,20 +1,18 @@
 //! Render passes for applying tone mapping.
 
-use crate::gpu::{
-    GraphicsDevice,
-    query::TimestampQueryRegistry,
-    rendering::{
-        postprocessing::Postprocessor,
-        render_command::postprocessing_pass::PostprocessingRenderPass,
-        resource::SynchronizedRenderResources, surface::RenderingSurface,
-    },
-    resource_group::GPUResourceGroupManager,
-    shader::{
-        ShaderManager, template::dynamic_range_compression::DynamicRangeCompressionShaderTemplate,
-    },
-    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+use crate::gpu::rendering::{
+    attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    render_command::postprocessing_pass::PostprocessingRenderPass,
+    resource::SynchronizedRenderResources,
+    shader_templates::dynamic_range_compression::DynamicRangeCompressionShaderTemplate,
+    surface::RenderingSurface,
 };
 use anyhow::Result;
+use impact_gpu::{
+    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
+    shader::ShaderManager,
+};
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};

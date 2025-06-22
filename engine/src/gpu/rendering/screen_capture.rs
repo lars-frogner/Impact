@@ -2,12 +2,10 @@
 
 pub mod command;
 
-use crate::{
-    gpu::{rendering::RenderingSystem, texture},
-    light::MAX_SHADOW_MAP_CASCADES,
-};
+use crate::{gpu::rendering::RenderingSystem, light::MAX_SHADOW_MAP_CASCADES};
 use anyhow::{Result, anyhow};
 use impact_geometry::CubemapFace;
+use impact_gpu::texture;
 use std::sync::{
     RwLock,
     atomic::{AtomicBool, Ordering},

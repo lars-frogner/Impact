@@ -5,13 +5,13 @@ pub mod physical;
 
 use crate::{
     assets::Assets,
-    gpu::GraphicsDevice,
     material::{MaterialLibrary, components::MaterialComp},
     model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
+use impact_gpu::device::GraphicsDevice;
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the components for

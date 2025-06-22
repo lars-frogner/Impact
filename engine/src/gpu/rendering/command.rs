@@ -4,6 +4,7 @@ use super::RenderingSystem;
 use crate::{
     command::{ModifiedActiveState, ToActiveState},
     gpu::{
+        rendering::attachment::RenderAttachmentQuantity,
         rendering::{
             RenderCommandManager,
             postprocessing::{
@@ -14,7 +15,6 @@ use crate::{
                 },
             },
         },
-        texture::attachment::RenderAttachmentQuantity,
     },
 };
 use anyhow::Result;

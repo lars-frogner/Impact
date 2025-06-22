@@ -284,7 +284,7 @@ impl PhysicsSimulator {
 
         if constraint_manager.solver().config().enabled {
             with_timing_info_logging!("Preparing constraints"; {
-                constraint_manager.prepare_constraints(ecs_world, voxel_object_manager,&collision_world.read().unwrap());
+                constraint_manager.prepare_constraints(ecs_world, voxel_object_manager, &collision_world.read().unwrap());
             });
         }
 

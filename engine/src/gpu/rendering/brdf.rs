@@ -2,7 +2,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::gpu::texture::{DepthOrArrayLayers, TextureLookupTable};
+use impact_gpu::texture::{DepthOrArrayLayers, TextureLookupTable};
 use impact_math::Float;
 use log::info;
 use std::num::NonZeroU32;

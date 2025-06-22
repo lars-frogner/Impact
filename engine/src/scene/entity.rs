@@ -3,7 +3,7 @@
 use crate::{
     assets::Assets,
     camera,
-    gpu::{GraphicsDevice, rendering::RenderingSystem},
+    gpu::rendering::RenderingSystem,
     light,
     material::{self, components::MaterialComp},
     mesh::{self, components::TriangleMeshComp},
@@ -27,6 +27,7 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, World as ECSWorld},
 };
+use impact_gpu::device::GraphicsDevice;
 use std::sync::RwLock;
 
 impl Scene {

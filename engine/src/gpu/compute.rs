@@ -1,22 +1,44 @@
 //! GPU compute passes.
 
-use crate::gpu::{
-    GraphicsDevice,
-    push_constant::{PushConstantGroup, PushConstantVariant},
-    query::TimestampQueryRegistry,
-    rendering::{postprocessing::Postprocessor, surface::RenderingSurface},
-    resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
-    shader::{Shader, ShaderManager, template::ComputeShaderTemplate},
-    texture::attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
+pub mod shader_templates;
+
+use crate::gpu::rendering::{
+    attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
+use impact_gpu::{
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
+    shader::{Shader, ShaderManager, template::SpecificShaderTemplate},
+};
 use std::borrow::Cow;
+
+/// Specific shader template that can be resolved to generate a compute shader.
+pub trait ComputeShaderTemplate: SpecificShaderTemplate + Send + Sync {
+    /// Returns the group of push constants used by the compute shader.
+    fn push_constants(&self) -> RenderingPushConstantGroup;
+
+    /// Returns the set of render attachments used as input by the compute
+    /// shader.
+    fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet;
+
+    /// Returns the ID of the GPU resource group used by the compute shader.
+    fn gpu_resource_group_id(&self) -> GPUResourceGroupID;
+
+    /// Returns the workgroup counts to use when invoking the compute shader
+    /// based on the dimensions of the rendering surface.
+    fn determine_workgroup_counts(&self, rendering_surface: &RenderingSurface) -> [u32; 3];
+}
 
 /// Helper for invoking a compute shader with specific resources.
 #[derive(Debug)]
 pub struct ComputePass {
     shader_template: Box<dyn ComputeShaderTemplate>,
-    push_constants: PushConstantGroup,
+    push_constants: RenderingPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     gpu_resource_group_id: GPUResourceGroupID,
     label: Cow<'static, str>,
@@ -151,28 +173,28 @@ impl ComputePass {
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::InverseWindowDimensions,
+                RenderingPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::PixelCount,
+                RenderingPushConstantVariant::PixelCount,
                 || rendering_surface.pixel_count_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::Exposure,
+                RenderingPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                PushConstantVariant::InverseExposure,
+                RenderingPushConstantVariant::InverseExposure,
                 || {
                     postprocessor
                         .capturing_camera()

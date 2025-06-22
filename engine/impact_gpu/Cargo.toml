@@ -1,0 +1,28 @@
+[package]
+name = "impact_gpu"
+description = "GPU primitives for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[features]
+serde = ["dep:serde"]
+
+[dependencies]
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
+half = { version = "2.6", features = ["bytemuck"] }
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+] }
+impact_containers = { path = "../impact_containers" }
+impact_math = { path = "../impact_math" }
+naga = { version = "24.0", features = ["wgsl-out"] }
+ordered-float = "5.0"
+regex = "1.11"
+serde = { workspace = true, optional = true }
+wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
+
+[lints]
+workspace = true
