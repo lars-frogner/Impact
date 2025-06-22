@@ -6,6 +6,7 @@ members = [
     "impact_ecs/impact_ecs_macros",
     "impact_geometry",
     "impact_gpu",
+    "impact_light",
     "impact_math",
     "impact_rendering",
     "impact_profiling",
@@ -147,6 +148,7 @@ roc_codegen = [
     "impact_camera/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_geometry/roc_codegen",
+    "impact_light/roc_codegen",
     "impact_math/roc_codegen",
     "roc_integration/roc_codegen",
 ]
@@ -181,6 +183,7 @@ impact_containers = { path = "impact_containers" }
 impact_ecs = { path = "impact_ecs" }
 impact_geometry = { path = "impact_geometry" }
 impact_gpu = { path = "impact_gpu", features = ["serde"] }
+impact_light = { path = "impact_light", features = ["serde"] }
 impact_math = { path = "impact_math", features = ["serde"] }
 impact_profiling = { path = "impact_profiling", optional = true }
 inventory = { workspace = true }

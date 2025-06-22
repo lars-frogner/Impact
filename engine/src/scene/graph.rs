@@ -2,11 +2,7 @@
 
 use crate::{
     camera::SceneCamera,
-    gpu::rendering::shadow_map::CascadeIdx,
-    light::{
-        LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
-        ShadowableUnidirectionalLight,
-    },
+    light,
     model::{
         InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
         transform::{
@@ -22,6 +18,10 @@ use bytemuck::{Pod, Zeroable};
 use impact_camera::buffer::BufferableCamera;
 use impact_containers::{GenerationalIdx, GenerationalReusingVec, HashSet};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
+use impact_light::{
+    LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
+    ShadowableUnidirectionalLight, shadow_map::CascadeIdx,
+};
 use nalgebra::Similarity3;
 use roc_integration::roc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -784,8 +784,8 @@ impl SceneGraph {
                     // cubemap face space for the current light at the end of
                     // each transform buffer, identified by the light's ID plus
                     // a face index offset
-                    let range_id =
-                        light_id.as_instance_feature_buffer_range_id() + face.as_idx_u32();
+                    let range_id = light::light_id_to_instance_feature_buffer_range_id(light_id)
+                        + face.as_idx_u32();
                     instance_feature_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
@@ -872,7 +872,8 @@ impl SceneGraph {
                     // light's space for instances casting shadows in he current
                     // cascade at the end of each transform buffer, identified
                     // by the light's ID plus a cascade index offset
-                    let range_id = light_id.as_instance_feature_buffer_range_id() + cascade_idx;
+                    let range_id =
+                        light::light_id_to_instance_feature_buffer_range_id(light_id) + cascade_idx;
                     instance_feature_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,

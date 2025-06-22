@@ -9,7 +9,6 @@ pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
 pub mod shader_templates;
-pub mod shadow_map;
 pub mod surface;
 pub mod tasks;
 
@@ -20,6 +19,7 @@ use impact_gpu::{
     device::GraphicsDevice, query::TimestampQueryManager, resource_group::GPUResourceGroupManager,
     shader::ShaderManager, storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator,
 };
+use impact_light::shadow_map::ShadowMappingConfig;
 use postprocessing::{
     Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
     temporal_anti_aliasing::TemporalAntiAliasingConfig,
@@ -73,19 +73,6 @@ pub struct RenderingConfig {
 pub struct BasicRenderingConfig {
     pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
-}
-
-/// Configuration options for shadow mapping.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ShadowMappingConfig {
-    /// Whether shadow mapping is enabled.
-    pub enabled: bool,
-    /// The width and height of each face of the omnidirectional light shadow
-    /// cubemap in number of texels.
-    pub omnidirectional_light_shadow_map_resolution: u32,
-    /// The width and height of the unidirectional light shadow map in number of
-    /// texels.
-    pub unidirectional_light_shadow_map_resolution: u32,
 }
 
 impl RenderingSystem {
@@ -371,16 +358,6 @@ impl Default for BasicRenderingConfig {
         Self {
             wireframe_mode_on: false,
             timings_enabled: false,
-        }
-    }
-}
-
-impl Default for ShadowMappingConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            omnidirectional_light_shadow_map_resolution: 1024,
-            unidirectional_light_shadow_map_resolution: 1024,
         }
     }
 }

@@ -2,8 +2,22 @@
 
 use anyhow::Result;
 use impact_geometry::CubemapFace;
-use impact_gpu::{device::GraphicsDevice, texture};
+use impact_gpu::{device::GraphicsDevice, texture, wgpu};
 use std::path::Path;
+
+/// Configuration options for shadow mapping.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct ShadowMappingConfig {
+    /// Whether shadow mapping is enabled.
+    pub enabled: bool,
+    /// The width and height of each face of the omnidirectional light shadow
+    /// cubemap in number of texels.
+    pub omnidirectional_light_shadow_map_resolution: u32,
+    /// The width and height of the unidirectional light shadow map in number of
+    /// texels.
+    pub unidirectional_light_shadow_map_resolution: u32,
+}
 
 /// Index representing a cascade in a cascaded shadow map.
 pub type CascadeIdx = u32;
@@ -37,6 +51,16 @@ pub struct CascadedShadowMapTexture {
     sampler: wgpu::Sampler,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+}
+
+impl Default for ShadowMappingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            omnidirectional_light_shadow_map_resolution: 1024,
+            unidirectional_light_shadow_map_resolution: 1024,
+        }
+    }
 }
 
 impl ShadowCubemapTexture {

@@ -2,21 +2,21 @@
 
 use crate::{
     camera::SceneCamera,
-    light::{
-        AmbientLight, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
-        ShadowableUnidirectionalLight, UnidirectionalLight,
-        components::{
-            AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
-            OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
-            ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
-            ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
-        },
-    },
     physics::motion::components::ReferenceFrameComp,
     scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_light::{
+    AmbientLight, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
+    ShadowableUnidirectionalLight, UnidirectionalLight,
+    components::{
+        AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
+        OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
+        ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
+        ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
+    },
+};
 use impact_math::Degrees;
 use nalgebra::{Similarity3, UnitVector3};
 use std::sync::RwLock;
@@ -76,9 +76,10 @@ pub fn setup_ambient_light_for_new_entity(
         |ambient_emission: &AmbientEmissionComp,
          flags: Option<&SceneEntityFlagsComp>|
          -> (AmbientLightComp, SceneEntityFlagsComp) {
-            let ambient_light = AmbientLight::new(
-                super::compute_luminance_for_uniform_illuminance(&ambient_emission.illuminance),
-            );
+            let ambient_light =
+                AmbientLight::new(impact_light::compute_luminance_for_uniform_illuminance(
+                    &ambient_emission.illuminance,
+                ));
             let id = light_storage.add_ambient_light(ambient_light);
 
             (AmbientLightComp { id }, flags.copied().unwrap_or_default())

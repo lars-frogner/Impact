@@ -11,9 +11,7 @@ use crate::{
             RenderAttachmentQuantitySet,
         },
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-        shadow_map::CascadedShadowMapTexture,
     },
-    light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager},
     mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
@@ -21,6 +19,9 @@ use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
+};
+use impact_light::{
+    MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager, shadow_map::CascadedShadowMapTexture,
 };
 use std::sync::LazyLock;
 

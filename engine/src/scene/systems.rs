@@ -2,15 +2,6 @@
 
 use crate::{
     camera::SceneCamera,
-    light::{
-        LightStorage,
-        components::{
-            AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
-            OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
-            ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
-            ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
-        },
-    },
     physics::motion::components::ReferenceFrameComp,
     scene::{
         SceneGraph,
@@ -22,6 +13,15 @@ use crate::{
 };
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_light::{
+    LightStorage,
+    components::{
+        AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
+        OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
+        ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
+        ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
+    },
+};
 use nalgebra::{Similarity3, UnitVector3};
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
