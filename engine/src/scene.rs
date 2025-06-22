@@ -36,8 +36,8 @@ pub struct Scene {
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
     voxel_manager: RwLock<VoxelManager>,
-    scene_graph: RwLock<SceneGraph<f32>>,
-    scene_camera: RwLock<Option<SceneCamera<f32>>>,
+    scene_graph: RwLock<SceneGraph>,
+    scene_camera: RwLock<Option<SceneCamera>>,
     skybox: RwLock<Option<Skybox>>,
 }
 
@@ -114,13 +114,13 @@ impl Scene {
     }
 
     /// Returns a reference to the [`SceneGraph`], guarded by a [`RwLock`].
-    pub fn scene_graph(&self) -> &RwLock<SceneGraph<f32>> {
+    pub fn scene_graph(&self) -> &RwLock<SceneGraph> {
         &self.scene_graph
     }
 
     /// Returns a reference to the [`SceneCamera`], or [`None`] if no scene
     /// camera has been set, guarded by a [`RwLock`].
-    pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<f32>>> {
+    pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera>> {
         &self.scene_camera
     }
 

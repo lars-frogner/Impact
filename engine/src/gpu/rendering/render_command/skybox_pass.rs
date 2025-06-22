@@ -2,7 +2,6 @@
 
 use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
-    camera::buffer::CameraGPUBufferManager,
     gpu::rendering::{
         attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         postprocessing::Postprocessor,
@@ -15,6 +14,7 @@ use crate::{
     skybox::Skybox,
 };
 use anyhow::{Result, anyhow};
+use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use std::borrow::Cow;
 

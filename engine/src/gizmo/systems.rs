@@ -45,6 +45,7 @@ use crate::{
     },
 };
 use approx::abs_diff_ne;
+use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_math::Angle;
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
@@ -76,9 +77,9 @@ pub fn buffer_transforms_for_gizmos(
     gizmo_manager: &GizmoManager,
     collision_world: &CollisionWorld,
     voxel_manager: &VoxelManager,
-    scene_graph: &SceneGraph<f32>,
+    scene_graph: &SceneGraph,
     light_storage: &LightStorage,
-    scene_camera: Option<&SceneCamera<f32>>,
+    scene_camera: Option<&SceneCamera>,
     current_frame_count: u32,
 ) {
     let Some(scene_camera) = scene_camera else {
@@ -274,7 +275,7 @@ pub fn buffer_transforms_for_gizmos(
 
 fn buffer_transforms_for_model_instance_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
-    scene_graph: &SceneGraph<f32>,
+    scene_graph: &SceneGraph,
     current_frame_count: u32,
     visible_gizmos: GizmoSet,
     model_instance_node_id: ModelInstanceNodeID,
@@ -309,7 +310,7 @@ fn buffer_transforms_for_model_instance_gizmos(
 }
 
 fn compute_transform_for_bounding_sphere_gizmo(
-    node: &ModelInstanceNode<f32>,
+    node: &ModelInstanceNode,
     model_view_transform: InstanceModelViewTransform,
 ) -> Option<InstanceModelViewTransform> {
     let bounding_sphere = node.get_model_bounding_sphere()?;
@@ -397,7 +398,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 fn buffer_transforms_for_shadow_map_cascades_gizmo(
     instance_feature_manager: &mut InstanceFeatureManager,
     light_storage: &LightStorage,
-    scene_camera: &SceneCamera<f32>,
+    scene_camera: &SceneCamera,
     light_id: LightID,
 ) {
     let Some(light) = light_storage.get_shadowable_unidirectional_light(light_id) else {
@@ -436,7 +437,7 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
 fn buffer_transforms_for_kinematics_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
     parameters: &GizmoParameters,
-    scene_camera: &SceneCamera<f32>,
+    scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
     frame: &ReferenceFrameComp,
     velocity: &VelocityComp,
@@ -482,7 +483,7 @@ fn buffer_transforms_for_kinematics_gizmos(
 fn buffer_transforms_for_dynamics_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
     parameters: &GizmoParameters,
-    scene_camera: &SceneCamera<f32>,
+    scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
     frame: &ReferenceFrameComp,
     rigid_body: &RigidBody,
@@ -572,7 +573,7 @@ fn sphere_radius_from_mass_and_density(mass: f64, density: f64) -> f64 {
 }
 
 fn model_view_transform_for_vector_gizmo(
-    scene_camera: &SceneCamera<f32>,
+    scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
     position: Point3<f64>,
     direction: UnitVector3<f64>,
@@ -636,7 +637,7 @@ fn buffer_transforms_for_collider_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
     collision_world: &CollisionWorld,
     voxel_object_manager: &VoxelObjectManager,
-    scene_camera: &SceneCamera<f32>,
+    scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
     collidable_id: CollidableID,
     visible_gizmos: GizmoSet,
@@ -776,7 +777,7 @@ fn rotation_between_axes(a: &UnitVector3<f64>, b: &UnitVector3<f64>) -> UnitQuat
 fn buffer_transforms_for_voxel_chunks_gizmo(
     instance_feature_manager: &mut InstanceFeatureManager,
     voxel_object_manager: &VoxelObjectManager,
-    scene_graph: &SceneGraph<f32>,
+    scene_graph: &SceneGraph,
     parameters: &GizmoParameters,
     current_frame_count: u32,
     model_instance_node_id: ModelInstanceNodeID,

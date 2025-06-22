@@ -1,7 +1,6 @@
 //! Shader template for the model geometry pass.
 
 use crate::{
-    camera::buffer::CameraProjectionUniform,
     gpu::rendering::{
         attachment::{RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantitySet},
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
@@ -17,6 +16,7 @@ use crate::{
     model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source,
 };
+use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,

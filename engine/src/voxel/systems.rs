@@ -34,7 +34,7 @@ use nalgebra::{Similarity3, Vector3};
 pub fn apply_absorption(
     simulator: &PhysicsSimulator,
     voxel_manager: &mut VoxelManager,
-    scene_graph: &SceneGraph<f32>,
+    scene_graph: &SceneGraph,
     ecs_world: &ECSWorld,
 ) {
     query!(

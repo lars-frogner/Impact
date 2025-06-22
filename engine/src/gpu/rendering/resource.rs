@@ -4,7 +4,7 @@ pub mod tasks;
 
 use crate::{
     assets::Assets,
-    camera::{SceneCamera, buffer::CameraGPUBufferManager},
+    camera::SceneCamera,
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
     light::{LightStorage, buffer::LightGPUBufferManager},
     mesh::{
@@ -18,6 +18,7 @@ use crate::{
     },
 };
 use anyhow::Result;
+use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use std::{
     borrow::Cow,
@@ -295,7 +296,7 @@ impl DesynchronizedRenderResources {
     fn sync_camera_buffer_with_scene_camera(
         graphics_device: &GraphicsDevice,
         camera_buffer_manager: &mut Option<CameraGPUBufferManager>,
-        scene_camera: Option<&SceneCamera<f32>>,
+        scene_camera: Option<&SceneCamera>,
     ) {
         if let Some(scene_camera) = scene_camera {
             if let Some(camera_buffer_manager) = camera_buffer_manager {

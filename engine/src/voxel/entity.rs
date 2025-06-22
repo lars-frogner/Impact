@@ -666,7 +666,7 @@ fn mesh_and_store_voxel_object(
 pub fn add_model_instance_node_component_for_new_voxel_object_entity(
     voxel_manager: &RwLock<VoxelManager>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
-    scene_graph: &RwLock<SceneGraph<f32>>,
+    scene_graph: &RwLock<SceneGraph>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(

@@ -20,6 +20,7 @@ use crate::{
         },
     },
 };
+use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use nalgebra::{Similarity3, UnitVector3};
 
@@ -29,10 +30,7 @@ use nalgebra::{Similarity3, UnitVector3};
 /// the translational, rotational and scaling parts match the origin offset,
 /// position, orientation and scaling. Also updates any flags for the node to
 /// match the entity's [`crate::scene::SceneEntityFlags`].
-pub fn sync_scene_object_transforms_and_flags(
-    ecs_world: &ECSWorld,
-    scene_graph: &mut SceneGraph<f32>,
-) {
+pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph) {
     query!(
         ecs_world,
         |node: &SceneGraphGroupNodeComp, frame: &ReferenceFrameComp| {
@@ -65,8 +63,8 @@ pub fn sync_scene_object_transforms_and_flags(
 /// every light source in the [`LightStorage`].
 pub fn sync_lights_in_storage(
     ecs_world: &ECSWorld,
-    scene_graph: &SceneGraph<f32>,
-    scene_camera: Option<&SceneCamera<f32>>,
+    scene_graph: &SceneGraph,
+    scene_camera: Option<&SceneCamera>,
     light_storage: &mut LightStorage,
 ) {
     let view_transform = scene_camera.map_or_else(Similarity3::identity, |scene_camera| {

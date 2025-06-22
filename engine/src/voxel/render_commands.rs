@@ -1,7 +1,7 @@
 //! Render commands for voxels.
 
 use crate::{
-    camera::{SceneCamera, buffer::CameraGPUBufferManager},
+    camera::SceneCamera,
     gpu::{
         compute::{self, shader_templates::voxel_chunk_culling::VoxelChunkCullingShaderTemplate},
         rendering::{
@@ -35,6 +35,7 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
+use impact_camera::buffer::{BufferableCamera, CameraGPUBufferManager};
 use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use nalgebra::Similarity3;
@@ -76,7 +77,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_geometry_pass(
         &self,
-        scene_camera: Option<&SceneCamera<f32>>,
+        scene_camera: Option<&SceneCamera>,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -295,7 +296,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_geometry_pass(
         &self,
-        scene_camera: Option<&SceneCamera<f32>>,
+        scene_camera: Option<&SceneCamera>,
         instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,

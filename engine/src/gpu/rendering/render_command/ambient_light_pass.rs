@@ -3,7 +3,6 @@
 use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
     assets::lookup_table,
-    camera::buffer::CameraGPUBufferManager,
     gpu::{
         GraphicsDevice,
         rendering::{
@@ -24,6 +23,7 @@ use crate::{
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
+use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
     query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
 };
