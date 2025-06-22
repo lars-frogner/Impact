@@ -15,10 +15,9 @@ arbitrary = { workspace = true, optional = true }
 egui_extras = "0.31"
 inventory = { workspace = true, optional = true }
 impact = { path = "..", features = ["egui"] }
-serde = { workspace = true }
-
 impact_math = { path = "../impact_math" }
 roc_integration = { path = "../../roc_integration" }
+serde = { workspace = true }
 
 [lints]
 workspace = true

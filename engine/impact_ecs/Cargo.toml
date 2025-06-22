@@ -19,14 +19,12 @@ bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
 fastrand = "2.3"
-inventory = { workspace = true }
-nohash-hasher = { workspace = true }
-paste = { workspace = true }
-rand = { workspace = true }
-
 impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }
 impact_profiling = { path = "../impact_profiling", optional = true }
+inventory = { workspace = true }
+nohash-hasher = { workspace = true }
+paste = { workspace = true }
 roc_integration = { path = "../../roc_integration" }
 
 [lints]
