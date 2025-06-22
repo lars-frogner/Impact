@@ -2,7 +2,6 @@
 
 use crate::{
     mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
-    model::transform::InstanceModelViewTransform,
     rendering_template_source,
 };
 use impact_camera::buffer::CameraProjectionUniform;
@@ -10,6 +9,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_model::transform::InstanceModelViewTransform;
 use std::sync::LazyLock;
 
 /// Shader template for rendering geometry with fixed vertex colors.

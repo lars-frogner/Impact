@@ -10,13 +10,14 @@ use crate::{
         components::{FixedColorComp, FixedTextureComp, MaterialComp},
     },
     mesh::VertexAttributeSet,
-    model::{InstanceFeature, InstanceFeatureManager},
+    model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
+use impact_model::InstanceFeature;
 use std::{
     collections::hash_map::Entry,
     sync::{LazyLock, RwLock},

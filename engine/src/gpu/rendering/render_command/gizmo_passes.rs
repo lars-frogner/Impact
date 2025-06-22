@@ -13,7 +13,7 @@ use crate::{
     mesh::{
         MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
     },
-    model::{InstanceFeature, ModelID, transform::InstanceModelViewTransform},
+    model::ModelID,
     scene::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
@@ -23,6 +23,7 @@ use impact_gpu::{
     query::TimestampQueryRegistry,
     shader::{Shader, ShaderManager},
 };
+use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use std::borrow::Cow;
 
 /// Passes for rendering gizmos.

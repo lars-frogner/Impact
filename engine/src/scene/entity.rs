@@ -7,10 +7,7 @@ use crate::{
     light,
     material::{self, components::MaterialComp},
     mesh::{self, components::TriangleMeshComp},
-    model::{
-        InstanceFeature, ModelID,
-        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
-    },
+    model::ModelID,
     physics::motion::components::ReferenceFrameComp,
     scene::{
         RenderResourcesDesynchronized, Scene, SceneEntityFlags,
@@ -28,6 +25,10 @@ use impact_ecs::{
     world::{EntityEntry, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
+use impact_model::{
+    InstanceFeature,
+    transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+};
 use std::sync::RwLock;
 
 impl Scene {

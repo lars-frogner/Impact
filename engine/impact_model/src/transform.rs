@@ -1,8 +1,10 @@
 //! Model instance transforms.
 
-use crate::{impl_InstanceFeature, model::InstanceFeatureManager};
+use crate::{InstanceFeatureManager, impl_InstanceFeature};
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::wgpu;
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
+use std::hash::Hash;
 
 /// Trait for types that can be referenced as an [`InstanceModelViewTransform`].
 pub trait AsInstanceModelViewTransform {
@@ -76,15 +78,6 @@ impl InstanceModelViewTransform {
     /// similarity transform.
     pub fn with_model_light_transform(transform: Similarity3<f32>) -> Self {
         Self::with_model_view_transform(transform)
-    }
-
-    #[cfg(test)]
-    pub fn dummy_instance_feature_id() -> super::InstanceFeatureID {
-        use crate::model::InstanceFeature;
-        super::InstanceFeatureID {
-            feature_type_id: Self::FEATURE_TYPE_ID,
-            idx: 0,
-        }
     }
 }
 
@@ -160,15 +153,6 @@ impl InstanceModelViewTransformWithPrevious {
         self.previous = self.current;
         self.current = transform;
     }
-
-    #[cfg(test)]
-    pub fn dummy_instance_feature_id() -> super::InstanceFeatureID {
-        use crate::model::InstanceFeature;
-        super::InstanceFeatureID {
-            feature_type_id: Self::FEATURE_TYPE_ID,
-            idx: 0,
-        }
-    }
 }
 
 impl AsInstanceModelViewTransform for InstanceModelViewTransformWithPrevious {
@@ -195,7 +179,9 @@ impl_InstanceFeature!(
     ]
 );
 
-pub fn register_model_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {
+pub fn register_model_feature_types<MID: Eq + Hash>(
+    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+) {
     instance_feature_manager.register_feature_type::<InstanceModelViewTransform>();
     instance_feature_manager.register_feature_type::<InstanceModelViewTransformWithPrevious>();
 }

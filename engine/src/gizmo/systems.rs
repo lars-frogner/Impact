@@ -15,10 +15,7 @@ use crate::{
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
     },
-    model::{
-        InstanceFeatureManager,
-        transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
-    },
+    model::InstanceFeatureManager,
     physics::{
         collision::{
             CollidableID, CollidableKind, CollisionWorld, WorldCollidableGeometry,
@@ -48,6 +45,7 @@ use impact_light::{
     },
 };
 use impact_math::Angle;
+use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::iter;
 

@@ -2,8 +2,9 @@
 
 pub mod entity;
 
-use crate::{model::InstanceFeatureBufferRangeID, scene::SceneEntityFlags};
+use crate::scene::SceneEntityFlags;
 use impact_light::{LightFlags, LightID};
+use impact_model::InstanceFeatureBufferRangeID;
 
 /// Converts the light ID into an [`InstanceFeatureBufferRangeID`].
 pub fn light_id_to_instance_feature_buffer_range_id(

@@ -2,7 +2,6 @@
 
 use crate::{
     gpu::rendering::push_constant::RenderingPushConstantVariant,
-    model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source,
     voxel::resource::{
         VoxelMaterialGPUResourceManager, VoxelMeshVertexAttributeLocation, VoxelPushConstantGroup,
@@ -15,6 +14,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_model::transform::InstanceModelViewTransformWithPrevious;
 use std::sync::LazyLock;
 
 /// Shader template for the voxel geometry pass, which extracts the relevant
