@@ -184,7 +184,6 @@ naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }
 noise = "0.9"
-num-derive = "0.4"
 num-traits = { workspace = true }
 ordered-float = "5.0"
 paste = { workspace = true }
@@ -207,7 +206,6 @@ winit = { version = "0.30", features = ["serde"], optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dev-dependencies]
-clap = { workspace = true }
 naga = { version = "24.0", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.7"
 

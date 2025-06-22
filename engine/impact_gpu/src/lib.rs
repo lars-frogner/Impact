@@ -13,3 +13,6 @@ pub mod shader;
 pub mod storage;
 pub mod texture;
 pub mod uniform;
+
+pub use naga;
+pub use wgpu;
