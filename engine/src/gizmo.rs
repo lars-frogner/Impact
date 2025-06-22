@@ -10,12 +10,11 @@ pub mod tasks;
 
 use crate::{
     mesh::MeshID,
-    model::{
-        InstanceFeature, InstanceFeatureManager, ModelID, transform::InstanceModelViewTransform,
-    },
+    model::{InstanceFeatureManager, ModelID},
 };
 use bitflags::{Flags, bitflags};
 use bytemuck::{Pod, Zeroable};
+use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use model::{GizmoModel, gizmo_models};
 use serde::{Deserialize, Serialize};
 

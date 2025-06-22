@@ -22,10 +22,7 @@ use crate::{
     },
     material::MaterialLibrary,
     mesh::VertexAttributeSet,
-    model::{
-        InstanceFeature, InstanceFeatureManager, ModelID,
-        transform::InstanceModelViewTransformWithPrevious,
-    },
+    model::{InstanceFeatureManager, ModelID},
     scene::ModelInstanceNode,
     voxel::render_commands::VoxelGeometryPipeline,
 };
@@ -33,6 +30,7 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use std::{borrow::Cow, collections::hash_map::Entry};
 
 /// Pass for filling the G-buffer attachments and the depth and stencil map.

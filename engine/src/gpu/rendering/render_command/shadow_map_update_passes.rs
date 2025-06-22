@@ -14,10 +14,7 @@ use crate::{
     light,
     material::{MaterialLibrary, MaterialShaderInput},
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
-    model::{
-        InstanceFeature, InstanceFeatureManager, ModelID, buffer::InstanceFeatureGPUBufferManager,
-        transform::InstanceModelLightTransform,
-    },
+    model::{InstanceFeatureManager, ModelID},
     scene::ModelInstanceNode,
     voxel::render_commands::VoxelRenderCommands,
 };
@@ -29,6 +26,10 @@ use impact_light::{
     LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
     buffer::LightGPUBufferManager,
     shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
+};
+use impact_model::{
+    InstanceFeature, buffer::InstanceFeatureGPUBufferManager,
+    transform::InstanceModelLightTransform,
 };
 use std::borrow::Cow;
 

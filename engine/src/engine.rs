@@ -22,7 +22,7 @@ use crate::{
     io::{self, util::parse_ron_file},
     material::{self, MaterialLibrary},
     mesh::{MeshRepository, components::TriangleMeshComp, texture_projection::TextureProjection},
-    model::{self, InstanceFeatureManager},
+    model::InstanceFeatureManager,
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
     voxel::{self, VoxelConfig, VoxelManager},
@@ -128,7 +128,7 @@ impl Engine {
         gizmo::mesh::generate_gizmo_meshes(&mut mesh_repository)?;
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
-        model::register_model_feature_types(&mut instance_feature_manager);
+        impact_model::register_model_feature_types(&mut instance_feature_manager);
         material::register_material_feature_types(&mut instance_feature_manager);
         voxel::register_voxel_feature_types(&mut instance_feature_manager);
         gizmo::initialize_buffers_for_gizmo_models(&mut instance_feature_manager);

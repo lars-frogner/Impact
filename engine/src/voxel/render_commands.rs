@@ -15,14 +15,7 @@ use crate::{
         },
     },
     mesh::buffer::VertexBufferable,
-    model::{
-        InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
-        InstanceFeatureManager,
-        transform::{
-            AsInstanceModelViewTransform, InstanceModelLightTransform, InstanceModelViewTransform,
-            InstanceModelViewTransformWithPrevious,
-        },
-    },
+    model::InstanceFeatureManager,
     scene::ModelInstanceNode,
     voxel::{
         VoxelObjectID,
@@ -38,6 +31,13 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::{BufferableCamera, CameraGPUBufferManager};
 use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_model::{
+    InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
+    transform::{
+        AsInstanceModelViewTransform, InstanceModelLightTransform, InstanceModelViewTransform,
+        InstanceModelViewTransformWithPrevious,
+    },
+};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
 

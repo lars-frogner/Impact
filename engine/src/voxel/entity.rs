@@ -2,13 +2,9 @@
 
 use crate::{
     engine::Engine,
-    impl_InstanceFeature,
     material::MaterialHandle,
     mesh::MeshID,
-    model::{
-        InstanceFeature, InstanceFeatureManager, ModelID,
-        transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
-    },
+    model::{InstanceFeatureManager, ModelID},
     physics::{
         inertia::InertialProperties,
         motion::components::{ReferenceFrameComp, VelocityComp},
@@ -46,6 +42,10 @@ use impact_ecs::{
     world::EntityEntry,
 };
 use impact_math::hash64;
+use impact_model::{
+    InstanceFeature, impl_InstanceFeature,
+    transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+};
 use std::sync::{LazyLock, RwLock};
 
 pub static VOXEL_MODEL_ID: LazyLock<ModelID> = LazyLock::new(|| {

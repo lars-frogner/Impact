@@ -3,7 +3,6 @@
 use crate::{
     gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
-    model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source,
 };
 use impact_camera::buffer::CameraProjectionUniform;
@@ -11,6 +10,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_model::transform::InstanceModelViewTransformWithPrevious;
 use std::sync::LazyLock;
 
 /// Shader template for the model depth prepass, which writes the depth

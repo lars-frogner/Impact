@@ -1,15 +1,17 @@
 //! Instance features representing material properties.
 
 use crate::{
-    impl_InstanceFeature,
     material::{
         RGBColor,
         components::{ParallaxMapComp, UniformColorComp},
     },
-    model::{InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID},
+    model::InstanceFeatureManager,
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_model::{
+    InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, impl_InstanceFeature,
+};
 use nalgebra::Vector2;
 
 const MATERIAL_VERTEX_BINDING_START: u32 = 20;

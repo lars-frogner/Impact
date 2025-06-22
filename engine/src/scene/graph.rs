@@ -3,13 +3,7 @@
 use crate::{
     camera::SceneCamera,
     light,
-    model::{
-        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID, ModelID,
-        transform::{
-            InstanceModelLightTransform, InstanceModelViewTransform,
-            InstanceModelViewTransformWithPrevious,
-        },
-    },
+    model::{InstanceFeatureManager, ModelID},
     scene::SceneEntityFlags,
     voxel::{VoxelObjectID, entity::VOXEL_MODEL_ID},
 };
@@ -21,6 +15,13 @@ use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
     LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
     ShadowableUnidirectionalLight, shadow_map::CascadeIdx,
+};
+use impact_model::{
+    InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID,
+    transform::{
+        InstanceModelLightTransform, InstanceModelViewTransform,
+        InstanceModelViewTransformWithPrevious,
+    },
 };
 use nalgebra::Similarity3;
 use roc_integration::roc;
@@ -1464,6 +1465,7 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use impact_math::hash64;
+    use impact_model::InstanceFeatureStorage;
     use nalgebra::{Point3, Rotation3, Scale3, Translation3, point};
 
     fn create_dummy_group_node(
@@ -1500,10 +1502,11 @@ mod tests {
     }
 
     fn create_dummy_model_instance_feature_ids() -> Vec<InstanceFeatureID> {
-        vec![
-            InstanceModelViewTransformWithPrevious::dummy_instance_feature_id(),
-            InstanceModelLightTransform::dummy_instance_feature_id(),
-        ]
+        let id_1 = InstanceFeatureStorage::new::<InstanceModelViewTransformWithPrevious>()
+            .add_feature(&InstanceModelViewTransformWithPrevious::zeroed());
+        let id_2 = InstanceFeatureStorage::new::<InstanceModelLightTransform>()
+            .add_feature(&InstanceModelLightTransform::zeroed());
+        vec![id_1, id_2]
     }
 
     fn create_dummy_camera_node(

@@ -3,7 +3,6 @@
 use crate::{
     gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     mesh::buffer::MeshVertexAttributeLocation,
-    model::transform::InstanceModelLightTransform,
     rendering_template_source,
 };
 use impact_gpu::{
@@ -11,6 +10,7 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager};
+use impact_model::transform::InstanceModelLightTransform;
 use std::sync::LazyLock;
 
 /// Shader template for unidirectional light shadow map update passes, which

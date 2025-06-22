@@ -9,7 +9,7 @@ use crate::{
     mesh::{
         MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
     },
-    model::{InstanceFeatureManager, ModelID, buffer::InstanceFeatureGPUBufferManager},
+    model::{InstanceFeatureManager, ModelID},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
     voxel::{
         VoxelManager, VoxelObjectID,
@@ -20,6 +20,7 @@ use anyhow::Result;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
+use impact_model::buffer::InstanceFeatureGPUBufferManager;
 use std::{
     borrow::Cow,
     collections::hash_map::Entry,
