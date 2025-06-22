@@ -1,10 +1,7 @@
 //! Management of camera-related components for entities.
 
 use crate::{
-    camera::{
-        OrthographicCamera, PerspectiveCamera, SceneCamera,
-        components::{OrthographicCameraComp, PerspectiveCameraComp},
-    },
+    camera::SceneCamera,
     gpu::rendering::RenderingSystem,
     physics::motion::components::ReferenceFrameComp,
     scene::{
@@ -13,6 +10,10 @@ use crate::{
     },
 };
 use anyhow::{Result, bail};
+use impact_camera::{
+    OrthographicCamera, PerspectiveCamera,
+    components::{OrthographicCameraComp, PerspectiveCameraComp},
+};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_math::UpperExclusiveBounds;
 use std::sync::RwLock;
@@ -28,8 +29,8 @@ use std::sync::RwLock;
 /// that the scene already has a camera.
 pub fn add_camera_to_scene_for_new_entity(
     renderer: &RwLock<RenderingSystem>,
-    scene_graph: &RwLock<SceneGraph<f32>>,
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_graph: &RwLock<SceneGraph>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
@@ -60,8 +61,8 @@ pub fn add_camera_to_scene_for_new_entity(
 /// that the scene already has a camera.
 pub fn add_perspective_camera_to_scene_for_new_entity(
     renderer: &RwLock<RenderingSystem>,
-    scene_graph: &RwLock<SceneGraph<f32>>,
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_graph: &RwLock<SceneGraph>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
@@ -129,8 +130,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 /// that the scene already has a camera.
 pub fn add_orthographic_camera_to_scene_for_new_entity(
     renderer: &RwLock<RenderingSystem>,
-    scene_graph: &RwLock<SceneGraph<f32>>,
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_graph: &RwLock<SceneGraph>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
@@ -191,8 +192,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 /// removes the corresponding camera node from the given [`SceneGraph`] and sets
 /// the content of `scene_camera` to [`None`].
 pub fn remove_camera_from_scene_for_removed_entity(
-    scene_graph: &RwLock<SceneGraph<f32>>,
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_graph: &RwLock<SceneGraph>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {

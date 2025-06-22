@@ -19,9 +19,9 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_camera::buffer::BufferableCamera;
 use impact_containers::{GenerationalIdx, GenerationalReusingVec, HashSet};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
-use impact_math::Float;
 use nalgebra::Similarity3;
 use roc_integration::roc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -35,11 +35,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// holds a transform from the model space of the object or group it represents
 /// to the space of the parent.
 #[derive(Debug)]
-pub struct SceneGraph<F: Float> {
+pub struct SceneGraph {
     root_node_id: GroupNodeID,
-    group_nodes: NodeStorage<GroupNode<F>>,
-    model_instance_nodes: NodeStorage<ModelInstanceNode<F>>,
-    camera_nodes: NodeStorage<CameraNode<F>>,
+    group_nodes: NodeStorage<GroupNode>,
+    model_instance_nodes: NodeStorage<ModelInstanceNode>,
+    camera_nodes: NodeStorage<CameraNode>,
 }
 
 /// Flat storage for all the [`SceneGraph`] nodes of a given
@@ -50,14 +50,12 @@ pub struct NodeStorage<N> {
 }
 
 /// Type of the transform used by scene graph nodes.
-pub type NodeTransform<F> = Similarity3<F>;
+pub type NodeTransform = Similarity3<f32>;
 
 /// Represents a type of node in a [`SceneGraph`].
 pub trait SceneGraphNode {
     /// Type of the node's ID.
     type ID: SceneGraphNodeID;
-    /// Floating point type used for the node's transform.
-    type F: Float;
 }
 
 /// Represents the ID of a type of node in a [`SceneGraph`].
@@ -99,24 +97,24 @@ pub trait IdxToNodeID {
 /// nodes. It holds a transform representing group's spatial relationship with
 /// its parent group.
 #[derive(Clone, Debug)]
-pub struct GroupNode<F: Float> {
+pub struct GroupNode {
     parent_node_id: Option<GroupNodeID>,
-    group_to_parent_transform: NodeTransform<F>,
+    group_to_parent_transform: NodeTransform,
     child_group_node_ids: HashSet<GroupNodeID>,
     child_model_instance_node_ids: HashSet<ModelInstanceNodeID>,
     child_camera_node_ids: HashSet<CameraNodeID>,
-    bounding_sphere: Option<Sphere<F>>,
-    group_to_root_transform: NodeTransform<F>,
+    bounding_sphere: Option<Sphere<f32>>,
+    group_to_root_transform: NodeTransform,
 }
 
 /// A [`SceneGraph`] leaf node representing a model instance. It holds a
 /// transform representing the instance's spatial relationship with its parent
 /// group, as well as a list of instance feature IDs.
 #[derive(Debug)]
-pub struct ModelInstanceNode<F: Float> {
+pub struct ModelInstanceNode {
     parent_node_id: GroupNodeID,
-    model_bounding_sphere: Option<Sphere<F>>,
-    model_to_parent_transform: NodeTransform<F>,
+    model_bounding_sphere: Option<Sphere<f32>>,
+    model_to_parent_transform: NodeTransform,
     model_id: ModelID,
     feature_ids: Vec<InstanceFeatureID>,
     flags: ModelInstanceFlags,
@@ -127,9 +125,9 @@ pub struct ModelInstanceNode<F: Float> {
 /// It holds at transform representing the camera's spatial relationship with
 /// its parent group.
 #[derive(Clone, Debug)]
-pub struct CameraNode<F: Float> {
+pub struct CameraNode {
     parent_node_id: GroupNodeID,
-    camera_to_parent_transform: NodeTransform<F>,
+    camera_to_parent_transform: NodeTransform,
 }
 
 bitflags! {
@@ -144,7 +142,7 @@ bitflags! {
     }
 }
 
-impl<F: Float> SceneGraph<F> {
+impl SceneGraph {
     /// Creates a new empty scene graph.
     pub fn new() -> Self {
         let mut group_nodes = NodeStorage::new();
@@ -167,18 +165,18 @@ impl<F: Float> SceneGraph<F> {
     }
 
     /// Returns a reference to the storage of group nodes in the scene graph.
-    pub fn group_nodes(&self) -> &NodeStorage<GroupNode<F>> {
+    pub fn group_nodes(&self) -> &NodeStorage<GroupNode> {
         &self.group_nodes
     }
 
     /// Returns a reference to the storage of model instance nodes in the scene
     /// graph.
-    pub fn model_instance_nodes(&self) -> &NodeStorage<ModelInstanceNode<F>> {
+    pub fn model_instance_nodes(&self) -> &NodeStorage<ModelInstanceNode> {
         &self.model_instance_nodes
     }
 
     /// Returns a reference to the storage of camera nodes in the scene graph.
-    pub fn camera_nodes(&self) -> &NodeStorage<CameraNode<F>> {
+    pub fn camera_nodes(&self) -> &NodeStorage<CameraNode> {
         &self.camera_nodes
     }
 
@@ -193,7 +191,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn create_group_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        group_to_parent_transform: NodeTransform<F>,
+        group_to_parent_transform: NodeTransform,
     ) -> GroupNodeID {
         let group_node = GroupNode::non_root(parent_node_id, group_to_parent_transform);
         let group_node_id = self.group_nodes.add_node(group_node);
@@ -225,9 +223,9 @@ impl<F: Float> SceneGraph<F> {
     pub fn create_model_instance_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        model_to_parent_transform: NodeTransform<F>,
+        model_to_parent_transform: NodeTransform,
         model_id: ModelID,
-        frustum_culling_bounding_sphere: Option<Sphere<F>>,
+        frustum_culling_bounding_sphere: Option<Sphere<f32>>,
         feature_ids: Vec<InstanceFeatureID>,
         flags: ModelInstanceFlags,
     ) -> ModelInstanceNodeID {
@@ -283,7 +281,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn create_camera_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        camera_to_parent_transform: NodeTransform<F>,
+        camera_to_parent_transform: NodeTransform,
     ) -> CameraNodeID {
         let camera_node = CameraNode::new(parent_node_id, camera_to_parent_transform);
         let camera_node_id = self.camera_nodes.add_node(camera_node);
@@ -368,7 +366,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn set_group_to_parent_transform(
         &mut self,
         group_node_id: GroupNodeID,
-        transform: NodeTransform<<GroupNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform,
     ) {
         self.group_nodes
             .node_mut(group_node_id)
@@ -380,7 +378,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn set_model_to_parent_transform(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
-        transform: NodeTransform<<ModelInstanceNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform,
     ) {
         self.model_instance_nodes
             .node_mut(model_instance_node_id)
@@ -392,7 +390,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn set_model_to_parent_transform_and_flags(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
-        transform: NodeTransform<<ModelInstanceNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform,
         flags: ModelInstanceFlags,
     ) {
         let node = self.model_instance_nodes.node_mut(model_instance_node_id);
@@ -405,7 +403,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn set_camera_to_parent_transform(
         &mut self,
         camera_node_id: CameraNodeID,
-        transform: NodeTransform<<CameraNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform,
     ) {
         self.camera_nodes
             .node_mut(camera_node_id)
@@ -424,7 +422,7 @@ impl<F: Float> SceneGraph<F> {
     /// # Warning
     /// Make sure to [`Self::update_all_group_to_root_transforms`] before calling
     /// this method if any group nodes have changed.
-    pub fn sync_camera_view_transform(&self, scene_camera: &mut SceneCamera<F>) {
+    pub fn sync_camera_view_transform(&self, scene_camera: &mut SceneCamera) {
         let camera_node = self.camera_nodes.node(scene_camera.scene_graph_node_id());
         let view_transform = self.compute_view_transform(camera_node);
         scene_camera.set_view_transform(view_transform);
@@ -447,11 +445,10 @@ impl<F: Float> SceneGraph<F> {
     pub fn buffer_transforms_of_visible_model_instances(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        scene_camera: &SceneCamera<F>,
+        scene_camera: &SceneCamera,
         current_frame_count: u32,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
-        F: simba::scalar::SubsetOf<f32>,
     {
         let root_node = self.group_nodes.node(self.root_node_id());
 
@@ -531,7 +528,7 @@ impl<F: Float> SceneGraph<F> {
     fn update_group_to_root_transforms(
         &mut self,
         group_node_id: GroupNodeID,
-        parent_to_root_transform: NodeTransform<F>,
+        parent_to_root_transform: NodeTransform,
     ) {
         let group_node = self.group_nodes.node_mut(group_node_id);
 
@@ -547,7 +544,7 @@ impl<F: Float> SceneGraph<F> {
 
     /// Computes the transform from the scene graph's root node space to the
     /// space of the given camera node.
-    fn compute_view_transform(&self, camera_node: &CameraNode<F>) -> NodeTransform<F> {
+    fn compute_view_transform(&self, camera_node: &CameraNode) -> NodeTransform {
         let parent_node = self.group_nodes.node(camera_node.parent_node_id());
         camera_node.parent_to_camera_transform() * parent_node.root_to_group_transform()
     }
@@ -562,7 +559,7 @@ impl<F: Float> SceneGraph<F> {
     ///
     /// # Panics
     /// If the specified group node does not exist.
-    fn update_bounding_spheres(&mut self, group_node_id: GroupNodeID) -> Option<Sphere<F>> {
+    fn update_bounding_spheres(&mut self, group_node_id: GroupNodeID) -> Option<Sphere<f32>> {
         let group_node = self.group_nodes.node(group_node_id);
 
         let child_group_node_ids = group_node.obtain_child_group_node_ids();
@@ -630,12 +627,11 @@ impl<F: Float> SceneGraph<F> {
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
         current_frame_count: u32,
-        camera_space_view_frustum: &Frustum<F>,
-        group_node: &GroupNode<F>,
-        group_to_camera_transform: &NodeTransform<F>,
+        camera_space_view_frustum: &Frustum<f32>,
+        group_node: &GroupNode,
+        group_to_camera_transform: &NodeTransform,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
-        F: simba::scalar::SubsetOf<f32>,
     {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -712,11 +708,10 @@ impl<F: Float> SceneGraph<F> {
     fn buffer_model_view_transform_of_model_instance(
         instance_feature_manager: &mut InstanceFeatureManager,
         current_frame_count: u32,
-        model_instance_node: &ModelInstanceNode<F>,
-        model_view_transform: &NodeTransform<F>,
+        model_instance_node: &ModelInstanceNode,
+        model_view_transform: &NodeTransform,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
-        F: simba::scalar::SubsetOf<f32>,
     {
         let instance_model_view_transform =
             InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
@@ -735,44 +730,6 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node.declare_visible_this_frame(current_frame_count);
     }
 
-    #[cfg(test)]
-    fn node_has_group_node_as_child(
-        &self,
-        group_node_id: GroupNodeID,
-        child_group_node_id: GroupNodeID,
-    ) -> bool {
-        self.group_nodes
-            .node(group_node_id)
-            .child_group_node_ids()
-            .contains(&child_group_node_id)
-    }
-
-    #[cfg(test)]
-    fn node_has_model_instance_node_as_child(
-        &self,
-        group_node_id: GroupNodeID,
-        child_model_instance_node_id: ModelInstanceNodeID,
-    ) -> bool {
-        self.group_nodes
-            .node(group_node_id)
-            .child_model_instance_node_ids()
-            .contains(&child_model_instance_node_id)
-    }
-
-    #[cfg(test)]
-    fn node_has_camera_node_as_child(
-        &self,
-        group_node_id: GroupNodeID,
-        child_camera_node_id: CameraNodeID,
-    ) -> bool {
-        self.group_nodes
-            .node(group_node_id)
-            .child_camera_node_ids()
-            .contains(&child_camera_node_id)
-    }
-}
-
-impl SceneGraph<f32> {
     /// Goes through all omnidirectional lights in the given light storage and
     /// updates their cubemap orientations and distance spans to encompass all
     /// model instances that may cast visible shadows in a way that preserves
@@ -791,7 +748,7 @@ impl SceneGraph<f32> {
         &self,
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
-        scene_camera: &SceneCamera<f32>,
+        scene_camera: &SceneCamera,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
         let view_transform = scene_camera.view_transform();
@@ -878,7 +835,7 @@ impl SceneGraph<f32> {
         &self,
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
-        scene_camera: &SceneCamera<f32>,
+        scene_camera: &SceneCamera,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
         let view_transform = scene_camera.view_transform();
@@ -945,8 +902,8 @@ impl SceneGraph<f32> {
         omnidirectional_light: &ShadowableOmnidirectionalLight,
         face: CubemapFace,
         camera_space_face_frustum: &Frustum<f32>,
-        group_node: &GroupNode<f32>,
-        group_to_camera_transform: &NodeTransform<f32>,
+        group_node: &GroupNode,
+        group_to_camera_transform: &NodeTransform,
     ) {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -1030,8 +987,8 @@ impl SceneGraph<f32> {
         instance_feature_manager: &mut InstanceFeatureManager,
         unidirectional_light: &ShadowableUnidirectionalLight,
         cascade_idx: CascadeIdx,
-        group_node: &GroupNode<f32>,
-        group_to_camera_transform: &NodeTransform<f32>,
+        group_node: &GroupNode,
+        group_to_camera_transform: &NodeTransform,
     ) {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -1108,9 +1065,45 @@ impl SceneGraph<f32> {
             }
         }
     }
+
+    #[cfg(test)]
+    fn node_has_group_node_as_child(
+        &self,
+        group_node_id: GroupNodeID,
+        child_group_node_id: GroupNodeID,
+    ) -> bool {
+        self.group_nodes
+            .node(group_node_id)
+            .child_group_node_ids()
+            .contains(&child_group_node_id)
+    }
+
+    #[cfg(test)]
+    fn node_has_model_instance_node_as_child(
+        &self,
+        group_node_id: GroupNodeID,
+        child_model_instance_node_id: ModelInstanceNodeID,
+    ) -> bool {
+        self.group_nodes
+            .node(group_node_id)
+            .child_model_instance_node_ids()
+            .contains(&child_model_instance_node_id)
+    }
+
+    #[cfg(test)]
+    fn node_has_camera_node_as_child(
+        &self,
+        group_node_id: GroupNodeID,
+        child_camera_node_id: CameraNodeID,
+    ) -> bool {
+        self.group_nodes
+            .node(group_node_id)
+            .child_camera_node_ids()
+            .contains(&child_camera_node_id)
+    }
 }
 
-impl<F: Float> Default for SceneGraph<F> {
+impl Default for SceneGraph {
     fn default() -> Self {
         Self::new()
     }
@@ -1155,16 +1148,13 @@ impl<N: SceneGraphNode> NodeStorage<N> {
     }
 }
 
-impl<F: Float> GroupNode<F> {
+impl GroupNode {
     /// Returns the group-to-root transform for the node.
-    pub fn group_to_root_transform(&self) -> &NodeTransform<F> {
+    pub fn group_to_root_transform(&self) -> &NodeTransform {
         &self.group_to_root_transform
     }
 
-    fn new(
-        parent_node_id: Option<GroupNodeID>,
-        group_to_parent_transform: NodeTransform<F>,
-    ) -> Self {
+    fn new(parent_node_id: Option<GroupNodeID>, group_to_parent_transform: NodeTransform) -> Self {
         Self {
             parent_node_id,
             group_to_parent_transform,
@@ -1180,15 +1170,15 @@ impl<F: Float> GroupNode<F> {
         Self::new(None, NodeTransform::identity())
     }
 
-    fn non_root(parent_node_id: GroupNodeID, transform: NodeTransform<F>) -> Self {
+    fn non_root(parent_node_id: GroupNodeID, transform: NodeTransform) -> Self {
         Self::new(Some(parent_node_id), transform)
     }
 
-    fn group_to_parent_transform(&self) -> &NodeTransform<F> {
+    fn group_to_parent_transform(&self) -> &NodeTransform {
         &self.group_to_parent_transform
     }
 
-    fn root_to_group_transform(&self) -> NodeTransform<F> {
+    fn root_to_group_transform(&self) -> NodeTransform {
         self.group_to_root_transform.inverse()
     }
 
@@ -1209,7 +1199,7 @@ impl<F: Float> GroupNode<F> {
         &self.child_camera_node_ids
     }
 
-    fn get_bounding_sphere(&self) -> Option<&Sphere<F>> {
+    fn get_bounding_sphere(&self) -> Option<&Sphere<f32>> {
         self.bounding_sphere.as_ref()
     }
 
@@ -1265,35 +1255,46 @@ impl<F: Float> GroupNode<F> {
         self.child_camera_node_ids.remove(&camera_node_id);
     }
 
-    fn set_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<F>>) {
+    fn set_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<f32>>) {
         self.bounding_sphere = bounding_sphere;
     }
 
-    fn set_group_to_root_transform(&mut self, group_to_root_transform: NodeTransform<F>) {
+    fn set_group_to_root_transform(&mut self, group_to_root_transform: NodeTransform) {
         self.group_to_root_transform = group_to_root_transform;
     }
 
-    fn set_group_to_parent_transform(&mut self, transform: NodeTransform<F>) {
+    fn set_group_to_parent_transform(&mut self, transform: NodeTransform) {
         self.group_to_parent_transform = transform;
     }
 }
 
 impl SceneGraphNodeID for GroupNodeID {}
 
-impl<F: Float> SceneGraphNode for GroupNode<F> {
+impl SceneGraphNode for GroupNode {
     type ID = GroupNodeID;
-    type F = F;
 }
 
-impl<F: Float> ModelInstanceNode<F> {
-    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<F>>) {
+impl ModelInstanceNode {
+    /// The index of the model-view transform feature in the array of features
+    /// for model instances.
+    pub const fn model_view_transform_feature_idx() -> usize {
+        0
+    }
+
+    /// The index of the model-light transform feature in the array of features
+    /// for model instances.
+    pub const fn model_light_transform_feature_idx() -> usize {
+        1
+    }
+
+    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<f32>>) {
         self.model_bounding_sphere = bounding_sphere;
     }
 
     fn new(
         parent_node_id: GroupNodeID,
-        model_bounding_sphere: Option<Sphere<F>>,
-        model_to_parent_transform: NodeTransform<F>,
+        model_bounding_sphere: Option<Sphere<f32>>,
+        model_to_parent_transform: NodeTransform,
         model_id: ModelID,
         feature_ids: Vec<InstanceFeatureID>,
         flags: ModelInstanceFlags,
@@ -1315,12 +1316,12 @@ impl<F: Float> ModelInstanceNode<F> {
     }
 
     /// Returns the parent-to-model transform for the node.
-    pub fn parent_to_model_transform(&self) -> NodeTransform<F> {
+    pub fn parent_to_model_transform(&self) -> NodeTransform {
         self.model_to_parent_transform.inverse()
     }
 
     /// Returns the model-to-parent transform for the node.
-    pub fn model_to_parent_transform(&self) -> &NodeTransform<F> {
+    pub fn model_to_parent_transform(&self) -> &NodeTransform {
         &self.model_to_parent_transform
     }
 
@@ -1363,11 +1364,11 @@ impl<F: Float> ModelInstanceNode<F> {
 
     /// Returns the bounding sphere of the model instance, or [`None`] if it has
     /// no bounding sphere.
-    pub fn get_model_bounding_sphere(&self) -> Option<&Sphere<F>> {
+    pub fn get_model_bounding_sphere(&self) -> Option<&Sphere<f32>> {
         self.model_bounding_sphere.as_ref()
     }
 
-    fn set_model_to_parent_transform(&mut self, transform: NodeTransform<F>) {
+    fn set_model_to_parent_transform(&mut self, transform: NodeTransform) {
         self.model_to_parent_transform = transform;
     }
 
@@ -1381,29 +1382,14 @@ impl<F: Float> ModelInstanceNode<F> {
     }
 }
 
-impl ModelInstanceNode<f32> {
-    /// The index of the model-view transform feature in the array of features
-    /// for model instances.
-    pub const fn model_view_transform_feature_idx() -> usize {
-        0
-    }
-
-    /// The index of the model-light transform feature in the array of features
-    /// for model instances.
-    pub const fn model_light_transform_feature_idx() -> usize {
-        1
-    }
-}
-
 impl SceneGraphNodeID for ModelInstanceNodeID {}
 
-impl<F: Float> SceneGraphNode for ModelInstanceNode<F> {
+impl SceneGraphNode for ModelInstanceNode {
     type ID = ModelInstanceNodeID;
-    type F = F;
 }
 
-impl<F: Float> CameraNode<F> {
-    fn new(parent_node_id: GroupNodeID, camera_to_parent_transform: NodeTransform<F>) -> Self {
+impl CameraNode {
+    fn new(parent_node_id: GroupNodeID, camera_to_parent_transform: NodeTransform) -> Self {
         Self {
             parent_node_id,
             camera_to_parent_transform,
@@ -1416,25 +1402,24 @@ impl<F: Float> CameraNode<F> {
     }
 
     /// Returns the parent-to-camera transform for the node.
-    pub fn parent_to_camera_transform(&self) -> NodeTransform<F> {
+    pub fn parent_to_camera_transform(&self) -> NodeTransform {
         self.camera_to_parent_transform.inverse()
     }
 
     /// Returns the camera-to-parent transform for the node.
-    pub fn camera_to_parent_transform(&self) -> &NodeTransform<F> {
+    pub fn camera_to_parent_transform(&self) -> &NodeTransform {
         &self.camera_to_parent_transform
     }
 
-    fn set_camera_to_parent_transform(&mut self, transform: NodeTransform<F>) {
+    fn set_camera_to_parent_transform(&mut self, transform: NodeTransform) {
         self.camera_to_parent_transform = transform;
     }
 }
 
 impl SceneGraphNodeID for CameraNodeID {}
 
-impl<F: Float> SceneGraphNode for CameraNode<F> {
+impl SceneGraphNode for CameraNode {
     type ID = CameraNodeID;
-    type F = F;
 }
 
 macro_rules! impl_node_id_idx_traits {
@@ -1480,15 +1465,15 @@ mod tests {
     use impact_math::hash64;
     use nalgebra::{Point3, Rotation3, Scale3, Translation3, point};
 
-    fn create_dummy_group_node<F: Float>(
-        scene_graph: &mut SceneGraph<F>,
+    fn create_dummy_group_node(
+        scene_graph: &mut SceneGraph,
         parent_node_id: GroupNodeID,
     ) -> GroupNodeID {
         scene_graph.create_group_node(parent_node_id, Similarity3::identity())
     }
 
-    fn create_dummy_model_instance_node<F: Float>(
-        scene_graph: &mut SceneGraph<F>,
+    fn create_dummy_model_instance_node(
+        scene_graph: &mut SceneGraph,
         parent_node_id: GroupNodeID,
     ) -> ModelInstanceNodeID {
         create_dummy_model_instance_node_with_transform(
@@ -1498,16 +1483,16 @@ mod tests {
         )
     }
 
-    fn create_dummy_model_instance_node_with_transform<F: Float>(
-        scene_graph: &mut SceneGraph<F>,
+    fn create_dummy_model_instance_node_with_transform(
+        scene_graph: &mut SceneGraph,
         parent_node_id: GroupNodeID,
-        model_to_parent_transform: Similarity3<F>,
+        model_to_parent_transform: Similarity3<f32>,
     ) -> ModelInstanceNodeID {
         scene_graph.create_model_instance_node(
             parent_node_id,
             model_to_parent_transform,
             create_dummy_model_id(""),
-            Some(Sphere::new(Point3::origin(), F::one())),
+            Some(Sphere::new(Point3::origin(), 1.0)),
             create_dummy_model_instance_feature_ids(),
             ModelInstanceFlags::empty(),
         )
@@ -1520,8 +1505,8 @@ mod tests {
         ]
     }
 
-    fn create_dummy_camera_node<F: Float>(
-        scene_graph: &mut SceneGraph<F>,
+    fn create_dummy_camera_node(
+        scene_graph: &mut SceneGraph,
         parent_node_id: GroupNodeID,
     ) -> CameraNodeID {
         scene_graph.create_camera_node(parent_node_id, Similarity3::identity())
@@ -1540,7 +1525,7 @@ mod tests {
 
     #[test]
     fn creating_scene_graph_works() {
-        let scene_graph = SceneGraph::<f64>::new();
+        let scene_graph = SceneGraph::new();
 
         assert!(
             scene_graph
@@ -1555,7 +1540,7 @@ mod tests {
 
     #[test]
     fn creating_group_node_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let id = create_dummy_group_node(&mut scene_graph, root_id);
 
@@ -1569,7 +1554,7 @@ mod tests {
 
     #[test]
     fn creating_model_instance_node_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let id = create_dummy_model_instance_node(&mut scene_graph, root_id);
 
@@ -1583,7 +1568,7 @@ mod tests {
 
     #[test]
     fn creating_camera_node_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let id = create_dummy_camera_node(&mut scene_graph, root_id);
 
@@ -1597,7 +1582,7 @@ mod tests {
 
     #[test]
     fn removing_model_instance_node_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let id = create_dummy_model_instance_node(&mut scene_graph, root_id);
         let model_id = scene_graph.remove_model_instance_node(id);
@@ -1613,7 +1598,7 @@ mod tests {
 
     #[test]
     fn removing_camera_node_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let id = create_dummy_camera_node(&mut scene_graph, root_id);
         scene_graph.remove_camera_node(id);
@@ -1628,7 +1613,7 @@ mod tests {
 
     #[test]
     fn removing_group_node_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
 
         let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
@@ -1658,7 +1643,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn creating_group_node_with_missing_parent_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
 
         let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
@@ -1670,7 +1655,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn creating_model_instance_node_with_missing_parent_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
 
         let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
@@ -1682,7 +1667,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn creating_camera_node_with_missing_parent_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
 
         let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
@@ -1694,14 +1679,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_root_node_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         scene_graph.remove_group_node(scene_graph.root_node_id());
     }
 
     #[test]
     #[should_panic]
     fn removing_group_node_twice_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
         scene_graph.remove_group_node(group_node_id);
@@ -1711,7 +1696,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_model_instance_node_twice_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
         scene_graph.remove_model_instance_node(model_instance_node_id);
@@ -1721,7 +1706,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_camera_node_twice_fails() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root_id = scene_graph.root_node_id();
         let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
         scene_graph.remove_camera_node(camera_node_id);
@@ -1736,7 +1721,7 @@ mod tests {
             7.0,
         );
 
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
         let camera = scene_graph.create_camera_node(root, camera_to_root_transform);
 
@@ -1748,7 +1733,7 @@ mod tests {
 
     #[test]
     fn computing_root_to_camera_transform_with_only_identity_parent_to_model_transforms_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(root, Similarity3::identity());
         let group_2 = scene_graph.create_group_node(group_1, Similarity3::identity());
@@ -1768,7 +1753,7 @@ mod tests {
         let rotation = Rotation3::from_euler_angles(0.1, 0.2, 0.3);
         let scaling = 7.0;
 
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(
             root,
@@ -1800,11 +1785,11 @@ mod tests {
                 .to_homogeneous()
                 * rotation.inverse().to_homogeneous()
                 * translation.inverse().to_homogeneous(),
-            epsilon = 1e-9
+            epsilon = 1e-7
         );
     }
 
-    fn assert_spheres_equal<F: Float>(sphere_1: &Sphere<F>, sphere_2: &Sphere<F>) {
+    fn assert_spheres_equal(sphere_1: &Sphere<f32>, sphere_2: &Sphere<f32>) {
         assert_abs_diff_eq!(sphere_1.center(), sphere_2.center());
         assert_abs_diff_eq!(sphere_1.radius(), sphere_2.radius());
     }
@@ -1818,7 +1803,7 @@ mod tests {
         );
         let bounding_sphere = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
 
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
 
         let model_instance_node_id = scene_graph.create_model_instance_node(
@@ -1855,7 +1840,7 @@ mod tests {
         let bounding_sphere_1 = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
         let bounding_sphere_2 = Sphere::new(point![-0.4, 7.7, 2.9], 4.8);
 
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
 
         scene_graph.create_model_instance_node(
@@ -1903,7 +1888,7 @@ mod tests {
             1.0,
         );
 
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
 
         let group_1 = scene_graph.create_group_node(root, group_1_to_parent_transform);
@@ -1962,7 +1947,7 @@ mod tests {
 
     #[test]
     fn branch_without_model_instance_child_has_no_bounding_spheres() {
-        let mut scene_graph = SceneGraph::<f64>::new();
+        let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(root, Similarity3::identity());
         let group_2 = scene_graph.create_group_node(group_1, Similarity3::identity());

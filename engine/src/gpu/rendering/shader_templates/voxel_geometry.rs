@@ -1,7 +1,6 @@
 //! Shader template for the voxel geometry pass.
 
 use crate::{
-    camera::buffer::CameraProjectionUniform,
     gpu::rendering::push_constant::RenderingPushConstantVariant,
     model::transform::InstanceModelViewTransformWithPrevious,
     rendering_template_source,
@@ -10,6 +9,7 @@ use crate::{
         VoxelPushConstantVariant,
     },
 };
+use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     push_constant::PushConstantGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},

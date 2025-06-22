@@ -2,7 +2,6 @@
 
 use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
-    camera::buffer::CameraGPUBufferManager,
     gpu::{
         GraphicsDevice,
         rendering::{
@@ -33,6 +32,7 @@ use crate::{
     mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
+use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
 use std::borrow::Cow;
 

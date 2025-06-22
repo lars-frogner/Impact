@@ -2,7 +2,6 @@
 
 use super::STANDARD_FRONT_FACE;
 use crate::{
-    camera::buffer::CameraGPUBufferManager,
     gizmo::{self, GizmoObscurability},
     gpu::rendering::{
         attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
@@ -18,6 +17,7 @@ use crate::{
     scene::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
+use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
     device::GraphicsDevice,
     query::TimestampQueryRegistry,

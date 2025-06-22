@@ -1,6 +1,6 @@
 //! Buffering of camera data for rendering.
 
-use crate::camera::SceneCamera;
+use crate::Camera;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::Frustum;
 use impact_gpu::{
@@ -8,6 +8,7 @@ use impact_gpu::{
     buffer::GPUBuffer,
     device::GraphicsDevice,
     uniform::{self, UniformBufferable},
+    wgpu,
 };
 use impact_math::{ConstStringHash64, HaltonSequence};
 use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
@@ -15,6 +16,18 @@ use std::{
     borrow::Cow,
     sync::{LazyLock, OnceLock},
 };
+
+/// Represents a camera that can buffered in a GPU buffer.
+pub trait BufferableCamera {
+    /// Returns a reference to the underlying [`Camera`].
+    fn camera(&self) -> &dyn Camera<f32>;
+
+    /// Returns a reference to the camera's view transform.
+    fn view_transform(&self) -> &Similarity3<f32>;
+
+    /// Returns whether jittering is enabled for the camera.
+    fn jitter_enabled(&self) -> bool;
+}
 
 /// Length of the sequence of jitter offsets to apply to the projection for
 /// temporal anti-aliasing.
@@ -70,7 +83,7 @@ impl CameraGPUBufferManager {
 
     /// Creates a new manager with GPU resources initialized from the given
     /// camera.
-    pub fn for_camera(graphics_device: &GraphicsDevice, camera: &SceneCamera<f32>) -> Self {
+    pub fn for_camera(graphics_device: &GraphicsDevice, camera: &impl BufferableCamera) -> Self {
         let view_transform = *camera.view_transform();
 
         let projection_uniform = CameraProjectionUniform::new(camera);
@@ -119,7 +132,7 @@ impl CameraGPUBufferManager {
     pub fn sync_with_camera(
         &mut self,
         graphics_device: &GraphicsDevice,
-        camera: &SceneCamera<f32>,
+        camera: &impl BufferableCamera,
     ) {
         self.view_transform = *camera.view_transform();
 
@@ -171,7 +184,7 @@ impl CameraGPUBufferManager {
         })
     }
 
-    fn sync_gpu_buffer(&self, graphics_device: &GraphicsDevice, camera: &SceneCamera<f32>) {
+    fn sync_gpu_buffer(&self, graphics_device: &GraphicsDevice, camera: &impl BufferableCamera) {
         let projection_uniform = CameraProjectionUniform::new(camera);
         self.projection_uniform_gpu_buffer
             .update_valid_bytes(graphics_device, bytemuck::bytes_of(&projection_uniform));
@@ -190,7 +203,7 @@ impl CameraProjectionUniform {
         JITTER_COUNT
     }
 
-    fn new(camera: &SceneCamera<f32>) -> Self {
+    fn new(camera: &impl BufferableCamera) -> Self {
         let transform = *camera.camera().projection_transform();
 
         let frustum_far_plane_corners =

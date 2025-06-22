@@ -1,7 +1,6 @@
 //! Shader template for the ambient light pass.
 
 use crate::{
-    camera::buffer::CameraProjectionUniform,
     gpu::rendering::{
         attachment::{
             Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
@@ -18,6 +17,7 @@ use crate::{
     mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
+use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     push_constant::PushConstantGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},

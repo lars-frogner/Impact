@@ -1,7 +1,6 @@
 //! Shader template for the skybox rendering pass.
 
 use crate::{
-    camera::buffer::CameraProjectionUniform,
     gpu::rendering::{
         attachment::{
             Blending, RenderAttachmentDescription, RenderAttachmentOutputDescription,
@@ -13,6 +12,7 @@ use crate::{
     rendering_template_source,
     skybox::resource::SkyboxGPUResourceManager,
 };
+use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,

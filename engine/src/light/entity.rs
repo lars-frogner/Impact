@@ -15,6 +15,7 @@ use crate::{
     physics::motion::components::ReferenceFrameComp,
     scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
 };
+use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_math::Degrees;
 use nalgebra::{Similarity3, UnitVector3};
@@ -25,7 +26,7 @@ use std::sync::RwLock;
 /// the light storage and adds a correspondong light component with the light's
 /// ID to the entity.
 pub fn setup_light_for_new_entity(
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -92,7 +93,7 @@ pub fn setup_ambient_light_for_new_entity(
 /// storage and adds a [`OmnidirectionalLightComp`] or
 /// [`ShadowableOmnidirectionalLightComp`] with the light's ID to the entity.
 pub fn setup_omnidirectional_light_for_new_entity(
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -175,7 +176,7 @@ pub fn setup_omnidirectional_light_for_new_entity(
 /// storage and adds a [`UnidirectionalLightComp`] or
 /// [`ShadowableUnidirectionalLightComp`] with the light's ID to the entity.
 pub fn setup_unidirectional_light_for_new_entity(
-    scene_camera: &RwLock<Option<SceneCamera<f32>>>,
+    scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,

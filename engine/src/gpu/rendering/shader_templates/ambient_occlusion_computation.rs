@@ -1,7 +1,6 @@
 //! Shader template for the ambient occlusion computation pass.
 
 use crate::{
-    camera::buffer::CameraProjectionUniform,
     gpu::rendering::{
         attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,
@@ -18,6 +17,7 @@ use crate::{
     mesh::buffer::MeshVertexAttributeLocation,
     rendering_template_source,
 };
+use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     resource_group::GPUResourceGroupID,
     shader::{

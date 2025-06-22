@@ -2,7 +2,6 @@
 
 use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
-    camera::buffer::CameraGPUBufferManager,
     gpu::{
         GraphicsDevice,
         rendering::{
@@ -31,6 +30,7 @@ use crate::{
     voxel::render_commands::VoxelGeometryPipeline,
 };
 use anyhow::{Result, anyhow};
+use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
 use std::{borrow::Cow, collections::hash_map::Entry};
