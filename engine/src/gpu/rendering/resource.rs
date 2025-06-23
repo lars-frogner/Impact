@@ -6,9 +6,6 @@ use crate::{
     assets::Assets,
     camera::SceneCamera,
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
-    mesh::{
-        MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
-    },
     model::{InstanceFeatureManager, ModelID},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
     voxel::{
@@ -20,6 +17,9 @@ use anyhow::Result;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
+use impact_mesh::{
+    MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
+};
 use impact_model::buffer::InstanceFeatureGPUBufferManager;
 use std::{
     borrow::Cow,

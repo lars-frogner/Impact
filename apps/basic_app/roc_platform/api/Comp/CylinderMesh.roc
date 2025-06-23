@@ -1,8 +1,8 @@
-# Hash: 341dc21e76750e47d231fd2ff747d0389719a7990400d1ea6b3acffd976fa745
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::mesh::components::CylinderMeshComp
+# Hash: db4eccd8e40624999b4dfebf4a2c5c59fd5b65c94ee5a6ed58c4acc6805d3b28
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::CylinderMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     CylinderMesh,
     new,
@@ -22,7 +22,7 @@ import core.Builtin
 ## entities whose mesh is a vertical cylinder with the bottom centered on
 ## the origin.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 CylinderMesh : {
     ## The length of the cylinder.
@@ -85,7 +85,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, CylinderMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 7629497407946727154
+    type_id = 1435125923063146685
     size = 12
     alignment = 4
     bytes
@@ -97,7 +97,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List CylinderMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 7629497407946727154
+    type_id = 1435125923063146685
     size = 12
     alignment = 4
     count = List.len(vals)

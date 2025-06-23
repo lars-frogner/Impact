@@ -1,28 +1,25 @@
 //! Pass for computing reflected luminance due to directional lights.
 
 use super::{STANDARD_FRONT_FACE, StencilValue};
-use crate::{
-    gpu::{
-        GraphicsDevice,
-        rendering::{
-            attachment::{
-                RenderAttachmentInputDescriptionSet, RenderAttachmentQuantity,
-                RenderAttachmentTextureManager,
-            },
-            postprocessing::Postprocessor,
-            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-            render_command::begin_single_render_pass,
-            resource::SynchronizedRenderResources,
-            shader_templates::{
-                omnidirectional_light::OmnidirectionalLightShaderTemplate,
-                shadowable_omnidirectional_light::ShadowableOmnidirectionalLightShaderTemplate,
-                shadowable_unidirectional_light::ShadowableUnidirectionalLightShaderTemplate,
-                unidirectional_light::UnidirectionalLightShaderTemplate,
-            },
-            surface::RenderingSurface,
+use crate::gpu::{
+    GraphicsDevice,
+    rendering::{
+        attachment::{
+            RenderAttachmentInputDescriptionSet, RenderAttachmentQuantity,
+            RenderAttachmentTextureManager,
         },
+        postprocessing::Postprocessor,
+        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        render_command::begin_single_render_pass,
+        resource::SynchronizedRenderResources,
+        shader_templates::{
+            omnidirectional_light::OmnidirectionalLightShaderTemplate,
+            shadowable_omnidirectional_light::ShadowableOmnidirectionalLightShaderTemplate,
+            shadowable_unidirectional_light::ShadowableUnidirectionalLightShaderTemplate,
+            unidirectional_light::UnidirectionalLightShaderTemplate,
+        },
+        surface::RenderingSurface,
     },
-    mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -34,6 +31,7 @@ use impact_light::{
         UnidirectionalLightShadowMapManager,
     },
 };
+use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to directional lights.

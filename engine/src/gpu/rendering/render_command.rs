@@ -23,7 +23,6 @@ use crate::{
         resource::SynchronizedRenderResources,
         surface::RenderingSurface,
     },
-    material::MaterialLibrary,
     scene::Scene,
     voxel::render_commands::VoxelRenderCommands,
 };
@@ -41,6 +40,7 @@ use impact_gpu::{
     shader::{Shader, ShaderManager},
     storage::StorageGPUBufferManager,
 };
+use impact_material::MaterialLibrary;
 use shadow_map_update_passes::{
     OmnidirectionalLightShadowMapUpdatePasses, UnidirectionalLightShadowMapUpdatePasses,
 };

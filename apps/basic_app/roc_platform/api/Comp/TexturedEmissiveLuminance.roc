@@ -1,8 +1,8 @@
-# Hash: e079f3c8d78bdca3d46847d5a0c9a7a0d3143a55065482debbdafca670203d9e
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::material::components::TexturedEmissiveLuminanceComp
+# Hash: e9863f6edc992e42d01c860b5eae14b39f2f737d972c17a4b918c5b4aa214586
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::TexturedEmissiveLuminanceComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     TexturedEmissiveLuminance,
     unscaled,
@@ -74,7 +74,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TexturedEmissiveLuminance -> List U8
 write_packet = |bytes, val|
-    type_id = 2499593613329366893
+    type_id = 17172044230456635272
     size = 8
     alignment = 4
     bytes
@@ -86,7 +86,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TexturedEmissiveLuminance -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 2499593613329366893
+    type_id = 17172044230456635272
     size = 8
     alignment = 4
     count = List.len(vals)

@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to meshes.
 
-use crate::mesh::{FrontFaceSide, MeshID};
+use crate::{FrontFaceSide, MeshID};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
 use impact_math::hash64;

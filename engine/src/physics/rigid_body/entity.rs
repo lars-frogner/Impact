@@ -1,13 +1,6 @@
 //! Management of rigid bodies for entities.
 
 use crate::{
-    mesh::{
-        MeshRepository,
-        components::{
-            BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, SphereMeshComp,
-            TriangleMeshComp,
-        },
-    },
     physics::{
         fph,
         inertia::InertialProperties,
@@ -21,6 +14,13 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_mesh::{
+    MeshRepository,
+    components::{
+        BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, SphereMeshComp,
+        TriangleMeshComp,
+    },
+};
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has a component

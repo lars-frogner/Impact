@@ -1,18 +1,16 @@
 //! Management of drag load maps for entities.
 
 use super::DragLoadMapRepository;
-use crate::{
-    mesh::{MeshID, MeshRepository, components::TriangleMeshComp},
-    physics::rigid_body::{
-        components::RigidBodyComp,
-        forces::detailed_drag::{
-            DragLoadMap, DragLoadMapConfig,
-            components::{DetailedDragComp, DragLoadMapComp},
-        },
+use crate::physics::rigid_body::{
+    components::RigidBodyComp,
+    forces::detailed_drag::{
+        DragLoadMap, DragLoadMapConfig,
+        components::{DetailedDragComp, DragLoadMapComp},
     },
 };
 use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_mesh::{MeshID, MeshRepository, components::TriangleMeshComp};
 use log::info;
 use std::{path::PathBuf, sync::RwLock};
 

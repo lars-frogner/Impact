@@ -1,8 +1,8 @@
-# Hash: 9117cbd57f2a6e2604d52a9297d9b20dd12236bde042d1451a772117ed417c9c
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::material::components::ParallaxMapComp
+# Hash: a97beb5cac7ea520f460fd1c68a92e9c328bce03ae916ba84cdaba73a6025ded
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::ParallaxMapComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     ParallaxMap,
     new,
@@ -73,7 +73,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, ParallaxMap -> List U8
 write_packet = |bytes, val|
-    type_id = 3547480525502144334
+    type_id = 17151599991360275179
     size = 16
     alignment = 4
     bytes
@@ -85,7 +85,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List ParallaxMap -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 3547480525502144334
+    type_id = 17151599991360275179
     size = 16
     alignment = 4
     count = List.len(vals)

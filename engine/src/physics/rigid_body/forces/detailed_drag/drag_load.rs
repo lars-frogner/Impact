@@ -1,14 +1,12 @@
 //! Calculation of forces and torques due to drag.
 
-use crate::{
-    mesh::triangle::TriangleMesh,
-    physics::{
-        fph,
-        motion::{Direction, Force, Orientation, Position, Torque},
-    },
+use crate::physics::{
+    fph,
+    motion::{Direction, Force, Orientation, Position, Torque},
 };
 use anyhow::Result;
 use impact_math::{Angle, Float, Radians};
+use impact_mesh::triangle::TriangleMesh;
 use nalgebra::{UnitVector3, Vector3, vector};
 use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned, ser::Serializer};
 use simba::scalar::SubsetOf;

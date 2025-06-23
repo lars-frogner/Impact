@@ -1,6 +1,6 @@
 //! Buffering of mesh data for rendering.
 
-use crate::mesh::{
+use crate::{
     MeshID, N_VERTEX_ATTRIBUTES, TriangleMesh, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute,
     VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
     VertexTangentSpaceQuaternion, VertexTextureCoords, line_segment::LineSegmentMesh,
@@ -11,6 +11,7 @@ use impact_containers::CollectionChange;
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
+    wgpu,
 };
 use std::{borrow::Cow, mem};
 
@@ -703,19 +704,6 @@ pub const fn create_vertex_buffer_layout_for_vertex<T>(
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
-        attributes,
-    }
-}
-
-/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
-/// instance data of type `T`, with data layout defined by the given
-/// instance attributes.
-pub const fn create_vertex_buffer_layout_for_instance<T>(
-    attributes: &'static [wgpu::VertexAttribute],
-) -> wgpu::VertexBufferLayout<'static> {
-    wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Instance,
         attributes,
     }
 }

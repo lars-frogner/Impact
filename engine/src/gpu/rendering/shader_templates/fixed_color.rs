@@ -1,14 +1,12 @@
 //! Shader template for rendering geometry with fixed vertex colors.
 
-use crate::{
-    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
-    rendering_template_source,
-};
+use crate::rendering_template_source;
 use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation};
 use impact_model::transform::InstanceModelViewTransform;
 use std::sync::LazyLock;
 

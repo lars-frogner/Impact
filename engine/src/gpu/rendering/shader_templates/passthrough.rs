@@ -11,7 +11,6 @@ use crate::{
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
         render_command::StencilValue,
     },
-    mesh::buffer::MeshVertexAttributeLocation,
     rendering_template_source,
 };
 use impact_gpu::{
@@ -21,6 +20,7 @@ use impact_gpu::{
     },
     shader_template_replacements,
 };
+use impact_mesh::buffer::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for passthrough passes, which write texels from an input

@@ -1,13 +1,11 @@
 //! Shader template for bloom downsampling passes.
 
-use crate::{
-    gpu::rendering::attachment::RenderAttachmentQuantity,
-    mesh::buffer::MeshVertexAttributeLocation, rendering_template_source,
-};
+use crate::{gpu::rendering::attachment::RenderAttachmentQuantity, rendering_template_source};
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_mesh::buffer::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for bloom downsampling passes, which successively downsample

@@ -1,9 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to the detailed
 //! drag model.
 
-use crate::{mesh::MeshID, physics::fph};
+use crate::physics::fph;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
+use impact_mesh::MeshID;
 use roc_integration::roc;
 
 /// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing

@@ -2,33 +2,26 @@
 
 pub mod lookup_table;
 
-use crate::{io::util::parse_ron_file, mesh::TriangleMeshSpecification};
+use crate::io;
 use anyhow::{Result, bail};
 use impact_containers::HashMap;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{
-        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureLookupTable,
-        mipmap::MipmapperGenerator,
+        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
+        TextureLookupTable, mipmap::MipmapperGenerator,
     },
 };
-use impact_math::{hash32, stringhash32_newtype};
+use impact_material::MaterialTextureProvider;
+use impact_math::hash32;
+use impact_mesh::TriangleMeshSpecification;
 use log::debug;
-use roc_integration::roc;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::hash_map::Entry,
     path::{Path, PathBuf},
     sync::Arc,
 };
-
-stringhash32_newtype!(
-    /// Identifier for specific textures.
-    /// Wraps a [`StringHash32`](impact_math::StringHash32).
-    #[roc(parents = "Rendering")]
-    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-    [pub] TextureID
-);
 
 /// Container for any rendering assets that never change.
 #[derive(Debug)]
@@ -83,15 +76,6 @@ pub enum TextureSpecification {
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
     },
-}
-
-#[roc(dependencies = [impact_math::Hash32])]
-impl TextureID {
-    #[roc(body = "Hashing.hash_str_32(name)")]
-    /// Creates a texture ID hashed from the given name.
-    pub fn from_name(name: &str) -> Self {
-        Self(hash32!(name))
-    }
 }
 
 impl Assets {
@@ -454,6 +438,16 @@ impl Assets {
     }
 }
 
+impl MaterialTextureProvider for Assets {
+    fn get_texture(&self, texture_id: &TextureID) -> Option<&Texture> {
+        self.textures.get(texture_id)
+    }
+
+    fn get_sampler(&self, sampler_id: &SamplerID) -> Option<&Sampler> {
+        self.samplers.get(sampler_id)
+    }
+}
+
 impl AssetConfig {
     /// Resolves all paths in the configuration by prepending the given root
     /// path to all paths.
@@ -480,7 +474,7 @@ impl AssetSpecifications {
     /// resolves any specified paths.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
-        let mut specs: Self = parse_ron_file(file_path)?;
+        let mut specs: Self = io::parse_ron_file(file_path)?;
         if let Some(root_path) = file_path.parent() {
             specs.resolve_paths(root_path);
         }

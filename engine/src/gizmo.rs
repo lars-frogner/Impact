@@ -8,12 +8,10 @@ pub mod model;
 pub mod systems;
 pub mod tasks;
 
-use crate::{
-    mesh::MeshID,
-    model::{InstanceFeatureManager, ModelID},
-};
+use crate::model::{InstanceFeatureManager, ModelID};
 use bitflags::{Flags, bitflags};
 use bytemuck::{Pod, Zeroable};
+use impact_mesh::MeshID;
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use model::{GizmoModel, gizmo_models};
 use serde::{Deserialize, Serialize};

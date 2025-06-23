@@ -1,7 +1,8 @@
 //! Models defined by a mesh and material.
 
-use crate::{material::MaterialHandle, mesh::MeshID};
+use impact_material::MaterialHandle;
 use impact_math::Hash64;
+use impact_mesh::MeshID;
 use std::{
     cmp, fmt,
     hash::{Hash, Hasher},

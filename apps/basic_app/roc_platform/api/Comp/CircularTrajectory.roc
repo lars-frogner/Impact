@@ -1,8 +1,8 @@
-# Hash: 5166be35b1edc6092aec5b3243ebc58d41b42e59378f4a4b31f8904358b60896
-# Generated: 2025-05-23T20:19:02+00:00
+# Hash: 574b1a0a11864889d477b73123e1e39fb9c85e29556fcc634e9a760514f6ff41
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::physics::motion::analytical::circular::components::CircularTrajectoryComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     CircularTrajectory,
     new,
@@ -23,8 +23,8 @@ import core.UnitQuaternion
 ## circular trajectory over time with constant speed.
 ##
 ## For this component to have an effect, the entity also needs a
-## [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
-## [`VelocityComp`](crate::physics::VelocityComp).
+## [`ReferenceFrameComp`](crate::physics::motion::components::ReferenceFrameComp) and a
+## [`VelocityComp`](crate::physics::motion::components::VelocityComp).
 CircularTrajectory : {
     ## When (in simulation time) the entity should be at the initial position
     ## on the circle.

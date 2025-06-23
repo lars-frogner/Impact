@@ -1,8 +1,8 @@
-# Hash: 4f9f5390c36de1cf60f0ac7099fd84e44456d9f93aa34f4d3739370a7308be08
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::mesh::components::HemisphereMeshComp
+# Hash: 8d25b942af249a67df8832a477f4981f53b0a062e182097722210d451c22abe7
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::HemisphereMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     HemisphereMesh,
     new,
@@ -22,7 +22,7 @@ import core.Builtin
 ## entities whose mesh is a unit diameter hemisphere whose disk lies in the
 ## xz-plane and is centered on the origin.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 HemisphereMesh : {
     ## The number of horizontal circular cross-sections of vertices making up
@@ -83,7 +83,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, HemisphereMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 5932358679912990868
+    type_id = 18332761573352064887
     size = 4
     alignment = 4
     bytes
@@ -95,7 +95,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List HemisphereMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 5932358679912990868
+    type_id = 18332761573352064887
     size = 4
     alignment = 4
     count = List.len(vals)

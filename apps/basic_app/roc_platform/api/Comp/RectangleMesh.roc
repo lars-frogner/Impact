@@ -1,8 +1,8 @@
-# Hash: 2f4c4735d27dfb251373699b582f274a9783fd2586d39c770a2e8f81899d57ab
-# Generated: 2025-05-24T10:34:21+00:00
-# Rust type: impact::mesh::components::RectangleMeshComp
+# Hash: a066c8dbb4b808a2134762a4557a7d75ad28187decb1aba5a3f4c2af396feeed
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::RectangleMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     RectangleMesh,
     unit_square,
@@ -25,7 +25,7 @@ import core.Builtin
 ## entities whose mesh is an axis-aligned horizontal rectangle centered on the
 ## origin, whose front face is on the positive y side.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 RectangleMesh : {
     ## The extent of the rectangle in the x-direction.
@@ -103,7 +103,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, RectangleMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 6379808845987299625
+    type_id = 11362251843644672696
     size = 8
     alignment = 4
     bytes
@@ -115,7 +115,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List RectangleMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 6379808845987299625
+    type_id = 11362251843644672696
     size = 8
     alignment = 4
     count = List.len(vals)

@@ -1,8 +1,8 @@
-# Hash: acfa3541f01c4d8408a848c7c0b9ab2eebcf5b8043de2d9256cb5733f4cc91fa
-# Generated: 2025-05-23T21:48:57+00:00
+# Hash: 9dbb8c0c52e5cbdb414695a61039903a6e9ce5ee70bd59de8afad01c6f2c40b1
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::physics::motion::analytical::constant_rotation::components::ConstantRotationComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     ConstantRotation,
     new,
@@ -24,7 +24,7 @@ import core.UnitQuaternion
 ## with a constant angular velocity over time.
 ##
 ## For this component to have an effect, the entity also needs a
-## [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp).
+## [`ReferenceFrameComp`](crate::physics::motion::components::ReferenceFrameComp).
 ConstantRotation : {
     ## When (in simulation time) the entity should have the initial
     ## orientation.

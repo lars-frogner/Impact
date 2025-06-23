@@ -1,8 +1,8 @@
-# Hash: 64d98402fe86565f2808a7008694de9a44cb4f0e23caaf0ad05b697e4ffb90d2
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::material::components::FixedColorComp
+# Hash: 33c81d529e4b911344f1b7ad26a7c69f045f032aab7536043f99965d37c0582d
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::FixedColorComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     FixedColor,
     add,
@@ -47,7 +47,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, FixedColor -> List U8
 write_packet = |bytes, val|
-    type_id = 14806733351734441480
+    type_id = 1887410598233648427
     size = 12
     alignment = 4
     bytes
@@ -59,7 +59,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List FixedColor -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 14806733351734441480
+    type_id = 1887410598233648427
     size = 12
     alignment = 4
     count = List.len(vals)

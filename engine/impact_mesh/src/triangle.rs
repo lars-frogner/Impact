@@ -1,6 +1,6 @@
 //! Triangle meshes.
 
-use crate::mesh::{
+use crate::{
     VertexColor, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
     VertexTextureCoords, texture_projection::TextureProjection,
 };

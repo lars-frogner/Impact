@@ -13,16 +13,13 @@ pub use graph::{
 };
 
 use crate::{
-    camera::SceneCamera,
-    material::{MaterialLibrary, MaterialLibraryState},
-    mesh::{MeshRepository, MeshRepositoryState},
-    model::InstanceFeatureManager,
-    skybox::Skybox,
-    voxel::VoxelManager,
+    camera::SceneCamera, model::InstanceFeatureManager, skybox::Skybox, voxel::VoxelManager,
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_light::LightStorage;
+use impact_material::{MaterialLibrary, MaterialLibraryState};
+use impact_mesh::{MeshRepository, MeshRepositoryState};
 use roc_integration::roc;
 use std::sync::RwLock;
 

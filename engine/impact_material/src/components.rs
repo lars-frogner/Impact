@@ -1,11 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to materials.
 
-use crate::{
-    assets::TextureID,
-    material::{MaterialHandle, RGBColor},
-};
+use crate::{MaterialHandle, RGBColor};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent};
+use impact_gpu::texture::TextureID;
 use nalgebra::{Vector2, vector};
 use roc_integration::roc;
 

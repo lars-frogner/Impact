@@ -1,8 +1,8 @@
-# Hash: d0a3b91dd65ce6e8438c4d970fb94e63210d214f39a987e00edb9acfc76d1422
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::material::components::TexturedMetalnessComp
+# Hash: c484cafd10559a1d25e4181ab3c8862d1bd6ac4b2cfaaedab96724758ab7a591
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::TexturedMetalnessComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     TexturedMetalness,
     unscaled,
@@ -84,7 +84,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TexturedMetalness -> List U8
 write_packet = |bytes, val|
-    type_id = 9176356752958161098
+    type_id = 5853784330558301595
     size = 8
     alignment = 4
     bytes
@@ -96,7 +96,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TexturedMetalness -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 9176356752958161098
+    type_id = 5853784330558301595
     size = 8
     alignment = 4
     count = List.len(vals)

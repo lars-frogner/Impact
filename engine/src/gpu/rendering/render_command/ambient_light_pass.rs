@@ -19,7 +19,6 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -27,6 +26,7 @@ use impact_gpu::{
     query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
 };
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
+use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to ambient light.

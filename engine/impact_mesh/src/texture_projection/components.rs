@@ -1,9 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to texture
 //! projections.
 
-use crate::{
-    mesh::components::RectangleMeshComp, mesh::texture_projection::PlanarTextureProjection,
-};
+use crate::{components::RectangleMeshComp, texture_projection::PlanarTextureProjection};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::SetupComponent;
 use nalgebra::{Point3, Vector3, point, vector};

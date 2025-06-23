@@ -1,8 +1,8 @@
-# Hash: aa859f007dac1c68c4010efc0ce7ba0ea08f53c957ad9012e9ad3823b6218877
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::light::components::ShadowableOmnidirectionalLightComp
+# Hash: 396566e17b7df323fa9f379029891e66250cb4cee1a8dff6b78be1d913c072e1
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_light::components::ShadowableOmnidirectionalLightComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     ShadowableOmnidirectionalLight,
     add,
@@ -47,7 +47,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, ShadowableOmnidirectionalLight -> List U8
 write_packet = |bytes, val|
-    type_id = 12736972046255061423
+    type_id = 1525945509956598742
     size = 4
     alignment = 4
     bytes
@@ -59,7 +59,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List ShadowableOmnidirectionalLight -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 12736972046255061423
+    type_id = 1525945509956598742
     size = 4
     alignment = 4
     count = List.len(vals)

@@ -1,8 +1,8 @@
-# Hash: e2eb524290e911c5799fd41d11200718caaa3f25c16412a7dbc1f5de17955186
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::material::components::UniformRoughnessComp
+# Hash: 508493ca4568ea6909b680170ef968620de59ca7f5bb683f173134d542a5120f
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::UniformRoughnessComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     UniformRoughness,
     add,
@@ -46,7 +46,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, UniformRoughness -> List U8
 write_packet = |bytes, val|
-    type_id = 17547361832925034363
+    type_id = 11384880478591516220
     size = 4
     alignment = 4
     bytes
@@ -58,7 +58,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List UniformRoughness -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 17547361832925034363
+    type_id = 11384880478591516220
     size = 4
     alignment = 4
     count = List.len(vals)

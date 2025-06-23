@@ -13,7 +13,6 @@ use crate::{
         },
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     },
-    mesh::buffer::MeshVertexAttributeLocation,
     rendering_template_source,
 };
 use impact_gpu::{
@@ -21,6 +20,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_mesh::buffer::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for a Gaussian blur pass, which blurs an input render

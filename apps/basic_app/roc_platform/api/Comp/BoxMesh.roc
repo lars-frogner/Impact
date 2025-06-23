@@ -1,8 +1,8 @@
-# Hash: 76478fce44a0c6e373531c3f132fd58fc673c33919db97e813f40a0c64bb9f51
-# Generated: 2025-05-24T10:34:21+00:00
-# Rust type: impact::mesh::components::BoxMeshComp
+# Hash: 28099cb3afbcd12d52d445863401c2a891b3bba18a6d0611133d8c6a691c8c4f
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::BoxMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     BoxMesh,
     unit_cube,
@@ -28,7 +28,7 @@ import core.Builtin
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 ## entities whose mesh is an axis-aligned box centered on the origin.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 BoxMesh : {
     ## The extent of the box in the x-direction.
@@ -133,7 +133,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, BoxMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 11529368862797554621
+    type_id = 9498785343099771140
     size = 16
     alignment = 4
     bytes
@@ -145,7 +145,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List BoxMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 11529368862797554621
+    type_id = 9498785343099771140
     size = 16
     alignment = 4
     count = List.len(vals)

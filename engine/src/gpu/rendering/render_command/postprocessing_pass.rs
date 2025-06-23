@@ -1,19 +1,16 @@
 //! Generic pass for postprocessing effects.
 
 use super::{STANDARD_FRONT_FACE, StencilValue};
-use crate::{
-    gpu::rendering::{
-        attachment::{
-            Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity, RenderAttachmentTextureManager,
-        },
-        postprocessing::{PostprocessingShaderTemplate, Postprocessor},
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-        render_command::begin_single_render_pass,
-        resource::SynchronizedRenderResources,
-        surface::RenderingSurface,
+use crate::gpu::rendering::{
+    attachment::{
+        Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+        RenderAttachmentQuantity, RenderAttachmentTextureManager,
     },
-    mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
+    postprocessing::{PostprocessingShaderTemplate, Postprocessor},
+    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    render_command::begin_single_render_pass,
+    resource::SynchronizedRenderResources,
+    surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -23,6 +20,7 @@ use impact_gpu::{
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{Shader, ShaderManager},
 };
+use impact_mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use std::borrow::Cow;
 
 /// Generic pass for postprocessing effects.
@@ -363,7 +361,7 @@ impl PostprocessingRenderPass {
             bind_group_index += 1;
         }
 
-        let mesh_id = mesh::screen_filling_quad_mesh_id();
+        let mesh_id = impact_mesh::screen_filling_quad_mesh_id();
 
         let mesh_buffer_manager = render_resources
             .get_triangle_mesh_buffer_manager(mesh_id)

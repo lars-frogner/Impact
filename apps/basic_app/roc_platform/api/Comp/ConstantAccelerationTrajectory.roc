@@ -1,8 +1,8 @@
-# Hash: ca82eb4431a30c5d811b15b19257e385f0cde4795bf05dd152cd7d2d0eb39ce2
-# Generated: 2025-05-23T20:19:02+00:00
+# Hash: b6dff2e8929828070ca8b1202892f5c8c65180c9eefd18d3bdea4e3bf89d7d94
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::physics::motion::analytical::constant_acceleration::components::ConstantAccelerationTrajectoryComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     ConstantAccelerationTrajectory,
     add,
@@ -21,8 +21,8 @@ import core.Vector3
 ## fixed trajectory over time governed by a constant acceleration vector.
 ##
 ## For this component to have an effect, the entity also needs a
-## [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
-## [`VelocityComp`](crate::physics::VelocityComp).
+## [`ReferenceFrameComp`](crate::physics::motion::components::ReferenceFrameComp) and a
+## [`VelocityComp`](crate::physics::motion::components::VelocityComp).
 ConstantAccelerationTrajectory : {
     ## When (in simulation time) the entity should be at the initial position.
     initial_time : F64,

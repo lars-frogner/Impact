@@ -1,6 +1,6 @@
 //! Benchmarks for model related functionality.
 
-use crate::model::{
+use impact_model::{
     DynamicInstanceFeatureBuffer, InstanceFeatureStorage, transform::InstanceModelViewTransform,
 };
 use impact_profiling::Profiler;

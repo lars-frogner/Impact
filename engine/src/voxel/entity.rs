@@ -2,8 +2,6 @@
 
 use crate::{
     engine::Engine,
-    material::MaterialHandle,
-    mesh::MeshID,
     model::{InstanceFeatureManager, ModelID},
     physics::{
         inertia::InertialProperties,
@@ -11,7 +9,7 @@ use crate::{
         rigid_body::{RigidBody, components::RigidBodyComp},
     },
     scene::{
-        RenderResourcesDesynchronized, SceneEntityFlags, SceneGraph,
+        SceneEntityFlags, SceneGraph,
         components::{
             SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
             UncullableComp,
@@ -41,7 +39,9 @@ use impact_ecs::{
     setup,
     world::EntityEntry,
 };
+use impact_material::MaterialHandle;
 use impact_math::hash64;
+use impact_mesh::MeshID;
 use impact_model::{
     InstanceFeature, impl_InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -759,7 +759,7 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
 pub fn cleanup_voxel_object_for_removed_entity(
     voxel_manager: &RwLock<VoxelManager>,
     entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     if let Some(voxel_object) = entity.get_component::<VoxelObjectComp>() {
         let voxel_object = voxel_object.access();
@@ -770,7 +770,7 @@ pub fn cleanup_voxel_object_for_removed_entity(
             .object_manager
             .remove_voxel_object(voxel_object.voxel_object_id);
 
-        desynchronized.set_yes();
+        *desynchronized = true;
     }
 }
 

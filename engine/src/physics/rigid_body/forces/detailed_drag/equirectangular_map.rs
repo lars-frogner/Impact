@@ -205,7 +205,7 @@ impl<D: Serialize + DeserializeOwned> EquirectangularMap<D> {
     /// path.
     pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
         let byte_buffer = bincode::serde::encode_to_vec(self, bincode::config::standard())?;
-        io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
+        io::save_data_as_binary(output_file_path, &byte_buffer)?;
         Ok(())
     }
 

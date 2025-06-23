@@ -1,8 +1,8 @@
-# Hash: 6d9e42596206a2b000372328da137950021268d00992ca6135aa8d1722b7eb2a
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::mesh::components::CircularFrustumMeshComp
+# Hash: 8d8fe24ebe4acca0e3fccf2ab2e01abf8acc09b9e734bb3d604f5fb34193a28b
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::CircularFrustumMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     CircularFrustumMesh,
     new,
@@ -22,7 +22,7 @@ import core.Builtin
 ## entities whose mesh is a vertical circular frustum with the bottom centered
 ## on the origin.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 CircularFrustumMesh : {
     ## The length of the frustum.
@@ -92,7 +92,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, CircularFrustumMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 4096628881926041269
+    type_id = 14549256835157768648
     size = 16
     alignment = 4
     bytes
@@ -104,7 +104,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List CircularFrustumMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 4096628881926041269
+    type_id = 14549256835157768648
     size = 16
     alignment = 4
     count = List.len(vals)

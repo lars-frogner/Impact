@@ -1,8 +1,8 @@
-# Hash: 516a32b63235e8310dfcaf3a01fcdc55db48dd639c139e1c071340ef686c2778
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::material::components::FixedTextureComp
+# Hash: 350985e21e6f627d3c3dca7211f2d8dbc6bdc706438de6b534c263faacf6e14c
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::FixedTextureComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     FixedTexture,
     add,
@@ -47,7 +47,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, FixedTexture -> List U8
 write_packet = |bytes, val|
-    type_id = 3901778254897440764
+    type_id = 10804101510640399927
     size = 4
     alignment = 4
     bytes
@@ -59,7 +59,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List FixedTexture -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 3901778254897440764
+    type_id = 10804101510640399927
     size = 4
     alignment = 4
     count = List.len(vals)

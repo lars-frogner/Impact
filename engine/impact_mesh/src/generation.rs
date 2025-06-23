@@ -1,22 +1,22 @@
 //! Generation of meshes representing geometrical objects.
 
-use crate::mesh::{FrontFaceSide, LineSegmentMesh, TriangleMesh, VertexColor};
+use crate::{FrontFaceSide, LineSegmentMesh, TriangleMesh, VertexColor};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::Float;
 use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
-        $crate::mesh::VertexPosition(nalgebra::point![$x, $y, $z])
+        $crate::VertexPosition(nalgebra::point![$x, $y, $z])
     };
     ($point:expr) => {
-        $crate::mesh::VertexPosition($point)
+        $crate::VertexPosition($point)
     };
 }
 
 macro_rules! normal {
     ($normal:expr) => {
-        $crate::mesh::VertexNormalVector($normal)
+        $crate::VertexNormalVector($normal)
     };
 }
 

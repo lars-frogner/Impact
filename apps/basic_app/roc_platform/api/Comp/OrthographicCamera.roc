@@ -1,8 +1,8 @@
-# Hash: 42e6106b683c5953b4a5e9667867f08f24fd39db90172c809b791fe61cdaa29d
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::camera::components::OrthographicCameraComp
+# Hash: 4709a125ca3c7ffed3394b245ccf12d31559896887a41526a8833fcbda06d626
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_camera::components::OrthographicCameraComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     OrthographicCamera,
     new,
@@ -24,7 +24,7 @@ import core.Radians
 ## [`OrthographicCamera`](crate::camera::OrthographicCamera).
 ##
 ## The purpose of this component is to aid in constructing a
-## [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
+## [`SceneGraphCameraNodeComp`](crate::scene::components::SceneGraphCameraNodeComp) for the
 ## entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 ## [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 ## creation.
@@ -108,7 +108,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, OrthographicCamera -> List U8
 write_packet = |bytes, val|
-    type_id = 15197630099165986382
+    type_id = 15423841809103225129
     size = 12
     alignment = 4
     bytes
@@ -120,7 +120,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List OrthographicCamera -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 15197630099165986382
+    type_id = 15423841809103225129
     size = 12
     alignment = 4
     count = List.len(vals)

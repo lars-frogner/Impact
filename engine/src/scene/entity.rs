@@ -4,13 +4,11 @@ use crate::{
     assets::Assets,
     camera,
     gpu::rendering::RenderingSystem,
-    light,
-    material::{self, components::MaterialComp},
-    mesh::{self, components::TriangleMeshComp},
+    light, mesh,
     model::ModelID,
     physics::motion::components::ReferenceFrameComp,
     scene::{
-        RenderResourcesDesynchronized, Scene, SceneEntityFlags,
+        Scene, SceneEntityFlags,
         components::{
             ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
             SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp, UncullableComp,
@@ -25,6 +23,8 @@ use impact_ecs::{
     world::{EntityEntry, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
+use impact_material::components::MaterialComp;
+use impact_mesh::components::TriangleMeshComp;
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -41,9 +41,9 @@ impl Scene {
         graphics_device: &GraphicsDevice,
         assets: &Assets,
         components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
+        desynchronized: &mut bool,
     ) -> Result<()> {
-        mesh::entity::setup_mesh_for_new_entity(
+        impact_mesh::entity::setup_mesh_for_new_entity(
             self.mesh_repository(),
             components,
             desynchronized,
@@ -56,7 +56,7 @@ impl Scene {
             desynchronized,
         );
 
-        material::entity::setup_material_for_new_entity(
+        impact_material::entity::setup_material_for_new_entity(
             graphics_device,
             assets,
             self.material_library(),
@@ -84,7 +84,7 @@ impl Scene {
         renderer: &RwLock<RenderingSystem>,
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
+        desynchronized: &mut bool,
     ) -> Result<()> {
         Self::add_parent_group_node_component_for_new_entity(ecs_world, components)?;
         self.add_group_node_component_for_new_entity(components);
@@ -114,37 +114,34 @@ impl Scene {
     pub fn perform_cleanup_for_removed_entity(
         &self,
         entity: &EntityEntry<'_>,
-    ) -> RenderResourcesDesynchronized {
-        let mut desynchronized = RenderResourcesDesynchronized::No;
+        desynchronized: &mut bool,
+    ) {
+        self.remove_model_instance_node_for_entity(entity, desynchronized);
 
-        self.remove_model_instance_node_for_entity(entity, &mut desynchronized);
-
-        material::entity::cleanup_material_for_removed_entity(
+        impact_material::entity::cleanup_material_for_removed_entity(
             self.instance_feature_manager(),
             entity,
-            &mut desynchronized,
+            desynchronized,
         );
 
         light::entity::cleanup_light_for_removed_entity(
             self.light_storage(),
             entity,
-            &mut desynchronized,
+            desynchronized,
         );
 
         camera::entity::remove_camera_from_scene_for_removed_entity(
             self.scene_graph(),
             self.scene_camera(),
             entity,
-            &mut desynchronized,
+            desynchronized,
         );
 
         voxel::entity::cleanup_voxel_object_for_removed_entity(
             self.voxel_manager(),
             entity,
-            &mut desynchronized,
+            desynchronized,
         );
-
-        desynchronized
     }
 
     fn add_parent_group_node_component_for_new_entity(
@@ -302,7 +299,7 @@ impl Scene {
     fn remove_model_instance_node_for_entity(
         &self,
         entity: &EntityEntry<'_>,
-        desynchronized: &mut RenderResourcesDesynchronized,
+        desynchronized: &mut bool,
     ) {
         if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeComp>() {
             let model_id = self
@@ -314,7 +311,7 @@ impl Scene {
                 .write()
                 .unwrap()
                 .unregister_instance(&model_id);
-            desynchronized.set_yes();
+            *desynchronized = true;
         }
     }
 }

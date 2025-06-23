@@ -1,8 +1,8 @@
-# Hash: 2aedf440e868250c0f3513e2b9cf2eba6c016eacce1b1ffdbc1ac16ce8750156
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::material::components::TexturedSpecularReflectanceComp
+# Hash: 0e58e833630c9865ae7f2462577ea7cedeea56f3199c93d901ccd1161dd28887
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::TexturedSpecularReflectanceComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     TexturedSpecularReflectance,
     unscaled,
@@ -73,7 +73,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TexturedSpecularReflectance -> List U8
 write_packet = |bytes, val|
-    type_id = 937393688329990639
+    type_id = 14079702830130915302
     size = 8
     alignment = 4
     bytes
@@ -85,7 +85,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TexturedSpecularReflectance -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 937393688329990639
+    type_id = 14079702830130915302
     size = 8
     alignment = 4
     count = List.len(vals)

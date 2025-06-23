@@ -12,7 +12,6 @@ use crate::{
         },
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     },
-    mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
 use impact_camera::buffer::CameraProjectionUniform;
@@ -21,6 +20,7 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_light::buffer::LightGPUBufferManager;
+use impact_mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation};
 use std::sync::LazyLock;
 
 /// Shader template for the unidirectional light pass, which computes the
@@ -88,7 +88,7 @@ impl UnidirectionalLightShaderTemplate {
     /// Returns the ID of the light volume mesh used by the shader (a
     /// screen-filling quad).
     pub fn light_volume_mesh_id() -> MeshID {
-        mesh::screen_filling_quad_mesh_id()
+        impact_mesh::screen_filling_quad_mesh_id()
     }
 }
 

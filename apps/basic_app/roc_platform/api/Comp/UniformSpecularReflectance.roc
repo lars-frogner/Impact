@@ -1,8 +1,8 @@
-# Hash: 22aeb7f80a0465aee2fb364588a99ff67d6b9c79cfcdd874839def3b1627ca3d
-# Generated: 2025-05-24T10:34:21+00:00
-# Rust type: impact::material::components::UniformSpecularReflectanceComp
+# Hash: f505bc6dafe012eb36759a793b03f776b3cdbf6ab7fe6e5162341b272a831262
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::UniformSpecularReflectanceComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     UniformSpecularReflectance,
     metal,
@@ -152,7 +152,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, UniformSpecularReflectance -> List U8
 write_packet = |bytes, val|
-    type_id = 12412346638566824456
+    type_id = 6299537813214761535
     size = 4
     alignment = 4
     bytes
@@ -164,7 +164,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List UniformSpecularReflectance -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 12412346638566824456
+    type_id = 6299537813214761535
     size = 4
     alignment = 4
     count = List.len(vals)

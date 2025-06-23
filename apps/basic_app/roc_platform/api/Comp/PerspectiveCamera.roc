@@ -1,8 +1,8 @@
-# Hash: 5f191ce69748f9851e663314c65b101ff3a94950476714d6c6777fefef2bc618
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::camera::components::PerspectiveCameraComp
+# Hash: 2e8df5b08309aea8c9a0605f871b7a7f4ce749549a4ce734fcab7e586895e5ff
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_camera::components::PerspectiveCameraComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     PerspectiveCamera,
     new,
@@ -24,7 +24,7 @@ import core.Radians
 ## [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
 ##
 ## The purpose of this component is to aid in constructing a
-## [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
+## [`SceneGraphCameraNodeComp`](crate::scene::components::SceneGraphCameraNodeComp) for the
 ## entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 ## [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 ## creation.
@@ -108,7 +108,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, PerspectiveCamera -> List U8
 write_packet = |bytes, val|
-    type_id = 10477796021710556922
+    type_id = 6950233554003327871
     size = 12
     alignment = 4
     bytes
@@ -120,7 +120,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List PerspectiveCamera -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 10477796021710556922
+    type_id = 6950233554003327871
     size = 12
     alignment = 4
     count = List.len(vals)

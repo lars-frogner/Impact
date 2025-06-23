@@ -10,12 +10,12 @@ use crate::{
         resource::SynchronizedRenderResources,
         shader_templates::skybox::SkyboxShaderTemplate,
     },
-    mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     skybox::Skybox,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use std::borrow::Cow;
 
 /// Pass for filling in emitted luminance from the skybox.
@@ -214,7 +214,7 @@ impl SkyboxPass {
 
         render_pass.set_bind_group(1, skybox_resource_manager.bind_group(), &[]);
 
-        let mesh_id = mesh::skybox_mesh_id();
+        let mesh_id = impact_mesh::skybox_mesh_id();
 
         let mesh_buffer_manager = render_resources
             .get_triangle_mesh_buffer_manager(mesh_id)

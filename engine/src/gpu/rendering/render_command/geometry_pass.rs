@@ -20,8 +20,6 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    material::MaterialLibrary,
-    mesh::VertexAttributeSet,
     model::{InstanceFeatureManager, ModelID},
     scene::ModelInstanceNode,
     voxel::render_commands::VoxelGeometryPipeline,
@@ -30,6 +28,8 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_material::MaterialLibrary;
+use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use std::{borrow::Cow, collections::hash_map::Entry};
 
