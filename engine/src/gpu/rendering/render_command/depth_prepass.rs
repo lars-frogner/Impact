@@ -15,7 +15,7 @@ use crate::{
         },
     },
     model::ModelID,
-    scene::ModelInstanceNode,
+    scene::graph::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;

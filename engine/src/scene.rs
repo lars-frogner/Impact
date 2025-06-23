@@ -3,20 +3,16 @@
 pub mod command;
 pub mod components;
 pub mod entity;
-mod graph;
+pub mod graph;
 pub mod systems;
 pub mod tasks;
-
-pub use graph::{
-    CameraNode, CameraNodeID, GroupNodeID, ModelInstanceNode, ModelInstanceNodeID, NodeStorage,
-    NodeTransform, SceneGraph, SceneGraphNodeID,
-};
 
 use crate::{
     camera::SceneCamera, model::InstanceFeatureManager, skybox::Skybox, voxel::VoxelManager,
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use graph::SceneGraph;
 use impact_light::LightStorage;
 use impact_material::{MaterialLibrary, MaterialLibraryState};
 use impact_mesh::{MeshRepository, MeshRepositoryState};

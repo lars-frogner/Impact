@@ -4,11 +4,11 @@ use crate::{
     camera::SceneCamera,
     physics::motion::components::ReferenceFrameComp,
     scene::{
-        SceneGraph,
         components::{
             SceneEntityFlagsComp, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
             SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
         },
+        graph::SceneGraph,
     },
 };
 use impact_camera::buffer::BufferableCamera;

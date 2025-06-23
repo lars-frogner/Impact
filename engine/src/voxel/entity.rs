@@ -9,11 +9,12 @@ use crate::{
         rigid_body::{RigidBody, components::RigidBodyComp},
     },
     scene::{
-        SceneEntityFlags, SceneGraph,
+        SceneEntityFlags,
         components::{
             SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
             UncullableComp,
         },
+        graph::SceneGraph,
     },
     voxel::{
         StagedVoxelObject, VoxelManager, VoxelObjectID, VoxelObjectManager,

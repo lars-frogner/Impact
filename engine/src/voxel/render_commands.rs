@@ -15,7 +15,7 @@ use crate::{
         },
     },
     model::InstanceFeatureManager,
-    scene::ModelInstanceNode,
+    scene::graph::ModelInstanceNode,
     voxel::{
         VoxelObjectID,
         entity::VOXEL_MODEL_ID,

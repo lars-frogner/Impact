@@ -13,7 +13,7 @@ use crate::{
     },
     light,
     model::{InstanceFeatureManager, ModelID},
-    scene::ModelInstanceNode,
+    scene::graph::ModelInstanceNode,
     voxel::render_commands::VoxelRenderCommands,
 };
 use anyhow::{Result, anyhow};
