@@ -3,7 +3,7 @@
 use super::Engine;
 use crate::{
     gizmo,
-    scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
+    scene::{SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -73,15 +73,16 @@ impl Engine {
             .unwrap()
             .perform_cleanup_for_removed_entity(&entry);
 
-        let render_resources_desynchronized = self
-            .scene()
+        let mut render_resources_desynchronized = false;
+
+        self.scene()
             .read()
             .unwrap()
-            .perform_cleanup_for_removed_entity(&entry);
+            .perform_cleanup_for_removed_entity(&entry, &mut render_resources_desynchronized);
 
         drop(entry);
 
-        if render_resources_desynchronized.is_yes() {
+        if render_resources_desynchronized {
             self.renderer()
                 .read()
                 .unwrap()
@@ -121,7 +122,7 @@ impl Engine {
         &self,
         components: &mut ArchetypeComponentStorage,
     ) -> Result<()> {
-        let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
+        let mut render_resources_desynchronized = false;
 
         self.scene().read().unwrap().perform_setup_for_new_entity(
             self.graphics_device(),
@@ -150,7 +151,7 @@ impl Engine {
             components,
         );
 
-        if render_resources_desynchronized.is_yes() {
+        if render_resources_desynchronized {
             self.renderer()
                 .read()
                 .unwrap()

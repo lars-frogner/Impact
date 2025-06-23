@@ -2,16 +2,18 @@
 members = [
     "impact_camera",
     "impact_containers",
+    "impact_dev_ui",
     "impact_ecs",
     "impact_ecs/impact_ecs_macros",
     "impact_geometry",
     "impact_gpu",
     "impact_light",
+    "impact_material",
     "impact_math",
+    "impact_mesh",
     "impact_model",
     "impact_rendering",
     "impact_profiling",
-    "impact_dev_ui",
 ]
 
 [workspace.package]
@@ -138,22 +140,32 @@ build = "build.rs"
 
 [features]
 default = ["window"]
-arbitrary = ["dep:arbitrary", "impact_ecs/arbitrary", "impact_math/arbitrary"]
+arbitrary = [
+    "dep:arbitrary",
+    "impact_ecs/arbitrary",
+    "impact_gpu/arbitrary",
+    "impact_math/arbitrary",
+]
 cli = ["dep:clap"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
 flamegraph = ["profiling"]
 fuzzing = ["arbitrary"]
+ply = ["impact_mesh/ply"]
 profiling = ["impact_profiling"]
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_camera/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_geometry/roc_codegen",
+    "impact_gpu/roc_codegen",
     "impact_light/roc_codegen",
+    "impact_material/roc_codegen",
     "impact_math/roc_codegen",
+    "impact_mesh/roc_codegen",
     "impact_model/roc_codegen",
     "roc_integration/roc_codegen",
 ]
+obj = ["impact_mesh/obj"]
 unchecked = []
 window = ["dep:winit"]
 
@@ -186,7 +198,9 @@ impact_ecs = { path = "impact_ecs" }
 impact_geometry = { path = "impact_geometry" }
 impact_gpu = { path = "impact_gpu", features = ["serde"] }
 impact_light = { path = "impact_light", features = ["serde"] }
+impact_material = { path = "impact_material" }
 impact_math = { path = "impact_math", features = ["serde"] }
+impact_mesh = { path = "impact_mesh", features = ["serde"] }
 impact_model = { path = "impact_model" }
 impact_profiling = { path = "impact_profiling", optional = true }
 inventory = { workspace = true }
@@ -201,7 +215,6 @@ paste = { workspace = true }
 petgraph = { version = "0.8", default-features = false, features = [
     "graphmap",
 ] }
-ply-rs = "0.1"
 pollster = "0.4"
 rand = { workspace = true }
 regex = "1.11"
@@ -211,7 +224,6 @@ roots = "0.0.8"
 serde = { workspace = true }
 simba = "0.9"
 tinyvec = { version = "1.9", features = ["alloc"] }
-tobj = "4.0"
 wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30", features = ["serde"], optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
@@ -219,6 +231,13 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 [dev-dependencies]
 naga = { version = "24.0", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.7"
+
+[profile.dev.package."image"]
+opt-level = 3
+[profile.dev.package."ply-rs"]
+opt-level = 3
+[profile.dev.package."tobj"]
+opt-level = 3
 
 [lints]
 workspace = true

@@ -1,8 +1,8 @@
-# Hash: 95af002dc6d49d1521b98a4ce1c1a102815a7f37e228ea98eabcff124cbf47a6
-# Generated: 2025-05-23T18:55:01+00:00
+# Hash: f2d0c662faad6da92dc319b2772213017bc9706bb7efc780dd439a164208c18c
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::scene::graph::GroupNodeID
 # Type category: POD
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     GroupNodeID,
     write_bytes,
@@ -11,7 +11,7 @@ module [
 
 import Containers.GenerationalIdx
 
-## Identifier for a [`GroupNode`] in a [`SceneGraph`].
+## Identifier for a group node in a [`SceneGraph`].
 GroupNodeID : Containers.GenerationalIdx.GenerationalIdx
 
 ## Serializes a value of [GroupNodeID] into the binary representation

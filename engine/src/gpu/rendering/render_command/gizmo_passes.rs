@@ -10,9 +10,6 @@ use crate::{
         shader_templates::fixed_color::FixedColorShaderTemplate,
         surface::RenderingSurface,
     },
-    mesh::{
-        MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
-    },
     model::ModelID,
     scene::ModelInstanceNode,
 };
@@ -22,6 +19,9 @@ use impact_gpu::{
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     shader::{Shader, ShaderManager},
+};
+use impact_mesh::{
+    MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
 };
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use std::borrow::Cow;

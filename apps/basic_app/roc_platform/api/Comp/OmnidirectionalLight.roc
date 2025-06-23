@@ -1,8 +1,8 @@
-# Hash: c5b18e5ef3119ee1f331d3f9315f9fc7bd900e0d120a3dd36b23de4680cac3f6
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::light::components::OmnidirectionalLightComp
+# Hash: de1106e571613fbccf34fca9446cff9561e15e03797e4ac964c36d8a5ddec4d9
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_light::components::OmnidirectionalLightComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     OmnidirectionalLight,
     add,
@@ -47,7 +47,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, OmnidirectionalLight -> List U8
 write_packet = |bytes, val|
-    type_id = 9604804340868413027
+    type_id = 13849646676937930522
     size = 4
     alignment = 4
     bytes
@@ -59,7 +59,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List OmnidirectionalLight -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 9604804340868413027
+    type_id = 13849646676937930522
     size = 4
     alignment = 4
     count = List.len(vals)

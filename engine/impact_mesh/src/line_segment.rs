@@ -1,6 +1,6 @@
 //! Line segment meshes.
 
-use crate::mesh::{VertexColor, VertexPosition};
+use crate::{VertexColor, VertexPosition};
 use impact_containers::{CollectionChange, CollectionChangeTracker};
 use impact_math::Float;
 use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};

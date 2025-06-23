@@ -1,8 +1,8 @@
-# Hash: 950c234d68ae7712014d21318d3800c05674de788fa6c8cf34e282264bae708e
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::material::components::UniformEmissiveLuminanceComp
+# Hash: 68e1b075e2376a9b17de1153033a299b9089521050cdeeffef508b311e708fa9
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::UniformEmissiveLuminanceComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     UniformEmissiveLuminance,
     add,
@@ -48,7 +48,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, UniformEmissiveLuminance -> List U8
 write_packet = |bytes, val|
-    type_id = 568816572470062482
+    type_id = 15842076415120799229
     size = 4
     alignment = 4
     bytes
@@ -60,7 +60,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List UniformEmissiveLuminance -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 568816572470062482
+    type_id = 15842076415120799229
     size = 4
     alignment = 4
     count = List.len(vals)

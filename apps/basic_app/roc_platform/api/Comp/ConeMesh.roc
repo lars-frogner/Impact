@@ -1,8 +1,8 @@
-# Hash: 315ea00aabc88412427cf772d95d6874b841498f22bd1d002a270d66cd60333b
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::mesh::components::ConeMeshComp
+# Hash: ce21ed7858291f4bfb11f3cb45354a2e356ae38e6046e36830cde948e6eae1c8
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::ConeMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     ConeMesh,
     new,
@@ -22,7 +22,7 @@ import core.Builtin
 ## entities whose mesh is an upward-pointing cone with the bottom centered on
 ## the origin.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 ConeMesh : {
     ## The length of the cone.
@@ -85,7 +85,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, ConeMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 6090438378649453219
+    type_id = 18078059379628098756
     size = 12
     alignment = 4
     bytes
@@ -97,7 +97,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List ConeMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 6090438378649453219
+    type_id = 18078059379628098756
     size = 12
     alignment = 4
     count = List.len(vals)

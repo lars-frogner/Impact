@@ -1,14 +1,15 @@
 //! Instance features representing material properties.
 
+use std::hash::Hash;
+
 use crate::{
-    material::{
-        RGBColor,
-        components::{ParallaxMapComp, UniformColorComp},
-    },
-    model::InstanceFeatureManager,
+    RGBColor,
+    components::{ParallaxMapComp, UniformColorComp},
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::wgpu;
+use impact_model::InstanceFeatureManager;
 use impact_model::{
     InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, impl_InstanceFeature,
 };
@@ -143,7 +144,9 @@ impl FixedColorMaterialFeature {
     }
 }
 
-pub fn register_material_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {
+pub fn register_material_feature_types<MID: Eq + Hash>(
+    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+) {
     instance_feature_manager.register_feature_type::<FixedColorMaterialFeature>();
     instance_feature_manager.register_feature_type::<UniformColorPhysicalMaterialFeature>();
     instance_feature_manager.register_feature_type::<TexturedColorPhysicalMaterialFeature>();
@@ -158,8 +161,8 @@ pub fn register_material_feature_types(instance_feature_manager: &mut InstanceFe
 ///
 /// # Returns
 /// The ID of the created feature type and the ID of the created feature.
-pub fn create_physical_material_feature(
-    instance_feature_manager: &mut InstanceFeatureManager,
+pub fn create_physical_material_feature<MID: Eq + Hash>(
+    instance_feature_manager: &mut InstanceFeatureManager<MID>,
     uniform_color: Option<&UniformColorComp>,
     specular_reflectance: f32,
     roughness: f32,
@@ -225,8 +228,8 @@ pub fn create_physical_material_feature(
 }
 
 impl UniformColorPhysicalMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
+    fn add_feature<MID: Eq + Hash>(
+        instance_feature_manager: &mut InstanceFeatureManager<MID>,
         color: &UniformColorComp,
         specular_reflectance: f32,
         roughness: f32,
@@ -247,8 +250,8 @@ impl UniformColorPhysicalMaterialFeature {
 }
 
 impl TexturedColorPhysicalMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
+    fn add_feature<MID: Eq + Hash>(
+        instance_feature_manager: &mut InstanceFeatureManager<MID>,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,
@@ -267,8 +270,8 @@ impl TexturedColorPhysicalMaterialFeature {
 }
 
 impl UniformColorParallaxMappedPhysicalMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
+    fn add_feature<MID: Eq + Hash>(
+        instance_feature_manager: &mut InstanceFeatureManager<MID>,
         color: &UniformColorComp,
         specular_reflectance: f32,
         roughness: f32,
@@ -294,8 +297,8 @@ impl UniformColorParallaxMappedPhysicalMaterialFeature {
 }
 
 impl TexturedColorParallaxMappedPhysicalMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
+    fn add_feature<MID: Eq + Hash>(
+        instance_feature_manager: &mut InstanceFeatureManager<MID>,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,

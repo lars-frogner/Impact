@@ -1,9 +1,9 @@
 //! Management of force data for entities.
 
 use super::{RigidBodyForceManager, detailed_drag};
-use crate::mesh::MeshRepository;
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
+use impact_mesh::MeshRepository;
 use std::sync::RwLock;
 
 impl RigidBodyForceManager {

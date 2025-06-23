@@ -2,7 +2,6 @@
 
 use crate::{
     gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
 use impact_camera::buffer::CameraProjectionUniform;
@@ -10,6 +9,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation};
 use impact_model::transform::InstanceModelViewTransformWithPrevious;
 use std::sync::LazyLock;
 

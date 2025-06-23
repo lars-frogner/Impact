@@ -1,8 +1,8 @@
-# Hash: 3841f73dc1d9153056317697733f741cbf88bbd56b54cf29fd87b3a42090cf1a
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::material::components::NormalMapComp
+# Hash: b890d51fcd87b65864ef9b96409a66cae50c56ea3d41d5204e0545c104e2eff6
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::NormalMapComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     NormalMap,
     add,
@@ -46,7 +46,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, NormalMap -> List U8
 write_packet = |bytes, val|
-    type_id = 13304748650252932154
+    type_id = 5195155576786477403
     size = 4
     alignment = 4
     bytes
@@ -58,7 +58,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List NormalMap -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 13304748650252932154
+    type_id = 5195155576786477403
     size = 4
     alignment = 4
     count = List.len(vals)

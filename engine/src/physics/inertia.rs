@@ -1,12 +1,10 @@
 //! Computation and representation of inertia-related properties.
 
-use crate::{
-    mesh::triangle::TriangleMesh,
-    physics::{fph, motion::Position},
-};
+use crate::physics::{fph, motion::Position};
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
+use impact_mesh::triangle::TriangleMesh;
 use nalgebra::{Matrix3, Point3, Similarity3, UnitQuaternion, Vector3, point, vector};
 use roc_integration::roc;
 use simba::scalar::SubsetOf;
@@ -727,8 +725,8 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mesh::FrontFaceSide;
     use approx::abs_diff_eq;
+    use impact_mesh::FrontFaceSide;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
     use proptest::prelude::*;
     use std::ops::Range;

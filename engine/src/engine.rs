@@ -5,6 +5,9 @@ pub mod components;
 pub mod entity;
 pub mod tasks;
 
+#[cfg(any(feature = "obj", feature = "ply"))]
+pub mod io;
+
 #[cfg(feature = "window")]
 pub mod window;
 
@@ -19,9 +22,6 @@ use crate::{
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
-    io::{self, util::parse_ron_file},
-    material::{self, MaterialLibrary},
-    mesh::{MeshRepository, components::TriangleMeshComp, texture_projection::TextureProjection},
     model::InstanceFeatureManager,
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
@@ -29,11 +29,12 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
-    archetype::ArchetypeComponentStorage,
-    component::{Component, SingleInstance},
+    component::Component,
     world::{EntityID, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
+use impact_material::MaterialLibrary;
+use impact_mesh::MeshRepository;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
@@ -129,7 +130,7 @@ impl Engine {
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
         impact_model::register_model_feature_types(&mut instance_feature_manager);
-        material::register_material_feature_types(&mut instance_feature_manager);
+        impact_material::register_material_feature_types(&mut instance_feature_manager);
         voxel::register_voxel_feature_types(&mut instance_feature_manager);
         gizmo::initialize_buffers_for_gizmo_models(&mut instance_feature_manager);
 
@@ -245,121 +246,6 @@ impl Engine {
 
         self.screen_capturer
             .save_unidirectional_light_shadow_maps_if_requested(self.renderer())
-    }
-
-    /// Reads the Wavefront OBJ file at the given path and any associated MTL
-    /// material files and returns the set of components representing the mesh
-    /// and material of each model in the file. The meshes are added to the mesh
-    /// repository, and any textures referenced in the MTL files are loaded as
-    /// rendering assets. Each [`ArchetypeComponentStorage`] in the returned
-    /// list contains the components describing a single model, and their order
-    /// in the list is the same as their order in the OBJ file.
-    ///
-    /// # Errors
-    /// Returns an error if any of the involved OBJ, MTL or texture files can
-    /// not be found or loaded.
-    pub fn load_models_from_obj_file<P>(
-        &self,
-        obj_file_path: P,
-    ) -> Result<Vec<SingleInstance<ArchetypeComponentStorage>>>
-    where
-        P: AsRef<Path> + Debug,
-    {
-        let mut assets = self.assets.write().unwrap();
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::obj::load_models_from_obj_file(&mut assets, &mut mesh_repository, obj_file_path)
-    }
-
-    /// Reads the Wavefront OBJ file at the given path and adds the contained
-    /// mesh to the mesh repository if it does not already exist. If there
-    /// are multiple meshes in the file, they are merged into a single mesh.
-    ///
-    /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
-    ///
-    /// # Errors
-    /// Returns an error if the file can not be found or loaded as a mesh.
-    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<TriangleMeshComp>
-    where
-        P: AsRef<Path> + Debug,
-    {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::obj::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
-    }
-
-    /// Reads the Wavefront OBJ file at the given path and adds the contained
-    /// mesh to the mesh repository if it does not already exist, after
-    /// generating texture coordinates for the mesh using the given
-    /// projection. If there are multiple meshes in the file, they are
-    /// merged into a single mesh.
-    ///
-    /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
-    ///
-    /// # Errors
-    /// Returns an error if the file can not be found or loaded as a mesh.
-    pub fn load_mesh_from_obj_file_with_projection<P>(
-        &self,
-        obj_file_path: P,
-        projection: &impl TextureProjection<f32>,
-    ) -> Result<TriangleMeshComp>
-    where
-        P: AsRef<Path> + Debug,
-    {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::obj::load_mesh_from_obj_file_with_projection(
-            &mut mesh_repository,
-            obj_file_path,
-            projection,
-        )
-    }
-
-    /// Reads the PLY (Polygon File Format, also called Stanford Triangle
-    /// Format) file at the given path and adds the contained mesh to the mesh
-    /// repository if it does not already exist.
-    ///
-    /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
-    ///
-    /// # Errors
-    /// Returns an error if the file can not be found or loaded as a mesh.
-    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<TriangleMeshComp>
-    where
-        P: AsRef<Path> + Debug,
-    {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::ply::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
-    }
-
-    /// Reads the PLY (Polygon File Format, also called Stanford Triangle
-    /// Format) file at the given path and adds the contained mesh to the
-    /// mesh repository if it does not already exist, after generating
-    /// texture coordinates for the mesh using the given projection.
-    ///
-    /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
-    ///
-    /// # Errors
-    /// Returns an error if the file can not be found or loaded as a mesh.
-    pub fn load_mesh_from_ply_file_with_projection<P>(
-        &self,
-        ply_file_path: P,
-        projection: &impl TextureProjection<f32>,
-    ) -> Result<TriangleMeshComp>
-    where
-        P: AsRef<Path> + Debug,
-    {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::ply::load_mesh_from_ply_file_with_projection(
-            &mut mesh_repository,
-            ply_file_path,
-            projection,
-        )
     }
 
     /// Sets a new size for the rendering surface and updates
@@ -520,7 +406,7 @@ impl EngineConfig {
     /// resolves any specified paths.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
-        let mut config: Self = parse_ron_file(file_path)?;
+        let mut config: Self = crate::io::parse_ron_file(file_path)?;
         if let Some(root_path) = file_path.parent() {
             config.resolve_paths(root_path);
         }

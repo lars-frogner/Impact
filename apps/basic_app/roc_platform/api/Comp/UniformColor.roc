@@ -1,8 +1,8 @@
-# Hash: 89190fabb1dceaaafca19d09ea14a00663285174313e0be3e627a05c1eeb3c29
-# Generated: 2025-05-24T10:34:21+00:00
-# Rust type: impact::material::components::UniformColorComp
+# Hash: 1ab77b96aba813af86f062ac97785b330a0b0f0426a4cde53bcfa61e6bba680d
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::UniformColorComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     UniformColor,
     iron,
@@ -180,7 +180,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, UniformColor -> List U8
 write_packet = |bytes, val|
-    type_id = 798125558113623870
+    type_id = 8106819983793931161
     size = 12
     alignment = 4
     bytes
@@ -192,7 +192,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List UniformColor -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 798125558113623870
+    type_id = 8106819983793931161
     size = 12
     alignment = 4
     count = List.len(vals)

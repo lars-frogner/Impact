@@ -36,9 +36,16 @@ pub mod window;
 #[cfg(feature = "profiling")]
 pub mod profiling;
 
+pub use impact_camera;
 pub use impact_containers;
 pub use impact_ecs;
+pub use impact_geometry;
+pub use impact_gpu;
+pub use impact_light;
+pub use impact_material;
 pub use impact_math;
+pub use impact_mesh;
+pub use impact_model;
 pub use roc_integration;
 
 #[cfg(feature = "egui")]

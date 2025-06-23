@@ -1,8 +1,8 @@
-# Hash: f62c7acaa40d6a986a3d3853fb65afd5289e0bf27c9a91320660b18e10da0c34
-# Generated: 2025-06-08T10:55:22+00:00
-# Rust type: impact::mesh::components::TriangleMeshComp
+# Hash: 2441c8167958c7f8e10376b32d5f6e5d479aa8e0081ecf1f68ca16ecb46f6c4f
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::TriangleMeshComp
 # Type category: Component
-# Commit: 5118a70 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     TriangleMesh,
     new,
@@ -77,7 +77,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TriangleMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 16727506806787248564
+    type_id = 1922850059123908775
     size = 8
     alignment = 8
     bytes
@@ -89,7 +89,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TriangleMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 16727506806787248564
+    type_id = 1922850059123908775
     size = 8
     alignment = 8
     count = List.len(vals)

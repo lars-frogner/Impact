@@ -5,14 +5,6 @@ use crate::{
         attachment::{RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantitySet},
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     },
-    material::{
-        MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, MaterialShaderInput,
-        MaterialSpecification,
-        entity::physical::{
-            PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindings,
-        },
-    },
-    mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation},
     rendering_template_source,
 };
 use impact_camera::buffer::CameraProjectionUniform;
@@ -20,6 +12,14 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_material::{
+    MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, MaterialShaderInput,
+    MaterialSpecification,
+    entity::physical::{
+        PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindings,
+    },
+};
+use impact_mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation};
 use impact_model::transform::InstanceModelViewTransformWithPrevious;
 use std::sync::LazyLock;
 
@@ -276,11 +276,11 @@ impl SpecificShaderTemplate for ModelGeometryShaderTemplate {
 mod tests {
 
     use super::*;
-    use crate::material::entity::physical::{
+    use impact_gpu::shader::template::validate_template;
+    use impact_material::entity::physical::{
         PhysicalMaterialNormalMappingTextureBindings,
         PhysicalMaterialParallaxMappingTextureBindings,
     };
-    use impact_gpu::shader::template::validate_template;
 
     #[test]
     fn should_resolve_to_valid_wgsl_for_basic_input() {

@@ -42,7 +42,7 @@ where
     T: TexelType + Serialize,
 {
     let byte_buffer = bincode::serde::encode_to_vec(table, bincode::config::standard())?;
-    io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
+    io::save_data_as_binary(output_file_path, &byte_buffer)?;
     Ok(())
 }
 

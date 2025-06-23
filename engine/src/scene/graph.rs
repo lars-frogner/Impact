@@ -1459,12 +1459,10 @@ impl From<SceneEntityFlags> for ModelInstanceFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        material::{MaterialHandle, MaterialID},
-        mesh::MeshID,
-    };
     use approx::assert_abs_diff_eq;
+    use impact_material::{MaterialHandle, MaterialID};
     use impact_math::hash64;
+    use impact_mesh::MeshID;
     use impact_model::InstanceFeatureStorage;
     use nalgebra::{Point3, Rotation3, Scale3, Translation3, point};
 

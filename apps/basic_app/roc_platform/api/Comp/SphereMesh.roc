@@ -1,8 +1,8 @@
-# Hash: 498534a64f1ea702d9270ab113d5cce5187c2f36aaed7a0bf787efc866295cb6
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::mesh::components::SphereMeshComp
+# Hash: 6d334a6beba1956369b4240e828d726eab7b7fb87d195a4868a8efdb1adae86c
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::components::SphereMeshComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     SphereMesh,
     new,
@@ -21,7 +21,7 @@ import core.Builtin
 ## [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
 ## entities whose mesh is a unit diameter sphere centered on the origin.
 ##
-## The purpose of this component is to aid in constructing a [`MeshComp`] for
+## The purpose of this component is to aid in constructing a [`TriangleMeshComp`] for
 ## the entity. It is therefore not kept after entity creation.
 SphereMesh : {
     ## The number of horizontal circular cross-sections of vertices making up
@@ -81,7 +81,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, SphereMesh -> List U8
 write_packet = |bytes, val|
-    type_id = 3326404544739324621
+    type_id = 3222644206785206958
     size = 4
     alignment = 4
     bytes
@@ -93,7 +93,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List SphereMesh -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 3326404544739324621
+    type_id = 3222644206785206958
     size = 4
     alignment = 4
     count = List.len(vals)

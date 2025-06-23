@@ -9,13 +9,13 @@ use crate::{
         postprocessing::PostprocessingShaderTemplate,
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     },
-    mesh::buffer::MeshVertexAttributeLocation,
     rendering_template_source,
 };
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_mesh::buffer::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for visualizing a render attachment texture by rendering it

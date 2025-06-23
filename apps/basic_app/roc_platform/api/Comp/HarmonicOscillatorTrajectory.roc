@@ -1,8 +1,8 @@
-# Hash: e56344c75e09d7c64e677eae212cc2f94e12535533f2241a036a566a1ab7c7ad
-# Generated: 2025-05-23T20:19:02+00:00
+# Hash: 223046098c48ac4169ca7fe12735b65c61cce81b1bf453907e89a0000f17da5d
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::physics::motion::analytical::harmonic_oscillation::components::HarmonicOscillatorTrajectoryComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     HarmonicOscillatorTrajectory,
     new,
@@ -24,8 +24,8 @@ import core.UnitVector3
 ## over time.
 ##
 ## For this component to have an effect, the entity also needs a
-## [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
-## [`VelocityComp`](crate::physics::VelocityComp).
+## [`ReferenceFrameComp`](crate::physics::motion::components::ReferenceFrameComp) and a
+## [`VelocityComp`](crate::physics::motion::components::VelocityComp).
 HarmonicOscillatorTrajectory : {
     ## A simulation time when the entity should be at the center of
     ## oscillation.

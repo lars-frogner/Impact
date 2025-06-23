@@ -1,29 +1,26 @@
 //! Render passes for applying bloom.
 
-use crate::{
-    gpu::rendering::{
-        attachment::{
-            RenderAttachmentDescription, RenderAttachmentInputDescription,
-            RenderAttachmentInputDescriptionSet,
-            RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
-            RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
-        },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-        render_command::{
-            additive_blend_state,
-            postprocessing_pass::{
-                create_postprocessing_render_pipeline, create_postprocessing_render_pipeline_layout,
-            },
-            render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
-        },
-        resource::SynchronizedRenderResources,
-        shader_templates::{
-            bloom_blending::BloomBlendingShaderTemplate,
-            bloom_downsampling::BloomDownsamplingShaderTemplate,
-            bloom_upsampling_blur::BloomUpsamplingBlurShaderTemplate,
-        },
+use crate::gpu::rendering::{
+    attachment::{
+        RenderAttachmentDescription, RenderAttachmentInputDescription,
+        RenderAttachmentInputDescriptionSet,
+        RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
+        RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
     },
-    mesh::{self, VertexAttributeSet},
+    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    render_command::{
+        additive_blend_state,
+        postprocessing_pass::{
+            create_postprocessing_render_pipeline, create_postprocessing_render_pipeline_layout,
+        },
+        render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
+    },
+    resource::SynchronizedRenderResources,
+    shader_templates::{
+        bloom_blending::BloomBlendingShaderTemplate,
+        bloom_downsampling::BloomDownsamplingShaderTemplate,
+        bloom_upsampling_blur::BloomUpsamplingBlurShaderTemplate,
+    },
 };
 use anyhow::{Result, anyhow};
 use approx::abs_diff_ne;
@@ -32,6 +29,7 @@ use impact_gpu::{
     query::TimestampQueryRegistry,
     shader::{ShaderID, ShaderManager},
 };
+use impact_mesh::VertexAttributeSet;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, num::NonZeroU32};
 
@@ -366,7 +364,7 @@ impl BloomRenderCommands {
                 .unwrap();
             render_pass.set_bind_group(0, bind_group, &[]);
 
-            let mesh_id = mesh::screen_filling_quad_mesh_id();
+            let mesh_id = impact_mesh::screen_filling_quad_mesh_id();
 
             let mesh_buffer_manager = render_resources
                 .get_triangle_mesh_buffer_manager(mesh_id)
@@ -446,7 +444,7 @@ impl BloomRenderCommands {
                 .unwrap();
             render_pass.set_bind_group(0, bind_group, &[]);
 
-            let mesh_id = mesh::screen_filling_quad_mesh_id();
+            let mesh_id = impact_mesh::screen_filling_quad_mesh_id();
 
             let mesh_buffer_manager = render_resources
                 .get_triangle_mesh_buffer_manager(mesh_id)
@@ -512,7 +510,7 @@ impl BloomRenderCommands {
             .unwrap();
         render_pass.set_bind_group(1, blurred_luminance_bind_group, &[]);
 
-        let mesh_id = mesh::screen_filling_quad_mesh_id();
+        let mesh_id = impact_mesh::screen_filling_quad_mesh_id();
 
         let mesh_buffer_manager = render_resources
             .get_triangle_mesh_buffer_manager(mesh_id)

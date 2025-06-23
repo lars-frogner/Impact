@@ -1,8 +1,8 @@
-# Hash: 0a9c290929ccd3656abb557b512bf2a63f99b390d2d657e16d72e22c9332026d
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::material::components::TexturedRoughnessComp
+# Hash: fece5a1554d3fc7bcc9897c0bf3a573f2c2762a49f1ffaf0b965696d327c21b1
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::TexturedRoughnessComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     TexturedRoughness,
     unscaled,
@@ -72,7 +72,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TexturedRoughness -> List U8
 write_packet = |bytes, val|
-    type_id = 1963253879334442476
+    type_id = 4010572086263355897
     size = 8
     alignment = 4
     bytes
@@ -84,7 +84,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TexturedRoughness -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 1963253879334442476
+    type_id = 4010572086263355897
     size = 8
     alignment = 4
     count = List.len(vals)

@@ -3,7 +3,7 @@
 use crate::{
     camera::SceneCamera,
     physics::motion::components::ReferenceFrameComp,
-    scene::{RenderResourcesDesynchronized, SceneEntityFlags, components::SceneEntityFlagsComp},
+    scene::{SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
@@ -29,7 +29,7 @@ pub fn setup_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     setup_ambient_light_for_new_entity(light_storage, components, desynchronized);
     setup_omnidirectional_light_for_new_entity(
@@ -51,7 +51,7 @@ pub fn setup_light_for_new_entity(
 pub fn cleanup_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     cleanup_ambient_light_for_removed_entity(light_storage, entity, desynchronized);
     cleanup_omnidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
@@ -65,11 +65,11 @@ pub fn cleanup_light_for_removed_entity(
 pub fn setup_ambient_light_for_new_entity(
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
             let mut light_storage = light_storage.write().unwrap();
         },
         components,
@@ -97,11 +97,11 @@ pub fn setup_omnidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
 
             let view_transform = scene_camera
                 .read()
@@ -135,7 +135,7 @@ pub fn setup_omnidirectional_light_for_new_entity(
 
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
 
             let view_transform = scene_camera
                 .read()
@@ -180,11 +180,11 @@ pub fn setup_unidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
 
             let view_transform = scene_camera
                 .read()
@@ -223,7 +223,7 @@ pub fn setup_unidirectional_light_for_new_entity(
 
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
 
             let view_transform = scene_camera
                 .read()
@@ -269,7 +269,7 @@ pub fn setup_unidirectional_light_for_new_entity(
 pub fn cleanup_ambient_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     if let Some(ambient_light) = entity.get_component::<AmbientLightComp>() {
         let light_id = ambient_light.access().id;
@@ -277,7 +277,7 @@ pub fn cleanup_ambient_light_for_removed_entity(
             .write()
             .unwrap()
             .remove_ambient_light(light_id);
-        desynchronized.set_yes();
+        *desynchronized = true;
     }
 }
 
@@ -288,7 +288,7 @@ pub fn cleanup_ambient_light_for_removed_entity(
 pub fn cleanup_omnidirectional_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightComp>() {
         let light_id = omnidirectional_light.access().id;
@@ -296,7 +296,7 @@ pub fn cleanup_omnidirectional_light_for_removed_entity(
             .write()
             .unwrap()
             .remove_omnidirectional_light(light_id);
-        desynchronized.set_yes();
+        *desynchronized = true;
     }
 
     if let Some(omnidirectional_light) =
@@ -307,7 +307,7 @@ pub fn cleanup_omnidirectional_light_for_removed_entity(
             .write()
             .unwrap()
             .remove_shadowable_omnidirectional_light(light_id);
-        desynchronized.set_yes();
+        *desynchronized = true;
     }
 }
 
@@ -318,7 +318,7 @@ pub fn cleanup_omnidirectional_light_for_removed_entity(
 pub fn cleanup_unidirectional_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) {
     if let Some(unidirectional_light) = entity.get_component::<UnidirectionalLightComp>() {
         let light_id = unidirectional_light.access().id;
@@ -326,7 +326,7 @@ pub fn cleanup_unidirectional_light_for_removed_entity(
             .write()
             .unwrap()
             .remove_unidirectional_light(light_id);
-        desynchronized.set_yes();
+        *desynchronized = true;
     }
 
     if let Some(unidirectional_light) = entity.get_component::<ShadowableUnidirectionalLightComp>()
@@ -336,6 +336,6 @@ pub fn cleanup_unidirectional_light_for_removed_entity(
             .write()
             .unwrap()
             .remove_shadowable_unidirectional_light(light_id);
-        desynchronized.set_yes();
+        *desynchronized = true;
     }
 }

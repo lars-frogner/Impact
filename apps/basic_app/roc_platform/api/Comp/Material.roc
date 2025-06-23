@@ -1,8 +1,8 @@
-# Hash: 088a56f340733264729400ea66b502b7190527f16776aa7b57163ce02eee8e73
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::material::components::MaterialComp
+# Hash: fb1c963ddc5738d618b2bf0f56ecbda1964506ec4b6942720124d7e6620cf50b
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::MaterialComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     Material,
     new,
@@ -73,7 +73,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, Material -> List U8
 write_packet = |bytes, val|
-    type_id = 12873697595636024364
+    type_id = 5599710697835304399
     size = 32
     alignment = 8
     bytes
@@ -85,7 +85,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List Material -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 12873697595636024364
+    type_id = 5599710697835304399
     size = 32
     alignment = 8
     count = List.len(vals)

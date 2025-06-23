@@ -2,26 +2,23 @@
 
 use super::super::features::create_physical_material_feature;
 use crate::{
-    assets::Assets,
-    material::{
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialShaderInput, MaterialSpecification,
-        components::{
-            MaterialComp, NormalMapComp, ParallaxMapComp, TexturedColorComp,
-            TexturedEmissiveLuminanceComp, TexturedMetalnessComp, TexturedRoughnessComp,
-            TexturedSpecularReflectanceComp, UniformColorComp, UniformEmissiveLuminanceComp,
-            UniformMetalnessComp, UniformRoughnessComp, UniformSpecularReflectanceComp,
-        },
+    MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+    MaterialPropertyTextureGroupID, MaterialShaderInput, MaterialSpecification,
+    MaterialTextureProvider,
+    components::{
+        MaterialComp, NormalMapComp, ParallaxMapComp, TexturedColorComp,
+        TexturedEmissiveLuminanceComp, TexturedMetalnessComp, TexturedRoughnessComp,
+        TexturedSpecularReflectanceComp, UniformColorComp, UniformEmissiveLuminanceComp,
+        UniformMetalnessComp, UniformRoughnessComp, UniformSpecularReflectanceComp,
     },
-    mesh::VertexAttributeSet,
-    model::InstanceFeatureManager,
-    scene::RenderResourcesDesynchronized,
 };
 use anyhow::{Result, bail};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
-use std::{collections::hash_map::Entry, sync::RwLock};
+use impact_mesh::VertexAttributeSet;
+use impact_model::InstanceFeatureManager;
+use std::{collections::hash_map::Entry, hash::Hash, sync::RwLock};
 
 /// Binding locations for textures used in a physical material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -62,17 +59,17 @@ pub struct PhysicalMaterialParallaxMappingTextureBindings {
 /// property texture set to the material library if not already present,
 /// registers the material in the instance feature manager and adds the
 /// appropriate material component to the entity.
-pub fn setup_physical_material_for_new_entity(
+pub fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
     graphics_device: &GraphicsDevice,
-    assets: &Assets,
+    texture_provider: &impl MaterialTextureProvider,
     material_library: &RwLock<MaterialLibrary>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager>,
+    instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut RenderResourcesDesynchronized,
+    desynchronized: &mut bool,
 ) -> Result<()> {
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
             let mut material_library = material_library.write().unwrap();
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
@@ -91,7 +88,7 @@ pub fn setup_physical_material_for_new_entity(
          -> Result<MaterialComp> {
             setup_physical_material(
                 graphics_device,
-                assets,
+                texture_provider,
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(uniform_color),
@@ -113,7 +110,7 @@ pub fn setup_physical_material_for_new_entity(
 
     setup!(
         {
-            desynchronized.set_yes();
+            *desynchronized = true;
             let mut material_library = material_library.write().unwrap();
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
@@ -132,7 +129,7 @@ pub fn setup_physical_material_for_new_entity(
          -> Result<MaterialComp> {
             setup_physical_material(
                 graphics_device,
-                assets,
+                texture_provider,
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -153,11 +150,11 @@ pub fn setup_physical_material_for_new_entity(
     )
 }
 
-pub fn setup_physical_material(
+pub fn setup_physical_material<MID: Eq + Hash>(
     graphics_device: &GraphicsDevice,
-    assets: &Assets,
+    texture_provider: &impl MaterialTextureProvider,
     material_library: &mut MaterialLibrary,
-    instance_feature_manager: &mut InstanceFeatureManager,
+    instance_feature_manager: &mut InstanceFeatureManager<MID>,
     uniform_color: Option<&UniformColorComp>,
     textured_color: Option<&TexturedColorComp>,
     uniform_specular_reflectance: Option<&UniformSpecularReflectanceComp>,
@@ -370,7 +367,7 @@ pub fn setup_physical_material(
         {
             entry.insert(MaterialPropertyTextureGroup::new(
                 graphics_device,
-                assets,
+                texture_provider,
                 texture_ids,
                 texture_group_id.to_string(),
             )?);

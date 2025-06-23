@@ -1,8 +1,8 @@
-# Hash: 3b52c68d6b2f2ae6101a10e8a5e6e29547730e202c164af358a477f478f4d766
-# Generated: 2025-05-24T10:01:42+00:00
+# Hash: 2ead848e225ce6584c0fc09a1c74757bec5e6ffa45f1c188a91c3f01f18deb66
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::voxel::components::VoxelAbsorbingCapsuleComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,
@@ -24,7 +24,8 @@ import core.Vector3
 ## is highest at the central line segment of the capsule and decreases
 ## quadratically to zero at the capsule boundary.
 ##
-## Does nothing if the entity does not have a [`ReferenceFrameComp`].
+## Does nothing if the entity does not have a
+## [`crate::physics::motion::components::ReferenceFrameComp`].
 VoxelAbsorbingCapsule : {
     ## The offset of the starting point of the capsule's central line segment
     ## in the reference frame of the entity.

@@ -1,8 +1,8 @@
-# Hash: e5af60a5d349d16bbadf3f16de5c4a070fbab4958ee4aa01d7ec550fd7808ed0
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::light::components::AmbientEmissionComp
+# Hash: 48195ca5f9d8dcf3bf8d4f1515defb5b48e9bb4bbe4579c8a52eaa5f5143ef59
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_light::components::AmbientEmissionComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     AmbientEmission,
     new,
@@ -81,7 +81,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, AmbientEmission -> List U8
 write_packet = |bytes, val|
-    type_id = 10976986305333878027
+    type_id = 59759936312467620
     size = 12
     alignment = 4
     bytes
@@ -93,7 +93,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List AmbientEmission -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 10976986305333878027
+    type_id = 59759936312467620
     size = 12
     alignment = 4
     count = List.len(vals)

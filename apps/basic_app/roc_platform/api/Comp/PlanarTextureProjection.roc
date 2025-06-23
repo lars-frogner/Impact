@@ -1,8 +1,8 @@
-# Hash: 9e248325f4312280a63910402dbf9667da91cf0070aa1d875f389bf98a022a10
-# Generated: 2025-05-23T21:48:57+00:00
-# Rust type: impact::mesh::texture_projection::components::PlanarTextureProjectionComp
+# Hash: 3984cc37eab5ec4a8024bde713fb8f84290c8557161ab89dbcc1d9d14e332ec3
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_mesh::texture_projection::components::PlanarTextureProjectionComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     PlanarTextureProjection,
     new,
@@ -28,8 +28,8 @@ import core.Vector3
 ## entities that use a [`PlanarTextureProjection`].
 ##
 ## The purpose of this component is to aid in constructing a
-## [`MeshComp`](crate::mesh::components::MeshComp) for the entity. It is
-## therefore not kept after entity creation.
+## [`TriangleMeshComp`](crate::mesh::components::TriangleMeshComp) for the
+## entity. It is therefore not kept after entity creation.
 PlanarTextureProjection : {
     ## The origin of the plane, where the texture coordinates will be zero.
     origin : Point3.Point3 Binary32,
@@ -141,7 +141,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, PlanarTextureProjection -> List U8
 write_packet = |bytes, val|
-    type_id = 2690438958355382704
+    type_id = 14974801091994966329
     size = 36
     alignment = 4
     bytes
@@ -153,7 +153,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List PlanarTextureProjection -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 2690438958355382704
+    type_id = 14974801091994966329
     size = 36
     alignment = 4
     count = List.len(vals)

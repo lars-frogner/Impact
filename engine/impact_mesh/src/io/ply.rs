@@ -1,6 +1,6 @@
 //! Input/output of mesh data in Polygon File Format.
 
-use crate::mesh::{
+use crate::{
     MeshID, MeshRepository, VertexNormalVector, VertexPosition, VertexTextureCoords,
     components::TriangleMeshComp, texture_projection::TextureProjection, triangle::TriangleMesh,
 };

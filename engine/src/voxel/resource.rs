@@ -3,10 +3,6 @@
 use crate::{
     assets::Assets,
     gpu::rendering::push_constant::RenderingPushConstantVariant,
-    mesh::buffer::{
-        MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
-        new_vertex_gpu_buffer_with_spare_capacity,
-    },
     voxel::{
         VoxelObjectID,
         mesh::{
@@ -33,6 +29,10 @@ use impact_gpu::{
     uniform::{self, UniformBufferable},
 };
 use impact_math::ConstStringHash64;
+use impact_mesh::buffer::{
+    MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
+    new_vertex_gpu_buffer_with_spare_capacity,
+};
 use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
 
 /// Owner and manager of the GPU resources for all voxel materials.

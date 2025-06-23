@@ -9,8 +9,10 @@ use image::{
     self, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma, Rgba,
     buffer::ConvertBuffer,
 };
+use impact_math::{hash32, stringhash32_newtype};
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
+use roc_integration::roc;
 use std::{
     borrow::Cow,
     fs::File,
@@ -20,6 +22,14 @@ use std::{
     path::Path,
 };
 use wgpu::util::DeviceExt;
+
+stringhash32_newtype!(
+    /// Identifier for specific textures.
+    /// Wraps a [`StringHash32`](impact_math::StringHash32).
+    #[roc(parents = "Rendering")]
+    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+    [pub] TextureID
+);
 
 /// Identifier for specific texture samplers.
 #[repr(transparent)]
@@ -179,6 +189,15 @@ pub struct TextureLookupTable<T: TexelType> {
 pub enum DepthOrArrayLayers {
     Depth(NonZeroU32),
     ArrayLayers(NonZeroU32),
+}
+
+#[roc(dependencies = [impact_math::Hash32])]
+impl TextureID {
+    #[roc(body = "Hashing.hash_str_32(name)")]
+    /// Creates a texture ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash32!(name))
+    }
 }
 
 impl From<&SamplerConfig> for SamplerID {

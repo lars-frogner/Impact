@@ -13,11 +13,13 @@ use crate::{
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
     },
-    mesh::{MeshRepository, VertexColor, line_segment::LineSegmentMesh, triangle::TriangleMesh},
     voxel::chunks::CHUNK_SIZE,
 };
 use anyhow::Result;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
+use impact_mesh::{
+    MeshRepository, VertexColor, line_segment::LineSegmentMesh, triangle::TriangleMesh,
+};
 
 impl GizmoType {
     fn generate_mesh_in_repository(&self, mesh_repository: &mut MeshRepository) -> Result<()> {

@@ -12,8 +12,6 @@ use crate::{
         },
     },
     light,
-    material::{MaterialLibrary, MaterialShaderInput},
-    mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     model::{InstanceFeatureManager, ModelID},
     scene::ModelInstanceNode,
     voxel::render_commands::VoxelRenderCommands,
@@ -27,6 +25,8 @@ use impact_light::{
     buffer::LightGPUBufferManager,
     shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
 };
+use impact_material::{MaterialLibrary, MaterialShaderInput};
+use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use impact_model::{
     InstanceFeature, buffer::InstanceFeatureGPUBufferManager,
     transform::InstanceModelLightTransform,

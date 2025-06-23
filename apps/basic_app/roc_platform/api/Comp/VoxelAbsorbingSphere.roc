@@ -1,8 +1,8 @@
-# Hash: 87b4e2aa2001cbc5df16db02e83f0e8ac34510c967a523d367d13de20bb8e0ef
-# Generated: 2025-05-24T10:01:42+00:00
+# Hash: f007df5406cfb7f0f1dfa0c0307fba43f2246fd774a32714f5fa3d00640d1215
+# Generated: 2025-06-23T21:05:32+00:00
 # Rust type: impact::voxel::components::VoxelAbsorbingSphereComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -24,7 +24,8 @@ import core.Vector3
 ## is highest at the center of the sphere and decreases quadratically to zero
 ## at the full radius.
 ##
-## Does nothing if the entity does not have a [`ReferenceFrameComp`].
+## Does nothing if the entity does not have a
+## [`crate::physics::motion::components::ReferenceFrameComp`].
 VoxelAbsorbingSphere : {
     ## The offset of the sphere in the reference frame of the entity.
     offset : Vector3.Vector3 Binary64,

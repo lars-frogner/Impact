@@ -14,7 +14,6 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    mesh::buffer::VertexBufferable,
     model::InstanceFeatureManager,
     scene::ModelInstanceNode,
     voxel::{
@@ -31,6 +30,7 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::{BufferableCamera, CameraGPUBufferManager};
 use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_mesh::buffer::VertexBufferable;
 use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
     transform::{

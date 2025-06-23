@@ -1,8 +1,8 @@
-# Hash: e803edba5fd07306f781d26d8e33efaa5529e9e6b6c554206921ea8cc4c22350
-# Generated: 2025-05-24T10:34:21+00:00
-# Rust type: impact::material::components::UniformMetalnessComp
+# Hash: 975d7ad5467637970e66dd24a41dc372139f2a1705e0f39a3b389a2da14670f5
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::UniformMetalnessComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     UniformMetalness,
     dielectric,
@@ -100,7 +100,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, UniformMetalness -> List U8
 write_packet = |bytes, val|
-    type_id = 16657324603404166233
+    type_id = 9618070596283987898
     size = 4
     alignment = 4
     bytes
@@ -112,7 +112,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List UniformMetalness -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 16657324603404166233
+    type_id = 9618070596283987898
     size = 4
     alignment = 4
     count = List.len(vals)

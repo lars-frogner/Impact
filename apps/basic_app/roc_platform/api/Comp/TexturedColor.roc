@@ -1,8 +1,8 @@
-# Hash: cbd991c767c4433ce148658fcda5ac1b9ea000f5da228399872a8b4302318c4e
-# Generated: 2025-05-23T20:19:02+00:00
-# Rust type: impact::material::components::TexturedColorComp
+# Hash: 67608e5d9542756bbd75ac4e502a04b4ec17718d624183c3a8d9183366ced451
+# Generated: 2025-06-23T21:05:32+00:00
+# Rust type: impact_material::components::TexturedColorComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: 6a2f327 (dirty)
 module [
     TexturedColor,
     add,
@@ -54,7 +54,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TexturedColor -> List U8
 write_packet = |bytes, val|
-    type_id = 1840339958461434793
+    type_id = 2872624422394126908
     size = 4
     alignment = 4
     bytes
@@ -66,7 +66,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TexturedColor -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 1840339958461434793
+    type_id = 2872624422394126908
     size = 4
     alignment = 4
     count = List.len(vals)

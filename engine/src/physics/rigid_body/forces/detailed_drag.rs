@@ -11,15 +11,13 @@ pub use drag_load::DragLoad;
 use impact_containers::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    mesh::{MeshID, triangle::TriangleMesh},
-    physics::{
-        fph,
-        motion::{Direction, Position},
-    },
+use crate::physics::{
+    fph,
+    motion::{Direction, Position},
 };
 use anyhow::{Result, anyhow, bail};
 use impact_math::{Angle, Float, Radians};
+use impact_mesh::{MeshID, triangle::TriangleMesh};
 use simba::scalar::SubsetOf;
 use std::collections::hash_map::Entry;
 

@@ -14,8 +14,6 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    material::{MaterialLibrary, MaterialShaderInput},
-    mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable},
     model::ModelID,
     scene::ModelInstanceNode,
 };
@@ -23,6 +21,8 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashSet;
 use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
+use impact_material::{MaterialLibrary, MaterialShaderInput};
+use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use std::borrow::Cow;
 

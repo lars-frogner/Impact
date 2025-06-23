@@ -1,9 +1,10 @@
 //! Management of scene data for entities.
 
 use super::{collision, rigid_body};
-use crate::{mesh::MeshRepository, physics::PhysicsSimulator};
+use crate::physics::PhysicsSimulator;
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
+use impact_mesh::MeshRepository;
 use std::sync::RwLock;
 
 impl PhysicsSimulator {
