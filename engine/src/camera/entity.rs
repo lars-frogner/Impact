@@ -5,8 +5,8 @@ use crate::{
     gpu::rendering::RenderingSystem,
     physics::motion::components::ReferenceFrameComp,
     scene::{
-        SceneGraph,
         components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
+        graph::SceneGraph,
     },
 };
 use anyhow::{Result, bail};

@@ -1,6 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to scenes.
 
-use crate::scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneEntityFlags};
+use crate::scene::{
+    SceneEntityFlags,
+    graph::{CameraNodeID, GroupNodeID, ModelInstanceNodeID},
+};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{Component, SetupComponent, world::EntityID};
 use roc_integration::roc;

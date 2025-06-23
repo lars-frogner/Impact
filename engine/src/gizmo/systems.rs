@@ -25,8 +25,8 @@ use crate::{
         rigid_body::{RigidBody, components::RigidBodyComp},
     },
     scene::{
-        ModelInstanceNode, ModelInstanceNodeID, SceneGraph,
         components::{SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp},
+        graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
     },
     voxel::{
         VoxelManager, VoxelObjectID, VoxelObjectManager,

@@ -8,8 +8,8 @@ use crate::{
         rigid_body::components::RigidBodyComp,
     },
     scene::{
-        SceneGraph,
         components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
+        graph::SceneGraph,
     },
     voxel::{
         StagedVoxelObject, VoxelManager, VoxelObjectManager,

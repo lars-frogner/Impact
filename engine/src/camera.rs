@@ -2,7 +2,7 @@
 
 pub mod entity;
 
-use crate::scene::CameraNodeID;
+use crate::scene::graph::CameraNodeID;
 use impact_camera::{Camera, buffer::BufferableCamera};
 use nalgebra::{Point3, Similarity3};
 

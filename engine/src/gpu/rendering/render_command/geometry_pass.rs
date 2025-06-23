@@ -21,7 +21,7 @@ use crate::{
         },
     },
     model::{InstanceFeatureManager, ModelID},
-    scene::ModelInstanceNode,
+    scene::graph::ModelInstanceNode,
     voxel::render_commands::VoxelGeometryPipeline,
 };
 use anyhow::{Result, anyhow};
