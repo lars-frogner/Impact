@@ -106,7 +106,7 @@ fn setup_omnidirectional_light_for_new_entity(
             (
                 impact_light::entity::setup_omnidirectional_light(
                     &mut light_storage,
-                    view_transform,
+                    &view_transform,
                     &frame.position.cast(),
                     omnidirectional_emission,
                     flags.into(),
@@ -139,7 +139,7 @@ fn setup_omnidirectional_light_for_new_entity(
             (
                 impact_light::entity::setup_shadowable_omnidirectional_light(
                     &mut light_storage,
-                    view_transform,
+                    &view_transform,
                     &frame.position.cast(),
                     omnidirectional_emission,
                     flags.into(),
@@ -183,7 +183,7 @@ fn setup_unidirectional_light_for_new_entity(
             (
                 impact_light::entity::setup_unidirectional_light(
                     &mut light_storage,
-                    view_transform,
+                    &view_transform,
                     unidirectional_emission,
                     flags.into(),
                     desynchronized,
@@ -214,7 +214,7 @@ fn setup_unidirectional_light_for_new_entity(
             (
                 impact_light::entity::setup_shadowable_unidirectional_light(
                     &mut light_storage,
-                    view_transform,
+                    &view_transform,
                     unidirectional_emission,
                     flags.into(),
                     desynchronized,

@@ -22,7 +22,7 @@ use impact_light::{
         ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
     },
 };
-use nalgebra::{Similarity3, UnitVector3};
+use nalgebra::Similarity3;
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
 /// entity that also has the
@@ -74,8 +74,11 @@ pub fn sync_lights_in_storage(
     query!(
         ecs_world,
         |ambient_light: &AmbientLightComp, ambient_emission: &AmbientEmissionComp| {
-            light_storage
-                .set_ambient_light_illuminance(ambient_light.id, ambient_emission.illuminance);
+            impact_light::entity::sync_ambient_light_in_storage(
+                light_storage,
+                ambient_light,
+                ambient_emission,
+            );
         }
     );
 
@@ -85,12 +88,14 @@ pub fn sync_lights_in_storage(
          frame: &ReferenceFrameComp,
          omnidirectional_emission: &OmnidirectionalEmissionComp,
          flags: &SceneEntityFlagsComp| {
-            let light_id = omnidirectional_light.id;
-            let light = light_storage.omnidirectional_light_mut(light_id);
-            light.set_camera_space_position(view_transform.transform_point(&frame.position.cast()));
-            light.set_luminous_intensity(omnidirectional_emission.luminous_intensity);
-            light.set_emissive_extent(omnidirectional_emission.source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_omnidirectional_light_in_storage(
+                light_storage,
+                omnidirectional_light,
+                &view_transform,
+                &frame.position.cast(),
+                omnidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![SceneGraphParentNodeComp]
     );
@@ -106,12 +111,14 @@ pub fn sync_lights_in_storage(
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            let light_id = omnidirectional_light.id;
-            let light = light_storage.omnidirectional_light_mut(light_id);
-            light.set_camera_space_position(view_transform.transform_point(&frame.position.cast()));
-            light.set_luminous_intensity(omnidirectional_emission.luminous_intensity);
-            light.set_emissive_extent(omnidirectional_emission.source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_omnidirectional_light_in_storage(
+                light_storage,
+                omnidirectional_light,
+                &view_transform,
+                &frame.position.cast(),
+                omnidirectional_emission,
+                flags.0.into(),
+            );
         }
     );
 
@@ -121,12 +128,14 @@ pub fn sync_lights_in_storage(
          frame: &ReferenceFrameComp,
          omnidirectional_emission: &ShadowableOmnidirectionalEmissionComp,
          flags: &SceneEntityFlagsComp| {
-            let light_id = omnidirectional_light.id;
-            let light = light_storage.shadowable_omnidirectional_light_mut(light_id);
-            light.set_camera_space_position(view_transform.transform_point(&frame.position.cast()));
-            light.set_luminous_intensity(omnidirectional_emission.luminous_intensity);
-            light.set_emissive_extent(omnidirectional_emission.source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_shadowable_omnidirectional_light_in_storage(
+                light_storage,
+                omnidirectional_light,
+                &view_transform,
+                &frame.position.cast(),
+                omnidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![SceneGraphParentNodeComp]
     );
@@ -142,12 +151,14 @@ pub fn sync_lights_in_storage(
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            let light_id = omnidirectional_light.id;
-            let light = light_storage.shadowable_omnidirectional_light_mut(light_id);
-            light.set_camera_space_position(view_transform.transform_point(&frame.position.cast()));
-            light.set_luminous_intensity(omnidirectional_emission.luminous_intensity);
-            light.set_emissive_extent(omnidirectional_emission.source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_shadowable_omnidirectional_light_in_storage(
+                light_storage,
+                omnidirectional_light,
+                &view_transform,
+                &frame.position.cast(),
+                omnidirectional_emission,
+                flags.0.into(),
+            );
         }
     );
 
@@ -156,14 +167,13 @@ pub fn sync_lights_in_storage(
         |unidirectional_light: &UnidirectionalLightComp,
          unidirectional_emission: &UnidirectionalEmissionComp,
          flags: &SceneEntityFlagsComp| {
-            let light_id = unidirectional_light.id;
-            let light = light_storage.unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&unidirectional_emission.direction),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_unidirectional_light_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                unidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![SceneGraphParentNodeComp, ReferenceFrameComp]
     );
@@ -178,14 +188,13 @@ pub fn sync_lights_in_storage(
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            let light_id = unidirectional_light.id;
-            let light = light_storage.unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&unidirectional_emission.direction),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_unidirectional_light_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                unidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![ReferenceFrameComp]
     );
@@ -196,18 +205,14 @@ pub fn sync_lights_in_storage(
          unidirectional_emission: &UnidirectionalEmissionComp,
          frame: &ReferenceFrameComp,
          flags: &SceneEntityFlagsComp| {
-            let world_direction = frame
-                .orientation
-                .transform_vector(&unidirectional_emission.direction.cast());
-
-            let light_id = unidirectional_light.id;
-            let light = light_storage.unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&world_direction.cast()),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_unidirectional_light_with_orientation_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                &frame.orientation.cast(),
+                unidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![SceneGraphParentNodeComp]
     );
@@ -222,18 +227,15 @@ pub fn sync_lights_in_storage(
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
-            let world_direction = frame
-                .orientation
-                .transform_vector(&unidirectional_emission.direction.cast());
 
-            let light_id = unidirectional_light.id;
-            let light = light_storage.unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&world_direction.cast()),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_unidirectional_light_with_orientation_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                &frame.orientation.cast(),
+                unidirectional_emission,
+                flags.0.into(),
+            );
         }
     );
 
@@ -242,14 +244,13 @@ pub fn sync_lights_in_storage(
         |unidirectional_light: &ShadowableUnidirectionalLightComp,
          unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
          flags: &SceneEntityFlagsComp| {
-            let light_id = unidirectional_light.id;
-            let light = light_storage.shadowable_unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&unidirectional_emission.direction),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_shadowable_unidirectional_light_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                unidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![SceneGraphParentNodeComp, ReferenceFrameComp]
     );
@@ -264,14 +265,13 @@ pub fn sync_lights_in_storage(
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            let light_id = unidirectional_light.id;
-            let light = light_storage.shadowable_unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&unidirectional_emission.direction),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_shadowable_unidirectional_light_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                unidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![ReferenceFrameComp]
     );
@@ -282,18 +282,14 @@ pub fn sync_lights_in_storage(
          unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
          frame: &ReferenceFrameComp,
          flags: &SceneEntityFlagsComp| {
-            let world_direction = frame
-                .orientation
-                .transform_vector(&unidirectional_emission.direction.cast());
-
-            let light_id = unidirectional_light.id;
-            let light = light_storage.shadowable_unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&world_direction.cast()),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_shadowable_unidirectional_light_with_orientation_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                &frame.orientation.cast(),
+                unidirectional_emission,
+                flags.0.into(),
+            );
         },
         ![SceneGraphParentNodeComp]
     );
@@ -308,18 +304,15 @@ pub fn sync_lights_in_storage(
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
-            let world_direction = frame
-                .orientation
-                .transform_vector(&unidirectional_emission.direction.cast());
 
-            let light_id = unidirectional_light.id;
-            let light = light_storage.shadowable_unidirectional_light_mut(light_id);
-            light.set_camera_space_direction(UnitVector3::new_unchecked(
-                view_transform.transform_vector(&world_direction.cast()),
-            ));
-            light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
-            light.set_angular_extent(unidirectional_emission.angular_source_extent);
-            light.set_flags(flags.0.into());
+            impact_light::entity::sync_shadowable_unidirectional_light_with_orientation_in_storage(
+                light_storage,
+                unidirectional_light,
+                &view_transform,
+                &frame.orientation.cast(),
+                unidirectional_emission,
+                flags.0.into(),
+            );
         }
     );
 }
