@@ -1,1 +1,3 @@
 //! Materials.
+
+pub mod entity;

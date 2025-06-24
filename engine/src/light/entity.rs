@@ -6,10 +6,9 @@ use crate::{
     scene::{SceneEntityFlags, components::SceneEntityFlagsComp},
 };
 use impact_camera::buffer::BufferableCamera;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_light::{
-    AmbientLight, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
-    ShadowableUnidirectionalLight, UnidirectionalLight,
+    LightStorage,
     components::{
         AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
         OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
@@ -17,8 +16,7 @@ use impact_light::{
         ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
     },
 };
-use impact_math::Degrees;
-use nalgebra::{Similarity3, UnitVector3};
+use nalgebra::Similarity3;
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the right
@@ -46,43 +44,31 @@ pub fn setup_light_for_new_entity(
     );
 }
 
-/// Checks if the given entity has a light component, and if so, removes the
-/// assocated light from the given [`LightStorage`].
-pub fn cleanup_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut bool,
-) {
-    cleanup_ambient_light_for_removed_entity(light_storage, entity, desynchronized);
-    cleanup_omnidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
-    cleanup_unidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
-}
-
 /// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
 /// [`AmbientLight`] to the light storage and adds an [`AmbientLightComp`] with
 /// the light's ID to the entity.
-pub fn setup_ambient_light_for_new_entity(
+fn setup_ambient_light_for_new_entity(
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) {
     setup!(
         {
-            *desynchronized = true;
             let mut light_storage = light_storage.write().unwrap();
         },
         components,
         |ambient_emission: &AmbientEmissionComp,
          flags: Option<&SceneEntityFlagsComp>|
          -> (AmbientLightComp, SceneEntityFlagsComp) {
-            let ambient_light =
-                AmbientLight::new(impact_light::compute_luminance_for_uniform_illuminance(
-                    &ambient_emission.illuminance,
-                ));
-            let id = light_storage.add_ambient_light(ambient_light);
-
-            (AmbientLightComp { id }, flags.copied().unwrap_or_default())
+            (
+                impact_light::entity::setup_ambient_light(
+                    &mut light_storage,
+                    ambient_emission,
+                    desynchronized,
+                ),
+                flags.copied().unwrap_or_default(),
+            )
         },
         ![AmbientLightComp]
     );
@@ -93,7 +79,7 @@ pub fn setup_ambient_light_for_new_entity(
 /// [`OmnidirectionalLight`] or [`ShadowableOmnidirectionalLight`] to the light
 /// storage and adds a [`OmnidirectionalLightComp`] or
 /// [`ShadowableOmnidirectionalLightComp`] with the light's ID to the entity.
-pub fn setup_omnidirectional_light_for_new_entity(
+fn setup_omnidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -101,8 +87,6 @@ pub fn setup_omnidirectional_light_for_new_entity(
 ) {
     setup!(
         {
-            *desynchronized = true;
-
             let view_transform = scene_camera
                 .read()
                 .unwrap()
@@ -119,24 +103,23 @@ pub fn setup_omnidirectional_light_for_new_entity(
          flags: Option<&SceneEntityFlagsComp>|
          -> (OmnidirectionalLightComp, SceneEntityFlagsComp) {
             let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
-
-            let omnidirectional_light = OmnidirectionalLight::new(
-                view_transform.transform_point(&frame.position.cast()),
-                omnidirectional_emission.luminous_intensity,
-                f32::max(omnidirectional_emission.source_extent, 0.0),
-                flags.into(),
-            );
-            let id = light_storage.add_omnidirectional_light(omnidirectional_light);
-
-            (OmnidirectionalLightComp { id }, SceneEntityFlagsComp(flags))
+            (
+                impact_light::entity::setup_omnidirectional_light(
+                    &mut light_storage,
+                    view_transform,
+                    &frame.position.cast(),
+                    omnidirectional_emission,
+                    flags.into(),
+                    desynchronized,
+                ),
+                SceneEntityFlagsComp(flags),
+            )
         },
         ![OmnidirectionalLightComp]
     );
 
     setup!(
         {
-            *desynchronized = true;
-
             let view_transform = scene_camera
                 .read()
                 .unwrap()
@@ -153,17 +136,15 @@ pub fn setup_omnidirectional_light_for_new_entity(
          flags: Option<&SceneEntityFlagsComp>|
          -> (ShadowableOmnidirectionalLightComp, SceneEntityFlagsComp) {
             let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
-
-            let omnidirectional_light = ShadowableOmnidirectionalLight::new(
-                view_transform.transform_point(&frame.position.cast()),
-                omnidirectional_emission.luminous_intensity,
-                f32::max(omnidirectional_emission.source_extent, 0.0),
-                flags.into(),
-            );
-            let id = light_storage.add_shadowable_omnidirectional_light(omnidirectional_light);
-
             (
-                ShadowableOmnidirectionalLightComp { id },
+                impact_light::entity::setup_shadowable_omnidirectional_light(
+                    &mut light_storage,
+                    view_transform,
+                    &frame.position.cast(),
+                    omnidirectional_emission,
+                    flags.into(),
+                    desynchronized,
+                ),
                 SceneEntityFlagsComp(flags),
             )
         },
@@ -176,7 +157,7 @@ pub fn setup_omnidirectional_light_for_new_entity(
 /// [`UnidirectionalLight`] or [`ShadowableUnidirectionalLight`] to the light
 /// storage and adds a [`UnidirectionalLightComp`] or
 /// [`ShadowableUnidirectionalLightComp`] with the light's ID to the entity.
-pub fn setup_unidirectional_light_for_new_entity(
+fn setup_unidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -184,8 +165,6 @@ pub fn setup_unidirectional_light_for_new_entity(
 ) {
     setup!(
         {
-            *desynchronized = true;
-
             let view_transform = scene_camera
                 .read()
                 .unwrap()
@@ -201,30 +180,22 @@ pub fn setup_unidirectional_light_for_new_entity(
          flags: Option<&SceneEntityFlagsComp>|
          -> (UnidirectionalLightComp, SceneEntityFlagsComp) {
             let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
-
-            let unidirectional_light = UnidirectionalLight::new(
-                // The view transform contains no scaling, so the direction remains normalized
-                UnitVector3::new_unchecked(
-                    view_transform.transform_vector(&unidirectional_emission.direction),
+            (
+                impact_light::entity::setup_unidirectional_light(
+                    &mut light_storage,
+                    view_transform,
+                    unidirectional_emission,
+                    flags.into(),
+                    desynchronized,
                 ),
-                unidirectional_emission.perpendicular_illuminance,
-                Degrees(f32::max(
-                    unidirectional_emission.angular_source_extent.0,
-                    0.0,
-                )),
-                flags.into(),
-            );
-            let id = light_storage.add_unidirectional_light(unidirectional_light);
-
-            (UnidirectionalLightComp { id }, SceneEntityFlagsComp(flags))
+                SceneEntityFlagsComp(flags),
+            )
         },
         ![UnidirectionalLightComp]
     );
 
     setup!(
         {
-            *desynchronized = true;
-
             let view_transform = scene_camera
                 .read()
                 .unwrap()
@@ -240,102 +211,17 @@ pub fn setup_unidirectional_light_for_new_entity(
          flags: Option<&SceneEntityFlagsComp>|
          -> (ShadowableUnidirectionalLightComp, SceneEntityFlagsComp) {
             let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
-
-            let unidirectional_light = ShadowableUnidirectionalLight::new(
-                // The view transform contains no scaling, so the direction remains normalized
-                UnitVector3::new_unchecked(
-                    view_transform.transform_vector(&unidirectional_emission.direction),
-                ),
-                unidirectional_emission.perpendicular_illuminance,
-                Degrees(f32::max(
-                    unidirectional_emission.angular_source_extent.0,
-                    0.0,
-                )),
-                flags.into(),
-            );
-            let id = light_storage.add_shadowable_unidirectional_light(unidirectional_light);
-
             (
-                ShadowableUnidirectionalLightComp { id },
+                impact_light::entity::setup_shadowable_unidirectional_light(
+                    &mut light_storage,
+                    view_transform,
+                    unidirectional_emission,
+                    flags.into(),
+                    desynchronized,
+                ),
                 SceneEntityFlagsComp(flags),
             )
         },
         ![ShadowableUnidirectionalLightComp]
     );
-}
-
-/// Checks if the given entity has a [`AmbientLightComp`], and if so, removes
-/// the assocated [`AmbientLight`] from the given [`LightStorage`].
-pub fn cleanup_ambient_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut bool,
-) {
-    if let Some(ambient_light) = entity.get_component::<AmbientLightComp>() {
-        let light_id = ambient_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_ambient_light(light_id);
-        *desynchronized = true;
-    }
-}
-
-/// Checks if the given entity has a [`OmnidirectionalLightComp`] or
-/// [`ShadowableOmnidirectionalLightComp`], and if so, removes the assocated
-/// [`OmnidirectionalLight`] or [`ShadowableOmnidirectionalLight`] from the
-/// given [`LightStorage`].
-pub fn cleanup_omnidirectional_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut bool,
-) {
-    if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightComp>() {
-        let light_id = omnidirectional_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_omnidirectional_light(light_id);
-        *desynchronized = true;
-    }
-
-    if let Some(omnidirectional_light) =
-        entity.get_component::<ShadowableOmnidirectionalLightComp>()
-    {
-        let light_id = omnidirectional_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_shadowable_omnidirectional_light(light_id);
-        *desynchronized = true;
-    }
-}
-
-/// Checks if the given entity has a [`UnidirectionalLightComp`] or
-/// [`ShadowableUnidirectionalLightComp`], and if so, removes the assocated
-/// [`UnidirectionalLight`] or [`ShadowableUnidirectionalLight`] from the given
-/// [`LightStorage`].
-pub fn cleanup_unidirectional_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut bool,
-) {
-    if let Some(unidirectional_light) = entity.get_component::<UnidirectionalLightComp>() {
-        let light_id = unidirectional_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_unidirectional_light(light_id);
-        *desynchronized = true;
-    }
-
-    if let Some(unidirectional_light) = entity.get_component::<ShadowableUnidirectionalLightComp>()
-    {
-        let light_id = unidirectional_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_shadowable_unidirectional_light(light_id);
-        *desynchronized = true;
-    }
 }

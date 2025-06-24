@@ -57,16 +57,16 @@ pub struct CameraGPUBufferManager {
 pub struct CameraProjectionUniform {
     transform: Projective3<f32>,
     /// The corners are listed in the order consistent with
-    /// [`TriangleMesh::create_screen_filling_quad`](`crate::mesh::triangle::TriangleMesh::create_screen_filling_quad`),
-    /// which means it can be indexed into using the `vertex_index` built-in in
-    /// the vertex shader when rendering a screen-filling quad to obtain the
-    /// far-plane corner for the current screen corner. When passed to the
-    /// fragment shader with interpolation, this will yield the camera-space
-    /// position of the point on the far plane corresponding to the current
-    /// fragment. By scaling this position by the fragment's normalized linear
-    /// depth (the camera-space z-coordinate of the point on the object it
-    /// covers divided by the far-plane z-coordinate), we can reconstruct the
-    /// camera-space position of the fragment from the depth.
+    /// `TriangleMesh::create_screen_filling_quad`, which means it can be
+    /// indexed into using the `vertex_index` built-in in the vertex shader when
+    /// rendering a screen-filling quad to obtain the far-plane corner for the
+    /// current screen corner. When passed to the fragment shader with
+    /// interpolation, this will yield the camera-space position of the point on
+    /// the far plane corresponding to the current fragment. By scaling this
+    /// position by the fragment's normalized linear depth (the camera-space
+    /// z-coordinate of the point on the object it covers divided by the
+    /// far-plane z-coordinate), we can reconstruct the camera-space position of
+    /// the fragment from the depth.
     frustum_far_plane_corners: [Vector4<f32>; 4],
     inverse_far_plane_z: Vector4<f32>,
     jitter_offsets: [Vector4<f32>; JITTER_COUNT],

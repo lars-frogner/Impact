@@ -8,16 +8,11 @@ use crate::{
     components::{FixedColorComp, FixedTextureComp, MaterialComp},
 };
 use anyhow::Result;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, InstanceFeatureManager};
-use std::{
-    collections::hash_map::Entry,
-    hash::Hash,
-    sync::{LazyLock, RwLock},
-};
+use std::{collections::hash_map::Entry, hash::Hash, sync::LazyLock};
 
 /// Binding locations for textures used in a fixed material.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,65 +25,11 @@ static FIXED_COLOR_MATERIAL_ID: LazyLock<MaterialID> =
 static FIXED_TEXTURE_MATERIAL_ID: LazyLock<MaterialID> =
     LazyLock::new(|| MaterialID(hash64!("FixedTextureMaterial")));
 
-/// Checks if the entity-to-be with the given components has the component
-/// for this material, and if so, registers the material in the given
-/// instance feature manager and adds the appropriate material component
-/// to the entity.
-pub fn setup_fixed_color_material_for_new_entity<MID: Eq + Hash>(
-    material_library: &RwLock<MaterialLibrary>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
-    components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
-) {
-    setup!(
-        {
-            *desynchronized = true;
-            let mut material_library = material_library.write().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-        },
-        components,
-        |fixed_color: &FixedColorComp| -> MaterialComp {
-            setup_fixed_color_material(
-                &mut material_library,
-                &mut instance_feature_manager,
-                fixed_color,
-            )
-        },
-        ![MaterialComp]
-    );
-}
-
-/// Checks if the entity-to-be with the given components has the component
-/// for this material, and if so, adds the appropriate material property
-/// texture set to the material library if not present and adds the
-/// appropriate material component to the entity.
-pub fn setup_fixed_texture_material_for_new_entity(
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
-    material_library: &RwLock<MaterialLibrary>,
-    components: &mut ArchetypeComponentStorage,
-) -> Result<()> {
-    setup!(
-        {
-            let mut material_library = material_library.write().unwrap();
-        },
-        components,
-        |fixed_texture: &FixedTextureComp| -> Result<MaterialComp> {
-            setup_fixed_texture_material(
-                graphics_device,
-                texture_provider,
-                &mut material_library,
-                fixed_texture,
-            )
-        },
-        ![MaterialComp]
-    )
-}
-
-fn setup_fixed_color_material<MID: Eq + Hash>(
+pub fn setup_fixed_color_material<MID: Eq + Hash>(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
     fixed_color: &FixedColorComp,
+    desynchronized: &mut bool,
 ) -> MaterialComp {
     let feature_id = instance_feature_manager
         .get_storage_mut::<FixedColorMaterialFeature>()
@@ -109,6 +50,8 @@ fn setup_fixed_color_material<MID: Eq + Hash>(
             )
         });
 
+    *desynchronized = true;
+
     MaterialComp::new(MaterialHandle::new(
         *FIXED_COLOR_MATERIAL_ID,
         Some(feature_id),
@@ -116,7 +59,7 @@ fn setup_fixed_color_material<MID: Eq + Hash>(
     ))
 }
 
-fn setup_fixed_texture_material(
+pub fn setup_fixed_texture_material(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &mut MaterialLibrary,
