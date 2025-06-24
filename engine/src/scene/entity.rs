@@ -1,9 +1,7 @@
 //! Management of scene data for entities.
 
 use crate::{
-    assets::Assets,
-    camera,
-    gpu::rendering::RenderingSystem,
+    camera::{self, entity::CameraRenderState},
     light, material, mesh,
     model::ModelID,
     physics::motion::components::ReferenceFrameComp,
@@ -23,7 +21,7 @@ use impact_ecs::{
     world::{EntityEntry, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
-use impact_material::components::MaterialComp;
+use impact_material::{MaterialTextureProvider, components::MaterialComp};
 use impact_mesh::components::TriangleMeshComp;
 use impact_model::{
     InstanceFeature,
@@ -39,7 +37,7 @@ impl Scene {
     pub fn perform_setup_for_new_entity(
         &self,
         graphics_device: &GraphicsDevice,
-        assets: &Assets,
+        texture_provider: &impl MaterialTextureProvider,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut bool,
     ) -> Result<()> {
@@ -58,7 +56,7 @@ impl Scene {
 
         material::entity::setup_material_for_new_entity(
             graphics_device,
-            assets,
+            texture_provider,
             self.material_library(),
             self.instance_feature_manager(),
             components,
@@ -81,8 +79,8 @@ impl Scene {
     /// entity's components.
     pub fn add_new_entity_to_scene_graph(
         &self,
-        renderer: &RwLock<RenderingSystem>,
         ecs_world: &RwLock<ECSWorld>,
+        get_render_state: &mut impl FnMut() -> CameraRenderState,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut bool,
     ) -> Result<()> {
@@ -90,9 +88,9 @@ impl Scene {
         self.add_group_node_component_for_new_entity(components);
 
         camera::entity::add_camera_to_scene_for_new_entity(
-            renderer,
             self.scene_graph(),
             self.scene_camera(),
+            get_render_state,
             components,
             desynchronized,
         )?;

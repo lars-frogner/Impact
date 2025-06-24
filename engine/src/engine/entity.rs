@@ -2,6 +2,7 @@
 
 use super::Engine;
 use crate::{
+    camera::entity::CameraRenderState,
     gizmo,
     scene::{SceneEntityFlags, components::SceneEntityFlagsComp},
 };
@@ -126,7 +127,7 @@ impl Engine {
 
         self.scene().read().unwrap().perform_setup_for_new_entity(
             self.graphics_device(),
-            &self.assets().read().unwrap(),
+            &*self.assets().read().unwrap(),
             components,
             &mut render_resources_desynchronized,
         )?;
@@ -140,8 +141,15 @@ impl Engine {
             )?;
 
         self.scene().read().unwrap().add_new_entity_to_scene_graph(
-            self.renderer(),
             &self.ecs_world,
+            &mut || {
+                let renderer = self.renderer.read().unwrap();
+                let postprocessor = renderer.postprocessor().read().unwrap();
+                CameraRenderState {
+                    aspect_ratio: renderer.rendering_surface().surface_aspect_ratio(),
+                    jittering_enabled: postprocessor.temporal_anti_aliasing_config().enabled,
+                }
+            },
             components,
             &mut render_resources_desynchronized,
         )?;
