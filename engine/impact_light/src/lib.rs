@@ -2,6 +2,7 @@
 
 pub mod buffer;
 pub mod components;
+pub mod entity;
 pub mod shadow_map;
 
 use bitflags::bitflags;

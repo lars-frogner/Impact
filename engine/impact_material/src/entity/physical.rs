@@ -13,12 +13,11 @@ use crate::{
     },
 };
 use anyhow::{Result, bail};
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
 use impact_model::InstanceFeatureManager;
-use std::{collections::hash_map::Entry, hash::Hash, sync::RwLock};
+use std::{collections::hash_map::Entry, hash::Hash};
 
 /// Binding locations for textures used in a physical material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -53,103 +52,6 @@ pub struct PhysicalMaterialParallaxMappingTextureBindings {
     pub height_map_texture_and_sampler_bindings: (u32, u32),
 }
 
-/// Checks if the entity-to-be with the given components has the components for
-/// a physical material, and if so, adds the material specification to the
-/// material library if not already present, adds the appropriate material
-/// property texture set to the material library if not already present,
-/// registers the material in the instance feature manager and adds the
-/// appropriate material component to the entity.
-pub fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
-    material_library: &RwLock<MaterialLibrary>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
-    components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
-) -> Result<()> {
-    setup!(
-        {
-            *desynchronized = true;
-            let mut material_library = material_library.write().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-        },
-        components,
-        |uniform_color: &UniformColorComp,
-         uniform_specular_reflectance: Option<&UniformSpecularReflectanceComp>,
-         textured_specular_reflectance: Option<&TexturedSpecularReflectanceComp>,
-         uniform_roughness: Option<&UniformRoughnessComp>,
-         textured_roughness: Option<&TexturedRoughnessComp>,
-         uniform_metalness: Option<&UniformMetalnessComp>,
-         textured_metalness: Option<&TexturedMetalnessComp>,
-         uniform_emissive_luminance: Option<&UniformEmissiveLuminanceComp>,
-         textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
-         normal_map: Option<&NormalMapComp>,
-         parallax_map: Option<&ParallaxMapComp>|
-         -> Result<MaterialComp> {
-            setup_physical_material(
-                graphics_device,
-                texture_provider,
-                &mut material_library,
-                &mut instance_feature_manager,
-                Some(uniform_color),
-                None,
-                uniform_specular_reflectance,
-                textured_specular_reflectance,
-                uniform_roughness,
-                textured_roughness,
-                uniform_metalness,
-                textured_metalness,
-                uniform_emissive_luminance,
-                textured_emissive_luminance,
-                normal_map,
-                parallax_map,
-            )
-        },
-        ![MaterialComp, TexturedColorComp]
-    )?;
-
-    setup!(
-        {
-            *desynchronized = true;
-            let mut material_library = material_library.write().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-        },
-        components,
-        |textured_color: &TexturedColorComp,
-         uniform_specular_reflectance: Option<&UniformSpecularReflectanceComp>,
-         textured_specular_reflectance: Option<&TexturedSpecularReflectanceComp>,
-         uniform_roughness: Option<&UniformRoughnessComp>,
-         textured_roughness: Option<&TexturedRoughnessComp>,
-         uniform_metalness: Option<&UniformMetalnessComp>,
-         textured_metalness: Option<&TexturedMetalnessComp>,
-         uniform_emissive_luminance: Option<&UniformEmissiveLuminanceComp>,
-         textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
-         normal_map: Option<&NormalMapComp>,
-         parallax_map: Option<&ParallaxMapComp>|
-         -> Result<MaterialComp> {
-            setup_physical_material(
-                graphics_device,
-                texture_provider,
-                &mut material_library,
-                &mut instance_feature_manager,
-                None,
-                Some(textured_color),
-                uniform_specular_reflectance,
-                textured_specular_reflectance,
-                uniform_roughness,
-                textured_roughness,
-                uniform_metalness,
-                textured_metalness,
-                uniform_emissive_luminance,
-                textured_emissive_luminance,
-                normal_map,
-                parallax_map,
-            )
-        },
-        ![MaterialComp, UniformColorComp]
-    )
-}
-
 pub fn setup_physical_material<MID: Eq + Hash>(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
@@ -167,6 +69,7 @@ pub fn setup_physical_material<MID: Eq + Hash>(
     textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
     normal_map: Option<&NormalMapComp>,
     parallax_map: Option<&ParallaxMapComp>,
+    desynchronized: &mut bool,
 ) -> Result<MaterialComp> {
     let mut material_name_parts = Vec::with_capacity(8);
 
@@ -377,6 +280,8 @@ pub fn setup_physical_material<MID: Eq + Hash>(
     } else {
         None
     };
+
+    *desynchronized = true;
 
     Ok(MaterialComp::new(MaterialHandle::new(
         material_id,

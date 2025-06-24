@@ -4,7 +4,7 @@ use crate::{
     assets::Assets,
     camera,
     gpu::rendering::RenderingSystem,
-    light, mesh,
+    light, material, mesh,
     model::ModelID,
     physics::motion::components::ReferenceFrameComp,
     scene::{
@@ -43,7 +43,7 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut bool,
     ) -> Result<()> {
-        impact_mesh::entity::setup_mesh_for_new_entity(
+        mesh::entity::setup_mesh_for_new_entity(
             self.mesh_repository(),
             components,
             desynchronized,
@@ -56,7 +56,7 @@ impl Scene {
             desynchronized,
         );
 
-        impact_material::entity::setup_material_for_new_entity(
+        material::entity::setup_material_for_new_entity(
             graphics_device,
             assets,
             self.material_library(),
@@ -124,7 +124,7 @@ impl Scene {
             desynchronized,
         );
 
-        light::entity::cleanup_light_for_removed_entity(
+        impact_light::entity::cleanup_light_for_removed_entity(
             self.light_storage(),
             entity,
             desynchronized,
