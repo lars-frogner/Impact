@@ -1,11 +1,11 @@
 //! Task scheduling.
 
-use crate::thread::{
-    TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
-};
 use anyhow::{Result, anyhow, bail};
 use impact_containers::{DefaultHasher, HashMap, HashSet};
 use impact_math::Hash64;
+use impact_thread::{
+    TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
+};
 use petgraph::{
     Directed,
     algo::{self, DfsSpace},
@@ -20,9 +20,6 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
-
-#[cfg(test)]
-use crate::thread::WorkerID;
 
 /// Represents a piece of work to be performed by a worker thread in a
 /// [`TaskScheduler`].
@@ -48,7 +45,11 @@ pub trait Task<S>: Sync + Send + Debug {
     /// Like [`execute`](Self::execute), but the ID of the worker executing the
     /// task is included as an argument. Useful for testing.
     #[cfg(test)]
-    fn execute_with_worker(&self, _worker_id: WorkerID, external_state: &S) -> Result<()> {
+    fn execute_with_worker(
+        &self,
+        _worker_id: impact_thread::WorkerID,
+        external_state: &S,
+    ) -> Result<()> {
         self.execute(external_state)
     }
 }
@@ -205,21 +206,21 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::thread::TaskID::from_str(stringify!($name));
+            $($pub)? const TASK_ID: ::impact_thread::TaskID = ::impact_thread::TaskID::from_str(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
-            const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
+            const DEPENDENCY_IDS: [::impact_thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
 
             const N_EXECUTION_TAGS: usize = $crate::count_ident_args!($($tag),*);
             const EXECUTION_TAGS: [$crate::scheduling::ExecutionTag; Self::N_EXECUTION_TAGS] = [$($tag::EXECUTION_TAG),*];
         }
 
         impl $crate::scheduling::Task<$state_ty> for $name {
-            fn id(&self) -> $crate::thread::TaskID {
+            fn id(&self) -> ::impact_thread::TaskID {
                 Self::TASK_ID
             }
 
-            fn depends_on(&self) -> &[$crate::thread::TaskID] {
+            fn depends_on(&self) -> &[::impact_thread::TaskID] {
                 &Self::DEPENDENCY_IDS
             }
 
@@ -834,6 +835,7 @@ impl<S> OrderedTask<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use impact_thread::WorkerID;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
     const EXEC_ALL: ExecutionTag = ExecutionTag::from_str("all");
@@ -1096,7 +1098,7 @@ mod tests {
             _ => panic!("Incorrect task order"),
         }
 
-        let sorted_worker_ids: Vec<_> = [
+        let sorted_worker_ids: Vec<u64> = [
             Task1::ID,
             Task2::ID,
             DepTask1::ID,
@@ -1109,6 +1111,7 @@ mod tests {
                 .iter()
                 .position(|id| id == task_id)
                 .unwrap()]
+            .into()
         })
         .collect();
 
@@ -1118,20 +1121,7 @@ mod tests {
         // respectively. DepDepTask1Task2 should execute last and
         // on the thread that executed DepTask1.
         match sorted_worker_ids[..] {
-            [
-                WorkerID(0),
-                WorkerID(1),
-                WorkerID(0),
-                WorkerID(1),
-                WorkerID(0),
-            ]
-            | [
-                WorkerID(1),
-                WorkerID(0),
-                WorkerID(1),
-                WorkerID(0),
-                WorkerID(1),
-            ] => {}
+            [0, 1, 0, 1, 0] | [1, 0, 1, 0, 1] => {}
             _ => panic!("Incorrect worker contribution"),
         }
     }

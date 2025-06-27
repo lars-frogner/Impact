@@ -5,9 +5,9 @@ use crate::{
     physics::{PhysicsSimulator, motion},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
-    thread::ThreadPoolTaskErrors,
 };
 use anyhow::Result;
+use impact_thread::ThreadPoolTaskErrors;
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s

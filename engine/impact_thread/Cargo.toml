@@ -1,0 +1,15 @@
+[package]
+name = "impact_thread"
+description = "Threading for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+impact_containers = { path = "../impact_containers" }
+impact_log = { path = "../impact_log" }
+impact_math = { path = "../impact_math" }
+
+[lints]
+workspace = true
