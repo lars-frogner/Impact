@@ -214,7 +214,7 @@ pub fn sync_shadowable_unidirectional_light_in_storage(
     flags: LightFlags,
 ) {
     let light_id = unidirectional_light.id;
-    let light = light_storage.unidirectional_light_mut(light_id);
+    let light = light_storage.shadowable_unidirectional_light_mut(light_id);
     light.set_camera_space_direction(UnitVector3::new_unchecked(
         view_transform.transform_vector(&unidirectional_emission.direction),
     ));
@@ -234,7 +234,7 @@ pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
     let world_direction = orientation.transform_vector(&unidirectional_emission.direction);
 
     let light_id = unidirectional_light.id;
-    let light = light_storage.unidirectional_light_mut(light_id);
+    let light = light_storage.shadowable_unidirectional_light_mut(light_id);
     light.set_camera_space_direction(UnitVector3::new_unchecked(
         view_transform.transform_vector(&world_direction),
     ));
