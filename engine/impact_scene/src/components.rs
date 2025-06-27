@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to scenes.
 
-use crate::scene::{
+use crate::{
     SceneEntityFlags,
     graph::{CameraNodeID, GroupNodeID, ModelInstanceNodeID},
 };

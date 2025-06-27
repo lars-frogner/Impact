@@ -1,17 +1,15 @@
 //! ECS systems related to rigid body physics.
 
-use crate::{
-    physics::{
-        fph,
-        motion::{
-            self,
-            components::{ReferenceFrameComp, Static, VelocityComp},
-        },
-        rigid_body::components::RigidBodyComp,
+use crate::physics::{
+    fph,
+    motion::{
+        self,
+        components::{ReferenceFrameComp, Static, VelocityComp},
     },
-    scene::components::SceneEntityFlagsComp,
+    rigid_body::components::RigidBodyComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_scene::components::SceneEntityFlagsComp;
 
 /// Advances the linear and angular velocities of all applicable entities with
 /// a [`RigidBodyComp`].

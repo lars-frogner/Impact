@@ -1,16 +1,14 @@
 //! Passes for rendering gizmos.
 
-use super::STANDARD_FRONT_FACE;
 use crate::{
     gizmo::{self, GizmoObscurability},
     gpu::rendering::{
         attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        render_command::begin_single_render_pass,
+        render_command::{STANDARD_FRONT_FACE, begin_single_render_pass},
         resource::SynchronizedRenderResources,
         shader_templates::fixed_color::FixedColorShaderTemplate,
         surface::RenderingSurface,
     },
-    model::ModelID,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -23,6 +21,7 @@ use impact_mesh::{
     MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
 };
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
+use impact_scene::model::ModelID;
 use std::borrow::Cow;
 
 /// Passes for rendering gizmos.

@@ -12,8 +12,9 @@ members = [
     "impact_math",
     "impact_mesh",
     "impact_model",
-    "impact_rendering",
     "impact_profiling",
+    "impact_rendering",
+    "impact_scene",
 ]
 
 [workspace.package]
@@ -145,6 +146,7 @@ arbitrary = [
     "impact_ecs/arbitrary",
     "impact_gpu/arbitrary",
     "impact_math/arbitrary",
+    "impact_scene/arbitrary",
 ]
 cli = ["dep:clap"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
@@ -163,6 +165,7 @@ roc_codegen = [
     "impact_math/roc_codegen",
     "impact_mesh/roc_codegen",
     "impact_model/roc_codegen",
+    "impact_scene/roc_codegen",
     "roc_integration/roc_codegen",
 ]
 obj = ["impact_mesh/obj"]
@@ -203,6 +206,7 @@ impact_math = { path = "impact_math", features = ["serde"] }
 impact_mesh = { path = "impact_mesh", features = ["serde"] }
 impact_model = { path = "impact_model" }
 impact_profiling = { path = "impact_profiling", optional = true }
+impact_scene = { path = "impact_scene" }
 inventory = { workspace = true }
 log = { workspace = true }
 naga = { version = "24.0", features = ["wgsl-out"] }

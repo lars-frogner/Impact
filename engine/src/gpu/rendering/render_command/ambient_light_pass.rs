@@ -1,6 +1,5 @@
 //! Pass for computing reflected luminance due to ambient light.
 
-use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
     assets::lookup_table,
     gpu::{
@@ -13,7 +12,7 @@ use crate::{
             },
             postprocessing::Postprocessor,
             push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-            render_command::begin_single_render_pass,
+            render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
             resource::SynchronizedRenderResources,
             shader_templates::ambient_light::AmbientLightShaderTemplate,
             surface::RenderingSurface,

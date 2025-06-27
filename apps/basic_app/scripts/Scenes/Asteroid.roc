@@ -25,6 +25,7 @@ import pf.Comp.SceneEntityFlags
 import pf.Comp.SceneGraphGroup
 import pf.Comp.SphereMesh
 import pf.Comp.ShadowableOmnidirectionalEmission
+import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Comp.UniformColor
 import pf.Comp.UniformEmissiveLuminance
 import pf.Comp.UniformRoughness
@@ -46,8 +47,10 @@ entity_ids = {
     absorbing_sphere: Entity.id("absorbing_sphere"),
     ground: Entity.id("ground"),
     asteroid: Entity.id("asteroid"),
+    asteroid2: Entity.id("asteroid2"),
     ambient_light: Entity.id("ambient_light"),
     omnidirectional_light: Entity.id("omnidirectional_light"),
+    unidirectional_light: Entity.id("unidirectional_light"),
 }
 
 setup! : {} => Result {} Str
@@ -60,8 +63,10 @@ setup! = |_|
     Entity.create_with_id!(entity_ids.absorbing_sphere, absorbing_sphere)?
     Entity.create_with_id!(entity_ids.ground, ground)?
     Entity.create_with_id!(entity_ids.asteroid, asteroid)?
+    Entity.create_with_id!(entity_ids.asteroid2, asteroid2)?
     Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
     Entity.create_with_id!(entity_ids.omnidirectional_light, omnidirectional_light)?
+    Entity.create_with_id!(entity_ids.unidirectional_light, unidirectional_light)?
 
     Ok({})
 
@@ -145,6 +150,14 @@ asteroid =
     |> Comp.MultifractalNoiseModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
     |> Comp.Velocity.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
 
+asteroid2 =
+    Entity.new
+    |> Comp.ReferenceFrame.add_unoriented((0, 10, 30))
+    |> Comp.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
+    |> Comp.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
+    |> Comp.MultifractalNoiseModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
+    |> Comp.Velocity.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
+
 ambient_light =
     Entity.new
     |> Comp.AmbientEmission.add_new(Vector3.same(1000))
@@ -158,4 +171,12 @@ omnidirectional_light =
     |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(2e7),
         0.7,
+    )
+
+unidirectional_light =
+    Entity.new
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
+        Vector3.same(20000),
+        UnitVector3.from((0.0, -1.0, 0.0)),
+        2.0,
     )

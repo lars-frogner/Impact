@@ -1,6 +1,5 @@
 //! Generic pass for postprocessing effects.
 
-use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::gpu::rendering::{
     attachment::{
         Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
@@ -8,7 +7,7 @@ use crate::gpu::rendering::{
     },
     postprocessing::{PostprocessingShaderTemplate, Postprocessor},
     push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-    render_command::begin_single_render_pass,
+    render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::SynchronizedRenderResources,
     surface::RenderingSurface,
 };

@@ -1,20 +1,16 @@
 //! Pass for filling the depth and stencil map.
 
-use super::{STANDARD_FRONT_FACE, StencilValue};
-use crate::{
-    gpu::{
-        GraphicsDevice,
-        rendering::{
-            BasicRenderingConfig,
-            attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-            render_command::begin_single_render_pass,
-            resource::SynchronizedRenderResources,
-            shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
-            surface::RenderingSurface,
-        },
+use crate::gpu::{
+    GraphicsDevice,
+    rendering::{
+        BasicRenderingConfig,
+        attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
+        resource::SynchronizedRenderResources,
+        shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
+        surface::RenderingSurface,
     },
-    model::ModelID,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -23,6 +19,7 @@ use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
 use impact_material::{MaterialLibrary, MaterialShaderInput};
 use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
+use impact_scene::model::ModelID;
 use std::borrow::Cow;
 
 /// Pass for filling the depth and stencil map.

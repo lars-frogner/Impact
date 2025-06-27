@@ -1,11 +1,10 @@
 //! Pass for clearing the render attachments.
 
-use super::StencilValue;
 use crate::gpu::rendering::{
     attachment::{
         RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
     },
-    render_command::begin_single_render_pass,
+    render_command::{StencilValue, begin_single_render_pass},
 };
 use anyhow::Result;
 use impact_gpu::query::TimestampQueryRegistry;

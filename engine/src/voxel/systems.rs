@@ -7,10 +7,6 @@ use crate::{
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::components::RigidBodyComp,
     },
-    scene::{
-        components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
-        graph::SceneGraph,
-    },
     voxel::{
         StagedVoxelObject, VoxelManager, VoxelObjectManager,
         chunks::{
@@ -26,6 +22,10 @@ use impact_ecs::{
     component::ComponentArray,
     query,
     world::{EntityID, World as ECSWorld},
+};
+use impact_scene::{
+    components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
+    graph::SceneGraph,
 };
 use nalgebra::{Similarity3, Vector3};
 

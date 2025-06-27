@@ -1,21 +1,17 @@
 //! ECS systems related to the detailed drag model.
 
 use super::DragLoadMapRepository;
-use crate::{
-    physics::{
-        fph,
-        medium::UniformMedium,
-        motion::{
-            Direction,
-            components::{ReferenceFrameComp, Static, VelocityComp},
-        },
-        rigid_body::{
-            components::RigidBodyComp, forces::detailed_drag::components::DragLoadMapComp,
-        },
+use crate::physics::{
+    fph,
+    medium::UniformMedium,
+    motion::{
+        Direction,
+        components::{ReferenceFrameComp, Static, VelocityComp},
     },
-    scene::components::SceneEntityFlagsComp,
+    rigid_body::{components::RigidBodyComp, forces::detailed_drag::components::DragLoadMapComp},
 };
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_scene::components::SceneEntityFlagsComp;
 
 /// Applies the drag force and torque calculated from precomputed detailed
 /// [`DragLoad`](super::DragLoad)s to all applicable entities with a

@@ -1,21 +1,18 @@
 //! Pass for filling in emitted luminance from the skybox.
 
-use super::{STANDARD_FRONT_FACE, StencilValue};
-use crate::{
-    gpu::rendering::{
-        attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        postprocessing::Postprocessor,
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-        render_command::begin_single_render_pass,
-        resource::SynchronizedRenderResources,
-        shader_templates::skybox::SkyboxShaderTemplate,
-    },
-    skybox::Skybox,
+use crate::gpu::rendering::{
+    attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
+    resource::SynchronizedRenderResources,
+    shader_templates::skybox::SkyboxShaderTemplate,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use impact_mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_scene::skybox::Skybox;
 use std::borrow::Cow;
 
 /// Pass for filling in emitted luminance from the skybox.

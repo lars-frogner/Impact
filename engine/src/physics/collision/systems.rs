@@ -1,16 +1,14 @@
 //! ECS systems related to collisions.
 
-use crate::{
-    physics::{
-        collision::{CollisionWorld, components::CollidableComp},
-        motion::components::ReferenceFrameComp,
-    },
-    scene::components::SceneEntityFlagsComp,
+use crate::physics::{
+    collision::{CollisionWorld, components::CollidableComp},
+    motion::components::ReferenceFrameComp,
 };
 use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
+use impact_scene::components::SceneEntityFlagsComp;
 
 pub fn synchronize_collision_world(collision_world: &mut CollisionWorld, ecs_world: &ECSWorld) {
     collision_world.clear_spatial_state();

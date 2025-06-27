@@ -12,13 +12,13 @@ use crate::{
         },
         rigid_body::{components::RigidBodyComp, forces::spring::components::SpringComp},
     },
-    scene::components::SceneEntityFlagsComp,
 };
 use approx::abs_diff_eq;
 use impact_ecs::{
     query,
     world::{EntityEntry, EntityID, World as ECSWorld},
 };
+use impact_scene::components::SceneEntityFlagsComp;
 use nalgebra::UnitVector3;
 
 /// The outcome of applying the forces from a spring.

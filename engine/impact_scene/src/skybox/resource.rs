@@ -1,6 +1,6 @@
 //! Management of GPU resources for skyboxes.
 
-use crate::{assets::Assets, skybox::Skybox};
+use crate::skybox::Skybox;
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
@@ -8,7 +8,9 @@ use impact_gpu::{
     device::GraphicsDevice,
     resource_group::GPUResourceGroup,
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
+    wgpu,
 };
+use impact_material::MaterialTextureProvider;
 use impact_math::ConstStringHash64;
 use std::borrow::Cow;
 
@@ -39,17 +41,16 @@ impl SkyboxGPUResourceManager {
     /// Returns an error if the skybox cubemap texture or sampler is missing.
     pub fn for_skybox(
         graphics_device: &GraphicsDevice,
-        assets: &Assets,
+        texture_provider: &impl MaterialTextureProvider,
         skybox: Skybox,
     ) -> Result<Self> {
-        let cubemap_texture = assets
-            .textures
-            .get(&skybox.cubemap_texture_id)
+        let cubemap_texture = texture_provider
+            .get_texture(&skybox.cubemap_texture_id)
             .ok_or_else(|| anyhow!("Missing texture for skybox"))?;
 
         let sampler = cubemap_texture
             .sampler_id()
-            .and_then(|sampler_id| assets.samplers.get(&sampler_id))
+            .and_then(|sampler_id| texture_provider.get_sampler(&sampler_id))
             .ok_or_else(|| anyhow!("Missing sampler for skybox"))?;
 
         let properties_uniform = SkyboxProperties::new(skybox.max_luminance);
@@ -99,11 +100,11 @@ impl SkyboxGPUResourceManager {
     pub fn sync_with_skybox(
         &mut self,
         graphics_device: &GraphicsDevice,
-        assets: &Assets,
+        texture_provider: &impl MaterialTextureProvider,
         skybox: Skybox,
     ) -> Result<()> {
         if skybox != self.skybox {
-            *self = Self::for_skybox(graphics_device, assets, skybox)?;
+            *self = Self::for_skybox(graphics_device, texture_provider, skybox)?;
         }
         Ok(())
     }

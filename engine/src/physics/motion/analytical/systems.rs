@@ -19,9 +19,9 @@ use crate::{
         },
         rigid_body::components::RigidBodyComp,
     },
-    scene::components::SceneEntityFlagsComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_scene::components::SceneEntityFlagsComp;
 
 /// Sets the positions, velocities, orientations and angular velocities of
 /// all entities whose motions are controlled analytically to the values for

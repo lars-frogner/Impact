@@ -22,7 +22,6 @@ use crate::{
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
-    model::InstanceFeatureManager,
     physics::{PhysicsConfig, PhysicsSimulator},
     scene::Scene,
     voxel::{self, VoxelConfig, VoxelManager},
@@ -35,6 +34,7 @@ use impact_ecs::{
 use impact_gpu::device::GraphicsDevice;
 use impact_material::MaterialLibrary;
 use impact_mesh::MeshRepository;
+use impact_scene::model::InstanceFeatureManager;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
