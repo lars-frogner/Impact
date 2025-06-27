@@ -237,7 +237,7 @@ impl SkyboxPass {
             0..1,
         );
 
-        log::trace!("Recorded skybox pass");
+        impact_log::trace!("Recorded skybox pass");
 
         Ok(())
     }

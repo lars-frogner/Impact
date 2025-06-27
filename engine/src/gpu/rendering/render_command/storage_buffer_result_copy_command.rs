@@ -34,7 +34,7 @@ impl StorageBufferResultCopyCommand {
 
         storage_buffer.encode_copy_to_result_buffer(command_encoder)?;
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded result copy command for storage buffer ({})",
             self.buffer_id
         );

@@ -126,13 +126,13 @@ where
                         self.runtime_and_window = Some((runtime, window));
                     }
                     Err(error) => {
-                        log::error!("Runtime creation error: {:?}", error);
+                        impact_log::error!("Runtime creation error: {:?}", error);
                         event_loop.exit();
                     }
                 }
             }
             Err(error) => {
-                log::error!("Window creation error: {:?}", error);
+                impact_log::error!("Window creation error: {:?}", error);
                 event_loop.exit();
             }
         }
@@ -163,7 +163,7 @@ where
                 let result = runtime.perform_game_loop_iteration();
 
                 if let Err(errors) = result {
-                    log::error!("Aborting due to fatal errors: {:?}", errors);
+                    impact_log::error!("Aborting due to fatal errors: {:?}", errors);
                     event_loop.exit();
                 } else {
                     window.request_redraw();
@@ -174,7 +174,7 @@ where
             // Resize rendering surface when window is resized
             WindowEvent::Resized(new_size) => {
                 if new_size.width == 0 || new_size.height == 0 {
-                    log::error!("Tried resizing window to zero size");
+                    impact_log::error!("Tried resizing window to zero size");
                     event_loop.exit();
                 } else {
                     runtime.resize_rendering_surface(
@@ -190,10 +190,10 @@ where
         }
 
         if let Err(error) = runtime.handle_window_event_for_engine(&event) {
-            log::error!("Window event handling error: {:?}", error);
+            impact_log::error!("Window event handling error: {:?}", error);
             event_loop.exit();
         } else if runtime.shutdown_requested() {
-            log::info!("Shutting down after request");
+            impact_log::info!("Shutting down after request");
             event_loop.exit();
         }
     }
@@ -211,7 +211,7 @@ where
         runtime.handle_device_event_for_ui(&event);
 
         if let Err(error) = runtime.handle_device_event_for_engine(&event) {
-            log::error!("Device event handling error: {:?}", error);
+            impact_log::error!("Device event handling error: {:?}", error);
             event_loop.exit();
         }
     }

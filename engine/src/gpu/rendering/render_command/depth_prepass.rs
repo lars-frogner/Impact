@@ -231,7 +231,7 @@ impl DepthPrepass {
             );
         }
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded depth prepass for {} models ({} draw calls)",
             self.models.len(),
             self.models.len()

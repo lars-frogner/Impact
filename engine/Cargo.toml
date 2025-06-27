@@ -9,6 +9,7 @@ members = [
     "impact_gpu",
     "impact_io",
     "impact_light",
+    "impact_log",
     "impact_material",
     "impact_math",
     "impact_mesh",
@@ -32,7 +33,6 @@ bytemuck = { version = "1.23", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
-log = "0.4"
 nalgebra = "0.33"
 nohash-hasher = "0.2"
 num-traits = "0.2"
@@ -203,6 +203,7 @@ impact_geometry = { path = "impact_geometry" }
 impact_gpu = { path = "impact_gpu", features = ["serde"] }
 impact_io = { path = "impact_io", features = ["ron"] }
 impact_light = { path = "impact_light", features = ["serde"] }
+impact_log = { path = "impact_log" }
 impact_material = { path = "impact_material" }
 impact_math = { path = "impact_math", features = ["serde"] }
 impact_mesh = { path = "impact_mesh", features = ["serde"] }
@@ -210,7 +211,6 @@ impact_model = { path = "impact_model" }
 impact_profiling = { path = "impact_profiling", optional = true }
 impact_scene = { path = "impact_scene" }
 inventory = { workspace = true }
-log = { workspace = true }
 naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }

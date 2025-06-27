@@ -2024,7 +2024,7 @@ impl LocalRegion {
             new_idx
         } else {
             // If we would exceed the limit, we instead overwrite the entry in the last slot
-            log::warn!("Exceeded max supported number of adjacent regions");
+            impact_log::warn!("Exceeded max supported number of adjacent regions");
             self.adjacent_region_connection_start_idx as usize
                 + (self.adjacent_region_connection_count - 1) as usize
         }

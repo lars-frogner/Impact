@@ -180,12 +180,12 @@ impl Engine {
     // Rendering
 
     pub fn set_ambient_occlusion(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting ambient occlusion to {to:?}");
+        impact_log::info!("Setting ambient occlusion to {to:?}");
         self.renderer.read().unwrap().set_ambient_occlusion(to)
     }
 
     pub fn set_temporal_anti_aliasing(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting temporal anti-aliasing to {to:?}");
+        impact_log::info!("Setting temporal anti-aliasing to {to:?}");
         let renderer = self.renderer().read().unwrap();
 
         let state = renderer.set_temporal_anti_aliasing(to);
@@ -203,22 +203,22 @@ impl Engine {
     }
 
     pub fn set_bloom(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting bloom to {to:?}");
+        impact_log::info!("Setting bloom to {to:?}");
         self.renderer.read().unwrap().set_bloom(to)
     }
 
     pub fn set_tone_mapping_method(&self, to: ToToneMappingMethod) -> ToneMappingMethod {
-        log::info!("Setting tone mapping method to {to:?}");
+        impact_log::info!("Setting tone mapping method to {to:?}");
         self.renderer.read().unwrap().set_tone_mapping_method(to)
     }
 
     pub fn set_exposure(&self, to: ToExposure) {
-        log::info!("Setting exposure to {to:?}");
+        impact_log::info!("Setting exposure to {to:?}");
         self.renderer.read().unwrap().set_exposure(to);
     }
 
     pub fn set_render_attachment_visualization(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting render attachment visualization to {to:?}");
+        impact_log::info!("Setting render attachment visualization to {to:?}");
         self.renderer
             .read()
             .unwrap()
@@ -229,7 +229,7 @@ impl Engine {
         &self,
         to: ToRenderAttachmentQuantity,
     ) -> Result<RenderAttachmentQuantity> {
-        log::info!("Setting visualized render attachment quantity to {to:?}");
+        impact_log::info!("Setting visualized render attachment quantity to {to:?}");
         self.renderer
             .read()
             .unwrap()
@@ -237,30 +237,30 @@ impl Engine {
     }
 
     pub fn set_shadow_mapping(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting shadow mapping to {to:?}");
+        impact_log::info!("Setting shadow mapping to {to:?}");
         self.renderer.write().unwrap().set_shadow_mapping(to)
     }
 
     pub fn set_wireframe_mode(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting wireframe mode to {to:?}");
+        impact_log::info!("Setting wireframe mode to {to:?}");
         self.renderer.write().unwrap().set_wireframe_mode(to)
     }
 
     pub fn set_render_pass_timings(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting render pass timings to {to:?}");
+        impact_log::info!("Setting render pass timings to {to:?}");
         self.renderer.write().unwrap().set_render_pass_timings(to)
     }
 
     // Physics
 
     pub fn set_simulation(&self, to: ToActiveState) -> ModifiedActiveState {
-        log::info!("Setting simulation to {to:?}");
+        impact_log::info!("Setting simulation to {to:?}");
         let mut simulator = self.simulator.write().unwrap();
         to.set(simulator.enabled_mut())
     }
 
     pub fn set_simulation_substep_count(&self, to: ToSubstepCount) -> u32 {
-        log::info!("Setting simulation substep count to {to:?}");
+        impact_log::info!("Setting simulation substep count to {to:?}");
         self.simulator
             .write()
             .unwrap()
@@ -268,7 +268,7 @@ impl Engine {
     }
 
     pub fn set_simulation_speed(&self, to: ToSimulationSpeedMultiplier) -> f64 {
-        log::info!("Setting simulation speed to {to:?}");
+        impact_log::info!("Setting simulation speed to {to:?}");
         let mut simulator = self.simulator.write().unwrap();
         let old_multiplier = simulator.simulation_speed_multiplier();
         let new_multiplier = simulator.set_simulation_speed(to);
@@ -294,7 +294,7 @@ impl Engine {
     // Scene
 
     pub fn set_skybox(&self, skybox: Skybox) {
-        log::info!("Setting skybox to {skybox:?}");
+        impact_log::info!("Setting skybox to {skybox:?}");
         self.scene().read().unwrap().set_skybox(skybox);
 
         self.renderer()
@@ -308,7 +308,7 @@ impl Engine {
         entity_id: EntityID,
         state: ActiveState,
     ) -> Result<()> {
-        log::info!("Setting state of scene entity with ID {entity_id} to {state:?}");
+        impact_log::info!("Setting state of scene entity with ID {entity_id} to {state:?}");
         match state {
             ActiveState::Enabled => self.enable_scene_entity(entity_id),
             ActiveState::Disabled => self.disable_scene_entity(entity_id),
@@ -320,46 +320,46 @@ impl Engine {
     pub fn set_motion(&self, state: MotionState, direction: MotionDirection) {
         if self.controls_enabled() {
             if let Some(motion_controller) = &self.motion_controller {
-                log::debug!("Setting motion in direction {direction:?} to {state:?}");
+                impact_log::debug!("Setting motion in direction {direction:?} to {state:?}");
                 motion_controller
                     .lock()
                     .unwrap()
                     .update_motion(state, direction);
             } else {
-                log::info!("Not setting motion since there is no motion controller");
+                impact_log::info!("Not setting motion since there is no motion controller");
             }
         } else {
-            log::info!("Not setting motion since controls are disabled");
+            impact_log::info!("Not setting motion since controls are disabled");
         }
     }
 
     pub fn stop_motion(&self) {
         if let Some(motion_controller) = &self.motion_controller {
-            log::info!("Stopping controller motion");
+            impact_log::info!("Stopping controller motion");
             motion_controller.lock().unwrap().stop();
         } else {
-            log::info!("Not stopping motion since there is no motion controller");
+            impact_log::info!("Not stopping motion since there is no motion controller");
         }
     }
 
     pub fn set_movement_speed(&self, speed: fph) {
         if let Some(motion_controller) = &self.motion_controller {
-            log::info!("Setting movement speed to {speed:?}");
+            impact_log::info!("Setting movement speed to {speed:?}");
             motion_controller.lock().unwrap().set_movement_speed(speed);
         } else {
-            log::info!("Not setting movement speed since there is no motion controller");
+            impact_log::info!("Not setting movement speed since there is no motion controller");
         }
     }
 
     // Capture
 
     pub fn save_screenshot(&self) {
-        log::info!("Saving screenshot");
+        impact_log::info!("Saving screenshot");
         self.screen_capturer().request_screenshot_save();
     }
 
     pub fn save_shadow_maps(&self, save_for: SaveShadowMapsFor) {
-        log::info!("Saving shadow maps for {save_for:?}");
+        impact_log::info!("Saving shadow maps for {save_for:?}");
         match save_for {
             SaveShadowMapsFor::OmnidirectionalLight => {
                 self.screen_capturer()

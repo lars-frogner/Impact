@@ -390,7 +390,7 @@ impl BloomRenderCommands {
                 0..1,
             );
 
-            log::trace!(
+            impact_log::trace!(
                 "Recorded bloom downsampling pass from mip level {} to {}",
                 input_mip_level,
                 output_mip_level
@@ -470,7 +470,7 @@ impl BloomRenderCommands {
                 0..1,
             );
 
-            log::trace!(
+            impact_log::trace!(
                 "Recorded bloom upsampling and blur pass from mip level {} to {}",
                 input_mip_level,
                 output_mip_level
@@ -536,7 +536,7 @@ impl BloomRenderCommands {
             0..1,
         );
 
-        log::trace!("Recorded bloom blending pass");
+        impact_log::trace!("Recorded bloom blending pass");
 
         Ok(())
     }

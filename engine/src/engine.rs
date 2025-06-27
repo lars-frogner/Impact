@@ -286,7 +286,7 @@ impl Engine {
             return;
         }
         if let Some(orientation_controller) = &self.orientation_controller {
-            log::trace!(
+            impact_log::trace!(
                 "Updating orientation controller by mouse delta ({}, {})",
                 mouse_displacement.0,
                 mouse_displacement.1

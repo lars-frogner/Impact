@@ -166,7 +166,7 @@ impl Engine {
         let (setup_component_ids, setup_component_names, standard_component_names) =
             self.extract_component_metadata(components);
 
-        log::info!(
+        impact_log::info!(
             "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
             components.component_count(),
             setup_component_names.join("\n    "),

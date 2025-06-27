@@ -275,7 +275,7 @@ fn handle_voxel_object_after_removing_voxels(
         .expect("Missing inertial property manager for entity with VoxelObjectComp");
 
     if object.is_effectively_empty() {
-        log::debug!("Marked voxel object as empty");
+        impact_log::debug!("Marked voxel object as empty");
         voxel_manager
             .object_manager
             .mark_voxel_object_as_empty_for_entity(entity_id);
@@ -316,7 +316,7 @@ fn handle_voxel_object_after_removing_voxels(
         let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
 
         if object.is_effectively_empty() {
-            log::debug!("Marked voxel object as empty");
+            impact_log::debug!("Marked voxel object as empty");
             voxel_manager
                 .object_manager
                 .mark_voxel_object_as_empty_for_entity(entity_id);
