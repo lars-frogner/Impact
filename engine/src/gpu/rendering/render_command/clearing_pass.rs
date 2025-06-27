@@ -131,7 +131,7 @@ impl AttachmentClearingPass {
             }
         }
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded clearing pass for {} render attachments",
             n_attachments
         );

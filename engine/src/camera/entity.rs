@@ -102,7 +102,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
                 .create_transform_to_parent_space();
 
             if camera_to_parent_transform.scaling() != 1.0 {
-                log::warn!(
+                impact_log::warn!(
                     "Added camera component to an entity with non-unity scaling:\n\
                      The scaling will be ignored since the view transform is assumed to contain no scaling"
                 );
@@ -174,7 +174,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
                 .create_transform_to_parent_space();
 
             if camera_to_parent_transform.scaling() != 1.0 {
-                log::warn!(
+                impact_log::warn!(
                     "Added camera component to an entity with non-unity scaling:\n\
                      The scaling will be ignored since the view transform is assumed to contain no scaling"
                 );

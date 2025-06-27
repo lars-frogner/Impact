@@ -27,9 +27,9 @@ impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs" }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
+impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true }
-log = { workspace = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
 paste = { workspace = true }

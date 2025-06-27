@@ -202,7 +202,7 @@ pub fn generate_missing_vertex_properties_for_mesh(
             .expect("Missing mesh in repository for mesh component");
 
         if !mesh.has_normal_vectors() {
-            log::info!("Generating normal vectors for mesh {}", mesh_id);
+            impact_log::info!("Generating normal vectors for mesh {}", mesh_id);
 
             mesh_repository
                 .get_triangle_mesh_mut(mesh_id)
@@ -217,7 +217,7 @@ pub fn generate_missing_vertex_properties_for_mesh(
             .expect("Missing mesh in repository for mesh component");
 
         if !mesh.has_tangent_space_quaternions() {
-            log::info!("Generating tangent space quaternions for mesh {}", mesh_id);
+            impact_log::info!("Generating tangent space quaternions for mesh {}", mesh_id);
 
             mesh_repository
                 .get_triangle_mesh_mut(mesh_id)

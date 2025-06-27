@@ -386,7 +386,7 @@ impl PostprocessingRenderPass {
             0..1,
         );
 
-        log::trace!("Recorded postprocessing pass: {}", &self.label);
+        impact_log::trace!("Recorded postprocessing pass: {}", &self.label);
 
         Ok(())
     }

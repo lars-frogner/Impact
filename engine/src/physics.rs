@@ -213,7 +213,7 @@ impl<G: CollidableGeometry> PhysicsSimulator<G> {
         if !self.config.enabled {
             return;
         }
-        with_timing_info_logging!(
+        impact_log::with_timing_info_logging!(
             "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
             self.scaled_time_step_duration(),
             self.simulation_speed_multiplier,
@@ -221,7 +221,7 @@ impl<G: CollidableGeometry> PhysicsSimulator<G> {
             self.do_advance_simulation(ecs_world, collidable_context);
         });
 
-        log::info!("Simulation time: {:.1}", self.simulation_time);
+        impact_log::info!("Simulation time: {:.1}", self.simulation_time);
     }
 
     fn do_advance_simulation(
@@ -282,7 +282,7 @@ impl<G: CollidableGeometry> PhysicsSimulator<G> {
         motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
         if constraint_manager.solver().config().enabled {
-            with_timing_info_logging!("Preparing constraints"; {
+            impact_log::with_timing_info_logging!("Preparing constraints"; {
                 constraint_manager.prepare_constraints(ecs_world, &collision_world.read().unwrap(), collidable_context);
             });
         }
@@ -290,7 +290,7 @@ impl<G: CollidableGeometry> PhysicsSimulator<G> {
         rigid_body::systems::advance_rigid_body_velocities(ecs_world, step_duration);
 
         if constraint_manager.solver().config().enabled {
-            with_timing_info_logging!("Solving constraints"; {
+            impact_log::with_timing_info_logging!("Solving constraints"; {
                 constraint_manager.compute_and_apply_constrained_state(ecs_world);
             });
         }

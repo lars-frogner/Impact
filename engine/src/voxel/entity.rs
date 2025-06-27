@@ -825,7 +825,7 @@ pub fn handle_emptied_voxel_objects(engine: &Engine) -> Result<()> {
             drop(voxel_manager);
             drop(scene);
 
-            log::debug!("Removing entity for emptied voxel object");
+            impact_log::debug!("Removing entity for emptied voxel object");
             engine.remove_entity(entity_id)?;
         } else {
             break;

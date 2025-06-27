@@ -14,7 +14,6 @@ use impact_gpu::{
 use impact_material::MaterialTextureProvider;
 use impact_math::hash32;
 use impact_mesh::TriangleMeshSpecification;
-use log::debug;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::hash_map::Entry,
@@ -201,7 +200,7 @@ impl Assets {
         let texture_name = texture_name.to_string();
         let image_path = image_path.as_ref();
 
-        debug!(
+        impact_log::debug!(
             "Loading texture `{}` from {}",
             &texture_name,
             image_path.display()
@@ -261,7 +260,7 @@ impl Assets {
     ) -> Result<TextureID> {
         let texture_name = texture_name.to_string();
 
-        debug!("Loading cubemap texture `{texture_name}`");
+        impact_log::debug!("Loading cubemap texture `{texture_name}`");
 
         let texture_id = TextureID(hash32!(texture_name));
 
@@ -320,7 +319,7 @@ impl Assets {
     {
         let texture_name = texture_name.as_ref();
 
-        debug!("Loading texture array `{texture_name}`");
+        impact_log::debug!("Loading texture array `{texture_name}`");
 
         let texture_id = TextureID(hash32!(texture_name));
 

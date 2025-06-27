@@ -328,7 +328,7 @@ impl AmbientLightPass {
             0..1,
         );
 
-        log::trace!("Recorded ambient light pass (1 draw call)");
+        impact_log::trace!("Recorded ambient light pass (1 draw call)");
 
         Ok(())
     }

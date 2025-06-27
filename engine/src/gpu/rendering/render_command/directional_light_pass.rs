@@ -637,7 +637,7 @@ impl DirectionalLightPass {
             }
         }
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded lighting pass for {} unshadowable and {} shadowable omnidirectional lights and {} unshadowable and {} shadowable unidirectional lights ({} draw calls)",
             n_omnidirectional_lights,
             n_shadowable_omnidirectional_lights,

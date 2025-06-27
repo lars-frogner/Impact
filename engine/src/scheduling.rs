@@ -580,7 +580,7 @@ where
         let ordered_task = state.task_ordering().task(task_idx);
         let task = ordered_task.task();
 
-        log::trace!(
+        impact_log::trace!(
             "Worker {} obtained task {}",
             channel.owning_worker_id(),
             task.id()
@@ -589,7 +589,7 @@ where
         // Execute the task only if it thinks it should be based on
         // the current execution tags
         if task.should_execute(execution_tags.as_ref()) {
-            with_trace_logging!("Worker {} executing task {}",
+            impact_log::with_trace_logging!("Worker {} executing task {}",
                 channel.owning_worker_id(),
                 task.id();
                 {
@@ -611,7 +611,7 @@ where
                 }
             );
         } else {
-            log::trace!(
+            impact_log::trace!(
                 "Worker {} skipped execution of task {}",
                 channel.owning_worker_id(),
                 task.id()
@@ -638,7 +638,7 @@ where
         // immediately
         if ready_dependent_task_indices.len() > 1 {
             for &ready_dependent_task_idx in &ready_dependent_task_indices[1..] {
-                with_trace_logging!(
+                impact_log::with_trace_logging!(
                     "Worker {} scheduling execution of task {}",
                     channel.owning_worker_id(),
                     state

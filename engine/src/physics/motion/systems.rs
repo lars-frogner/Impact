@@ -26,7 +26,7 @@ pub fn log_kinetic_energies(ecs_world: &ECSWorld) {
 
             let total_kinetic_energy = translational_kinetic_energy + rotational_kinetic_energy;
 
-            log::info!(
+            impact_log::info!(
                 "Body at {{{:.1}, {:.1}, {:.1}}} has kinetic energy {:.2} ({:.2} translational, {:.2} rotational)",
                 frame.position.x,
                 frame.position.y,
@@ -49,7 +49,7 @@ pub fn log_momenta(ecs_world: &ECSWorld) {
             let linear_momentum = rigid_body.0.momentum();
             let angular_momentum = rigid_body.0.angular_momentum();
 
-            log::info!(
+            impact_log::info!(
                 "Body at {{{:.1}, {:.1}, {:.1}}} has linear momentum [{:.2}, {:.2}, {:.2}] and angular momentum [{:.2}, {:.2}, {:.2}]",
                 frame.position.x,
                 frame.position.y,

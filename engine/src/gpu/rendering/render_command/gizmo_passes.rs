@@ -135,7 +135,7 @@ impl GizmoPasses {
             command_encoder,
         )?;
 
-        log::trace!("Recorded gizmo passes");
+        impact_log::trace!("Recorded gizmo passes");
 
         Ok(())
     }

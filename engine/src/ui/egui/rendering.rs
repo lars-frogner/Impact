@@ -80,7 +80,7 @@ impl EguiRenderer {
             self.renderer.free_texture(texture_id);
         }
 
-        log::trace!("Recorded GUI render pass");
+        impact_log::trace!("Recorded GUI render pass");
     }
 
     fn color_attachment(

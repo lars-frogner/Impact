@@ -16,7 +16,6 @@ use impact_containers::{HashMap, HashSet};
 use impact_geometry::Point;
 use impact_math::{Float, hash64, stringhash64_newtype};
 use line_segment::LineSegmentMesh;
-use log::debug;
 use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
 };
@@ -222,7 +221,7 @@ impl MeshRepository {
         &mut self,
         specification: &TriangleMeshSpecification,
     ) -> Result<()> {
-        debug!(
+        impact_log::debug!(
             "Loading triangle mesh `{}` from {}",
             specification.name,
             specification.file_path.display()

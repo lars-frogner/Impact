@@ -454,7 +454,7 @@ impl ExecutionProgress {
     /// the given number and updates the conditional variable
     /// used for tracking whether there are pending tasks.
     fn add_to_pending_task_count(&self, n_tasks: usize) {
-        log::trace!("Adding {} pending tasks", n_tasks);
+        impact_log::trace!("Adding {} pending tasks", n_tasks);
 
         if n_tasks == 0 {
             return;
@@ -463,7 +463,7 @@ impl ExecutionProgress {
         let previous_count = self.pending_task_count.fetch_add(n_tasks, Ordering::AcqRel);
 
         if previous_count == 0 {
-            log::trace!("There are now pending tasks");
+            impact_log::trace!("There are now pending tasks");
             self.set_no_pending_tasks(false);
             self.notify_change_of_no_pending_tasks();
         }
@@ -476,7 +476,7 @@ impl ExecutionProgress {
     /// # Panics
     /// If the count is attempted to be decremented below zero.
     fn register_executed_tasks(&self, worker_id: WorkerID, n_tasks: usize) {
-        log::trace!(
+        impact_log::trace!(
             "Worker {} registering {} tasks as executed",
             worker_id,
             n_tasks
@@ -493,7 +493,7 @@ impl ExecutionProgress {
         );
 
         if previous_count == n_tasks {
-            log::trace!("There are now no pending tasks");
+            impact_log::trace!("There are now no pending tasks");
             self.set_no_pending_tasks(true);
             self.notify_change_of_no_pending_tasks();
         }
@@ -502,7 +502,7 @@ impl ExecutionProgress {
     /// Blocks execution in the calling thread and resumes when
     /// the count of pending tasks is zero.
     fn wait_for_no_pending_tasks(&self) {
-        with_trace_logging!("Waiting for no pending tasks"; {
+        impact_log::with_trace_logging!("Waiting for no pending tasks"; {
             let mut no_pending_tasks = self.no_pending_tasks_condvar.0.lock().unwrap();
             while !*no_pending_tasks {
                 no_pending_tasks = self.no_pending_tasks_condvar.1.wait(no_pending_tasks).unwrap();
@@ -549,7 +549,7 @@ impl TaskStatus {
     }
 
     fn register_error(&self, worker_id: WorkerID, task_id: TaskID, error: TaskError) {
-        log::error!(
+        impact_log::error!(
             "Worker {} registered error on task {}: {}",
             worker_id,
             task_id,
@@ -573,7 +573,7 @@ impl Worker {
     {
         let handle = thread::spawn(move || {
             let worker_id = communicator.channel().owning_worker_id();
-            log::trace!("Worker {} spawned", worker_id);
+            impact_log::trace!("Worker {} spawned", worker_id);
 
             loop {
                 let instruction = communicator.channel().wait_for_next_instruction();
@@ -596,7 +596,7 @@ impl Worker {
                             .register_executed_tasks(worker_id, n_executed_tasks);
                     }
                     WorkerInstruction::Terminate => {
-                        log::trace!("Worker {} terminating", worker_id);
+                        impact_log::trace!("Worker {} terminating", worker_id);
                         return;
                     }
                 }

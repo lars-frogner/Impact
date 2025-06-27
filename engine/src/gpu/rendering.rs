@@ -241,7 +241,7 @@ impl RenderingSystem {
         scene: &Scene,
         user_interface: &dyn UserInterface,
     ) -> Result<()> {
-        with_timing_info_logging!("Rendering"; {
+        impact_log::with_timing_info_logging!("Rendering"; {
             self.surface_texture_to_present = self.render_surface(scene, user_interface)?;
         });
         Ok(())

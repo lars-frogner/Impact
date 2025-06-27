@@ -531,7 +531,7 @@ impl GeometryPass {
             .map(|pipeline| pipeline.models.len())
             .product();
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded geometry pass for {} models ({} pipelines, {} draw calls)",
             n_models,
             self.model_pipelines.len(),

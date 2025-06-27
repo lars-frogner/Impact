@@ -61,7 +61,7 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
     ) {
         (entity_1_id, entity_2_id)
     } else {
-        log::debug!("Missing spring attachment entity: spring component will be removed");
+        impact_log::debug!("Missing spring attachment entity: spring component will be removed");
         return SpringForceApplicationOutcome::EntityMissing;
     };
 

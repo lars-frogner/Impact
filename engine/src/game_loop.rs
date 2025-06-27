@@ -51,7 +51,7 @@ impl GameLoop {
         engine: &Engine,
         task_scheduler: &RuntimeTaskScheduler,
     ) -> ThreadPoolResult {
-        let execution_result = with_timing_info_logging!("Game loop iteration"; {
+        let execution_result = impact_log::with_timing_info_logging!("Game loop iteration"; {
             task_scheduler.execute_and_wait(&ALL_SYSTEMS)
         });
 
@@ -76,13 +76,13 @@ impl GameLoop {
 
         engine.gather_metrics_after_completed_frame(smooth_frame_duration);
 
-        log::info!(
+        impact_log::info!(
             "Completed game loop iteration after {:.1} ms (~{} FPS)",
             iter_duration.as_secs_f64() * 1e3,
             instrumentation::frame_duration_to_fps(smooth_frame_duration)
         );
 
-        log::info!(
+        impact_log::info!(
             "Elapsed time: {:.1} s",
             self.start_time.elapsed().as_secs_f64()
         );

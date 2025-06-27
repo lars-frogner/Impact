@@ -391,7 +391,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded shadow map update passes for {} omnidirectional lights and {} models ({} passes, {} draw calls)",
             shadow_map_textures.len(),
             self.models.len(),
@@ -753,7 +753,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        log::trace!(
+        impact_log::trace!(
             "Recorded shadow map update passes for {} unidirectional lights and {} models ({} passes, {} draw calls)",
             shadow_map_textures.len(),
             self.models.len(),

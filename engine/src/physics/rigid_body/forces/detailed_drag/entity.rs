@@ -11,7 +11,6 @@ use crate::physics::rigid_body::{
 use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_mesh::{MeshID, MeshRepository, components::TriangleMeshComp};
-use log::info;
 use std::{path::PathBuf, sync::RwLock};
 
 /// Checks if the entity-to-be with the given components has the components
@@ -29,7 +28,7 @@ pub fn setup_drag_load_map_for_new_entity(
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,
     ) -> Result<DragLoadMap<f32>> {
-        info!("Generating drag load map for mesh: {mesh_id}");
+        impact_log::info!("Generating drag load map for mesh: {mesh_id}");
 
         let center_of_mass = rigid_body.0.inertial_properties().center_of_mass();
 
@@ -38,7 +37,7 @@ pub fn setup_drag_load_map_for_new_entity(
             anyhow!("Tried to generate drag load map for missing mesh (mesh ID {mesh_id})")
         })?;
 
-        let map = with_timing_info_logging!(
+        let map = impact_log::with_timing_info_logging!(
             "Generating drag load map with resolution {} and smoothness {} for {} using {} direction samples",
             config.n_theta_coords,
             mesh_id,
