@@ -6,7 +6,9 @@ use crate::{
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::AdvanceSimulation,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
-    scene::tasks::{BufferVisibleModelInstances, ClearModelInstanceBuffers, SyncLightsInStorage},
+    scene::tasks::{
+        BufferModelInstancesForRendering, ClearModelInstanceBuffers, SyncLightsInStorage,
+    },
     ui::tasks::ProcessUserInterface,
 };
 use anyhow::Result;
@@ -51,7 +53,7 @@ define_task!(
     depends_on = [
         UpdateVisibilityFlagsForGizmos,
         ClearModelInstanceBuffers,
-        BufferVisibleModelInstances,
+        BufferModelInstancesForRendering,
         SyncLightsInStorage,
         AdvanceSimulation
     ],

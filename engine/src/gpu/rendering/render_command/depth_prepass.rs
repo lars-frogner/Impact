@@ -15,7 +15,6 @@ use crate::{
         },
     },
     model::ModelID,
-    scene::graph::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -187,10 +186,7 @@ impl DepthPrepass {
 
         for model_id in &self.models {
             let transform_buffer_manager = render_resources
-                .get_instance_feature_buffer_managers(model_id)
-                .and_then(|buffers| {
-                    buffers.get(ModelInstanceNode::model_view_transform_feature_idx())
-                })
+                .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransformWithPrevious>(model_id)
                 .ok_or_else(|| {
                     anyhow!(
                         "Missing model-view transform GPU buffer for model {}",

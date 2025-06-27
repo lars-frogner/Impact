@@ -105,7 +105,7 @@ pub struct InstanceFeatureStorage {
 ///
 /// The buffer is grown on demand, but never shrunk. Instead, a counter keeps
 /// track of the position of the last valid byte in the buffer, and the counter
-/// is reset to zero when the buffer is cleared. This allows the it to be filled
+/// is reset to zero when the buffer is cleared. This allows it to be filled
 /// and emptied repeatedly without unneccesary allocations.
 ///
 /// Stores the raw bytes of the features to avoid exposing the feature type
@@ -268,18 +268,18 @@ impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
         feature_type_ids: &[InstanceFeatureTypeID],
     ) {
         self.instance_buffers
-                .entry(model_id)
-                .and_modify(|instance_buffer| {
-                    assert_eq!(instance_buffer.n_feature_types(), feature_type_ids.len());
-                })
-                .or_insert_with(|| {
-                    ModelInstanceBuffer::new(feature_type_ids.iter().map(|feature_type_id| {
-                        self.feature_storages.get(feature_type_id).expect(
-                            "Missing storage for instance feature type \
-                                 (all feature types must be registered with `register_feature_type`)",
-                        )
-                    }))
-                });
+            .entry(model_id)
+            .and_modify(|instance_buffer| {
+                assert_eq!(instance_buffer.n_feature_types(), feature_type_ids.len());
+            })
+            .or_insert_with(|| {
+                ModelInstanceBuffer::new(feature_type_ids.iter().map(|feature_type_id| {
+                    self.feature_storages.get(feature_type_id).expect(
+                        "Missing storage for instance feature type \
+                              (all feature types must be registered with `register_feature_type`)",
+                    )
+                }))
+            });
     }
 
     /// Registers the existence of a new instance of the model with the given
@@ -303,7 +303,7 @@ impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
                 ModelInstanceBuffer::new(feature_type_ids.iter().map(|feature_type_id| {
                     self.feature_storages.get(feature_type_id).expect(
                         "Missing storage for instance feature type \
-                             (all feature types must be registered with `register_feature_type`)",
+                              (all feature types must be registered with `register_feature_type`)",
                     )
                 }))
             });
@@ -333,11 +333,7 @@ impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
     ///
     /// # Panics
     /// - If no [`ModelInstanceBuffer`] exists for the model with the given ID.
-    /// - If the number of feature IDs does not match the number of buffers.
-    /// - If any of the feature IDs are for feature types other than the type
-    ///   stored in the corresponding buffer (the order of the feature IDs has
-    ///   to be the same as in the [`Self::register_instance`] call used to
-    ///   initialize the buffers).
+    /// - If any of the feature types are not used by this model.
     pub fn buffer_instance_features_from_storages(
         &mut self,
         model_id: &MID,
@@ -416,6 +412,25 @@ impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
     ) {
         for instance_buffer in self.instance_buffers.values_mut() {
             instance_buffer.begin_range_in_feature_buffer(feature_type_id, range_id);
+        }
+    }
+
+    /// Calls [`DynamicInstanceFeatureBuffer::begin_range`] with the given range
+    /// ID for the instance feature buffers holding the given feature types
+    /// for the given model.
+    pub fn begin_ranges_in_feature_buffers_for_model(
+        &mut self,
+        model_id: &MID,
+        feature_type_ids: &[InstanceFeatureTypeID],
+        range_id: InstanceFeatureBufferRangeID,
+    ) {
+        let instance_buffer = self
+            .instance_buffers
+            .get_mut(model_id)
+            .expect("Tried to begin range in feature buffer for missing model");
+
+        for feature_type_id in feature_type_ids {
+            instance_buffer.begin_range_in_feature_buffer(*feature_type_id, range_id);
         }
     }
 
@@ -583,24 +598,20 @@ impl ModelInstanceBuffer {
     /// buffers.
     ///
     /// # Panics
-    /// - If the number of feature IDs does not match the number of buffers.
-    /// - If any of the feature IDs are for feature types other than the type
-    ///   stored in the corresponding buffer (the order of the feature IDs has
-    ///   to be the same as in the [`Self::register_instance`] call used to
-    ///   initialize the buffers).
+    /// - If any of the feature types are not used by this model.
+    /// - If any of the feature types are missing a storage.
     fn buffer_instance_features_from_storage(
         &mut self,
         feature_storages: &HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
         feature_ids: &[InstanceFeatureID],
     ) {
-        assert_eq!(feature_ids.len(), self.feature_buffers.len());
-
-        for (&feature_id, feature_buffer) in feature_ids.iter().zip(self.feature_buffers.iter_mut())
-        {
-            let feature_type_id = feature_buffer.feature_type_id();
+        for &feature_id in feature_ids {
+            let feature_buffer = self
+                .get_feature_buffer_mut(feature_id.feature_type_id())
+                .expect("Missing buffer for model instance feature");
 
             let storage = feature_storages
-                .get(&feature_type_id)
+                .get(&feature_id.feature_type_id())
                 .expect("Missing storage for model instance feature");
 
             feature_buffer.add_feature_from_storage(storage, feature_id);
@@ -1716,10 +1727,9 @@ mod tests {
                 &[feature_2_instance_1]
             );
 
-            manager.buffer_instance_features_from_storages(
-                &model_id,
-                &[id_1_instance_2, id_2_instance_2],
-            );
+            // Buffering separately should also work
+            manager.buffer_instance_features_from_storages(&model_id, &[id_2_instance_2]);
+            manager.buffer_instance_features_from_storages(&model_id, &[id_1_instance_2]);
 
             let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
             assert_eq!(buffer.n_feature_types(), 2);
@@ -1752,16 +1762,6 @@ mod tests {
             let id = storage.add_feature(&Feature(33));
 
             manager.buffer_instance_features_from_storages(&model_id, &[id]);
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_too_few_feature_types_from_storages_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
-            manager.register_feature_type::<Feature>();
-            let model_id = ModelID(0);
-            manager.register_instance(model_id, &[Feature::FEATURE_TYPE_ID]);
-            manager.buffer_instance_features_from_storages(&model_id, &[]);
         }
 
         #[test]

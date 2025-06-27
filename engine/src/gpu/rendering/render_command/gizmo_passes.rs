@@ -11,7 +11,6 @@ use crate::{
         surface::RenderingSurface,
     },
     model::ModelID,
-    scene::graph::ModelInstanceNode,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -342,12 +341,10 @@ impl GizmoPassPipeline {
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
         for model_id in model_ids {
-            let instance_feature_buffer_managers = render_resources
-                .get_instance_feature_buffer_managers(model_id)
-                .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
-
-            let transform_buffer_manager = instance_feature_buffer_managers
-                .get(ModelInstanceNode::model_view_transform_feature_idx())
+            let transform_buffer_manager = render_resources
+                .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransform>(
+                    model_id,
+                )
                 .ok_or_else(|| {
                     anyhow!(
                         "Missing model-view transform GPU buffer for model {}",
@@ -414,12 +411,10 @@ impl GizmoPassPipeline {
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
         for model_id in model_ids {
-            let instance_feature_buffer_managers = render_resources
-                .get_instance_feature_buffer_managers(model_id)
-                .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
-
-            let transform_buffer_manager = instance_feature_buffer_managers
-                .get(ModelInstanceNode::model_view_transform_feature_idx())
+            let transform_buffer_manager = render_resources
+                .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransform>(
+                    model_id,
+                )
                 .ok_or_else(|| {
                     anyhow!(
                         "Missing model-view transform GPU buffer for model {}",

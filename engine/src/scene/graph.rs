@@ -5,12 +5,11 @@ use crate::{
     light,
     model::{InstanceFeatureManager, ModelID},
     scene::SceneEntityFlags,
-    voxel::{VoxelObjectID, entity::VOXEL_MODEL_ID},
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_camera::buffer::BufferableCamera;
-use impact_containers::{GenerationalIdx, GenerationalReusingVec, HashSet};
+use impact_containers::{GenerationalIdx, GenerationalReusingVec, HashMap, HashSet};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
     LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
@@ -25,7 +24,10 @@ use impact_model::{
 };
 use nalgebra::Similarity3;
 use roc_integration::roc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    collections::hash_map::Entry,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
 /// and enables useful operations on them.
@@ -41,6 +43,7 @@ pub struct SceneGraph {
     group_nodes: NodeStorage<GroupNode>,
     model_instance_nodes: NodeStorage<ModelInstanceNode>,
     camera_nodes: NodeStorage<CameraNode>,
+    model_metadata: ModelMetadata,
 }
 
 /// Flat storage for all the [`SceneGraph`] nodes of a given
@@ -48,6 +51,11 @@ pub struct SceneGraph {
 #[derive(Clone, Debug, Default)]
 pub struct NodeStorage<N> {
     nodes: GenerationalReusingVec<N>,
+}
+
+#[derive(Debug)]
+struct ModelMetadata {
+    feature_type_ids_for_shadow_mapping: HashMap<ModelID, Vec<InstanceFeatureTypeID>>,
 }
 
 /// Type of the transform used by scene graph nodes.
@@ -117,7 +125,8 @@ pub struct ModelInstanceNode {
     model_bounding_sphere: Option<Sphere<f32>>,
     model_to_parent_transform: NodeTransform,
     model_id: ModelID,
-    feature_ids: Vec<InstanceFeatureID>,
+    feature_ids_for_rendering: Vec<InstanceFeatureID>,
+    feature_ids_for_shadow_mapping: Vec<InstanceFeatureID>,
     flags: ModelInstanceFlags,
     frame_count_when_last_visible: AtomicU32,
 }
@@ -150,6 +159,8 @@ impl SceneGraph {
         let model_instance_nodes = NodeStorage::new();
         let camera_nodes = NodeStorage::new();
 
+        let model_metadata = ModelMetadata::new();
+
         let root_node_id = group_nodes.add_node(GroupNode::root());
 
         Self {
@@ -157,6 +168,7 @@ impl SceneGraph {
             group_nodes,
             model_instance_nodes,
             camera_nodes,
+            model_metadata,
         }
     }
 
@@ -203,9 +215,9 @@ impl SceneGraph {
     }
 
     /// Creates a new [`ModelInstanceNode`] for an instance of the model with
-    /// the given ID, bounding sphere for frustum culling, feature IDs and
-    /// flags. It is included in the scene graph with the given transform
-    /// relative to the the given parent node.
+    /// the given ID, bounding sphere for frustum culling, feature IDs for
+    /// rendering and shadow mapping, and flags. It is included in the scene
+    /// graph with the given transform relative to the the given parent node.
     ///
     /// If no bounding sphere is provided, the model will not be frustum culled.
     ///
@@ -213,11 +225,10 @@ impl SceneGraph {
     /// The ID of the created model instance node.
     ///
     /// # Panics
-    /// - If fewer than two feature IDs are provided.
-    /// - If the first feature ID is not the
+    /// - If the first rendering feature ID is not the
     ///   [`InstanceModelViewTransformWithPrevious`] feature.
-    /// - If the second feature ID is not the [`InstanceModelLightTransform`]
-    ///   feature.
+    /// - If the first shadow mapping rendering feature ID is not the
+    ///   [`InstanceModelLightTransform`] feature.
     /// - If the specified parent group node does not exist.
     /// - If no bounding sphere is provided when the parent node is not the root
     ///   node.
@@ -227,23 +238,24 @@ impl SceneGraph {
         model_to_parent_transform: NodeTransform,
         model_id: ModelID,
         frustum_culling_bounding_sphere: Option<Sphere<f32>>,
-        feature_ids: Vec<InstanceFeatureID>,
+        feature_ids_for_rendering: Vec<InstanceFeatureID>,
+        feature_ids_for_shadow_mapping: Vec<InstanceFeatureID>,
         flags: ModelInstanceFlags,
     ) -> ModelInstanceNodeID {
-        assert!(
-            feature_ids.len() >= 2,
-            "Tried to create model instance node with too few features"
-        );
-        assert_eq!(
-            feature_ids[0].feature_type_id(),
-            InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
-            "First feature for model instance node must be the InstanceModelViewTransformWithPrevious feature"
-        );
-        assert_eq!(
-            feature_ids[1].feature_type_id(),
-            InstanceModelLightTransform::FEATURE_TYPE_ID,
-            "Second feature for model instance node must be the InstanceModelLightTransform feature"
-        );
+        if !feature_ids_for_rendering.is_empty() {
+            assert_eq!(
+                feature_ids_for_rendering[0].feature_type_id(),
+                InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                "First rendering feature for model instance node must be the InstanceModelViewTransformWithPrevious feature"
+            );
+        }
+        if !feature_ids_for_shadow_mapping.is_empty() {
+            assert_eq!(
+                feature_ids_for_shadow_mapping[0].feature_type_id(),
+                InstanceModelLightTransform::FEATURE_TYPE_ID,
+                "First shadow mapping feature for model instance node must be the InstanceModelLightTransform feature"
+            );
+        }
 
         // Since we don't guarantee that any other parent node than the root is
         // never culled, allowing a non-root node to have an uncullable child
@@ -258,9 +270,12 @@ impl SceneGraph {
             frustum_culling_bounding_sphere,
             model_to_parent_transform,
             model_id,
-            feature_ids,
+            feature_ids_for_rendering,
+            feature_ids_for_shadow_mapping,
             flags,
         );
+
+        self.model_metadata.register_instance(&model_instance_node);
 
         let model_instance_node_id = self.model_instance_nodes.add_node(model_instance_node);
 
@@ -443,7 +458,7 @@ impl SceneGraph {
     /// Make sure to [`Self::update_all_bounding_spheres`] and
     /// compute the view transform before calling this method if any nodes have
     /// changed.
-    pub fn buffer_transforms_of_visible_model_instances(
+    pub fn buffer_model_instances_for_rendering(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
         scene_camera: &SceneCamera,
@@ -474,7 +489,7 @@ impl SceneGraph {
             };
 
             if should_buffer {
-                self.buffer_transforms_of_visible_model_instances_in_group(
+                self.buffer_model_instances_in_group_for_rendering(
                     instance_feature_manager,
                     current_frame_count,
                     camera_space_view_frustum,
@@ -490,6 +505,7 @@ impl SceneGraph {
             if model_instance_node
                 .flags()
                 .contains(ModelInstanceFlags::IS_HIDDEN)
+                || model_instance_node.feature_ids_for_rendering().is_empty()
             {
                 continue;
             }
@@ -510,7 +526,7 @@ impl SceneGraph {
                 };
 
             if should_buffer {
-                Self::buffer_model_view_transform_of_model_instance(
+                Self::buffer_model_instance_for_rendering(
                     instance_feature_manager,
                     current_frame_count,
                     model_instance_node,
@@ -614,17 +630,17 @@ impl SceneGraph {
         }
     }
 
-    /// Determines the group/model-to-camera transforms of the group nodes
-    /// and model instance nodes that are children of the specified group node
-    /// and whose bounding spheres lie within the given camera frustum. The
-    /// given group-to-camera transform is prepended to the transforms of
-    /// the children. For the children that are model instance nodes, their
-    /// final model-to-camera transforms are added to the given instance feature
-    /// manager.
+    /// Determines the group/model-to-camera transforms of the group nodes and
+    /// model instance nodes that are children of the specified group node and
+    /// whose bounding spheres lie within the given camera frustum. The given
+    /// group-to-camera transform is prepended to the transforms of the
+    /// children. For the children that are model instance nodes, their final
+    /// model-to-camera transforms along with other relevant features needed for
+    /// rendering are added to the given instance feature manager.
     ///
     /// # Panics
     /// If any of the child nodes of the group node does not exist.
-    fn buffer_transforms_of_visible_model_instances_in_group(
+    fn buffer_model_instances_in_group_for_rendering(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
         current_frame_count: u32,
@@ -653,7 +669,7 @@ impl SceneGraph {
                 };
 
             if should_buffer {
-                self.buffer_transforms_of_visible_model_instances_in_group(
+                self.buffer_model_instances_in_group_for_rendering(
                     instance_feature_manager,
                     current_frame_count,
                     camera_space_view_frustum,
@@ -670,6 +686,9 @@ impl SceneGraph {
             if child_model_instance_node
                 .flags()
                 .contains(ModelInstanceFlags::IS_HIDDEN)
+                || child_model_instance_node
+                    .feature_ids_for_rendering()
+                    .is_empty()
             {
                 continue;
             }
@@ -691,7 +710,7 @@ impl SceneGraph {
             };
 
             if should_buffer {
-                Self::buffer_model_view_transform_of_model_instance(
+                Self::buffer_model_instance_for_rendering(
                     instance_feature_manager,
                     current_frame_count,
                     child_model_instance_node,
@@ -701,12 +720,7 @@ impl SceneGraph {
         }
     }
 
-    /// Adds an instance corresponding to the given model instance node with the
-    /// given model-to-camera transform to the given instance feature manager.
-    ///
-    /// # Panics
-    /// If the specified model instance node does not exist.
-    fn buffer_model_view_transform_of_model_instance(
+    fn buffer_model_instance_for_rendering(
         instance_feature_manager: &mut InstanceFeatureManager,
         current_frame_count: u32,
         model_instance_node: &ModelInstanceNode,
@@ -715,7 +729,7 @@ impl SceneGraph {
         InstanceModelViewTransformWithPrevious: InstanceFeature,
     {
         let instance_model_view_transform =
-            InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
+            InstanceModelViewTransform::from(model_view_transform.cast());
 
         instance_feature_manager
             .feature_mut::<InstanceModelViewTransformWithPrevious>(
@@ -725,7 +739,7 @@ impl SceneGraph {
 
         instance_feature_manager.buffer_instance_features_from_storages(
             model_instance_node.model_id(),
-            model_instance_node.feature_ids(),
+            model_instance_node.feature_ids_for_rendering(),
         );
 
         model_instance_node.declare_visible_this_frame(current_frame_count);
@@ -792,11 +806,21 @@ impl SceneGraph {
                         range_id,
                     );
 
-                    // Since each voxel object is an instance of the same model, we need to buffer
-                    // voxel object IDs in addition to transforms so that the transform can be
-                    // associated with the correct voxel object
-                    instance_feature_manager
-                        .begin_range_in_feature_buffers(VoxelObjectID::FEATURE_TYPE_ID, range_id);
+                    for (model_id, feature_type_ids) in self
+                        .model_metadata
+                        .models_with_feature_type_ids_for_shadow_mapping()
+                    {
+                        // We have already created a range for the
+                        // `InstanceModelLightTransform` feature, which is the
+                        // first ID in the list
+                        if feature_type_ids.len() > 1 {
+                            instance_feature_manager.begin_ranges_in_feature_buffers_for_model(
+                                model_id,
+                                &feature_type_ids[1..],
+                                range_id,
+                            );
+                        }
+                    }
 
                     let camera_space_face_frustum =
                         omnidirectional_light.compute_camera_space_frustum_for_face(face);
@@ -814,6 +838,84 @@ impl SceneGraph {
                             view_transform,
                         );
                     }
+                }
+            }
+        }
+    }
+
+    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
+        &self,
+        instance_feature_manager: &mut InstanceFeatureManager,
+        omnidirectional_light: &ShadowableOmnidirectionalLight,
+        face: CubemapFace,
+        camera_space_face_frustum: &Frustum<f32>,
+        group_node: &GroupNode,
+        group_to_camera_transform: &NodeTransform,
+    ) {
+        for &child_group_node_id in group_node.child_group_node_ids() {
+            let child_group_node = self.group_nodes.node(child_group_node_id);
+
+            // We assume that only objects with bounding spheres will cast shadows
+            if let Some(child_bounding_sphere) = child_group_node.get_bounding_sphere() {
+                let child_group_to_camera_transform =
+                    group_to_camera_transform * child_group_node.group_to_parent_transform();
+
+                let child_camera_space_bounding_sphere =
+                    child_bounding_sphere.transformed(&child_group_to_camera_transform);
+
+                if camera_space_face_frustum
+                    .could_contain_part_of_sphere(&child_camera_space_bounding_sphere)
+                {
+                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
+                            instance_feature_manager,
+                            omnidirectional_light,
+                            face,
+                            camera_space_face_frustum,
+                            child_group_node,
+                            &child_group_to_camera_transform,
+                        );
+                }
+            }
+        }
+
+        for &model_instance_node_id in group_node.child_model_instance_node_ids() {
+            let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+            if model_instance_node
+                .flags()
+                .intersects(ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS)
+                | model_instance_node
+                    .feature_ids_for_shadow_mapping()
+                    .is_empty()
+            {
+                continue;
+            }
+
+            // We assume that only objects with bounding spheres will cast shadows
+            if let Some(model_instance_bounding_sphere) =
+                model_instance_node.get_model_bounding_sphere()
+            {
+                let model_instance_to_camera_transform =
+                    group_to_camera_transform * model_instance_node.model_to_parent_transform();
+
+                let model_instance_camera_space_bounding_sphere =
+                    model_instance_bounding_sphere.transformed(&model_instance_to_camera_transform);
+
+                if camera_space_face_frustum
+                    .could_contain_part_of_sphere(&model_instance_camera_space_bounding_sphere)
+                {
+                    let instance_model_light_transform = InstanceModelLightTransform::from(
+                        omnidirectional_light.create_transform_to_positive_z_cubemap_face_space(
+                            face,
+                            &model_instance_to_camera_transform,
+                        ),
+                    );
+
+                    Self::buffer_model_instance_for_shadow_mapping(
+                        instance_feature_manager,
+                        model_instance_node,
+                        &instance_model_light_transform,
+                    );
                 }
             }
         }
@@ -880,11 +982,21 @@ impl SceneGraph {
                         range_id,
                     );
 
-                    // Since each voxel object is an instance of the same model, we need to buffer
-                    // voxel object IDs in addition to transforms so that the transform can be
-                    // associated with the correct voxel object
-                    instance_feature_manager
-                        .begin_range_in_feature_buffers(VoxelObjectID::FEATURE_TYPE_ID, range_id);
+                    for (model_id, feature_type_ids) in self
+                        .model_metadata
+                        .models_with_feature_type_ids_for_shadow_mapping()
+                    {
+                        // We have already created a range for the
+                        // `InstanceModelLightTransform` feature, which is the
+                        // first ID in the list
+                        if feature_type_ids.len() > 1 {
+                            instance_feature_manager.begin_ranges_in_feature_buffers_for_model(
+                                model_id,
+                                &feature_type_ids[1..],
+                                range_id,
+                            );
+                        }
+                    }
 
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
                         instance_feature_manager,
@@ -893,92 +1005,6 @@ impl SceneGraph {
                         root_node,
                         view_transform,
                     );
-                }
-            }
-        }
-    }
-
-    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
-        &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
-        omnidirectional_light: &ShadowableOmnidirectionalLight,
-        face: CubemapFace,
-        camera_space_face_frustum: &Frustum<f32>,
-        group_node: &GroupNode,
-        group_to_camera_transform: &NodeTransform,
-    ) {
-        for &child_group_node_id in group_node.child_group_node_ids() {
-            let child_group_node = self.group_nodes.node(child_group_node_id);
-
-            // We assume that only objects with bounding spheres will cast shadows
-            if let Some(child_bounding_sphere) = child_group_node.get_bounding_sphere() {
-                let child_group_to_camera_transform =
-                    group_to_camera_transform * child_group_node.group_to_parent_transform();
-
-                let child_camera_space_bounding_sphere =
-                    child_bounding_sphere.transformed(&child_group_to_camera_transform);
-
-                if camera_space_face_frustum
-                    .could_contain_part_of_sphere(&child_camera_space_bounding_sphere)
-                {
-                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
-                        instance_feature_manager,
-                        omnidirectional_light,
-                        face,
-                        camera_space_face_frustum,
-                        child_group_node,
-                        &child_group_to_camera_transform,
-                    );
-                }
-            }
-        }
-
-        for &model_instance_node_id in group_node.child_model_instance_node_ids() {
-            let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-
-            if model_instance_node
-                .flags()
-                .intersects(ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS)
-            {
-                continue;
-            }
-
-            // We assume that only objects with bounding spheres will cast shadows
-            if let Some(model_instance_bounding_sphere) =
-                model_instance_node.get_model_bounding_sphere()
-            {
-                let model_instance_to_camera_transform =
-                    group_to_camera_transform * model_instance_node.model_to_parent_transform();
-
-                let model_instance_camera_space_bounding_sphere =
-                    model_instance_bounding_sphere.transformed(&model_instance_to_camera_transform);
-
-                if camera_space_face_frustum
-                    .could_contain_part_of_sphere(&model_instance_camera_space_bounding_sphere)
-                {
-                    let instance_model_light_transform =
-                        InstanceModelLightTransform::with_model_light_transform(
-                            omnidirectional_light
-                                .create_transform_to_positive_z_cubemap_face_space(
-                                    face,
-                                    &model_instance_to_camera_transform,
-                                ),
-                        );
-
-                    instance_feature_manager.buffer_instance_feature(
-                        model_instance_node.model_id(),
-                        &instance_model_light_transform,
-                    );
-
-                    // If this is a voxel object, we also need to buffer the voxel object ID
-                    if model_instance_node.model_id() == &*VOXEL_MODEL_ID {
-                        instance_feature_manager.buffer_instance_feature_from_storage(
-                            model_instance_node.model_id(),
-                            *model_instance_node
-                                .feature_id_of_type(VoxelObjectID::FEATURE_TYPE_ID)
-                                .unwrap(),
-                        );
-                    }
                 }
             }
         }
@@ -1024,6 +1050,9 @@ impl SceneGraph {
             if model_instance_node
                 .flags()
                 .intersects(ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS)
+                | model_instance_node
+                    .feature_ids_for_shadow_mapping()
+                    .is_empty()
             {
                 continue;
             }
@@ -1042,29 +1071,40 @@ impl SceneGraph {
                     cascade_idx,
                     &model_instance_camera_space_bounding_sphere,
                 ) {
-                    let instance_model_light_transform =
-                        InstanceModelLightTransform::with_model_light_transform(
-                            unidirectional_light.create_transform_to_light_space(
-                                &model_instance_to_camera_transform,
-                            ),
-                        );
-
-                    instance_feature_manager.buffer_instance_feature(
-                        model_instance_node.model_id(),
-                        &instance_model_light_transform,
+                    let instance_model_light_transform = InstanceModelLightTransform::from(
+                        unidirectional_light
+                            .create_transform_to_light_space(&model_instance_to_camera_transform),
                     );
 
-                    // If this is a voxel object, we also need to buffer the voxel object ID
-                    if model_instance_node.model_id() == &*VOXEL_MODEL_ID {
-                        instance_feature_manager.buffer_instance_feature_from_storage(
-                            model_instance_node.model_id(),
-                            *model_instance_node
-                                .feature_id_of_type(VoxelObjectID::FEATURE_TYPE_ID)
-                                .unwrap(),
-                        );
-                    }
+                    Self::buffer_model_instance_for_shadow_mapping(
+                        instance_feature_manager,
+                        model_instance_node,
+                        &instance_model_light_transform,
+                    );
                 }
             }
+        }
+    }
+
+    fn buffer_model_instance_for_shadow_mapping(
+        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_node: &ModelInstanceNode,
+        instance_model_light_transform: &InstanceModelLightTransform,
+    ) where
+        InstanceModelLightTransform: InstanceFeature,
+    {
+        instance_feature_manager.buffer_instance_feature(
+            model_instance_node.model_id(),
+            instance_model_light_transform,
+        );
+
+        let feature_ids_for_shadow_mapping = model_instance_node.feature_ids_for_shadow_mapping();
+
+        if feature_ids_for_shadow_mapping.len() > 1 {
+            instance_feature_manager.buffer_instance_features_from_storages(
+                model_instance_node.model_id(),
+                &feature_ids_for_shadow_mapping[1..],
+            );
         }
     }
 
@@ -1147,6 +1187,48 @@ impl<N: SceneGraphNode> NodeStorage<N> {
 
     fn remove_all_nodes(&mut self) {
         self.nodes.free_all_elements();
+    }
+}
+
+impl ModelMetadata {
+    fn new() -> Self {
+        Self {
+            feature_type_ids_for_shadow_mapping: HashMap::default(),
+        }
+    }
+
+    fn register_instance(&mut self, model_instance_node: &ModelInstanceNode) {
+        match self
+            .feature_type_ids_for_shadow_mapping
+            .entry(*model_instance_node.model_id())
+        {
+            Entry::Vacant(entry) => {
+                entry.insert(
+                    model_instance_node
+                        .feature_ids_for_shadow_mapping()
+                        .iter()
+                        .map(InstanceFeatureID::feature_type_id)
+                        .collect(),
+                );
+            }
+            Entry::Occupied(entry) => {
+                assert!(
+                    entry.get().iter().copied().eq(model_instance_node
+                        .feature_ids_for_shadow_mapping()
+                        .iter()
+                        .map(InstanceFeatureID::feature_type_id)),
+                    "Got inconsistent list of feature types for shadow mapping between instances of the same model"
+                );
+            }
+        }
+    }
+
+    fn models_with_feature_type_ids_for_shadow_mapping(
+        &self,
+    ) -> impl Iterator<Item = (&ModelID, &[InstanceFeatureTypeID])> {
+        self.feature_type_ids_for_shadow_mapping
+            .iter()
+            .map(|(model_id, feature_type_ids)| (model_id, feature_type_ids.as_slice()))
     }
 }
 
@@ -1277,18 +1359,6 @@ impl SceneGraphNode for GroupNode {
 }
 
 impl ModelInstanceNode {
-    /// The index of the model-view transform feature in the array of features
-    /// for model instances.
-    pub const fn model_view_transform_feature_idx() -> usize {
-        0
-    }
-
-    /// The index of the model-light transform feature in the array of features
-    /// for model instances.
-    pub const fn model_light_transform_feature_idx() -> usize {
-        1
-    }
-
     pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<f32>>) {
         self.model_bounding_sphere = bounding_sphere;
     }
@@ -1298,7 +1368,8 @@ impl ModelInstanceNode {
         model_bounding_sphere: Option<Sphere<f32>>,
         model_to_parent_transform: NodeTransform,
         model_id: ModelID,
-        feature_ids: Vec<InstanceFeatureID>,
+        feature_ids_for_rendering: Vec<InstanceFeatureID>,
+        feature_ids_for_shadow_mapping: Vec<InstanceFeatureID>,
         flags: ModelInstanceFlags,
     ) -> Self {
         Self {
@@ -1306,7 +1377,8 @@ impl ModelInstanceNode {
             model_bounding_sphere,
             model_to_parent_transform,
             model_id,
-            feature_ids,
+            feature_ids_for_rendering,
+            feature_ids_for_shadow_mapping,
             flags,
             frame_count_when_last_visible: AtomicU32::new(0),
         }
@@ -1335,23 +1407,17 @@ impl ModelInstanceNode {
 
     /// Returns the ID of the instance's model-to-camera transform feature.
     pub fn model_view_transform_feature_id(&self) -> InstanceFeatureID {
-        self.feature_ids[0]
+        self.feature_ids_for_rendering[0]
     }
 
-    /// Returns the IDs of the instance's features.
-    pub fn feature_ids(&self) -> &[InstanceFeatureID] {
-        &self.feature_ids
+    /// Returns the IDs of the instance's features needed for rendering.
+    pub fn feature_ids_for_rendering(&self) -> &[InstanceFeatureID] {
+        &self.feature_ids_for_rendering
     }
 
-    /// Returns the ID of the instance's feature of the given type, or [`None`]
-    /// if the instance does not have such a feature.
-    pub fn feature_id_of_type(
-        &self,
-        feature_type_id: InstanceFeatureTypeID,
-    ) -> Option<&InstanceFeatureID> {
-        self.feature_ids
-            .iter()
-            .find(|feature_id| feature_id.feature_type_id() == feature_type_id)
+    /// Returns the IDs of the instance's features needed for shadow mapping.
+    pub fn feature_ids_for_shadow_mapping(&self) -> &[InstanceFeatureID] {
+        &self.feature_ids_for_shadow_mapping
     }
 
     /// Returns the flags for the model instance.
@@ -1494,12 +1560,13 @@ mod tests {
             model_to_parent_transform,
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
-            create_dummy_model_instance_feature_ids(),
+            create_dummy_model_instance_rendering_feature_ids(),
+            Vec::new(),
             ModelInstanceFlags::empty(),
         )
     }
 
-    fn create_dummy_model_instance_feature_ids() -> Vec<InstanceFeatureID> {
+    fn create_dummy_model_instance_rendering_feature_ids() -> Vec<InstanceFeatureID> {
         let id_1 = InstanceFeatureStorage::new::<InstanceModelViewTransformWithPrevious>()
             .add_feature(&InstanceModelViewTransformWithPrevious::zeroed());
         let id_2 = InstanceFeatureStorage::new::<InstanceModelLightTransform>()
@@ -1813,7 +1880,8 @@ mod tests {
             model_to_parent_transform,
             create_dummy_model_id(""),
             Some(bounding_sphere),
-            create_dummy_model_instance_feature_ids(),
+            create_dummy_model_instance_rendering_feature_ids(),
+            Vec::new(),
             ModelInstanceFlags::empty(),
         );
 
@@ -1850,7 +1918,8 @@ mod tests {
             Similarity3::identity(),
             create_dummy_model_id("1"),
             Some(bounding_sphere_1),
-            create_dummy_model_instance_feature_ids(),
+            create_dummy_model_instance_rendering_feature_ids(),
+            Vec::new(),
             ModelInstanceFlags::empty(),
         );
         scene_graph.create_model_instance_node(
@@ -1858,7 +1927,8 @@ mod tests {
             Similarity3::identity(),
             create_dummy_model_id("2"),
             Some(bounding_sphere_2),
-            create_dummy_model_instance_feature_ids(),
+            create_dummy_model_instance_rendering_feature_ids(),
+            Vec::new(),
             ModelInstanceFlags::empty(),
         );
 
@@ -1899,7 +1969,8 @@ mod tests {
             Similarity3::identity(),
             create_dummy_model_id("1"),
             Some(bounding_sphere_1),
-            create_dummy_model_instance_feature_ids(),
+            create_dummy_model_instance_rendering_feature_ids(),
+            Vec::new(),
             ModelInstanceFlags::empty(),
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_to_parent_transform);
@@ -1908,7 +1979,8 @@ mod tests {
             model_instance_2_to_parent_transform,
             create_dummy_model_id("2"),
             Some(bounding_sphere_2),
-            create_dummy_model_instance_feature_ids(),
+            create_dummy_model_instance_rendering_feature_ids(),
+            Vec::new(),
             ModelInstanceFlags::empty(),
         );
 

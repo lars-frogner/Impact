@@ -8,8 +8,8 @@ use crate::{
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
-        SyncLightsInStorage, SyncSceneCameraViewTransform,
+        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
+        BufferModelInstancesForRendering, SyncLightsInStorage, SyncSceneCameraViewTransform,
     },
     voxel::tasks::SyncVoxelObjectMeshes,
 };
@@ -200,7 +200,7 @@ define_task!(
 define_task!(
     SyncInstanceFeatureBuffers,
     depends_on = [
-        BufferVisibleModelInstances,
+        BufferModelInstancesForRendering,
         BufferTransformsForGizmos,
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances

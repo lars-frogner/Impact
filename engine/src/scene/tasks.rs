@@ -157,7 +157,7 @@ define_task!(
     /// model instances are visible with the scene camera, update
     /// their model-to-camera space transforms and buffer their
     /// features for rendering.
-    [pub] BufferVisibleModelInstances,
+    [pub] BufferModelInstancesForRendering,
     depends_on = [
         UpdateSceneObjectBoundingSpheres,
         SyncSceneCameraViewTransform,
@@ -174,7 +174,7 @@ define_task!(
                 scene.scene_graph()
                     .read()
                     .unwrap()
-                    .buffer_transforms_of_visible_model_instances(
+                    .buffer_model_instances_for_rendering(
                         &mut scene.instance_feature_manager().write().unwrap(),
                         scene_camera,
                         renderer.current_frame_count(),
@@ -200,7 +200,7 @@ define_task!(
         ClearModelInstanceBuffers,
         // The current task begins new ranges in the instance feature buffers,
         // so all tasks writing to the initial range have to be completed first
-        BufferVisibleModelInstances,
+        BufferModelInstancesForRendering,
         BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
@@ -244,7 +244,7 @@ define_task!(
         ClearModelInstanceBuffers,
         // The current task begins new ranges in the instance feature buffers,
         // so all tasks writing to the initial range have to be completed first
-        BufferVisibleModelInstances,
+        BufferModelInstancesForRendering,
         BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
@@ -290,7 +290,7 @@ pub fn register_scene_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;
     task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
     task_scheduler.register_task(ClearModelInstanceBuffers)?;
-    task_scheduler.register_task(BufferVisibleModelInstances)?;
+    task_scheduler.register_task(BufferModelInstancesForRendering)?;
     task_scheduler.register_task(SyncLightsInStorage)?;
     task_scheduler.register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;
     task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)

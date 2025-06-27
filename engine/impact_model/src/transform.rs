@@ -24,8 +24,6 @@ pub struct InstanceModelViewTransform {
     pub scaling: f32,
 }
 
-pub type InstanceModelLightTransform = InstanceModelViewTransform;
-
 /// A model-to-camera transform for a specific instance of a model, along with
 /// the corresponding transform from the previous frame.
 ///
@@ -37,6 +35,14 @@ pub struct InstanceModelViewTransformWithPrevious {
     pub current: InstanceModelViewTransform,
     pub previous: InstanceModelViewTransform,
 }
+
+/// A model-to-light transform for a specific instance of a model.
+///
+/// This struct is intended to be passed to the GPU in a vertex buffer. The
+/// order of the fields is assumed in the shaders.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct InstanceModelLightTransform(InstanceModelViewTransform);
 
 const INSTANCE_VERTEX_BINDING_START: u32 = 0;
 
@@ -60,24 +66,6 @@ impl InstanceModelViewTransform {
             translation: Vector3::zeros(),
             scaling: 1.0,
         }
-    }
-
-    /// Creates a new model-to-camera transform corresponding to the given
-    /// similarity transform.
-    pub fn with_model_view_transform(transform: Similarity3<f32>) -> Self {
-        let scaling = transform.scaling();
-
-        Self {
-            rotation: transform.isometry.rotation,
-            translation: transform.isometry.translation.vector,
-            scaling,
-        }
-    }
-
-    /// Creates a new model-to-light transform corresponding to the given
-    /// similarity transform.
-    pub fn with_model_light_transform(transform: Similarity3<f32>) -> Self {
-        Self::with_model_view_transform(transform)
     }
 }
 
@@ -161,6 +149,48 @@ impl AsInstanceModelViewTransform for InstanceModelViewTransformWithPrevious {
     }
 }
 
+impl InstanceModelLightTransform {
+    /// Returns the binding location of the transform's rotation quaternion in
+    /// the instance buffer.
+    pub const fn rotation_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START
+    }
+
+    /// Returns the binding location of the transform's translation and scaling
+    /// in the instance buffer.
+    pub const fn translation_and_scaling_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START + 1
+    }
+
+    /// Creates a new identity transform.
+    pub fn identity() -> Self {
+        Self(InstanceModelViewTransform::identity())
+    }
+}
+
+impl From<Similarity3<f32>> for InstanceModelLightTransform {
+    fn from(transform: Similarity3<f32>) -> Self {
+        Self(InstanceModelViewTransform::from(transform))
+    }
+}
+
+impl From<InstanceModelLightTransform> for Similarity3<f32> {
+    fn from(transform: InstanceModelLightTransform) -> Self {
+        transform.0.into()
+    }
+}
+
+impl Default for InstanceModelLightTransform {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
+impl AsInstanceModelViewTransform for InstanceModelLightTransform {
+    fn as_instance_model_view_transform(&self) -> &InstanceModelViewTransform {
+        &self.0
+    }
+}
 
 impl_InstanceFeatureForGPU!(
     InstanceModelViewTransform,
@@ -180,9 +210,18 @@ impl_InstanceFeatureForGPU!(
     ]
 );
 
+impl_InstanceFeatureForGPU!(
+    InstanceModelLightTransform,
+    wgpu::vertex_attr_array![
+        INSTANCE_VERTEX_BINDING_START => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
+    ]
+);
+
 pub fn register_model_feature_types<MID: Eq + Hash>(
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
 ) {
     instance_feature_manager.register_feature_type::<InstanceModelViewTransform>();
     instance_feature_manager.register_feature_type::<InstanceModelViewTransformWithPrevious>();
+    instance_feature_manager.register_feature_type::<InstanceModelLightTransform>();
 }

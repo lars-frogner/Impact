@@ -591,6 +591,11 @@ impl<'a> EntityEntry<'a> {
         Self { entity_id, table }
     }
 
+    /// Returns the [`EntityID`] of the entity.
+    pub fn id(&self) -> EntityID {
+        self.entity_id
+    }
+
     /// Returns the [`Archetype`] of the entity.
     pub fn archetype(&self) -> &Archetype {
         self.table.archetype()
