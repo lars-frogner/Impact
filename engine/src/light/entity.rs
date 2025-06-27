@@ -1,10 +1,6 @@
 //! Management of lights for entities.
 
-use crate::{
-    camera::SceneCamera,
-    physics::motion::components::ReferenceFrameComp,
-    scene::{SceneEntityFlags, components::SceneEntityFlagsComp},
-};
+use crate::physics::motion::components::ReferenceFrameComp;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_light::{
@@ -16,6 +12,7 @@ use impact_light::{
         ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
     },
 };
+use impact_scene::{SceneEntityFlags, camera::SceneCamera, components::SceneEntityFlagsComp};
 use nalgebra::Similarity3;
 use std::sync::RwLock;
 

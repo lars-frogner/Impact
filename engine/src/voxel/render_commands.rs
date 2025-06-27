@@ -1,7 +1,6 @@
 //! Render commands for voxels.
 
 use crate::{
-    camera::SceneCamera,
     gpu::{
         compute::{self, shader_templates::voxel_chunk_culling::VoxelChunkCullingShaderTemplate},
         rendering::{
@@ -14,7 +13,6 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    model::InstanceFeatureManager,
     voxel::{
         VoxelObjectID,
         entity::VOXEL_MODEL_ID,
@@ -37,6 +35,7 @@ use impact_model::{
         InstanceModelViewTransformWithPrevious,
     },
 };
+use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
 

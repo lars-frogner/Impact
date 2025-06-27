@@ -1,12 +1,10 @@
 //! Gizmo models.
 
-use crate::{
-    gizmo::{GizmoObscurability, GizmoType},
-    model::ModelID,
-};
+use crate::gizmo::{GizmoObscurability, GizmoType};
 use impact_material::MaterialHandle;
 use impact_math::hash64;
 use impact_mesh::{MeshID, MeshPrimitive};
+use impact_scene::model::ModelID;
 use std::sync::LazyLock;
 
 /// A model defining the geometric and visual attributes of a gizmo or part of a

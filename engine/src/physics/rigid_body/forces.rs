@@ -5,9 +5,8 @@ pub mod entity;
 pub mod spring;
 pub mod uniform_gravity;
 
-use crate::{
-    physics::{UniformMedium, motion::components::Static, rigid_body::components::RigidBodyComp},
-    scene::components::SceneEntityFlagsComp,
+use crate::physics::{
+    UniformMedium, motion::components::Static, rigid_body::components::RigidBodyComp,
 };
 use anyhow::Result;
 use detailed_drag::{DragLoadMapConfig, DragLoadMapRepository};
@@ -15,6 +14,7 @@ use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
+use impact_scene::components::SceneEntityFlagsComp;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 

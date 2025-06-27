@@ -28,10 +28,10 @@ use crate::{
         medium::UniformMedium,
     },
     scene::command::SceneCommand,
-    skybox::Skybox,
 };
 use anyhow::Result;
 use impact_ecs::world::EntityID;
+use impact_scene::skybox::Skybox;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]

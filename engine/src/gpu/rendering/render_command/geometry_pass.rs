@@ -1,6 +1,5 @@
 //! Pass for filling the G-buffer attachments and the depth and stencil map.
 
-use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::{
     gpu::{
         GraphicsDevice,
@@ -12,7 +11,7 @@ use crate::{
             },
             postprocessing::Postprocessor,
             push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-            render_command::begin_single_render_pass,
+            render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
             resource::SynchronizedRenderResources,
             shader_templates::model_geometry::{
                 ModelGeometryShaderInput, ModelGeometryShaderTemplate,
@@ -20,7 +19,6 @@ use crate::{
             surface::RenderingSurface,
         },
     },
-    model::{InstanceFeatureManager, ModelID},
     voxel::render_commands::VoxelGeometryPipeline,
 };
 use anyhow::{Result, anyhow};
@@ -30,6 +28,7 @@ use impact_gpu::{query::TimestampQueryRegistry, shader::ShaderManager};
 use impact_material::MaterialLibrary;
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
+use impact_scene::model::{InstanceFeatureManager, ModelID};
 use std::{borrow::Cow, collections::hash_map::Entry};
 
 /// Pass for filling the G-buffer attachments and the depth and stencil map.

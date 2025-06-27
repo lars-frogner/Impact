@@ -4,10 +4,7 @@ pub mod tasks;
 
 use crate::{
     assets::Assets,
-    camera::SceneCamera,
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
-    model::{InstanceFeatureManager, ModelID},
-    skybox::{Skybox, resource::SkyboxGPUResourceManager},
     voxel::{
         VoxelManager, VoxelObjectID,
         resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
@@ -21,6 +18,11 @@ use impact_mesh::{
     MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
 };
 use impact_model::{InstanceFeature, buffer::InstanceFeatureGPUBufferManager};
+use impact_scene::{
+    camera::SceneCamera,
+    model::{InstanceFeatureManager, ModelID},
+    skybox::{Skybox, resource::SkyboxGPUResourceManager},
+};
 use std::{
     borrow::Cow,
     collections::hash_map::Entry,

@@ -1,7 +1,6 @@
 //! ECS systems for gizmo management.
 
 use crate::{
-    camera::SceneCamera,
     gizmo::{
         GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
         components::GizmosComp,
@@ -15,7 +14,6 @@ use crate::{
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
     },
-    model::InstanceFeatureManager,
     physics::{
         collision::{
             CollidableID, CollidableKind, CollisionWorld, WorldCollidableGeometry,
@@ -23,10 +21,6 @@ use crate::{
         },
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::{RigidBody, components::RigidBodyComp},
-    },
-    scene::{
-        components::{SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp},
-        graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
     },
     voxel::{
         VoxelManager, VoxelObjectID, VoxelObjectManager,
@@ -46,6 +40,12 @@ use impact_light::{
 };
 use impact_math::Angle;
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
+use impact_scene::{
+    camera::SceneCamera,
+    components::{SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp},
+    graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
+    model::InstanceFeatureManager,
+};
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::iter;
 

@@ -1,16 +1,13 @@
 //! Management of rigid bodies for entities.
 
-use crate::{
-    physics::{
-        fph,
-        inertia::InertialProperties,
-        motion::components::{ReferenceFrameComp, VelocityComp},
-        rigid_body::{
-            RigidBody,
-            components::{RigidBodyComp, UniformRigidBodyComp},
-        },
+use crate::physics::{
+    fph,
+    inertia::InertialProperties,
+    motion::components::{ReferenceFrameComp, VelocityComp},
+    rigid_body::{
+        RigidBody,
+        components::{RigidBodyComp, UniformRigidBodyComp},
     },
-    scene::components::SceneEntityFlagsComp,
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -21,6 +18,7 @@ use impact_mesh::{
         TriangleMeshComp,
     },
 };
+use impact_scene::components::SceneEntityFlagsComp;
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has a component

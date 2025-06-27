@@ -1,16 +1,6 @@
 //! ECS systems for scenes.
 
-use crate::{
-    camera::SceneCamera,
-    physics::motion::components::ReferenceFrameComp,
-    scene::{
-        components::{
-            SceneEntityFlagsComp, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
-            SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
-        },
-        graph::SceneGraph,
-    },
-};
+use crate::physics::motion::components::ReferenceFrameComp;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_light::{
@@ -21,6 +11,14 @@ use impact_light::{
         ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
         ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
     },
+};
+use impact_scene::{
+    camera::SceneCamera,
+    components::{
+        SceneEntityFlagsComp, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
+        SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
+    },
+    graph::SceneGraph,
 };
 use nalgebra::Similarity3;
 

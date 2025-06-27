@@ -1,13 +1,6 @@
 //! Management of camera-related components for entities.
 
-use crate::{
-    camera::SceneCamera,
-    physics::motion::components::ReferenceFrameComp,
-    scene::{
-        components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
-        graph::SceneGraph,
-    },
-};
+use crate::physics::motion::components::ReferenceFrameComp;
 use anyhow::{Result, bail};
 use impact_camera::{
     OrthographicCamera, PerspectiveCamera,
@@ -15,6 +8,11 @@ use impact_camera::{
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_math::UpperExclusiveBounds;
+use impact_scene::{
+    camera::SceneCamera,
+    components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
+    graph::SceneGraph,
+};
 use std::sync::RwLock;
 
 /// Rendering related state needed for camera initialization.

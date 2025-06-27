@@ -1,15 +1,13 @@
 //! ECS systems related to uniform gravity forces.
 
-use crate::{
-    physics::{
-        motion::components::Static,
-        rigid_body::{
-            components::RigidBodyComp, forces::uniform_gravity::components::UniformGravityComp,
-        },
+use crate::physics::{
+    motion::components::Static,
+    rigid_body::{
+        components::RigidBodyComp, forces::uniform_gravity::components::UniformGravityComp,
     },
-    scene::components::SceneEntityFlagsComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_scene::components::SceneEntityFlagsComp;
 
 /// Applies the force corresponding to uniform gravitational acceleration to all
 /// applicable entities with a [`UniformGravityComp`].

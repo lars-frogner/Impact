@@ -1,17 +1,14 @@
 //! Management of entities in the engine.
 
 use super::Engine;
-use crate::{
-    camera::entity::CameraRenderState,
-    gizmo,
-    scene::{SceneEntityFlags, components::SceneEntityFlagsComp},
-};
+use crate::{camera::entity::CameraRenderState, gizmo};
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
     component::{ComponentArray, ComponentCategory, ComponentID, SingleInstance},
     world::EntityID,
 };
+use impact_scene::{SceneEntityFlags, components::SceneEntityFlagsComp};
 
 impl Engine {
     pub fn create_entity_with_id<A, E>(

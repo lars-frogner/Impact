@@ -1,10 +1,9 @@
 //! Scene graph implementation.
 
 use crate::{
+    SceneEntityFlags,
     camera::SceneCamera,
-    light,
     model::{InstanceFeatureManager, ModelID},
-    scene::SceneEntityFlags,
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -799,8 +798,9 @@ impl SceneGraph {
                     // cubemap face space for the current light at the end of
                     // each transform buffer, identified by the light's ID plus
                     // a face index offset
-                    let range_id = light::light_id_to_instance_feature_buffer_range_id(light_id)
-                        + face.as_idx_u32();
+                    let range_id =
+                        crate::light::light_id_to_instance_feature_buffer_range_id(light_id)
+                            + face.as_idx_u32();
                     instance_feature_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
@@ -976,7 +976,8 @@ impl SceneGraph {
                     // cascade at the end of each transform buffer, identified
                     // by the light's ID plus a cascade index offset
                     let range_id =
-                        light::light_id_to_instance_feature_buffer_range_id(light_id) + cascade_idx;
+                        crate::light::light_id_to_instance_feature_buffer_range_id(light_id)
+                            + cascade_idx;
                     instance_feature_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,

@@ -1,6 +1,5 @@
 //! Pass for computing reflected luminance due to directional lights.
 
-use super::{STANDARD_FRONT_FACE, StencilValue};
 use crate::gpu::{
     GraphicsDevice,
     rendering::{
@@ -10,7 +9,7 @@ use crate::gpu::{
         },
         postprocessing::Postprocessor,
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
-        render_command::begin_single_render_pass,
+        render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
         resource::SynchronizedRenderResources,
         shader_templates::{
             omnidirectional_light::OmnidirectionalLightShaderTemplate,

@@ -9,7 +9,6 @@ use crate::{
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     },
     rendering_template_source,
-    skybox::resource::SkyboxGPUResourceManager,
 };
 use impact_camera::buffer::CameraProjectionUniform;
 use impact_gpu::{
@@ -17,6 +16,7 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation};
+use impact_scene::skybox::resource::SkyboxGPUResourceManager;
 use std::sync::LazyLock;
 
 /// Shader template for the skybox rendering pass, which writes the emitted

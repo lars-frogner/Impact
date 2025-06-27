@@ -2,19 +2,10 @@
 
 use crate::{
     engine::Engine,
-    model::{InstanceFeatureManager, ModelID},
     physics::{
         inertia::InertialProperties,
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::{RigidBody, components::RigidBodyComp},
-    },
-    scene::{
-        SceneEntityFlags,
-        components::{
-            SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
-            UncullableComp,
-        },
-        graph::SceneGraph,
     },
     voxel::{
         StagedVoxelObject, VoxelManager, VoxelObjectID, VoxelObjectManager,
@@ -46,6 +37,15 @@ use impact_mesh::MeshID;
 use impact_model::{
     InstanceFeature, impl_InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+};
+use impact_scene::{
+    SceneEntityFlags,
+    components::{
+        SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
+        UncullableComp,
+    },
+    graph::SceneGraph,
+    model::{InstanceFeatureManager, ModelID},
 };
 use std::sync::{LazyLock, RwLock};
 
