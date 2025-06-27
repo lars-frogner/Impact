@@ -16,8 +16,9 @@ use crate::{
     },
     physics::{
         collision::{
-            CollidableID, CollidableKind, CollisionWorld, WorldCollidableGeometry,
+            CollidableID, CollidableKind,
             components::CollidableComp,
+            geometry::voxel::{CollidableGeometry, CollisionWorld},
         },
         motion::components::{ReferenceFrameComp, VelocityComp},
         rigid_body::{RigidBody, components::RigidBodyComp},
@@ -664,7 +665,7 @@ fn buffer_transforms_for_collider_gizmos(
     };
 
     match collidable.geometry() {
-        WorldCollidableGeometry::Sphere(sphere_geometry) => {
+        CollidableGeometry::Sphere(sphere_geometry) => {
             let sphere = sphere_geometry.sphere();
 
             let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
@@ -681,7 +682,7 @@ fn buffer_transforms_for_collider_gizmos(
                 &InstanceModelViewTransform::from(model_to_camera_transform),
             );
         }
-        WorldCollidableGeometry::Plane(plane_geometry) => {
+        CollidableGeometry::Plane(plane_geometry) => {
             let plane = plane_geometry.plane();
 
             // Make the plane appear infinite by putting the center of the mesh
@@ -703,7 +704,7 @@ fn buffer_transforms_for_collider_gizmos(
                 &InstanceModelViewTransform::from(model_to_camera_transform),
             );
         }
-        WorldCollidableGeometry::VoxelObject(voxel_object_geometry) => {
+        CollidableGeometry::VoxelObject(voxel_object_geometry) => {
             let Some(voxel_object) =
                 voxel_object_manager.get_voxel_object(voxel_object_geometry.object_id())
             else {

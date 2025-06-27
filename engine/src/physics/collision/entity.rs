@@ -2,10 +2,10 @@
 
 use crate::{
     physics::collision::{
-        CollisionWorld,
         components::{
             CollidableComp, PlaneCollidableComp, SphereCollidableComp, VoxelObjectCollidableComp,
         },
+        geometry::voxel::{CollidableGeometry, CollisionWorld},
     },
     voxel::components::VoxelObjectComp,
 };
@@ -25,8 +25,10 @@ pub fn setup_collidable_for_new_entity(
         },
         components,
         |sphere_collidable: &SphereCollidableComp| -> CollidableComp {
-            let collidable_id = collision_world
-                .add_sphere_collidable(sphere_collidable.kind(), *sphere_collidable.sphere());
+            let collidable_id = collision_world.add_collidable(
+                sphere_collidable.kind(),
+                CollidableGeometry::local_sphere(*sphere_collidable.sphere()),
+            );
 
             CollidableComp { collidable_id }
         }
@@ -38,8 +40,10 @@ pub fn setup_collidable_for_new_entity(
         },
         components,
         |plane_collidable: &PlaneCollidableComp| -> CollidableComp {
-            let collidable_id = collision_world
-                .add_plane_collidable(plane_collidable.kind(), *plane_collidable.plane());
+            let collidable_id = collision_world.add_collidable(
+                plane_collidable.kind(),
+                CollidableGeometry::local_plane(*plane_collidable.plane()),
+            );
 
             CollidableComp { collidable_id }
         }
@@ -53,8 +57,10 @@ pub fn setup_collidable_for_new_entity(
         |object: &VoxelObjectComp,
          object_collidable: &VoxelObjectCollidableComp|
          -> CollidableComp {
-            let collidable_id = collision_world
-                .add_voxel_object_collidable(object_collidable.kind(), object.voxel_object_id);
+            let collidable_id = collision_world.add_collidable(
+                object_collidable.kind(),
+                CollidableGeometry::local_voxel_object(object.voxel_object_id),
+            );
 
             CollidableComp { collidable_id }
         }

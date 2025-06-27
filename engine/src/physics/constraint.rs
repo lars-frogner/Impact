@@ -4,17 +4,14 @@ pub mod contact;
 pub mod solver;
 pub mod spherical_joint;
 
-use crate::{
-    physics::{
-        collision::{Collision, CollisionWorld},
-        fph,
-        motion::{
-            Orientation, Position, Velocity,
-            components::{ReferenceFrameComp, VelocityComp},
-        },
-        rigid_body::components::RigidBodyComp,
+use crate::physics::{
+    collision::{CollidableGeometry, Collision, CollisionWorld},
+    fph,
+    motion::{
+        Orientation, Position, Velocity,
+        components::{ReferenceFrameComp, VelocityComp},
     },
-    voxel::VoxelObjectManager,
+    rigid_body::components::RigidBodyComp,
 };
 use bytemuck::{Pod, Zeroable};
 use contact::Contact;
@@ -154,11 +151,11 @@ impl ConstraintManager {
     /// all relevant rigid body state and precomputing relevant constraint
     /// quantities. Should be called before advancing rigid body velocities and
     /// configurations for the frame.
-    pub fn prepare_constraints(
+    pub fn prepare_constraints<G: CollidableGeometry>(
         &mut self,
         ecs_world: &ECSWorld,
-        voxel_object_manager: &VoxelObjectManager,
-        collision_world: &CollisionWorld,
+        collision_world: &CollisionWorld<G>,
+        collidable_context: &G::Context,
     ) {
         // The cached states of the bodies from the previous frame are stale
         // and must be removed. Up-to-date body state will be gathered as
@@ -166,7 +163,7 @@ impl ConstraintManager {
         self.solver.clear_prepared_bodies();
 
         collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
-            voxel_object_manager,
+            collidable_context,
             &mut |Collision {
                       collider_a,
                       collider_b,
