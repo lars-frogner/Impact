@@ -15,7 +15,6 @@ pub mod game_loop;
 pub mod gizmo;
 pub mod gpu;
 pub mod instrumentation;
-pub mod io;
 pub mod light;
 pub mod material;
 pub mod mesh;

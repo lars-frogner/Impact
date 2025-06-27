@@ -1,0 +1,17 @@
+[package]
+name = "impact_io"
+description = "Input/output for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[features]
+ron = ["dep:ron", "dep:serde"]
+
+[dependencies]
+anyhow = { workspace = true }
+ron = { version = "0.10", optional = true }
+serde = { workspace = true, optional = true }
+
+[lints]
+workspace = true

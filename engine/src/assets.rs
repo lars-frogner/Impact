@@ -2,7 +2,6 @@
 
 pub mod lookup_table;
 
-use crate::io;
 use anyhow::{Result, bail};
 use impact_containers::HashMap;
 use impact_gpu::{
@@ -474,7 +473,7 @@ impl AssetSpecifications {
     /// resolves any specified paths.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
-        let mut specs: Self = io::parse_ron_file(file_path)?;
+        let mut specs: Self = impact_io::parse_ron_file(file_path)?;
         if let Some(root_path) = file_path.parent() {
             specs.resolve_paths(root_path);
         }

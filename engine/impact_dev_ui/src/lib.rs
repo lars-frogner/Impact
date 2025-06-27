@@ -15,7 +15,7 @@ use impact::{
     command::ToActiveState,
     egui::{Context, FullOutput, RawInput},
     engine::Engine,
-    io, ui,
+    ui,
 };
 use option_panels::{
     gizmo::GizmoOptionPanel, physics::PhysicsOptionPanel, rendering::RenderingOptionPanel,
@@ -118,7 +118,7 @@ impl UserInterfaceConfig {
     /// Parses the configuration from the RON file at the given path.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
-        io::parse_ron_file(file_path)
+        impact_io::parse_ron_file(file_path)
     }
 }
 

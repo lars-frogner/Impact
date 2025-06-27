@@ -5,7 +5,7 @@ mod main {
     use super::*;
     use anyhow::bail;
     use clap::{Parser, Subcommand};
-    use impact::{engine::EngineConfig, io};
+    use impact::engine::EngineConfig;
     use std::path::PathBuf;
 
     #[derive(Debug, Parser)]
@@ -60,7 +60,7 @@ mod main {
                     bail!("File {} already exists", output_path.display());
                 }
                 let config = EngineConfig::default();
-                io::write_ron_file(&config, output_path)
+                impact_io::write_ron_file(&config, output_path)
             }
             #[cfg(feature = "profiling")]
             Command::Profile {

@@ -2,7 +2,7 @@
 
 pub mod specular_ggx_reflectance;
 
-use crate::{assets::Assets, io};
+use crate::assets::Assets;
 use anyhow::{Context, Result};
 use impact_gpu::{
     resource_group::GPUResourceGroupManager,
@@ -42,7 +42,7 @@ where
     T: TexelType + Serialize,
 {
     let byte_buffer = bincode::serde::encode_to_vec(table, bincode::config::standard())?;
-    io::save_data_as_binary(output_file_path, &byte_buffer)?;
+    impact_io::save_data_as_binary(output_file_path, &byte_buffer)?;
     Ok(())
 }
 
