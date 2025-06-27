@@ -1,10 +1,8 @@
 //! Tasks for the user interface.
 
-use crate::{
-    define_execution_tag, define_task,
-    runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
-};
+use crate::runtime::tasks::{RuntimeContext, RuntimeTaskScheduler};
 use anyhow::Result;
+use impact_scheduling::{define_execution_tag, define_task};
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s

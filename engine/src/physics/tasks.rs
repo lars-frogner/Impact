@@ -1,12 +1,12 @@
 //! Tasks for physics.
 
 use crate::{
-    define_execution_tag, define_task,
     physics::{PhysicsSimulator, motion},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
 };
 use anyhow::Result;
+use impact_scheduling::{define_execution_tag, define_task};
 use impact_thread::ThreadPoolTaskErrors;
 
 define_execution_tag!(

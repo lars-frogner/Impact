@@ -1,12 +1,11 @@
 //! Tasks for rendering.
 
 use crate::{
-    define_execution_tag, define_task,
     gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
-    scheduling::Task,
 };
 use anyhow::Result;
+use impact_scheduling::{Task, define_execution_tag, define_task};
 use impact_thread::ThreadPoolTaskErrors;
 
 use super::{render_command, resource};

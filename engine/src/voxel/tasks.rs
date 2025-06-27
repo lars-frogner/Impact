@@ -1,7 +1,6 @@
 //! Tasks related to voxels.
 
 use crate::{
-    define_task,
     gpu::rendering::{render_command::tasks::SyncRenderCommands, tasks::RenderingTag},
     physics::tasks::{AdvanceSimulation, PhysicsTag},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
@@ -9,6 +8,7 @@ use crate::{
     voxel,
 };
 use anyhow::Result;
+use impact_scheduling::define_task;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) applies each voxel absorber

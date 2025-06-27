@@ -1,7 +1,6 @@
 //! Tasks for coordination between systems in the scene.
 
 use crate::{
-    define_task,
     gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
@@ -9,6 +8,7 @@ use crate::{
     ui::tasks::ProcessUserInterface,
 };
 use anyhow::Result;
+use impact_scheduling::define_task;
 use impact_thread::ThreadPoolTaskErrors;
 
 define_task!(

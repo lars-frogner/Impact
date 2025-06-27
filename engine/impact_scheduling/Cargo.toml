@@ -1,0 +1,21 @@
+[package]
+name = "impact_scheduling"
+description = "Task scheduling for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+cfg-if = { workspace = true }
+hashbrown = "0.15"
+impact_containers = { path = "../impact_containers" }
+impact_log = { path = "../impact_log" }
+impact_math = { path = "../impact_math" }
+impact_thread = { path = "../impact_thread" }
+petgraph = { version = "0.8", default-features = false, features = [
+    "graphmap",
+] }
+
+[lints]
+workspace = true

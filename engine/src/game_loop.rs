@@ -1,7 +1,6 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
-    define_execution_tag_set,
     engine::Engine,
     gpu::rendering::tasks::RenderingTag,
     instrumentation::{self, FrameDurationTracker},
@@ -9,6 +8,7 @@ use crate::{
     runtime::tasks::RuntimeTaskScheduler,
     ui::tasks::UserInterfaceTag,
 };
+use impact_scheduling::define_execution_tag_set;
 use impact_thread::ThreadPoolResult;
 use serde::{Deserialize, Serialize};
 use std::{

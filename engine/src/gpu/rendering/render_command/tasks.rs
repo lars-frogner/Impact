@@ -1,11 +1,11 @@
 //! Tasks for synchronizing render passes.
 
 use crate::{
-    define_task,
     gpu::rendering::{resource::tasks::SyncRenderResources, tasks::RenderingTag},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
+use impact_scheduling::define_task;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) ensures that all render commands
