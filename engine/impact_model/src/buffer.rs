@@ -1,8 +1,8 @@
 //! Buffering of model instance data for rendering.
 
 use crate::{
-    DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
-    InstanceFeatureTypeID,
+    DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeID,
+    InstanceFeatureBufferRangeMap, InstanceFeatureTypeID,
 };
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
@@ -23,13 +23,16 @@ pub struct InstanceFeatureGPUBufferManager {
 }
 
 impl InstanceFeatureGPUBufferManager {
-    /// Creates a new manager with a vertex GPU buffer initialized
-    /// from the given model instance feature buffer.
+    /// Creates a new manager with a vertex GPU buffer initialized from the
+    /// given model instance feature buffer. Returns [`None`] if the buffer's
+    /// instance feature type does not require GPU buffers.
     pub fn new(
         graphics_device: &GraphicsDevice,
         feature_buffer: &DynamicInstanceFeatureBuffer,
         label: Cow<'static, str>,
-    ) -> Self {
+    ) -> Option<Self> {
+        let vertex_buffer_layout = feature_buffer.vertex_buffer_layout()?;
+
         let raw_buffer = feature_buffer.raw_buffer();
 
         assert!(
@@ -45,13 +48,13 @@ impl InstanceFeatureGPUBufferManager {
             label,
         );
 
-        Self {
+        Some(Self {
             feature_gpu_buffer,
-            vertex_buffer_layout: feature_buffer.vertex_buffer_layout().clone(),
+            vertex_buffer_layout,
             feature_type_id: feature_buffer.feature_type_id(),
             n_features: u32::try_from(feature_buffer.n_valid_features()).unwrap(),
             range_map: feature_buffer.create_range_map(),
-        }
+        })
     }
 
     /// Returns the layout of the vertex buffer.

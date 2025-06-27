@@ -99,7 +99,7 @@ impl GizmoPasses {
 
     const fn vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 3] {
         [
-            InstanceModelViewTransform::BUFFER_LAYOUT,
+            InstanceModelViewTransform::BUFFER_LAYOUT.unwrap(),
             VertexPosition::BUFFER_LAYOUT,
             VertexColor::BUFFER_LAYOUT,
         ]

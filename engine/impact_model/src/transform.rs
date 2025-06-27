@@ -1,6 +1,6 @@
 //! Model instance transforms.
 
-use crate::{InstanceFeatureManager, impl_InstanceFeature};
+use crate::{InstanceFeatureManager, impl_InstanceFeatureForGPU};
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::wgpu;
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
@@ -161,7 +161,8 @@ impl AsInstanceModelViewTransform for InstanceModelViewTransformWithPrevious {
     }
 }
 
-impl_InstanceFeature!(
+
+impl_InstanceFeatureForGPU!(
     InstanceModelViewTransform,
     wgpu::vertex_attr_array![
         INSTANCE_VERTEX_BINDING_START => Float32x4,
@@ -169,7 +170,7 @@ impl_InstanceFeature!(
     ]
 );
 
-impl_InstanceFeature!(
+impl_InstanceFeatureForGPU!(
     InstanceModelViewTransformWithPrevious,
     wgpu::vertex_attr_array![
         INSTANCE_VERTEX_BINDING_START => Float32x4,

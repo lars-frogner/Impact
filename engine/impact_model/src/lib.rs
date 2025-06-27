@@ -27,9 +27,10 @@ pub trait InstanceFeature: Pod {
     /// The memory alignment of the feature type.
     const FEATURE_ALIGNMENT: Alignment = Alignment::of::<Self>();
 
-    /// The layout of the vertex GPU buffer that can be used to pass the
-    /// feature to the GPU.
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
+    /// The layout of the vertex GPU buffer that can be used to pass the feature
+    /// to the GPU. If [`None`], no GPU buffer will be created for instance
+    /// features of this type.
+    const BUFFER_LAYOUT: Option<wgpu::VertexBufferLayout<'static>>;
 
     /// Returns a slice with the raw bytes representing the feature.
     fn feature_bytes(&self) -> &[u8] {
@@ -94,7 +95,7 @@ pub struct InstanceFeatureID {
 #[derive(Debug)]
 pub struct InstanceFeatureStorage {
     type_descriptor: InstanceFeatureTypeDescriptor,
-    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    vertex_buffer_layout: Option<wgpu::VertexBufferLayout<'static>>,
     bytes: AlignedByteVec,
     index_map: NoHashKeyIndexMapper<usize>,
     feature_id_count: usize,
@@ -113,7 +114,7 @@ pub struct InstanceFeatureStorage {
 #[derive(Debug)]
 pub struct DynamicInstanceFeatureBuffer {
     type_descriptor: InstanceFeatureTypeDescriptor,
-    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    vertex_buffer_layout: Option<wgpu::VertexBufferLayout<'static>>,
     bytes: AlignedByteVec,
     n_valid_bytes: usize,
     range_manager: InstanceFeatureBufferRangeManager,
@@ -507,7 +508,7 @@ impl ModelInstanceBuffer {
     ) -> Vec<InstanceFeatureGPUBufferManager> {
         self.feature_buffers
             .iter_mut()
-            .map(|feature_buffer| {
+            .filter_map(|feature_buffer| {
                 InstanceFeatureGPUBufferManager::new(graphics_device, feature_buffer, label.clone())
             })
             .collect()
@@ -523,8 +524,11 @@ impl ModelInstanceBuffer {
         graphics_device: &GraphicsDevice,
         gpu_buffer_managers: &mut [InstanceFeatureGPUBufferManager],
     ) {
-        for (feature_buffer, gpu_buffer_manager) in
-            self.feature_buffers.iter_mut().zip(gpu_buffer_managers)
+        for (feature_buffer, gpu_buffer_manager) in self
+            .feature_buffers
+            .iter_mut()
+            .filter(|buffer| buffer.vertex_buffer_layout().is_some())
+            .zip(gpu_buffer_managers)
         {
             gpu_buffer_manager
                 .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
@@ -749,12 +753,6 @@ impl InstanceFeatureStorage {
         self.type_descriptor.size()
     }
 
-    /// Returns the layout of the vertex GPU buffer that can be used for the
-    /// stored features.
-    pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
-        &self.vertex_buffer_layout
-    }
-
     /// Returns the number of stored features.
     pub fn feature_count(&self) -> usize {
         self.index_map.len()
@@ -866,6 +864,12 @@ impl InstanceFeatureStorage {
         self.index_map.clear();
     }
 
+    /// Returns the layout of the vertex GPU buffer that can be used for the
+    /// stored features.
+    pub(crate) fn vertex_buffer_layout(&self) -> Option<wgpu::VertexBufferLayout<'static>> {
+        self.vertex_buffer_layout.clone()
+    }
+
     fn type_descriptor(&self) -> InstanceFeatureTypeDescriptor {
         self.type_descriptor
     }
@@ -948,12 +952,6 @@ impl DynamicInstanceFeatureBuffer {
     /// Returns the size in bytes of the type of feature this buffer can store.
     pub fn feature_size(&self) -> usize {
         self.type_descriptor.size()
-    }
-
-    /// Returns the layout of the vertex GPU buffer that can be used for the
-    /// stored features.
-    pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
-        &self.vertex_buffer_layout
     }
 
     /// Returns the current number of valid features in the buffer.
@@ -1165,6 +1163,12 @@ impl DynamicInstanceFeatureBuffer {
     pub fn clear(&mut self) {
         self.n_valid_bytes = 0;
         self.range_manager.clear();
+    }
+
+    /// Returns the layout of the vertex GPU buffer that can be used for the
+    /// stored features.
+    pub(crate) fn vertex_buffer_layout(&self) -> Option<wgpu::VertexBufferLayout<'static>> {
+        self.vertex_buffer_layout.clone()
     }
 
     fn add_feature_bytes(&mut self, feature_bytes: &[u8]) {
@@ -1432,9 +1436,9 @@ mod tests {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
     struct ZeroSizedFeature;
 
-    impl_InstanceFeature!(Feature, []);
-    impl_InstanceFeature!(DifferentFeature, []);
-    impl_InstanceFeature!(ZeroSizedFeature, []);
+    impl_InstanceFeature!(Feature);
+    impl_InstanceFeature!(DifferentFeature);
+    impl_InstanceFeature!(ZeroSizedFeature);
 
     type TestInstanceFeatureManager = InstanceFeatureManager<ModelID>;
 
@@ -1853,8 +1857,8 @@ mod tests {
         #[derive(Clone, Copy, Zeroable, Pod)]
         struct ZeroSizedFeature;
 
-        impl_InstanceFeature!(DifferentFeature, []);
-        impl_InstanceFeature!(ZeroSizedFeature, []);
+        impl_InstanceFeature!(DifferentFeature);
+        impl_InstanceFeature!(ZeroSizedFeature);
 
         #[test]
         fn creating_new_instance_feature_storage_works() {

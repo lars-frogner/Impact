@@ -18,7 +18,6 @@ serde = ["dep:serde"]
 [dependencies]
 anyhow = { workspace = true }
 approx = { workspace = true }
-bitflags = { workspace = true }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
 impact_gpu = { path = "../impact_gpu" }

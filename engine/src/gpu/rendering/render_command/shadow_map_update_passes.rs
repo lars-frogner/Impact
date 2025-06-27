@@ -85,7 +85,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             &pipeline_layout,
             shader,
             &[
-                InstanceModelLightTransform::BUFFER_LAYOUT,
+                InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
                 VertexPosition::BUFFER_LAYOUT,
             ],
             &color_target_states,
@@ -180,7 +180,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 &self.pipeline_layout,
                 shader,
                 &[
-                    InstanceModelLightTransform::BUFFER_LAYOUT,
+                    InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
                     VertexPosition::BUFFER_LAYOUT,
                 ],
                 &self.color_target_states,
@@ -438,7 +438,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             &pipeline_layout,
             shader,
             &[
-                InstanceModelLightTransform::BUFFER_LAYOUT,
+                InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
                 VertexPosition::BUFFER_LAYOUT,
             ],
             &color_target_states,
@@ -531,7 +531,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 &self.pipeline_layout,
                 shader,
                 &[
-                    InstanceModelLightTransform::BUFFER_LAYOUT,
+                    InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
                     VertexPosition::BUFFER_LAYOUT,
                 ],
                 &self.color_target_states,
