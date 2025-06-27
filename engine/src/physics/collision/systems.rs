@@ -1,7 +1,7 @@
 //! ECS systems related to collisions.
 
 use crate::physics::{
-    collision::{CollisionWorld, components::CollidableComp},
+    collision::{CollidableGeometry, CollisionWorld, components::CollidableComp},
     motion::components::ReferenceFrameComp,
 };
 use impact_ecs::{
@@ -10,7 +10,10 @@ use impact_ecs::{
 };
 use impact_scene::components::SceneEntityFlagsComp;
 
-pub fn synchronize_collision_world(collision_world: &mut CollisionWorld, ecs_world: &ECSWorld) {
+pub fn synchronize_collision_world<G: CollidableGeometry>(
+    collision_world: &mut CollisionWorld<G>,
+    ecs_world: &ECSWorld,
+) {
     collision_world.clear_spatial_state();
 
     query!(
@@ -22,14 +25,22 @@ pub fn synchronize_collision_world(collision_world: &mut CollisionWorld, ecs_wor
             if flags.is_disabled() {
                 return;
             }
-
-            let transform_to_world_space = frame.create_transform_to_parent_space();
-
-            collision_world.synchronize_collidable(
-                collidable.collidable_id,
-                entity_id,
-                transform_to_world_space,
-            );
+            synchronize_collidable(collision_world, entity_id, collidable, frame);
         }
+    );
+}
+
+pub fn synchronize_collidable<G: CollidableGeometry>(
+    collision_world: &mut CollisionWorld<G>,
+    entity_id: EntityID,
+    collidable: &CollidableComp,
+    frame: &ReferenceFrameComp,
+) {
+    let transform_to_world_space = frame.create_transform_to_parent_space();
+
+    collision_world.synchronize_collidable(
+        collidable.collidable_id,
+        entity_id,
+        transform_to_world_space,
     );
 }

@@ -1,19 +1,20 @@
 //! Benchmarks for constraint resolution.
 
-use crate::{
-    physics::{
-        collision::{CollidableKind, Collision, CollisionWorld, components::CollidableComp},
-        constraint::{ConstraintManager, solver::ConstraintSolverConfig},
-        fph,
-        inertia::InertialProperties,
-        material::{ContactResponseParameters, components::UniformContactResponseComp},
-        motion::{
-            AngularVelocity, Orientation, Position, Velocity,
-            components::{ReferenceFrameComp, VelocityComp},
-        },
-        rigid_body::{RigidBody, components::RigidBodyComp},
+use crate::physics::{
+    collision::{
+        CollidableKind, Collision,
+        components::CollidableComp,
+        geometry::basic::{CollidableGeometry, CollisionWorld},
     },
-    voxel::VoxelObjectManager,
+    constraint::{ConstraintManager, solver::ConstraintSolverConfig},
+    fph,
+    inertia::InertialProperties,
+    material::{ContactResponseParameters, components::UniformContactResponseComp},
+    motion::{
+        AngularVelocity, Orientation, Position, Velocity,
+        components::{ReferenceFrameComp, VelocityComp},
+    },
+    rigid_body::{RigidBody, components::RigidBodyComp},
 };
 use impact_ecs::world::{EntityID, World as ECSWorld};
 use impact_geometry::Sphere;
@@ -28,7 +29,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 
     let mut contacts = Vec::new();
     collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
-        &VoxelObjectManager::new(),
+        &(),
         &mut |Collision {
                   collider_a,
                   collider_b,
@@ -66,11 +67,7 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
         n_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(
-        &ecs_world,
-        &VoxelObjectManager::new(),
-        &collision_world,
-    );
+    constraint_manager.prepare_constraints(&ecs_world, &collision_world, &());
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().clone();
@@ -89,11 +86,7 @@ pub fn correct_contact_configurations(profiler: impl Profiler) {
         n_positional_correction_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(
-        &ecs_world,
-        &VoxelObjectManager::new(),
-        &collision_world,
-    );
+    constraint_manager.prepare_constraints(&ecs_world, &collision_world, &());
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().clone();
@@ -135,9 +128,12 @@ fn setup_sphere_bodies(
                  mass_density,
                  velocity,
              }| {
-                let collidable_id = collision_world.add_sphere_collidable(
+                let collidable_id = collision_world.add_collidable(
                     CollidableKind::Dynamic,
-                    Sphere::new(Position::origin(), sphere.radius()),
+                    CollidableGeometry::local_sphere(Sphere::new(
+                        Position::origin(),
+                        sphere.radius(),
+                    )),
                 );
 
                 let frame =

@@ -1,20 +1,21 @@
 //! Constraint resolution tests.
 
 use approx::assert_abs_diff_eq;
-use impact::{
-    physics::{
-        collision::{CollidableKind, CollisionWorld, components::CollidableComp},
-        constraint::{ConstraintManager, solver::ConstraintSolverConfig},
-        fph,
-        inertia::InertialProperties,
-        material::{ContactResponseParameters, components::UniformContactResponseComp},
-        motion::{
-            AngularVelocity, Orientation, Position, Velocity,
-            components::{ReferenceFrameComp, VelocityComp},
-        },
-        rigid_body::{RigidBody, components::RigidBodyComp},
+use impact::physics::{
+    collision::{
+        CollidableKind,
+        components::CollidableComp,
+        geometry::basic::{CollidableGeometry, CollisionWorld},
     },
-    voxel::VoxelObjectManager,
+    constraint::{ConstraintManager, solver::ConstraintSolverConfig},
+    fph,
+    inertia::InertialProperties,
+    material::{ContactResponseParameters, components::UniformContactResponseComp},
+    motion::{
+        AngularVelocity, Orientation, Position, Velocity,
+        components::{ReferenceFrameComp, VelocityComp},
+    },
+    rigid_body::{RigidBody, components::RigidBodyComp},
 };
 use impact_ecs::world::{EntityID, World as ECSWorld};
 use impact_geometry::{Plane, Sphere};
@@ -80,9 +81,12 @@ fn setup_sphere_bodies(
                  mass_density,
                  restitution_coef,
              }| {
-                let collidable_id = collision_world.add_sphere_collidable(
+                let collidable_id = collision_world.add_collidable(
                     CollidableKind::Dynamic,
-                    Sphere::new(Position::origin(), sphere.radius()),
+                    CollidableGeometry::local_sphere(Sphere::new(
+                        Position::origin(),
+                        sphere.radius(),
+                    )),
                 );
 
                 let frame =
@@ -132,8 +136,10 @@ fn setup_plane_bodies(
                  orientation,
                  restitution_coef,
              }| {
-                let collidable_id =
-                    collision_world.add_plane_collidable(CollidableKind::Static, Plane::XZ_PLANE);
+                let collidable_id = collision_world.add_collidable(
+                    CollidableKind::Static,
+                    CollidableGeometry::local_plane(Plane::XZ_PLANE),
+                );
 
                 let frame = ReferenceFrameComp::unscaled(origin, orientation);
 
@@ -206,7 +212,7 @@ fn run_constraints(
     collision_world: &CollisionWorld,
     constraint_manager: &mut ConstraintManager,
 ) {
-    constraint_manager.prepare_constraints(ecs_world, &VoxelObjectManager::new(), collision_world);
+    constraint_manager.prepare_constraints(ecs_world, collision_world, &());
     constraint_manager.compute_and_apply_constrained_state(ecs_world);
 }
 

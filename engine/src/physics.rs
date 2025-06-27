@@ -12,7 +12,7 @@ pub mod rigid_body;
 pub mod tasks;
 
 use anyhow::{Result, bail};
-use collision::CollisionWorld;
+use collision::{CollidableGeometry, CollisionWorld};
 use constraint::{ConstraintManager, solver::ConstraintSolverConfig};
 use impact_ecs::world::{EntityID, World as ECSWorld};
 use medium::UniformMedium;
@@ -21,19 +21,18 @@ use rigid_body::forces::{RigidBodyForceConfig, RigidBodyForceManager};
 use serde::{Deserialize, Serialize};
 use std::{sync::RwLock, time::Duration};
 
-use crate::voxel::VoxelObjectManager;
-
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
 pub type fph = f64;
 
 /// The manager of the physics simulation.
 #[derive(Debug)]
-pub struct PhysicsSimulator {
+pub struct PhysicsSimulator<G: CollidableGeometry = collision::geometry::voxel::CollidableGeometry>
+{
     config: SimulatorConfig,
     rigid_body_force_manager: RwLock<RigidBodyForceManager>,
     constraint_manager: RwLock<ConstraintManager>,
-    collision_world: RwLock<CollisionWorld>,
+    collision_world: RwLock<CollisionWorld<G>>,
     medium: UniformMedium,
     simulation_time: fph,
     time_step_duration: fph,
@@ -73,7 +72,7 @@ pub struct SimulatorConfig {
     pub simulation_speed_multiplier_increment_factor: fph,
 }
 
-impl PhysicsSimulator {
+impl<G: CollidableGeometry> PhysicsSimulator<G> {
     /// Creates a new physics simulator with the given configuration parameters.
     ///
     /// # Errors
@@ -183,7 +182,7 @@ impl PhysicsSimulator {
 
     /// Returns a reference to the [`CollisionWorld`], guarded by a
     /// [`RwLock`].
-    pub fn collision_world(&self) -> &RwLock<CollisionWorld> {
+    pub fn collision_world(&self) -> &RwLock<CollisionWorld<G>> {
         &self.collision_world
     }
 
@@ -209,17 +208,17 @@ impl PhysicsSimulator {
     pub fn advance_simulation(
         &mut self,
         ecs_world: &RwLock<ECSWorld>,
-        voxel_object_manager: &VoxelObjectManager,
+        collidable_context: &G::Context,
     ) {
         if !self.config.enabled {
             return;
         }
         with_timing_info_logging!(
-        "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
-        self.scaled_time_step_duration(),
-        self.simulation_speed_multiplier,
-        self.n_substeps(); {
-            self.do_advance_simulation(ecs_world, voxel_object_manager);
+            "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
+            self.scaled_time_step_duration(),
+            self.simulation_speed_multiplier,
+            self.n_substeps(); {
+            self.do_advance_simulation(ecs_world, collidable_context);
         });
 
         log::info!("Simulation time: {:.1}", self.simulation_time);
@@ -228,7 +227,7 @@ impl PhysicsSimulator {
     fn do_advance_simulation(
         &mut self,
         ecs_world: &RwLock<ECSWorld>,
-        voxel_object_manager: &VoxelObjectManager,
+        collidable_context: &G::Context,
     ) {
         let mut entities_to_remove = Vec::new();
 
@@ -240,10 +239,10 @@ impl PhysicsSimulator {
         for _ in 0..self.n_substeps() {
             Self::perform_step(
                 &ecs_world_readonly,
-                voxel_object_manager,
                 &rigid_body_force_manager,
                 &mut constraint_manager,
                 &self.collision_world,
+                collidable_context,
                 &self.medium,
                 self.simulation_time,
                 substep_duration,
@@ -264,10 +263,10 @@ impl PhysicsSimulator {
 
     fn perform_step(
         ecs_world: &ECSWorld,
-        voxel_object_manager: &VoxelObjectManager,
         rigid_body_force_manager: &RigidBodyForceManager,
         constraint_manager: &mut ConstraintManager,
-        collision_world: &RwLock<CollisionWorld>,
+        collision_world: &RwLock<CollisionWorld<G>>,
+        collidable_context: &G::Context,
         medium: &UniformMedium,
         current_simulation_time: fph,
         step_duration: fph,
@@ -284,7 +283,7 @@ impl PhysicsSimulator {
 
         if constraint_manager.solver().config().enabled {
             with_timing_info_logging!("Preparing constraints"; {
-                constraint_manager.prepare_constraints(ecs_world, voxel_object_manager, &collision_world.read().unwrap());
+                constraint_manager.prepare_constraints(ecs_world, &collision_world.read().unwrap(), collidable_context);
             });
         }
 
