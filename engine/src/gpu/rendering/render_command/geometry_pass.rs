@@ -250,7 +250,7 @@ impl GeometryPass {
             .get_instance_feature_buffer_managers(model_id)
             .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
 
-        layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT);
+        layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap());
 
         // If the material has a buffer of per-instance features, it will be directly
         // after the transform buffers

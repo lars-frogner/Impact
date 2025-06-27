@@ -837,13 +837,6 @@ pub fn handle_emptied_voxel_objects(engine: &Engine) -> Result<()> {
     Ok(())
 }
 
-impl_InstanceFeature!(
-    VoxelObjectID,
-    wgpu::vertex_attr_array![
-        0 => Uint32,
-    ]
-);
-
 impl GradientNoiseVoxelTypeGenerator {
     fn from_component(
         voxel_type_registry: &VoxelTypeRegistry,
@@ -859,6 +852,8 @@ impl GradientNoiseVoxelTypeGenerator {
         )
     }
 }
+
+impl_InstanceFeature!(VoxelObjectID);
 
 pub fn register_voxel_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {
     instance_feature_manager.register_feature_type::<VoxelObjectID>();

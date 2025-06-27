@@ -11,7 +11,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_gpu::wgpu;
 use impact_model::InstanceFeatureManager;
 use impact_model::{
-    InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, impl_InstanceFeature,
+    InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, impl_InstanceFeatureForGPU,
 };
 use nalgebra::Vector2;
 
@@ -321,12 +321,12 @@ impl TexturedColorParallaxMappedPhysicalMaterialFeature {
     }
 }
 
-impl_InstanceFeature!(
+impl_InstanceFeatureForGPU!(
     FixedColorMaterialFeature,
     wgpu::vertex_attr_array![MaterialInstanceFeatureLocation::Color as u32 => Float32x3]
 );
 
-impl_InstanceFeature!(
+impl_InstanceFeatureForGPU!(
     UniformColorPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
         MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
@@ -337,7 +337,7 @@ impl_InstanceFeature!(
     ]
 );
 
-impl_InstanceFeature!(
+impl_InstanceFeatureForGPU!(
     TexturedColorPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
         MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
@@ -347,7 +347,7 @@ impl_InstanceFeature!(
     ]
 );
 
-impl_InstanceFeature!(
+impl_InstanceFeatureForGPU!(
     UniformColorParallaxMappedPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
         MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
@@ -360,7 +360,7 @@ impl_InstanceFeature!(
     ]
 );
 
-impl_InstanceFeature!(
+impl_InstanceFeatureForGPU!(
     TexturedColorParallaxMappedPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
         MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,

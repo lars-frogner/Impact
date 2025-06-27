@@ -565,7 +565,7 @@ impl VoxelGeometryPipeline {
         );
 
         let vertex_buffer_layouts = &[
-            InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT,
+            InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap(),
             VoxelMeshIndex::BUFFER_LAYOUT,
             VoxelMeshIndexMaterials::BUFFER_LAYOUT,
         ];
