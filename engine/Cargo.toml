@@ -7,6 +7,7 @@ members = [
     "impact_ecs/impact_ecs_macros",
     "impact_geometry",
     "impact_gpu",
+    "impact_io",
     "impact_light",
     "impact_material",
     "impact_math",
@@ -200,6 +201,7 @@ impact_containers = { path = "impact_containers" }
 impact_ecs = { path = "impact_ecs" }
 impact_geometry = { path = "impact_geometry" }
 impact_gpu = { path = "impact_gpu", features = ["serde"] }
+impact_io = { path = "impact_io", features = ["ron"] }
 impact_light = { path = "impact_light", features = ["serde"] }
 impact_material = { path = "impact_material" }
 impact_math = { path = "impact_math", features = ["serde"] }
@@ -223,7 +225,6 @@ pollster = "0.4"
 rand = { workspace = true }
 regex = "1.11"
 roc_integration = { path = "../roc_integration" }
-ron = "0.10"
 roots = "0.0.8"
 serde = { workspace = true }
 simba = "0.9"

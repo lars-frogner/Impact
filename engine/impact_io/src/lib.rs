@@ -54,6 +54,7 @@ where
 
 /// Reads the RON (Rusty Object Notation) file at the given path and
 /// deserializes the contents into an object of type `T`.
+#[cfg(feature = "ron")]
 pub fn parse_ron_file<T>(file_path: impl AsRef<Path>) -> Result<T>
 where
     T: for<'de> serde::de::Deserialize<'de>,
@@ -71,6 +72,7 @@ where
 
 /// Serializes the given value of type `T` to RON (Rusty Object Notation)
 /// and writes it to the given path.
+#[cfg(feature = "ron")]
 pub fn write_ron_file<T>(value: &T, output_file_path: impl AsRef<Path>) -> Result<()>
 where
     T: serde::ser::Serialize,

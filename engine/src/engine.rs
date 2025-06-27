@@ -406,7 +406,7 @@ impl EngineConfig {
     /// resolves any specified paths.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
-        let mut config: Self = crate::io::parse_ron_file(file_path)?;
+        let mut config: Self = impact_io::parse_ron_file(file_path)?;
         if let Some(root_path) = file_path.parent() {
             config.resolve_paths(root_path);
         }
