@@ -17,6 +17,7 @@ members = [
     "impact_profiling",
     "impact_rendering",
     "impact_scene",
+    "impact_scheduling",
     "impact_thread",
 ]
 
@@ -31,6 +32,7 @@ approx = "0.5"
 arbitrary = { version = "1.4", features = ["derive"] }
 bitflags = "2.6"
 bytemuck = { version = "1.23", features = ["derive"] }
+cfg-if = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
@@ -184,7 +186,7 @@ bincode = { version = "2.0", default-features = false, features = [
 ] }
 bitflags = { workspace = true, features = ["bytemuck"] }
 bytemuck = { workspace = true }
-cfg-if = "1.0"
+cfg-if = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
 egui = { version = "0.31", features = ["log"], optional = true }
@@ -192,7 +194,6 @@ egui-wgpu = { version = "0.31", optional = true }
 egui-winit = { version = "0.31", optional = true }
 glam = "0.30"
 half = { version = "2.6", features = ["bytemuck"] }
-hashbrown = "0.15"
 image = { version = "0.25", default-features = false, features = [
     "png",
     "jpeg",
@@ -211,6 +212,7 @@ impact_mesh = { path = "impact_mesh", features = ["serde"] }
 impact_model = { path = "impact_model" }
 impact_profiling = { path = "impact_profiling", optional = true }
 impact_scene = { path = "impact_scene" }
+impact_scheduling = { path = "impact_scheduling" }
 impact_thread = { path = "impact_thread" }
 inventory = { workspace = true }
 naga = { version = "24.0", features = ["wgsl-out"] }
@@ -220,9 +222,6 @@ noise = "0.9"
 num-traits = { workspace = true }
 ordered-float = "5.0"
 paste = { workspace = true }
-petgraph = { version = "0.8", default-features = false, features = [
-    "graphmap",
-] }
 pollster = "0.4"
 rand = { workspace = true }
 regex = "1.11"

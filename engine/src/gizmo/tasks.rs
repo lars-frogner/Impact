@@ -1,7 +1,6 @@
 //! Tasks for gizmo management.
 
 use crate::{
-    define_task,
     gizmo::{self, GizmoSet, GizmoType},
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::AdvanceSimulation,
@@ -12,6 +11,7 @@ use crate::{
     ui::tasks::ProcessUserInterface,
 };
 use anyhow::Result;
+use impact_scheduling::define_task;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the appropriate gizmo

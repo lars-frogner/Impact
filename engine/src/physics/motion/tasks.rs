@@ -1,7 +1,6 @@
 //! Tasks related to motion.
 
 use crate::{
-    define_task,
     physics::{
         motion,
         tasks::{AdvanceSimulation, PhysicsTag},
@@ -9,6 +8,7 @@ use crate::{
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
+use impact_scheduling::define_task;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) logs the kinetic energy of each

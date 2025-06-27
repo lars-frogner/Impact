@@ -2,10 +2,10 @@
 
 use crate::{
     engine::{self, Engine},
-    scheduling::TaskScheduler,
     ui::{self, UserInterface},
 };
 use anyhow::Result;
+use impact_scheduling::TaskScheduler;
 use std::{num::NonZeroUsize, sync::Arc};
 
 pub type RuntimeTaskScheduler = TaskScheduler<RuntimeContext>;

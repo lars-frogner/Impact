@@ -2,7 +2,6 @@
 
 use super::DesynchronizedRenderResources;
 use crate::{
-    define_task,
     gizmo::tasks::BufferTransformsForGizmos,
     gpu::rendering::tasks::RenderingTag,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
@@ -14,6 +13,7 @@ use crate::{
     voxel::tasks::SyncVoxelObjectMeshes,
 };
 use anyhow::Result;
+use impact_scheduling::define_task;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) performs any required
