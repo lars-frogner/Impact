@@ -21,7 +21,6 @@ use crate::{
         },
     },
     model::{InstanceFeatureManager, ModelID},
-    scene::graph::ModelInstanceNode,
     voxel::render_commands::VoxelGeometryPipeline,
 };
 use anyhow::{Result, anyhow};
@@ -122,7 +121,10 @@ impl GeometryPass {
                 // buffered transforms, otherwise it will not be rendered
                 // anyway
                 if instance_feature_buffer_manager
-                    .get(ModelInstanceNode::model_view_transform_feature_idx())
+                    .iter()
+                    .find(|buffer| {
+                        buffer.is_for_feature_type::<InstanceModelViewTransformWithPrevious>()
+                    })
                     .is_some_and(|buffer| buffer.has_features_in_initial_range())
                 {
                     Some(*model_id)
@@ -431,7 +433,10 @@ impl GeometryPass {
                     })?;
 
                 let transform_buffer_manager = instance_feature_buffer_managers
-                    .get(ModelInstanceNode::model_view_transform_feature_idx())
+                    .iter()
+                    .find(|buffer| {
+                        buffer.is_for_feature_type::<InstanceModelViewTransformWithPrevious>()
+                    })
                     .ok_or_else(|| {
                         anyhow!(
                             "Missing model-view transform GPU buffer for model {}",
@@ -468,13 +473,17 @@ impl GeometryPass {
 
                 let mut vertex_buffer_slot = 1;
 
-                if model_id
-                    .material_handle()
-                    .material_property_feature_id()
-                    .is_some()
+                if let Some(material_property_feature_id) =
+                    model_id.material_handle().material_property_feature_id()
                 {
-                    let material_property_buffer_manager =
-                        instance_feature_buffer_managers.get(2).ok_or_else(|| {
+                    let material_property_buffer_manager = instance_feature_buffer_managers
+                        .iter()
+                        .find(|buffer| {
+                            buffer.is_for_feature_type_with_id(
+                                material_property_feature_id.feature_type_id(),
+                            )
+                        })
+                        .ok_or_else(|| {
                             anyhow!("Missing material GPU buffer for model {}", model_id)
                         })?;
 

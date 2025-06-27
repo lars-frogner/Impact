@@ -57,6 +57,16 @@ impl InstanceFeatureGPUBufferManager {
         })
     }
 
+    /// Whether this buffer is for instance features of type `Fe`.
+    pub fn is_for_feature_type<Fe: InstanceFeature>(&self) -> bool {
+        self.is_for_feature_type_with_id(Fe::FEATURE_TYPE_ID)
+    }
+
+    /// Whether this buffer is for instance features of the type with the given ID.
+    pub fn is_for_feature_type_with_id(&self, feature_type_id: InstanceFeatureTypeID) -> bool {
+        feature_type_id == self.feature_type_id
+    }
+
     /// Returns the layout of the vertex buffer.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout

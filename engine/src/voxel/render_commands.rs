@@ -15,7 +15,6 @@ use crate::{
         },
     },
     model::InstanceFeatureManager,
-    scene::graph::ModelInstanceNode,
     voxel::{
         VoxelObjectID,
         entity::VOXEL_MODEL_ID,
@@ -163,12 +162,10 @@ impl VoxelRenderCommands {
             return Ok(());
         }
 
-        let instance_feature_gpu_buffer_managers = render_resources
-            .get_instance_feature_buffer_managers(&VOXEL_MODEL_ID)
-            .ok_or_else(|| anyhow!("Missing instance GPU buffers for voxel objects"))?;
-
-        let transform_gpu_buffer_manager = instance_feature_gpu_buffer_managers
-            .get(ModelInstanceNode::model_light_transform_feature_idx())
+        let transform_gpu_buffer_manager = render_resources
+            .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(
+                &VOXEL_MODEL_ID,
+            )
             .ok_or_else(|| anyhow!("Missing model-light transform GPU buffer for voxel objects"))?;
 
         // All draw calls share the same transform buffer
@@ -408,7 +405,7 @@ impl VoxelChunkCullingPass {
                 anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
             })?;
 
-        let (instance_range, voxel_object_ids) =
+        let (_, voxel_object_ids) =
             voxel_object_id_buffer.range_with_valid_features::<VoxelObjectID>(instance_range_id);
 
         // Return early if no voxel objects are buffered in the specified range
@@ -436,7 +433,11 @@ impl VoxelChunkCullingPass {
             &self.pipeline_for_non_indexed
         });
 
-        let (_, voxel_object_to_frustum_transforms) =
+        // It's important that we use the instance range associated with the
+        // transforms and not with the voxel object IDs, since these can be
+        // different due to the object ID buffer being used for both rendering
+        // and shadow mapping
+        let (instance_range, voxel_object_to_frustum_transforms) =
             instance_transform_buffer.range_with_valid_features::<F>(instance_range_id);
 
         for ((instance_idx, voxel_object_id), voxel_object_to_frustum_transform) in instance_range
@@ -664,12 +665,10 @@ impl VoxelGeometryPipeline {
             return Ok(());
         }
 
-        let instance_feature_gpu_buffer_managers = render_resources
-            .get_instance_feature_buffer_managers(&VOXEL_MODEL_ID)
-            .ok_or_else(|| anyhow!("Missing instance GPU buffers for voxel objects"))?;
-
-        let transform_gpu_buffer_manager = instance_feature_gpu_buffer_managers
-            .get(ModelInstanceNode::model_view_transform_feature_idx())
+        let transform_gpu_buffer_manager = render_resources
+            .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransformWithPrevious>(
+                &VOXEL_MODEL_ID,
+            )
             .ok_or_else(|| anyhow!("Missing model-view transform GPU buffer for voxel objects"))?;
 
         let material_gpu_resource_manager = render_resources

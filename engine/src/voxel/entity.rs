@@ -741,11 +741,8 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                     model_to_parent_transform,
                     model_id,
                     bounding_sphere,
-                    vec![
-                        model_view_transform_feature_id,
-                        model_light_transform_feature_id,
-                        voxel_object_id_feature_id,
-                    ],
+                    vec![model_view_transform_feature_id, voxel_object_id_feature_id],
+                    vec![model_light_transform_feature_id, voxel_object_id_feature_id],
                     flags.into(),
                 )),
                 SceneEntityFlagsComp(flags),

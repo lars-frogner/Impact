@@ -20,7 +20,7 @@ use impact_light::{LightStorage, buffer::LightGPUBufferManager};
 use impact_mesh::{
     MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
 };
-use impact_model::buffer::InstanceFeatureGPUBufferManager;
+use impact_model::{InstanceFeature, buffer::InstanceFeatureGPUBufferManager};
 use std::{
     borrow::Cow,
     collections::hash_map::Entry,
@@ -220,6 +220,21 @@ impl SynchronizedRenderResources {
         model_id: &ModelID,
     ) -> Option<&Vec<InstanceFeatureGPUBufferManager>> {
         self.instance_feature_buffer_managers.get(model_id)
+    }
+
+    /// Returns the instance feature GPU buffer manager for features of type
+    /// `Fe` for the given model if it exists, otherwise returns [`None`].
+    pub fn get_instance_feature_buffer_manager_for_feature_type<Fe: InstanceFeature>(
+        &self,
+        model_id: &ModelID,
+    ) -> Option<&InstanceFeatureGPUBufferManager> {
+        self.instance_feature_buffer_managers
+            .get(model_id)
+            .and_then(|buffers| {
+                buffers
+                    .iter()
+                    .find(|buffer| buffer.is_for_feature_type::<Fe>())
+            })
     }
 
     /// Returns a reference to the map of instance feature GPU buffer managers.

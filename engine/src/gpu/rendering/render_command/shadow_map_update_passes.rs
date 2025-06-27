@@ -13,7 +13,6 @@ use crate::{
     },
     light,
     model::{InstanceFeatureManager, ModelID},
-    scene::graph::ModelInstanceNode,
     voxel::render_commands::VoxelRenderCommands,
 };
 use anyhow::{Result, anyhow};
@@ -129,7 +128,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         #[allow(clippy::ptr_arg)]
         fn has_features(buffer_managers: &Vec<InstanceFeatureGPUBufferManager>) -> bool {
             buffer_managers
-                .get(ModelInstanceNode::model_light_transform_feature_idx())
+                .iter()
+                .find(|buffer| buffer.is_for_feature_type::<InstanceModelLightTransform>())
                 .is_some_and(|buffer| buffer.n_features() > 0)
         }
 
@@ -335,10 +335,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                 for model_id in &self.models {
                     let transform_buffer_manager = render_resources
-                        .get_instance_feature_buffer_managers(model_id)
-                        .and_then(|buffers| {
-                            buffers.get(ModelInstanceNode::model_light_transform_feature_idx())
-                        })
+                        .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(model_id)
                         .ok_or_else(|| {
                             anyhow!(
                                 "Missing model-light transform GPU buffer for model {}",
@@ -480,7 +477,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         #[allow(clippy::ptr_arg)]
         fn has_features(buffer_managers: &Vec<InstanceFeatureGPUBufferManager>) -> bool {
             buffer_managers
-                .get(ModelInstanceNode::model_light_transform_feature_idx())
+                .iter()
+                .find(|buffer| buffer.is_for_feature_type::<InstanceModelLightTransform>())
                 .is_some_and(|buffer| buffer.n_features() > 0)
         }
 
@@ -698,10 +696,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                 for model_id in &self.models {
                     let transform_buffer_manager = render_resources
-                        .get_instance_feature_buffer_managers(model_id)
-                        .and_then(|buffers| {
-                            buffers.get(ModelInstanceNode::model_light_transform_feature_idx())
-                        })
+                        .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(model_id)
                         .ok_or_else(|| {
                             anyhow!(
                                 "Missing model-light transform GPU buffer for model {}",
