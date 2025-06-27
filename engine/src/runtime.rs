@@ -9,10 +9,10 @@ use crate::{
     engine::Engine,
     game_loop::{GameLoop, GameLoopConfig},
     runtime::tasks::RuntimeTaskScheduler,
-    thread::ThreadPoolResult,
     ui::UserInterface,
 };
 use anyhow::Result;
+use impact_thread::ThreadPoolResult;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroUsize},

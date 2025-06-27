@@ -1,10 +1,10 @@
 //! Tasks for all engine subsystems.
 
 use crate::{
-    engine::Engine, gizmo, gpu, physics, runtime::tasks::RuntimeTaskScheduler, scene,
-    thread::ThreadPoolTaskErrors, voxel,
+    engine::Engine, gizmo, gpu, physics, runtime::tasks::RuntimeTaskScheduler, scene, voxel,
 };
 use anyhow::Result;
+use impact_thread::ThreadPoolTaskErrors;
 
 impl Engine {
     /// Identifies errors that need special handling in the given set of task

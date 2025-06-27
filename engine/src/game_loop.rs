@@ -7,9 +7,9 @@ use crate::{
     instrumentation::{self, FrameDurationTracker},
     physics::tasks::PhysicsTag,
     runtime::tasks::RuntimeTaskScheduler,
-    thread::ThreadPoolResult,
     ui::tasks::UserInterfaceTag,
 };
+use impact_thread::ThreadPoolResult;
 use serde::{Deserialize, Serialize};
 use std::{
     num::NonZeroU32,

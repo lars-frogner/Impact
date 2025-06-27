@@ -5,9 +5,9 @@ use crate::{
     gpu::rendering::{RenderingSystem, render_command::tasks::SyncRenderCommands},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scheduling::Task,
-    thread::ThreadPoolTaskErrors,
 };
 use anyhow::Result;
+use impact_thread::ThreadPoolTaskErrors;
 
 use super::{render_command, resource};
 

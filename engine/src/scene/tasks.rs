@@ -6,10 +6,10 @@ use crate::{
     gpu::rendering::tasks::RenderingTag,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::{self, Scene},
-    thread::ThreadPoolTaskErrors,
     ui::tasks::ProcessUserInterface,
 };
 use anyhow::Result;
+use impact_thread::ThreadPoolTaskErrors;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform of

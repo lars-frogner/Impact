@@ -74,13 +74,8 @@ pub enum WorkerInstruction<M> {
 }
 
 /// ID identifying worker threads in a [`ThreadPool`].
-#[cfg(not(test))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct WorkerID(usize);
-
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct WorkerID(pub usize);
+pub struct WorkerID(u64);
 
 /// Type of ID used for identifying tasks that can be performed
 /// by worker threads in a [`ThreadPool`].
@@ -172,7 +167,7 @@ impl<M> ThreadPool<M> {
     {
         let communicator = ThreadPoolCommunicator::new(n_workers);
 
-        let workers = (0..n_workers.get())
+        let workers = (0..n_workers.get() as u64)
             .map(|worker_id| {
                 // Create a new instance of the shared communicator
                 // for the spawned worker to use
@@ -263,6 +258,12 @@ impl<M> Drop for ThreadPool<M> {
         for worker in self.workers.drain(..) {
             worker.join();
         }
+    }
+}
+
+impl From<WorkerID> for u64 {
+    fn from(id: WorkerID) -> Self {
+        id.0
     }
 }
 
