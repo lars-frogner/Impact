@@ -22,7 +22,7 @@ use std::{
 ///
 /// # Examples
 /// ```no_run
-/// # use impact::thread::{ThreadPool, TaskClosureReturnValue};
+/// # use impact_thread::{ThreadPool, TaskClosureReturnValue};
 /// # use std::{iter, num::NonZeroUsize, sync::{Arc, Mutex}};
 /// #
 /// let n_workers = 2;
