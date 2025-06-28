@@ -7,16 +7,14 @@ use crate::physics::{
     },
 };
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 
 /// Applies the force corresponding to uniform gravitational acceleration to all
 /// applicable entities with a [`UniformGravityComp`].
 pub fn apply_uniform_gravity(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |rigid_body: &mut RigidBodyComp,
-         gravity: &UniformGravityComp,
-         flags: &SceneEntityFlagsComp| {
+        |rigid_body: &mut RigidBodyComp, gravity: &UniformGravityComp, flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }

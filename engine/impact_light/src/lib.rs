@@ -1,8 +1,10 @@
 //! Light sources.
 
+#[macro_use]
+mod macros;
+
 pub mod buffer;
-pub mod components;
-pub mod entity;
+pub mod setup;
 pub mod shadow_map;
 
 use bitflags::bitflags;
@@ -11,7 +13,7 @@ use impact_geometry::{
     AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox, OrthographicTransform, Sphere,
 };
 use impact_gpu::uniform::UniformBuffer;
-use impact_math::{Angle, Float, UpperExclusiveBounds};
+use impact_math::{Angle, Degrees, Float, UpperExclusiveBounds};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };
@@ -31,6 +33,163 @@ pub type Illumninance = Vector3<f32>;
 /// and area of light traveling in a given direction, represented as an RGB
 /// triplet.
 pub type Luminance = Vector3<f32>;
+
+define_component_type! {
+    /// A spatially uniform and isotropic (ambient) light field.
+    #[roc(parents = "Light")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct AmbientEmission {
+        /// The illuminance (incident flux per area) of a surface due to the ambient
+        /// emission.
+        ///
+        /// # Unit
+        /// Lux (lx = lm/m²)
+        pub illuminance: Illumninance,
+    }
+}
+
+define_component_type! {
+    /// Uniform emission of light in all directions. The light can not be
+    /// shadowed (use [`ShadowableOmnidirectionalEmission`] for light with
+    /// shadows).
+    #[roc(parents = "Light")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct OmnidirectionalEmission {
+        /// The luminous intensity of the emitted light.
+        ///
+        /// # Unit
+        /// Candela (cd = lm/sr)
+        pub luminous_intensity: LuminousIntensity,
+        /// The physical extent of the light source, which determines the extent of
+        /// specular highlights.
+        ///
+        /// # Unit
+        /// Meter (m)
+        pub source_extent: f32,
+    }
+}
+
+define_component_type! {
+    /// Uniform emission of light in all directions. The light can be shadowed
+    /// (use [`OmnidirectionalEmission`] for light without shadows).
+    #[roc(parents = "Light")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ShadowableOmnidirectionalEmission {
+        /// The luminous intensity of the emitted light.
+        ///
+        /// # Unit
+        /// Candela (cd = lm/sr)
+        pub luminous_intensity: LuminousIntensity,
+        /// The physical extent of the light source, which determines the extent of
+        /// specular highlights and the softness of shadows.
+        ///
+        /// # Unit
+        /// Meter (m)
+        pub source_extent: f32,
+    }
+}
+
+define_component_type! {
+    /// Emission of light in a single direction. The light can not be shadowed
+    /// (use [`ShadowableUnidirectionalEmission`] for light with shadows).
+    #[roc(parents = "Light")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct UnidirectionalEmission {
+        /// The illuminance (incident flux per area) of an illuminated surface
+        /// perpendicular to the light direction.
+        ///
+        /// # Unit
+        /// Lux (lx = lm/m²)
+        pub perpendicular_illuminance: Illumninance,
+        /// The direction of the emitted light.
+        pub direction: UnitVector3<f32>,
+        /// The angular extent of the light source, which determines the extent of
+        /// specular highlights.
+        pub angular_source_extent: Degrees<f32>,
+    }
+}
+
+define_component_type! {
+    /// Emission of light in a single direction. The light can be shadowed (use
+    /// [`UnidirectionalEmission`] for light without shadows).
+    #[roc(parents = "Light")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ShadowableUnidirectionalEmission {
+        /// The illuminance (incident flux per area) of an illuminated surface
+        /// perpendicular to the light direction.
+        ///
+        /// # Unit
+        /// Lux (lx = lm/m²)
+        pub perpendicular_illuminance: Illumninance,
+        /// The direction of the emitted light.
+        pub direction: UnitVector3<f32>,
+        /// The angular extent of the light source, which determines the extent of
+        /// specular highlights and the softness of shadows.
+        pub angular_source_extent: Degrees<f32>,
+    }
+}
+
+define_component_type! {
+    /// Handle to an [`AmbientLight`].
+    #[roc(parents = "Light")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct AmbientLightHandle {
+        /// The ID of the [`AmbientLight`] in the [`LightStorage`].
+        pub id: LightID,
+    }
+}
+
+define_component_type! {
+    /// Handle to an [`OmnidirectionalLight`].
+    #[roc(parents = "Light")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct OmnidirectionalLightHandle {
+        /// The ID of the [`OmnidirectionalLight`] in the [`LightStorage`].
+        pub id: LightID,
+    }
+}
+
+define_component_type! {
+    /// Handle to a [`ShadowableOmnidirectionalLight`].
+    #[roc(parents = "Light")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ShadowableOmnidirectionalLightHandle {
+        /// The ID of the [`ShadowableOmnidirectionalLight`] in the
+        /// [`LightStorage`].
+        pub id: LightID,
+    }
+}
+
+define_component_type! {
+    /// Handle to a [`UnidirectionalLight`].
+    #[roc(parents = "Light")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct UnidirectionalLightHandle {
+        /// The ID of the [`UnidirectionalLight`] in the [`LightStorage`].
+        pub id: LightID,
+    }
+}
+
+define_component_type! {
+    /// Handle to a [`ShadowableUnidirectionalLight`].
+    #[roc(parents = "Light")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ShadowableUnidirectionalLightHandle {
+        /// The ID of the [`ShadowableUnidirectionalLight`] in the
+        /// [`LightStorage`].
+        pub id: LightID,
+    }
+}
 
 /// Identifier for a light in a [`LightStorage`].
 #[roc(parents = "Light")]
@@ -227,6 +386,80 @@ pub struct LightStorage {
     shadowable_unidirectional_light_buffer: ShadowableUnidirectionalLightUniformBuffer,
     light_id_counter: u32,
     total_ambient_luminance: Luminance,
+}
+
+#[roc]
+impl AmbientEmission {
+    /// Creates a new ambient light emission component with the given
+    /// illuminance (in lux).
+    #[roc(body = "{ illuminance }")]
+    pub fn new(illuminance: Illumninance) -> Self {
+        Self { illuminance }
+    }
+}
+
+#[roc]
+impl OmnidirectionalEmission {
+    /// Creates a new omnidirectional emission component with the given
+    /// luminous intensity (in candela) and source extent.
+    #[roc(body = "{ luminous_intensity, source_extent }")]
+    pub fn new(luminous_intensity: LuminousIntensity, source_extent: f32) -> Self {
+        Self {
+            luminous_intensity,
+            source_extent,
+        }
+    }
+}
+
+#[roc]
+impl ShadowableOmnidirectionalEmission {
+    /// Creates a new shadowable omnidirectional emission component with
+    /// the given luminous intensity (in candela) and source extent.
+    #[roc(body = "{ luminous_intensity, source_extent }")]
+    pub fn new(luminous_intensity: LuminousIntensity, source_extent: f32) -> Self {
+        Self {
+            luminous_intensity,
+            source_extent,
+        }
+    }
+}
+
+#[roc]
+impl UnidirectionalEmission {
+    /// Creates a new unidirectional emission component with the given
+    /// perpendicular illuminance (in lux), direction, and angular
+    /// source extent.
+    #[roc(body = "{ perpendicular_illuminance, direction, angular_source_extent }")]
+    pub fn new(
+        perpendicular_illuminance: Illumninance,
+        direction: UnitVector3<f32>,
+        angular_source_extent: Degrees<f32>,
+    ) -> Self {
+        Self {
+            perpendicular_illuminance,
+            direction,
+            angular_source_extent,
+        }
+    }
+}
+
+#[roc]
+impl ShadowableUnidirectionalEmission {
+    /// Creates a new shadowable unidirectional emission component with the
+    /// given perpendicular illuminance (in lux), direction, and angular
+    /// source extent.
+    #[roc(body = "{ perpendicular_illuminance, direction, angular_source_extent }")]
+    pub fn new(
+        perpendicular_illuminance: Illumninance,
+        direction: UnitVector3<f32>,
+        angular_source_extent: Degrees<f32>,
+    ) -> Self {
+        Self {
+            perpendicular_illuminance,
+            direction,
+            angular_source_extent,
+        }
+    }
 }
 
 impl LightID {

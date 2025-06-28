@@ -11,7 +11,7 @@ use crate::physics::{
     rigid_body::{components::RigidBodyComp, forces::detailed_drag::components::DragLoadMapComp},
 };
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 
 /// Applies the drag force and torque calculated from precomputed detailed
 /// [`DragLoad`](super::DragLoad)s to all applicable entities with a
@@ -27,7 +27,7 @@ pub fn apply_detailed_drag(
          frame: &ReferenceFrameComp,
          velocity: &VelocityComp,
          drag: &DragLoadMapComp,
-         flags: &SceneEntityFlagsComp| {
+         flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }

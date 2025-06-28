@@ -39,13 +39,10 @@ use impact_model::{
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
 use impact_scene::{
-    SceneEntityFlags,
-    components::{
-        SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
-        UncullableComp,
-    },
+    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
     graph::SceneGraph,
     model::{InstanceFeatureManager, ModelID},
+    setup::Uncullable,
 };
 use std::sync::{LazyLock, RwLock};
 
@@ -679,10 +676,10 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
         components,
         |voxel_object: &VoxelObjectComp,
          frame: Option<&ReferenceFrameComp>,
-         parent: Option<&SceneGraphParentNodeComp>,
-         flags: Option<&SceneEntityFlagsComp>|
-         -> Result<(SceneGraphModelInstanceNodeComp, SceneEntityFlagsComp)> {
-            let flags = flags.map_or_else(SceneEntityFlags::empty, |flags| flags.0);
+         parent: Option<&SceneGraphParentNodeHandle>,
+         flags: Option<&SceneEntityFlags>|
+         -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
+            let flags = flags.copied().unwrap_or_default();
 
             let voxel_object_id = voxel_object.voxel_object_id;
 
@@ -725,7 +722,7 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 .expect("Missing storage for VoxelObjectID feature")
                 .add_feature(&voxel_object_id);
 
-            let bounding_sphere = if components.has_component_type::<UncullableComp>() {
+            let bounding_sphere = if components.has_component_type::<Uncullable>() {
                 // The scene graph will not cull models with no bounding sphere
                 None
             } else {
@@ -736,7 +733,7 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
             Ok((
-                SceneGraphModelInstanceNodeComp::new(scene_graph.create_model_instance_node(
+                SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
                     parent_node_id,
                     model_to_parent_transform,
                     model_id,
@@ -745,10 +742,10 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                     vec![model_light_transform_feature_id, voxel_object_id_feature_id],
                     flags.into(),
                 )),
-                SceneEntityFlagsComp(flags),
+                flags,
             ))
         },
-        ![SceneGraphModelInstanceNodeComp]
+        ![SceneGraphModelInstanceNodeHandle]
     )
 }
 

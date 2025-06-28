@@ -1,8 +1,8 @@
 //! Input/output of mesh data in Polygon File Format.
 
 use crate::{
-    MeshID, MeshRepository, VertexNormalVector, VertexPosition, VertexTextureCoords,
-    components::TriangleMeshComp, texture_projection::TextureProjection, triangle::TriangleMesh,
+    MeshID, MeshRepository, TriangleMeshHandle, VertexNormalVector, VertexPosition,
+    VertexTextureCoords, texture_projection::TextureProjection, triangle::TriangleMesh,
 };
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
@@ -73,14 +73,14 @@ pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
 /// it does not already exist.
 ///
 /// # Returns
-/// The [`TriangleMeshComp`] representing the mesh.
+/// The [`TriangleMeshHandle`] to the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file<P>(
     mesh_repository: &mut MeshRepository,
     ply_file_path: P,
-) -> Result<TriangleMeshComp>
+) -> Result<TriangleMeshHandle>
 where
     P: AsRef<Path> + Debug,
 {
@@ -94,7 +94,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshComp { id: mesh_id })
+    Ok(TriangleMeshHandle { id: mesh_id })
 }
 
 /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
@@ -103,7 +103,7 @@ where
 /// using the given projection.
 ///
 /// # Returns
-/// The [`TriangleMeshComp`] representing the mesh.
+/// The [`TriangleMeshHandle`] to the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
@@ -111,7 +111,7 @@ pub fn load_mesh_from_ply_file_with_projection<P>(
     mesh_repository: &mut MeshRepository,
     ply_file_path: P,
     projection: &impl TextureProjection<f32>,
-) -> Result<TriangleMeshComp>
+) -> Result<TriangleMeshHandle>
 where
     P: AsRef<Path> + Debug,
 {
@@ -131,7 +131,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshComp { id: mesh_id })
+    Ok(TriangleMeshHandle { id: mesh_id })
 }
 
 fn convert_ply_vertices_and_faces_to_mesh(

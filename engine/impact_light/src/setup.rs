@@ -1,25 +1,21 @@
-//! Management of lights for entities.
+//! Light setup.
 
 use crate::{
-    AmbientLight, LightFlags, LightStorage, OmnidirectionalLight, ShadowableOmnidirectionalLight,
-    ShadowableUnidirectionalLight, UnidirectionalLight,
-    components::{
-        AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
-        OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
-        ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
-        ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
-    },
+    AmbientEmission, AmbientLight, AmbientLightHandle, LightFlags, LightStorage,
+    OmnidirectionalEmission, OmnidirectionalLight, OmnidirectionalLightHandle,
+    ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLight,
+    ShadowableOmnidirectionalLightHandle, ShadowableUnidirectionalEmission,
+    ShadowableUnidirectionalLight, ShadowableUnidirectionalLightHandle, UnidirectionalEmission,
+    UnidirectionalLight, UnidirectionalLightHandle,
 };
-use impact_ecs::world::EntityEntry;
 use impact_math::Degrees;
 use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3};
-use std::sync::RwLock;
 
 pub fn setup_ambient_light(
     light_storage: &mut LightStorage,
-    ambient_emission: &AmbientEmissionComp,
+    ambient_emission: &AmbientEmission,
     desynchronized: &mut bool,
-) -> AmbientLightComp {
+) -> AmbientLightHandle {
     let ambient_light = AmbientLight::new(crate::compute_luminance_for_uniform_illuminance(
         &ambient_emission.illuminance,
     ));
@@ -28,17 +24,17 @@ pub fn setup_ambient_light(
 
     *desynchronized = true;
 
-    AmbientLightComp { id }
+    AmbientLightHandle { id }
 }
 
 pub fn setup_omnidirectional_light(
     light_storage: &mut LightStorage,
     view_transform: &Similarity3<f32>,
     position: &Point3<f32>,
-    omnidirectional_emission: &OmnidirectionalEmissionComp,
+    omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
     desynchronized: &mut bool,
-) -> OmnidirectionalLightComp {
+) -> OmnidirectionalLightHandle {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = OmnidirectionalLight::new(
         position,
@@ -50,17 +46,17 @@ pub fn setup_omnidirectional_light(
 
     *desynchronized = true;
 
-    OmnidirectionalLightComp { id }
+    OmnidirectionalLightHandle { id }
 }
 
 pub fn setup_shadowable_omnidirectional_light(
     light_storage: &mut LightStorage,
     view_transform: &Similarity3<f32>,
     position: &Point3<f32>,
-    omnidirectional_emission: &ShadowableOmnidirectionalEmissionComp,
+    omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
     desynchronized: &mut bool,
-) -> ShadowableOmnidirectionalLightComp {
+) -> ShadowableOmnidirectionalLightHandle {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = ShadowableOmnidirectionalLight::new(
         position,
@@ -72,16 +68,16 @@ pub fn setup_shadowable_omnidirectional_light(
 
     *desynchronized = true;
 
-    ShadowableOmnidirectionalLightComp { id }
+    ShadowableOmnidirectionalLightHandle { id }
 }
 
 pub fn setup_unidirectional_light(
     light_storage: &mut LightStorage,
     view_transform: &Similarity3<f32>,
-    unidirectional_emission: &UnidirectionalEmissionComp,
+    unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
     desynchronized: &mut bool,
-) -> UnidirectionalLightComp {
+) -> UnidirectionalLightHandle {
     // The view transform contains no scaling, so the direction remains normalized
     let direction = UnitVector3::new_unchecked(
         view_transform.transform_vector(&unidirectional_emission.direction),
@@ -99,16 +95,16 @@ pub fn setup_unidirectional_light(
 
     *desynchronized = true;
 
-    UnidirectionalLightComp { id }
+    UnidirectionalLightHandle { id }
 }
 
 pub fn setup_shadowable_unidirectional_light(
     light_storage: &mut LightStorage,
     view_transform: &Similarity3<f32>,
-    unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
+    unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
     desynchronized: &mut bool,
-) -> ShadowableUnidirectionalLightComp {
+) -> ShadowableUnidirectionalLightHandle {
     // The view transform contains no scaling, so the direction remains normalized
     let direction = UnitVector3::new_unchecked(
         view_transform.transform_vector(&unidirectional_emission.direction),
@@ -126,23 +122,23 @@ pub fn setup_shadowable_unidirectional_light(
 
     *desynchronized = true;
 
-    ShadowableUnidirectionalLightComp { id }
+    ShadowableUnidirectionalLightHandle { id }
 }
 
 pub fn sync_ambient_light_in_storage(
     light_storage: &mut LightStorage,
-    ambient_light: &AmbientLightComp,
-    ambient_emission: &AmbientEmissionComp,
+    ambient_light: &AmbientLightHandle,
+    ambient_emission: &AmbientEmission,
 ) {
     light_storage.set_ambient_light_illuminance(ambient_light.id, ambient_emission.illuminance);
 }
 
 pub fn sync_omnidirectional_light_in_storage(
     light_storage: &mut LightStorage,
-    omnidirectional_light: &OmnidirectionalLightComp,
+    omnidirectional_light: &OmnidirectionalLightHandle,
     view_transform: &Similarity3<f32>,
     position: &Point3<f32>,
-    omnidirectional_emission: &OmnidirectionalEmissionComp,
+    omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
 ) {
     let light_id = omnidirectional_light.id;
@@ -155,10 +151,10 @@ pub fn sync_omnidirectional_light_in_storage(
 
 pub fn sync_shadowable_omnidirectional_light_in_storage(
     light_storage: &mut LightStorage,
-    omnidirectional_light: &ShadowableOmnidirectionalLightComp,
+    omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
     view_transform: &Similarity3<f32>,
     position: &Point3<f32>,
-    omnidirectional_emission: &ShadowableOmnidirectionalEmissionComp,
+    omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
 ) {
     let light_id = omnidirectional_light.id;
@@ -171,9 +167,9 @@ pub fn sync_shadowable_omnidirectional_light_in_storage(
 
 pub fn sync_unidirectional_light_in_storage(
     light_storage: &mut LightStorage,
-    unidirectional_light: &UnidirectionalLightComp,
+    unidirectional_light: &UnidirectionalLightHandle,
     view_transform: &Similarity3<f32>,
-    unidirectional_emission: &UnidirectionalEmissionComp,
+    unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) {
     let light_id = unidirectional_light.id;
@@ -188,10 +184,10 @@ pub fn sync_unidirectional_light_in_storage(
 
 pub fn sync_unidirectional_light_with_orientation_in_storage(
     light_storage: &mut LightStorage,
-    unidirectional_light: &UnidirectionalLightComp,
+    unidirectional_light: &UnidirectionalLightHandle,
     view_transform: &Similarity3<f32>,
     orientation: &UnitQuaternion<f32>,
-    unidirectional_emission: &UnidirectionalEmissionComp,
+    unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) {
     let world_direction = orientation.transform_vector(&unidirectional_emission.direction);
@@ -208,9 +204,9 @@ pub fn sync_unidirectional_light_with_orientation_in_storage(
 
 pub fn sync_shadowable_unidirectional_light_in_storage(
     light_storage: &mut LightStorage,
-    unidirectional_light: &ShadowableUnidirectionalLightComp,
+    unidirectional_light: &ShadowableUnidirectionalLightHandle,
     view_transform: &Similarity3<f32>,
-    unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
+    unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) {
     let light_id = unidirectional_light.id;
@@ -225,10 +221,10 @@ pub fn sync_shadowable_unidirectional_light_in_storage(
 
 pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
     light_storage: &mut LightStorage,
-    unidirectional_light: &ShadowableUnidirectionalLightComp,
+    unidirectional_light: &ShadowableUnidirectionalLightHandle,
     view_transform: &Similarity3<f32>,
     orientation: &UnitQuaternion<f32>,
-    unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
+    unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) {
     let world_direction = orientation.transform_vector(&unidirectional_emission.direction);
@@ -245,9 +241,10 @@ pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
 
 /// Checks if the given entity has a light component, and if so, removes the
 /// assocated light from the given [`LightStorage`].
+#[cfg(feature = "ecs")]
 pub fn cleanup_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
+    light_storage: &std::sync::RwLock<LightStorage>,
+    entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
     cleanup_ambient_light_for_removed_entity(light_storage, entity, desynchronized);
@@ -255,14 +252,15 @@ pub fn cleanup_light_for_removed_entity(
     cleanup_unidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
 }
 
-/// Checks if the given entity has a [`AmbientLightComp`], and if so, removes
+/// Checks if the given entity has a [`AmbientLightHandle`], and if so, removes
 /// the assocated [`AmbientLight`] from the given [`LightStorage`].
+#[cfg(feature = "ecs")]
 fn cleanup_ambient_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
+    light_storage: &std::sync::RwLock<LightStorage>,
+    entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
-    if let Some(ambient_light) = entity.get_component::<AmbientLightComp>() {
+    if let Some(ambient_light) = entity.get_component::<AmbientLightHandle>() {
         let light_id = ambient_light.access().id;
         light_storage
             .write()
@@ -272,16 +270,17 @@ fn cleanup_ambient_light_for_removed_entity(
     }
 }
 
-/// Checks if the given entity has a [`OmnidirectionalLightComp`] or
-/// [`ShadowableOmnidirectionalLightComp`], and if so, removes the assocated
+/// Checks if the given entity has a [`OmnidirectionalLightHandle`] or
+/// [`ShadowableOmnidirectionalLightHandle`], and if so, removes the assocated
 /// [`OmnidirectionalLight`] or [`ShadowableOmnidirectionalLight`] from the
 /// given [`LightStorage`].
+#[cfg(feature = "ecs")]
 fn cleanup_omnidirectional_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
+    light_storage: &std::sync::RwLock<LightStorage>,
+    entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
-    if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightComp>() {
+    if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightHandle>() {
         let light_id = omnidirectional_light.access().id;
         light_storage
             .write()
@@ -291,7 +290,7 @@ fn cleanup_omnidirectional_light_for_removed_entity(
     }
 
     if let Some(omnidirectional_light) =
-        entity.get_component::<ShadowableOmnidirectionalLightComp>()
+        entity.get_component::<ShadowableOmnidirectionalLightHandle>()
     {
         let light_id = omnidirectional_light.access().id;
         light_storage
@@ -302,16 +301,17 @@ fn cleanup_omnidirectional_light_for_removed_entity(
     }
 }
 
-/// Checks if the given entity has a [`UnidirectionalLightComp`] or
-/// [`ShadowableUnidirectionalLightComp`], and if so, removes the assocated
+/// Checks if the given entity has a [`UnidirectionalLightHandle`] or
+/// [`ShadowableUnidirectionalLightHandle`], and if so, removes the assocated
 /// [`UnidirectionalLight`] or [`ShadowableUnidirectionalLight`] from the given
 /// [`LightStorage`].
+#[cfg(feature = "ecs")]
 fn cleanup_unidirectional_light_for_removed_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
+    light_storage: &std::sync::RwLock<LightStorage>,
+    entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
-    if let Some(unidirectional_light) = entity.get_component::<UnidirectionalLightComp>() {
+    if let Some(unidirectional_light) = entity.get_component::<UnidirectionalLightHandle>() {
         let light_id = unidirectional_light.access().id;
         light_storage
             .write()
@@ -320,7 +320,8 @@ fn cleanup_unidirectional_light_for_removed_entity(
         *desynchronized = true;
     }
 
-    if let Some(unidirectional_light) = entity.get_component::<ShadowableUnidirectionalLightComp>()
+    if let Some(unidirectional_light) =
+        entity.get_component::<ShadowableUnidirectionalLightHandle>()
     {
         let light_id = unidirectional_light.access().id;
         light_storage

@@ -1,49 +1,36 @@
-//! [`Component`](impact_ecs::component::Component)s related to cameras.
+//! Camera setup.
 
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::SetupComponent;
 use impact_math::{Angle, Radians};
 use roc_integration::roc;
 
-/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
-/// entities that have a
-/// [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
-///
-/// The purpose of this component is to aid in constructing a
-/// [`SceneGraphCameraNodeComp`](crate::scene::components::SceneGraphCameraNodeComp) for the
-/// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
-/// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
-/// creation.
-#[roc(parents = "Comp", name = "PerspectiveCamera")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
-pub struct PerspectiveCameraComp {
-    vertical_field_of_view: Radians<f32>,
-    near_distance: f32,
-    far_distance: f32,
+define_setup_type! {
+    /// Properties of a [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct PerspectiveCamera {
+        vertical_field_of_view: Radians<f32>,
+        near_distance: f32,
+        far_distance: f32,
+    }
 }
 
-/// [`SetupComponent`](impact_ecs::component::SetupComponent) for initializing
-/// entities that have an
-/// [`OrthographicCamera`](crate::camera::OrthographicCamera).
-///
-/// The purpose of this component is to aid in constructing a
-/// [`SceneGraphCameraNodeComp`](crate::scene::components::SceneGraphCameraNodeComp) for the
-/// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
-/// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
-/// creation.
-#[roc(parents = "Comp", name = "OrthographicCamera")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, SetupComponent)]
-pub struct OrthographicCameraComp {
-    vertical_field_of_view: Radians<f32>,
-    near_distance: f32,
-    far_distance: f32,
+define_setup_type! {
+    /// Properties of an [`OrthographicCamera`](crate::camera::OrthographicCamera).
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct OrthographicCamera {
+        vertical_field_of_view: Radians<f32>,
+        near_distance: f32,
+        far_distance: f32,
+    }
 }
 
 #[roc]
-impl PerspectiveCameraComp {
-    /// Creates a new component representing a
+impl PerspectiveCamera {
+    /// Creates a new value representing a
     /// [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
     /// vertical field of view (in radians) and near and far distance.
     ///
@@ -93,8 +80,8 @@ impl PerspectiveCameraComp {
 }
 
 #[roc]
-impl OrthographicCameraComp {
-    /// Creates a new component representing an
+impl OrthographicCamera {
+    /// Creates a new value representing an
     /// [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
     /// vertical field of view (in radians) and near and far distance.
     ///

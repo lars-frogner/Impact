@@ -14,7 +14,7 @@ use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 
@@ -76,7 +76,7 @@ impl RigidBodyForceManager {
 fn reset_forces_and_torques(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |rigid_body: &mut RigidBodyComp, flags: &SceneEntityFlagsComp| {
+        |rigid_body: &mut RigidBodyComp, flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }

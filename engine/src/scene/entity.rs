@@ -14,11 +14,12 @@ use impact_ecs::{
     world::{EntityEntry, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
-use impact_material::{MaterialTextureProvider, components::MaterialComp};
-use impact_mesh::components::TriangleMeshComp;
-use impact_scene::components::{
-    ParentComp, SceneEntityFlagsComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
-    SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp, UncullableComp,
+use impact_material::{MaterialHandle, MaterialTextureProvider};
+use impact_mesh::TriangleMeshHandle;
+use impact_scene::{
+    SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
+    SceneGraphParentNodeHandle,
+    setup::{Parent, SceneGraphGroup, Uncullable},
 };
 use std::sync::RwLock;
 
@@ -109,13 +110,13 @@ impl Scene {
     ) {
         self.remove_model_instance_node_for_entity(entity, desynchronized);
 
-        impact_material::entity::cleanup_material_for_removed_entity(
+        impact_material::setup::cleanup_material_for_removed_entity(
             self.instance_feature_manager(),
             entity,
             desynchronized,
         );
 
-        impact_light::entity::cleanup_light_for_removed_entity(
+        impact_light::setup::cleanup_light_for_removed_entity(
             self.light_storage(),
             entity,
             desynchronized,
@@ -144,14 +145,14 @@ impl Scene {
                 let ecs_world = ecs_world.read().unwrap();
             },
             components,
-            |parent: &ParentComp| -> Result<SceneGraphParentNodeComp> {
+            |parent: &Parent| -> Result<SceneGraphParentNodeHandle> {
                 let parent_entity = ecs_world
                     .get_entity(parent.entity_id)
                     .ok_or_else(|| anyhow!("Missing parent entity with ID {}", parent.entity_id))?;
 
-                impact_scene::entity::setup_parent_group_node(parent_entity)
+                impact_scene::setup::setup_parent_group_node(parent_entity)
             },
-            ![SceneGraphParentNodeComp]
+            ![SceneGraphParentNodeHandle]
         )
     }
 
@@ -162,21 +163,21 @@ impl Scene {
             },
             components,
             |frame: Option<&ReferenceFrameComp>,
-             parent: Option<&SceneGraphParentNodeComp>|
-             -> SceneGraphGroupNodeComp {
+             parent: Option<&SceneGraphParentNodeHandle>|
+             -> SceneGraphGroupNodeHandle {
                 let group_to_parent_transform = frame
                     .cloned()
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                impact_scene::entity::setup_group_node(
+                impact_scene::setup::setup_group_node(
                     &mut scene_graph,
                     group_to_parent_transform,
                     parent,
                 )
             },
-            [SceneGraphGroupComp],
-            ![SceneGraphGroupNodeComp]
+            [SceneGraphGroup],
+            ![SceneGraphGroupNodeHandle]
         );
     }
 
@@ -192,20 +193,20 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |mesh: &TriangleMeshComp,
-             material: &MaterialComp,
+            |mesh: &TriangleMeshHandle,
+             material: &MaterialHandle,
              frame: Option<&ReferenceFrameComp>,
-             parent: Option<&SceneGraphParentNodeComp>,
-             flags: Option<&SceneEntityFlagsComp>|
-             -> Result<(SceneGraphModelInstanceNodeComp, SceneEntityFlagsComp)> {
+             parent: Option<&SceneGraphParentNodeHandle>,
+             flags: Option<&SceneEntityFlags>|
+             -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
                 let model_to_parent_transform = frame
                     .cloned()
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                let uncullable = components.has_component_type::<UncullableComp>();
+                let uncullable = components.has_component_type::<Uncullable>();
 
-                impact_scene::entity::setup_model_instance_node(
+                impact_scene::setup::setup_model_instance_node(
                     &mesh_repository,
                     &material_library,
                     &mut instance_feature_manager,
@@ -218,7 +219,7 @@ impl Scene {
                     uncullable,
                 )
             },
-            ![SceneGraphModelInstanceNodeComp]
+            ![SceneGraphModelInstanceNodeHandle]
         )
     }
 
@@ -227,7 +228,7 @@ impl Scene {
         entity: &EntityEntry<'_>,
         desynchronized: &mut bool,
     ) {
-        impact_scene::entity::remove_model_instance_node_for_entity(
+        impact_scene::setup::remove_model_instance_node_for_entity(
             &self.instance_feature_manager,
             &self.scene_graph,
             entity,

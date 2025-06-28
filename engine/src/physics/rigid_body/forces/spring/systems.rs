@@ -18,7 +18,7 @@ use impact_ecs::{
     query,
     world::{EntityEntry, EntityID, World as ECSWorld},
 };
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 use nalgebra::UnitVector3;
 
 /// The outcome of applying the forces from a spring.
@@ -66,11 +66,11 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
     };
 
     let entity_1_is_disabled = entity_1
-        .get_component::<SceneEntityFlagsComp>()
+        .get_component::<SceneEntityFlags>()
         .is_some_and(|comp| comp.access().is_disabled());
 
     let entity_2_is_disabled = entity_2
-        .get_component::<SceneEntityFlagsComp>()
+        .get_component::<SceneEntityFlags>()
         .is_some_and(|comp| comp.access().is_disabled());
 
     if entity_1_is_disabled || entity_2_is_disabled {

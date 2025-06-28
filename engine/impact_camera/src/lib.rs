@@ -1,7 +1,10 @@
 //! Cameras.
 
+#[macro_use]
+mod macros;
+
 pub mod buffer;
-pub mod components;
+pub mod setup;
 
 use approx::assert_abs_diff_ne;
 use impact_containers::EntityChangeTracker;

@@ -2,7 +2,7 @@
 
 use super::Engine;
 use anyhow::Result;
-use impact_mesh::{components::TriangleMeshComp, texture_projection::TextureProjection};
+use impact_mesh::{TriangleMeshHandle, texture_projection::TextureProjection};
 use std::{fmt, path::Path};
 
 impl Engine {
@@ -11,12 +11,12 @@ impl Engine {
     /// are multiple meshes in the file, they are merged into a single mesh.
     ///
     /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
+    /// The [`TriangleMeshHandle`] to the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
     #[cfg(feature = "obj")]
-    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<TriangleMeshComp>
+    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<TriangleMeshHandle>
     where
         P: AsRef<Path> + fmt::Debug,
     {
@@ -32,7 +32,7 @@ impl Engine {
     /// merged into a single mesh.
     ///
     /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
+    /// The [`TriangleMeshHandle`] to the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
@@ -41,7 +41,7 @@ impl Engine {
         &self,
         obj_file_path: P,
         projection: &impl TextureProjection<f32>,
-    ) -> Result<TriangleMeshComp>
+    ) -> Result<TriangleMeshHandle>
     where
         P: AsRef<Path> + fmt::Debug,
     {
@@ -59,12 +59,12 @@ impl Engine {
     /// repository if it does not already exist.
     ///
     /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
+    /// The [`TriangleMeshHandle`] to the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
     #[cfg(feature = "ply")]
-    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<TriangleMeshComp>
+    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<TriangleMeshHandle>
     where
         P: AsRef<Path> + fmt::Debug,
     {
@@ -79,7 +79,7 @@ impl Engine {
     /// texture coordinates for the mesh using the given projection.
     ///
     /// # Returns
-    /// The [`TriangleMeshComp`] representing the mesh.
+    /// The [`TriangleMeshHandle`] to the mesh.
     ///
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
@@ -88,7 +88,7 @@ impl Engine {
         &self,
         ply_file_path: P,
         projection: &impl TextureProjection<f32>,
-    ) -> Result<TriangleMeshComp>
+    ) -> Result<TriangleMeshHandle>
     where
         P: AsRef<Path> + fmt::Debug,
     {

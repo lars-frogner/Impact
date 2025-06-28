@@ -1,16 +1,16 @@
 //! Materials.
 
-pub mod components;
-pub mod entity;
-mod features;
+#[macro_use]
+mod macros;
 
-pub use features::{
-    MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, register_material_feature_types,
-};
+pub mod features;
+pub mod setup;
+
+pub use features::register_material_feature_types;
 
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use entity::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};
+use features::MaterialInstanceFeatureFlags;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{
     device::GraphicsDevice,
@@ -23,6 +23,7 @@ use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeatureID, InstanceFeatureTypeID};
 use nalgebra::Vector3;
 use roc_integration::roc;
+use setup::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};
 use std::{collections::hash_map::Entry, fmt};
 
 /// Represents a source of textures and samplers for materials.
@@ -53,21 +54,23 @@ stringhash64_newtype!(
     [pub] MaterialPropertyTextureGroupID
 );
 
-/// A handle for a material, containing the IDs for the pieces of data holding
-/// information about the material.
-#[roc(parents = "Material")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct MaterialHandle {
-    /// The ID of the material's [`MaterialSpecification`].
-    material_id: MaterialID,
-    /// The ID of the entry for the material's per-instance material properties
-    /// in the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage)
-    /// (may be N/A).
-    material_property_feature_id: InstanceFeatureID,
-    /// The ID of the material's [`MaterialPropertyTextureGroup`] (may represent
-    /// an empty group).
-    material_property_texture_group_id: MaterialPropertyTextureGroupID,
+define_component_type! {
+    /// A handle for a material, containing the IDs for the pieces of data holding
+    /// information about the material.
+    #[roc(parents = "Material")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct MaterialHandle {
+        /// The ID of the material's [`MaterialSpecification`].
+        material_id: MaterialID,
+        /// The ID of the entry for the material's per-instance material properties
+        /// in the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage)
+        /// (may be N/A).
+        material_property_feature_id: InstanceFeatureID,
+        /// The ID of the material's [`MaterialPropertyTextureGroup`] (may represent
+        /// an empty group).
+        material_property_texture_group_id: MaterialPropertyTextureGroupID,
+    }
 }
 
 /// A material description specifying a material's set of required vertex

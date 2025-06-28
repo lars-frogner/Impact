@@ -1,18 +1,36 @@
 //! Materials with a fixed color or texture.
 
-use super::super::features::FixedColorMaterialFeature;
 use crate::{
     MaterialHandle, MaterialID, MaterialInstanceFeatureFlags, MaterialLibrary,
     MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialShaderInput,
-    MaterialSpecification, MaterialTextureProvider,
-    components::{FixedColorComp, FixedTextureComp, MaterialComp},
+    MaterialSpecification, MaterialTextureProvider, RGBColor, features::FixedColorMaterialFeature,
 };
 use anyhow::Result;
-use impact_gpu::device::GraphicsDevice;
+use bytemuck::{Pod, Zeroable};
+use impact_gpu::{device::GraphicsDevice, texture::TextureID};
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, InstanceFeatureManager};
+use roc_integration::roc;
 use std::{collections::hash_map::Entry, hash::Hash, sync::LazyLock};
+
+define_setup_type! {
+    target = MaterialHandle;
+    /// A fixed, uniform color that is independent of lighting.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct FixedColor(pub RGBColor);
+}
+
+define_setup_type! {
+    target = MaterialHandle;
+    /// A fixed, textured color that is independent of lighting.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct FixedTexture(pub TextureID);
+}
 
 /// Binding locations for textures used in a fixed material.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,9 +46,9 @@ static FIXED_TEXTURE_MATERIAL_ID: LazyLock<MaterialID> =
 pub fn setup_fixed_color_material<MID: Eq + Hash>(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
-    fixed_color: &FixedColorComp,
+    fixed_color: &FixedColor,
     desynchronized: &mut bool,
-) -> MaterialComp {
+) -> MaterialHandle {
     let feature_id = instance_feature_manager
         .get_storage_mut::<FixedColorMaterialFeature>()
         .expect("Missing storage for FixedColorMaterialFeature features")
@@ -52,19 +70,15 @@ pub fn setup_fixed_color_material<MID: Eq + Hash>(
 
     *desynchronized = true;
 
-    MaterialComp::new(MaterialHandle::new(
-        *FIXED_COLOR_MATERIAL_ID,
-        Some(feature_id),
-        None,
-    ))
+    MaterialHandle::new(*FIXED_COLOR_MATERIAL_ID, Some(feature_id), None)
 }
 
 pub fn setup_fixed_texture_material(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &mut MaterialLibrary,
-    fixed_texture: &FixedTextureComp,
-) -> Result<MaterialComp> {
+    fixed_texture: &FixedTexture,
+) -> Result<MaterialHandle> {
     material_library
         .material_specification_entry(*FIXED_TEXTURE_MATERIAL_ID)
         .or_insert_with(|| {
@@ -96,9 +110,9 @@ pub fn setup_fixed_texture_material(
         )?);
     };
 
-    Ok(MaterialComp::new(MaterialHandle::new(
+    Ok(MaterialHandle::new(
         *FIXED_TEXTURE_MATERIAL_ID,
         None,
         Some(texture_group_id),
-    )))
+    ))
 }

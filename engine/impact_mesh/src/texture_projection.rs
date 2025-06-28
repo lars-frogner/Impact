@@ -1,12 +1,9 @@
 //! Texture projection.
 
-pub mod components;
-
 use anyhow::{Result, bail};
 use approx::abs_diff_eq;
 use impact_math::Float;
 use nalgebra::{Point3, UnitVector3, Vector2, Vector3, vector};
-use serde::{Deserialize, Serialize};
 
 /// Represents a projection of 3D positions into UV texture coordinates.
 pub trait TextureProjection<F: Float> {
@@ -30,7 +27,8 @@ pub struct PlanarTextureProjection<F: Float> {
     inverse_v_vector_length: F,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub enum TextureProjectionSpecification {
     Planar {
         origin: Point3<f32>,

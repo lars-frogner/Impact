@@ -23,10 +23,7 @@ use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
-use impact_scene::{
-    components::{SceneEntityFlagsComp, SceneGraphParentNodeComp},
-    graph::SceneGraph,
-};
+use impact_scene::{SceneEntityFlags, SceneGraphParentNodeHandle, graph::SceneGraph};
 use nalgebra::{Similarity3, Vector3};
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
@@ -37,153 +34,150 @@ pub fn apply_absorption(
     scene_graph: &SceneGraph,
     ecs_world: &ECSWorld,
 ) {
-    query!(
-        ecs_world,
-        |entity_id: EntityID,
-         voxel_object: &VoxelObjectComp,
-         reference_frame: &mut ReferenceFrameComp,
-         velocity: &mut VelocityComp,
-         rigid_body: &mut RigidBodyComp,
-         flags: &SceneEntityFlagsComp| {
-            if flags.is_disabled() {
-                return;
-            }
+    query!(ecs_world, |entity_id: EntityID,
+                       voxel_object: &VoxelObjectComp,
+                       reference_frame: &mut ReferenceFrameComp,
+                       velocity: &mut VelocityComp,
+                       rigid_body: &mut RigidBodyComp,
+                       flags: &SceneEntityFlags| {
+        if flags.is_disabled() {
+            return;
+        }
 
-            let (object, inertial_property_manager) = voxel_manager
-                .object_manager
-                .get_voxel_object_with_inertial_property_manager_mut(voxel_object.voxel_object_id);
+        let (object, inertial_property_manager) = voxel_manager
+            .object_manager
+            .get_voxel_object_with_inertial_property_manager_mut(voxel_object.voxel_object_id);
 
-            let object = object
-                .expect("Missing voxel object for entity with VoxelObjectComp")
-                .object_mut();
+        let object = object
+            .expect("Missing voxel object for entity with VoxelObjectComp")
+            .object_mut();
 
-            let inertial_property_manager = inertial_property_manager
-                .expect("Missing inertial property manager for entity with VoxelObjectComp");
+        let inertial_property_manager = inertial_property_manager
+            .expect("Missing inertial property manager for entity with VoxelObjectComp");
 
-            let world_to_voxel_object_transform = reference_frame
-                .create_transform_to_parent_space::<f64>()
-                .inverse();
+        let world_to_voxel_object_transform = reference_frame
+            .create_transform_to_parent_space::<f64>()
+            .inverse();
 
-            let mut inertial_property_updater = inertial_property_manager.begin_update(
-                object.voxel_extent(),
-                voxel_manager.type_registry.mass_densities(),
-            );
+        let mut inertial_property_updater = inertial_property_manager.begin_update(
+            object.voxel_extent(),
+            voxel_manager.type_registry.mass_densities(),
+        );
 
-            let time_step_duration = simulator.time_step_duration();
+        let time_step_duration = simulator.time_step_duration();
 
-            query!(
-                ecs_world,
-                |absorbing_sphere: &VoxelAbsorbingSphereComp,
-                 sphere_frame: &ReferenceFrameComp,
-                 flags: &SceneEntityFlagsComp| {
-                    if flags.is_disabled() {
-                        return;
-                    }
-
-                    let sphere_to_world_transform =
-                        sphere_frame.create_transform_to_parent_space::<f64>();
-
-                    apply_sphere_absorption(
-                        time_step_duration,
-                        &mut inertial_property_updater,
-                        object,
-                        &world_to_voxel_object_transform,
-                        absorbing_sphere,
-                        &sphere_to_world_transform,
-                    );
-                },
-                ![SceneGraphParentNodeComp]
-            );
-
-            query!(
-                ecs_world,
-                |absorbing_sphere: &VoxelAbsorbingSphereComp,
-                 sphere_frame: &ReferenceFrameComp,
-                 parent: &SceneGraphParentNodeComp,
-                 flags: &SceneEntityFlagsComp| {
-                    if flags.is_disabled() {
-                        return;
-                    }
-
-                    let parent_node = scene_graph.group_nodes().node(parent.id);
-
-                    let sphere_to_world_transform = parent_node.group_to_root_transform().cast()
-                        * sphere_frame.create_transform_to_parent_space::<f64>();
-
-                    apply_sphere_absorption(
-                        time_step_duration,
-                        &mut inertial_property_updater,
-                        object,
-                        &world_to_voxel_object_transform,
-                        absorbing_sphere,
-                        &sphere_to_world_transform,
-                    );
+        query!(
+            ecs_world,
+            |absorbing_sphere: &VoxelAbsorbingSphereComp,
+             sphere_frame: &ReferenceFrameComp,
+             flags: &SceneEntityFlags| {
+                if flags.is_disabled() {
+                    return;
                 }
-            );
 
-            query!(
-                ecs_world,
-                |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
-                 capsule_frame: &ReferenceFrameComp,
-                 flags: &SceneEntityFlagsComp| {
-                    if flags.is_disabled() {
-                        return;
-                    }
+                let sphere_to_world_transform =
+                    sphere_frame.create_transform_to_parent_space::<f64>();
 
-                    let capsule_to_world_transform =
-                        capsule_frame.create_transform_to_parent_space::<f64>();
+                apply_sphere_absorption(
+                    time_step_duration,
+                    &mut inertial_property_updater,
+                    object,
+                    &world_to_voxel_object_transform,
+                    absorbing_sphere,
+                    &sphere_to_world_transform,
+                );
+            },
+            ![SceneGraphParentNodeHandle]
+        );
 
-                    apply_capsule_absorption(
-                        time_step_duration,
-                        &mut inertial_property_updater,
-                        object,
-                        &world_to_voxel_object_transform,
-                        absorbing_capsule,
-                        &capsule_to_world_transform,
-                    );
-                },
-                ![SceneGraphParentNodeComp]
-            );
-
-            query!(
-                ecs_world,
-                |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
-                 capsule_frame: &ReferenceFrameComp,
-                 parent: &SceneGraphParentNodeComp,
-                 flags: &SceneEntityFlagsComp| {
-                    if flags.is_disabled() {
-                        return;
-                    }
-
-                    let parent_node = scene_graph.group_nodes().node(parent.id);
-
-                    let capsule_to_world_transform = parent_node.group_to_root_transform().cast()
-                        * capsule_frame.create_transform_to_parent_space::<f64>();
-
-                    apply_capsule_absorption(
-                        time_step_duration,
-                        &mut inertial_property_updater,
-                        object,
-                        &world_to_voxel_object_transform,
-                        absorbing_capsule,
-                        &capsule_to_world_transform,
-                    );
+        query!(
+            ecs_world,
+            |absorbing_sphere: &VoxelAbsorbingSphereComp,
+             sphere_frame: &ReferenceFrameComp,
+             parent: &SceneGraphParentNodeHandle,
+             flags: &SceneEntityFlags| {
+                if flags.is_disabled() {
+                    return;
                 }
-            );
 
-            if object.invalidated_mesh_chunk_indices().len() > 0 {
-                handle_voxel_object_after_removing_voxels(
-                    voxel_manager,
-                    ecs_world,
-                    entity_id,
-                    voxel_object,
-                    reference_frame,
-                    velocity,
-                    rigid_body,
+                let parent_node = scene_graph.group_nodes().node(parent.id);
+
+                let sphere_to_world_transform = parent_node.group_to_root_transform().cast()
+                    * sphere_frame.create_transform_to_parent_space::<f64>();
+
+                apply_sphere_absorption(
+                    time_step_duration,
+                    &mut inertial_property_updater,
+                    object,
+                    &world_to_voxel_object_transform,
+                    absorbing_sphere,
+                    &sphere_to_world_transform,
                 );
             }
+        );
+
+        query!(
+            ecs_world,
+            |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
+             capsule_frame: &ReferenceFrameComp,
+             flags: &SceneEntityFlags| {
+                if flags.is_disabled() {
+                    return;
+                }
+
+                let capsule_to_world_transform =
+                    capsule_frame.create_transform_to_parent_space::<f64>();
+
+                apply_capsule_absorption(
+                    time_step_duration,
+                    &mut inertial_property_updater,
+                    object,
+                    &world_to_voxel_object_transform,
+                    absorbing_capsule,
+                    &capsule_to_world_transform,
+                );
+            },
+            ![SceneGraphParentNodeHandle]
+        );
+
+        query!(
+            ecs_world,
+            |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
+             capsule_frame: &ReferenceFrameComp,
+             parent: &SceneGraphParentNodeHandle,
+             flags: &SceneEntityFlags| {
+                if flags.is_disabled() {
+                    return;
+                }
+
+                let parent_node = scene_graph.group_nodes().node(parent.id);
+
+                let capsule_to_world_transform = parent_node.group_to_root_transform().cast()
+                    * capsule_frame.create_transform_to_parent_space::<f64>();
+
+                apply_capsule_absorption(
+                    time_step_duration,
+                    &mut inertial_property_updater,
+                    object,
+                    &world_to_voxel_object_transform,
+                    absorbing_capsule,
+                    &capsule_to_world_transform,
+                );
+            }
+        );
+
+        if object.invalidated_mesh_chunk_indices().len() > 0 {
+            handle_voxel_object_after_removing_voxels(
+                voxel_manager,
+                ecs_world,
+                entity_id,
+                voxel_object,
+                reference_frame,
+                velocity,
+                rigid_body,
+            );
         }
-    );
+    });
 }
 
 fn apply_sphere_absorption(
@@ -436,7 +430,7 @@ fn add_additional_parent_components_for_disconnected_object(
         .expect("Missing parent entity for disconnected voxel object");
 
     if let Some(scene_graph_parent) = parent.get_component() {
-        let scene_graph_parent: &SceneGraphParentNodeComp = scene_graph_parent.access();
+        let scene_graph_parent: &SceneGraphParentNodeHandle = scene_graph_parent.access();
         components
             .add_new_component_type(scene_graph_parent.into_storage())
             .unwrap();

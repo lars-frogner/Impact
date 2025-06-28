@@ -4,13 +4,15 @@ use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_gpu::device::GraphicsDevice;
 use impact_material::{
-    MaterialLibrary, MaterialTextureProvider,
-    components::{
-        FixedColorComp, FixedTextureComp, MaterialComp, NormalMapComp, ParallaxMapComp,
-        TexturedColorComp, TexturedEmissiveLuminanceComp, TexturedMetalnessComp,
-        TexturedRoughnessComp, TexturedSpecularReflectanceComp, UniformColorComp,
-        UniformEmissiveLuminanceComp, UniformMetalnessComp, UniformRoughnessComp,
-        UniformSpecularReflectanceComp,
+    MaterialHandle, MaterialLibrary, MaterialTextureProvider,
+    setup::{
+        self,
+        fixed::{FixedColor, FixedTexture},
+        physical::{
+            NormalMap, ParallaxMap, TexturedColor, TexturedEmissiveLuminance, TexturedMetalness,
+            TexturedRoughness, TexturedSpecularReflectance, UniformColor, UniformEmissiveLuminance,
+            UniformMetalness, UniformRoughness, UniformSpecularReflectance,
+        },
     },
 };
 use impact_model::InstanceFeatureManager;
@@ -72,15 +74,15 @@ fn setup_fixed_color_material_for_new_entity<MID: Eq + Hash>(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |fixed_color: &FixedColorComp| -> MaterialComp {
-            impact_material::entity::fixed::setup_fixed_color_material(
+        |fixed_color: &FixedColor| -> MaterialHandle {
+            setup::fixed::setup_fixed_color_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 fixed_color,
                 desynchronized,
             )
         },
-        ![MaterialComp]
+        ![MaterialHandle]
     );
 }
 
@@ -99,15 +101,15 @@ fn setup_fixed_texture_material_for_new_entity(
             let mut material_library = material_library.write().unwrap();
         },
         components,
-        |fixed_texture: &FixedTextureComp| -> Result<MaterialComp> {
-            impact_material::entity::fixed::setup_fixed_texture_material(
+        |fixed_texture: &FixedTexture| -> Result<MaterialHandle> {
+            setup::fixed::setup_fixed_texture_material(
                 graphics_device,
                 texture_provider,
                 &mut material_library,
                 fixed_texture,
             )
         },
-        ![MaterialComp]
+        ![MaterialHandle]
     )
 }
 
@@ -131,19 +133,19 @@ fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |uniform_color: &UniformColorComp,
-         uniform_specular_reflectance: Option<&UniformSpecularReflectanceComp>,
-         textured_specular_reflectance: Option<&TexturedSpecularReflectanceComp>,
-         uniform_roughness: Option<&UniformRoughnessComp>,
-         textured_roughness: Option<&TexturedRoughnessComp>,
-         uniform_metalness: Option<&UniformMetalnessComp>,
-         textured_metalness: Option<&TexturedMetalnessComp>,
-         uniform_emissive_luminance: Option<&UniformEmissiveLuminanceComp>,
-         textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
-         normal_map: Option<&NormalMapComp>,
-         parallax_map: Option<&ParallaxMapComp>|
-         -> Result<MaterialComp> {
-            impact_material::entity::physical::setup_physical_material(
+        |uniform_color: &UniformColor,
+         uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
+         textured_specular_reflectance: Option<&TexturedSpecularReflectance>,
+         uniform_roughness: Option<&UniformRoughness>,
+         textured_roughness: Option<&TexturedRoughness>,
+         uniform_metalness: Option<&UniformMetalness>,
+         textured_metalness: Option<&TexturedMetalness>,
+         uniform_emissive_luminance: Option<&UniformEmissiveLuminance>,
+         textured_emissive_luminance: Option<&TexturedEmissiveLuminance>,
+         normal_map: Option<&NormalMap>,
+         parallax_map: Option<&ParallaxMap>|
+         -> Result<MaterialHandle> {
+            setup::physical::setup_physical_material(
                 graphics_device,
                 texture_provider,
                 &mut material_library,
@@ -163,7 +165,7 @@ fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
                 desynchronized,
             )
         },
-        ![MaterialComp, TexturedColorComp]
+        ![MaterialHandle, TexturedColor]
     )?;
 
     setup!(
@@ -172,19 +174,19 @@ fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |textured_color: &TexturedColorComp,
-         uniform_specular_reflectance: Option<&UniformSpecularReflectanceComp>,
-         textured_specular_reflectance: Option<&TexturedSpecularReflectanceComp>,
-         uniform_roughness: Option<&UniformRoughnessComp>,
-         textured_roughness: Option<&TexturedRoughnessComp>,
-         uniform_metalness: Option<&UniformMetalnessComp>,
-         textured_metalness: Option<&TexturedMetalnessComp>,
-         uniform_emissive_luminance: Option<&UniformEmissiveLuminanceComp>,
-         textured_emissive_luminance: Option<&TexturedEmissiveLuminanceComp>,
-         normal_map: Option<&NormalMapComp>,
-         parallax_map: Option<&ParallaxMapComp>|
-         -> Result<MaterialComp> {
-            impact_material::entity::physical::setup_physical_material(
+        |textured_color: &TexturedColor,
+         uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
+         textured_specular_reflectance: Option<&TexturedSpecularReflectance>,
+         uniform_roughness: Option<&UniformRoughness>,
+         textured_roughness: Option<&TexturedRoughness>,
+         uniform_metalness: Option<&UniformMetalness>,
+         textured_metalness: Option<&TexturedMetalness>,
+         uniform_emissive_luminance: Option<&UniformEmissiveLuminance>,
+         textured_emissive_luminance: Option<&TexturedEmissiveLuminance>,
+         normal_map: Option<&NormalMap>,
+         parallax_map: Option<&ParallaxMap>|
+         -> Result<MaterialHandle> {
+            setup::physical::setup_physical_material(
                 graphics_device,
                 texture_provider,
                 &mut material_library,
@@ -204,6 +206,6 @@ fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
                 desynchronized,
             )
         },
-        ![MaterialComp, UniformColorComp]
+        ![MaterialHandle, UniformColor]
     )
 }

@@ -10,7 +10,7 @@ use crate::physics::rigid_body::{
 };
 use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_mesh::{MeshID, MeshRepository, components::TriangleMeshComp};
+use impact_mesh::{MeshID, MeshRepository, TriangleMeshHandle};
 use std::{path::PathBuf, sync::RwLock};
 
 /// Checks if the entity-to-be with the given components has the components
@@ -62,7 +62,7 @@ pub fn setup_drag_load_map_for_new_entity(
     }
 
     setup!(components, |drag: &DetailedDragComp,
-                        mesh: &TriangleMeshComp,
+                        mesh: &TriangleMeshHandle,
                         rigid_body: &RigidBodyComp|
      -> Result<DragLoadMapComp> {
         let mesh_id = mesh.id;

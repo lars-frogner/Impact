@@ -6,6 +6,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
+ecs = ["dep:impact_ecs"]
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_ecs/roc_codegen",
@@ -20,7 +21,7 @@ anyhow = { workspace = true }
 approx = { workspace = true }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
-impact_ecs = { path = "../impact_ecs" }
+impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_math = { path = "../impact_math" }

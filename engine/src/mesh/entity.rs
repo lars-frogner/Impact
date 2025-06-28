@@ -2,16 +2,14 @@
 
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_material::{MaterialLibrary, components::MaterialComp};
+use impact_material::{MaterialHandle, MaterialLibrary};
 use impact_mesh::{
-    MeshRepository,
-    components::TriangleMeshComp,
-    components::{
-        BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
-        RectangleMeshComp, SphereMeshComp,
+    MeshRepository, TriangleMeshHandle,
+    setup::{
+        self, BoxMesh, CircularFrustumMesh, ConeMesh, CylinderMesh, HemisphereMesh, RectangleMesh,
+        SphereMesh,
     },
-    entity,
-    texture_projection::{PlanarTextureProjection, components::PlanarTextureProjectionComp},
+    texture_projection::PlanarTextureProjection,
 };
 use std::sync::RwLock;
 
@@ -29,17 +27,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |rectangle_mesh: &RectangleMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |rectangle_mesh: &RectangleMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_rectangle_mesh(
+                (Some(planar_projection),) => setup::setup_rectangle_mesh(
                     &mut mesh_repository,
                     rectangle_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_rectangle_mesh(
+                (None,) => setup::setup_rectangle_mesh(
                     &mut mesh_repository,
                     rectangle_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -47,7 +45,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     setup!(
@@ -55,17 +53,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |box_mesh: &BoxMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |box_mesh: &BoxMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_box_mesh(
+                (Some(planar_projection),) => setup::setup_box_mesh(
                     &mut mesh_repository,
                     box_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_box_mesh(
+                (None,) => setup::setup_box_mesh(
                     &mut mesh_repository,
                     box_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -73,7 +71,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     setup!(
@@ -81,17 +79,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |cylinder_mesh: &CylinderMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |cylinder_mesh: &CylinderMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_cylinder_mesh(
+                (Some(planar_projection),) => setup::setup_cylinder_mesh(
                     &mut mesh_repository,
                     cylinder_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_cylinder_mesh(
+                (None,) => setup::setup_cylinder_mesh(
                     &mut mesh_repository,
                     cylinder_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -99,7 +97,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     setup!(
@@ -107,17 +105,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |cone_mesh: &ConeMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |cone_mesh: &ConeMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_cone_mesh(
+                (Some(planar_projection),) => setup::setup_cone_mesh(
                     &mut mesh_repository,
                     cone_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_cone_mesh(
+                (None,) => setup::setup_cone_mesh(
                     &mut mesh_repository,
                     cone_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -125,7 +123,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     setup!(
@@ -133,17 +131,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |circular_frustum_mesh: &CircularFrustumMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |circular_frustum_mesh: &CircularFrustumMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_circular_frustum_mesh(
+                (Some(planar_projection),) => setup::setup_circular_frustum_mesh(
                     &mut mesh_repository,
                     circular_frustum_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_circular_frustum_mesh(
+                (None,) => setup::setup_circular_frustum_mesh(
                     &mut mesh_repository,
                     circular_frustum_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -151,7 +149,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     setup!(
@@ -159,17 +157,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |sphere_mesh: &SphereMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |sphere_mesh: &SphereMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_sphere_mesh(
+                (Some(planar_projection),) => setup::setup_sphere_mesh(
                     &mut mesh_repository,
                     sphere_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_sphere_mesh(
+                (None,) => setup::setup_sphere_mesh(
                     &mut mesh_repository,
                     sphere_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -177,7 +175,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     setup!(
@@ -185,17 +183,17 @@ pub fn setup_mesh_for_new_entity(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |hemisphere_mesh: &HemisphereMeshComp,
-         planar_projection: Option<&PlanarTextureProjectionComp>|
-         -> TriangleMeshComp {
+        |hemisphere_mesh: &HemisphereMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshHandle {
             match (planar_projection,) {
-                (Some(planar_projection),) => entity::setup_hemisphere_mesh(
+                (Some(planar_projection),) => setup::setup_hemisphere_mesh(
                     &mut mesh_repository,
                     hemisphere_mesh,
-                    Some(&planar_projection.create_projection()),
+                    Some(&planar_projection.create()),
                     desynchronized,
                 ),
-                (None,) => entity::setup_hemisphere_mesh(
+                (None,) => setup::setup_hemisphere_mesh(
                     &mut mesh_repository,
                     hemisphere_mesh,
                     Option::<&PlanarTextureProjection<_>>::None,
@@ -203,7 +201,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshComp]
+        ![TriangleMeshHandle]
     );
 
     Ok(())
@@ -223,15 +221,21 @@ pub fn generate_missing_vertex_properties_for_new_entity_mesh(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |mesh: &TriangleMeshComp, material: &MaterialComp| {
-            let material_specification = material_library
-                .get_material_specification(material.material_handle().material_id())
-                .expect("Missing material in library for material component");
+        |mesh: &TriangleMeshHandle, material: &MaterialHandle| {
+            let Some(material_specification) =
+                material_library.get_material_specification(material.material_id())
+            else {
+                impact_log::warn!(
+                    "Tried to generate missing vertex properties for missing material {}",
+                    material.material_id()
+                );
+                return;
+            };
 
             let vertex_attribute_requirements =
                 material_specification.vertex_attribute_requirements();
 
-            entity::generate_missing_vertex_properties_for_mesh(
+            setup::generate_missing_vertex_properties_for_mesh(
                 &mut mesh_repository,
                 mesh.id,
                 vertex_attribute_requirements,

@@ -12,13 +12,10 @@ use crate::physics::{
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_mesh::{
-    MeshRepository,
-    components::{
-        BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, SphereMeshComp,
-        TriangleMeshComp,
-    },
+    MeshRepository, TriangleMeshHandle,
+    setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has a component
@@ -32,12 +29,12 @@ pub fn setup_rigid_body_for_new_entity(
         mut inertial_properties: InertialProperties,
         frame: Option<&ReferenceFrameComp>,
         velocity: Option<&VelocityComp>,
-        flags: Option<&SceneEntityFlagsComp>,
+        flags: Option<&SceneEntityFlags>,
     ) -> (
         RigidBodyComp,
         ReferenceFrameComp,
         VelocityComp,
-        SceneEntityFlagsComp,
+        SceneEntityFlags,
     ) {
         let mut frame = frame.cloned().unwrap_or_default();
 
@@ -70,16 +67,16 @@ pub fn setup_rigid_body_for_new_entity(
 
     setup!(
         components,
-        |box_mesh: &BoxMeshComp,
+        |box_mesh: &BoxMesh,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlagsComp>|
+         flags: Option<&SceneEntityFlags>|
          -> (
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
-            SceneEntityFlagsComp
+            SceneEntityFlags
         ) {
             let inertial_properties = InertialProperties::of_uniform_box(
                 fph::from(box_mesh.extent_x),
@@ -94,16 +91,16 @@ pub fn setup_rigid_body_for_new_entity(
 
     setup!(
         components,
-        |cylinder_mesh: &CylinderMeshComp,
+        |cylinder_mesh: &CylinderMesh,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlagsComp>|
+         flags: Option<&SceneEntityFlags>|
          -> (
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
-            SceneEntityFlagsComp
+            SceneEntityFlags
         ) {
             let inertial_properties = InertialProperties::of_uniform_cylinder(
                 fph::from(cylinder_mesh.length),
@@ -117,16 +114,16 @@ pub fn setup_rigid_body_for_new_entity(
 
     setup!(
         components,
-        |cone_mesh: &ConeMeshComp,
+        |cone_mesh: &ConeMesh,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlagsComp>|
+         flags: Option<&SceneEntityFlags>|
          -> (
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
-            SceneEntityFlagsComp
+            SceneEntityFlags
         ) {
             let inertial_properties = InertialProperties::of_uniform_cone(
                 fph::from(cone_mesh.length),
@@ -143,18 +140,18 @@ pub fn setup_rigid_body_for_new_entity(
         |uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlagsComp>|
+         flags: Option<&SceneEntityFlags>|
          -> (
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
-            SceneEntityFlagsComp
+            SceneEntityFlags
         ) {
             let inertial_properties =
                 InertialProperties::of_uniform_sphere(uniform_rigid_body.mass_density);
             execute_setup(inertial_properties, frame, velocity, flags)
         },
-        [SphereMeshComp],
+        [SphereMesh],
         ![RigidBodyComp]
     );
 
@@ -163,33 +160,33 @@ pub fn setup_rigid_body_for_new_entity(
         |uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlagsComp>|
+         flags: Option<&SceneEntityFlags>|
          -> (
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
-            SceneEntityFlagsComp
+            SceneEntityFlags
         ) {
             let inertial_properties =
                 InertialProperties::of_uniform_hemisphere(uniform_rigid_body.mass_density);
             execute_setup(inertial_properties, frame, velocity, flags)
         },
-        [HemisphereMeshComp],
+        [HemisphereMesh],
         ![RigidBodyComp]
     );
 
     setup!(
         components,
-        |mesh: &TriangleMeshComp,
+        |mesh: &TriangleMeshHandle,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlagsComp>|
+         flags: Option<&SceneEntityFlags>|
          -> Result<(
             RigidBodyComp,
             ReferenceFrameComp,
             VelocityComp,
-            SceneEntityFlagsComp
+            SceneEntityFlags
         )> {
             let mesh_repository_readonly = mesh_repository.read().unwrap();
             let triangle_mesh = mesh_repository_readonly

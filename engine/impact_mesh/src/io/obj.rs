@@ -1,8 +1,8 @@
 //! Input/output of mesh data in Wavefront OBJ format.
 
 use crate::{
-    MeshID, MeshRepository, VertexNormalVector, VertexPosition, VertexTextureCoords,
-    components::TriangleMeshComp, texture_projection::TextureProjection, triangle::TriangleMesh,
+    MeshID, MeshRepository, TriangleMeshHandle, VertexNormalVector, VertexPosition,
+    VertexTextureCoords, texture_projection::TextureProjection, triangle::TriangleMesh,
 };
 use anyhow::{Result, bail};
 use impact_math::hash64;
@@ -39,14 +39,14 @@ pub fn read_mesh_from_obj_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
 /// meshes in the file, they are merged into a single mesh.
 ///
 /// # Returns
-/// The [`TriangleMeshComp`] representing the mesh.
+/// The [`TriangleMeshHandle`] to the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file<P>(
     mesh_repository: &mut MeshRepository,
     obj_file_path: P,
-) -> Result<TriangleMeshComp>
+) -> Result<TriangleMeshHandle>
 where
     P: AsRef<Path> + Debug,
 {
@@ -71,7 +71,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshComp { id: mesh_id })
+    Ok(TriangleMeshHandle { id: mesh_id })
 }
 
 /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
@@ -80,7 +80,7 @@ where
 /// multiple meshes in the file, they are merged into a single mesh.
 ///
 /// # Returns
-/// The [`TriangleMeshComp`] representing the mesh.
+/// The [`TriangleMeshHandle`] to the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
@@ -88,7 +88,7 @@ pub fn load_mesh_from_obj_file_with_projection<P>(
     mesh_repository: &mut MeshRepository,
     obj_file_path: P,
     projection: &impl TextureProjection<f32>,
-) -> Result<TriangleMeshComp>
+) -> Result<TriangleMeshHandle>
 where
     P: AsRef<Path> + Debug,
 {
@@ -119,7 +119,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshComp { id: mesh_id })
+    Ok(TriangleMeshHandle { id: mesh_id })
 }
 
 fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {
