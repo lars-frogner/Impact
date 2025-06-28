@@ -10,7 +10,7 @@
 ///
 /// # Examples
 /// ```no_run
-/// # use impact::{define_execution_tag, define_task, scheduling::TaskScheduler};
+/// # use impact_scheduling::{define_execution_tag, define_task, TaskScheduler};
 /// # use std::{num::NonZeroUsize, sync::Arc};
 /// #
 /// # #[derive(Clone)]
