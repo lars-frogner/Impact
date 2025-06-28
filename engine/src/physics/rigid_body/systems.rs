@@ -9,7 +9,7 @@ use crate::physics::{
     rigid_body::components::RigidBodyComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 
 /// Advances the linear and angular velocities of all applicable entities with
 /// a [`RigidBodyComp`].
@@ -19,7 +19,7 @@ pub fn advance_rigid_body_velocities(ecs_world: &ECSWorld, step_duration: fph) {
         |rigid_body: &mut RigidBodyComp,
          frame: &ReferenceFrameComp,
          velocity: &mut VelocityComp,
-         flags: &SceneEntityFlagsComp| {
+         flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }
@@ -41,7 +41,7 @@ pub fn advance_rigid_body_velocities(ecs_world: &ECSWorld, step_duration: fph) {
 pub fn advance_rigid_body_configurations(ecs_world: &ECSWorld, step_duration: fph) {
     query!(
         ecs_world,
-        |frame: &mut ReferenceFrameComp, velocity: &VelocityComp, flags: &SceneEntityFlagsComp| {
+        |frame: &mut ReferenceFrameComp, velocity: &VelocityComp, flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }

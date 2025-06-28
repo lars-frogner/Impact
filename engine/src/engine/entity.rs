@@ -8,7 +8,7 @@ use impact_ecs::{
     component::{ComponentArray, ComponentCategory, ComponentID, SingleInstance},
     world::EntityID,
 };
-use impact_scene::{SceneEntityFlags, components::SceneEntityFlagsComp};
+use impact_scene::SceneEntityFlags;
 
 impl Engine {
     pub fn create_entity_with_id<A, E>(
@@ -97,8 +97,8 @@ impl Engine {
     /// Returns an error if the entity does not exist or does not have the
     /// [`SceneEntityFlagsComp`] component.
     pub fn enable_scene_entity(&self, entity_id: EntityID) -> Result<()> {
-        self.with_component_mut(entity_id, |flags: &mut SceneEntityFlagsComp| {
-            flags.0.remove(SceneEntityFlags::IS_DISABLED);
+        self.with_component_mut(entity_id, |flags: &mut SceneEntityFlags| {
+            flags.remove(SceneEntityFlags::IS_DISABLED);
             Ok(())
         })
     }
@@ -110,8 +110,8 @@ impl Engine {
     /// Returns an error if the entity does not exist or does not have the
     /// [`SceneEntityFlagsComp`] component.
     pub fn disable_scene_entity(&self, entity_id: EntityID) -> Result<()> {
-        self.with_component_mut(entity_id, |flags: &mut SceneEntityFlagsComp| {
-            flags.0.insert(SceneEntityFlags::IS_DISABLED);
+        self.with_component_mut(entity_id, |flags: &mut SceneEntityFlags| {
+            flags.insert(SceneEntityFlags::IS_DISABLED);
             Ok(())
         })
     }

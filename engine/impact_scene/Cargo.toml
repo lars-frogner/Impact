@@ -12,6 +12,13 @@ arbitrary = [
     "impact_gpu/arbitrary",
     "impact_math/arbitrary",
 ]
+ecs = [
+    "dep:impact_ecs",
+    "impact_camera/ecs",
+    "impact_light/ecs",
+    "impact_material/ecs",
+    "impact_mesh/ecs",
+]
 roc_codegen = [
     "impact_camera/roc_codegen",
     "impact_containers/roc_codegen",
@@ -34,7 +41,7 @@ bitflags = { workspace = true }
 bytemuck = { workspace = true }
 impact_camera = { path = "../impact_camera" }
 impact_containers = { path = "../impact_containers" }
-impact_ecs = { path = "../impact_ecs" }
+impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_light = { path = "../impact_light" }

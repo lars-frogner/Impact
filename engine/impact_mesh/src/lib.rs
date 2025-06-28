@@ -1,11 +1,13 @@
 //! Triangle and line segment meshes.
 
+#[macro_use]
+mod macros;
+
 pub mod buffer;
-pub mod components;
-pub mod entity;
 pub mod generation;
 pub mod io;
 pub mod line_segment;
+pub mod setup;
 pub mod texture_projection;
 pub mod triangle;
 
@@ -20,7 +22,6 @@ use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
 };
 use roc_integration::roc;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::hash_map::Entry,
     fmt::Debug,
@@ -29,6 +30,17 @@ use std::{
 };
 use texture_projection::{PlanarTextureProjection, TextureProjectionSpecification};
 use triangle::TriangleMesh;
+
+define_component_type! {
+    /// Handle to a [`TriangleMesh`].
+    #[roc(parents = "Mesh")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct TriangleMeshHandle {
+        /// The ID of the [`TriangleMesh`] in the [`MeshRepository`].
+        pub id: MeshID,
+    }
+}
 
 stringhash64_newtype!(
     /// Identifier for specific meshes.
@@ -58,7 +70,8 @@ pub struct MeshRepositoryState {
     line_segment_mesh_ids: HashSet<MeshID>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct TriangleMeshSpecification {
     pub name: String,
     pub file_path: PathBuf,
@@ -156,6 +169,16 @@ pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
     "tangent space quaternion",
     "color",
 ];
+
+#[roc]
+impl TriangleMeshHandle {
+    /// Creates a new component representing a [`TriangleMesh`] with the given
+    /// ID.
+    #[roc(body = "{ id: mesh_id }")]
+    pub fn new(mesh_id: MeshID) -> Self {
+        Self { id: mesh_id }
+    }
+}
 
 #[roc(dependencies = [impact_math::Hash64])]
 impl MeshID {

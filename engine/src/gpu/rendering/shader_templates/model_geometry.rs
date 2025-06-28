@@ -13,9 +13,9 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_material::{
-    MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation, MaterialShaderInput,
-    MaterialSpecification,
-    entity::physical::{
+    MaterialShaderInput, MaterialSpecification,
+    features::{MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation},
+    setup::physical::{
         PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindings,
     },
 };
@@ -277,7 +277,7 @@ mod tests {
 
     use super::*;
     use impact_gpu::shader::template::validate_template;
-    use impact_material::entity::physical::{
+    use impact_material::setup::physical::{
         PhysicalMaterialNormalMappingTextureBindings,
         PhysicalMaterialParallaxMappingTextureBindings,
     };

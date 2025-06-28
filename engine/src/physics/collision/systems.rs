@@ -8,7 +8,7 @@ use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
-use impact_scene::components::SceneEntityFlagsComp;
+use impact_scene::SceneEntityFlags;
 
 pub fn synchronize_collision_world<G: CollidableGeometry>(
     collision_world: &mut CollisionWorld<G>,
@@ -16,18 +16,15 @@ pub fn synchronize_collision_world<G: CollidableGeometry>(
 ) {
     collision_world.clear_spatial_state();
 
-    query!(
-        ecs_world,
-        |entity_id: EntityID,
-         collidable: &CollidableComp,
-         frame: &ReferenceFrameComp,
-         flags: &SceneEntityFlagsComp| {
-            if flags.is_disabled() {
-                return;
-            }
-            synchronize_collidable(collision_world, entity_id, collidable, frame);
+    query!(ecs_world, |entity_id: EntityID,
+                       collidable: &CollidableComp,
+                       frame: &ReferenceFrameComp,
+                       flags: &SceneEntityFlags| {
+        if flags.is_disabled() {
+            return;
         }
-    );
+        synchronize_collidable(collision_world, entity_id, collidable, frame);
+    });
 }
 
 pub fn synchronize_collidable<G: CollidableGeometry>(

@@ -4,20 +4,14 @@ use crate::physics::motion::components::ReferenceFrameComp;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_light::{
-    LightStorage,
-    components::{
-        AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
-        OmnidirectionalLightComp, ShadowableOmnidirectionalEmissionComp,
-        ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalEmissionComp,
-        ShadowableUnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
-    },
+    AmbientEmission, AmbientLightHandle, LightStorage, OmnidirectionalEmission,
+    OmnidirectionalLightHandle, ShadowableOmnidirectionalEmission,
+    ShadowableOmnidirectionalLightHandle, ShadowableUnidirectionalEmission,
+    ShadowableUnidirectionalLightHandle, UnidirectionalEmission, UnidirectionalLightHandle,
 };
 use impact_scene::{
-    camera::SceneCamera,
-    components::{
-        SceneEntityFlagsComp, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
-        SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
-    },
+    SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
+    SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera,
     graph::SceneGraph,
 };
 use nalgebra::Similarity3;
@@ -31,26 +25,23 @@ use nalgebra::Similarity3;
 pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph) {
     query!(
         ecs_world,
-        |node: &SceneGraphGroupNodeComp, frame: &ReferenceFrameComp| {
+        |node: &SceneGraphGroupNodeHandle, frame: &ReferenceFrameComp| {
             scene_graph
                 .set_group_to_parent_transform(node.id, frame.create_transform_to_parent_space());
         }
     );
+    query!(ecs_world, |node: &SceneGraphModelInstanceNodeHandle,
+                       frame: &ReferenceFrameComp,
+                       flags: &SceneEntityFlags| {
+        scene_graph.set_model_to_parent_transform_and_flags(
+            node.id,
+            frame.create_transform_to_parent_space(),
+            (*flags).into(),
+        );
+    });
     query!(
         ecs_world,
-        |node: &SceneGraphModelInstanceNodeComp,
-         frame: &ReferenceFrameComp,
-         flags: &SceneEntityFlagsComp| {
-            scene_graph.set_model_to_parent_transform_and_flags(
-                node.id,
-                frame.create_transform_to_parent_space(),
-                flags.0.into(),
-            );
-        }
-    );
-    query!(
-        ecs_world,
-        |node: &SceneGraphCameraNodeComp, frame: &ReferenceFrameComp| {
+        |node: &SceneGraphCameraNodeHandle, frame: &ReferenceFrameComp| {
             scene_graph
                 .set_camera_to_parent_transform(node.id, frame.create_transform_to_parent_space());
         }
@@ -71,8 +62,8 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |ambient_light: &AmbientLightComp, ambient_emission: &AmbientEmissionComp| {
-            impact_light::entity::sync_ambient_light_in_storage(
+        |ambient_light: &AmbientLightHandle, ambient_emission: &AmbientEmission| {
+            impact_light::setup::sync_ambient_light_in_storage(
                 light_storage,
                 ambient_light,
                 ambient_emission,
@@ -82,116 +73,116 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |omnidirectional_light: &OmnidirectionalLightComp,
+        |omnidirectional_light: &OmnidirectionalLightHandle,
          frame: &ReferenceFrameComp,
-         omnidirectional_emission: &OmnidirectionalEmissionComp,
-         flags: &SceneEntityFlagsComp| {
-            impact_light::entity::sync_omnidirectional_light_in_storage(
+         omnidirectional_emission: &OmnidirectionalEmission,
+         flags: &SceneEntityFlags| {
+            impact_light::setup::sync_omnidirectional_light_in_storage(
                 light_storage,
                 omnidirectional_light,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeComp]
+        ![SceneGraphParentNodeHandle]
     );
 
     query!(
         ecs_world,
-        |omnidirectional_light: &OmnidirectionalLightComp,
+        |omnidirectional_light: &OmnidirectionalLightHandle,
          frame: &ReferenceFrameComp,
-         omnidirectional_emission: &OmnidirectionalEmissionComp,
-         parent: &SceneGraphParentNodeComp,
-         flags: &SceneEntityFlagsComp| {
+         omnidirectional_emission: &OmnidirectionalEmission,
+         parent: &SceneGraphParentNodeHandle,
+         flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            impact_light::entity::sync_omnidirectional_light_in_storage(
+            impact_light::setup::sync_omnidirectional_light_in_storage(
                 light_storage,
                 omnidirectional_light,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         }
     );
 
     query!(
         ecs_world,
-        |omnidirectional_light: &ShadowableOmnidirectionalLightComp,
+        |omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
          frame: &ReferenceFrameComp,
-         omnidirectional_emission: &ShadowableOmnidirectionalEmissionComp,
-         flags: &SceneEntityFlagsComp| {
-            impact_light::entity::sync_shadowable_omnidirectional_light_in_storage(
+         omnidirectional_emission: &ShadowableOmnidirectionalEmission,
+         flags: &SceneEntityFlags| {
+            impact_light::setup::sync_shadowable_omnidirectional_light_in_storage(
                 light_storage,
                 omnidirectional_light,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeComp]
+        ![SceneGraphParentNodeHandle]
     );
 
     query!(
         ecs_world,
-        |omnidirectional_light: &ShadowableOmnidirectionalLightComp,
+        |omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
          frame: &ReferenceFrameComp,
-         omnidirectional_emission: &ShadowableOmnidirectionalEmissionComp,
-         parent: &SceneGraphParentNodeComp,
-         flags: &SceneEntityFlagsComp| {
+         omnidirectional_emission: &ShadowableOmnidirectionalEmission,
+         parent: &SceneGraphParentNodeHandle,
+         flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            impact_light::entity::sync_shadowable_omnidirectional_light_in_storage(
+            impact_light::setup::sync_shadowable_omnidirectional_light_in_storage(
                 light_storage,
                 omnidirectional_light,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         }
     );
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightComp,
-         unidirectional_emission: &UnidirectionalEmissionComp,
-         flags: &SceneEntityFlagsComp| {
-            impact_light::entity::sync_unidirectional_light_in_storage(
+        |unidirectional_light: &UnidirectionalLightHandle,
+         unidirectional_emission: &UnidirectionalEmission,
+         flags: &SceneEntityFlags| {
+            impact_light::setup::sync_unidirectional_light_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeComp, ReferenceFrameComp]
+        ![SceneGraphParentNodeHandle, ReferenceFrameComp]
     );
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightComp,
-         unidirectional_emission: &UnidirectionalEmissionComp,
-         parent: &SceneGraphParentNodeComp,
-         flags: &SceneEntityFlagsComp| {
+        |unidirectional_light: &UnidirectionalLightHandle,
+         unidirectional_emission: &UnidirectionalEmission,
+         parent: &SceneGraphParentNodeHandle,
+         flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            impact_light::entity::sync_unidirectional_light_in_storage(
+            impact_light::setup::sync_unidirectional_light_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
         ![ReferenceFrameComp]
@@ -199,76 +190,76 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightComp,
-         unidirectional_emission: &UnidirectionalEmissionComp,
+        |unidirectional_light: &UnidirectionalLightHandle,
+         unidirectional_emission: &UnidirectionalEmission,
          frame: &ReferenceFrameComp,
-         flags: &SceneEntityFlagsComp| {
-            impact_light::entity::sync_unidirectional_light_with_orientation_in_storage(
+         flags: &SceneEntityFlags| {
+            impact_light::setup::sync_unidirectional_light_with_orientation_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeComp]
+        ![SceneGraphParentNodeHandle]
     );
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightComp,
-         unidirectional_emission: &UnidirectionalEmissionComp,
+        |unidirectional_light: &UnidirectionalLightHandle,
+         unidirectional_emission: &UnidirectionalEmission,
          frame: &ReferenceFrameComp,
-         parent: &SceneGraphParentNodeComp,
-         flags: &SceneEntityFlagsComp| {
+         parent: &SceneGraphParentNodeHandle,
+         flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            impact_light::entity::sync_unidirectional_light_with_orientation_in_storage(
+            impact_light::setup::sync_unidirectional_light_with_orientation_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         }
     );
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightComp,
-         unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
-         flags: &SceneEntityFlagsComp| {
-            impact_light::entity::sync_shadowable_unidirectional_light_in_storage(
+        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+         unidirectional_emission: &ShadowableUnidirectionalEmission,
+         flags: &SceneEntityFlags| {
+            impact_light::setup::sync_shadowable_unidirectional_light_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeComp, ReferenceFrameComp]
+        ![SceneGraphParentNodeHandle, ReferenceFrameComp]
     );
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightComp,
-         unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
-         parent: &SceneGraphParentNodeComp,
-         flags: &SceneEntityFlagsComp| {
+        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+         unidirectional_emission: &ShadowableUnidirectionalEmission,
+         parent: &SceneGraphParentNodeHandle,
+         flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            impact_light::entity::sync_shadowable_unidirectional_light_in_storage(
+            impact_light::setup::sync_shadowable_unidirectional_light_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
         ![ReferenceFrameComp]
@@ -276,40 +267,40 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightComp,
-         unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
+        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+         unidirectional_emission: &ShadowableUnidirectionalEmission,
          frame: &ReferenceFrameComp,
-         flags: &SceneEntityFlagsComp| {
-            impact_light::entity::sync_shadowable_unidirectional_light_with_orientation_in_storage(
+         flags: &SceneEntityFlags| {
+            impact_light::setup::sync_shadowable_unidirectional_light_with_orientation_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeComp]
+        ![SceneGraphParentNodeHandle]
     );
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightComp,
-         unidirectional_emission: &ShadowableUnidirectionalEmissionComp,
+        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+         unidirectional_emission: &ShadowableUnidirectionalEmission,
          frame: &ReferenceFrameComp,
-         parent: &SceneGraphParentNodeComp,
-         flags: &SceneEntityFlagsComp| {
+         parent: &SceneGraphParentNodeHandle,
+         flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
             let view_transform = view_transform * parent_group_node.group_to_root_transform();
 
-            impact_light::entity::sync_shadowable_unidirectional_light_with_orientation_in_storage(
+            impact_light::setup::sync_shadowable_unidirectional_light_with_orientation_in_storage(
                 light_storage,
                 unidirectional_light,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
-                flags.0.into(),
+                (*flags).into(),
             );
         }
     );

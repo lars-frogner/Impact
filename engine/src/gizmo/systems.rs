@@ -33,17 +33,14 @@ use approx::abs_diff_ne;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_light::{
-    LightID, LightStorage,
-    components::{
-        OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp,
-        ShadowableUnidirectionalLightComp,
-    },
+    LightID, LightStorage, OmnidirectionalLightHandle, ShadowableOmnidirectionalLightHandle,
+    ShadowableUnidirectionalLightHandle,
 };
 use impact_math::Angle;
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_scene::{
+    SceneEntityFlags, SceneGraphModelInstanceNodeHandle,
     camera::SceneCamera,
-    components::{SceneEntityFlagsComp, SceneGraphModelInstanceNodeComp},
     graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
     model::InstanceFeatureManager,
 };
@@ -89,8 +86,8 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         model_instance_node: &SceneGraphModelInstanceNodeComp,
-         flags: &SceneEntityFlagsComp| {
+         model_instance_node: &SceneGraphModelInstanceNodeHandle,
+         flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .intersects(GizmoSet::REFERENCE_FRAME_AXES.union(GizmoSet::BOUNDING_SPHERE))
@@ -111,8 +108,8 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         omnidirectional_light: &OmnidirectionalLightComp,
-         flags: &SceneEntityFlagsComp| {
+         omnidirectional_light: &OmnidirectionalLightHandle,
+         flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) || flags.is_disabled() {
                 return;
             }
@@ -128,8 +125,8 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         omnidirectional_light: &ShadowableOmnidirectionalLightComp,
-         flags: &SceneEntityFlagsComp| {
+         omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
+         flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }
@@ -157,8 +154,8 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         unidirectional_light: &ShadowableUnidirectionalLightComp,
-         flags: &SceneEntityFlagsComp| {
+         unidirectional_light: &ShadowableUnidirectionalLightHandle,
+         flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .contains(GizmoSet::SHADOW_MAP_CASCADES)
@@ -175,87 +172,80 @@ pub fn buffer_transforms_for_gizmos(
         }
     );
 
-    query!(
-        ecs_world,
-        |gizmos: &GizmosComp,
-         frame: &ReferenceFrameComp,
-         velocity: &VelocityComp,
-         flags: &SceneEntityFlagsComp| {
-            if !gizmos
-                .visible_gizmos
-                .intersects(GizmoSet::LINEAR_VELOCITY.union(GizmoSet::ANGULAR_VELOCITY))
-                || flags.is_disabled()
-            {
-                return;
-            }
-            buffer_transforms_for_kinematics_gizmos(
-                instance_feature_manager,
-                gizmo_manager.parameters(),
-                scene_camera,
-                &camera_position,
-                frame,
-                velocity,
-                gizmos.visible_gizmos,
-            );
+    query!(ecs_world, |gizmos: &GizmosComp,
+                       frame: &ReferenceFrameComp,
+                       velocity: &VelocityComp,
+                       flags: &SceneEntityFlags| {
+        if !gizmos
+            .visible_gizmos
+            .intersects(GizmoSet::LINEAR_VELOCITY.union(GizmoSet::ANGULAR_VELOCITY))
+            || flags.is_disabled()
+        {
+            return;
         }
-    );
+        buffer_transforms_for_kinematics_gizmos(
+            instance_feature_manager,
+            gizmo_manager.parameters(),
+            scene_camera,
+            &camera_position,
+            frame,
+            velocity,
+            gizmos.visible_gizmos,
+        );
+    });
 
-    query!(
-        ecs_world,
-        |gizmos: &GizmosComp,
-         frame: &ReferenceFrameComp,
-         rigid_body: &RigidBodyComp,
-         flags: &SceneEntityFlagsComp| {
-            if !gizmos.visible_gizmos.intersects(
-                GizmoSet::CENTER_OF_MASS
-                    .union(GizmoSet::ANGULAR_MOMENTUM)
-                    .union(GizmoSet::FORCE)
-                    .union(GizmoSet::TORQUE),
-            ) || flags.is_disabled()
-            {
-                return;
-            }
-            buffer_transforms_for_dynamics_gizmos(
-                instance_feature_manager,
-                gizmo_manager.parameters(),
-                scene_camera,
-                &camera_position,
-                frame,
-                &rigid_body.0,
-                gizmos.visible_gizmos,
-            );
+    query!(ecs_world, |gizmos: &GizmosComp,
+                       frame: &ReferenceFrameComp,
+                       rigid_body: &RigidBodyComp,
+                       flags: &SceneEntityFlags| {
+        if !gizmos.visible_gizmos.intersects(
+            GizmoSet::CENTER_OF_MASS
+                .union(GizmoSet::ANGULAR_MOMENTUM)
+                .union(GizmoSet::FORCE)
+                .union(GizmoSet::TORQUE),
+        ) || flags.is_disabled()
+        {
+            return;
         }
-    );
+        buffer_transforms_for_dynamics_gizmos(
+            instance_feature_manager,
+            gizmo_manager.parameters(),
+            scene_camera,
+            &camera_position,
+            frame,
+            &rigid_body.0,
+            gizmos.visible_gizmos,
+        );
+    });
 
-    query!(
-        ecs_world,
-        |gizmos: &GizmosComp, collidable: &CollidableComp, flags: &SceneEntityFlagsComp| {
-            if !gizmos.visible_gizmos.intersects(
-                GizmoSet::DYNAMIC_COLLIDER
-                    .union(GizmoSet::STATIC_COLLIDER)
-                    .union(GizmoSet::PHANTOM_COLLIDER),
-            ) || flags.is_disabled()
-            {
-                return;
-            }
-            buffer_transforms_for_collider_gizmos(
-                instance_feature_manager,
-                collision_world,
-                &voxel_manager.object_manager,
-                scene_camera,
-                &camera_position,
-                collidable.collidable_id,
-                gizmos.visible_gizmos,
-            );
+    query!(ecs_world, |gizmos: &GizmosComp,
+                       collidable: &CollidableComp,
+                       flags: &SceneEntityFlags| {
+        if !gizmos.visible_gizmos.intersects(
+            GizmoSet::DYNAMIC_COLLIDER
+                .union(GizmoSet::STATIC_COLLIDER)
+                .union(GizmoSet::PHANTOM_COLLIDER),
+        ) || flags.is_disabled()
+        {
+            return;
         }
-    );
+        buffer_transforms_for_collider_gizmos(
+            instance_feature_manager,
+            collision_world,
+            &voxel_manager.object_manager,
+            scene_camera,
+            &camera_position,
+            collidable.collidable_id,
+            gizmos.visible_gizmos,
+        );
+    });
 
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
          voxel_object: &VoxelObjectComp,
-         model_instance_node: &SceneGraphModelInstanceNodeComp,
-         flags: &SceneEntityFlagsComp| {
+         model_instance_node: &SceneGraphModelInstanceNodeHandle,
+         flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::VOXEL_CHUNKS) || flags.is_disabled() {
                 return;
             }

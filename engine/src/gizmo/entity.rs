@@ -5,8 +5,9 @@ use crate::{
     physics::{collision::components::CollidableComp, motion::components::ReferenceFrameComp},
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_light::components::{
-    OmnidirectionalLightComp, ShadowableOmnidirectionalLightComp, ShadowableUnidirectionalLightComp,
+use impact_light::{
+    OmnidirectionalLightHandle, ShadowableOmnidirectionalLightHandle,
+    ShadowableUnidirectionalLightHandle,
 };
 
 /// Adds the [`GizmosComp`] component to the new entity if it has any of the
@@ -42,23 +43,23 @@ pub fn setup_gizmos_for_new_entity(
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [OmnidirectionalLightComp],
+        [OmnidirectionalLightHandle],
         ![ReferenceFrameComp]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [ShadowableOmnidirectionalLightComp],
-        ![ReferenceFrameComp, OmnidirectionalLightComp]
+        [ShadowableOmnidirectionalLightHandle],
+        ![ReferenceFrameComp, OmnidirectionalLightHandle]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [ShadowableUnidirectionalLightComp],
+        [ShadowableUnidirectionalLightHandle],
         ![
             ReferenceFrameComp,
-            OmnidirectionalLightComp,
-            ShadowableOmnidirectionalLightComp
+            OmnidirectionalLightHandle,
+            ShadowableOmnidirectionalLightHandle
         ]
     );
     setup!(
@@ -67,9 +68,9 @@ pub fn setup_gizmos_for_new_entity(
         [CollidableComp],
         ![
             ReferenceFrameComp,
-            OmnidirectionalLightComp,
-            ShadowableOmnidirectionalLightComp,
-            ShadowableUnidirectionalLightComp
+            OmnidirectionalLightHandle,
+            ShadowableOmnidirectionalLightHandle,
+            ShadowableUnidirectionalLightHandle
         ]
     );
 }

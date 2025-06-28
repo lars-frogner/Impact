@@ -1,10 +1,8 @@
 //! Instance features representing material properties.
 
-use std::hash::Hash;
-
 use crate::{
     RGBColor,
-    components::{ParallaxMapComp, UniformColorComp},
+    setup::physical::{ParallaxMap, UniformColor},
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -14,6 +12,7 @@ use impact_model::{
     InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, impl_InstanceFeatureForGPU,
 };
 use nalgebra::Vector2;
+use std::hash::Hash;
 
 const MATERIAL_VERTEX_BINDING_START: u32 = 20;
 
@@ -157,18 +156,18 @@ pub fn register_material_feature_types<MID: Eq + Hash>(
 }
 
 /// Creates the appropriate physical material feature for the given set of
-/// components and properties and adds it to the instance feature manager.
+/// properties and adds it to the instance feature manager.
 ///
 /// # Returns
 /// The ID of the created feature type and the ID of the created feature.
 pub fn create_physical_material_feature<MID: Eq + Hash>(
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
-    uniform_color: Option<&UniformColorComp>,
+    uniform_color: Option<&UniformColor>,
     specular_reflectance: f32,
     roughness: f32,
     metalness: f32,
     emissive_luminance: f32,
-    parallax_map: Option<&ParallaxMapComp>,
+    parallax_map: Option<&ParallaxMap>,
 ) -> (
     InstanceFeatureTypeID,
     InstanceFeatureID,
@@ -230,7 +229,7 @@ pub fn create_physical_material_feature<MID: Eq + Hash>(
 impl UniformColorPhysicalMaterialFeature {
     fn add_feature<MID: Eq + Hash>(
         instance_feature_manager: &mut InstanceFeatureManager<MID>,
-        color: &UniformColorComp,
+        color: &UniformColor,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,
@@ -272,12 +271,12 @@ impl TexturedColorPhysicalMaterialFeature {
 impl UniformColorParallaxMappedPhysicalMaterialFeature {
     fn add_feature<MID: Eq + Hash>(
         instance_feature_manager: &mut InstanceFeatureManager<MID>,
-        color: &UniformColorComp,
+        color: &UniformColor,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,
         emissive_luminance: f32,
-        parallax_map: &ParallaxMapComp,
+        parallax_map: &ParallaxMap,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -303,7 +302,7 @@ impl TexturedColorParallaxMappedPhysicalMaterialFeature {
         roughness: f32,
         metalness: f32,
         emissive_luminance: f32,
-        parallax_map: &ParallaxMapComp,
+        parallax_map: &ParallaxMap,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()

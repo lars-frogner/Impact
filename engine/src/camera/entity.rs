@@ -2,16 +2,11 @@
 
 use crate::physics::motion::components::ReferenceFrameComp;
 use anyhow::{Result, bail};
-use impact_camera::{
-    OrthographicCamera, PerspectiveCamera,
-    components::{OrthographicCameraComp, PerspectiveCameraComp},
-};
+use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_math::UpperExclusiveBounds;
 use impact_scene::{
-    camera::SceneCamera,
-    components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
-    graph::SceneGraph,
+    SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera, graph::SceneGraph,
 };
 use std::sync::RwLock;
 
@@ -27,7 +22,7 @@ pub struct CameraRenderState {
 /// Checks if the entity-to-be with the given components has the required
 /// components for a camera, and if so, adds a node for the camera in the
 /// given [`SceneGraph`], inserts a [`SceneCamera`] into the given
-/// `scene_camera` variable and adds a [`SceneGraphCameraNodeComp`] to the
+/// `scene_camera` variable and adds a [`SceneGraphCameraNodeHandle`] to the
 /// entity.
 ///
 /// # Errors
@@ -59,7 +54,7 @@ pub fn add_camera_to_scene_for_new_entity(
 /// Checks if the entity-to-be with the given components has the required
 /// components for a perspective camera, and if so, adds a node for the camera
 /// in the given [`SceneGraph`], inserts a [`SceneCamera`] into the given
-/// `scene_camera` variable and adds a [`SceneGraphCameraNodeComp`] to the
+/// `scene_camera` variable and adds a [`SceneGraphCameraNodeHandle`] to the
 /// entity.
 ///
 /// # Errors
@@ -85,15 +80,18 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
         },
         components,
         |frame: Option<&ReferenceFrameComp>,
-         camera_comp: &PerspectiveCameraComp,
-         parent: Option<&SceneGraphParentNodeComp>|
-         -> SceneGraphCameraNodeComp {
+         camera_props: &setup::PerspectiveCamera,
+         parent: Option<&SceneGraphParentNodeHandle>|
+         -> SceneGraphCameraNodeHandle {
             let render_state = get_render_state();
 
             let camera = PerspectiveCamera::<f32>::new(
                 render_state.aspect_ratio,
-                camera_comp.vertical_field_of_view(),
-                UpperExclusiveBounds::new(camera_comp.near_distance(), camera_comp.far_distance()),
+                camera_props.vertical_field_of_view(),
+                UpperExclusiveBounds::new(
+                    camera_props.near_distance(),
+                    camera_props.far_distance(),
+                ),
             );
 
             let mut camera_to_parent_transform = frame
@@ -121,9 +119,9 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
                 render_state.jittering_enabled,
             ));
 
-            SceneGraphCameraNodeComp::new(node_id)
+            SceneGraphCameraNodeHandle::new(node_id)
         },
-        ![SceneGraphCameraNodeComp]
+        ![SceneGraphCameraNodeHandle]
     );
     Ok(())
 }
@@ -131,7 +129,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 /// Checks if the entity-to-be with the given components has the required
 /// components for an orthographic camera, and if so, adds a node for the camera
 /// in the given [`SceneGraph`], inserts a [`SceneCamera`] into the given
-/// `scene_camera` variable and adds a [`SceneGraphCameraNodeComp`] to the
+/// `scene_camera` variable and adds a [`SceneGraphCameraNodeHandle`] to the
 /// entity.
 ///
 /// # Errors
@@ -157,15 +155,18 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
         },
         components,
         |frame: Option<&ReferenceFrameComp>,
-         camera_comp: &OrthographicCameraComp,
-         parent: Option<&SceneGraphParentNodeComp>|
-         -> SceneGraphCameraNodeComp {
+         camera_props: &setup::OrthographicCamera,
+         parent: Option<&SceneGraphParentNodeHandle>|
+         -> SceneGraphCameraNodeHandle {
             let render_state = get_render_state();
 
             let camera = OrthographicCamera::<f32>::new(
                 render_state.aspect_ratio,
-                camera_comp.vertical_field_of_view(),
-                UpperExclusiveBounds::new(camera_comp.near_distance(), camera_comp.far_distance()),
+                camera_props.vertical_field_of_view(),
+                UpperExclusiveBounds::new(
+                    camera_props.near_distance(),
+                    camera_props.far_distance(),
+                ),
             );
 
             let mut camera_to_parent_transform = frame
@@ -193,14 +194,14 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
                 render_state.jittering_enabled,
             ));
 
-            SceneGraphCameraNodeComp::new(node_id)
+            SceneGraphCameraNodeHandle::new(node_id)
         },
-        ![SceneGraphCameraNodeComp]
+        ![SceneGraphCameraNodeHandle]
     );
     Ok(())
 }
 
-/// Checks if the given entity has a [`SceneGraphCameraNodeComp`], and if so,
+/// Checks if the given entity has a [`SceneGraphCameraNodeHandle`], and if so,
 /// removes the corresponding camera node from the given [`SceneGraph`] and sets
 /// the content of `scene_camera` to [`None`].
 pub fn remove_camera_from_scene_for_removed_entity(
@@ -209,7 +210,7 @@ pub fn remove_camera_from_scene_for_removed_entity(
     entity: &EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
-    if let Some(node) = entity.get_component::<SceneGraphCameraNodeComp>() {
+    if let Some(node) = entity.get_component::<SceneGraphCameraNodeHandle>() {
         let node_id = node.access().id;
         scene_graph.write().unwrap().remove_camera_node(node_id);
         scene_camera.write().unwrap().take();
