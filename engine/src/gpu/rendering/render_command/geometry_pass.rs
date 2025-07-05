@@ -12,7 +12,7 @@ use crate::{
             postprocessing::Postprocessor,
             push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
             render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-            resource::SynchronizedRenderResources,
+            resource::{BasicRenderResources, VoxelRenderResources},
             shader_templates::model_geometry::{
                 ModelGeometryShaderInput, ModelGeometryShaderTemplate,
             },
@@ -87,13 +87,16 @@ impl GeometryPass {
         }
     }
 
-    pub fn sync_with_render_resources(
+    pub fn sync_with_render_resources<R>(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
-    ) -> Result<()> {
+        render_resources: &R,
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         self.voxel_pipeline.sync_with_render_resources(
             graphics_device,
             shader_manager,
@@ -147,7 +150,7 @@ impl GeometryPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         models: impl IntoIterator<Item = &'a ModelID>,
     ) -> Result<()> {
         let camera_bind_group_layout =
@@ -241,7 +244,7 @@ impl GeometryPass {
     }
 
     fn vertex_buffer_layouts(
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         model_id: &ModelID,
         vertex_attributes: VertexAttributeSet,
     ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
@@ -381,18 +384,21 @@ impl GeometryPass {
             );
     }
 
-    pub fn record(
+    pub fn record<R>(
         &self,
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
             return Ok(());
         };

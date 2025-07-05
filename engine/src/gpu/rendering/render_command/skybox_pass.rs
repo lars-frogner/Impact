@@ -5,7 +5,7 @@ use crate::gpu::rendering::{
     postprocessing::Postprocessor,
     push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     shader_templates::skybox::SkyboxShaderTemplate,
 };
 use anyhow::{Result, anyhow};
@@ -56,7 +56,7 @@ impl SkyboxPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) {
         match (
             self.skybox.as_ref(),
@@ -168,7 +168,7 @@ impl SkyboxPass {
 
     pub fn record(
         &self,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,

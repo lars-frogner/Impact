@@ -14,7 +14,7 @@ use crate::gpu::rendering::{
     },
     push_constant::RenderingPushConstantGroup,
     render_command::StencilValue,
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     surface::RenderingSurface,
 };
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
@@ -144,7 +144,7 @@ impl Postprocessor {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,

@@ -8,7 +8,7 @@ use crate::gpu::rendering::{
     postprocessing::{PostprocessingShaderTemplate, Postprocessor},
     push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
     render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
@@ -293,7 +293,7 @@ impl PostprocessingRenderPass {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,

@@ -2,7 +2,7 @@
 
 pub mod command;
 
-use crate::gpu::rendering::RenderingSystem;
+use crate::gpu::rendering::{RenderingSystem, resource::BasicRenderResources};
 use anyhow::{Result, anyhow};
 use impact_geometry::CubemapFace;
 use impact_gpu::texture;

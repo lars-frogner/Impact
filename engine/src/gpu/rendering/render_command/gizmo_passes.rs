@@ -5,7 +5,7 @@ use crate::{
     gpu::rendering::{
         attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         render_command::{STANDARD_FRONT_FACE, begin_single_render_pass},
-        resource::SynchronizedRenderResources,
+        resource::BasicRenderResources,
         shader_templates::fixed_color::FixedColorShaderTemplate,
         surface::RenderingSurface,
     },
@@ -114,7 +114,7 @@ impl GizmoPasses {
     pub fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -208,7 +208,7 @@ impl GizmoPass {
     fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -301,7 +301,7 @@ impl GizmoPassPipeline {
 
     fn record(
         &self,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()> {
@@ -329,7 +329,7 @@ impl GizmoPassPipeline {
     }
 
     fn record_for_triangles<'a>(
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
         pipeline: &wgpu::RenderPipeline,
@@ -399,7 +399,7 @@ impl GizmoPassPipeline {
     }
 
     fn record_for_lines<'a>(
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
         pipeline: &wgpu::RenderPipeline,

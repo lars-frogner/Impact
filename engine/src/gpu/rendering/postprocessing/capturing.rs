@@ -6,7 +6,7 @@ pub mod dynamic_range_compression;
 
 use crate::gpu::rendering::{
     attachment::RenderAttachmentTextureManager, postprocessing::Postprocessor,
-    resource::SynchronizedRenderResources, surface::RenderingSurface,
+    resource::BasicRenderResources, surface::RenderingSurface,
 };
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
@@ -249,7 +249,7 @@ impl CapturingCamera {
     pub fn record_commands_before_dynamic_range_compression(
         &self,
         rendering_surface: &RenderingSurface,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
@@ -284,7 +284,7 @@ impl CapturingCamera {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,

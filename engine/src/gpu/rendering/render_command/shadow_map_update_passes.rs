@@ -4,7 +4,7 @@ use crate::{
     gpu::rendering::{
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
         render_command::{INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
-        resource::SynchronizedRenderResources,
+        resource::{BasicRenderResources, VoxelRenderResources},
         shader_templates::{
             omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
             unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
@@ -110,7 +110,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) -> Result<()> {
         self.sync_models_with_render_resources(material_library, render_resources);
         self.sync_shader_with_render_resources(graphics_device, shader_manager, render_resources)
@@ -119,7 +119,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     fn sync_models_with_render_resources(
         &mut self,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
@@ -160,7 +160,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
@@ -231,16 +231,19 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             );
     }
 
-    pub fn record(
+    pub fn record<R>(
         &self,
         light_storage: &LightStorage,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
         voxel_render_commands: &VoxelRenderCommands,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
@@ -458,7 +461,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) -> Result<()> {
         self.sync_models_with_render_resources(material_library, render_resources);
         self.sync_shader_with_render_resources(graphics_device, shader_manager, render_resources)
@@ -467,7 +470,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     fn sync_models_with_render_resources(
         &mut self,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
@@ -508,7 +511,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
@@ -591,16 +594,19 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             );
     }
 
-    pub fn record(
+    pub fn record<R>(
         &self,
         light_storage: &LightStorage,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
         voxel_render_commands: &VoxelRenderCommands,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;

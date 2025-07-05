@@ -30,6 +30,77 @@ use std::{
     sync::{Mutex, RwLock},
 };
 
+pub trait BasicRenderResources {
+    /// Returns the GPU buffer manager for camera data, or [`None`] if it has
+    /// not been created.
+    fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager>;
+
+    /// Returns the GPU buffer manager for light data, or [`None`] if it has
+    /// not been created.
+    fn get_light_buffer_manager(&self) -> Option<&LightGPUBufferManager>;
+
+    /// Returns the GPU resource manager for skybox data, or [`None`] if it has
+    /// not been created.
+    fn get_skybox_resource_manager(&self) -> Option<&SkyboxGPUResourceManager>;
+
+    /// Returns the GPU buffer manager for the given triangle mesh identifier if
+    /// the triangle mesh exists, otherwise returns [`None`].
+    fn get_triangle_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager>;
+
+    /// Returns the GPU buffer manager for the given line segment mesh
+    /// identifier if the line segment mesh exists, otherwise returns [`None`].
+    fn get_line_segment_mesh_buffer_manager(
+        &self,
+        mesh_id: MeshID,
+    ) -> Option<&MeshGPUBufferManager>;
+
+    /// Returns a reference to the map of instance feature GPU buffer managers.
+    fn instance_feature_buffer_managers(&self) -> &InstanceFeatureGPUBufferManagerMap;
+
+    /// Returns the instance feature GPU buffer managers for the given model
+    /// identifier if the model exists, otherwise returns [`None`].
+    fn get_instance_feature_buffer_managers(
+        &self,
+        model_id: &ModelID,
+    ) -> Option<&[InstanceFeatureGPUBufferManager]> {
+        self.instance_feature_buffer_managers()
+            .get(model_id)
+            .map(|managers| managers.as_slice())
+    }
+
+    /// Returns the instance feature GPU buffer manager for features of type
+    /// `Fe` for the given model if it exists, otherwise returns [`None`].
+    fn get_instance_feature_buffer_manager_for_feature_type<Fe: InstanceFeature>(
+        &self,
+        model_id: &ModelID,
+    ) -> Option<&InstanceFeatureGPUBufferManager> {
+        self.get_instance_feature_buffer_managers(model_id)
+            .and_then(|buffers| {
+                buffers
+                    .iter()
+                    .find(|buffer| buffer.is_for_feature_type::<Fe>())
+            })
+    }
+}
+
+pub trait VoxelRenderResources {
+    /// Returns the GPU resource manager for voxel materials, or [`None`] if it
+    /// has not been initialized.
+    fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager>;
+
+    /// Returns a reference to the map of voxel object GPU buffer managers.
+    fn voxel_object_buffer_managers(&self) -> &VoxelObjectGPUBufferManagerMap;
+
+    /// Returns the GPU buffer manager for the given voxel object identifier if
+    /// the voxel object exists, otherwise returns [`None`].
+    fn get_voxel_object_buffer_manager(
+        &self,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<&VoxelObjectGPUBufferManager> {
+        self.voxel_object_buffer_managers().get(&voxel_object_id)
+    }
+}
+
 /// Manager and owner of render resources representing world data.
 ///
 /// The GPU buffers will at any one time be in one of two states;
@@ -163,89 +234,41 @@ impl Default for RenderResourceManager {
     }
 }
 
-impl SynchronizedRenderResources {
-    /// Returns the GPU buffer manager for camera data, or [`None`] if it has
-    /// not been created.
-    pub fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager> {
+impl BasicRenderResources for SynchronizedRenderResources {
+    fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager> {
         self.camera_buffer_manager.as_ref().as_ref()
     }
 
-    /// Returns the GPU resource manager for skybox data, or [`None`] if it has
-    /// not been created.
-    pub fn get_skybox_resource_manager(&self) -> Option<&SkyboxGPUResourceManager> {
+    fn get_light_buffer_manager(&self) -> Option<&LightGPUBufferManager> {
+        self.light_buffer_manager.as_ref().as_ref()
+    }
+
+    fn get_skybox_resource_manager(&self) -> Option<&SkyboxGPUResourceManager> {
         self.skybox_resource_manager.as_ref().as_ref()
     }
 
-    /// Returns the GPU buffer manager for the given triangle mesh identifier if
-    /// the triangle mesh exists, otherwise returns [`None`].
-    pub fn get_triangle_mesh_buffer_manager(
-        &self,
-        mesh_id: MeshID,
-    ) -> Option<&MeshGPUBufferManager> {
+    fn get_triangle_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager> {
         self.triangle_mesh_buffer_managers.get(&mesh_id)
     }
 
-    /// Returns the GPU buffer manager for the given line segment mesh
-    /// identifier if the line segment mesh exists, otherwise returns [`None`].
-    pub fn get_line_segment_mesh_buffer_manager(
+    fn get_line_segment_mesh_buffer_manager(
         &self,
         mesh_id: MeshID,
     ) -> Option<&MeshGPUBufferManager> {
         self.line_segment_mesh_buffer_managers.get(&mesh_id)
     }
 
-    /// Returns the GPU resource manager for voxel materials, or [`None`] if it
-    /// has not been initialized.
-    pub fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager> {
+    fn instance_feature_buffer_managers(&self) -> &InstanceFeatureGPUBufferManagerMap {
+        self.instance_feature_buffer_managers.as_ref()
+    }
+}
+
+impl VoxelRenderResources for SynchronizedRenderResources {
+    fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager> {
         self.voxel_resource_managers.0.as_ref()
     }
 
-    /// Returns the GPU buffer manager for the given voxel object identifier if
-    /// the voxel object exists, otherwise returns [`None`].
-    pub fn get_voxel_object_buffer_manager(
-        &self,
-        voxel_object_id: VoxelObjectID,
-    ) -> Option<&VoxelObjectGPUBufferManager> {
-        self.voxel_resource_managers.1.get(&voxel_object_id)
-    }
-
-    /// Returns the GPU buffer manager for light data, or [`None`] if it has
-    /// not been created.
-    pub fn get_light_buffer_manager(&self) -> Option<&LightGPUBufferManager> {
-        self.light_buffer_manager.as_ref().as_ref()
-    }
-
-    /// Returns the instance feature GPU buffer managers for the given model
-    /// identifier if the model exists, otherwise returns [`None`].
-    pub fn get_instance_feature_buffer_managers(
-        &self,
-        model_id: &ModelID,
-    ) -> Option<&Vec<InstanceFeatureGPUBufferManager>> {
-        self.instance_feature_buffer_managers.get(model_id)
-    }
-
-    /// Returns the instance feature GPU buffer manager for features of type
-    /// `Fe` for the given model if it exists, otherwise returns [`None`].
-    pub fn get_instance_feature_buffer_manager_for_feature_type<Fe: InstanceFeature>(
-        &self,
-        model_id: &ModelID,
-    ) -> Option<&InstanceFeatureGPUBufferManager> {
-        self.instance_feature_buffer_managers
-            .get(model_id)
-            .and_then(|buffers| {
-                buffers
-                    .iter()
-                    .find(|buffer| buffer.is_for_feature_type::<Fe>())
-            })
-    }
-
-    /// Returns a reference to the map of instance feature GPU buffer managers.
-    pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureGPUBufferManagerMap {
-        self.instance_feature_buffer_managers.as_ref()
-    }
-
-    /// Returns a reference to the map of voxel object GPU buffer managers.
-    pub fn voxel_object_buffer_managers(&self) -> &VoxelObjectGPUBufferManagerMap {
+    fn voxel_object_buffer_managers(&self) -> &VoxelObjectGPUBufferManagerMap {
         &self.voxel_resource_managers.1
     }
 }

@@ -10,7 +10,7 @@ use crate::gpu::{
         postprocessing::Postprocessor,
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
         render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-        resource::SynchronizedRenderResources,
+        resource::BasicRenderResources,
         shader_templates::{
             omnidirectional_light::OmnidirectionalLightShaderTemplate,
             shadowable_omnidirectional_light::ShadowableOmnidirectionalLightShaderTemplate,
@@ -195,7 +195,7 @@ impl DirectionalLightPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
@@ -338,7 +338,7 @@ impl DirectionalLightPass {
         &self,
         rendering_surface: &RenderingSurface,
         light_storage: &LightStorage,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
