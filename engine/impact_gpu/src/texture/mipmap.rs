@@ -171,7 +171,7 @@ impl MipmapperGenerator {
                                         resource: wgpu::BindingResource::Sampler(&self.sampler),
                                     },
                                 ],
-                                label: Some(&format!("{} mipmap bind group", label)),
+                                label: Some(&format!("{label} mipmap bind group")),
                             })
                     })
                     .collect()

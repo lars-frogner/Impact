@@ -276,43 +276,43 @@ impl VoxelObjectGPUBufferManager {
         let position_buffer = Self::create_position_buffer(
             graphics_device,
             mesh.positions(),
-            Cow::Owned(format!("{} vertex position", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id} vertex position")),
         );
 
         let normal_vector_buffer = Self::create_normal_vector_buffer(
             graphics_device,
             mesh.normal_vectors(),
-            Cow::Owned(format!("{} normal vector", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id} normal vector")),
         );
 
         let index_material_buffer = Self::create_index_material_buffer(
             graphics_device,
             mesh.index_materials(),
-            Cow::Owned(format!("{} index material", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id} index material")),
         );
 
         let index_buffer = Self::create_index_buffer(
             graphics_device,
             mesh.indices(),
-            Cow::Owned(format!("{}", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id}")),
         );
 
         let chunk_submesh_buffer = Self::create_chunk_submesh_buffer(
             graphics_device,
             mesh.chunk_submeshes(),
-            Cow::Owned(format!("{} chunk info", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id} chunk info")),
         );
 
         let indirect_argument_buffer = Self::create_indirect_argument_buffer(
             graphics_device,
             mesh.n_chunks(),
-            Cow::Owned(format!("{} draw argument", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id} draw argument")),
         );
 
         let indexed_indirect_argument_buffer = Self::create_indexed_indirect_argument_buffer(
             graphics_device,
             mesh.n_chunks(),
-            Cow::Owned(format!("{} indexed draw argument", voxel_object_id)),
+            Cow::Owned(format!("{voxel_object_id} indexed draw argument")),
         );
 
         let position_and_normal_buffer_bind_group_layout =

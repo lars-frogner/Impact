@@ -306,8 +306,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                     &color_attachments,
                     None,
                     Cow::Owned(format!(
-                        "Update pass for shadow cubemap face {:?} for light {}",
-                        cubemap_face, light_idx,
+                        "Update pass for shadow cubemap face {cubemap_face:?} for light {light_idx}",
                     )),
                 );
                 pass_count += 1;
@@ -667,8 +666,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                     &color_attachments,
                     None,
                     Cow::Owned(format!(
-                        "Update pass for shadow map cascade {} for light {}",
-                        cascade_idx, light_idx,
+                        "Update pass for shadow map cascade {cascade_idx} for light {light_idx}",
                     )),
                 );
                 pass_count += 1;

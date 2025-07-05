@@ -59,8 +59,7 @@ impl RenderAttachmentVisualizationPasses {
                     gpu_resource_group_manager,
                     &shader_template,
                     Cow::Owned(format!(
-                        "Visualization pass for render attachment: {:?}",
-                        quantity
+                        "Visualization pass for render attachment: {quantity:?}"
                     )),
                 )?,
             );

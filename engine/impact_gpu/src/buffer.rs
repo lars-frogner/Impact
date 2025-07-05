@@ -73,7 +73,7 @@ impl GPUBuffer {
         let buffer_size = bytes.len();
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} GPU buffer", label);
+        let buffer_label = format!("{label} GPU buffer");
         let buffer = Self::create_initialized_buffer(
             graphics_device.device(),
             bytes,
@@ -105,7 +105,7 @@ impl GPUBuffer {
         assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
         assert!(valid_bytes.len() <= buffer_size);
 
-        let buffer_label = format!("{} GPU buffer", label);
+        let buffer_label = format!("{label} GPU buffer");
         let buffer = Self::create_uninitialized_buffer(
             graphics_device.device(),
             buffer_size as u64,
@@ -141,7 +141,7 @@ impl GPUBuffer {
     ) -> Self {
         assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
 
-        let buffer_label = format!("{} GPU buffer", label);
+        let buffer_label = format!("{label} GPU buffer");
         let buffer = Self::create_uninitialized_buffer(
             graphics_device.device(),
             buffer_size as u64,

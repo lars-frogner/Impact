@@ -554,7 +554,7 @@ impl std::fmt::Display for VertexAttributeSet {
             .zip(VERTEX_ATTRIBUTE_NAMES.iter())
         {
             if self.contains(attribute) {
-                write!(f, "`{}` ", name)?;
+                write!(f, "`{name}` ")?;
             }
         }
         write!(f, "}}")

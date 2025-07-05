@@ -126,14 +126,13 @@ impl AttachmentClearingPass {
                     depth_stencil_attachment,
                     timestamp_writes: None,
                     occlusion_query_set: None,
-                    label: Some(&format!("Clearing pass {}", idx)),
+                    label: Some(&format!("Clearing pass {idx}")),
                 });
             }
         }
 
         impact_log::trace!(
-            "Recorded clearing pass for {} render attachments",
-            n_attachments
+            "Recorded clearing pass for {n_attachments} render attachments"
         );
 
         Ok(())

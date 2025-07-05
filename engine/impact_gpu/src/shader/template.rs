@@ -15,14 +15,14 @@ pub trait SpecificShaderTemplate: fmt::Debug {
     /// Returns a label describing this instance of the specific shader
     /// template.
     fn label(&self) -> Cow<'static, str> {
-        Cow::Owned(format!("{:?}", self))
+        Cow::Owned(format!("{self:?}"))
     }
 
     /// Returns a unique ID for this template instance (two instances of
     /// specific shader templates should never have the same ID unless they
     /// resolve to the same source code).
     fn shader_id(&self) -> ShaderID {
-        ShaderID::from_identifier(&format!("{:?}", self))
+        ShaderID::from_identifier(&format!("{self:?}"))
     }
 }
 
@@ -69,7 +69,7 @@ impl<'a> ShaderTemplate<'a> {
             .map(|label| {
                 (
                     label,
-                    Regex::new(&format!("\\{{\\{{{}\\}}\\}}", label)).unwrap(),
+                    Regex::new(&format!("\\{{\\{{{label}\\}}\\}}")).unwrap(),
                 )
             })
             .collect();
@@ -287,7 +287,7 @@ fn create_flag_and_replacement_list_string<'b>(
         .chain(
             replacements
                 .into_iter()
-                .map(|(label, replacement)| Cow::Owned(format!("{} = {}", label, replacement))),
+                .map(|(label, replacement)| Cow::Owned(format!("{label} = {replacement}"))),
         )
         .collect::<Vec<_>>()
         .join(", ")
@@ -457,7 +457,7 @@ mod tests {
             "#if () #elseif () #endif",
             "#if () #elseif () #else #endif",
         ] {
-            println!("{}", templ);
+            println!("{templ}");
             assert!(ShaderTemplate::new(templ).is_err());
         }
     }

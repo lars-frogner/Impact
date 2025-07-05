@@ -205,8 +205,7 @@ fn create_dynamic_range_compression_render_pass(
         gpu_resource_group_manager,
         &shader_template,
         Cow::Owned(format!(
-            "Dynamic range compression pass ({})",
-            tone_mapping_method
+            "Dynamic range compression pass ({tone_mapping_method})"
         )),
     )
 }

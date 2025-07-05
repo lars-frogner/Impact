@@ -40,7 +40,7 @@ pub fn read_text_file<P: AsRef<Path>>(file_path: P) -> io::Result<String> {
 /// of whether the file already exists.
 pub fn write_text_file<P: AsRef<Path>>(text: &str, output_file_path: P) -> io::Result<()> {
     let mut file = create_file_and_required_directories(output_file_path)?;
-    write!(&mut file, "{}", text)
+    write!(&mut file, "{text}")
 }
 
 /// Saves the given byte buffer directly as a binary file at the given path.

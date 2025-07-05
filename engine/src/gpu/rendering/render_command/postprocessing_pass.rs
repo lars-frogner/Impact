@@ -96,7 +96,7 @@ impl PostprocessingRenderPass {
             graphics_device.device(),
             &bind_group_layouts,
             &push_constants.create_ranges(),
-            &format!("Postprocessing pass render pipeline layout ({})", label),
+            &format!("Postprocessing pass render pipeline layout ({label})"),
         );
 
         let color_target_states = Self::color_target_states(
@@ -118,7 +118,7 @@ impl PostprocessingRenderPass {
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
             depth_stencil_state.clone(),
-            &format!("Postprocessing pass render pipeline ({})", label),
+            &format!("Postprocessing pass render pipeline ({label})"),
         );
 
         Ok(Self {
@@ -402,8 +402,7 @@ pub fn create_postprocessing_render_pipeline_layout(
         bind_group_layouts,
         push_constant_ranges,
         label: Some(&format!(
-            "Postprocessing pass render pipeline layout ({})",
-            label
+            "Postprocessing pass render pipeline layout ({label})"
         )),
     })
 }
@@ -426,6 +425,6 @@ pub fn create_postprocessing_render_pipeline(
         Some(wgpu::Face::Back),
         wgpu::PolygonMode::Fill,
         depth_stencil_state,
-        &format!("Postprocessing pass render pipeline ({})", label),
+        &format!("Postprocessing pass render pipeline ({label})"),
     )
 }

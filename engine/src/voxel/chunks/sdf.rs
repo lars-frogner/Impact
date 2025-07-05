@@ -489,13 +489,11 @@ impl ChunkedVoxelObject {
 
                     if signed_dist.is_sign_negative() && voxel.is_none_or(|voxel| voxel.is_empty()) {
                         panic!(
-                            "SDF value ({}) is negative for empty voxel at indices {:?} (chunk starts at {:?})",
-                            signed_dist, voxel_indices, lower_chunk_voxel_indices
+                            "SDF value ({signed_dist}) is negative for empty voxel at indices {voxel_indices:?} (chunk starts at {lower_chunk_voxel_indices:?})"
                         );
                     } else if signed_dist.is_sign_positive() && voxel.is_some_and(|voxel| !voxel.is_empty()) {
                         panic!(
-                            "SDF value ({}) is non-negative for non-empty voxel at indices {:?} (chunk starts at {:?})",
-                            signed_dist, voxel_indices, lower_chunk_voxel_indices
+                            "SDF value ({signed_dist}) is non-negative for non-empty voxel at indices {voxel_indices:?} (chunk starts at {lower_chunk_voxel_indices:?})"
                         );
                     }
                 },

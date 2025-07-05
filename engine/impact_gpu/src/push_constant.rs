@@ -44,8 +44,7 @@ impl<V: PushConstantVariant> PushConstant<V> {
                 || stages == wgpu::ShaderStages::FRAGMENT
                 || stages == wgpu::ShaderStages::VERTEX_FRAGMENT
                 || stages == wgpu::ShaderStages::COMPUTE,
-            "invalid shader stages for push constant: {:?}",
-            stages
+            "invalid shader stages for push constant: {stages:?}"
         );
         Self { variant, stages }
     }
@@ -358,7 +357,7 @@ fn shader_stages_order(stages: wgpu::ShaderStages) -> u8 {
         wgpu::ShaderStages::VERTEX_FRAGMENT => 1,
         wgpu::ShaderStages::FRAGMENT => 2,
         wgpu::ShaderStages::COMPUTE => 3,
-        _ => panic!("unsupported shader stages: {:?}", stages),
+        _ => panic!("unsupported shader stages: {stages:?}"),
     }
 }
 

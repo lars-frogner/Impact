@@ -126,13 +126,13 @@ where
                         self.runtime_and_window = Some((runtime, window));
                     }
                     Err(error) => {
-                        impact_log::error!("Runtime creation error: {:?}", error);
+                        impact_log::error!("Runtime creation error: {error:?}");
                         event_loop.exit();
                     }
                 }
             }
             Err(error) => {
-                impact_log::error!("Window creation error: {:?}", error);
+                impact_log::error!("Window creation error: {error:?}");
                 event_loop.exit();
             }
         }
@@ -163,7 +163,7 @@ where
                 let result = runtime.perform_game_loop_iteration();
 
                 if let Err(errors) = result {
-                    impact_log::error!("Aborting due to fatal errors: {:?}", errors);
+                    impact_log::error!("Aborting due to fatal errors: {errors:?}");
                     event_loop.exit();
                 } else {
                     window.request_redraw();
@@ -190,7 +190,7 @@ where
         }
 
         if let Err(error) = runtime.handle_window_event_for_engine(&event) {
-            impact_log::error!("Window event handling error: {:?}", error);
+            impact_log::error!("Window event handling error: {error:?}");
             event_loop.exit();
         } else if runtime.shutdown_requested() {
             impact_log::info!("Shutting down after request");
@@ -211,7 +211,7 @@ where
         runtime.handle_device_event_for_ui(&event);
 
         if let Err(error) = runtime.handle_device_event_for_engine(&event) {
-            impact_log::error!("Device event handling error: {:?}", error);
+            impact_log::error!("Device event handling error: {error:?}");
             event_loop.exit();
         }
     }

@@ -283,8 +283,7 @@ impl PropertyAccess for PlyTriangleVertexIndices {
         let verify_length = |length: usize| {
             assert_eq!(
                 length, 3,
-                "Tried to set triangle vertex indices with list of {} indices",
-                length
+                "Tried to set triangle vertex indices with list of {length} indices"
             );
         };
 

@@ -82,7 +82,7 @@ impl<F: Float> PlanarTextureProjection<F> {
 
 impl<F: Float> TextureProjection<F> for PlanarTextureProjection<F> {
     fn identifier(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 
     fn project_position(&self, position: &Point3<F>) -> Vector2<F> {

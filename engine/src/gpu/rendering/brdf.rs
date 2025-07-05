@@ -226,9 +226,7 @@ fn integrate_hundred_point_gauss_legendre(
 
     assert!(
         end >= start,
-        "Interval end {} is smaller than interval start {}",
-        end,
-        start
+        "Interval end {end} is smaller than interval start {start}"
     );
     let interval_scale = 0.5 * (end - start);
     let interval_offset = 0.5 * (end + start);

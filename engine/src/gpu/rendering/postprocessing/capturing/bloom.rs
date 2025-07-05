@@ -346,8 +346,7 @@ impl BloomRenderCommands {
                 timestamp_writes,
                 occlusion_query_set: None,
                 label: Some(&format!(
-                    "Bloom downsampling pass from mip level {} to {}",
-                    input_mip_level, output_mip_level
+                    "Bloom downsampling pass from mip level {input_mip_level} to {output_mip_level}"
                 )),
             });
 
@@ -391,9 +390,7 @@ impl BloomRenderCommands {
             );
 
             impact_log::trace!(
-                "Recorded bloom downsampling pass from mip level {} to {}",
-                input_mip_level,
-                output_mip_level
+                "Recorded bloom downsampling pass from mip level {input_mip_level} to {output_mip_level}"
             );
         }
 
@@ -426,8 +423,7 @@ impl BloomRenderCommands {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 label: Some(&format!(
-                    "Bloom upsampling and blur pass from mip level {} to {}",
-                    input_mip_level, output_mip_level
+                    "Bloom upsampling and blur pass from mip level {input_mip_level} to {output_mip_level}"
                 )),
             });
 
@@ -471,9 +467,7 @@ impl BloomRenderCommands {
             );
 
             impact_log::trace!(
-                "Recorded bloom upsampling and blur pass from mip level {} to {}",
-                input_mip_level,
-                output_mip_level
+                "Recorded bloom upsampling and blur pass from mip level {input_mip_level} to {output_mip_level}"
             );
         }
 
