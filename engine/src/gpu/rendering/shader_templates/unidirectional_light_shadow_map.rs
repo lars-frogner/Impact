@@ -1,7 +1,7 @@
 //! Shader template for unidirectional light shadow map update passes.
 
 use crate::{
-    gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    gpu::rendering::push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     rendering_template_source,
 };
 use impact_gpu::{
@@ -37,10 +37,10 @@ impl UnidirectionalLightShadowMapShaderTemplate {
     }
 
     /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> RenderingPushConstantGroup {
-        RenderingPushConstantGroup::for_vertex([
-            RenderingPushConstantVariant::LightIdx,
-            RenderingPushConstantVariant::ShadowMapArrayIdx,
+    pub fn push_constants() -> BasicPushConstantGroup {
+        BasicPushConstantGroup::for_vertex([
+            BasicPushConstantVariant::LightIdx,
+            BasicPushConstantVariant::ShadowMapArrayIdx,
         ])
     }
 }

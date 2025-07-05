@@ -10,7 +10,7 @@ use crate::{
             },
             RenderAttachmentQuantitySet,
         },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     },
     rendering_template_source,
 };
@@ -48,14 +48,14 @@ impl ShadowableUnidirectionalLightShaderTemplate {
     }
 
     /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> RenderingPushConstantGroup {
+    pub fn push_constants() -> BasicPushConstantGroup {
         // Although we only access the push constants in the fragment state, we include
         // the vertex stage here so that we can use the same push constant group as the
         // `ShadowableOmnidirectionalLightShaderTemplate`
-        RenderingPushConstantGroup::for_vertex_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
-            RenderingPushConstantVariant::LightIdx,
-            RenderingPushConstantVariant::Exposure,
+        BasicPushConstantGroup::for_vertex_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
+            BasicPushConstantVariant::LightIdx,
+            BasicPushConstantVariant::Exposure,
         ])
     }
 

@@ -1,7 +1,7 @@
 //! Shader template for the voxel geometry pass.
 
 use crate::{
-    gpu::rendering::push_constant::RenderingPushConstantVariant,
+    gpu::rendering::push_constant::BasicPushConstantVariant,
     rendering_template_source,
     voxel::resource::{
         VoxelMaterialGPUResourceManager, VoxelMeshVertexAttributeLocation, VoxelPushConstantGroup,
@@ -46,11 +46,11 @@ impl VoxelGeometryShaderTemplate {
     pub fn push_constants() -> VoxelPushConstantGroup {
         PushConstantGroup::for_vertex_fragment([
             VoxelPushConstantVariant::Rendering(
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
             ),
-            VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::FrameCounter),
-            VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::Exposure),
-            VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::GenericVec3f32), // Offsets for texture coordinates
+            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::FrameCounter),
+            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::Exposure),
+            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::GenericVec3f32), // Offsets for texture coordinates
         ])
     }
 }

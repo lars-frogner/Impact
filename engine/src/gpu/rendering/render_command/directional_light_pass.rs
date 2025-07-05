@@ -8,7 +8,7 @@ use crate::gpu::{
             RenderAttachmentTextureManager,
         },
         postprocessing::Postprocessor,
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
         resource::BasicRenderResources,
         shader_templates::{
@@ -36,7 +36,7 @@ use std::borrow::Cow;
 /// Pass for computing reflected luminance due to directional lights.
 #[derive(Debug)]
 pub struct DirectionalLightPass {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     color_target_state: wgpu::ColorTargetState,
@@ -313,14 +313,14 @@ impl DirectionalLightPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::Exposure,
+                BasicPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }
@@ -329,7 +329,7 @@ impl DirectionalLightPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::LightIdx,
+                BasicPushConstantVariant::LightIdx,
                 || light_idx,
             );
     }

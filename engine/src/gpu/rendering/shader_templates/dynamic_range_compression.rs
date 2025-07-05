@@ -9,7 +9,7 @@ use crate::{
         postprocessing::{
             PostprocessingShaderTemplate, capturing::dynamic_range_compression::ToneMappingMethod,
         },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     },
     rendering_template_source,
 };
@@ -28,7 +28,7 @@ use std::sync::LazyLock;
 pub struct DynamicRangeCompressionShaderTemplate {
     input_render_attachment_quantity: RenderAttachmentQuantity,
     tone_mapping_method: ToneMappingMethod,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
 }
 
@@ -44,8 +44,8 @@ impl DynamicRangeCompressionShaderTemplate {
         input_render_attachment_quantity: RenderAttachmentQuantity,
         tone_mapping_method: ToneMappingMethod,
     ) -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
@@ -78,7 +78,7 @@ impl SpecificShaderTemplate for DynamicRangeCompressionShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for DynamicRangeCompressionShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

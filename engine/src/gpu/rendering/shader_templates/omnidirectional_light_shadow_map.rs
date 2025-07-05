@@ -1,7 +1,7 @@
 //! Shader template for omnidirectional light shadow map update passes.
 
 use crate::{
-    gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    gpu::rendering::push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     rendering_template_source,
 };
 use impact_gpu::{
@@ -37,8 +37,8 @@ impl OmnidirectionalLightShadowMapShaderTemplate {
     }
 
     /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> RenderingPushConstantGroup {
-        RenderingPushConstantGroup::for_fragment([RenderingPushConstantVariant::LightIdx])
+    pub fn push_constants() -> BasicPushConstantGroup {
+        BasicPushConstantGroup::for_fragment([BasicPushConstantVariant::LightIdx])
     }
 }
 

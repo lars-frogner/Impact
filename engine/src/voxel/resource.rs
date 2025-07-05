@@ -2,7 +2,7 @@
 
 use crate::{
     assets::Assets,
-    gpu::rendering::push_constant::RenderingPushConstantVariant,
+    gpu::rendering::push_constant::BasicPushConstantVariant,
     voxel::{
         VoxelObjectID,
         mesh::{
@@ -82,7 +82,7 @@ pub type VoxelPushConstantGroup = PushConstantGroup<VoxelPushConstantVariant>;
 pub enum VoxelPushConstantVariant {
     CullingFrustum,
     ChunkCount,
-    Rendering(RenderingPushConstantVariant),
+    Rendering(BasicPushConstantVariant),
 }
 
 static MATERIAL_RESOURCES_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();

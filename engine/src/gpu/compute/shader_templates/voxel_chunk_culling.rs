@@ -2,7 +2,7 @@
 
 use crate::{
     compute_template_source,
-    gpu::rendering::push_constant::RenderingPushConstantVariant,
+    gpu::rendering::push_constant::BasicPushConstantVariant,
     voxel::resource::{VoxelPushConstantGroup, VoxelPushConstantVariant},
 };
 use impact_gpu::{
@@ -41,7 +41,7 @@ impl VoxelChunkCullingShaderTemplate {
         VoxelPushConstantGroup::for_compute([
             VoxelPushConstantVariant::CullingFrustum,
             VoxelPushConstantVariant::ChunkCount,
-            VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::InstanceIdx),
+            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::InstanceIdx),
         ])
     }
 }

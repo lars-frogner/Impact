@@ -7,7 +7,7 @@ use crate::{
             RenderAttachmentQuantity,
         },
         postprocessing::PostprocessingShaderTemplate,
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     },
     rendering_template_source,
 };
@@ -23,7 +23,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct RenderAttachmentVisualizationShaderTemplate {
     render_attachment_quantity: RenderAttachmentQuantity,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
 }
 
@@ -34,8 +34,8 @@ impl RenderAttachmentVisualizationShaderTemplate {
     /// Creates a new visualization shader template for the given render
     /// attachment quantity.
     pub fn new(render_attachment_quantity: RenderAttachmentQuantity) -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
 
         let input_render_attachments =
@@ -65,7 +65,7 @@ impl SpecificShaderTemplate for RenderAttachmentVisualizationShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for RenderAttachmentVisualizationShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

@@ -2,7 +2,7 @@
 
 use crate::{
     gpu::rendering::{
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::{INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
         resource::{BasicRenderResources, VoxelRenderResources},
         shader_templates::{
@@ -33,7 +33,7 @@ use std::borrow::Cow;
 /// Passes for filling the faces of each omnidirectional light shadow cubemap.
 #[derive(Debug)]
 pub struct OmnidirectionalLightShadowMapUpdatePasses {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
@@ -44,7 +44,7 @@ pub struct OmnidirectionalLightShadowMapUpdatePasses {
 /// Passes for filling the cascades of each unidirectional light shadow map.
 #[derive(Debug)]
 pub struct UnidirectionalLightShadowMapUpdatePasses {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
@@ -226,7 +226,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::LightIdx,
+                BasicPushConstantVariant::LightIdx,
                 || light_idx,
             );
     }
@@ -582,14 +582,14 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::LightIdx,
+                BasicPushConstantVariant::LightIdx,
                 || light_idx,
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::ShadowMapArrayIdx,
+                BasicPushConstantVariant::ShadowMapArrayIdx,
                 || cascade_idx,
             );
     }

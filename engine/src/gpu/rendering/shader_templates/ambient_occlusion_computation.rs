@@ -11,7 +11,7 @@ use crate::{
         postprocessing::{
             PostprocessingShaderTemplate, ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
         },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::StencilValue,
     },
     rendering_template_source,
@@ -34,7 +34,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct AmbientOcclusionComputationShaderTemplate {
     samples_resource_group_id: GPUResourceGroupID,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -47,9 +47,9 @@ impl AmbientOcclusionComputationShaderTemplate {
     /// Creates a new ambient occlusion computation shader template using the
     /// given resource group for the ambient occlusion sample uniform.
     pub fn new(samples_resource_group_id: GPUResourceGroupID) -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
-            RenderingPushConstantVariant::FrameCounter,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
+            BasicPushConstantVariant::FrameCounter,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
@@ -100,7 +100,7 @@ impl SpecificShaderTemplate for AmbientOcclusionComputationShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for AmbientOcclusionComputationShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

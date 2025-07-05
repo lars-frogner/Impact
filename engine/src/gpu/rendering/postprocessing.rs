@@ -12,7 +12,7 @@ use crate::gpu::rendering::{
         RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity, RenderAttachmentTextureManager,
     },
-    push_constant::RenderingPushConstantGroup,
+    push_constant::BasicPushConstantGroup,
     render_command::StencilValue,
     resource::BasicRenderResources,
     surface::RenderingSurface,
@@ -34,7 +34,7 @@ use temporal_anti_aliasing::{TemporalAntiAliasingConfig, TemporalAntiAliasingRen
 /// shader.
 pub trait PostprocessingShaderTemplate: SpecificShaderTemplate {
     /// Returns the group of push constants used by the shader.
-    fn push_constants(&self) -> RenderingPushConstantGroup;
+    fn push_constants(&self) -> BasicPushConstantGroup;
 
     /// Returns the set of render attachments used as input by the shader.
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet;
