@@ -4,7 +4,7 @@ use crate::gpu::rendering::{
     attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
     render_command::{StencilValue, postprocessing_pass::PostprocessingRenderPass},
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     shader_templates::{
         ambient_occlusion_application::AmbientOcclusionApplicationShaderTemplate,
         ambient_occlusion_computation::AmbientOcclusionComputationShaderTemplate,
@@ -162,7 +162,7 @@ impl AmbientOcclusionRenderCommands {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,

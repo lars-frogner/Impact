@@ -15,7 +15,7 @@ use crate::gpu::rendering::{
         },
         render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
     },
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     shader_templates::{
         bloom_blending::BloomBlendingShaderTemplate,
         bloom_downsampling::BloomDownsamplingShaderTemplate,
@@ -292,7 +292,7 @@ impl BloomRenderCommands {
 
     pub(super) fn record(
         &self,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,

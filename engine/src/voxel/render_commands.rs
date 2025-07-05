@@ -8,7 +8,7 @@ use crate::{
             postprocessing::Postprocessor,
             push_constant::RenderingPushConstantVariant,
             render_command::{self, STANDARD_FRONT_FACE},
-            resource::SynchronizedRenderResources,
+            resource::{BasicRenderResources, VoxelRenderResources},
             shader_templates::voxel_geometry::VoxelGeometryShaderTemplate,
             surface::RenderingSurface,
         },
@@ -73,14 +73,17 @@ impl VoxelRenderCommands {
         Self { chunk_culling_pass }
     }
 
-    pub fn record_before_geometry_pass(
+    pub fn record_before_geometry_pass<R>(
         &self,
         scene_camera: Option<&SceneCamera>,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         self.chunk_culling_pass.record_for_geometry_pass(
             scene_camera,
             instance_feature_manager,
@@ -90,15 +93,18 @@ impl VoxelRenderCommands {
         )
     }
 
-    pub fn record_before_omnidirectional_light_shadow_cubemap_face_update(
+    pub fn record_before_omnidirectional_light_shadow_cubemap_face_update<R>(
         &self,
         positive_z_cubemap_face_frustum: &Frustum<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         self.chunk_culling_pass
             .record_for_shadow_mapping_with_frustum(
                 positive_z_cubemap_face_frustum,
@@ -110,15 +116,18 @@ impl VoxelRenderCommands {
             )
     }
 
-    pub fn record_before_unidirectional_light_shadow_map_cascade_update(
+    pub fn record_before_unidirectional_light_shadow_map_cascade_update<R>(
         &self,
         cascade_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         self.chunk_culling_pass
             .record_for_shadow_mapping_with_orthographic_frustum(
                 cascade_frustum,
@@ -130,12 +139,15 @@ impl VoxelRenderCommands {
             )
     }
 
-    pub fn record_shadow_map_update(
+    pub fn record_shadow_map_update<R>(
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         render_pass: &mut wgpu::RenderPass<'_>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
 
         // Return early if there are no voxel objects
@@ -278,7 +290,7 @@ impl VoxelChunkCullingPass {
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::ChunkCount),
+                VoxelPushConstantVariant::ChunkCount,
                 || chunk_count,
             );
 
@@ -290,14 +302,17 @@ impl VoxelChunkCullingPass {
             );
     }
 
-    fn record_for_geometry_pass(
+    fn record_for_geometry_pass<R>(
         &self,
         scene_camera: Option<&SceneCamera>,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let Some(scene_camera) = scene_camera else {
             return Ok(());
         };
@@ -306,7 +321,7 @@ impl VoxelChunkCullingPass {
 
         let instance_range_id = InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
 
-        self.record::<InstanceModelViewTransformWithPrevious>(
+        self.record::<R, InstanceModelViewTransformWithPrevious>(
             instance_feature_manager,
             render_resources,
             timestamp_recorder,
@@ -321,16 +336,19 @@ impl VoxelChunkCullingPass {
         )
     }
 
-    fn record_for_shadow_mapping_with_frustum(
+    fn record_for_shadow_mapping_with_frustum<R>(
         &self,
         frustum: &Frustum<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
-        self.record::<InstanceModelLightTransform>(
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
+        self.record::<R, InstanceModelLightTransform>(
             instance_feature_manager,
             render_resources,
             timestamp_recorder,
@@ -345,16 +363,19 @@ impl VoxelChunkCullingPass {
         )
     }
 
-    fn record_for_shadow_mapping_with_orthographic_frustum(
+    fn record_for_shadow_mapping_with_orthographic_frustum<R>(
         &self,
         orthographic_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
-        self.record::<InstanceModelLightTransform>(
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
+        self.record::<R, InstanceModelLightTransform>(
             instance_feature_manager,
             render_resources,
             timestamp_recorder,
@@ -373,10 +394,10 @@ impl VoxelChunkCullingPass {
         )
     }
 
-    fn record<F>(
+    fn record<R, F>(
         &self,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
         instance_range_id: InstanceFeatureBufferRangeID,
@@ -385,6 +406,7 @@ impl VoxelChunkCullingPass {
         tag: Cow<'static, str>,
     ) -> Result<()>
     where
+        R: BasicRenderResources + VoxelRenderResources,
         F: InstanceFeature + AsInstanceModelViewTransform,
     {
         let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
@@ -546,12 +568,15 @@ impl VoxelGeometryPipeline {
         }
     }
 
-    pub fn sync_with_render_resources(
+    pub fn sync_with_render_resources<R>(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &SynchronizedRenderResources,
-    ) -> Result<()> {
+        render_resources: &R,
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let Some(voxel_material_resource_manager) =
             render_resources.get_voxel_material_resource_manager()
         else {
@@ -630,15 +655,18 @@ impl VoxelGeometryPipeline {
             );
     }
 
-    pub fn record(
+    pub fn record<R>(
         &self,
         rendering_surface: &RenderingSurface,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &R,
         postprocessor: &Postprocessor,
         frame_counter: u32,
         render_pass: &mut wgpu::RenderPass<'_>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
 
         // Return early if there are no voxel objects

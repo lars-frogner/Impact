@@ -20,10 +20,9 @@ use crate::{
             RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
         },
         postprocessing::Postprocessor,
-        resource::SynchronizedRenderResources,
+        resource::{BasicRenderResources, VoxelRenderResources},
         surface::RenderingSurface,
     },
-    scene::Scene,
     voxel::render_commands::VoxelRenderCommands,
 };
 use ambient_light_pass::AmbientLightPass;
@@ -40,7 +39,9 @@ use impact_gpu::{
     shader::{Shader, ShaderManager},
     storage::StorageGPUBufferManager,
 };
+use impact_light::LightStorage;
 use impact_material::MaterialLibrary;
+use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
 use shadow_map_update_passes::{
     OmnidirectionalLightShadowMapUpdatePasses, UnidirectionalLightShadowMapUpdatePasses,
 };
@@ -144,13 +145,16 @@ impl RenderCommandManager {
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
-    pub fn sync_with_render_resources(
+    pub fn sync_with_render_resources<R>(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
-    ) -> Result<()> {
+        render_resources: &R,
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         self.non_physical_model_depth_prepass
             .sync_with_render_resources_for_non_physical_models(material_library, render_resources);
 
@@ -203,12 +207,15 @@ impl RenderCommandManager {
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
-    pub fn record(
+    pub fn record<R>(
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        scene: &Scene,
-        render_resources: &SynchronizedRenderResources,
+        light_storage: &LightStorage,
+        material_library: &MaterialLibrary,
+        instance_feature_manager: &InstanceFeatureManager,
+        scene_camera: Option<&SceneCamera>,
+        render_resources: &R,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
@@ -217,10 +224,10 @@ impl RenderCommandManager {
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
-        let instance_feature_manager = scene.instance_feature_manager().read().unwrap();
-        let light_storage = scene.light_storage().read().unwrap();
-
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
         self.attachment_clearing_pass.record(
             surface_texture_view,
             render_attachment_texture_manager,
@@ -229,8 +236,8 @@ impl RenderCommandManager {
         )?;
 
         self.voxel_render_commands.record_before_geometry_pass(
-            scene.scene_camera().read().unwrap().as_ref(),
-            &instance_feature_manager,
+            scene_camera,
+            instance_feature_manager,
             render_resources,
             timestamp_recorder,
             command_encoder,
@@ -247,8 +254,8 @@ impl RenderCommandManager {
 
         self.geometry_pass.record(
             rendering_surface,
-            &scene.material_library().read().unwrap(),
-            &instance_feature_manager,
+            material_library,
+            instance_feature_manager,
             render_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -258,8 +265,8 @@ impl RenderCommandManager {
         )?;
 
         self.omnidirectional_light_shadow_map_update_passes.record(
-            &light_storage,
-            &instance_feature_manager,
+            light_storage,
+            instance_feature_manager,
             render_resources,
             timestamp_recorder,
             shadow_mapping_config.enabled,
@@ -268,8 +275,8 @@ impl RenderCommandManager {
         )?;
 
         self.unidirectional_light_shadow_map_update_passes.record(
-            &light_storage,
-            &instance_feature_manager,
+            light_storage,
+            instance_feature_manager,
             render_resources,
             timestamp_recorder,
             shadow_mapping_config.enabled,
@@ -289,7 +296,7 @@ impl RenderCommandManager {
 
         self.directional_light_pass.record(
             rendering_surface,
-            &light_storage,
+            light_storage,
             render_resources,
             render_attachment_texture_manager,
             postprocessor,

@@ -290,10 +290,18 @@ impl RenderingSystem {
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
+        let light_storage = scene.light_storage().read().unwrap();
+        let material_library = scene.material_library().read().unwrap();
+        let instance_feature_manager = scene.instance_feature_manager().read().unwrap();
+        let scene_camera = scene.scene_camera().read().unwrap();
+
         self.render_command_manager.read().unwrap().record(
             &self.rendering_surface,
             &surface_texture_view,
-            scene,
+            &light_storage,
+            &material_library,
+            &instance_feature_manager,
+            scene_camera.as_ref(),
             self.render_resource_manager.read().unwrap().synchronized(),
             &self.render_attachment_texture_manager.read().unwrap(),
             &self.gpu_resource_group_manager.read().unwrap(),

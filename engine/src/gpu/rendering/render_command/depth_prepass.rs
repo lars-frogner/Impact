@@ -7,7 +7,7 @@ use crate::gpu::{
         attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
         render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-        resource::SynchronizedRenderResources,
+        resource::BasicRenderResources,
         shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
         surface::RenderingSurface,
     },
@@ -85,7 +85,7 @@ impl DepthPrepass {
     pub fn sync_with_render_resources_for_non_physical_models(
         &mut self,
         material_library: &MaterialLibrary,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) {
         let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
@@ -148,7 +148,7 @@ impl DepthPrepass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,

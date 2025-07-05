@@ -13,7 +13,7 @@ use crate::gpu::rendering::{
         postprocessing_pass::PostprocessingRenderPass,
         render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
     },
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     shader_templates::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate,
     surface::RenderingSurface,
 };
@@ -144,7 +144,7 @@ impl TemporalAntiAliasingRenderCommands {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,

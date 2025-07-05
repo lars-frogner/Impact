@@ -13,7 +13,7 @@ use crate::{
             postprocessing::Postprocessor,
             push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
             render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-            resource::SynchronizedRenderResources,
+            resource::BasicRenderResources,
             shader_templates::ambient_light::AmbientLightShaderTemplate,
             surface::RenderingSurface,
         },
@@ -116,7 +116,7 @@ impl AmbientLightPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
@@ -239,7 +239,7 @@ impl AmbientLightPass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,

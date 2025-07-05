@@ -4,7 +4,7 @@ use crate::gpu::rendering::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
     render_command::postprocessing_pass::PostprocessingRenderPass,
-    resource::SynchronizedRenderResources,
+    resource::BasicRenderResources,
     shader_templates::dynamic_range_compression::DynamicRangeCompressionShaderTemplate,
     surface::RenderingSurface,
 };
@@ -127,7 +127,7 @@ impl DynamicRangeCompressionRenderCommands {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &SynchronizedRenderResources,
+        render_resources: &impl BasicRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
