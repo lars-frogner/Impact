@@ -19,7 +19,6 @@ pub enum RenderingPushConstantVariant {
     FrameCounter,
     CameraRotationQuaternion,
     InstanceIdx,
-    ChunkCount,
     GenericVec3f32,
 }
 
@@ -30,8 +29,7 @@ impl PushConstantVariant for RenderingPushConstantVariant {
             | Self::LightIdx
             | Self::ShadowMapArrayIdx
             | Self::PixelCount
-            | Self::InstanceIdx
-            | Self::ChunkCount => mem::size_of::<u32>(),
+            | Self::InstanceIdx => mem::size_of::<u32>(),
             Self::InverseWindowDimensions => mem::size_of::<[f32; 2]>(),
             Self::Exposure | Self::InverseExposure => mem::size_of::<f32>(),
             Self::CameraRotationQuaternion => mem::size_of::<UnitQuaternion<f32>>(),

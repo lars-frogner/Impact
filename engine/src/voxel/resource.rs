@@ -81,6 +81,7 @@ pub type VoxelPushConstantGroup = PushConstantGroup<VoxelPushConstantVariant>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum VoxelPushConstantVariant {
     CullingFrustum,
+    ChunkCount,
     Rendering(RenderingPushConstantVariant),
 }
 
@@ -908,6 +909,7 @@ impl PushConstantVariant for VoxelPushConstantVariant {
     fn size(&self) -> u32 {
         match self {
             Self::CullingFrustum => mem::size_of::<CullingFrustum>() as u32,
+            Self::ChunkCount => mem::size_of::<u32>() as u32,
             Self::Rendering(variant) => variant.size(),
         }
     }

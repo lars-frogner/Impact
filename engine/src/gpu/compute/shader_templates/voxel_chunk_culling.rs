@@ -40,7 +40,7 @@ impl VoxelChunkCullingShaderTemplate {
     pub fn push_constants() -> VoxelPushConstantGroup {
         VoxelPushConstantGroup::for_compute([
             VoxelPushConstantVariant::CullingFrustum,
-            VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::ChunkCount),
+            VoxelPushConstantVariant::ChunkCount,
             VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::InstanceIdx),
         ])
     }
