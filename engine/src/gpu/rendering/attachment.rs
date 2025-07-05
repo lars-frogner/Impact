@@ -368,7 +368,7 @@ impl Display for RenderAttachmentQuantitySet {
         write!(f, "{{ ")?;
         for quantity in RenderAttachmentQuantity::all() {
             if self.contains(quantity.flag()) {
-                write!(f, "`{}` ", quantity)?;
+                write!(f, "`{quantity}` ")?;
             }
         }
         write!(f, "}}")
@@ -1052,7 +1052,7 @@ impl RenderAttachmentTextureManager {
                 texture.create_bind_group_layout_entry(texture_binding, visibility),
                 sampler.create_bind_group_layout_entry(sampler_binding, visibility),
             ],
-            label: Some(&format!("{} bind group layout", label)),
+            label: Some(&format!("{label} bind group layout")),
         })
     }
 
@@ -1077,7 +1077,7 @@ impl RenderAttachmentTextureManager {
                     resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
-            label: Some(&format!("{} bind group", label)),
+            label: Some(&format!("{label} bind group")),
         })
     }
 }
@@ -1113,8 +1113,7 @@ impl RenderAttachmentTexture {
             mip_level_count,
             1,
             &format!(
-                "Render attachment texture (quantity = {:?}, format = {:?})",
-                quantity, format
+                "Render attachment texture (quantity = {quantity:?}, format = {format:?})"
             ),
         );
 

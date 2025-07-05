@@ -35,7 +35,7 @@ pub(crate) fn impl_setup_component(input: DeriveInput, crate_root: &Ident) -> To
 }
 
 fn generate_component_impl(type_name: &Ident, crate_root: &Ident) -> TokenStream {
-    let type_path_tail = format!("::{}", type_name);
+    let type_path_tail = format!("::{type_name}");
     let component_id = quote!(
         #crate_root::component::ComponentID::hashed_from_str(concat!(
             module_path!(),

@@ -697,7 +697,7 @@ pub mod fuzzing {
                         Some(VoxelPlacement::Surface(pl)) if pl == placement
                     ));
                     let was_absent = indices_of_touched_voxels.insert(indices);
-                    assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+                    assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
                 },
             );
 
@@ -705,7 +705,7 @@ pub mod fuzzing {
                 &sphere.0,
                 &mut |indices, _| {
                     let was_present = indices_of_touched_voxels.remove(&indices);
-                    assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
+                    assert!(was_present, "Voxel in sphere was not found: {indices:?}");
                 },
             );
         }
@@ -720,14 +720,14 @@ pub mod fuzzing {
             object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
                 if !voxel.is_empty() {
                     let was_absent = indices_of_inside_voxels.insert(indices);
-                    assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+                    assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
                 }
             });
             object.resolve_connected_regions_between_all_chunks();
 
             object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere.0, &mut |indices, _| {
                 let was_present = indices_of_inside_voxels.remove(&indices);
-                assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
+                assert!(was_present, "Voxel in sphere was not found: {indices:?}");
             });
 
             assert!(
@@ -749,7 +749,7 @@ pub mod fuzzing {
             object.modify_voxels_within_capsule(&capsule.0, &mut |indices, _, voxel| {
                 if !voxel.is_empty() {
                     let was_absent = indices_of_inside_voxels.insert(indices);
-                    assert!(was_absent, "Voxel in capsule found twice: {:?}", indices);
+                    assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
                 }
             });
             object.resolve_connected_regions_between_all_chunks();
@@ -758,7 +758,7 @@ pub mod fuzzing {
                 &capsule.0,
                 &mut |indices, _| {
                     let was_present = indices_of_inside_voxels.remove(&indices);
-                    assert!(was_present, "Voxel in capsule was not found: {:?}", indices);
+                    assert!(was_present, "Voxel in capsule was not found: {indices:?}");
                 },
             );
 
@@ -903,13 +903,13 @@ mod tests {
                     Some(VoxelPlacement::Surface(pl)) if pl == placement
                 ));
                 let was_absent = indices_of_touched_voxels.insert(indices);
-                assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+                assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
             },
         );
 
         object.for_each_surface_voxel_touching_sphere_brute_force(&sphere, &mut |indices, _| {
             let was_present = indices_of_touched_voxels.remove(&indices);
-            assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
+            assert!(was_present, "Voxel in sphere was not found: {indices:?}");
         });
     }
 
@@ -936,13 +936,13 @@ mod tests {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = indices_of_inside_voxels.insert(indices);
-                assert!(was_absent, "Voxel in sphere found twice: {:?}", indices);
+                assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
             }
         });
 
         object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere, &mut |indices, _| {
             let was_present = indices_of_inside_voxels.remove(&indices);
-            assert!(was_present, "Voxel in sphere was not found: {:?}", indices);
+            assert!(was_present, "Voxel in sphere was not found: {indices:?}");
         });
 
         assert!(
@@ -977,13 +977,13 @@ mod tests {
         object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = indices_of_inside_voxels.insert(indices);
-                assert!(was_absent, "Voxel in capsule found twice: {:?}", indices);
+                assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
             }
         });
 
         object.for_each_non_empty_voxel_in_capsule_brute_force(&capsule, &mut |indices, _| {
             let was_present = indices_of_inside_voxels.remove(&indices);
-            assert!(was_present, "Voxel in capsule was not found: {:?}", indices);
+            assert!(was_present, "Voxel in capsule was not found: {indices:?}");
         });
 
         assert!(

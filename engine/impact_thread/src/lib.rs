@@ -455,7 +455,7 @@ impl ExecutionProgress {
     /// the given number and updates the conditional variable
     /// used for tracking whether there are pending tasks.
     fn add_to_pending_task_count(&self, n_tasks: usize) {
-        impact_log::trace!("Adding {} pending tasks", n_tasks);
+        impact_log::trace!("Adding {n_tasks} pending tasks");
 
         if n_tasks == 0 {
             return;
@@ -478,9 +478,7 @@ impl ExecutionProgress {
     /// If the count is attempted to be decremented below zero.
     fn register_executed_tasks(&self, worker_id: WorkerID, n_tasks: usize) {
         impact_log::trace!(
-            "Worker {} registering {} tasks as executed",
-            worker_id,
-            n_tasks
+            "Worker {worker_id} registering {n_tasks} tasks as executed"
         );
 
         if n_tasks == 0 {
@@ -574,7 +572,7 @@ impl Worker {
     {
         let handle = thread::spawn(move || {
             let worker_id = communicator.channel().owning_worker_id();
-            impact_log::trace!("Worker {} spawned", worker_id);
+            impact_log::trace!("Worker {worker_id} spawned");
 
             loop {
                 let instruction = communicator.channel().wait_for_next_instruction();
@@ -597,7 +595,7 @@ impl Worker {
                             .register_executed_tasks(worker_id, n_executed_tasks);
                     }
                     WorkerInstruction::Terminate => {
-                        impact_log::trace!("Worker {} terminating", worker_id);
+                        impact_log::trace!("Worker {worker_id} terminating");
                         return;
                     }
                 }

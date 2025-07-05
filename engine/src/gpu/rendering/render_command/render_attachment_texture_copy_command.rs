@@ -22,14 +22,12 @@ impl RenderAttachmentTextureCopyCommand {
     pub fn new(source: RenderAttachmentQuantity, destination: RenderAttachmentQuantity) -> Self {
         if source == destination {
             panic!(
-                "Tried to create render attachment texture copy command with same source and destination: {:?}",
-                source,
+                "Tried to create render attachment texture copy command with same source and destination: {source:?}",
             );
         }
         if source.texture_format() != destination.texture_format() {
             panic!(
-                "Tried to create render attachment texture copy command with different formats: {:?} and {:?}",
-                source, destination,
+                "Tried to create render attachment texture copy command with different formats: {source:?} and {destination:?}",
             );
         }
         Self {

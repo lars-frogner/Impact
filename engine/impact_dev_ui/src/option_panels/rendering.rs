@@ -395,7 +395,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 
     labeled_option(ui, camera::docs::EXPOSURE_MODE, |ui| {
         ComboBox::from_id_salt(camera::docs::EXPOSURE_MODE.label)
-            .selected_text(format!("{:?}", exposure_mode))
+            .selected_text(format!("{exposure_mode:?}"))
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut exposure_mode, ExposureMode::Automatic, "Automatic");
                 ui.selectable_value(&mut exposure_mode, ExposureMode::Manual, "Manual");

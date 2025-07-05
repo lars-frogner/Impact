@@ -340,8 +340,7 @@ impl InterpretedArgType {
             Err(syn::Error::new(
                 name.span(),
                 format!(
-                    "Invalid type for argument `{}`: expected `&C` or `Option<&C>` for a type `C`",
-                    name
+                    "Invalid type for argument `{name}`: expected `&C` or `Option<&C>` for a type `C`"
                 ),
             ))
         };

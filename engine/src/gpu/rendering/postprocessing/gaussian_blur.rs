@@ -223,8 +223,7 @@ pub fn create_gaussian_blur_render_pass(
         gpu_resource_group_manager,
         &shader_template,
         Cow::Owned(format!(
-            "Gaussian blur pass from {} into {}",
-            input_render_attachment_quantity, output_render_attachment_quantity
+            "Gaussian blur pass from {input_render_attachment_quantity} into {output_render_attachment_quantity}"
         )),
     )
 }

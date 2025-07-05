@@ -93,14 +93,14 @@ impl ComputePass {
             graphics_device.device(),
             &bind_group_layouts,
             &push_constants.create_ranges(),
-            &format!("Compute pipeline layout ({})", label),
+            &format!("Compute pipeline layout ({label})"),
         );
 
         let pipeline = create_compute_pipeline(
             graphics_device.device(),
             &pipeline_layout,
             shader,
-            &format!("Compute pipeline ({})", label),
+            &format!("Compute pipeline ({label})"),
         );
 
         Ok(Self {

@@ -255,13 +255,13 @@ impl MaterialPropertyTextureGroup {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &bind_group_layout_entries,
-            label: Some(&format!("{} bind group layout", label)),
+            label: Some(&format!("{label} bind group layout")),
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &bind_group_entries,
-            label: Some(&format!("{} bind group", label)),
+            label: Some(&format!("{label} bind group")),
         });
 
         Ok((bind_group_layout, bind_group))

@@ -379,7 +379,7 @@ impl MeshGPUBufferManager {
             new_full_index_gpu_buffer(
                 graphics_device,
                 indices,
-                Cow::Owned(format!("{} index", mesh_id)),
+                Cow::Owned(format!("{mesh_id} index")),
             ),
         )
     }

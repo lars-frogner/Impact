@@ -57,8 +57,8 @@ pub fn setup_drag_load_map_for_new_entity(
 
     fn generate_map_path(mesh_id: MeshID) -> PathBuf {
         // Ensure there are no path delimiters
-        let sanitized_mesh_name = format!("{}", mesh_id).replace('/', "_").replace('\\', "_");
-        PathBuf::from(format!("assets/drag_load_maps/{}.bc", sanitized_mesh_name))
+        let sanitized_mesh_name = format!("{mesh_id}").replace('/', "_").replace('\\', "_");
+        PathBuf::from(format!("assets/drag_load_maps/{sanitized_mesh_name}.bc"))
     }
 
     setup!(components, |drag: &DetailedDragComp,

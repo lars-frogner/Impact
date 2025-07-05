@@ -286,13 +286,13 @@ impl AverageLuminanceComputeCommands {
         for (luminance, &count) in luminances.zip(&histogram).skip(1) {
             weighted_sum += luminance * count as f32;
             sum += count as f32;
-            println!("{}: {}", luminance, count);
+            println!("{luminance}: {count}");
         }
         let average = weighted_sum / sum;
         println!("----------------------------------");
         println!("Below threshold: {}", histogram[0]);
-        println!("Total count: {}", sum);
-        println!("Average: {}", average);
+        println!("Total count: {sum}");
+        println!("Average: {average}");
         println!("**********************************");
 
         Ok(())

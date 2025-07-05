@@ -384,7 +384,7 @@ pub fn print_timing_results(timings: &[(Cow<'_, str>, Duration)]) {
         if title.len() < total_width {
             title.push('*');
         }
-        println!("{}", title);
+        println!("{title}");
     }
     for (tag, duration) in timings {
         println!(
