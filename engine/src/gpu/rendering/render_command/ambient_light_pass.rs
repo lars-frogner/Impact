@@ -11,7 +11,7 @@ use crate::{
                 RenderAttachmentTextureManager,
             },
             postprocessing::Postprocessor,
-            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+            push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
             render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
             resource::BasicRenderResources,
             shader_templates::ambient_light::AmbientLightShaderTemplate,
@@ -31,7 +31,7 @@ use std::borrow::Cow;
 /// Pass for computing reflected luminance due to ambient light.
 #[derive(Debug)]
 pub struct AmbientLightPass {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
@@ -224,14 +224,14 @@ impl AmbientLightPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::Exposure,
+                BasicPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }

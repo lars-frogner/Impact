@@ -8,7 +8,7 @@ use crate::{
             RenderAttachmentQuantity,
         },
         postprocessing::PostprocessingShaderTemplate,
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::StencilValue,
     },
     rendering_template_source,
@@ -29,7 +29,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct PassthroughShaderTemplate {
     input_render_attachment_quantity: RenderAttachmentQuantity,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     stencil_test: Option<(wgpu::CompareFunction, StencilValue)>,
@@ -48,8 +48,8 @@ impl PassthroughShaderTemplate {
         blending: Blending,
         stencil_test: Option<(wgpu::CompareFunction, StencilValue)>,
     ) -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
@@ -94,7 +94,7 @@ impl SpecificShaderTemplate for PassthroughShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for PassthroughShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

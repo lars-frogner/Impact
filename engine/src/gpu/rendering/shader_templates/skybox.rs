@@ -6,7 +6,7 @@ use crate::{
             Blending, RenderAttachmentDescription, RenderAttachmentOutputDescription,
             RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
         },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     },
     rendering_template_source,
 };
@@ -30,10 +30,10 @@ static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
 
 impl SkyboxShaderTemplate {
     /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> RenderingPushConstantGroup {
-        RenderingPushConstantGroup::for_vertex_fragment([
-            RenderingPushConstantVariant::CameraRotationQuaternion,
-            RenderingPushConstantVariant::Exposure,
+    pub fn push_constants() -> BasicPushConstantGroup {
+        BasicPushConstantGroup::for_vertex_fragment([
+            BasicPushConstantVariant::CameraRotationQuaternion,
+            BasicPushConstantVariant::Exposure,
         ])
     }
 

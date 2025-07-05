@@ -11,7 +11,7 @@ use crate::{
             RenderAttachmentQuantitySet, RenderAttachmentSampler,
         },
         postprocessing::PostprocessingShaderTemplate,
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::StencilValue,
     },
     rendering_template_source,
@@ -33,7 +33,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct TemporalAntiAliasingShaderTemplate {
     params_resource_group_id: GPUResourceGroupID,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -46,8 +46,8 @@ impl TemporalAntiAliasingShaderTemplate {
     /// Creates a new temporal anti-aliasing shader template using the given
     /// resource group ID for the temporal anti-aliasing parameters.
     pub fn new(params_resource_group_id: GPUResourceGroupID) -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
@@ -104,7 +104,7 @@ impl SpecificShaderTemplate for TemporalAntiAliasingShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for TemporalAntiAliasingShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

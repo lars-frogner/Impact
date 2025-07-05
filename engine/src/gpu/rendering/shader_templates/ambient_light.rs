@@ -11,7 +11,7 @@ use crate::{
             },
             RenderAttachmentQuantitySet,
         },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     },
     rendering_template_source,
 };
@@ -48,10 +48,10 @@ impl AmbientLightShaderTemplate {
     }
 
     /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> RenderingPushConstantGroup {
+    pub fn push_constants() -> BasicPushConstantGroup {
         PushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
-            RenderingPushConstantVariant::Exposure,
+            BasicPushConstantVariant::InverseWindowDimensions,
+            BasicPushConstantVariant::Exposure,
         ])
     }
 

@@ -1,7 +1,7 @@
 //! Shader template for the model depth prepass.
 
 use crate::{
-    gpu::rendering::push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    gpu::rendering::push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     rendering_template_source,
 };
 use impact_camera::buffer::CameraProjectionUniform;
@@ -24,10 +24,10 @@ static TEMPLATE: LazyLock<ShaderTemplate<'static>> = LazyLock::new(|| {
 
 impl ModelDepthPrepassShaderTemplate {
     /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> RenderingPushConstantGroup {
-        RenderingPushConstantGroup::for_vertex([
-            RenderingPushConstantVariant::InverseWindowDimensions,
-            RenderingPushConstantVariant::FrameCounter,
+    pub fn push_constants() -> BasicPushConstantGroup {
+        BasicPushConstantGroup::for_vertex([
+            BasicPushConstantVariant::InverseWindowDimensions,
+            BasicPushConstantVariant::FrameCounter,
         ])
     }
 

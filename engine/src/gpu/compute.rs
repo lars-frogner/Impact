@@ -5,7 +5,7 @@ pub mod shader_templates;
 use crate::gpu::rendering::{
     attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
-    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
@@ -20,7 +20,7 @@ use std::borrow::Cow;
 /// Specific shader template that can be resolved to generate a compute shader.
 pub trait ComputeShaderTemplate: SpecificShaderTemplate + Send + Sync {
     /// Returns the group of push constants used by the compute shader.
-    fn push_constants(&self) -> RenderingPushConstantGroup;
+    fn push_constants(&self) -> BasicPushConstantGroup;
 
     /// Returns the set of render attachments used as input by the compute
     /// shader.
@@ -38,7 +38,7 @@ pub trait ComputeShaderTemplate: SpecificShaderTemplate + Send + Sync {
 #[derive(Debug)]
 pub struct ComputePass {
     shader_template: Box<dyn ComputeShaderTemplate>,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     gpu_resource_group_id: GPUResourceGroupID,
     label: Cow<'static, str>,
@@ -173,28 +173,28 @@ impl ComputePass {
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                RenderingPushConstantVariant::PixelCount,
+                BasicPushConstantVariant::PixelCount,
                 || rendering_surface.pixel_count_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                RenderingPushConstantVariant::Exposure,
+                BasicPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                RenderingPushConstantVariant::InverseExposure,
+                BasicPushConstantVariant::InverseExposure,
                 || {
                     postprocessor
                         .capturing_camera()

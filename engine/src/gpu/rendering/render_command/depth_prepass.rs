@@ -5,7 +5,7 @@ use crate::gpu::{
     rendering::{
         BasicRenderingConfig,
         attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
         resource::BasicRenderResources,
         shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
@@ -25,7 +25,7 @@ use std::borrow::Cow;
 /// Pass for filling the depth and stencil map.
 #[derive(Debug)]
 pub struct DepthPrepass {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     pipeline: wgpu::RenderPipeline,
     models: HashSet<ModelID>,
     write_stencil_value: StencilValue,
@@ -133,14 +133,14 @@ impl DepthPrepass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::FrameCounter,
+                BasicPushConstantVariant::FrameCounter,
                 || frame_counter,
             );
     }

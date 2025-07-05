@@ -7,7 +7,7 @@ use crate::gpu::rendering::{
         RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
         RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
     },
-    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{
         additive_blend_state,
         postprocessing_pass::{
@@ -57,7 +57,7 @@ pub struct BloomConfig {
 pub(super) struct BloomRenderCommands {
     n_downsamplings: usize,
     n_upsamplings: usize,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_descriptions: RenderAttachmentInputDescriptionSet,
     downsampling_pipeline: wgpu::RenderPipeline,
     upsampling_blur_pipeline: wgpu::RenderPipeline,
@@ -116,8 +116,8 @@ impl BloomRenderCommands {
 
         // This is not necessarily the full window dimensions, but the dimensions of the
         // mip level we are outputting to
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
         let push_constant_ranges = push_constants.create_ranges();
 
@@ -544,7 +544,7 @@ impl BloomRenderCommands {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
                 || Self::compute_inverse_output_view_size(texture, output_mip_level),
             );
     }

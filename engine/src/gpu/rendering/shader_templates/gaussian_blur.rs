@@ -11,7 +11,7 @@ use crate::{
             PostprocessingShaderTemplate,
             gaussian_blur::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS},
         },
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     },
     rendering_template_source,
 };
@@ -31,7 +31,7 @@ pub struct GaussianBlurShaderTemplate {
     samples_resource_group_id: GPUResourceGroupID,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     direction: GaussianBlurDirection,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -51,8 +51,8 @@ impl GaussianBlurShaderTemplate {
         blending: Blending,
         direction: GaussianBlurDirection,
     ) -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
@@ -96,7 +96,7 @@ impl SpecificShaderTemplate for GaussianBlurShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for GaussianBlurShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

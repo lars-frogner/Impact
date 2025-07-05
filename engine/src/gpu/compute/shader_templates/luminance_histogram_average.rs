@@ -6,7 +6,7 @@ use crate::{
         compute::ComputeShaderTemplate,
         rendering::{
             attachment::RenderAttachmentInputDescriptionSet,
-            push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+            push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
             surface::RenderingSurface,
         },
     },
@@ -31,7 +31,7 @@ use std::sync::LazyLock;
 pub struct LuminanceHistogramAverageShaderTemplate {
     bin_count: usize,
     gpu_resource_group_id: GPUResourceGroupID,
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
 }
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> = LazyLock::new(|| {
@@ -45,7 +45,7 @@ impl LuminanceHistogramAverageShaderTemplate {
     /// result buffer.
     pub fn new(bin_count: usize, gpu_resource_group_id: GPUResourceGroupID) -> Self {
         let push_constants =
-            RenderingPushConstantGroup::for_compute([RenderingPushConstantVariant::PixelCount]);
+            BasicPushConstantGroup::for_compute([BasicPushConstantVariant::PixelCount]);
         Self {
             bin_count,
             gpu_resource_group_id,
@@ -81,7 +81,7 @@ impl SpecificShaderTemplate for LuminanceHistogramAverageShaderTemplate {
 }
 
 impl ComputeShaderTemplate for LuminanceHistogramAverageShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

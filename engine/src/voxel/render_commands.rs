@@ -6,7 +6,7 @@ use crate::{
         rendering::{
             BasicRenderingConfig,
             postprocessing::Postprocessor,
-            push_constant::RenderingPushConstantVariant,
+            push_constant::BasicPushConstantVariant,
             render_command::{self, STANDARD_FRONT_FACE},
             resource::{BasicRenderResources, VoxelRenderResources},
             shader_templates::voxel_geometry::VoxelGeometryShaderTemplate,
@@ -297,7 +297,7 @@ impl VoxelChunkCullingPass {
         self.push_constants
             .set_push_constant_for_compute_pass_if_present(
                 compute_pass,
-                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::InstanceIdx),
+                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::InstanceIdx),
                 || instance_idx,
             );
     }
@@ -622,7 +622,7 @@ impl VoxelGeometryPipeline {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 VoxelPushConstantVariant::Rendering(
-                    RenderingPushConstantVariant::InverseWindowDimensions,
+                    BasicPushConstantVariant::InverseWindowDimensions,
                 ),
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
@@ -630,14 +630,14 @@ impl VoxelGeometryPipeline {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::FrameCounter),
+                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::FrameCounter),
                 || frame_counter,
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::Exposure),
+                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::Exposure),
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
     }
@@ -650,7 +650,7 @@ impl VoxelGeometryPipeline {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                VoxelPushConstantVariant::Rendering(RenderingPushConstantVariant::GenericVec3f32),
+                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::GenericVec3f32),
                 || voxel_object_buffer_manager.origin_offset_in_root(),
             );
     }

@@ -6,7 +6,7 @@ use crate::gpu::rendering::{
         RenderAttachmentQuantity, RenderAttachmentTextureManager,
     },
     postprocessing::{PostprocessingShaderTemplate, Postprocessor},
-    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicRenderResources,
     surface::RenderingSurface,
@@ -25,7 +25,7 @@ use std::borrow::Cow;
 /// Generic pass for postprocessing effects.
 #[derive(Debug)]
 pub struct PostprocessingRenderPass {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     uses_camera: bool,
@@ -248,28 +248,28 @@ impl PostprocessingRenderPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::InverseWindowDimensions,
+                BasicPushConstantVariant::InverseWindowDimensions,
                 || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::PixelCount,
+                BasicPushConstantVariant::PixelCount,
                 || rendering_surface.pixel_count_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::Exposure,
+                BasicPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::InverseExposure,
+                BasicPushConstantVariant::InverseExposure,
                 || {
                     postprocessor
                         .capturing_camera()
@@ -280,7 +280,7 @@ impl PostprocessingRenderPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::FrameCounter,
+                BasicPushConstantVariant::FrameCounter,
                 || frame_counter,
             );
     }

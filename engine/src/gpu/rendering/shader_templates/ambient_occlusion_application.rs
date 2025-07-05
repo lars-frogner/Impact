@@ -10,7 +10,7 @@ use crate::{
             RenderAttachmentSampler,
         },
         postprocessing::PostprocessingShaderTemplate,
-        push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+        push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
         render_command::StencilValue,
     },
     rendering_template_source,
@@ -31,7 +31,7 @@ use std::sync::LazyLock;
 /// attachment.
 #[derive(Clone, Debug)]
 pub struct AmbientOcclusionApplicationShaderTemplate {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -43,8 +43,8 @@ static TEMPLATE: LazyLock<ShaderTemplate<'static>> = LazyLock::new(|| {
 impl AmbientOcclusionApplicationShaderTemplate {
     /// Creates a new ambient occlusion application shader template.
     pub fn new() -> Self {
-        let push_constants = RenderingPushConstantGroup::for_fragment([
-            RenderingPushConstantVariant::InverseWindowDimensions,
+        let push_constants = BasicPushConstantGroup::for_fragment([
+            BasicPushConstantVariant::InverseWindowDimensions,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
@@ -101,7 +101,7 @@ impl SpecificShaderTemplate for AmbientOcclusionApplicationShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for AmbientOcclusionApplicationShaderTemplate {
-    fn push_constants(&self) -> RenderingPushConstantGroup {
+    fn push_constants(&self) -> BasicPushConstantGroup {
         self.push_constants.clone()
     }
 

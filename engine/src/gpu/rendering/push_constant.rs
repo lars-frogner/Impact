@@ -4,12 +4,12 @@ use impact_gpu::push_constant::{PushConstant, PushConstantGroup, PushConstantVar
 use nalgebra::UnitQuaternion;
 use std::mem;
 
-pub type RenderingPushConstant = PushConstant<RenderingPushConstantVariant>;
-pub type RenderingPushConstantGroup = PushConstantGroup<RenderingPushConstantVariant>;
+pub type BasicPushConstant = PushConstant<BasicPushConstantVariant>;
+pub type BasicPushConstantGroup = PushConstantGroup<BasicPushConstantVariant>;
 
 /// The meaning of a push constant used for rendering.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum RenderingPushConstantVariant {
+pub enum BasicPushConstantVariant {
     InverseWindowDimensions,
     PixelCount,
     LightIdx,
@@ -22,7 +22,7 @@ pub enum RenderingPushConstantVariant {
     GenericVec3f32,
 }
 
-impl PushConstantVariant for RenderingPushConstantVariant {
+impl PushConstantVariant for BasicPushConstantVariant {
     fn size(&self) -> u32 {
         (match self {
             Self::FrameCounter

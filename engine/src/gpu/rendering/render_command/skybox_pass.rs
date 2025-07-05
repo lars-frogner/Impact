@@ -3,7 +3,7 @@
 use crate::gpu::rendering::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
-    push_constant::{RenderingPushConstantGroup, RenderingPushConstantVariant},
+    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicRenderResources,
     shader_templates::skybox::SkyboxShaderTemplate,
@@ -18,7 +18,7 @@ use std::borrow::Cow;
 /// Pass for filling in emitted luminance from the skybox.
 #[derive(Debug)]
 pub struct SkyboxPass {
-    push_constants: RenderingPushConstantGroup,
+    push_constants: BasicPushConstantGroup,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     push_constant_ranges: Vec<wgpu::PushConstantRange>,
     color_target_state: wgpu::ColorTargetState,
@@ -154,14 +154,14 @@ impl SkyboxPass {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::Exposure,
+                BasicPushConstantVariant::Exposure,
                 || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
-                RenderingPushConstantVariant::CameraRotationQuaternion,
+                BasicPushConstantVariant::CameraRotationQuaternion,
                 || camera_buffer_manager.camera_rotation_quaternion_push_constant(),
             );
     }
