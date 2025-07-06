@@ -278,7 +278,7 @@ jobs:
         run: cargo doc --workspace --no-deps --document-private-items
 
   # ───────────────────────────────────────────────────────────────
-  # Check for all feature combinations (all OSes)
+  # Check for each feature (all OSes)
   # ───────────────────────────────────────────────────────────────
   check-features:
     strategy:
@@ -310,4 +310,4 @@ jobs:
 
       - name: Check all feature combinations
         working-directory: ${{ matrix.workspace }}
-        run: cargo hack check --feature-powerset --no-dev-deps
+        run: cargo hack check --each-feature --no-dev-deps
