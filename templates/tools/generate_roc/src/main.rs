@@ -27,6 +27,9 @@ enum Command {
         /// The categories of types to list (includes all categories if omitted)
         #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
         categories: Vec<ListedRocTypeCategory>,
+        /// Show the type ID of each type
+        #[arg(long)]
+        show_type_ids: bool,
     },
     /// List associated constants and functions for types annotated with the `roc` attribute
     ListAssociatedItems {
@@ -55,8 +58,14 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::ListTypes { categories } => {
-            let options = ListOptions { categories };
+        Command::ListTypes {
+            categories,
+            show_type_ids,
+        } => {
+            let options = ListOptions {
+                categories,
+                show_type_ids,
+            };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
             generate::list_types(options, &component_type_ids)?;
         }
