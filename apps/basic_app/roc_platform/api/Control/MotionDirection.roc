@@ -1,8 +1,8 @@
 # Hash: 48f4e5e77b58a4d584e232686f410f6d49415c58dff35f4710d05fbce0562136
-# Generated: 2025-05-23T18:55:01+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::control::motion::MotionDirection
 # Type category: Inline
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     MotionDirection,
     write_bytes,

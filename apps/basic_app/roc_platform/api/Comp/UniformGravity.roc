@@ -1,8 +1,8 @@
 # Hash: f9e77b60c322ec8ce57bc586d1c46cf114f73358ef7e8608c4776e597e49408d
-# Generated: 2025-05-24T10:33:40+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::forces::uniform_gravity::components::UniformGravityComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     UniformGravity,
     earth_downward_acceleration,

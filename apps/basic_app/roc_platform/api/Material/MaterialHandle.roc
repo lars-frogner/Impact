@@ -1,17 +1,22 @@
-# Hash: b59c2b03277f349d7d2dbad1d55940bd0cb203c2139a8659e54cba6811c954f0
-# Generated: 2025-05-23T18:55:01+00:00
-# Rust type: impact::material::MaterialHandle
-# Type category: POD
-# Commit: 31f3514 (dirty)
+# Hash: 49fa3a2d6993d29bee4dc665c60b8770cb05a120937f86e0ee66e5ce26d5f0ff
+# Generated: 2025-07-06T18:04:01+00:00
+# Rust type: impact_material::MaterialHandle
+# Type category: Component
+# Commit: ce2d27b (dirty)
 module [
     MaterialHandle,
+    add,
+    add_multiple,
     write_bytes,
     from_bytes,
 ]
 
+import Entity
+import Entity.Arg
 import Material.MaterialID
 import Material.MaterialPropertyTextureGroupID
 import Model.InstanceFeatureID
+import core.Builtin
 
 ## A handle for a material, containing the IDs for the pieces of data holding
 ## information about the material.
@@ -26,6 +31,58 @@ MaterialHandle : {
     ## an empty group).
     material_property_texture_group_id : Material.MaterialPropertyTextureGroupID.MaterialPropertyTextureGroupID,
 }
+
+## Adds a value of the [MaterialHandle] component to an entity's data.
+## Note that an entity never should have more than a single value of
+## the same component type.
+add : Entity.Data, MaterialHandle -> Entity.Data
+add = |entity_data, comp_value|
+    entity_data |> Entity.append_component(write_packet, comp_value)
+
+## Adds multiple values of the [MaterialHandle] component to the data of
+## a set of entities of the same archetype's data.
+## Note that the number of values should match the number of entities
+## in the set and that an entity never should have more than a single
+## value of the same component type.
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (MaterialHandle) -> Result Entity.MultiData Str
+add_multiple = |entity_data, comp_values|
+    entity_data
+    |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
+    |> Result.map_err(
+        |CountMismatch(new_count, orig_count)|
+            "Got ${Inspect.to_str(new_count)} values in MaterialHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
+    )
+
+write_packet : List U8, MaterialHandle -> List U8
+write_packet = |bytes, val|
+    type_id = 16835469039925593474
+    size = 32
+    alignment = 8
+    bytes
+    |> List.reserve(24 + size)
+    |> Builtin.write_bytes_u64(type_id)
+    |> Builtin.write_bytes_u64(size)
+    |> Builtin.write_bytes_u64(alignment)
+    |> write_bytes(val)
+
+write_multi_packet : List U8, List MaterialHandle -> List U8
+write_multi_packet = |bytes, vals|
+    type_id = 16835469039925593474
+    size = 32
+    alignment = 8
+    count = List.len(vals)
+    bytes_with_header =
+        bytes
+        |> List.reserve(32 + size * count)
+        |> Builtin.write_bytes_u64(type_id)
+        |> Builtin.write_bytes_u64(size)
+        |> Builtin.write_bytes_u64(alignment)
+        |> Builtin.write_bytes_u64(count)
+    vals
+    |> List.walk(
+        bytes_with_header,
+        |bts, value| bts |> write_bytes(value),
+    )
 
 ## Serializes a value of [MaterialHandle] into the binary representation
 ## expected by the engine and appends the bytes to the list.

@@ -1,8 +1,8 @@
 # Hash: 0539c6f6fc742567365ec0668a8c8724c70b755682b9b87339dbcf65667e6c8c
-# Generated: 2025-05-24T10:33:40+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::components::Static
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     Static,
     add,

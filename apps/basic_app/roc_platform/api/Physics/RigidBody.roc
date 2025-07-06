@@ -1,8 +1,8 @@
 # Hash: 5d1b49cb8bc50cdd351d5818954e12ea41c15a363dfc842e8f0a28e059434ce4
-# Generated: 2025-05-23T18:55:01+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::RigidBody
 # Type category: POD
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     RigidBody,
     write_bytes,

@@ -1,8 +1,8 @@
 # Hash: fd4303b0b8aa14d28f7a0ac002843f50019a568a0e5fd8be303c29ac6aaaa1c5
-# Generated: 2025-05-24T10:33:40+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::components::LogsMomentum
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     LogsMomentum,
     add,

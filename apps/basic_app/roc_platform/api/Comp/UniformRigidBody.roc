@@ -1,8 +1,8 @@
 # Hash: 663d619684bc2a13496c6cde4a9a5aef948e810cfc90a6061c0f6e12847c5fd9
-# Generated: 2025-05-23T20:19:02+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::components::UniformRigidBodyComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     UniformRigidBody,
     add,

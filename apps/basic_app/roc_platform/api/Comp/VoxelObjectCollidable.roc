@@ -1,8 +1,8 @@
 # Hash: 5e5d7a4f0bc676fcdc1cbe74d9b60bd2b026a02e38807fec7ac8a2cde239297c
-# Generated: 2025-05-23T21:48:57+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::collision::components::VoxelObjectCollidableComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     VoxelObjectCollidable,
     new,

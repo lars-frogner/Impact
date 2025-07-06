@@ -1,8 +1,8 @@
 # Hash: 9dbb8c0c52e5cbdb414695a61039903a6e9ce5ee70bd59de8afad01c6f2c40b1
-# Generated: 2025-06-23T21:05:32+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::analytical::constant_rotation::components::ConstantRotationComp
 # Type category: Component
-# Commit: 6a2f327 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     ConstantRotation,
     new,

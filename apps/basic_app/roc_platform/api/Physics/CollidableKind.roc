@@ -1,8 +1,8 @@
 # Hash: 49eb2f100b6121bae3723c476bb39cf01d6d0f15f67dc69d382170c52711a42c
-# Generated: 2025-05-23T18:55:01+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::collision::CollidableKind
 # Type category: Inline
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     CollidableKind,
     write_bytes,

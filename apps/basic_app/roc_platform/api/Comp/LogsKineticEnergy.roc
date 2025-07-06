@@ -1,8 +1,8 @@
 # Hash: e3dee264eb9dc8640ceea664a8abfedde7143b809406fa418a444213283c563b
-# Generated: 2025-05-24T10:33:40+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::components::LogsKineticEnergy
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     LogsKineticEnergy,
     add,

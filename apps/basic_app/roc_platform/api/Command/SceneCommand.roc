@@ -1,8 +1,8 @@
 # Hash: d32b91bc9a20e66458ecc6894a5b849d46994f32a9811bcf7216bca44da64002
-# Generated: 2025-05-23T18:55:01+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::scene::command::SceneCommand
 # Type category: Inline
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     SceneCommand,
     write_bytes,

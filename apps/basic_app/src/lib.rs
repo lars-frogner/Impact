@@ -13,7 +13,6 @@ use impact::{
     application::Application,
     egui,
     engine::{Engine, EngineConfig},
-    io,
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
@@ -87,7 +86,7 @@ impl BasicAppConfig {
     /// resolves any specified paths.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
-        let mut config: Self = io::parse_ron_file(file_path)?;
+        let mut config: Self = impact_io::parse_ron_file(file_path)?;
         if let Some(root_path) = file_path.parent() {
             config.resolve_paths(root_path);
         }
