@@ -6,32 +6,9 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-arbitrary = [
-    "dep:arbitrary",
-    "impact_ecs/arbitrary",
-    "impact_gpu/arbitrary",
-    "impact_math/arbitrary",
-]
-ecs = [
-    "dep:impact_ecs",
-    "impact_camera/ecs",
-    "impact_light/ecs",
-    "impact_material/ecs",
-    "impact_mesh/ecs",
-]
-roc_codegen = [
-    "impact_camera/roc_codegen",
-    "impact_containers/roc_codegen",
-    "impact_ecs/roc_codegen",
-    "impact_geometry/roc_codegen",
-    "impact_gpu/roc_codegen",
-    "impact_light/roc_codegen",
-    "impact_material/roc_codegen",
-    "impact_mesh/roc_codegen",
-    "impact_mesh/roc_codegen",
-    "impact_model/roc_codegen",
-    "roc_integration/roc_codegen",
-]
+arbitrary = ["dep:arbitrary"]
+ecs = ["dep:impact_ecs"]
+roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }

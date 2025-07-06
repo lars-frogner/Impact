@@ -8,12 +8,7 @@ license = { workspace = true }
 [features]
 arbitrary = ["dep:arbitrary"]
 bincode = ["dep:bincode", "dep:impact_io", "serde"]
-roc_codegen = [
-    "dep:inventory",
-    "impact_containers/roc_codegen",
-    "impact_math/roc_codegen",
-    "roc_integration/roc_codegen",
-]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 
 [dependencies]

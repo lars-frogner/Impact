@@ -12,19 +12,7 @@ arbitrary = [
     "impact_math/arbitrary",
     "impact_scene/arbitrary",
 ]
-roc_codegen = [
-    "impact_camera/roc_codegen",
-    "impact_containers/roc_codegen",
-    "impact_geometry/roc_codegen",
-    "impact_gpu/roc_codegen",
-    "impact_light/roc_codegen",
-    "impact_material/roc_codegen",
-    "impact_mesh/roc_codegen",
-    "impact_mesh/roc_codegen",
-    "impact_model/roc_codegen",
-    "impact_scene/roc_codegen",
-    "roc_integration/roc_codegen",
-]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 window = []
 
@@ -45,7 +33,7 @@ impact_math = { path = "../impact_math" }
 impact_mesh = { path = "../impact_mesh" }
 impact_model = { path = "../impact_model" }
 impact_scene = { path = "../impact_scene" }
-inventory = { workspace = true }
+inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
 paste = { workspace = true }

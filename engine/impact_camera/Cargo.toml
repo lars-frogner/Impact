@@ -7,14 +7,7 @@ license = { workspace = true }
 
 [features]
 ecs = ["dep:impact_ecs"]
-roc_codegen = [
-    "impact_containers/roc_codegen",
-    "impact_ecs/roc_codegen",
-    "impact_geometry/roc_codegen",
-    "impact_gpu/roc_codegen",
-    "impact_math/roc_codegen",
-    "roc_integration/roc_codegen",
-]
+roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
