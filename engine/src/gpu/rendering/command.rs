@@ -3,21 +3,21 @@
 use super::RenderingSystem;
 use crate::{
     command::{ModifiedActiveState, ToActiveState},
-    gpu::{
-        rendering::attachment::RenderAttachmentQuantity,
-        rendering::{
-            RenderCommandManager,
-            postprocessing::{
-                capturing::dynamic_range_compression::ToneMappingMethod,
-                command::{
-                    PostprocessingCommand, ToExposure, ToRenderAttachmentQuantity,
-                    ToToneMappingMethod,
-                },
+    gpu::rendering::{
+        RenderCommandManager,
+        postprocessing::{
+            self,
+            command::{
+                PostprocessingCommand, ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod,
             },
         },
     },
 };
 use anyhow::Result;
+use impact_rendering::{
+    attachment::RenderAttachmentQuantity,
+    postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
+};
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -32,49 +32,46 @@ pub enum RenderingCommand {
 
 impl RenderingSystem {
     pub fn set_ambient_occlusion(&self, to: ToActiveState) -> ModifiedActiveState {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .set_ambient_occlusion(to)
+        postprocessing::command::set_ambient_occlusion(&mut self.postprocessor.write().unwrap(), to)
     }
 
     pub fn set_temporal_anti_aliasing(&self, to: ToActiveState) -> ModifiedActiveState {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .set_temporal_anti_aliasing(to)
+        postprocessing::command::set_temporal_anti_aliasing(
+            &mut self.postprocessor.write().unwrap(),
+            to,
+        )
     }
 
     pub fn set_bloom(&self, to: ToActiveState) -> ModifiedActiveState {
-        self.postprocessor.write().unwrap().set_bloom(to)
+        postprocessing::command::set_bloom(&mut self.postprocessor.write().unwrap(), to)
     }
 
     pub fn set_tone_mapping_method(&self, to: ToToneMappingMethod) -> ToneMappingMethod {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .set_tone_mapping_method(to)
+        postprocessing::command::set_tone_mapping_method(
+            &mut self.postprocessor.write().unwrap(),
+            to,
+        )
     }
 
     pub fn set_exposure(&self, to: ToExposure) {
-        self.postprocessor.write().unwrap().set_exposure(to);
+        postprocessing::command::set_exposure(&mut self.postprocessor.write().unwrap(), to);
     }
 
     pub fn set_render_attachment_visualization(&self, to: ToActiveState) -> ModifiedActiveState {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .set_render_attachment_visualization(to)
+        postprocessing::command::set_render_attachment_visualization(
+            &mut self.postprocessor.write().unwrap(),
+            to,
+        )
     }
 
     pub fn set_visualized_render_attachment_quantity(
         &self,
         to: ToRenderAttachmentQuantity,
     ) -> Result<RenderAttachmentQuantity> {
-        self.postprocessor
-            .write()
-            .unwrap()
-            .set_visualized_render_attachment_quantity(to)
+        postprocessing::command::set_visualized_render_attachment_quantity(
+            &mut self.postprocessor.write().unwrap(),
+            to,
+        )
     }
 
     pub fn set_shadow_mapping(&mut self, to: ToActiveState) -> ModifiedActiveState {

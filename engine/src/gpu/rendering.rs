@@ -1,28 +1,28 @@
 //! Graphics rendering.
 
-pub mod attachment;
-pub mod brdf;
 pub mod command;
 pub mod postprocessing;
-pub mod push_constant;
 pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
 pub mod shader_templates;
-pub mod surface;
 pub mod tasks;
 
 use crate::{scene::Scene, ui::UserInterface};
 use anyhow::Result;
-use attachment::RenderAttachmentTextureManager;
 use impact_gpu::{
     device::GraphicsDevice, query::TimestampQueryManager, resource_group::GPUResourceGroupManager,
     shader::ShaderManager, storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator,
 };
 use impact_light::shadow_map::ShadowMappingConfig;
-use postprocessing::{
-    Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
-    temporal_anti_aliasing::TemporalAntiAliasingConfig,
+use impact_rendering::{
+    BasicRenderingConfig,
+    attachment::RenderAttachmentTextureManager,
+    postprocessing::{
+        Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
+        temporal_anti_aliasing::TemporalAntiAliasingConfig,
+    },
+    surface::RenderingSurface,
 };
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
@@ -31,7 +31,6 @@ use std::{
     num::NonZeroU32,
     sync::{Arc, RwLock},
 };
-use surface::RenderingSurface;
 
 /// Container for data and systems required for rendering.
 #[derive(Debug)]
@@ -66,13 +65,6 @@ pub struct RenderingConfig {
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     #[serde(default)]
     pub capturing_camera: CapturingCameraConfig,
-}
-
-/// Basic rendering configuration options.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BasicRenderingConfig {
-    pub wireframe_mode_on: bool,
-    pub timings_enabled: bool,
 }
 
 impl RenderingSystem {
@@ -358,14 +350,5 @@ impl RenderingSystem {
             .write()
             .unwrap()
             .recreate_textures(&self.graphics_device, &self.rendering_surface);
-    }
-}
-
-impl Default for BasicRenderingConfig {
-    fn default() -> Self {
-        Self {
-            wireframe_mode_on: false,
-            timings_enabled: false,
-        }
     }
 }

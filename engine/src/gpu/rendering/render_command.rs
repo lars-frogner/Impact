@@ -1,52 +1,39 @@
 //! Render commands.
 
-pub mod ambient_light_pass;
-pub mod clearing_pass;
-pub mod depth_prepass;
-pub mod directional_light_pass;
-pub mod geometry_pass;
 pub mod gizmo_passes;
-pub mod postprocessing_pass;
-pub mod render_attachment_texture_copy_command;
-pub mod shadow_map_update_passes;
-pub mod skybox_pass;
-pub mod storage_buffer_result_copy_command;
 pub mod tasks;
 
 use crate::{
-    gpu::rendering::{
-        BasicRenderingConfig, ShadowMappingConfig,
-        attachment::{
-            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-        },
-        postprocessing::Postprocessor,
-        resource::{BasicRenderResources, VoxelRenderResources},
-        surface::RenderingSurface,
-    },
+    gpu::rendering::{BasicRenderingConfig, ShadowMappingConfig, resource::VoxelRenderResources},
     voxel::render_commands::VoxelRenderCommands,
 };
-use ambient_light_pass::AmbientLightPass;
 use anyhow::Result;
-use clearing_pass::AttachmentClearingPass;
-use depth_prepass::DepthPrepass;
-use directional_light_pass::DirectionalLightPass;
-use geometry_pass::GeometryPass;
 use gizmo_passes::GizmoPasses;
 use impact_gpu::{
-    device::GraphicsDevice,
-    query::TimestampQueryRegistry,
-    resource_group::GPUResourceGroupManager,
-    shader::{Shader, ShaderManager},
-    storage::StorageGPUBufferManager,
+    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
+    shader::ShaderManager, storage::StorageGPUBufferManager,
 };
 use impact_light::LightStorage;
 use impact_material::MaterialLibrary;
-use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
-use shadow_map_update_passes::{
-    OmnidirectionalLightShadowMapUpdatePasses, UnidirectionalLightShadowMapUpdatePasses,
+use impact_rendering::{
+    attachment::{RenderAttachmentQuantitySet, RenderAttachmentTextureManager},
+    postprocessing::Postprocessor,
+    render_command::{
+        StencilValue,
+        ambient_light_pass::AmbientLightPass,
+        clearing_pass::AttachmentClearingPass,
+        depth_prepass::DepthPrepass,
+        directional_light_pass::DirectionalLightPass,
+        geometry_pass::GeometryPass,
+        shadow_map_update_passes::{
+            OmnidirectionalLightShadowMapUpdatePasses, UnidirectionalLightShadowMapUpdatePasses,
+        },
+        skybox_pass::SkyboxPass,
+    },
+    resource::BasicRenderResources,
+    surface::RenderingSurface,
 };
-use skybox_pass::SkyboxPass;
-use std::borrow::Cow;
+use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
 
 /// Manager of commands for rendering the scene. Postprocessing commands are
 /// managed by the [`Postprocessor`], but evoked by this manager.
@@ -63,18 +50,6 @@ pub struct RenderCommandManager {
     voxel_render_commands: VoxelRenderCommands,
     gizmo_passes: GizmoPasses,
 }
-
-/// The meaning of a specific value in the stencil buffer.
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StencilValue {
-    Background = 0,
-    NonPhysicalModel = 1,
-    PhysicalModel = 2,
-}
-
-pub const STANDARD_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Ccw;
-pub const INVERTED_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Cw;
 
 impl RenderCommandManager {
     /// Creates a new render command manager, initializing all
@@ -100,7 +75,7 @@ impl RenderCommandManager {
             config,
         );
 
-        let geometry_pass = GeometryPass::new(graphics_device, config);
+        let geometry_pass = GeometryPass::new(config);
 
         let omnidirectional_light_shadow_map_update_passes =
             OmnidirectionalLightShadowMapUpdatePasses::new(graphics_device, shader_manager);
@@ -122,7 +97,8 @@ impl RenderCommandManager {
 
         let skybox_pass = SkyboxPass::new(graphics_device, shader_manager);
 
-        let voxel_render_commands = VoxelRenderCommands::new(graphics_device, shader_manager);
+        let voxel_render_commands =
+            VoxelRenderCommands::new(graphics_device, shader_manager, &geometry_pass, config);
 
         let gizmo_passes = GizmoPasses::new(graphics_device, rendering_surface, shader_manager);
 
@@ -199,6 +175,12 @@ impl RenderCommandManager {
             render_resources,
         );
 
+        self.voxel_render_commands.sync_with_render_resources(
+            graphics_device,
+            shader_manager,
+            render_resources,
+        )?;
+
         Ok(())
     }
 
@@ -252,10 +234,9 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        self.geometry_pass.record(
+        let mut geometry_pass = self.geometry_pass.record(
             rendering_surface,
             material_library,
-            instance_feature_manager,
             render_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -264,24 +245,73 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
+        if let Some(ref mut pass) = geometry_pass {
+            self.voxel_render_commands.record_to_geometry_pass(
+                rendering_surface,
+                instance_feature_manager,
+                render_resources,
+                postprocessor,
+                frame_counter,
+                pass,
+            )?;
+        }
+        drop(geometry_pass);
+
         self.omnidirectional_light_shadow_map_update_passes.record(
             light_storage,
-            instance_feature_manager,
             render_resources,
             timestamp_recorder,
             shadow_mapping_config.enabled,
-            &self.voxel_render_commands,
             command_encoder,
+            &mut |positive_z_cubemap_face_frustum,
+                  instance_range_id,
+                  timestamp_recorder,
+                  command_encoder| {
+                self.voxel_render_commands
+                    .record_before_omnidirectional_light_shadow_cubemap_face_update(
+                        positive_z_cubemap_face_frustum,
+                        instance_range_id,
+                        instance_feature_manager,
+                        render_resources,
+                        timestamp_recorder,
+                        command_encoder,
+                    )
+            },
+            &mut |instance_range_id, render_pass| {
+                VoxelRenderCommands::record_shadow_map_update(
+                    instance_range_id,
+                    instance_feature_manager,
+                    render_resources,
+                    render_pass,
+                )
+            },
         )?;
 
         self.unidirectional_light_shadow_map_update_passes.record(
             light_storage,
-            instance_feature_manager,
             render_resources,
             timestamp_recorder,
             shadow_mapping_config.enabled,
-            &self.voxel_render_commands,
             command_encoder,
+            &mut |cascade_frustum, instance_range_id, timestamp_recorder, command_encoder| {
+                self.voxel_render_commands
+                    .record_before_unidirectional_light_shadow_map_cascade_update(
+                        cascade_frustum,
+                        instance_range_id,
+                        instance_feature_manager,
+                        render_resources,
+                        timestamp_recorder,
+                        command_encoder,
+                    )
+            },
+            &mut |instance_range_id, render_pass| {
+                VoxelRenderCommands::record_shadow_map_update(
+                    instance_range_id,
+                    instance_feature_manager,
+                    render_resources,
+                    render_pass,
+                )
+            },
         )?;
 
         self.ambient_light_pass.record(
@@ -334,203 +364,4 @@ impl RenderCommandManager {
 
         Ok(())
     }
-}
-
-pub fn create_render_pipeline_layout(
-    device: &wgpu::Device,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
-    push_constant_ranges: &[wgpu::PushConstantRange],
-    label: &str,
-) -> wgpu::PipelineLayout {
-    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        bind_group_layouts,
-        push_constant_ranges,
-        label: Some(label),
-    })
-}
-
-pub fn create_render_pipeline(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    shader: &Shader,
-    vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
-    color_target_states: &[Option<wgpu::ColorTargetState>],
-    front_face: wgpu::FrontFace,
-    cull_mode: Option<wgpu::Face>,
-    polygon_mode: wgpu::PolygonMode,
-    depth_stencil_state: Option<wgpu::DepthStencilState>,
-    label: &str,
-) -> wgpu::RenderPipeline {
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        layout: Some(layout),
-        vertex: wgpu::VertexState {
-            module: shader.vertex_module(),
-            entry_point: Some(shader.vertex_entry_point_name().unwrap()),
-            buffers: vertex_buffer_layouts,
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        },
-        fragment: shader
-            .fragment_entry_point_name()
-            .map(|entry_point| wgpu::FragmentState {
-                module: shader.fragment_module(),
-                entry_point: Some(entry_point),
-                targets: color_target_states,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face,
-            cull_mode,
-            polygon_mode,
-            unclipped_depth: false,
-            conservative: false,
-        },
-        depth_stencil: depth_stencil_state,
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-        multiview: None,
-        cache: None,
-        label: Some(label),
-    })
-}
-
-pub fn create_line_list_render_pipeline(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    shader: &Shader,
-    vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
-    color_target_states: &[Option<wgpu::ColorTargetState>],
-    depth_stencil_state: Option<wgpu::DepthStencilState>,
-    label: &str,
-) -> wgpu::RenderPipeline {
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        layout: Some(layout),
-        vertex: wgpu::VertexState {
-            module: shader.vertex_module(),
-            entry_point: Some(shader.vertex_entry_point_name().unwrap()),
-            buffers: vertex_buffer_layouts,
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        },
-        fragment: shader
-            .fragment_entry_point_name()
-            .map(|entry_point| wgpu::FragmentState {
-                module: shader.fragment_module(),
-                entry_point: Some(entry_point),
-                targets: color_target_states,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::LineList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::default(),
-            cull_mode: None,
-            polygon_mode: wgpu::PolygonMode::default(),
-            unclipped_depth: false,
-            conservative: false,
-        },
-        depth_stencil: depth_stencil_state,
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-        multiview: None,
-        cache: None,
-        label: Some(label),
-    })
-}
-
-pub fn depth_stencil_state_for_depth_test_without_write() -> wgpu::DepthStencilState {
-    wgpu::DepthStencilState {
-        format: RenderAttachmentQuantity::depth_texture_format(),
-        depth_write_enabled: false,
-        depth_compare: wgpu::CompareFunction::Less,
-        stencil: wgpu::StencilState::default(),
-        bias: wgpu::DepthBiasState::default(),
-    }
-}
-
-pub fn depth_stencil_state_for_depth_stencil_write() -> wgpu::DepthStencilState {
-    wgpu::DepthStencilState {
-        format: RenderAttachmentQuantity::depth_texture_format(),
-        depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::Less,
-        // Write the reference stencil value to the stencil map
-        // whenever the depth test passes
-        stencil: wgpu::StencilState {
-            front: wgpu::StencilFaceState {
-                compare: wgpu::CompareFunction::Always,
-                fail_op: wgpu::StencilOperation::Keep,
-                depth_fail_op: wgpu::StencilOperation::Keep,
-                pass_op: wgpu::StencilOperation::Replace,
-            },
-            read_mask: 0xFF,
-            write_mask: 0xFF,
-            ..Default::default()
-        },
-        bias: wgpu::DepthBiasState::default(),
-    }
-}
-
-pub fn depth_stencil_state_for_equal_stencil_testing() -> wgpu::DepthStencilState {
-    depth_stencil_state_for_stencil_testing(wgpu::CompareFunction::Equal)
-}
-
-pub fn depth_stencil_state_for_stencil_testing(
-    compare: wgpu::CompareFunction,
-) -> wgpu::DepthStencilState {
-    // When we are doing stencil testing, we make the depth test always pass and
-    // configure the stencil operations to pass only if the given comparison of the
-    // stencil value with the reference value passes
-    wgpu::DepthStencilState {
-        format: RenderAttachmentQuantity::depth_texture_format(),
-        depth_write_enabled: false,
-        depth_compare: wgpu::CompareFunction::Always,
-        stencil: wgpu::StencilState {
-            front: wgpu::StencilFaceState {
-                compare,
-                fail_op: wgpu::StencilOperation::Keep,
-                depth_fail_op: wgpu::StencilOperation::Keep,
-                pass_op: wgpu::StencilOperation::Keep,
-            },
-            read_mask: 0xFF,
-            write_mask: 0x00,
-            ..Default::default()
-        },
-        bias: wgpu::DepthBiasState::default(),
-    }
-}
-
-pub fn additive_blend_state() -> wgpu::BlendState {
-    wgpu::BlendState {
-        color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::One,
-            dst_factor: wgpu::BlendFactor::One,
-            operation: wgpu::BlendOperation::Add,
-        },
-        alpha: wgpu::BlendComponent::default(),
-    }
-}
-
-pub fn begin_single_render_pass<'a>(
-    command_encoder: &'a mut wgpu::CommandEncoder,
-    timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-    color_attachments: &[Option<wgpu::RenderPassColorAttachment<'_>>],
-    depth_stencil_attachment: Option<wgpu::RenderPassDepthStencilAttachment<'_>>,
-    label: Cow<'static, str>,
-) -> wgpu::RenderPass<'a> {
-    let timestamp_writes =
-        timestamp_recorder.register_timestamp_writes_for_single_render_pass(label.clone());
-
-    command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        color_attachments,
-        depth_stencil_attachment,
-        timestamp_writes,
-        occlusion_query_set: None,
-        label: Some(&label),
-    })
 }

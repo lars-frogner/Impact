@@ -1,16 +1,11 @@
 //! Render commands for voxels.
 
 use crate::{
-    gpu::{
-        compute::{self, shader_templates::voxel_chunk_culling::VoxelChunkCullingShaderTemplate},
-        rendering::{
-            BasicRenderingConfig,
-            postprocessing::Postprocessor,
-            push_constant::BasicPushConstantVariant,
-            render_command::{self, STANDARD_FRONT_FACE},
-            resource::{BasicRenderResources, VoxelRenderResources},
-            shader_templates::voxel_geometry::VoxelGeometryShaderTemplate,
-            surface::RenderingSurface,
+    gpu::rendering::{
+        resource::VoxelRenderResources,
+        shader_templates::{
+            voxel_chunk_culling::VoxelChunkCullingShaderTemplate,
+            voxel_geometry::VoxelGeometryShaderTemplate,
         },
     },
     voxel::{
@@ -35,6 +30,14 @@ use impact_model::{
         InstanceModelViewTransformWithPrevious,
     },
 };
+use impact_rendering::{
+    BasicRenderingConfig, compute,
+    postprocessing::Postprocessor,
+    push_constant::BasicPushConstantVariant,
+    render_command::{self, STANDARD_FRONT_FACE, geometry_pass::GeometryPass},
+    resource::BasicRenderResources,
+    surface::RenderingSurface,
+};
 use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
@@ -42,6 +45,7 @@ use std::borrow::Cow;
 /// GPU commands that should be executed prior to rendering voxel objects.
 #[derive(Debug)]
 pub struct VoxelRenderCommands {
+    geometry_pipeline: VoxelGeometryPipeline,
     chunk_culling_pass: VoxelChunkCullingPass,
 }
 
@@ -68,9 +72,41 @@ pub struct VoxelGeometryPipeline {
 }
 
 impl VoxelRenderCommands {
-    pub fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
+    pub fn new(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        geometry_pass: &GeometryPass,
+        config: &BasicRenderingConfig,
+    ) -> Self {
+        let geometry_pipeline = VoxelGeometryPipeline::new(
+            graphics_device,
+            geometry_pass.color_target_states().to_vec(),
+            Some(geometry_pass.depth_stencil_state().clone()),
+            config,
+        );
+
         let chunk_culling_pass = VoxelChunkCullingPass::new(graphics_device, shader_manager);
-        Self { chunk_culling_pass }
+
+        Self {
+            geometry_pipeline,
+            chunk_culling_pass,
+        }
+    }
+
+    pub fn sync_with_render_resources<R>(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        render_resources: &R,
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
+        self.geometry_pipeline.sync_with_render_resources(
+            graphics_device,
+            shader_manager,
+            render_resources,
+        )
     }
 
     pub fn record_before_geometry_pass<R>(
@@ -90,6 +126,28 @@ impl VoxelRenderCommands {
             render_resources,
             timestamp_recorder,
             command_encoder,
+        )
+    }
+
+    pub fn record_to_geometry_pass<R>(
+        &self,
+        rendering_surface: &RenderingSurface,
+        instance_feature_manager: &InstanceFeatureManager,
+        render_resources: &R,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) -> Result<()>
+    where
+        R: BasicRenderResources + VoxelRenderResources,
+    {
+        self.geometry_pipeline.record(
+            rendering_surface,
+            instance_feature_manager,
+            render_resources,
+            postprocessor,
+            frame_counter,
+            render_pass,
         )
     }
 

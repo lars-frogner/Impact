@@ -7,19 +7,12 @@ use crate::{
         command::ControlCommand,
         motion::{MotionDirection, MotionState},
     },
-    gpu::{
-        rendering::attachment::RenderAttachmentQuantity,
-        rendering::{
-            command::RenderingCommand,
-            postprocessing::{
-                capturing::dynamic_range_compression::ToneMappingMethod,
-                command::{
-                    PostprocessingCommand, ToExposure, ToRenderAttachmentQuantity,
-                    ToToneMappingMethod,
-                },
-            },
-            screen_capture::command::{CaptureCommand, SaveShadowMapsFor},
+    gpu::rendering::{
+        command::RenderingCommand,
+        postprocessing::command::{
+            PostprocessingCommand, ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod,
         },
+        screen_capture::command::{CaptureCommand, SaveShadowMapsFor},
     },
     instrumentation::command::InstrumentationCommand,
     physics::{
@@ -31,6 +24,10 @@ use crate::{
 };
 use anyhow::Result;
 use impact_ecs::world::EntityID;
+use impact_rendering::{
+    attachment::RenderAttachmentQuantity,
+    postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
+};
 use impact_scene::skybox::Skybox;
 use roc_integration::roc;
 

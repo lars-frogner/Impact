@@ -1,9 +1,8 @@
-pub mod compute;
 pub mod rendering;
 
 use anyhow::Result;
 use impact_gpu::device::GraphicsDevice;
-use rendering::surface::RenderingSurface;
+use impact_rendering::surface::RenderingSurface;
 
 /// Interface to a graphics device and a surface that can be rendered to.
 #[derive(Debug)]

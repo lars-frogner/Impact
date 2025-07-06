@@ -3,6 +3,7 @@
 pub mod input;
 
 use anyhow::Result;
+use impact_rendering::surface::window::SurfaceWindow;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, sync::Arc};
 use winit::{
@@ -63,6 +64,26 @@ impl Window {
 
     pub fn request_redraw(&self) {
         self.window.request_redraw();
+    }
+}
+
+impl SurfaceWindow for Window {
+    fn width(&self) -> NonZeroU32 {
+        let window_size = self.window.inner_size();
+        NonZeroU32::new(window_size.width).unwrap()
+    }
+
+    fn height(&self) -> NonZeroU32 {
+        let window_size = self.window.inner_size();
+        NonZeroU32::new(window_size.height).unwrap()
+    }
+
+    fn pixels_per_point(&self) -> f64 {
+        self.window.scale_factor()
+    }
+
+    fn as_target(&self) -> wgpu::SurfaceTarget<'static> {
+        self.arc_window().into()
     }
 }
 

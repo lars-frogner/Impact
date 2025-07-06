@@ -7,9 +7,10 @@ pub mod egui;
 #[cfg(feature = "window")]
 pub mod window;
 
-use crate::{engine::Engine, gpu::rendering::surface::RenderingSurface};
+use crate::engine::Engine;
 use anyhow::Result;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry};
+use impact_rendering::surface::RenderingSurface;
 
 /// Core trait that all user interface implementations must implement.
 pub trait UserInterface: Send + Sync + std::fmt::Debug {

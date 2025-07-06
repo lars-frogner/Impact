@@ -1,13 +1,13 @@
 //! Management of rendering assets.
 
-pub mod lookup_table;
+pub mod lookup_tables;
 
 use anyhow::{Result, bail};
 use impact_containers::HashMap;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{
-        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
+        self, Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
         TextureLookupTable, mipmap::MipmapperGenerator,
     },
 };
@@ -425,9 +425,9 @@ impl Assets {
         self.load_texture_from_generated_lookup_table(
             texture_name,
             || {
-                lookup_table::read_lookup_table_from_file(table_file_path).or_else(|_| {
+                texture::read_lookup_table_from_file(table_file_path).or_else(|_| {
                     let table = compute_table();
-                    lookup_table::save_lookup_table_to_file(&table, table_file_path)?;
+                    texture::save_lookup_table_to_file(&table, table_file_path)?;
                     Ok(table)
                 })
             },
