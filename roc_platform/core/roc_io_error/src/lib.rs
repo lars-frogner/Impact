@@ -57,7 +57,7 @@ impl From<std::io::Error> for IOErr {
         let other = || -> IOErr {
             IOErr {
                 tag: IOErrTag::Other,
-                msg: format!("{}", e).as_str().into(),
+                msg: format!("{e}").as_str().into(),
             }
         };
 

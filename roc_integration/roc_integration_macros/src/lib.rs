@@ -223,7 +223,7 @@ fn determine_crate_import_root() -> String {
         };
         crate_root
     } else {
-        format!("crate::{}", CRATE_NAME)
+        format!("crate::{CRATE_NAME}")
     }
 }
 
@@ -271,8 +271,7 @@ impl syn::parse::Parse for TypeAttributeArgs {
                         return Err(syn::Error::new_spanned(
                             arg.value,
                             format!(
-                                "invalid category `{}`, must be one of `pod`, `inline`, `primitive`",
-                                value
+                                "invalid category `{value}`, must be one of `pod`, `inline`, `primitive`"
                             ),
                         ));
                     };
@@ -325,9 +324,8 @@ impl syn::parse::Parse for TypeAttributeArgs {
                     return Err(syn::Error::new_spanned(
                         arg.key,
                         format!(
-                            "invalid argument `{}`, must be one of \
-                                 `category`, `package`, `parents`, `module`, `name`, `postfix`",
-                            other
+                            "invalid argument `{other}`, must be one of \
+                                 `category`, `package`, `parents`, `module`, `name`, `postfix`"
                         ),
                     ));
                 }
@@ -354,7 +352,7 @@ impl syn::parse::Parse for ImplAttributeArgs {
             other => {
                 return Err(syn::Error::new_spanned(
                     arg.key,
-                    format!("invalid argument `{}`, must be `dependencies`", other),
+                    format!("invalid argument `{other}`, must be `dependencies`"),
                 ));
             }
         };
@@ -406,8 +404,7 @@ impl syn::parse::Parse for AssociatedConstantAttributeArgs {
                     return Err(syn::Error::new_spanned(
                         arg.key.clone(),
                         format!(
-                            "invalid argument `{}`, must be one of `expr`, `name`",
-                            other
+                            "invalid argument `{other}`, must be one of `expr`, `name`"
                         ),
                     ));
                 }
@@ -457,8 +454,7 @@ impl syn::parse::Parse for AssociatedFunctionAttributeArgs {
                     return Err(syn::Error::new_spanned(
                         arg.key.clone(),
                         format!(
-                            "invalid argument `{}`, must be one of `body`, `name`",
-                            other
+                            "invalid argument `{other}`, must be one of `body`, `name`"
                         ),
                     ));
                 }
