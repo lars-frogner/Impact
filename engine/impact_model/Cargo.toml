@@ -6,13 +6,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-roc_codegen = [
-    "dep:inventory",
-    "impact_containers/roc_codegen",
-    "impact_gpu/roc_codegen",
-    "impact_math/roc_codegen",
-    "roc_integration/roc_codegen",
-]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 
 [dependencies]
