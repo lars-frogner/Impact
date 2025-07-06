@@ -1,26 +1,30 @@
 [package]
-name = "impact_model"
-description = "Management of model data for the Impact engine"
+name = "impact_light"
+description = "Light sources in the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
+ecs = ["dep:impact_ecs"]
+roc_codegen = ["roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 
 [dependencies]
 anyhow = { workspace = true }
 approx = { workspace = true }
+bitflags = { workspace = true }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
+impact_ecs = { path = "../impact_ecs", optional = true }
+impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_math = { path = "../impact_math" }
-inventory = { workspace = true, optional = true }
+inventory = { workspace = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
 paste = { workspace = true }
-roc_integration = { path = "../../roc_integration" }
+roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 
 [lints]

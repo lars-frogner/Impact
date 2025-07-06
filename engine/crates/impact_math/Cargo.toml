@@ -1,22 +1,28 @@
 [package]
-name = "impact_geometry"
-description = "Geometric primitives for the Impact engine"
+name = "impact_math"
+description = "Mathematical utilities for the Impact engine"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
 [features]
+arbitrary = ["dep:arbitrary"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
+serde = ["dep:serde"]
 
 [dependencies]
 anyhow = { workspace = true }
 approx = { workspace = true }
+arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
-impact_math = { path = "../impact_math" }
+const-fnv1a-hash = { workspace = true }
+impact_containers = { path = "../impact_containers" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
+nohash-hasher = { workspace = true }
 num-traits = { workspace = true }
-roc_integration = { path = "../../roc_integration" }
+roc_integration = { path = "../../../roc_integration" }
+serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true

@@ -28,7 +28,7 @@ nalgebra = { workspace = true }
 num-traits = { workspace = true }
 paste = { workspace = true }
 ply-rs = { version = "0.1", optional = true }
-roc_integration = { path = "../../roc_integration" }
+roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 tobj = { version = "4.0", optional = true }
 

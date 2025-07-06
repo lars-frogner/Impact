@@ -1,24 +1,24 @@
 [workspace]
 members = [
-    "impact_camera",
-    "impact_containers",
-    "impact_dev_ui",
-    "impact_ecs",
-    "impact_ecs/impact_ecs_macros",
-    "impact_geometry",
-    "impact_gpu",
-    "impact_io",
-    "impact_light",
-    "impact_log",
-    "impact_material",
-    "impact_math",
-    "impact_mesh",
-    "impact_model",
-    "impact_profiling",
-    "impact_rendering",
-    "impact_scene",
-    "impact_scheduling",
-    "impact_thread",
+    "crates/impact_camera",
+    "crates/impact_containers",
+    "crates/impact_dev_ui",
+    "crates/impact_ecs",
+    "crates/impact_ecs/impact_ecs_macros",
+    "crates/impact_geometry",
+    "crates/impact_gpu",
+    "crates/impact_io",
+    "crates/impact_light",
+    "crates/impact_log",
+    "crates/impact_material",
+    "crates/impact_math",
+    "crates/impact_mesh",
+    "crates/impact_model",
+    "crates/impact_profiling",
+    "crates/impact_rendering",
+    "crates/impact_scene",
+    "crates/impact_scheduling",
+    "crates/impact_thread",
 ]
 
 [workspace.package]
@@ -200,23 +200,23 @@ image = { version = "0.25", default-features = false, features = [
     "png",
     "jpeg",
 ] }
-impact_camera = { path = "impact_camera", features = ["ecs"] }
-impact_containers = { path = "impact_containers" }
-impact_ecs = { path = "impact_ecs" }
-impact_geometry = { path = "impact_geometry" }
-impact_gpu = { path = "impact_gpu", features = ["bincode", "serde"] }
-impact_io = { path = "impact_io", features = ["ron"] }
-impact_light = { path = "impact_light", features = ["ecs", "serde"] }
-impact_log = { path = "impact_log" }
-impact_material = { path = "impact_material", features = ["ecs"] }
-impact_math = { path = "impact_math", features = ["serde"] }
-impact_mesh = { path = "impact_mesh", features = ["ecs", "serde"] }
-impact_model = { path = "impact_model" }
-impact_profiling = { path = "impact_profiling", optional = true }
-impact_rendering = { path = "impact_rendering", features = ["serde"] }
-impact_scene = { path = "impact_scene", features = ["ecs"] }
-impact_scheduling = { path = "impact_scheduling" }
-impact_thread = { path = "impact_thread" }
+impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
+impact_containers = { path = "crates/impact_containers" }
+impact_ecs = { path = "crates/impact_ecs" }
+impact_geometry = { path = "crates/impact_geometry" }
+impact_gpu = { path = "crates/impact_gpu", features = ["bincode", "serde"] }
+impact_io = { path = "crates/impact_io", features = ["ron"] }
+impact_light = { path = "crates/impact_light", features = ["ecs", "serde"] }
+impact_log = { path = "crates/impact_log" }
+impact_material = { path = "crates/impact_material", features = ["ecs"] }
+impact_math = { path = "crates/impact_math", features = ["serde"] }
+impact_mesh = { path = "crates/impact_mesh", features = ["ecs", "serde"] }
+impact_model = { path = "crates/impact_model" }
+impact_profiling = { path = "crates/impact_profiling", optional = true }
+impact_rendering = { path = "crates/impact_rendering", features = ["serde"] }
+impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
+impact_scheduling = { path = "crates/impact_scheduling" }
+impact_thread = { path = "crates/impact_thread" }
 inventory = { workspace = true }
 naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
