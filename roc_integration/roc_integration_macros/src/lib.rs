@@ -403,9 +403,7 @@ impl syn::parse::Parse for AssociatedConstantAttributeArgs {
                 other => {
                     return Err(syn::Error::new_spanned(
                         arg.key.clone(),
-                        format!(
-                            "invalid argument `{other}`, must be one of `expr`, `name`"
-                        ),
+                        format!("invalid argument `{other}`, must be one of `expr`, `name`"),
                     ));
                 }
             }
@@ -453,9 +451,7 @@ impl syn::parse::Parse for AssociatedFunctionAttributeArgs {
                 other => {
                     return Err(syn::Error::new_spanned(
                         arg.key.clone(),
-                        format!(
-                            "invalid argument `{other}`, must be one of `body`, `name`"
-                        ),
+                        format!("invalid argument `{other}`, must be one of `body`, `name`"),
                     ));
                 }
             }

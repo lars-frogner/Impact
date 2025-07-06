@@ -330,9 +330,7 @@ impl<S> TaskDependencyGraph<S> {
             let existing_edge = self.graph.add_edge(dependence_task_id, task_id, ());
 
             if existing_edge.is_some() {
-                panic!(
-                    "Task {task_id} depends on same task ({dependence_task_id}) multiple times"
-                );
+                panic!("Task {task_id} depends on same task ({dependence_task_id}) multiple times");
             }
         }
 

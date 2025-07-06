@@ -7,7 +7,7 @@ use crate::{
     },
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
-    render_command::{self, begin_single_render_pass, StencilValue, STANDARD_FRONT_FACE},
+    render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicRenderResources,
     shader_templates::{
         omnidirectional_light::OmnidirectionalLightShaderTemplate,
@@ -17,19 +17,19 @@ use crate::{
     },
     surface::RenderingSurface,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
     device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_light::{
+    LightFlags, LightStorage,
     buffer::{
         LightGPUBufferManager, OmnidirectionalLightShadowMapManager,
         UnidirectionalLightShadowMapManager,
     },
-    LightFlags, LightStorage,
 };
-use impact_mesh::{buffer::VertexBufferable, VertexAttributeSet, VertexPosition};
+use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to directional lights.
