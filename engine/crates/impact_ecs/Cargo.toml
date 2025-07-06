@@ -25,7 +25,7 @@ impact_profiling = { path = "../impact_profiling", optional = true }
 inventory = { workspace = true }
 nohash-hasher = { workspace = true }
 paste = { workspace = true }
-roc_integration = { path = "../../roc_integration" }
+roc_integration = { path = "../../../roc_integration" }
 
 [lints]
 workspace = true

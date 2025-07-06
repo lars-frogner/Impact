@@ -14,7 +14,7 @@ atomic_enum = "0.3"
 bytemuck = { workspace = true }
 inventory = { workspace = true, optional = true }
 nohash-hasher = { workspace = true }
-roc_integration = { path = "../../roc_integration" }
+roc_integration = { path = "../../../roc_integration" }
 rustc-hash = "2.1"
 
 [lints]

@@ -28,7 +28,7 @@ inventory = { workspace = true, optional = true }
 naga = { version = "24.0", features = ["wgsl-out"] }
 ordered-float = "5.0"
 regex = "1.11"
-roc_integration = { path = "../../roc_integration" }
+roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
 
