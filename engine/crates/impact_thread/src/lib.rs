@@ -477,9 +477,7 @@ impl ExecutionProgress {
     /// # Panics
     /// If the count is attempted to be decremented below zero.
     fn register_executed_tasks(&self, worker_id: WorkerID, n_tasks: usize) {
-        impact_log::trace!(
-            "Worker {worker_id} registering {n_tasks} tasks as executed"
-        );
+        impact_log::trace!("Worker {worker_id} registering {n_tasks} tasks as executed");
 
         if n_tasks == 0 {
             return;
