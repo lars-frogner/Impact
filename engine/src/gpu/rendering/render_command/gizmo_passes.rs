@@ -1,15 +1,6 @@
 //! Passes for rendering gizmos.
 
-use crate::{
-    gizmo::{self, GizmoObscurability},
-    gpu::rendering::{
-        attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-        render_command::{STANDARD_FRONT_FACE, begin_single_render_pass},
-        resource::BasicRenderResources,
-        shader_templates::fixed_color::FixedColorShaderTemplate,
-        surface::RenderingSurface,
-    },
-};
+use crate::gizmo::{self, GizmoObscurability};
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
@@ -21,6 +12,13 @@ use impact_mesh::{
     MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
 };
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
+use impact_rendering::{
+    attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    render_command::{self, STANDARD_FRONT_FACE, begin_single_render_pass},
+    resource::BasicRenderResources,
+    shader_templates::fixed_color::FixedColorShaderTemplate,
+    surface::RenderingSurface,
+};
 use impact_scene::model::ModelID;
 use std::borrow::Cow;
 
@@ -64,7 +62,7 @@ impl GizmoPasses {
             &FixedColorShaderTemplate,
         );
 
-        let pipeline_layout = super::create_render_pipeline_layout(
+        let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[camera_bind_group_layout],
             &[],
@@ -259,7 +257,7 @@ impl GizmoPassPipeline {
     ) -> Self {
         let depth_stencil_state = match obscurability {
             GizmoObscurability::Obscurable => {
-                Some(super::depth_stencil_state_for_depth_test_without_write())
+                Some(render_command::depth_stencil_state_for_depth_test_without_write())
             }
             GizmoObscurability::NonObscurable => None,
         };
@@ -269,7 +267,7 @@ impl GizmoPassPipeline {
         );
 
         let pipeline = match mesh_primitive {
-            MeshPrimitive::Triangle => super::create_render_pipeline(
+            MeshPrimitive::Triangle => render_command::create_render_pipeline(
                 graphics_device.device(),
                 pipeline_layout,
                 shader,
@@ -281,7 +279,7 @@ impl GizmoPassPipeline {
                 depth_stencil_state,
                 &label,
             ),
-            MeshPrimitive::LineSegment => super::create_line_list_render_pipeline(
+            MeshPrimitive::LineSegment => render_command::create_line_list_render_pipeline(
                 graphics_device.device(),
                 pipeline_layout,
                 shader,

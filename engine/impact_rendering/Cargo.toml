@@ -1,0 +1,56 @@
+[package]
+name = "impact_rendering"
+description = "Graphics rendering for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[features]
+arbitrary = [
+    "dep:arbitrary",
+    "impact_gpu/arbitrary",
+    "impact_math/arbitrary",
+    "impact_scene/arbitrary",
+]
+roc_codegen = [
+    "impact_camera/roc_codegen",
+    "impact_containers/roc_codegen",
+    "impact_geometry/roc_codegen",
+    "impact_gpu/roc_codegen",
+    "impact_light/roc_codegen",
+    "impact_material/roc_codegen",
+    "impact_mesh/roc_codegen",
+    "impact_mesh/roc_codegen",
+    "impact_model/roc_codegen",
+    "impact_scene/roc_codegen",
+    "roc_integration/roc_codegen",
+]
+serde = ["dep:serde"]
+window = []
+
+[dependencies]
+anyhow = { workspace = true }
+approx = { workspace = true }
+arbitrary = { workspace = true, optional = true }
+bitflags = { workspace = true }
+bytemuck = { workspace = true }
+impact_camera = { path = "../impact_camera" }
+impact_containers = { path = "../impact_containers" }
+impact_geometry = { path = "../impact_geometry" }
+impact_gpu = { path = "../impact_gpu" }
+impact_light = { path = "../impact_light" }
+impact_log = { path = "../impact_log" }
+impact_material = { path = "../impact_material" }
+impact_math = { path = "../impact_math" }
+impact_mesh = { path = "../impact_mesh" }
+impact_model = { path = "../impact_model" }
+impact_scene = { path = "../impact_scene" }
+inventory = { workspace = true }
+nalgebra = { workspace = true }
+num-traits = { workspace = true }
+paste = { workspace = true }
+roc_integration = { path = "../../roc_integration" }
+serde = { workspace = true, optional = true }
+
+[lints]
+workspace = true

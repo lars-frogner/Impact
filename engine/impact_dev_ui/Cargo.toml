@@ -17,6 +17,7 @@ inventory = { workspace = true, optional = true }
 impact = { path = "..", features = ["egui"] }
 impact_io = { path = "../impact_io", features = ["ron"] }
 impact_math = { path = "../impact_math" }
+impact_rendering = { path = "../impact_rendering" }
 roc_integration = { path = "../../roc_integration" }
 serde = { workspace = true }
 

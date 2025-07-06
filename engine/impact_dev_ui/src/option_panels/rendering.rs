@@ -7,15 +7,13 @@ use impact::{
     command::ToActiveState,
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
-    gpu::rendering::{
-        RenderingSystem,
-        postprocessing::{
-            capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
-            render_attachment_visualization::RenderAttachmentVisualizationPasses,
-        },
-    },
+    gpu::rendering::RenderingSystem,
 };
 use impact_math::{Bounds, UpperExclusiveBounds};
+use impact_rendering::postprocessing::{
+    capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
+    render_attachment_visualization::RenderAttachmentVisualizationPasses,
+};
 
 mod shadow_mapping {
     pub mod docs {
@@ -54,7 +52,7 @@ mod ambient_occlusion {
         };
     }
     pub mod ranges {
-        use impact::gpu::rendering::postprocessing::ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT;
+        use impact_rendering::postprocessing::ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT;
         use std::ops::RangeInclusive;
 
         pub const SAMPLE_COUNT: RangeInclusive<u32> = 1..=MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u32;

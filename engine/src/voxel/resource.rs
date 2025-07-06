@@ -2,7 +2,6 @@
 
 use crate::{
     assets::Assets,
-    gpu::rendering::push_constant::BasicPushConstantVariant,
     voxel::{
         VoxelObjectID,
         mesh::{
@@ -33,6 +32,7 @@ use impact_mesh::buffer::{
     MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
     new_vertex_gpu_buffer_with_spare_capacity,
 };
+use impact_rendering::push_constant::BasicPushConstantVariant;
 use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
 
 /// Owner and manager of the GPU resources for all voxel materials.

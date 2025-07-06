@@ -13,7 +13,7 @@ pub mod window;
 
 use crate::{
     application::Application,
-    assets::{AssetConfig, Assets, lookup_table},
+    assets::{AssetConfig, Assets, lookup_tables},
     component::ComponentRegistry,
     control::{self, ControllerConfig, MotionController, OrientationController},
     gizmo::{self, GizmoConfig, GizmoManager},
@@ -116,7 +116,7 @@ impl Engine {
 
         let asset_specs = assets.load_assets_specified_in_config()?;
 
-        lookup_table::initialize_default_lookup_tables(
+        lookup_tables::initialize_default_lookup_tables(
             &mut assets,
             &mut renderer.gpu_resource_group_manager().write().unwrap(),
         )?;
