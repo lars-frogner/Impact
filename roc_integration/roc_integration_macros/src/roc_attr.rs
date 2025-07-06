@@ -270,7 +270,7 @@ fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> Tok
 }
 
 fn generate_qualified_type_path_str(rust_type_name: &Ident) -> TokenStream {
-    let type_path_tail = format!("::{}", rust_type_name);
+    let type_path_tail = format!("::{rust_type_name}");
     quote! {
         concat!(module_path!(), #type_path_tail)
     }
@@ -1424,7 +1424,7 @@ fn extract_docstrings(attributes: &[syn::Attribute]) -> impl Iterator<Item = Str
 fn process_docstrings(lines: impl IntoIterator<Item = String>) -> String {
     let mut docstring = String::new();
     for line in lines {
-        writeln!(&mut docstring, "##{}", line).unwrap();
+        writeln!(&mut docstring, "##{line}").unwrap();
     }
     docstring
 }

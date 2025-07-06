@@ -153,7 +153,7 @@ fn write_module_header(
     }
 
     for export_name in optional_exports.export_names {
-        writeln!(roc_code, "    {},", export_name)?;
+        writeln!(roc_code, "    {export_name},")?;
     }
 
     roc_code.push_str(
@@ -397,7 +397,7 @@ fn qualified_type_name_for_field(
             let mut type_name = String::from("List ");
             let elem_type_name = get_field_type(type_map, elem_type_id, field, parent_name)?
                 .qualified_type_name(ir::TypeUsage::TypeParameter);
-            write!(&mut type_name, "{}", elem_type_name)?;
+            write!(&mut type_name, "{elem_type_name}")?;
             Cow::Owned(type_name)
         }
     })
@@ -1032,7 +1032,7 @@ fn write_write_bytes_function(
                                 if field_idx > 0 {
                                     roc_code.push_str(", ");
                                 }
-                                write!(roc_code, "x{}", field_idx)?;
+                                write!(roc_code, "x{field_idx}")?;
                             }
                         }
                         roc_code.push_str(") ->\n");
