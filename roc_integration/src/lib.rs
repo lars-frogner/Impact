@@ -319,11 +319,16 @@ mod inner {
         }
 
         /// Returns a string describing the type.
-        pub fn description(&self) -> String {
+        pub fn description(&self, include_type_id: bool) -> String {
             format!(
-                "{} ({})",
+                "{} ({}){}",
                 self.qualified_type_name(ir::TypeUsage::Concrete),
-                self.composition_description()
+                self.composition_description(),
+                if include_type_id {
+                    format!(" [ID {}]", self.ty.id)
+                } else {
+                    String::new()
+                }
             )
         }
 

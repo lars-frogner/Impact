@@ -20,6 +20,7 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct ListOptions {
     pub categories: Vec<ListedRocTypeCategory>,
+    pub show_type_ids: bool,
 }
 
 /// The categories of `roc`-annotated types that can be listed.
@@ -120,7 +121,7 @@ pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>)
     if categories.contains(&ListedRocTypeCategory::Primitive) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if ty.is_primitive() {
-                Some(ty.description())
+                Some(ty.description(options.show_type_ids))
             } else {
                 None
             }
@@ -131,7 +132,7 @@ pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>)
     if categories.contains(&ListedRocTypeCategory::Pod) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if ty.is_pod() && !ty.is_component() && !ty.is_primitive() {
-                Some(ty.description())
+                Some(ty.description(options.show_type_ids))
             } else {
                 None
             }
@@ -142,7 +143,7 @@ pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>)
     if categories.contains(&ListedRocTypeCategory::Component) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if ty.is_component() {
-                Some(ty.description())
+                Some(ty.description(options.show_type_ids))
             } else {
                 None
             }
@@ -153,7 +154,7 @@ pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>)
     if categories.contains(&ListedRocTypeCategory::Inline) {
         type_description_list.extend(type_map.values().filter_map(|ty| {
             if !ty.is_pod() {
-                Some(ty.description())
+                Some(ty.description(options.show_type_ids))
             } else {
                 None
             }
