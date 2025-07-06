@@ -29,3 +29,24 @@ pub trait UserInterface: Send + Sync + std::fmt::Debug {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>;
 }
+
+/// No-op implementation of the [`UserInterface`] trait.
+#[derive(Clone, Copy, Debug)]
+pub struct NoUserInterface;
+
+impl UserInterface for NoUserInterface {
+    fn process(&self, _engine: &Engine) -> Result<()> {
+        Ok(())
+    }
+
+    fn render(
+        &self,
+        _graphics_device: &GraphicsDevice,
+        _rendering_surface: &RenderingSurface,
+        _surface_texture_view: &wgpu::TextureView,
+        _timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        _command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        Ok(())
+    }
+}

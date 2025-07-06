@@ -207,20 +207,14 @@ impl SurfaceConfiguration {
     fn initialized(&self) -> Option<&wgpu::SurfaceConfiguration> {
         match self {
             Self::Initialized(config) => Some(config),
-            Self::Uninitialized {
-                width: _,
-                height: _,
-            } => None,
+            Self::Uninitialized { .. } => None,
         }
     }
 
     fn initialized_mut(&mut self) -> Option<&mut wgpu::SurfaceConfiguration> {
         match self {
             Self::Initialized(config) => Some(config),
-            Self::Uninitialized {
-                width: _,
-                height: _,
-            } => None,
+            Self::Uninitialized { .. } => None,
         }
     }
 
