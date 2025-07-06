@@ -1,8 +1,8 @@
 # Hash: 574b1a0a11864889d477b73123e1e39fb9c85e29556fcc634e9a760514f6ff41
-# Generated: 2025-06-23T21:05:32+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::analytical::circular::components::CircularTrajectoryComp
 # Type category: Component
-# Commit: 6a2f327 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     CircularTrajectory,
     new,

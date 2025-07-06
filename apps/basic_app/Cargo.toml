@@ -127,6 +127,7 @@ ffi_utils = { path = "../../ffi_utils" }
 impact = { path = "../../engine", features = ["window", "egui", "obj", "ply"] }
 impact_dev_ui = { path = "../../engine/impact_dev_ui" }
 impact_ecs = { path = "../../engine/impact_ecs" }
+impact_io = { path = "../../engine/impact_io" }
 inventory = "0.3"
 libloading = "0.8"
 log = "0.4"

@@ -1,8 +1,8 @@
 # Hash: b30d889839296e81697e11b5b7816ff088ac6d887480f8b09a85ae3fbdc63693
-# Generated: 2025-05-23T21:48:57+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::forces::detailed_drag::components::DetailedDragComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     DetailedDrag,
     new,

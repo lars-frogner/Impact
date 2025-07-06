@@ -1,8 +1,8 @@
 # Hash: e44777909ab4329c7326c725d13458ba4150994391027e1f9da5326fe1b27700
-# Generated: 2025-05-23T20:19:02+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::collision::components::CollidableComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     Collidable,
     add,

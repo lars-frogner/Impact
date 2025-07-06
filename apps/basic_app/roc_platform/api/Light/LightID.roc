@@ -1,8 +1,8 @@
 # Hash: 024c062566ce371d486b2bed4b95abd20809dc0a3229f6239a868c0026553120
-# Generated: 2025-05-23T18:55:01+00:00
-# Rust type: impact::light::LightID
+# Generated: 2025-07-06T18:04:01+00:00
+# Rust type: impact_light::LightID
 # Type category: POD
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     LightID,
     write_bytes,

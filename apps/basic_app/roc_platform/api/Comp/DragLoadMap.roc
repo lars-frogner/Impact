@@ -1,8 +1,8 @@
 # Hash: 22d0761596abd87c4de41d350e7b6440a1822d237f22effa36a72715c663c628
-# Generated: 2025-06-23T21:05:32+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::forces::detailed_drag::components::DragLoadMapComp
 # Type category: Component
-# Commit: 6a2f327 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     DragLoadMap,
     add,

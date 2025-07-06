@@ -1,8 +1,8 @@
 # Hash: 184dd8519c579332dd2a5f08fface71b19009187f709758535bfe0b4abb78060
-# Generated: 2025-05-24T10:33:40+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::components::ReferenceFrameComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     ReferenceFrame,
     new,

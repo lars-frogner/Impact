@@ -1,8 +1,8 @@
 # Hash: b7fd9a2c299728dd25c6874ab7836593447a5fb472fbe932f4b2ad42372b056a
-# Generated: 2025-05-23T20:19:02+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::components::RigidBodyComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     RigidBody,
     add,

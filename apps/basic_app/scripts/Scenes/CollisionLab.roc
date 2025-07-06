@@ -12,30 +12,30 @@ import core.UnitQuaternion
 import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
 import core.Vector3
 import pf.Command
-import pf.Comp.AmbientEmission
+import pf.Light.AmbientEmission
 import pf.Comp.ConstantRotation
 import pf.Comp.MotionControl
-import pf.Comp.NormalMap
-import pf.Comp.OmnidirectionalEmission
+import pf.Setup.NormalMap
+import pf.Light.OmnidirectionalEmission
 import pf.Comp.OrientationControl
-import pf.Comp.Parent
-import pf.Comp.PerspectiveCamera
-import pf.Comp.PlanarTextureProjection
+import pf.Setup.Parent
+import pf.Setup.PerspectiveCamera
+import pf.Setup.PlanarTextureProjection
 import pf.Comp.PlaneCollidable
-import pf.Comp.RectangleMesh
+import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.SameVoxelType
-import pf.Comp.SceneGraphGroup
-import pf.Comp.ShadowableUnidirectionalEmission
+import pf.Setup.SceneGraphGroup
+import pf.Light.ShadowableUnidirectionalEmission
 import pf.Comp.SphereCollidable
-import pf.Comp.SphereMesh
+import pf.Setup.SphereMesh
 import pf.Comp.Static
-import pf.Comp.TexturedColor
-import pf.Comp.TexturedRoughness
+import pf.Setup.TexturedColor
+import pf.Setup.TexturedRoughness
 import pf.Comp.UniformContactResponse
 import pf.Comp.UniformGravity
 import pf.Comp.UniformRigidBody
-import pf.Comp.UniformSpecularReflectance
+import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Velocity
 import pf.Comp.VoxelBox
 import pf.Comp.VoxelObjectCollidable
@@ -94,11 +94,11 @@ player =
     |> Comp.Velocity.add_stationary
     |> Comp.MotionControl.add_new
     |> Comp.OrientationControl.add_new
-    |> Comp.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
+    |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 sun_light =
     Entity.new
-    |> Comp.ShadowableUnidirectionalEmission.add_new(
+    |> Light.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(200000),
         UnitVector3.from((0, -1, 0)),
         2.0,
@@ -106,7 +106,7 @@ sun_light =
 
 ambient_light =
     Entity.new
-    |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
+    |> Light.AmbientEmission.add_new(Vector3.same(2000000))
 
 create_texture_ids = |texture_name| {
     color: TextureID.from_name("${texture_name}_color_texture"),
@@ -129,7 +129,7 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
 
     _ =
         Entity.new_multi(List.len(scaled_positions))
-        |> Comp.SphereMesh.add_multiple_new(
+        |> Setup.SphereMesh.add_multiple_new(
             Same(100),
         )?
         |> Comp.ReferenceFrame.add_multiple_unoriented_scaled(
@@ -154,21 +154,21 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
             Same(Sphere.new(Point3.origin, radius)),
         )?
         |> Comp.UniformGravity.add_multiple_earth
-        |> Comp.TexturedColor.add_multiple(
+        |> Setup.TexturedColor.add_multiple(
             Same(texture_ids.color),
         )?
-        |> Comp.UniformSpecularReflectance.add_multiple_in_range_of(
-            Same(Comp.UniformSpecularReflectance.plastic),
+        |> Setup.UniformSpecularReflectance.add_multiple_in_range_of(
+            Same(Setup.UniformSpecularReflectance.plastic),
             Same(0),
         )?
-        |> Comp.TexturedRoughness.add_multiple_unscaled(
+        |> Setup.TexturedRoughness.add_multiple_unscaled(
             Same(texture_ids.roughness),
         )?
-        |> Comp.NormalMap.add_multiple(
+        |> Setup.NormalMap.add_multiple(
             Same(texture_ids.normal),
         )?
-        |> Comp.PlanarTextureProjection.add_multiple_for_rectangle(
-            Same(Comp.RectangleMesh.unit_square),
+        |> Setup.PlanarTextureProjection.add_multiple_for_rectangle(
+            Same(Setup.RectangleMesh.unit_square),
             Same(0.2),
             Same(0.2),
         )?
@@ -193,7 +193,7 @@ create_room! = |extent, angular_speed, texture_ids|
 
     wall_ids =
         Entity.new_multi(List.len(wall_orientations))
-        |> Comp.RectangleMesh.add_multiple_unit_square
+        |> Setup.RectangleMesh.add_multiple_unit_square
         |> Comp.ReferenceFrame.add_multiple_scaled_with_offset_origin(
             Same((0, 0.5, 0)),
             Same(Point3.origin),
@@ -221,24 +221,24 @@ create_room! = |extent, angular_speed, texture_ids|
             Same(Static),
             Same(Plane.new(y_axis, 0)),
         )?
-        |> Comp.TexturedColor.add_multiple(
+        |> Setup.TexturedColor.add_multiple(
             Same(texture_ids.color),
         )?
-        |> Comp.UniformSpecularReflectance.add_multiple(
+        |> Setup.UniformSpecularReflectance.add_multiple(
             Same(0.01),
         )?
-        |> Comp.TexturedRoughness.add_multiple_unscaled(
+        |> Setup.TexturedRoughness.add_multiple_unscaled(
             Same(texture_ids.roughness),
         )?
-        |> Comp.NormalMap.add_multiple(
+        |> Setup.NormalMap.add_multiple(
             Same(texture_ids.normal),
         )?
-        |> Comp.PlanarTextureProjection.add_multiple_for_rectangle(
-            Same(Comp.RectangleMesh.unit_square),
+        |> Setup.PlanarTextureProjection.add_multiple_for_rectangle(
+            Same(Setup.RectangleMesh.unit_square),
             Same(2),
             Same(2),
         )?
-        |> Comp.SceneGraphGroup.add_multiple
+        |> Setup.SceneGraphGroup.add_multiple
         |> Entity.create_multiple!?
 
     wall_ids_for_lights =
@@ -254,14 +254,14 @@ create_room! = |extent, angular_speed, texture_ids|
 
     _ =
         Entity.new_multi(List.len(wall_ids_for_lights))
-        |> Comp.Parent.add_multiple_new(
+        |> Setup.Parent.add_multiple_new(
             All(wall_ids_for_lights),
         )?
         |> Comp.ReferenceFrame.add_multiple_unoriented_scaled(
             All(light_positions),
             Same(0.2 / extent),
         )?
-        |> Comp.OmnidirectionalEmission.add_multiple_new(
+        |> Light.OmnidirectionalEmission.add_multiple_new(
             Same(Vector3.same(1e7)),
             Same(0.7),
         )?

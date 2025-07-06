@@ -1,8 +1,8 @@
 # Hash: 1310c2f17488b2fa76125d5e7ba4702ac7bfed3ae4a4a02c9640a132c7eb2ec5
-# Generated: 2025-05-24T10:33:40+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::motion::components::VelocityComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     Velocity,
     new,

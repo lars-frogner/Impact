@@ -1,8 +1,8 @@
 # Hash: aa6a4974f254d8def51cc83f0be4f2fd5ee73a18eba42ac2a71984fffb1e9c77
-# Generated: 2025-05-23T20:19:02+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::rigid_body::forces::spring::components::SpringComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     Spring,
     new,

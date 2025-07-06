@@ -11,25 +11,24 @@ import core.Vector3
 import pf.Command
 import pf.Entity
 import pf.Skybox
-import pf.Comp.AmbientEmission
-import pf.Comp.CylinderMesh
+import pf.Light.AmbientEmission
+import pf.Setup.CylinderMesh
 import pf.Comp.GradientNoiseVoxelTypes
 import pf.Comp.MotionControl
 import pf.Comp.MultifractalNoiseModification
 import pf.Comp.OrientationControl
-import pf.Comp.Parent
-import pf.Comp.PerspectiveCamera
-import pf.Comp.RectangleMesh
+import pf.Setup.Parent
+import pf.Setup.PerspectiveCamera
+import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
-import pf.Comp.SceneEntityFlags
-import pf.Comp.SceneGraphGroup
-import pf.Comp.SphereMesh
-import pf.Comp.ShadowableOmnidirectionalEmission
-import pf.Comp.ShadowableUnidirectionalEmission
-import pf.Comp.UniformColor
-import pf.Comp.UniformEmissiveLuminance
-import pf.Comp.UniformRoughness
-import pf.Comp.UniformSpecularReflectance
+import pf.Setup.SceneGraphGroup
+import pf.Setup.SphereMesh
+import pf.Light.ShadowableOmnidirectionalEmission
+import pf.Light.ShadowableUnidirectionalEmission
+import pf.Setup.UniformColor
+import pf.Setup.UniformEmissiveLuminance
+import pf.Setup.UniformRoughness
+import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Velocity
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
@@ -98,25 +97,25 @@ player =
     |> Comp.Velocity.add_stationary
     |> Comp.MotionControl.add_new
     |> Comp.OrientationControl.add_new
-    |> Comp.SceneGraphGroup.add
+    |> Setup.SceneGraphGroup.add
 
 camera =
     Entity.new
-    |> Comp.Parent.add_new(entity_ids.player)
-    |> Comp.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
+    |> Setup.Parent.add_new(entity_ids.player)
+    |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 laser =
     Entity.new
-    |> Comp.Parent.add_new(entity_ids.player)
+    |> Setup.Parent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_unscaled(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
     )
-    |> Comp.CylinderMesh.add_new(100, 0.02, 16)
-    |> Comp.UniformColor.add((0.9, 0.05, 0.05))
-    |> Comp.UniformEmissiveLuminance.add(1e6)
+    |> Setup.CylinderMesh.add_new(100, 0.02, 16)
+    |> Setup.UniformColor.add((0.9, 0.05, 0.05))
+    |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3, 200)
-    |> Comp.SceneEntityFlags.add(
+    |> Scene.SceneEntityFlags.add(
         Scene.SceneEntityFlags.union(
             Scene.SceneEntityFlags.is_disabled,
             Scene.SceneEntityFlags.casts_no_shadows,
@@ -125,22 +124,22 @@ laser =
 
 absorbing_sphere =
     Entity.new
-    |> Comp.Parent.add_new(entity_ids.player)
+    |> Setup.Parent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_unoriented_scaled((0, 0, -3), 0.1)
-    |> Comp.SphereMesh.add_new(64)
-    |> Comp.UniformColor.add((0.9, 0.05, 0.05))
-    |> Comp.UniformEmissiveLuminance.add(1e6)
-    |> Comp.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
+    |> Setup.SphereMesh.add_new(64)
+    |> Setup.UniformColor.add((0.9, 0.05, 0.05))
+    |> Setup.UniformEmissiveLuminance.add(1e6)
+    |> Light.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
     |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 10, 15)
-    |> Comp.SceneEntityFlags.add(Scene.SceneEntityFlags.is_disabled)
+    |> Scene.SceneEntityFlags.add(Scene.SceneEntityFlags.is_disabled)
 
 ground =
     Entity.new
-    |> Comp.RectangleMesh.add_unit_square
+    |> Setup.RectangleMesh.add_unit_square
     |> Comp.ReferenceFrame.add_unoriented_scaled((0, -20, 0), 500)
-    |> Comp.UniformColor.add((1, 1, 1))
-    |> Comp.UniformSpecularReflectance.add(0.01)
-    |> Comp.UniformRoughness.add(0.5)
+    |> Setup.UniformColor.add((1, 1, 1))
+    |> Setup.UniformSpecularReflectance.add(0.01)
+    |> Setup.UniformRoughness.add(0.5)
 
 asteroid =
     Entity.new
@@ -160,22 +159,22 @@ asteroid2 =
 
 ambient_light =
     Entity.new
-    |> Comp.AmbientEmission.add_new(Vector3.same(1000))
+    |> Light.AmbientEmission.add_new(Vector3.same(1000))
 
 omnidirectional_light =
     Entity.new
-    |> Comp.SphereMesh.add_new(25)
+    |> Setup.SphereMesh.add_new(25)
     |> Comp.ReferenceFrame.add_unoriented_scaled((0, 15, 2), 0.7)
-    |> Comp.UniformColor.add((1, 1, 1))
-    |> Comp.UniformEmissiveLuminance.add(1e6)
-    |> Comp.ShadowableOmnidirectionalEmission.add_new(
+    |> Setup.UniformColor.add((1, 1, 1))
+    |> Setup.UniformEmissiveLuminance.add(1e6)
+    |> Light.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(2e7),
         0.7,
     )
 
 unidirectional_light =
     Entity.new
-    |> Comp.ShadowableUnidirectionalEmission.add_new(
+    |> Light.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(20000),
         UnitVector3.from((0.0, -1.0, 0.0)),
         2.0,

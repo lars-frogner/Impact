@@ -1,8 +1,8 @@
 # Hash: b46d15fad09b7344568970a35124162e88217b2271463f13f6f3c4a29bb79f2d
-# Generated: 2025-05-23T21:48:57+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::collision::components::SphereCollidableComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     SphereCollidable,
     new,

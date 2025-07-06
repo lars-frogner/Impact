@@ -1,8 +1,8 @@
 # Hash: 42105fd6bd9667dd0353d9d48abf262fda7ed182eb68a52e3ab8daf23782d0a6
-# Generated: 2025-05-23T18:55:01+00:00
-# Rust type: impact::mesh::MeshID
+# Generated: 2025-07-06T18:04:01+00:00
+# Rust type: impact_mesh::MeshID
 # Type category: POD
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     MeshID,
     from_name,

@@ -6,13 +6,11 @@ module [
 
 import core.Point3
 import pf.Entity
-import pf.Comp.BoxMesh
-import pf.Comp.LogsKineticEnergy
-import pf.Comp.LogsMomentum
+import pf.Setup.BoxMesh
 import pf.Comp.ReferenceFrame
-import pf.Comp.UniformColor
+import pf.Setup.UniformColor
 import pf.Comp.UniformRigidBody
-import pf.Comp.UniformSpecularReflectance
+import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Velocity
 import pf.Physics.AngularVelocity as AngularVelocity
 import Scenes.Blank
@@ -36,15 +34,13 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
 
     body_base =
         Entity.new
-        |> Comp.BoxMesh.add_new(3, 2, 1, Outside)
+        |> Setup.BoxMesh.add_new(3, 2, 1, Outside)
         |> Comp.UniformRigidBody.add({ mass_density: 1 / 6 })
-        |> Comp.UniformColor.add((0.1, 0.1, 0.7))
-        |> Comp.UniformSpecularReflectance.add_in_range_of(
-            Comp.UniformSpecularReflectance.plastic,
+        |> Setup.UniformColor.add((0.1, 0.1, 0.7))
+        |> Setup.UniformSpecularReflectance.add_in_range_of(
+            Setup.UniformSpecularReflectance.plastic,
             80.0,
         )
-        |> Comp.LogsKineticEnergy.add
-        |> Comp.LogsMomentum.add
 
     major_axis_body =
         body_base

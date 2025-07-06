@@ -8,16 +8,14 @@ import core.Point3
 import core.UnitQuaternion
 import core.UnitVector3
 import pf.Entity
-import pf.Comp.BoxMesh
+import pf.Setup.BoxMesh
 import pf.Comp.HarmonicOscillatorTrajectory
-import pf.Comp.LogsKineticEnergy
-import pf.Comp.LogsMomentum
 import pf.Comp.ReferenceFrame
-import pf.Comp.SphereMesh
+import pf.Setup.SphereMesh
 import pf.Comp.Spring
-import pf.Comp.UniformColor
+import pf.Setup.UniformColor
 import pf.Comp.UniformRigidBody
-import pf.Comp.UniformSpecularReflectance
+import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Velocity
 import pf.Physics.Spring
 import Scenes.Blank
@@ -44,23 +42,21 @@ create_entities! = |position, mass, spring_constant, amplitude|
 
     attachment_point =
         Entity.new
-        |> Comp.SphereMesh.add_new(15)
+        |> Setup.SphereMesh.add_new(15)
         |> Comp.ReferenceFrame.add_unoriented_scaled(attachment_position, 0.2)
-        |> Comp.UniformColor.add((0.8, 0.1, 0.1))
+        |> Setup.UniformColor.add((0.8, 0.1, 0.1))
 
     dynamic_body =
         Entity.new
-        |> Comp.BoxMesh.add_unit_cube
+        |> Setup.BoxMesh.add_unit_cube
         |> Comp.UniformRigidBody.add({ mass_density: mass })
         |> Comp.ReferenceFrame.add_for_unoriented_rigid_body(mass_position)
         |> Comp.Velocity.add_stationary
-        |> Comp.UniformColor.add((0.1, 0.1, 0.7))
-        |> Comp.UniformSpecularReflectance.add_in_range_of(
-            Comp.UniformSpecularReflectance.plastic,
+        |> Setup.UniformColor.add((0.1, 0.1, 0.7))
+        |> Setup.UniformSpecularReflectance.add_in_range_of(
+            Setup.UniformSpecularReflectance.plastic,
             80.0,
         )
-        |> Comp.LogsKineticEnergy.add
-        |> Comp.LogsMomentum.add
 
     spring =
         Entity.new
@@ -75,7 +71,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
 
     kinematic_body =
         Entity.new
-        |> Comp.BoxMesh.add_unit_cube
+        |> Setup.BoxMesh.add_unit_cube
         |> Comp.ReferenceFrame.add_for_driven_trajectory(UnitQuaternion.identity)
         |> Comp.Velocity.add_stationary
         |> Comp.HarmonicOscillatorTrajectory.add_new(
@@ -85,9 +81,9 @@ create_entities! = |position, mass, spring_constant, amplitude|
             amplitude,
             period,
         )
-        |> Comp.UniformColor.add((0.1, 0.7, 0.1))
-        |> Comp.UniformSpecularReflectance.add_in_range_of(
-            Comp.UniformSpecularReflectance.plastic,
+        |> Setup.UniformColor.add((0.1, 0.7, 0.1))
+        |> Setup.UniformSpecularReflectance.add_in_range_of(
+            Setup.UniformSpecularReflectance.plastic,
             80.0,
         )
 

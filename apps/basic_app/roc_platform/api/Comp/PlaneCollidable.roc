@@ -1,8 +1,8 @@
 # Hash: 8cb50856ab4a39856ce4cac45a7239db77de1a07f84028638d5a77119eb36bbd
-# Generated: 2025-05-23T21:48:57+00:00
+# Generated: 2025-07-06T18:04:01+00:00
 # Rust type: impact::physics::collision::components::PlaneCollidableComp
 # Type category: Component
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     PlaneCollidable,
     new,

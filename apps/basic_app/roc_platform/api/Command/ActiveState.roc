@@ -1,8 +1,8 @@
 # Hash: 424d5dfeefa60e8e2bc68aa1b6793e51ae4385d3406c842f5211418e4423c60e
-# Generated: 2025-05-23T18:55:01+00:00
-# Rust type: impact::engine::command::ActiveState
+# Generated: 2025-07-06T18:04:01+00:00
+# Rust type: impact::command::ActiveState
 # Type category: Inline
-# Commit: 31f3514 (dirty)
+# Commit: ce2d27b (dirty)
 module [
     ActiveState,
     write_bytes,
