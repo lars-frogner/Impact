@@ -1,21 +1,30 @@
 //! Representation of surfaces to render to.
 
+pub mod headless;
+
 #[cfg(feature = "window")]
 pub mod window;
 
 use anyhow::Result;
+use headless::HeadlessRenderingSurface;
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use std::num::NonZeroU32;
 
 /// A surface that can be rendered to.
 #[derive(Debug)]
 pub enum RenderingSurface {
-    Headless,
+    Headless(HeadlessRenderingSurface),
     #[cfg(feature = "window")]
     Window(window::WindowRenderingSurface),
 }
 
 impl RenderingSurface {
+    /// Creates a headless rendering surface with the given dimensions in
+    /// physical pixels.
+    pub fn new_headless(width: NonZeroU32, height: NonZeroU32) -> Self {
+        Self::Headless(HeadlessRenderingSurface::new(width, height))
+    }
+
     /// Creates a rendering surface for the given window.
     ///
     /// # Errors
@@ -31,7 +40,7 @@ impl RenderingSurface {
     /// Initializes the surface for being rendered to with the given device.
     pub fn initialize_for_device(&mut self, graphics_device: &GraphicsDevice) -> Result<()> {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(surface) => surface.initialize_for_device(graphics_device),
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.initialize_for_device(graphics_device),
         }
@@ -44,7 +53,7 @@ impl RenderingSurface {
     /// been called.
     pub fn reinitialize_lost_surface(&self, graphics_device: &GraphicsDevice) {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(_) => {}
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.configure_surface_for_device(graphics_device),
         }
@@ -54,7 +63,7 @@ impl RenderingSurface {
     /// or [`None`] if the surface is not attached to a window.
     pub fn presentable_surface(&self) -> Option<&wgpu::Surface<'static>> {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(_) => None,
             #[cfg(feature = "window")]
             Self::Window(surface) => Some(surface.surface()),
         }
@@ -67,7 +76,7 @@ impl RenderingSurface {
         &self,
     ) -> Result<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)> {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(surface) => Ok((surface.create_surface_texture_view(), None)),
             #[cfg(feature = "window")]
             Self::Window(surface) => surface
                 .get_current_surface_texture_with_view()
@@ -79,7 +88,7 @@ impl RenderingSurface {
     /// physical pixels.
     pub fn surface_dimensions(&self) -> (NonZeroU32, NonZeroU32) {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(surface) => surface.surface_dimensions(),
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.surface_dimensions(),
         }
@@ -95,7 +104,7 @@ impl RenderingSurface {
     /// screen the surface is rendered to.
     pub fn pixels_per_point(&self) -> f64 {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(_) => 1.0,
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.pixels_per_point(),
         }
@@ -108,7 +117,7 @@ impl RenderingSurface {
     /// been called.
     pub fn texture_format(&self) -> wgpu::TextureFormat {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(_) => HeadlessRenderingSurface::texture_format(),
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.texture_format(),
         }
@@ -126,7 +135,7 @@ impl RenderingSurface {
         new_height: NonZeroU32,
     ) {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(surface) => surface.resize(graphics_device, new_width, new_height),
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.resize(graphics_device, new_width, new_height),
         }
@@ -135,7 +144,7 @@ impl RenderingSurface {
     /// Informs the surface of a new number of pixels per point.
     pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
         match self {
-            Self::Headless => todo!(),
+            Self::Headless(_) => {}
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.update_pixels_per_point(pixels_per_point),
         }

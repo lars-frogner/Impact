@@ -1,5 +1,7 @@
 pub mod rendering;
 
+use std::num::NonZeroU32;
+
 use anyhow::Result;
 use impact_gpu::device::GraphicsDevice;
 use impact_rendering::surface::RenderingSurface;
@@ -9,6 +11,29 @@ use impact_rendering::surface::RenderingSurface;
 pub struct GraphicsContext {
     pub device: GraphicsDevice,
     pub surface: RenderingSurface,
+}
+
+/// Connects to a graphics device and creates a headless rendering surface
+/// (backed by an ordinary texture instead of a window) with the given
+/// dimensions in physical pixels.
+///
+/// # Errors
+/// See [`GraphicsDevice::connect`].
+pub fn initialize_for_headless_rendering(
+    width: NonZeroU32,
+    height: NonZeroU32,
+) -> Result<GraphicsContext> {
+    let wgpu_instance = create_wgpu_instance();
+
+    let mut rendering_surface = RenderingSurface::new_headless(width, height);
+
+    let graphics_device =
+        connect_to_graphics_device_for_rendering(&wgpu_instance, &mut rendering_surface)?;
+
+    Ok(GraphicsContext {
+        device: graphics_device,
+        surface: rendering_surface,
+    })
 }
 
 /// Creates a rendering surface for the given window, connects to a graphics

@@ -1,5 +1,6 @@
 //! The top-level orchestrator of engine components.
 
+pub mod headless;
 pub mod tasks;
 
 #[cfg(feature = "window")]
@@ -9,7 +10,7 @@ use crate::{
     engine::Engine,
     game_loop::{GameLoop, GameLoopConfig},
     runtime::tasks::RuntimeTaskScheduler,
-    ui::UserInterface,
+    ui::{NoUserInterface, UserInterface},
 };
 use anyhow::Result;
 use impact_thread::ThreadPoolResult;
@@ -59,6 +60,12 @@ where
     }
 }
 
+impl Runtime<NoUserInterface> {
+    pub fn new_without_ui(engine: Engine, config: RuntimeConfig) -> Result<Self> {
+        Self::new(engine, NoUserInterface, config)
+    }
+}
+
 impl<UI> Runtime<UI> {
     pub fn engine(&self) -> &Engine {
         self.engine.as_ref()
@@ -67,8 +74,13 @@ impl<UI> Runtime<UI> {
     pub fn arc_engine(&self) -> Arc<Engine> {
         Arc::clone(&self.engine)
     }
+
     pub fn user_interface(&self) -> &UI {
         self.user_interface.as_ref()
+    }
+
+    pub fn game_loop(&self) -> &GameLoop {
+        &self.game_loop
     }
 
     pub fn perform_game_loop_iteration(&mut self) -> ThreadPoolResult {
