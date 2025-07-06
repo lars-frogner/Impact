@@ -7,9 +7,10 @@ use impact::{
     },
 };
 use impact_profiling::{
-    criterion::{self, Criterion, black_box},
+    criterion::{self, Criterion},
     define_criterion_target,
 };
+use std::hint::black_box;
 
 pub fn clone_object(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
