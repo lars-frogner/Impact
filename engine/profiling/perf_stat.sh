@@ -8,5 +8,5 @@ done
 shift # Ignore "--"
 profileargs=("$@") # What's left goes to profile
 
-cargo build --release --features "profiling,unchecked" --bin profile
-sudo perf stat "${perfargs[@]}" --delay 400 --detailed ./target/release/profile "${profileargs[@]}" --delay 0.5
+cargo build --release --features "cli,profiling,unchecked" --bin impact
+sudo perf stat "${perfargs[@]}" --delay 400 --detailed ./target/release/impact profile "${profileargs[@]}" --delay 0.5
