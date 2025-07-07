@@ -1,8 +1,8 @@
-# Hash: ce684addcf933115827c697f1eb0c2aec6ba182b4d63a1c93994330231d8cfb6
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 1c3757b733ef956d92af89ceeb89ba3e170e8444a29015c80a7d40df184041c2
+# Generated: 2025-07-07T18:59:18+00:00
 # Rust type: impact_scene::SceneGraphCameraNodeHandle
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     SceneGraphCameraNodeHandle,
     new,
@@ -22,24 +22,24 @@ import core.Builtin
 ## Handle to a camera node in a scene graph.
 SceneGraphCameraNodeHandle : {
     ## The ID of the camera node in the
-    ## [`SceneGraph`](crate::scene::SceneGraph).
+    ## [`SceneGraph`](crate::graph::SceneGraph).
     id : Scene.CameraNodeID.CameraNodeID,
 }
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## camera node with the given ID.
 new : Scene.CameraNodeID.CameraNodeID -> SceneGraphCameraNodeHandle
 new = |node_id|
     { id: node_id }
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## camera node with the given ID.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Scene.CameraNodeID.CameraNodeID -> Entity.Data
 add_new = |entity_data, node_id|
     add(entity_data, new(node_id))
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## camera node with the given ID.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.

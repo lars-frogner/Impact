@@ -1,8 +1,8 @@
-# Hash: 0a0bd6586864a9baad1dd6f920cd88053e1f0dd7f934ae113d26a05a5a77067c
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 60ae48f68495b6e98995ad7e8e62a2caf4f1f1e8bb7d91500321044036810549
+# Generated: 2025-07-07T18:59:18+00:00
 # Rust type: impact_scene::SceneGraphParentNodeHandle
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     SceneGraphParentNodeHandle,
     new,
@@ -22,25 +22,25 @@ import core.Builtin
 ## Handle to a parent group node in a scene graph.
 SceneGraphParentNodeHandle : {
     ## The ID of the parent node in the
-    ## [`SceneGraph`](crate::scene::SceneGraph).
+    ## [`SceneGraph`](crate::graph::SceneGraph).
     id : Scene.GroupNodeID.GroupNodeID,
 }
 
 ## Creates a new handle to the parent
-## [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
 new : Scene.GroupNodeID.GroupNodeID -> SceneGraphParentNodeHandle
 new = |parent_node_id|
     { id: parent_node_id }
 
 ## Creates a new handle to the parent
-## [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Scene.GroupNodeID.GroupNodeID -> Entity.Data
 add_new = |entity_data, parent_node_id|
     add(entity_data, new(parent_node_id))
 
 ## Creates a new handle to the parent
-## [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Scene.GroupNodeID.GroupNodeID) -> Result Entity.MultiData Str

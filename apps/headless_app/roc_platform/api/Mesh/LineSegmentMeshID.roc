@@ -1,13 +1,13 @@
-# Hash: e108ef1e130dfd1ef40facc769fa1f6ef2db240f68427ee55a0330f764a8209f
-# Generated: 2025-07-06T18:04:01+00:00
-# Rust type: impact_mesh::TriangleMeshHandle
+# Hash: 041b5b200414a6b13ce0641b64d65cccbcb9ca2b350efd4c02e0dc26c8b11097
+# Generated: 2025-07-07T19:02:48+00:00
+# Rust type: impact_mesh::LineSegmentMeshID
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
-    TriangleMeshHandle,
-    new,
-    add_new,
-    add_multiple_new,
+    LineSegmentMeshID,
+    from_name,
+    add_from_name,
+    add_multiple_from_name,
     add,
     add_multiple,
     write_bytes,
@@ -16,67 +16,61 @@ module [
 
 import Entity
 import Entity.Arg
-import Mesh.MeshID
 import core.Builtin
+import core.Hashing
 
-## Handle to a [`TriangleMesh`].
-TriangleMeshHandle : {
-    ## The ID of the [`TriangleMesh`] in the [`MeshRepository`].
-    id : Mesh.MeshID.MeshID,
-}
+## The ID of a [`LineSegmentMesh`] in the [`MeshRepository`].
+LineSegmentMeshID : Hashing.StringHash64
 
-## Creates a new component representing a [`TriangleMesh`] with the given
-## ID.
-new : Mesh.MeshID.MeshID -> TriangleMeshHandle
-new = |mesh_id|
-    { id: mesh_id }
+## Creates a line segment mesh ID hashed from the given name.
+from_name : Str -> LineSegmentMeshID
+from_name = |name|
+    Hashing.hash_str_64(name)
 
-## Creates a new component representing a [`TriangleMesh`] with the given
-## ID.
+## Creates a line segment mesh ID hashed from the given name.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Mesh.MeshID.MeshID -> Entity.Data
-add_new = |entity_data, mesh_id|
-    add(entity_data, new(mesh_id))
+add_from_name : Entity.Data, Str -> Entity.Data
+add_from_name = |entity_data, name|
+    add(entity_data, from_name(name))
 
-## Creates a new component representing a [`TriangleMesh`] with the given
-## ID.
+## Creates a line segment mesh ID hashed from the given name.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Mesh.MeshID.MeshID) -> Result Entity.MultiData Str
-add_multiple_new = |entity_data, mesh_id|
+add_multiple_from_name : Entity.MultiData, Entity.Arg.Broadcasted (Str) -> Result Entity.MultiData Str
+add_multiple_from_name = |entity_data, name|
     add_multiple(
         entity_data,
         All(Entity.Arg.broadcasted_map1(
-            mesh_id,
+            name,
             Entity.multi_count(entity_data),
-            new
+            from_name
         ))
     )
 
-## Adds a value of the [TriangleMeshHandle] component to an entity's data.
+## Adds a value of the [LineSegmentMeshID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, TriangleMeshHandle -> Entity.Data
+add : Entity.Data, LineSegmentMeshID -> Entity.Data
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [TriangleMeshHandle] component to the data of
+## Adds multiple values of the [LineSegmentMeshID] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (TriangleMeshHandle) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (LineSegmentMeshID) -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in TriangleMeshHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in LineSegmentMeshID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, TriangleMeshHandle -> List U8
+write_packet : List U8, LineSegmentMeshID -> List U8
 write_packet = |bytes, val|
-    type_id = 13122720462734590154
+    type_id = 11324198981518198464
     size = 8
     alignment = 8
     bytes
@@ -86,9 +80,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List TriangleMeshHandle -> List U8
+write_multi_packet : List U8, List LineSegmentMeshID -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 13122720462734590154
+    type_id = 11324198981518198464
     size = 8
     alignment = 8
     count = List.len(vals)
@@ -105,22 +99,22 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [TriangleMeshHandle] into the binary representation
+## Serializes a value of [LineSegmentMeshID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, TriangleMeshHandle -> List U8
+write_bytes : List U8, LineSegmentMeshID -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(8)
-    |> Mesh.MeshID.write_bytes(value.id)
+    |> Hashing.write_bytes_string_hash_64(value)
 
-## Deserializes a value of [TriangleMeshHandle] from its bytes in the
+## Deserializes a value of [LineSegmentMeshID] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result TriangleMeshHandle _
+from_bytes : List U8 -> Result LineSegmentMeshID _
 from_bytes = |bytes|
     Ok(
-        {
-            id: bytes |> List.sublist({ start: 0, len: 8 }) |> Mesh.MeshID.from_bytes?,
-        },
+        (
+            bytes |> List.sublist({ start: 0, len: 8 }) |> Hashing.from_bytes_string_hash_64?,
+        ),
     )
 
 test_roundtrip : {} -> Result {} _

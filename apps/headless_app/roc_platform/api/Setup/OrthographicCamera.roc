@@ -1,8 +1,8 @@
-# Hash: ca262aaf11ef58281e435382c71adc539cd9403bfaad06aced0d5ceca276e578
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 0ba96cbe19a2eeeedf893731ade22f2c55c2139e9f2a388e4e2ddbf72fcecae5
+# Generated: 2025-07-07T19:02:48+00:00
 # Rust type: impact_camera::setup::OrthographicCamera
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     OrthographicCamera,
     new,
@@ -19,7 +19,7 @@ import Entity.Arg
 import core.Builtin
 import core.Radians
 
-## Properties of an [`OrthographicCamera`](crate::camera::OrthographicCamera).
+## Properties of an [`OrthographicCamera`](crate::OrthographicCamera).
 OrthographicCamera : {
     vertical_field_of_view : Radians.Radians Binary32,
     near_distance : F32,
@@ -27,7 +27,7 @@ OrthographicCamera : {
 }
 
 ## Creates a new value representing an
-## [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
+## [`OrthographicCamera`](crate::OrthographicCamera) with the given
 ## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics
@@ -46,7 +46,7 @@ new = |vertical_field_of_view, near_distance, far_distance|
     }
 
 ## Creates a new value representing an
-## [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
+## [`OrthographicCamera`](crate::OrthographicCamera) with the given
 ## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics
@@ -58,7 +58,7 @@ add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
     add(entity_data, new(vertical_field_of_view, near_distance, far_distance))
 
 ## Creates a new value representing an
-## [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
+## [`OrthographicCamera`](crate::OrthographicCamera) with the given
 ## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics

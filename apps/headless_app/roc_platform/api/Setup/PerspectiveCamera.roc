@@ -1,8 +1,8 @@
-# Hash: 166a654d64d44f1cffde86d39eaabc24308cb0093349db520f41c2248aac6818
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: a227c5ccdf3fd1085516781413c68c7df07056dee0a1a3b74c78b95263425f29
+# Generated: 2025-07-07T19:02:48+00:00
 # Rust type: impact_camera::setup::PerspectiveCamera
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     PerspectiveCamera,
     new,
@@ -19,7 +19,7 @@ import Entity.Arg
 import core.Builtin
 import core.Radians
 
-## Properties of a [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
+## Properties of a [`PerspectiveCamera`](crate::PerspectiveCamera).
 PerspectiveCamera : {
     vertical_field_of_view : Radians.Radians Binary32,
     near_distance : F32,
@@ -27,7 +27,7 @@ PerspectiveCamera : {
 }
 
 ## Creates a new value representing a
-## [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
+## [`PerspectiveCamera`](crate::PerspectiveCamera) with the given
 ## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics
@@ -46,7 +46,7 @@ new = |vertical_field_of_view, near_distance, far_distance|
     }
 
 ## Creates a new value representing a
-## [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
+## [`PerspectiveCamera`](crate::PerspectiveCamera) with the given
 ## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics
@@ -58,7 +58,7 @@ add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
     add(entity_data, new(vertical_field_of_view, near_distance, far_distance))
 
 ## Creates a new value representing a
-## [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
+## [`PerspectiveCamera`](crate::PerspectiveCamera) with the given
 ## vertical field of view (in radians) and near and far distance.
 ##
 ## # Panics

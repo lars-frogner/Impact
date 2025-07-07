@@ -1,8 +1,8 @@
-# Hash: 22d0761596abd87c4de41d350e7b6440a1822d237f22effa36a72715c663c628
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: cfdd5f5a0cb31997e41102599f8221a761a9b29b67833a19cf2c7ad77294be73
+# Generated: 2025-07-07T19:02:48+00:00
 # Rust type: impact::physics::rigid_body::forces::detailed_drag::components::DragLoadMapComp
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     DragLoadMap,
     add,
@@ -13,7 +13,7 @@ module [
 
 import Entity
 import Entity.Arg
-import Mesh.MeshID
+import Mesh.TriangleMeshID
 import core.Builtin
 
 ## [`Component`](impact_ecs::component::Component) for entities that have an
@@ -23,7 +23,7 @@ import core.Builtin
 ## [`DragLoadMapRepository`](crate::physics::rigid_body::forces::detailed_drag::DragLoadMapRepository).
 DragLoadMap : {
     ## The ID of the mesh from which the drag load map was computed.
-    mesh_id : Mesh.MeshID.MeshID,
+    mesh_id : Mesh.TriangleMeshID.TriangleMeshID,
     ## The drag coefficient of the body.
     drag_coefficient : F64,
 }
@@ -86,7 +86,7 @@ write_bytes : List U8, DragLoadMap -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(16)
-    |> Mesh.MeshID.write_bytes(value.mesh_id)
+    |> Mesh.TriangleMeshID.write_bytes(value.mesh_id)
     |> Builtin.write_bytes_f64(value.drag_coefficient)
 
 ## Deserializes a value of [DragLoadMap] from its bytes in the
@@ -95,7 +95,7 @@ from_bytes : List U8 -> Result DragLoadMap _
 from_bytes = |bytes|
     Ok(
         {
-            mesh_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Mesh.MeshID.from_bytes?,
+            mesh_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Mesh.TriangleMeshID.from_bytes?,
             drag_coefficient: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
         },
     )
