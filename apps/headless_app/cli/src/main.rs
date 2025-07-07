@@ -20,7 +20,7 @@ define_ffi! {
 }
 
 #[derive(Debug, Parser)]
-#[command(about = "A basic Impact application", long_about = None)]
+#[command(about = "A headless Impact application", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

@@ -1,0 +1,11 @@
+(
+    headless: (
+        actions: (
+            save_screenshot_on_exit: true,
+        ),
+        termination_criterion: IterationCountReached(
+            count: 10,
+        ),
+    ),
+    engine_config_path: "engine_config.ron",
+)
