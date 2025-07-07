@@ -40,8 +40,8 @@ pub fn setup_light_for_new_entity(
 
 /// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
-/// [`AmbientLight`] to the light storage and adds an [`AmbientLightHandle`] with
-/// the light's ID to the entity.
+/// [`AmbientLight`](impact_light::AmbientLight) to the light storage and adds
+/// an [`AmbientLightHandle`] with the light's ID to the entity.
 fn setup_ambient_light_for_new_entity(
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -66,8 +66,9 @@ fn setup_ambient_light_for_new_entity(
 
 /// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
-/// [`OmnidirectionalLight`] or [`ShadowableOmnidirectionalLight`] to the light
-/// storage and adds a [`OmnidirectionalLightHandle`] or
+/// [`OmnidirectionalLight`](impact_light::OmnidirectionalLight) or
+/// [`ShadowableOmnidirectionalLight`](impact_light::ShadowableOmnidirectionalLight)
+/// to the light storage and adds a [`OmnidirectionalLightHandle`] or
 /// [`ShadowableOmnidirectionalLightHandle`] with the light's ID to the entity.
 fn setup_omnidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
@@ -144,8 +145,9 @@ fn setup_omnidirectional_light_for_new_entity(
 
 /// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
-/// [`UnidirectionalLight`] or [`ShadowableUnidirectionalLight`] to the light
-/// storage and adds a [`UnidirectionalLightHandle`] or
+/// [`UnidirectionalLight`](impact_light::UnidirectionalLight) or
+/// [`ShadowableUnidirectionalLight`](impact_light::ShadowableUnidirectionalLight)
+/// to the light storage and adds a [`UnidirectionalLightHandle`] or
 /// [`ShadowableUnidirectionalLightHandle`] with the light's ID to the entity.
 fn setup_unidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,

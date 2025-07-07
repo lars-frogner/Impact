@@ -1,6 +1,7 @@
 //! Macros for scheduling.
 
-/// Macro for defining a new empty type that implements the [`Task`] trait.
+/// Macro for defining a new empty type that implements the
+/// [`Task`](crate::Task) trait.
 ///
 /// The macro takes as input the name of the new task type, the other tasks
 /// (also defined with this macro) this task depends on, the execution tags
@@ -108,7 +109,7 @@ macro_rules! define_task {
 }
 
 /// Macro for defining a new empty type representing an
-/// [`ExecutionTag`], for use in the [`define_task`] macro.
+/// [`ExecutionTag`](crate::ExecutionTag), for use in the [`define_task`] macro.
 #[macro_export]
 macro_rules! define_execution_tag {
     (
@@ -125,7 +126,7 @@ macro_rules! define_execution_tag {
     };
 }
 
-/// Macro that creates a static [`Arc<ExecutionTags>`]
+/// Macro that creates a static `Arc<ExecutionTags>`
 /// variable with the given name containing the given list of
 /// execution tags (defined with the `define_execution_tag`
 /// macro).

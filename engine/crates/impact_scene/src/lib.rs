@@ -46,7 +46,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphParentNodeHandle {
         /// The ID of the parent node in the
-        /// [`SceneGraph`](crate::scene::SceneGraph).
+        /// [`SceneGraph`](crate::graph::SceneGraph).
         pub id: GroupNodeID,
     }
 }
@@ -58,7 +58,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphGroupNodeHandle {
         /// The ID of the group node in the
-        /// [`SceneGraph`](crate::scene::SceneGraph).
+        /// [`SceneGraph`](crate::graph::SceneGraph).
         pub id: GroupNodeID,
     }
 }
@@ -70,7 +70,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphCameraNodeHandle {
         /// The ID of the camera node in the
-        /// [`SceneGraph`](crate::scene::SceneGraph).
+        /// [`SceneGraph`](crate::graph::SceneGraph).
         pub id: CameraNodeID,
     }
 }
@@ -82,7 +82,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphModelInstanceNodeHandle {
         /// The ID of the model instance node in the
-        /// [`SceneGraph`](crate::scene::SceneGraph).
+        /// [`SceneGraph`](crate::graph::SceneGraph).
         pub id: ModelInstanceNodeID,
     }
 }
@@ -97,7 +97,7 @@ impl SceneEntityFlags {
 #[roc]
 impl SceneGraphParentNodeHandle {
     /// Creates a new handle to the parent
-    /// [`SceneGraph`](crate::scene::SceneGraph) group node with the given ID.
+    /// [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
     #[roc(body = "{ id: parent_node_id }")]
     pub fn new(parent_node_id: GroupNodeID) -> Self {
         Self { id: parent_node_id }
@@ -106,7 +106,7 @@ impl SceneGraphParentNodeHandle {
 
 #[roc]
 impl SceneGraphGroupNodeHandle {
-    /// Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+    /// Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
     /// group node with the given ID.
     #[roc(body = "{ id: node_id }")]
     pub fn new(node_id: GroupNodeID) -> Self {
@@ -116,7 +116,7 @@ impl SceneGraphGroupNodeHandle {
 
 #[roc]
 impl SceneGraphCameraNodeHandle {
-    /// Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+    /// Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
     /// camera node with the given ID.
     #[roc(body = "{ id: node_id }")]
     pub fn new(node_id: CameraNodeID) -> Self {
@@ -126,7 +126,7 @@ impl SceneGraphCameraNodeHandle {
 
 #[roc]
 impl SceneGraphModelInstanceNodeHandle {
-    /// Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+    /// Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
     /// model instance node with the given ID.
     #[roc(body = "{ id: node_id }")]
     pub fn new(node_id: ModelInstanceNodeID) -> Self {

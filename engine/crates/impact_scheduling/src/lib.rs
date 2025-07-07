@@ -243,7 +243,7 @@ where
     /// use [`execute`](Self::execute) instead.
     ///
     /// # Errors
-    /// A [`ThreadPoolTaskErrors`](crate::thread::ThreadPoolTaskErrors)
+    /// A [`ThreadPoolTaskErrors`](impact_thread::ThreadPoolTaskErrors)
     /// containing the [`TaskError`] of each failed task is returned if any of
     /// the executed tasks failed.
     ///
@@ -284,7 +284,7 @@ where
     /// call have been completed or have failed with an error.
     ///
     /// # Errors
-    /// A [`ThreadPoolTaskErrors`](crate::thread::ThreadPoolTaskErrors)
+    /// A [`ThreadPoolTaskErrors`](impact_thread::ThreadPoolTaskErrors)
     /// containing the [`TaskError`] of each failed task is returned if any of
     /// the executed tasks failed.
     ///

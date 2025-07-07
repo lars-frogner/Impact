@@ -130,7 +130,7 @@ pub struct ModelInstanceNode {
     frame_count_when_last_visible: AtomicU32,
 }
 
-/// A [`SceneGraph`] leaf node representing a [`Camera`](crate::camera::Camera).
+/// A [`SceneGraph`] leaf node representing a [`Camera`](impact_camera::Camera).
 /// It holds at transform representing the camera's spatial relationship with
 /// its parent group.
 #[derive(Clone, Debug)]
@@ -754,7 +754,7 @@ impl SceneGraph {
     /// particular light.
     ///
     /// # Warning
-    /// Make sure to [`Self::buffer_transforms_of_visible_model_instances`] before
+    /// Make sure to call [`Self::buffer_model_instances_for_rendering`] before
     /// calling this method, so that the ranges of model to cubemap face
     /// transforms in the model instance buffers come after the initial range
     /// containing model to camera transforms.
@@ -930,7 +930,7 @@ impl SceneGraph {
     /// light and cascade.
     ///
     /// # Warning
-    /// Make sure to [`Self::buffer_transforms_of_visible_model_instances`] before
+    /// Make sure to call [`Self::buffer_model_instances_for_rendering`] before
     /// calling this method, so that the ranges of model to light transforms in
     /// the model instance buffers come after the initial range containing model
     /// to camera transforms.

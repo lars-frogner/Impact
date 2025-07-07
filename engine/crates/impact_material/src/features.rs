@@ -44,7 +44,7 @@ bitflags! {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct FixedColorMaterialFeature {
@@ -61,7 +61,7 @@ pub struct FixedColorMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformColorPhysicalMaterialFeature {
@@ -82,7 +82,7 @@ pub struct UniformColorPhysicalMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedColorPhysicalMaterialFeature {
@@ -102,7 +102,7 @@ pub struct TexturedColorPhysicalMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformColorParallaxMappedPhysicalMaterialFeature {
@@ -125,7 +125,7 @@ pub struct UniformColorParallaxMappedPhysicalMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedColorParallaxMappedPhysicalMaterialFeature {

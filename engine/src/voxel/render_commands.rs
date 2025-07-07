@@ -60,7 +60,7 @@ struct VoxelChunkCullingPass {
 
 /// Pipeline for rendering the geometric and material properties of voxel
 /// objects into the G-buffer attachments. Should be executed as part of the
-/// [`GeometryPass`](crate::gpu::rendering::render_command::geometry_pass::GeometryPass).
+/// [`GeometryPass`].
 #[derive(Debug)]
 pub struct VoxelGeometryPipeline {
     push_constants: VoxelPushConstantGroup,
