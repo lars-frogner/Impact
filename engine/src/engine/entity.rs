@@ -95,7 +95,7 @@ impl Engine {
     ///
     /// # Errors
     /// Returns an error if the entity does not exist or does not have the
-    /// [`SceneEntityFlagsComp`] component.
+    /// [`SceneEntityFlags`] component.
     pub fn enable_scene_entity(&self, entity_id: EntityID) -> Result<()> {
         self.with_component_mut(entity_id, |flags: &mut SceneEntityFlags| {
             flags.remove(SceneEntityFlags::IS_DISABLED);
@@ -108,7 +108,7 @@ impl Engine {
     ///
     /// # Errors
     /// Returns an error if the entity does not exist or does not have the
-    /// [`SceneEntityFlagsComp`] component.
+    /// [`SceneEntityFlags`] component.
     pub fn disable_scene_entity(&self, entity_id: EntityID) -> Result<()> {
         self.with_component_mut(entity_id, |flags: &mut SceneEntityFlags| {
             flags.insert(SceneEntityFlags::IS_DISABLED);

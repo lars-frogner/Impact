@@ -26,7 +26,7 @@ pub fn cleanup_material<MID: Eq + Hash>(
     }
 }
 
-/// Checks if the given entity has a [`MaterialComp`], and if so, removes the
+/// Checks if the given entity has a [`MaterialHandle`], and if so, removes the
 /// assocated instance features from the given [`InstanceFeatureManager`].
 #[cfg(feature = "ecs")]
 pub fn cleanup_material_for_removed_entity<MID: Eq + Hash>(

@@ -21,7 +21,7 @@ use nalgebra::Similarity3;
 /// [`crate::physics::motion::components::ReferenceFrameComp`] component so that
 /// the translational, rotational and scaling parts match the origin offset,
 /// position, orientation and scaling. Also updates any flags for the node to
-/// match the entity's [`crate::scene::SceneEntityFlags`].
+/// match the entity's [`impact_scene::SceneEntityFlags`].
 pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph) {
     query!(
         ecs_world,

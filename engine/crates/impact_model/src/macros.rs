@@ -1,6 +1,7 @@
-/// Convenience macro for implementing the [`InstanceFeature`] trait. The
-/// feature type ID is created by hashing the name of the implementing type.
-/// Buffers for this type will not get associated GPU buffers.
+/// Convenience macro for implementing the
+/// [`InstanceFeature`](crate::InstanceFeature) trait. The feature type ID is
+/// created by hashing the name of the implementing type. Buffers for this type
+/// will not get associated GPU buffers.
 #[macro_export]
 macro_rules! impl_InstanceFeature {
     ($ty:ty) => {
@@ -13,9 +14,10 @@ macro_rules! impl_InstanceFeature {
     };
 }
 
-/// Convenience macro for implementing the [`InstanceFeature`] trait. The
-/// feature type ID is created by hashing the name of the implementing type.
-/// Buffers for this type will get associated GPU buffers.
+/// Convenience macro for implementing the
+/// [`InstanceFeature`](crate::InstanceFeature) trait. The feature type ID is
+/// created by hashing the name of the implementing type. Buffers for this type
+/// will get associated GPU buffers.
 #[macro_export]
 macro_rules! impl_InstanceFeatureForGPU {
     ($ty:ty, $vertex_attr_array:expr) => {

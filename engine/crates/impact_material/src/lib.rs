@@ -64,7 +64,7 @@ define_component_type! {
         /// The ID of the material's [`MaterialSpecification`].
         material_id: MaterialID,
         /// The ID of the entry for the material's per-instance material properties
-        /// in the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage)
+        /// in the [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage)
         /// (may be N/A).
         material_property_feature_id: InstanceFeatureID,
         /// The ID of the material's [`MaterialPropertyTextureGroup`] (may represent
@@ -458,7 +458,7 @@ impl MaterialHandle {
     }
 
     /// Returns the ID of the entry for the per-instance material properties in
-    /// the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage), or
+    /// the [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage), or
     /// [`None`] if there are no untextured per-instance material properties.
     pub fn material_property_feature_id(&self) -> Option<InstanceFeatureID> {
         if self.material_property_feature_id.is_not_applicable() {

@@ -28,7 +28,7 @@ pub struct Parent {
     pub entity_id: impact_ecs::world::EntityID,
 }
 
-/// The entity has a group node in the [`SceneGraph`](crate::scene::SceneGraph).
+/// The entity has a group node in the [`SceneGraph`](crate::graph::SceneGraph).
 ///
 /// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 /// purpose is to aid in constructing a `SceneGraphGroupNodeHandle` component
@@ -40,7 +40,7 @@ pub struct Parent {
 pub struct SceneGraphGroup;
 
 /// The entity should never be frustum culled in the
-/// [`SceneGraph`](crate::scene::SceneGraph).
+/// [`SceneGraph`](crate::graph::SceneGraph).
 ///
 /// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 /// purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`

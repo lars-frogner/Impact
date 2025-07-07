@@ -4,7 +4,7 @@ use crate::graph::CameraNodeID;
 use impact_camera::{Camera, buffer::BufferableCamera};
 use nalgebra::{Point3, Similarity3};
 
-/// Represents a [`Camera`] that has a camera node in a [`SceneGraph`](crate::scene::SceneGraph).
+/// Represents a [`Camera`] that has a camera node in a [`SceneGraph`](crate::graph::SceneGraph).
 #[derive(Debug)]
 pub struct SceneCamera {
     camera: Box<dyn Camera<f32>>,
@@ -15,7 +15,7 @@ pub struct SceneCamera {
 
 impl SceneCamera {
     /// Creates a new [`SceneCamera`] representing the given [`Camera`] in the
-    /// camera node with the given ID in the [`SceneGraph`](crate::scene::SceneGraph).
+    /// camera node with the given ID in the [`SceneGraph`](crate::graph::SceneGraph).
     pub fn new(
         camera: impl Camera<f32>,
         scene_graph_node_id: CameraNodeID,
@@ -29,8 +29,8 @@ impl SceneCamera {
         }
     }
 
-    /// Returns the ID of the [`CameraNode`](crate::scene::CameraNode)
-    /// for the camera in the [`SceneGraph`](crate::scene::SceneGraph).
+    /// Returns the ID of the [`CameraNode`](crate::graph::CameraNode)
+    /// for the camera in the [`SceneGraph`](crate::graph::SceneGraph).
     pub fn scene_graph_node_id(&self) -> CameraNodeID {
         self.scene_graph_node_id
     }

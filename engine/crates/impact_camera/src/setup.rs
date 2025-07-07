@@ -5,7 +5,7 @@ use impact_math::{Angle, Radians};
 use roc_integration::roc;
 
 define_setup_type! {
-    /// Properties of a [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
+    /// Properties of a [`PerspectiveCamera`](crate::PerspectiveCamera).
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -17,7 +17,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    /// Properties of an [`OrthographicCamera`](crate::camera::OrthographicCamera).
+    /// Properties of an [`OrthographicCamera`](crate::OrthographicCamera).
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -31,7 +31,7 @@ define_setup_type! {
 #[roc]
 impl PerspectiveCamera {
     /// Creates a new value representing a
-    /// [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
+    /// [`PerspectiveCamera`](crate::PerspectiveCamera) with the given
     /// vertical field of view (in radians) and near and far distance.
     ///
     /// # Panics
@@ -82,7 +82,7 @@ impl PerspectiveCamera {
 #[roc]
 impl OrthographicCamera {
     /// Creates a new value representing an
-    /// [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
+    /// [`OrthographicCamera`](crate::OrthographicCamera) with the given
     /// vertical field of view (in radians) and near and far distance.
     ///
     /// # Panics

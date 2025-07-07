@@ -11,7 +11,7 @@ use impact_rendering::lookup_tables::specular_ggx_reflectance;
 /// # Errors
 /// Returns an error if a computed table can not be saved to file. Additionally,
 /// see
-/// [`Texture::from_lookup_table`](crate::gpu::texture::Texture::from_lookup_table).
+/// [`Texture::from_lookup_table`](impact_gpu::texture::Texture::from_lookup_table).
 pub(super) fn load_lookup_table_into_assets(assets: &mut Assets) -> Result<()> {
     let file_path = assets
         .lookup_table_dir()

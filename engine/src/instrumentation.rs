@@ -19,7 +19,7 @@ pub struct InstrumentationConfig {
 pub struct EngineMetrics {
     /// The current smoothed frame duration calculated from recent frame timings.
     pub current_smooth_frame_duration: Duration,
-    /// The execution times of all [`Task`](crate::scheduling::Task)s executed
+    /// The execution times of all [`Task`](impact_scheduling::Task)s executed
     /// during the last frame the engine's task timer was enabled.
     pub last_task_execution_times: TaskExecutionTimes,
 }
