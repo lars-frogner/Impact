@@ -50,6 +50,16 @@ impl HeadlessRenderingSurface {
         Ok(())
     }
 
+    /// Returns a reference to the surface texture.
+    ///
+    /// # Panics
+    /// If [`Self::initialize_for_device`] has not been called.
+    pub fn surface_texture(&self) -> &wgpu::Texture {
+        self.surface
+            .initialized()
+            .expect("`initialize` must be called before `surface_texture`")
+    }
+
     /// Creates a view into the surface texture.
     ///
     /// # Panics

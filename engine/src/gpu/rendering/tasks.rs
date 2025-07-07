@@ -30,7 +30,7 @@ define_task!(
                 &scene,
                 ctx.user_interface(),
             )?;
-            engine.capture_screenshots()
+            engine.save_screenshots()
         })
     }
 );

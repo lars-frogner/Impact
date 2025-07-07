@@ -156,10 +156,10 @@ impl Engine {
     pub fn execute_capture_command(&self, command: CaptureCommand) -> Result<()> {
         match command {
             CaptureCommand::SaveScreenshot => {
-                self.save_screenshot();
+                self.request_screenshot_save();
             }
             CaptureCommand::SaveShadowMaps(save_for) => {
-                self.save_shadow_maps(save_for);
+                self.request_shadow_map_saves(save_for);
             }
         }
         Ok(())
@@ -350,13 +350,13 @@ impl Engine {
 
     // Capture
 
-    pub fn save_screenshot(&self) {
-        impact_log::info!("Saving screenshot");
+    pub fn request_screenshot_save(&self) {
+        impact_log::info!("Requesting screenshot save");
         self.screen_capturer().request_screenshot_save();
     }
 
-    pub fn save_shadow_maps(&self, save_for: SaveShadowMapsFor) {
-        impact_log::info!("Saving shadow maps for {save_for:?}");
+    pub fn request_shadow_map_saves(&self, save_for: SaveShadowMapsFor) {
+        impact_log::info!("Requesting shadow map saves for {save_for:?}");
         match save_for {
             SaveShadowMapsFor::OmnidirectionalLight => {
                 self.screen_capturer()

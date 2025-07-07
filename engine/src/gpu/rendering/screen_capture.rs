@@ -3,11 +3,11 @@
 pub mod command;
 
 use crate::gpu::rendering::RenderingSystem;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use impact_geometry::CubemapFace;
 use impact_gpu::texture;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
-use impact_rendering::resource::BasicRenderResources;
+use impact_rendering::{resource::BasicRenderResources, surface::RenderingSurface};
 use std::sync::{
     RwLock,
     atomic::{AtomicBool, Ordering},
@@ -69,14 +69,23 @@ impl ScreenCapturer {
         {
             let renderer = renderer.read().unwrap();
 
-            let surface_texture = renderer
-                .surface_texture_to_present
-                .as_ref()
-                .ok_or_else(|| anyhow!("No unpresented surface to save as screenshot"))?;
+            let surface_texture = match renderer.rendering_surface() {
+                RenderingSurface::Headless(surface) => surface.surface_texture(),
+                #[cfg(feature = "window")]
+                RenderingSurface::Window(_) => {
+                    &renderer
+                        .surface_texture_to_present
+                        .as_ref()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("No unpresented surface to save as screenshot")
+                        })?
+                        .texture
+                }
+            };
 
             texture::save_texture_as_image_file(
                 renderer.graphics_device(),
-                &surface_texture.texture,
+                surface_texture,
                 0,
                 0,
                 true,

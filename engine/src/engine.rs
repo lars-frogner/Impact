@@ -237,7 +237,7 @@ impl Engine {
 
     /// Captures any screenshots or related textures requested through the
     /// [`ScreenCapturer`].
-    pub fn capture_screenshots(&self) -> Result<()> {
+    pub fn save_screenshots(&self) -> Result<()> {
         self.screen_capturer
             .save_screenshot_if_requested(self.renderer())?;
 
