@@ -22,7 +22,8 @@ pub mod headless {
     ) -> Result<()> {
         let HeadlessConfig {
             surface_size,
-            termination_condition,
+            actions,
+            termination_criterion,
         } = headless_config;
 
         let runtime = create_runtime(
@@ -33,7 +34,7 @@ pub mod headless {
             on_engine_created,
         )?;
 
-        run_headless(runtime, termination_condition)
+        run_headless(runtime, actions, termination_criterion)
     }
 
     fn create_runtime(

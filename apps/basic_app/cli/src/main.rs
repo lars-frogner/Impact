@@ -5,16 +5,16 @@ use std::path::PathBuf;
 
 #[cfg(feature = "fuzzing")]
 define_ffi! {
-    name = BasicAppFFI,
-    lib_path_env = "BASIC_APP_LIB_PATH",
+    name = AppFFI,
+    lib_path_env = "APP_LIB_PATH",
     lib_path_default = "../../../lib/libapp",
     run_with_config_at_path => unsafe extern "C" fn(*const u8, usize) -> i32,
     fuzz_test_command_roundtrip => unsafe extern "C" fn(usize, u64, u8) -> i32,
 }
 #[cfg(not(feature = "fuzzing"))]
 define_ffi! {
-    name = BasicAppFFI,
-    lib_path_env = "BASIC_APP_LIB_PATH",
+    name = AppFFI,
+    lib_path_env = "APP_LIB_PATH",
     lib_path_default = "../../../lib/libapp",
     run_with_config_at_path => unsafe extern "C" fn(*const u8, usize) -> i32,
 }
@@ -62,7 +62,7 @@ fn run(config_path: PathBuf) -> Result<()> {
     let config_path = config_path.to_string_lossy();
     let config_path_bytes = config_path.as_bytes();
 
-    BasicAppFFI::call(
+    AppFFI::call(
         |ffi| unsafe {
             error_code_to_result((ffi.run_with_config_at_path)(
                 config_path_bytes.as_ptr(),
@@ -76,7 +76,7 @@ fn run(config_path: PathBuf) -> Result<()> {
 #[cfg(feature = "fuzzing")]
 fn fuzz(test: FuzzTest, iterations: u64, seed: u64, verbose: bool) -> Result<()> {
     match test {
-        FuzzTest::CommandRoundtrip => BasicAppFFI::call(
+        FuzzTest::CommandRoundtrip => AppFFI::call(
             |ffi| unsafe {
                 error_code_to_result((ffi.fuzz_test_command_roundtrip)(
                     iterations as usize,
