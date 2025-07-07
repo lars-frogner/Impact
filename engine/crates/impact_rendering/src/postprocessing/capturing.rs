@@ -81,7 +81,7 @@ pub struct CapturingCamera {
 impl Default for CameraSettings {
     fn default() -> Self {
         Self {
-            relative_aperture: 1.0 / 4.0,
+            relative_aperture: 4.0,
             shutter_duration: 1.0 / 200.0,
             sensitivity: SensorSensitivity::Auto {
                 ev_compensation: 0.0,
