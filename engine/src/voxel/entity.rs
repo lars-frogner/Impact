@@ -33,7 +33,7 @@ use impact_ecs::{
 };
 use impact_material::MaterialHandle;
 use impact_math::hash64;
-use impact_mesh::MeshID;
+use impact_mesh::TriangleMeshID;
 use impact_model::{
     InstanceFeature, impl_InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -47,8 +47,8 @@ use impact_scene::{
 use std::sync::{LazyLock, RwLock};
 
 pub static VOXEL_MODEL_ID: LazyLock<ModelID> = LazyLock::new(|| {
-    ModelID::for_mesh_and_material(
-        MeshID(hash64!("Voxel mesh")),
+    ModelID::for_triangle_mesh_and_material(
+        TriangleMeshID(hash64!("Voxel mesh")),
         MaterialHandle::not_applicable(),
     )
 });

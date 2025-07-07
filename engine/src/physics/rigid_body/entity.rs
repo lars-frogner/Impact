@@ -12,7 +12,7 @@ use crate::physics::{
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_mesh::{
-    MeshRepository, TriangleMeshHandle,
+    MeshRepository, TriangleMeshID,
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_scene::SceneEntityFlags;
@@ -177,7 +177,7 @@ pub fn setup_rigid_body_for_new_entity(
 
     setup!(
         components,
-        |mesh: &TriangleMeshHandle,
+        |mesh_id: &TriangleMeshID,
          uniform_rigid_body: &UniformRigidBodyComp,
          frame: Option<&ReferenceFrameComp>,
          velocity: Option<&VelocityComp>,
@@ -190,11 +190,11 @@ pub fn setup_rigid_body_for_new_entity(
         )> {
             let mesh_repository_readonly = mesh_repository.read().unwrap();
             let triangle_mesh = mesh_repository_readonly
-                .get_triangle_mesh(mesh.id)
+                .get_triangle_mesh(*mesh_id)
                 .ok_or_else(|| {
                     anyhow!(
                         "Tried to create rigid body for missing mesh (mesh ID {})",
-                        mesh.id
+                        mesh_id
                     )
                 })?;
             let inertial_properties = InertialProperties::of_uniform_triangle_mesh(

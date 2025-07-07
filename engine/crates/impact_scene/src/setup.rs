@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_material::{MaterialHandle, MaterialLibrary};
-use impact_mesh::{MeshRepository, TriangleMeshHandle};
+use impact_mesh::{MeshRepository, TriangleMeshID};
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -96,7 +96,7 @@ pub fn setup_model_instance_node(
     instance_feature_manager: &mut InstanceFeatureManager,
     scene_graph: &mut SceneGraph,
     model_to_parent_transform: NodeTransform,
-    mesh: &TriangleMeshHandle,
+    mesh_id: &TriangleMeshID,
     material: &MaterialHandle,
     parent: Option<&SceneGraphParentNodeHandle>,
     flags: Option<&SceneEntityFlags>,
@@ -104,7 +104,7 @@ pub fn setup_model_instance_node(
 ) -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
     let flags = flags.copied().unwrap_or_default();
 
-    let model_id = ModelID::for_mesh_and_material(mesh.id, *material);
+    let model_id = ModelID::for_triangle_mesh_and_material(*mesh_id, *material);
 
     let bounding_sphere = if uncullable {
         // The scene graph will not cull models with no bounding sphere
@@ -112,18 +112,18 @@ pub fn setup_model_instance_node(
     } else {
         Some(
             mesh_repository
-                .get_triangle_mesh(mesh.id)
+                .get_triangle_mesh(*mesh_id)
                 .ok_or_else(|| {
                     anyhow!(
                         "Tried to create renderable entity with missing mesh (mesh ID {})",
-                        mesh.id
+                        mesh_id
                     )
                 })?
                 .compute_bounding_sphere()
                 .ok_or_else(|| {
                     anyhow!(
                         "Tried to create renderable entity with empty mesh (mesh ID {})",
-                        mesh.id
+                        mesh_id
                     )
                 })?,
         )

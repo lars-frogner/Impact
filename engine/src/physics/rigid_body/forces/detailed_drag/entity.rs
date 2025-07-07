@@ -10,7 +10,7 @@ use crate::physics::rigid_body::{
 };
 use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_mesh::{MeshID, MeshRepository, TriangleMeshHandle};
+use impact_mesh::{MeshRepository, TriangleMeshID};
 use std::{path::PathBuf, sync::RwLock};
 
 /// Checks if the entity-to-be with the given components has the components
@@ -25,7 +25,7 @@ pub fn setup_drag_load_map_for_new_entity(
     fn generate_map(
         mesh_repository: &RwLock<MeshRepository>,
         config: &DragLoadMapConfig,
-        mesh_id: MeshID,
+        mesh_id: TriangleMeshID,
         rigid_body: &RigidBodyComp,
     ) -> Result<DragLoadMap<f32>> {
         impact_log::info!("Generating drag load map for mesh: {mesh_id}");
@@ -55,17 +55,17 @@ pub fn setup_drag_load_map_for_new_entity(
         Ok(map)
     }
 
-    fn generate_map_path(mesh_id: MeshID) -> PathBuf {
+    fn generate_map_path(mesh_id: TriangleMeshID) -> PathBuf {
         // Ensure there are no path delimiters
         let sanitized_mesh_name = format!("{mesh_id}").replace('/', "_").replace('\\', "_");
         PathBuf::from(format!("assets/drag_load_maps/{sanitized_mesh_name}.bc"))
     }
 
     setup!(components, |drag: &DetailedDragComp,
-                        mesh: &TriangleMeshHandle,
+                        mesh_id: &TriangleMeshID,
                         rigid_body: &RigidBodyComp|
      -> Result<DragLoadMapComp> {
-        let mesh_id = mesh.id;
+        let mesh_id = *mesh_id;
 
         let drag_load_map_repository_readonly = drag_load_map_repository.read().unwrap();
 

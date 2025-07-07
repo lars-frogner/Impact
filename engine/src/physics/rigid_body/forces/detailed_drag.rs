@@ -17,7 +17,7 @@ use crate::physics::{
 };
 use anyhow::{Result, anyhow, bail};
 use impact_math::{Angle, Float, Radians};
-use impact_mesh::{MeshID, triangle::TriangleMesh};
+use impact_mesh::{TriangleMeshID, triangle::TriangleMesh};
 use simba::scalar::SubsetOf;
 use std::collections::hash_map::Entry;
 
@@ -34,7 +34,7 @@ pub type DragLoadMap<F> = EquirectangularMap<DragLoad<F>>;
 #[derive(Debug)]
 pub struct DragLoadMapRepository<F: Float> {
     config: DragLoadMapConfig,
-    drag_load_maps: HashMap<MeshID, DragLoadMap<F>>,
+    drag_load_maps: HashMap<TriangleMeshID, DragLoadMap<F>>,
 }
 
 /// Configuration parameters for the generation of drag load maps.
@@ -92,19 +92,19 @@ impl<F: Float> DragLoadMapRepository<F> {
     ///
     /// # Panics
     /// If no map is present for the mesh with the given ID.
-    pub fn drag_load_map(&self, mesh_id: MeshID) -> &DragLoadMap<F> {
+    pub fn drag_load_map(&self, mesh_id: TriangleMeshID) -> &DragLoadMap<F> {
         self.get_drag_load_map(mesh_id)
             .expect("Tried to obtain missing drag load map")
     }
 
     /// Returns a reference to the [`DragLoadMap`] for the mesh with the given
     /// ID, or [`None`] if the map is not present.
-    pub fn get_drag_load_map(&self, mesh_id: MeshID) -> Option<&DragLoadMap<F>> {
+    pub fn get_drag_load_map(&self, mesh_id: TriangleMeshID) -> Option<&DragLoadMap<F>> {
         self.drag_load_maps.get(&mesh_id)
     }
 
     /// Whether a drag load map for the mesh with the given ID is present.
-    pub fn has_drag_load_map_for_mesh(&self, mesh_id: MeshID) -> bool {
+    pub fn has_drag_load_map_for_mesh(&self, mesh_id: TriangleMeshID) -> bool {
         self.drag_load_maps.contains_key(&mesh_id)
     }
 
@@ -114,7 +114,11 @@ impl<F: Float> DragLoadMapRepository<F> {
     /// # Errors
     /// Returns an error if a map for the mesh with the given ID already exists.
     /// The repository will remain unchanged.
-    pub fn add_drag_load_map(&mut self, mesh_id: MeshID, map: DragLoadMap<F>) -> Result<()> {
+    pub fn add_drag_load_map(
+        &mut self,
+        mesh_id: TriangleMeshID,
+        map: DragLoadMap<F>,
+    ) -> Result<()> {
         match self.drag_load_maps.entry(mesh_id) {
             Entry::Vacant(entry) => {
                 entry.insert(map);
@@ -129,7 +133,11 @@ impl<F: Float> DragLoadMapRepository<F> {
 
     /// Includes the given drag load map in the repository under the given mesh
     /// ID, unless a map for a mesh with the same ID is already present.
-    pub fn add_drag_load_map_unless_present(&mut self, mesh_id: MeshID, map: DragLoadMap<F>) {
+    pub fn add_drag_load_map_unless_present(
+        &mut self,
+        mesh_id: TriangleMeshID,
+        map: DragLoadMap<F>,
+    ) {
         let _ = self.add_drag_load_map(mesh_id, map);
     }
 }

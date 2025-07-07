@@ -26,21 +26,21 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => {
                 let mesh = LineSegmentMesh::create_reference_frame_axes();
-                mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_line_segment_mesh(self.only_line_segment_mesh_id(), mesh)
             }
             Self::BoundingSphere => {
                 let mesh = TriangleMesh::create_unit_sphere_with_color(
                     32,
                     VertexColor::CYAN.with_alpha(0.15),
                 );
-                mesh_repository.add_triangle_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_triangle_mesh(self.only_triangle_mesh_id(), mesh)
             }
             Self::LightSphere => {
                 let mesh = TriangleMesh::create_unit_sphere_with_color(
                     32,
                     VertexColor::YELLOW.with_alpha(0.1),
                 );
-                mesh_repository.add_triangle_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_triangle_mesh(self.only_triangle_mesh_id(), mesh)
             }
             Self::ShadowCubemapFaces => {
                 let planes_mesh = TriangleMesh::create_cube_with_face_colors(
@@ -56,14 +56,15 @@ impl GizmoType {
                     .map(|color| color.with_alpha(0.1)),
                 );
                 mesh_repository.add_triangle_mesh(
-                    self.models()[SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX].mesh_id(),
+                    self.models()[SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX].triangle_mesh_id(),
                     planes_mesh,
                 )?;
 
                 let mut outlines_mesh = LineSegmentMesh::create_unit_cubemap_frusta();
                 outlines_mesh.set_same_color(VertexColor::WHITE);
                 mesh_repository.add_line_segment_mesh(
-                    self.models()[SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX].mesh_id(),
+                    self.models()[SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX]
+                        .line_segment_mesh_id(),
                     outlines_mesh,
                 )
             }
@@ -84,7 +85,7 @@ impl GizmoType {
                     .zip(CASCADE_COLORS.map(|color| color.with_alpha(0.2)))
                 {
                     let mesh = TriangleMesh::create_vertical_square_with_color(1.0, color);
-                    mesh_repository.add_triangle_mesh(model.mesh_id(), mesh)?;
+                    mesh_repository.add_triangle_mesh(model.triangle_mesh_id(), mesh)?;
                 }
                 Ok(())
             }
@@ -93,32 +94,32 @@ impl GizmoType {
                     32,
                     VertexColor::BLUE.with_alpha(0.4),
                 );
-                mesh_repository.add_triangle_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_triangle_mesh(self.only_triangle_mesh_id(), mesh)
             }
             Self::LinearVelocity => {
                 let mut mesh = LineSegmentMesh::create_unit_arrow_y();
                 mesh.set_same_color(VertexColor::RED);
-                mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_line_segment_mesh(self.only_line_segment_mesh_id(), mesh)
             }
             Self::AngularVelocity => {
                 let mut mesh = LineSegmentMesh::create_unit_arrow_y();
                 mesh.set_same_color(VertexColor::YELLOW);
-                mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_line_segment_mesh(self.only_line_segment_mesh_id(), mesh)
             }
             Self::AngularMomentum => {
                 let mut mesh = LineSegmentMesh::create_unit_arrow_y();
                 mesh.set_same_color(VertexColor::MAGENTA);
-                mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_line_segment_mesh(self.only_line_segment_mesh_id(), mesh)
             }
             Self::Force => {
                 let mut mesh = LineSegmentMesh::create_unit_arrow_y();
                 mesh.set_same_color(VertexColor::GREEN);
-                mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_line_segment_mesh(self.only_line_segment_mesh_id(), mesh)
             }
             Self::Torque => {
                 let mut mesh = LineSegmentMesh::create_unit_arrow_y();
                 mesh.set_same_color(VertexColor::CYAN);
-                mesh_repository.add_line_segment_mesh(self.only_mesh_id(), mesh)
+                mesh_repository.add_line_segment_mesh(self.only_line_segment_mesh_id(), mesh)
             }
             Self::DynamicCollider | Self::StaticCollider | Self::PhantomCollider => {
                 let color = match self {
@@ -131,19 +132,19 @@ impl GizmoType {
 
                 let sphere_mesh = TriangleMesh::create_unit_sphere_with_color(32, color);
                 mesh_repository.add_triangle_mesh(
-                    self.models()[COLLIDER_GIZMO_SPHERE_MODEL_IDX].mesh_id(),
+                    self.models()[COLLIDER_GIZMO_SPHERE_MODEL_IDX].triangle_mesh_id(),
                     sphere_mesh,
                 )?;
 
                 let plane_mesh = TriangleMesh::create_vertical_square_with_color(1.0, color);
                 mesh_repository.add_triangle_mesh(
-                    self.models()[COLLIDER_GIZMO_PLANE_MODEL_IDX].mesh_id(),
+                    self.models()[COLLIDER_GIZMO_PLANE_MODEL_IDX].triangle_mesh_id(),
                     plane_mesh,
                 )?;
 
                 let voxel_sphere_mesh = TriangleMesh::create_unit_sphere_with_color(8, color);
                 mesh_repository.add_triangle_mesh(
-                    self.models()[COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX].mesh_id(),
+                    self.models()[COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX].triangle_mesh_id(),
                     voxel_sphere_mesh,
                 )
             }
@@ -156,8 +157,10 @@ impl GizmoType {
                         CHUNK_SIZE as f32,
                         VertexColor::BLUE.with_alpha(0.05),
                     );
-                    mesh_repository
-                        .add_triangle_mesh(self.models()[idx].mesh_id(), uniform_chunk_mesh)?;
+                    mesh_repository.add_triangle_mesh(
+                        self.models()[idx].triangle_mesh_id(),
+                        uniform_chunk_mesh,
+                    )?;
                 }
 
                 for idx in [
@@ -168,8 +171,10 @@ impl GizmoType {
                         CHUNK_SIZE as f32,
                         VertexColor::GREEN.with_alpha(0.05),
                     );
-                    mesh_repository
-                        .add_triangle_mesh(self.models()[idx].mesh_id(), non_uniform_chunk_mesh)?;
+                    mesh_repository.add_triangle_mesh(
+                        self.models()[idx].triangle_mesh_id(),
+                        non_uniform_chunk_mesh,
+                    )?;
                 }
                 Ok(())
             }

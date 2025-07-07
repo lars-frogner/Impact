@@ -4,7 +4,7 @@ use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_material::{MaterialHandle, MaterialLibrary};
 use impact_mesh::{
-    MeshRepository, TriangleMeshHandle,
+    MeshRepository, TriangleMeshID,
     setup::{
         self, BoxMesh, CircularFrustumMesh, ConeMesh, CylinderMesh, HemisphereMesh, RectangleMesh,
         SphereMesh,
@@ -29,7 +29,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |rectangle_mesh: &RectangleMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_rectangle_mesh(
                     &mut mesh_repository,
@@ -45,7 +45,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     setup!(
@@ -55,7 +55,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |box_mesh: &BoxMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_box_mesh(
                     &mut mesh_repository,
@@ -71,7 +71,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     setup!(
@@ -81,7 +81,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |cylinder_mesh: &CylinderMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_cylinder_mesh(
                     &mut mesh_repository,
@@ -97,7 +97,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     setup!(
@@ -107,7 +107,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |cone_mesh: &ConeMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_cone_mesh(
                     &mut mesh_repository,
@@ -123,7 +123,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     setup!(
@@ -133,7 +133,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |circular_frustum_mesh: &CircularFrustumMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_circular_frustum_mesh(
                     &mut mesh_repository,
@@ -149,7 +149,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     setup!(
@@ -159,7 +159,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |sphere_mesh: &SphereMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_sphere_mesh(
                     &mut mesh_repository,
@@ -175,7 +175,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     setup!(
@@ -185,7 +185,7 @@ pub fn setup_mesh_for_new_entity(
         components,
         |hemisphere_mesh: &HemisphereMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
-         -> TriangleMeshHandle {
+         -> TriangleMeshID {
             match (planar_projection,) {
                 (Some(planar_projection),) => setup::setup_hemisphere_mesh(
                     &mut mesh_repository,
@@ -201,7 +201,7 @@ pub fn setup_mesh_for_new_entity(
                 ),
             }
         },
-        ![TriangleMeshHandle]
+        ![TriangleMeshID]
     );
 
     Ok(())
@@ -221,7 +221,7 @@ pub fn generate_missing_vertex_properties_for_new_entity_mesh(
             let mut mesh_repository = mesh_repository.write().unwrap();
         },
         components,
-        |mesh: &TriangleMeshHandle, material: &MaterialHandle| {
+        |mesh_id: &TriangleMeshID, material: &MaterialHandle| {
             let Some(material_specification) =
                 material_library.get_material_specification(material.material_id())
             else {
@@ -237,7 +237,7 @@ pub fn generate_missing_vertex_properties_for_new_entity_mesh(
 
             setup::generate_missing_vertex_properties_for_mesh(
                 &mut mesh_repository,
-                mesh.id,
+                *mesh_id,
                 vertex_attribute_requirements,
             );
         }

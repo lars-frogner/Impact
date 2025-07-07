@@ -1,8 +1,8 @@
 //! Input/output of mesh data in Wavefront OBJ format.
 
 use crate::{
-    MeshID, MeshRepository, TriangleMeshHandle, VertexNormalVector, VertexPosition,
-    VertexTextureCoords, texture_projection::TextureProjection, triangle::TriangleMesh,
+    MeshRepository, TriangleMeshID, VertexNormalVector, VertexPosition, VertexTextureCoords,
+    texture_projection::TextureProjection, triangle::TriangleMesh,
 };
 use anyhow::{Result, bail};
 use impact_math::hash64;
@@ -46,7 +46,7 @@ pub fn read_mesh_from_obj_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
 pub fn load_mesh_from_obj_file<P>(
     mesh_repository: &mut MeshRepository,
     obj_file_path: P,
-) -> Result<TriangleMeshHandle>
+) -> Result<TriangleMeshID>
 where
     P: AsRef<Path> + Debug,
 {
@@ -59,7 +59,7 @@ where
         bail!("File {} does not contain any meshes", obj_file_path_string);
     }
 
-    let mesh_id = MeshID(hash64!(obj_file_path_string));
+    let mesh_id = TriangleMeshID(hash64!(obj_file_path_string));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
         let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
@@ -71,7 +71,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshHandle { id: mesh_id })
+    Ok(mesh_id)
 }
 
 /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
@@ -88,7 +88,7 @@ pub fn load_mesh_from_obj_file_with_projection<P>(
     mesh_repository: &mut MeshRepository,
     obj_file_path: P,
     projection: &impl TextureProjection<f32>,
-) -> Result<TriangleMeshHandle>
+) -> Result<TriangleMeshID>
 where
     P: AsRef<Path> + Debug,
 {
@@ -101,7 +101,7 @@ where
         bail!("File {} does not contain any meshes", obj_file_path_string);
     }
 
-    let mesh_id = MeshID(hash64!(format!(
+    let mesh_id = TriangleMeshID(hash64!(format!(
         "{} (projection = {})",
         obj_file_path_string,
         projection.identifier()
@@ -119,7 +119,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshHandle { id: mesh_id })
+    Ok(mesh_id)
 }
 
 fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {

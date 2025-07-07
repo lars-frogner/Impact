@@ -18,7 +18,7 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_light::buffer::LightGPUBufferManager;
-use impact_mesh::{self, MeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation};
+use impact_mesh::{self, TriangleMeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation};
 use std::sync::LazyLock;
 
 /// Shader template for the omnidirectional light pass, which computes the
@@ -82,7 +82,7 @@ impl OmnidirectionalLightShaderTemplate {
 
     /// Returns the ID of the light volume mesh used by the shader (a spherical
     /// mesh).
-    pub fn light_volume_mesh_id() -> MeshID {
+    pub fn light_volume_mesh_id() -> TriangleMeshID {
         impact_mesh::spherical_light_volume_mesh_id()
     }
 }

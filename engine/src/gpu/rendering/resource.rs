@@ -15,7 +15,8 @@ use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
 use impact_mesh::{
-    MeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh, triangle::TriangleMesh,
+    LineSegmentMeshID, TriangleMeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh,
+    triangle::TriangleMesh,
 };
 use impact_model::buffer::InstanceFeatureGPUBufferManager;
 use impact_rendering::resource::BasicRenderResources;
@@ -75,8 +76,8 @@ pub struct RenderResourceManager {
 pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraGPUBufferManager>>,
     skybox_resource_manager: Box<Option<SkyboxGPUResourceManager>>,
-    triangle_mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
-    line_segment_mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
+    triangle_mesh_buffer_managers: Box<TriangleMeshGPUBufferManagerMap>,
+    line_segment_mesh_buffer_managers: Box<LineSegmentMeshGPUBufferManagerMap>,
     voxel_resource_managers: Box<(
         Option<VoxelMaterialGPUResourceManager>,
         VoxelObjectGPUBufferManagerMap,
@@ -92,8 +93,8 @@ pub struct SynchronizedRenderResources {
 struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
     skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
-    triangle_mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
-    line_segment_mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
+    triangle_mesh_buffer_managers: Mutex<Box<TriangleMeshGPUBufferManagerMap>>,
+    line_segment_mesh_buffer_managers: Mutex<Box<LineSegmentMeshGPUBufferManagerMap>>,
     voxel_resource_managers: Mutex<
         Box<(
             Option<VoxelMaterialGPUResourceManager>,
@@ -104,7 +105,8 @@ struct DesynchronizedRenderResources {
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
 
-type MeshGPUBufferManagerMap = HashMap<MeshID, MeshGPUBufferManager>;
+type TriangleMeshGPUBufferManagerMap = HashMap<TriangleMeshID, MeshGPUBufferManager>;
+type LineSegmentMeshGPUBufferManagerMap = HashMap<LineSegmentMeshID, MeshGPUBufferManager>;
 type VoxelObjectGPUBufferManagerMap = HashMap<VoxelObjectID, VoxelObjectGPUBufferManager>;
 type InstanceFeatureGPUBufferManagerMap = HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>>;
 
@@ -195,13 +197,16 @@ impl BasicRenderResources for SynchronizedRenderResources {
         self.skybox_resource_manager.as_ref().as_ref()
     }
 
-    fn get_triangle_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager> {
+    fn get_triangle_mesh_buffer_manager(
+        &self,
+        mesh_id: TriangleMeshID,
+    ) -> Option<&MeshGPUBufferManager> {
         self.triangle_mesh_buffer_managers.get(&mesh_id)
     }
 
     fn get_line_segment_mesh_buffer_manager(
         &self,
-        mesh_id: MeshID,
+        mesh_id: LineSegmentMeshID,
     ) -> Option<&MeshGPUBufferManager> {
         self.line_segment_mesh_buffer_managers.get(&mesh_id)
     }
@@ -336,8 +341,8 @@ impl DesynchronizedRenderResources {
     /// missing GPU buffers for new source data will be created.
     fn sync_triangle_mesh_buffers_with_triangle_meshes(
         graphics_device: &GraphicsDevice,
-        triangle_mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
-        triangle_meshes: &HashMap<MeshID, TriangleMesh<f32>>,
+        triangle_mesh_gpu_buffers: &mut TriangleMeshGPUBufferManagerMap,
+        triangle_meshes: &HashMap<TriangleMeshID, TriangleMesh<f32>>,
     ) {
         for (&mesh_id, mesh) in triangle_meshes {
             triangle_mesh_gpu_buffers
@@ -359,8 +364,8 @@ impl DesynchronizedRenderResources {
     /// missing GPU buffers for new source data will be created.
     fn sync_line_segment_mesh_buffers_with_line_segment_meshes(
         graphics_device: &GraphicsDevice,
-        line_segment_mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
-        line_segment_meshes: &HashMap<MeshID, LineSegmentMesh<f32>>,
+        line_segment_mesh_gpu_buffers: &mut LineSegmentMeshGPUBufferManagerMap,
+        line_segment_meshes: &HashMap<LineSegmentMeshID, LineSegmentMesh<f32>>,
     ) {
         for (&mesh_id, mesh) in line_segment_meshes {
             line_segment_mesh_gpu_buffers

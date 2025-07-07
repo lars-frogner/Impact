@@ -3,7 +3,7 @@
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_light::buffer::LightGPUBufferManager;
-use impact_mesh::{MeshID, buffer::MeshGPUBufferManager};
+use impact_mesh::{LineSegmentMeshID, TriangleMeshID, buffer::MeshGPUBufferManager};
 use impact_model::{InstanceFeature, buffer::InstanceFeatureGPUBufferManager};
 use impact_scene::{model::ModelID, skybox::resource::SkyboxGPUResourceManager};
 
@@ -22,13 +22,16 @@ pub trait BasicRenderResources {
 
     /// Returns the GPU buffer manager for the given triangle mesh identifier if
     /// the triangle mesh exists, otherwise returns [`None`].
-    fn get_triangle_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager>;
+    fn get_triangle_mesh_buffer_manager(
+        &self,
+        mesh_id: TriangleMeshID,
+    ) -> Option<&MeshGPUBufferManager>;
 
     /// Returns the GPU buffer manager for the given line segment mesh
     /// identifier if the line segment mesh exists, otherwise returns [`None`].
     fn get_line_segment_mesh_buffer_manager(
         &self,
-        mesh_id: MeshID,
+        mesh_id: LineSegmentMeshID,
     ) -> Option<&MeshGPUBufferManager>;
 
     /// Returns a reference to the map of instance feature GPU buffer managers.

@@ -364,7 +364,7 @@ impl GizmoPassPipeline {
 
             let mut vertex_buffer_slot = 1;
 
-            let mesh_id = model_id.mesh_id();
+            let mesh_id = model_id.triangle_mesh_id();
 
             let mesh_buffer_manager = render_resources
                 .get_triangle_mesh_buffer_manager(mesh_id)
@@ -434,7 +434,7 @@ impl GizmoPassPipeline {
 
             let mut vertex_buffer_slot = 1;
 
-            let mesh_id = model_id.mesh_id();
+            let mesh_id = model_id.line_segment_mesh_id();
 
             let mesh_buffer_manager = render_resources
                 .get_line_segment_mesh_buffer_manager(mesh_id)

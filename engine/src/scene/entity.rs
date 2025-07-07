@@ -15,7 +15,7 @@ use impact_ecs::{
 };
 use impact_gpu::device::GraphicsDevice;
 use impact_material::{MaterialHandle, MaterialTextureProvider};
-use impact_mesh::TriangleMeshHandle;
+use impact_mesh::TriangleMeshID;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
@@ -193,7 +193,7 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |mesh: &TriangleMeshHandle,
+            |mesh: &TriangleMeshID,
              material: &MaterialHandle,
              frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeHandle>,
