@@ -1529,7 +1529,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use impact_material::{MaterialHandle, MaterialID};
     use impact_math::hash64;
-    use impact_mesh::MeshID;
+    use impact_mesh::TriangleMeshID;
     use impact_model::InstanceFeatureStorage;
     use nalgebra::{Point3, Rotation3, Scale3, Translation3, point};
 
@@ -1583,8 +1583,8 @@ mod tests {
     }
 
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
-        ModelID::for_mesh_and_material(
-            MeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
+        ModelID::for_triangle_mesh_and_material(
+            TriangleMeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
             MaterialHandle::new(
                 MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
                 None,

@@ -2,7 +2,7 @@
 
 use impact_material::MaterialHandle;
 use impact_math::Hash64;
-use impact_mesh::MeshID;
+use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
 use std::{
     cmp, fmt,
     hash::{Hash, Hasher},
@@ -22,15 +22,35 @@ pub struct ModelID {
 pub type InstanceFeatureManager = impact_model::InstanceFeatureManager<ModelID>;
 
 impl ModelID {
-    /// Creates a new [`ModelID`] for the model comprised of the given mesh and
-    /// material.
-    pub fn for_mesh_and_material(mesh_id: MeshID, material_handle: MaterialHandle) -> Self {
+    /// Creates a new [`ModelID`] for the model comprised of the given triangle
+    /// mesh and material.
+    pub fn for_triangle_mesh_and_material(
+        mesh_id: TriangleMeshID,
+        material_handle: MaterialHandle,
+    ) -> Self {
         let hash = impact_math::compute_hash_64_of_two_hash_64(
             mesh_id.0.hash(),
             material_handle.compute_hash(),
         );
         Self {
-            mesh_id,
+            mesh_id: MeshID::Triangle(mesh_id),
+            material_handle,
+            hash,
+        }
+    }
+
+    /// Creates a new [`ModelID`] for the model comprised of the given line segment
+    /// mesh and material.
+    pub fn for_line_segment_mesh_and_material(
+        mesh_id: LineSegmentMeshID,
+        material_handle: MaterialHandle,
+    ) -> Self {
+        let hash = impact_math::compute_hash_64_of_two_hash_64(
+            mesh_id.0.hash(),
+            material_handle.compute_hash(),
+        );
+        Self {
+            mesh_id: MeshID::LineSegment(mesh_id),
             material_handle,
             hash,
         }
@@ -39,6 +59,32 @@ impl ModelID {
     /// The ID of the model's mesh.
     pub fn mesh_id(&self) -> MeshID {
         self.mesh_id
+    }
+
+    /// The ID of the model's triangle mesh.
+    ///
+    /// # Panics
+    /// If the mesh is not a triangle mesh.
+    pub fn triangle_mesh_id(&self) -> TriangleMeshID {
+        match self.mesh_id {
+            MeshID::Triangle(mesh_id) => mesh_id,
+            MeshID::LineSegment(_) => {
+                panic!("Got line segment mesh when expecting triangle mesh in `ModelID`")
+            }
+        }
+    }
+
+    /// The ID of the model's line segment mesh.
+    ///
+    /// # Panics
+    /// If the mesh is not a line segment mesh.
+    pub fn line_segment_mesh_id(&self) -> LineSegmentMeshID {
+        match self.mesh_id {
+            MeshID::LineSegment(mesh_id) => mesh_id,
+            MeshID::Triangle(_) => {
+                panic!("Got triangle mesh when expecting line segment mesh in `ModelID`")
+            }
+        }
     }
 
     /// The handle for the model's material.

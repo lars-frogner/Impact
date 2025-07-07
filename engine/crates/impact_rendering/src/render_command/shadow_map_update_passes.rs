@@ -360,7 +360,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                             .valid_buffer_slice(),
                     );
 
-                    let mesh_id = model_id.mesh_id();
+                    let mesh_id = model_id.triangle_mesh_id();
 
                     let mesh_buffer_manager = render_resources
                         .get_triangle_mesh_buffer_manager(mesh_id)
@@ -727,7 +727,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                             .valid_buffer_slice(),
                     );
 
-                    let mesh_id = model_id.mesh_id();
+                    let mesh_id = model_id.triangle_mesh_id();
 
                     let mesh_buffer_manager = render_resources
                         .get_triangle_mesh_buffer_manager(mesh_id)

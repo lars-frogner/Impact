@@ -2,7 +2,7 @@
 
 use super::Engine;
 use anyhow::Result;
-use impact_mesh::{TriangleMeshHandle, texture_projection::TextureProjection};
+use impact_mesh::{TriangleMeshID, texture_projection::TextureProjection};
 use std::{fmt, path::Path};
 
 impl Engine {
@@ -16,7 +16,7 @@ impl Engine {
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
     #[cfg(feature = "obj")]
-    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<TriangleMeshHandle>
+    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<TriangleMeshID>
     where
         P: AsRef<Path> + fmt::Debug,
     {
@@ -41,7 +41,7 @@ impl Engine {
         &self,
         obj_file_path: P,
         projection: &impl TextureProjection<f32>,
-    ) -> Result<TriangleMeshHandle>
+    ) -> Result<TriangleMeshID>
     where
         P: AsRef<Path> + fmt::Debug,
     {
@@ -64,7 +64,7 @@ impl Engine {
     /// # Errors
     /// Returns an error if the file can not be found or loaded as a mesh.
     #[cfg(feature = "ply")]
-    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<TriangleMeshHandle>
+    pub fn load_mesh_from_ply_file<P>(&self, ply_file_path: P) -> Result<TriangleMeshID>
     where
         P: AsRef<Path> + fmt::Debug,
     {
@@ -88,7 +88,7 @@ impl Engine {
         &self,
         ply_file_path: P,
         projection: &impl TextureProjection<f32>,
-    ) -> Result<TriangleMeshHandle>
+    ) -> Result<TriangleMeshID>
     where
         P: AsRef<Path> + fmt::Debug,
     {

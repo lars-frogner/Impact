@@ -1,18 +1,17 @@
 //! Mesh setup.
 
-use std::fmt;
-
 use crate::{
-    FrontFaceSide, MeshID, MeshRepository, TriangleMesh, TriangleMeshHandle, VertexAttributeSet,
+    FrontFaceSide, MeshRepository, TriangleMesh, TriangleMeshID, VertexAttributeSet,
     texture_projection::TextureProjection,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
 use nalgebra::{Point3, Vector3, point, vector};
 use roc_integration::roc;
+use std::fmt;
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of an axis-aligned horizontal rectangle centered on
     /// the origin, whose front face is on the positive y side.
     #[roc(parents = "Setup")]
@@ -27,7 +26,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of an axis-aligned box centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -44,7 +43,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of a vertical cylinder with the bottom centered on the
     /// origin.
     #[roc(parents = "Setup")]
@@ -62,7 +61,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of an upward-pointing cone with the bottom centered on
     /// the origin.
     #[roc(parents = "Setup")]
@@ -80,7 +79,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of a vertical circular frustum with the bottom
     /// centered on the origin.
     #[roc(parents = "Setup")]
@@ -100,7 +99,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of a unit diameter sphere centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -114,7 +113,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// A mesh consisting of a unit diameter hemisphere whose disk lies in the
     /// xz-plane and is centered on the origin.
     #[roc(parents = "Setup")]
@@ -130,7 +129,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = TriangleMeshHandle;
+    target = TriangleMeshID;
     /// The properties of a
     /// [`PlanarTextureProjection`](crate::texture_projection::PlanarTextureProjection).
     #[roc(parents = "Setup")]
@@ -162,10 +161,10 @@ impl RectangleMesh {
         Self { extent_x, extent_z }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Rectangle mesh {{ extent_x = {}, extent_z = {}, projection = {} }}",
             self.extent_x, self.extent_z, projection_label
         )))
@@ -228,10 +227,10 @@ impl BoxMesh {
         }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Box mesh {{ extent_x = {}, extent_y = {}, extent_z = {}, front_faces_on_outside = {}, projection = {} }}",
             self.extent_x,
             self.extent_y,
@@ -255,10 +254,10 @@ impl CylinderMesh {
         }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Cylinder mesh {{ length = {}, diameter = {}, n_circumference_vertices = {}, projection = {} }}",
             self.length, self.diameter, self.n_circumference_vertices, projection_label
         )))
@@ -278,10 +277,10 @@ impl ConeMesh {
         }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Cone mesh {{ length = {}, max_diameter = {}, n_circumference_vertices = {}, projection = {} }}",
             self.length, self.max_diameter, self.n_circumference_vertices, projection_label
         )))
@@ -313,10 +312,10 @@ impl CircularFrustumMesh {
         }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Circular frustum mesh {{ length = {}, bottom_diameter = {}, top_diameter = {}, n_circumference_vertices = {}, projection = {} }}",
             self.length,
             self.bottom_diameter,
@@ -335,10 +334,10 @@ impl SphereMesh {
         Self { n_rings }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Sphere mesh {{ n_rings = {}, projection = {} }}",
             self.n_rings, projection_label
         )))
@@ -353,10 +352,10 @@ impl HemisphereMesh {
         Self { n_rings }
     }
 
-    /// Generates a [`MeshID`] for this mesh, using the given label to describe
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
     /// the texture projection.
-    pub fn generate_id(&self, projection_label: impl fmt::Display) -> MeshID {
-        MeshID(hash64!(format!(
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
             "Hemisphere mesh {{ n_rings = {}, projection = {} }}",
             self.n_rings, projection_label
         )))
@@ -418,7 +417,7 @@ pub fn setup_rectangle_mesh(
     rectangle_mesh: &RectangleMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = rectangle_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -434,7 +433,7 @@ pub fn setup_rectangle_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 pub fn setup_box_mesh(
@@ -442,7 +441,7 @@ pub fn setup_box_mesh(
     box_mesh: &BoxMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = box_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -462,7 +461,7 @@ pub fn setup_box_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 pub fn setup_cylinder_mesh(
@@ -470,7 +469,7 @@ pub fn setup_cylinder_mesh(
     cylinder_mesh: &CylinderMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = cylinder_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -489,7 +488,7 @@ pub fn setup_cylinder_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 pub fn setup_cone_mesh(
@@ -497,7 +496,7 @@ pub fn setup_cone_mesh(
     cone_mesh: &ConeMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = cone_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -516,7 +515,7 @@ pub fn setup_cone_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 pub fn setup_circular_frustum_mesh(
@@ -524,7 +523,7 @@ pub fn setup_circular_frustum_mesh(
     circular_frustum_mesh: &CircularFrustumMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = circular_frustum_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -544,7 +543,7 @@ pub fn setup_circular_frustum_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 pub fn setup_sphere_mesh(
@@ -552,7 +551,7 @@ pub fn setup_sphere_mesh(
     sphere_mesh: &SphereMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = sphere_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -567,7 +566,7 @@ pub fn setup_sphere_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 pub fn setup_hemisphere_mesh(
@@ -575,7 +574,7 @@ pub fn setup_hemisphere_mesh(
     hemisphere_mesh: &HemisphereMesh,
     projection: Option<&impl TextureProjection<f32>>,
     desynchronized: &mut bool,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id = hemisphere_mesh.generate_id(create_projection_label(projection));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
@@ -590,14 +589,14 @@ pub fn setup_hemisphere_mesh(
         *desynchronized = true;
     }
 
-    TriangleMeshHandle::new(mesh_id)
+    mesh_id
 }
 
 /// Generates the vertex attributes missing from the giving requirements for the
 /// specified mesh, if possible.
 pub fn generate_missing_vertex_properties_for_mesh(
     mesh_repository: &mut MeshRepository,
-    mesh_id: MeshID,
+    mesh_id: TriangleMeshID,
     vertex_attribute_requirements: VertexAttributeSet,
 ) {
     if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {

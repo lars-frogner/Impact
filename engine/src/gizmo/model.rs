@@ -3,7 +3,7 @@
 use crate::gizmo::{GizmoObscurability, GizmoType};
 use impact_material::MaterialHandle;
 use impact_math::hash64;
-use impact_mesh::{MeshID, MeshPrimitive};
+use impact_mesh::{LineSegmentMeshID, MeshID, MeshPrimitive, TriangleMeshID};
 use impact_scene::model::ModelID;
 use std::sync::LazyLock;
 
@@ -25,6 +25,14 @@ pub struct GizmoModel {
 impl GizmoModel {
     pub fn mesh_id(&self) -> MeshID {
         self.model_id.mesh_id()
+    }
+
+    pub fn triangle_mesh_id(&self) -> TriangleMeshID {
+        self.model_id.triangle_mesh_id()
+    }
+
+    pub fn line_segment_mesh_id(&self) -> LineSegmentMeshID {
+        self.model_id.line_segment_mesh_id()
     }
 }
 
@@ -125,7 +133,7 @@ pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 3;
 
 fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
     GizmoModel {
-        model_id: create_model_id(label),
+        model_id: create_triangle_model_id(label),
         mesh_primitive: MeshPrimitive::Triangle,
         obscurability: GizmoObscurability::Obscurable,
     }
@@ -133,7 +141,7 @@ fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
 
 fn define_non_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
     GizmoModel {
-        model_id: create_model_id(label),
+        model_id: create_triangle_model_id(label),
         mesh_primitive: MeshPrimitive::Triangle,
         obscurability: GizmoObscurability::NonObscurable,
     }
@@ -141,15 +149,22 @@ fn define_non_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
 
 fn define_non_obscurable_line_segment_model(label: impl AsRef<str>) -> GizmoModel {
     GizmoModel {
-        model_id: create_model_id(label),
+        model_id: create_line_segment_model_id(label),
         mesh_primitive: MeshPrimitive::LineSegment,
         obscurability: GizmoObscurability::NonObscurable,
     }
 }
 
-fn create_model_id(label: impl AsRef<str>) -> ModelID {
-    ModelID::for_mesh_and_material(
-        MeshID(hash64!(label.as_ref())),
+fn create_triangle_model_id(label: impl AsRef<str>) -> ModelID {
+    ModelID::for_triangle_mesh_and_material(
+        TriangleMeshID(hash64!(label.as_ref())),
+        MaterialHandle::not_applicable(),
+    )
+}
+
+fn create_line_segment_model_id(label: impl AsRef<str>) -> ModelID {
+    ModelID::for_line_segment_mesh_and_material(
+        LineSegmentMeshID(hash64!(label.as_ref())),
         MaterialHandle::not_applicable(),
     )
 }

@@ -24,30 +24,48 @@ use nalgebra::{
 use roc_integration::roc;
 use std::{
     collections::hash_map::Entry,
-    fmt::Debug,
+    fmt::{self, Debug},
     ops::Neg,
     path::{Path, PathBuf},
 };
 use texture_projection::{PlanarTextureProjection, TextureProjectionSpecification};
 use triangle::TriangleMesh;
 
-define_component_type! {
-    /// Handle to a [`TriangleMesh`].
+stringhash64_newtype!(
+    /// The ID of a [`TriangleMesh`] in the [`MeshRepository`].
     #[roc(parents = "Mesh")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct TriangleMeshHandle {
-        /// The ID of the [`TriangleMesh`] in the [`MeshRepository`].
-        pub id: MeshID,
-    }
-}
+    #[cfg_attr(
+        feature = "ecs",
+        doc = concat!(
+            "\n\n\
+            This is an ECS [`Component`](impact_ecs::component::Component)."
+        )
+    )]
+    #[cfg_attr(feature = "ecs", derive(impact_ecs::Component))]
+    [pub] TriangleMeshID
+);
 
 stringhash64_newtype!(
-    /// Identifier for specific meshes.
-    /// Wraps a [`StringHash64`](impact_math::StringHash64).
+    /// The ID of a [`LineSegmentMesh`] in the [`MeshRepository`].
     #[roc(parents = "Mesh")]
-    [pub] MeshID
+    #[cfg_attr(
+        feature = "ecs",
+        doc = concat!(
+            "\n\n\
+            This is an ECS [`Component`](impact_ecs::component::Component)."
+        )
+    )]
+    #[cfg_attr(feature = "ecs", derive(impact_ecs::Component))]
+    [pub] LineSegmentMeshID
 );
+
+/// Identifier for a [`TriangleMesh`] or [`LineSegmentMesh`] in the
+/// [`MeshRepository`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MeshID {
+    Triangle(TriangleMeshID),
+    LineSegment(LineSegmentMeshID),
+}
 
 /// The geometric primitive used for a mesh.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,15 +77,15 @@ pub enum MeshPrimitive {
 /// Repository where [`TriangleMesh`]es are stored under unique [`MeshID`]s.
 #[derive(Debug, Default)]
 pub struct MeshRepository {
-    triangle_meshes: HashMap<MeshID, TriangleMesh<f32>>,
-    line_segment_meshes: HashMap<MeshID, LineSegmentMesh<f32>>,
+    triangle_meshes: HashMap<TriangleMeshID, TriangleMesh<f32>>,
+    line_segment_meshes: HashMap<LineSegmentMeshID, LineSegmentMesh<f32>>,
 }
 
 /// Record of the state of a [`MeshRepository`].
 #[derive(Clone, Debug)]
 pub struct MeshRepositoryState {
-    triangle_mesh_ids: HashSet<MeshID>,
-    line_segment_mesh_ids: HashSet<MeshID>,
+    triangle_mesh_ids: HashSet<TriangleMeshID>,
+    line_segment_mesh_ids: HashSet<LineSegmentMeshID>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -170,22 +188,30 @@ pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
     "color",
 ];
 
-#[roc]
-impl TriangleMeshHandle {
-    /// Creates a new component representing a [`TriangleMesh`] with the given
-    /// ID.
-    #[roc(body = "{ id: mesh_id }")]
-    pub fn new(mesh_id: MeshID) -> Self {
-        Self { id: mesh_id }
+#[roc(dependencies = [impact_math::Hash64])]
+impl TriangleMeshID {
+    #[roc(body = "Hashing.hash_str_64(name)")]
+    /// Creates a triangle mesh ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash64!(name))
     }
 }
 
 #[roc(dependencies = [impact_math::Hash64])]
-impl MeshID {
+impl LineSegmentMeshID {
     #[roc(body = "Hashing.hash_str_64(name)")]
-    /// Creates a mesh ID hashed from the given name.
+    /// Creates a line segment mesh ID hashed from the given name.
     pub fn from_name(name: &str) -> Self {
         Self(hash64!(name))
+    }
+}
+
+impl fmt::Display for MeshID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Triangle(id) => write!(f, "{id}"),
+            Self::LineSegment(id) => write!(f, "{id}"),
+        }
     }
 }
 
@@ -253,7 +279,7 @@ impl MeshRepository {
         let file_path = &specification.file_path;
         let file_format = specification.resolve_file_format()?;
 
-        let mesh_id = MeshID(hash64!(&specification.name));
+        let mesh_id = TriangleMeshID(hash64!(&specification.name));
         if self.has_triangle_mesh(mesh_id) {
             bail!(
                 "Tried to load triangle mesh under already existing name: {}",
@@ -311,19 +337,25 @@ impl MeshRepository {
 
     /// Returns a reference to the [`TriangleMesh`] with the given ID, or
     /// [`None`] if no triangle mesh with that ID is present.
-    pub fn get_triangle_mesh(&self, mesh_id: MeshID) -> Option<&TriangleMesh<f32>> {
+    pub fn get_triangle_mesh(&self, mesh_id: TriangleMeshID) -> Option<&TriangleMesh<f32>> {
         self.triangle_meshes.get(&mesh_id)
     }
 
     /// Returns a reference to the [`LineSegmentMesh`] with the given ID, or
     /// [`None`] if no line segment mesh with that ID is present.
-    pub fn get_line_segment_mesh(&self, mesh_id: MeshID) -> Option<&LineSegmentMesh<f32>> {
+    pub fn get_line_segment_mesh(
+        &self,
+        mesh_id: LineSegmentMeshID,
+    ) -> Option<&LineSegmentMesh<f32>> {
         self.line_segment_meshes.get(&mesh_id)
     }
 
     /// Returns a mutable reference to the [`TriangleMesh`] with the given ID,
     /// or [`None`] if no triangle mesh with that ID is present.
-    pub fn get_triangle_mesh_mut(&mut self, mesh_id: MeshID) -> Option<&mut TriangleMesh<f32>> {
+    pub fn get_triangle_mesh_mut(
+        &mut self,
+        mesh_id: TriangleMeshID,
+    ) -> Option<&mut TriangleMesh<f32>> {
         self.triangle_meshes.get_mut(&mesh_id)
     }
 
@@ -331,28 +363,28 @@ impl MeshRepository {
     /// ID, or [`None`] if no line segment mesh with that ID is present.
     pub fn get_line_segment_mesh_mut(
         &mut self,
-        mesh_id: MeshID,
+        mesh_id: LineSegmentMeshID,
     ) -> Option<&mut LineSegmentMesh<f32>> {
         self.line_segment_meshes.get_mut(&mesh_id)
     }
 
     /// Whether a triangle mesh with the given ID exists in the repository.
-    pub fn has_triangle_mesh(&self, mesh_id: MeshID) -> bool {
+    pub fn has_triangle_mesh(&self, mesh_id: TriangleMeshID) -> bool {
         self.triangle_meshes.contains_key(&mesh_id)
     }
 
     /// Whether a line segment mesh with the given ID exists in the repository.
-    pub fn has_line_segment_mesh(&self, mesh_id: MeshID) -> bool {
+    pub fn has_line_segment_mesh(&self, mesh_id: LineSegmentMeshID) -> bool {
         self.line_segment_meshes.contains_key(&mesh_id)
     }
 
     /// Returns a reference to the [`HashMap`] storing all triangle meshes.
-    pub fn triangle_meshes(&self) -> &HashMap<MeshID, TriangleMesh<f32>> {
+    pub fn triangle_meshes(&self) -> &HashMap<TriangleMeshID, TriangleMesh<f32>> {
         &self.triangle_meshes
     }
 
     /// Returns a reference to the [`HashMap`] storing all line segment meshes.
-    pub fn line_segment_meshes(&self) -> &HashMap<MeshID, LineSegmentMesh<f32>> {
+    pub fn line_segment_meshes(&self) -> &HashMap<LineSegmentMeshID, LineSegmentMesh<f32>> {
         &self.line_segment_meshes
     }
 
@@ -361,7 +393,11 @@ impl MeshRepository {
     /// # Errors
     /// Returns an error if a triangle mesh with the given ID already
     /// exists. The repository will remain unchanged.
-    pub fn add_triangle_mesh(&mut self, mesh_id: MeshID, mesh: TriangleMesh<f32>) -> Result<()> {
+    pub fn add_triangle_mesh(
+        &mut self,
+        mesh_id: TriangleMeshID,
+        mesh: TriangleMesh<f32>,
+    ) -> Result<()> {
         match self.triangle_meshes.entry(mesh_id) {
             Entry::Vacant(entry) => {
                 entry.insert(mesh);
@@ -382,7 +418,7 @@ impl MeshRepository {
     /// exists. The repository will remain unchanged.
     pub fn add_line_segment_mesh(
         &mut self,
-        mesh_id: MeshID,
+        mesh_id: LineSegmentMeshID,
         mesh: LineSegmentMesh<f32>,
     ) -> Result<()> {
         match self.line_segment_meshes.entry(mesh_id) {
@@ -399,7 +435,11 @@ impl MeshRepository {
 
     /// Includes the given triangle mesh in the repository under the given ID,
     /// unless a triangle mesh with the same ID is already present.
-    pub fn add_triangle_mesh_unless_present(&mut self, mesh_id: MeshID, mesh: TriangleMesh<f32>) {
+    pub fn add_triangle_mesh_unless_present(
+        &mut self,
+        mesh_id: TriangleMeshID,
+        mesh: TriangleMesh<f32>,
+    ) {
         let _ = self.add_triangle_mesh(mesh_id, mesh);
     }
 
@@ -407,7 +447,7 @@ impl MeshRepository {
     /// ID, unless a line segment mesh with the same ID is already present.
     pub fn add_line_segment_mesh_unless_present(
         &mut self,
-        mesh_id: MeshID,
+        mesh_id: LineSegmentMeshID,
         mesh: LineSegmentMesh<f32>,
     ) {
         let _ = self.add_line_segment_mesh(mesh_id, mesh);
@@ -567,7 +607,7 @@ impl<F: Float> Point<F> for VertexPosition<F> {
     }
 }
 
-macro_rules! define_mesh_ids {
+macro_rules! define_triangle_mesh_ids {
     (
         $(
             $(#[$meta:meta])*
@@ -577,18 +617,18 @@ macro_rules! define_mesh_ids {
         paste::paste! {
             $(
                 $(#[$meta])*
-                pub fn $fn_name() -> MeshID {
+                pub fn $fn_name() -> TriangleMeshID {
                     *[<$fn_name:upper>]
                 }
 
-                static [<$fn_name:upper>]: std::sync::LazyLock<MeshID> =
-                    std::sync::LazyLock::new(|| MeshID(impact_math::hash64!($desc)));
+                static [<$fn_name:upper>]: std::sync::LazyLock<TriangleMeshID> =
+                    std::sync::LazyLock::new(|| TriangleMeshID(impact_math::hash64!($desc)));
             )+
         }
     };
 }
 
-define_mesh_ids! {
+define_triangle_mesh_ids! {
     /// The ID of a [`TriangleMesh`] in the [`MeshRepository`] generated by
     /// [`TriangleMesh::create_screen_filling_quad`];
     fn screen_filling_quad_mesh_id() => "Screen filling quad mesh";

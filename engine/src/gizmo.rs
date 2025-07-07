@@ -10,7 +10,7 @@ pub mod tasks;
 
 use bitflags::{Flags, bitflags};
 use bytemuck::{Pod, Zeroable};
-use impact_mesh::MeshID;
+use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use impact_scene::model::{InstanceFeatureManager, ModelID};
 use model::{GizmoModel, gizmo_models};
@@ -492,6 +492,24 @@ impl GizmoType {
     /// If this gizmo does not have exactly one model.
     pub fn only_mesh_id(&self) -> MeshID {
         self.only_model_id().mesh_id()
+    }
+
+    /// Returns the [`TriangleMeshID`] of the single [`GizmoModel`] defining the
+    /// geometric and visual attributes of this gizmo.
+    ///
+    /// # Panics
+    /// If this gizmo does not have exactly one model with a triangle mesh.
+    pub fn only_triangle_mesh_id(&self) -> TriangleMeshID {
+        self.only_model_id().triangle_mesh_id()
+    }
+
+    /// Returns the [`LineSegmentMeshID`] of the single [`GizmoModel`] defining
+    /// the geometric and visual attributes of this gizmo.
+    ///
+    /// # Panics
+    /// If this gizmo does not have exactly one model with a line segment mesh.
+    pub fn only_line_segment_mesh_id(&self) -> LineSegmentMeshID {
+        self.only_model_id().line_segment_mesh_id()
     }
 }
 

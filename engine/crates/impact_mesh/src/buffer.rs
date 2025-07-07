@@ -1,8 +1,8 @@
 //! Buffering of mesh data for rendering.
 
 use crate::{
-    MeshID, N_VERTEX_ATTRIBUTES, TriangleMesh, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute,
-    VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
+    LineSegmentMeshID, N_VERTEX_ATTRIBUTES, TriangleMesh, TriangleMeshID, VERTEX_ATTRIBUTE_FLAGS,
+    VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
     VertexTangentSpaceQuaternion, VertexTextureCoords, line_segment::LineSegmentMesh,
 };
 use anyhow::{Result, anyhow};
@@ -45,7 +45,7 @@ pub struct MeshGPUBufferManager {
     index_format: Option<wgpu::IndexFormat>,
     n_vertices: usize,
     n_indices: usize,
-    mesh_id: MeshID,
+    label: String,
 }
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
@@ -66,7 +66,7 @@ impl MeshGPUBufferManager {
     /// triangle mesh.
     pub fn for_triangle_mesh(
         graphics_device: &GraphicsDevice,
-        mesh_id: MeshID,
+        mesh_id: TriangleMeshID,
         mesh: &TriangleMesh<f32>,
     ) -> Self {
         assert!(
@@ -78,9 +78,11 @@ impl MeshGPUBufferManager {
         let mut vertex_buffers = [None, None, None, None, None];
         let mut vertex_buffer_layouts = [None, None, None, None, None];
 
+        let label = mesh_id.to_string();
+
         let indices = mesh.indices();
         let (index_format, index_buffer) =
-            Self::create_index_buffer(graphics_device, mesh_id, indices);
+            Self::create_index_buffer(graphics_device, indices, &label);
 
         let n_vertices = mesh.n_vertices();
         let n_indices = indices.len();
@@ -90,40 +92,40 @@ impl MeshGPUBufferManager {
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.positions(),
+            &label,
         );
         Self::add_vertex_attribute_if_available(
             graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.normal_vectors(),
+            &label,
         );
         Self::add_vertex_attribute_if_available(
             graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.texture_coords(),
+            &label,
         );
         Self::add_vertex_attribute_if_available(
             graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.tangent_space_quaternions(),
+            &label,
         );
         Self::add_vertex_attribute_if_available(
             graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.colors(),
+            &label,
         );
 
         Self {
@@ -134,7 +136,7 @@ impl MeshGPUBufferManager {
             index_format: Some(index_format),
             n_vertices,
             n_indices,
-            mesh_id,
+            label: mesh_id.to_string(),
         }
     }
 
@@ -142,28 +144,30 @@ impl MeshGPUBufferManager {
     /// line segment mesh.
     pub fn for_line_segment_mesh(
         graphics_device: &GraphicsDevice,
-        mesh_id: MeshID,
+        mesh_id: LineSegmentMeshID,
         mesh: &LineSegmentMesh<f32>,
     ) -> Self {
         let mut available_attributes = VertexAttributeSet::empty();
         let mut vertex_buffers = [None, None, None, None, None];
         let mut vertex_buffer_layouts = [None, None, None, None, None];
 
+        let label = mesh_id.to_string();
+
         Self::add_vertex_attribute_if_available(
             graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.positions(),
+            &label,
         );
         Self::add_vertex_attribute_if_available(
             graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            mesh_id,
             mesh.colors(),
+            &label,
         );
 
         Self {
@@ -174,7 +178,7 @@ impl MeshGPUBufferManager {
             index_format: None,
             n_vertices: mesh.n_vertices(),
             n_indices: 0,
-            mesh_id,
+            label,
         }
     }
 
@@ -242,7 +246,7 @@ impl MeshGPUBufferManager {
         } else {
             Err(anyhow!(
                 "Mesh `{}` missing requested vertex attributes: {}",
-                self.mesh_id,
+                self.label,
                 requested_attributes.difference(self.available_attributes)
             ))
         }
@@ -271,7 +275,7 @@ impl MeshGPUBufferManager {
         } else {
             Err(anyhow!(
                 "Mesh `{}` missing requested vertex attributes: {}",
-                self.mesh_id,
+                self.label,
                 requested_attributes.difference(self.available_attributes)
             ))
         }
@@ -339,8 +343,8 @@ impl MeshGPUBufferManager {
         vertex_buffers: &mut [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
         vertex_buffer_layouts: &mut [Option<wgpu::VertexBufferLayout<'static>>;
                  N_VERTEX_ATTRIBUTES],
-        mesh_id: MeshID,
         data: &[V],
+        label: &str,
     ) where
         V: VertexAttribute + VertexBufferable,
     {
@@ -350,7 +354,7 @@ impl MeshGPUBufferManager {
             vertex_buffers[V::GLOBAL_INDEX] = Some(new_full_vertex_gpu_buffer(
                 graphics_device,
                 data,
-                Cow::Owned(format!("{} {}", mesh_id, V::NAME)),
+                Cow::Owned(format!("{} {}", label, V::NAME)),
             ));
 
             vertex_buffer_layouts[V::GLOBAL_INDEX] = Some(V::BUFFER_LAYOUT);
@@ -368,8 +372,8 @@ impl MeshGPUBufferManager {
 
     fn create_index_buffer<I>(
         graphics_device: &GraphicsDevice,
-        mesh_id: MeshID,
         indices: &[I],
+        label: &str,
     ) -> (wgpu::IndexFormat, GPUBuffer)
     where
         I: IndexBufferable,
@@ -379,7 +383,7 @@ impl MeshGPUBufferManager {
             new_full_index_gpu_buffer(
                 graphics_device,
                 indices,
-                Cow::Owned(format!("{mesh_id} index")),
+                Cow::Owned(format!("{label} index")),
             ),
         )
     }
@@ -419,8 +423,8 @@ impl MeshGPUBufferManager {
                     &mut self.available_attributes,
                     &mut self.vertex_buffers,
                     &mut self.vertex_buffer_layouts,
-                    self.mesh_id,
                     data,
+                    &self.label,
                 );
             }
 
@@ -456,7 +460,7 @@ impl MeshGPUBufferManager {
                 }
             } else {
                 let (index_format, index_buffer) =
-                    Self::create_index_buffer(graphics_device, self.mesh_id, indices);
+                    Self::create_index_buffer(graphics_device, indices, &self.label);
                 self.index_buffer = Some(index_buffer);
                 self.index_format = Some(index_format);
             }

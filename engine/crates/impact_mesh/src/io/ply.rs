@@ -1,8 +1,8 @@
 //! Input/output of mesh data in Polygon File Format.
 
 use crate::{
-    MeshID, MeshRepository, TriangleMeshHandle, VertexNormalVector, VertexPosition,
-    VertexTextureCoords, texture_projection::TextureProjection, triangle::TriangleMesh,
+    MeshRepository, TriangleMeshID, VertexNormalVector, VertexPosition, VertexTextureCoords,
+    texture_projection::TextureProjection, triangle::TriangleMesh,
 };
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
@@ -80,13 +80,13 @@ pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
 pub fn load_mesh_from_ply_file<P>(
     mesh_repository: &mut MeshRepository,
     ply_file_path: P,
-) -> Result<TriangleMeshHandle>
+) -> Result<TriangleMeshID>
 where
     P: AsRef<Path> + Debug,
 {
     let ply_file_path = ply_file_path.as_ref();
 
-    let mesh_id = MeshID(hash64!(ply_file_path.to_string_lossy()));
+    let mesh_id = TriangleMeshID(hash64!(ply_file_path.to_string_lossy()));
 
     if !mesh_repository.has_triangle_mesh(mesh_id) {
         let mesh = read_mesh_from_ply_file(ply_file_path)?;
@@ -94,7 +94,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshHandle { id: mesh_id })
+    Ok(mesh_id)
 }
 
 /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
@@ -111,13 +111,13 @@ pub fn load_mesh_from_ply_file_with_projection<P>(
     mesh_repository: &mut MeshRepository,
     ply_file_path: P,
     projection: &impl TextureProjection<f32>,
-) -> Result<TriangleMeshHandle>
+) -> Result<TriangleMeshID>
 where
     P: AsRef<Path> + Debug,
 {
     let ply_file_path = ply_file_path.as_ref();
 
-    let mesh_id = MeshID(hash64!(format!(
+    let mesh_id = TriangleMeshID(hash64!(format!(
         "{} (projection = {})",
         ply_file_path.display(),
         projection.identifier()
@@ -131,7 +131,7 @@ where
         mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
     }
 
-    Ok(TriangleMeshHandle { id: mesh_id })
+    Ok(mesh_id)
 }
 
 fn convert_ply_vertices_and_faces_to_mesh(
