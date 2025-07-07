@@ -399,7 +399,14 @@ fn mainVS(
 
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
 
-    let lightVolumeRadius = omnidirectionalLight.cameraSpacePositionAndMaxReach.w;
+    let cameraFarDistance = -projectionUniform.frustumFarPlaneCorners[0].z;
+
+    // Clamp light volume radius to less than camera far distance to prevent
+    // culling
+    let lightVolumeRadius = min(
+        omnidirectionalLight.cameraSpacePositionAndMaxReach.w,
+        cameraFarDistance * 0.99
+    );
 
     let cameraSpacePosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz + lightVolumeRadius * modelSpacePosition;
     output.projectedPosition = projectionUniform.projectionMatrix * vec4f(cameraSpacePosition, 1.0);
