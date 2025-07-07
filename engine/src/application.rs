@@ -1,5 +1,6 @@
 //! Interfacing with the application using the engine.
 
+#[allow(unused_imports)]
 use crate::engine::Engine;
 use anyhow::Result;
 
