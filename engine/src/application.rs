@@ -4,6 +4,7 @@ use crate::engine::Engine;
 use anyhow::Result;
 
 pub trait Application: Send + Sync + std::fmt::Debug {
+    #[cfg(feature = "window")]
     fn setup_ui(&self, engine: &Engine);
 
     fn setup_scene(&self) -> Result<()>;
