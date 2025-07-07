@@ -155,6 +155,7 @@ arbitrary = [
     "impact_gpu/arbitrary",
     "impact_math/arbitrary",
     "impact_scene/arbitrary",
+    "impact_rendering/arbitrary",
 ]
 cli = ["dep:clap"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
