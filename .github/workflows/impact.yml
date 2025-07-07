@@ -308,6 +308,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-hack
 
-      - name: Check all feature combinations
+      - name: Check for each feature
         working-directory: ${{ matrix.workspace }}
         run: cargo hack check --each-feature --no-dev-deps
