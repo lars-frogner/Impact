@@ -110,14 +110,9 @@ fuzzing = [
     "dep:arbitrary",
     "dep:rand",
     "impact/arbitrary",
-    "impact_ecs/arbitrary",
     "impact_dev_ui/arbitrary",
 ]
-roc_codegen = [
-    "impact/roc_codegen",
-    "impact_ecs/roc_codegen",
-    "impact_dev_ui/roc_codegen",
-]
+roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 
 [dependencies]
 anyhow = "1.0"
