@@ -27,7 +27,7 @@
         ),
         capturing_camera: (
             settings: (
-                relative_aperture: 0.25,
+                relative_aperture: 4.0,
                 shutter_duration: 0.005,
                 sensitivity: Auto(
                     ev_compensation: 0.0,

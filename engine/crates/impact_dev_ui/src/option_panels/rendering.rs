@@ -160,7 +160,7 @@ mod camera {
         pub const MIN_LUMINANCE: f32 = 1e-1;
         pub const MAX_LUMINANCE: f32 = 1e12;
         pub const CURRENT_FRAME_WEIGHT: RangeInclusive<f32> = 0.0..=1.0;
-        pub const RELATIVE_APERTURE: RangeInclusive<f32> = 0.1..=10.0;
+        pub const RELATIVE_APERTURE: RangeInclusive<f32> = 1.0..=10.0;
         pub const SHUTTER_SPEED: RangeInclusive<f64> = 1.0..=8000.0;
         pub const ISO: RangeInclusive<f32> = 1e1..=1e6;
     }
