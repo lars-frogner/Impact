@@ -145,7 +145,7 @@ mod camera {
         };
         pub const SHUTTER_SPEED: LabelAndHoverText = LabelAndHoverText {
             label: "Shutter speed",
-            hover_text: "The duration the sensor is exposed.",
+            hover_text: "The inverse of the duration the sensor is exposed.",
         };
         pub const ISO: LabelAndHoverText = LabelAndHoverText {
             label: "ISO",
