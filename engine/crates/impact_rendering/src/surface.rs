@@ -51,6 +51,7 @@ impl RenderingSurface {
     /// # Panics
     /// If this is a window surface and [`Self::initialize_for_device`] has not
     /// been called.
+    #[allow(unused_variables)]
     pub fn reinitialize_lost_surface(&self, graphics_device: &GraphicsDevice) {
         match self {
             Self::Headless(_) => {}
@@ -142,6 +143,7 @@ impl RenderingSurface {
     }
 
     /// Informs the surface of a new number of pixels per point.
+    #[allow(unused_variables)]
     pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
         match self {
             Self::Headless(_) => {}
