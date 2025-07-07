@@ -4,10 +4,10 @@ use crate::physics::motion::components::ReferenceFrameComp;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_light::{
-    AmbientEmission, AmbientLightHandle, LightStorage, OmnidirectionalEmission,
-    OmnidirectionalLightHandle, ShadowableOmnidirectionalEmission,
-    ShadowableOmnidirectionalLightHandle, ShadowableUnidirectionalEmission,
-    ShadowableUnidirectionalLightHandle, UnidirectionalEmission, UnidirectionalLightHandle,
+    AmbientEmission, AmbientLightID, LightStorage, OmnidirectionalEmission, OmnidirectionalLightID,
+    ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
+    ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
+    UnidirectionalLightID,
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
@@ -62,10 +62,10 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |ambient_light: &AmbientLightHandle, ambient_emission: &AmbientEmission| {
+        |ambient_light_id: &AmbientLightID, ambient_emission: &AmbientEmission| {
             impact_light::setup::sync_ambient_light_in_storage(
                 light_storage,
-                ambient_light,
+                *ambient_light_id,
                 ambient_emission,
             );
         }
@@ -73,13 +73,13 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |omnidirectional_light: &OmnidirectionalLightHandle,
+        |omnidirectional_light_id: &OmnidirectionalLightID,
          frame: &ReferenceFrameComp,
          omnidirectional_emission: &OmnidirectionalEmission,
          flags: &SceneEntityFlags| {
             impact_light::setup::sync_omnidirectional_light_in_storage(
                 light_storage,
-                omnidirectional_light,
+                *omnidirectional_light_id,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
@@ -91,7 +91,7 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |omnidirectional_light: &OmnidirectionalLightHandle,
+        |omnidirectional_light_id: &OmnidirectionalLightID,
          frame: &ReferenceFrameComp,
          omnidirectional_emission: &OmnidirectionalEmission,
          parent: &SceneGraphParentNodeHandle,
@@ -102,7 +102,7 @@ pub fn sync_lights_in_storage(
 
             impact_light::setup::sync_omnidirectional_light_in_storage(
                 light_storage,
-                omnidirectional_light,
+                *omnidirectional_light_id,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
@@ -113,13 +113,13 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
+        |omnidirectional_light_id: &ShadowableOmnidirectionalLightID,
          frame: &ReferenceFrameComp,
          omnidirectional_emission: &ShadowableOmnidirectionalEmission,
          flags: &SceneEntityFlags| {
             impact_light::setup::sync_shadowable_omnidirectional_light_in_storage(
                 light_storage,
-                omnidirectional_light,
+                *omnidirectional_light_id,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
@@ -131,7 +131,7 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
+        |omnidirectional_light_id: &ShadowableOmnidirectionalLightID,
          frame: &ReferenceFrameComp,
          omnidirectional_emission: &ShadowableOmnidirectionalEmission,
          parent: &SceneGraphParentNodeHandle,
@@ -142,7 +142,7 @@ pub fn sync_lights_in_storage(
 
             impact_light::setup::sync_shadowable_omnidirectional_light_in_storage(
                 light_storage,
-                omnidirectional_light,
+                *omnidirectional_light_id,
                 &view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
@@ -153,12 +153,12 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightHandle,
+        |unidirectional_light_id: &UnidirectionalLightID,
          unidirectional_emission: &UnidirectionalEmission,
          flags: &SceneEntityFlags| {
             impact_light::setup::sync_unidirectional_light_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 unidirectional_emission,
                 (*flags).into(),
@@ -169,7 +169,7 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightHandle,
+        |unidirectional_light_id: &UnidirectionalLightID,
          unidirectional_emission: &UnidirectionalEmission,
          parent: &SceneGraphParentNodeHandle,
          flags: &SceneEntityFlags| {
@@ -179,7 +179,7 @@ pub fn sync_lights_in_storage(
 
             impact_light::setup::sync_unidirectional_light_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 unidirectional_emission,
                 (*flags).into(),
@@ -190,13 +190,13 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightHandle,
+        |unidirectional_light_id: &UnidirectionalLightID,
          unidirectional_emission: &UnidirectionalEmission,
          frame: &ReferenceFrameComp,
          flags: &SceneEntityFlags| {
             impact_light::setup::sync_unidirectional_light_with_orientation_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
@@ -208,7 +208,7 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &UnidirectionalLightHandle,
+        |unidirectional_light_id: &UnidirectionalLightID,
          unidirectional_emission: &UnidirectionalEmission,
          frame: &ReferenceFrameComp,
          parent: &SceneGraphParentNodeHandle,
@@ -219,7 +219,7 @@ pub fn sync_lights_in_storage(
 
             impact_light::setup::sync_unidirectional_light_with_orientation_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
@@ -230,12 +230,12 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+        |unidirectional_light_id: &ShadowableUnidirectionalLightID,
          unidirectional_emission: &ShadowableUnidirectionalEmission,
          flags: &SceneEntityFlags| {
             impact_light::setup::sync_shadowable_unidirectional_light_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 unidirectional_emission,
                 (*flags).into(),
@@ -246,7 +246,7 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+        |unidirectional_light_id: &ShadowableUnidirectionalLightID,
          unidirectional_emission: &ShadowableUnidirectionalEmission,
          parent: &SceneGraphParentNodeHandle,
          flags: &SceneEntityFlags| {
@@ -256,7 +256,7 @@ pub fn sync_lights_in_storage(
 
             impact_light::setup::sync_shadowable_unidirectional_light_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 unidirectional_emission,
                 (*flags).into(),
@@ -267,13 +267,13 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+        |unidirectional_light_id: &ShadowableUnidirectionalLightID,
          unidirectional_emission: &ShadowableUnidirectionalEmission,
          frame: &ReferenceFrameComp,
          flags: &SceneEntityFlags| {
             impact_light::setup::sync_shadowable_unidirectional_light_with_orientation_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
@@ -285,7 +285,7 @@ pub fn sync_lights_in_storage(
 
     query!(
         ecs_world,
-        |unidirectional_light: &ShadowableUnidirectionalLightHandle,
+        |unidirectional_light_id: &ShadowableUnidirectionalLightID,
          unidirectional_emission: &ShadowableUnidirectionalEmission,
          frame: &ReferenceFrameComp,
          parent: &SceneGraphParentNodeHandle,
@@ -296,7 +296,7 @@ pub fn sync_lights_in_storage(
 
             impact_light::setup::sync_shadowable_unidirectional_light_with_orientation_in_storage(
                 light_storage,
-                unidirectional_light,
+                *unidirectional_light_id,
                 &view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
