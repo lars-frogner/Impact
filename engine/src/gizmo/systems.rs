@@ -33,8 +33,8 @@ use approx::abs_diff_ne;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_light::{
-    LightID, LightStorage, OmnidirectionalLightHandle, ShadowableOmnidirectionalLightHandle,
-    ShadowableUnidirectionalLightHandle,
+    LightStorage, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
+    ShadowableUnidirectionalLightID,
 };
 use impact_math::Angle;
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
@@ -108,7 +108,7 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         omnidirectional_light: &OmnidirectionalLightHandle,
+         omnidirectional_light_id: &OmnidirectionalLightID,
          flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) || flags.is_disabled() {
                 return;
@@ -116,8 +116,7 @@ pub fn buffer_transforms_for_gizmos(
             buffer_transform_for_light_sphere_gizmo(
                 instance_feature_manager,
                 light_storage,
-                omnidirectional_light.id,
-                false,
+                *omnidirectional_light_id,
             );
         }
     );
@@ -125,17 +124,16 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         omnidirectional_light: &ShadowableOmnidirectionalLightHandle,
+         omnidirectional_light_id: &ShadowableOmnidirectionalLightID,
          flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }
             if gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) {
-                buffer_transform_for_light_sphere_gizmo(
+                buffer_transform_for_shadowable_light_sphere_gizmo(
                     instance_feature_manager,
                     light_storage,
-                    omnidirectional_light.id,
-                    true,
+                    *omnidirectional_light_id,
                 );
             }
             if gizmos
@@ -145,7 +143,7 @@ pub fn buffer_transforms_for_gizmos(
                 buffer_transforms_for_shadow_cubemap_faces_gizmo(
                     instance_feature_manager,
                     light_storage,
-                    omnidirectional_light.id,
+                    *omnidirectional_light_id,
                 );
             }
         }
@@ -154,7 +152,7 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         unidirectional_light: &ShadowableUnidirectionalLightHandle,
+         unidirectional_light_id: &ShadowableUnidirectionalLightID,
          flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
@@ -167,7 +165,7 @@ pub fn buffer_transforms_for_gizmos(
                 instance_feature_manager,
                 light_storage,
                 scene_camera,
-                unidirectional_light.id,
+                *unidirectional_light_id,
             );
         }
     );
@@ -319,24 +317,36 @@ fn compute_transform_for_bounding_sphere_gizmo(
 fn buffer_transform_for_light_sphere_gizmo(
     instance_feature_manager: &mut InstanceFeatureManager,
     light_storage: &LightStorage,
-    light_id: LightID,
-    is_shadowable: bool,
+    light_id: OmnidirectionalLightID,
 ) {
-    let (camera_space_position, max_reach) = if is_shadowable {
-        let Some(light) = light_storage.get_shadowable_omnidirectional_light(light_id) else {
-            return;
-        };
-        (*light.camera_space_position(), light.max_reach())
-    } else {
-        let Some(light) = light_storage.get_omnidirectional_light(light_id) else {
-            return;
-        };
-        (*light.camera_space_position(), light.max_reach())
+    let Some(light) = light_storage.get_omnidirectional_light(light_id) else {
+        return;
     };
 
     let light_sphere_from_unit_sphere = InstanceModelViewTransform {
-        translation: camera_space_position.coords,
-        scaling: max_reach,
+        translation: light.camera_space_position().coords,
+        scaling: light.max_reach(),
+        rotation: UnitQuaternion::identity(),
+    };
+
+    instance_feature_manager.buffer_instance_feature(
+        GizmoType::LightSphere.only_model_id(),
+        &light_sphere_from_unit_sphere,
+    );
+}
+
+fn buffer_transform_for_shadowable_light_sphere_gizmo(
+    instance_feature_manager: &mut InstanceFeatureManager,
+    light_storage: &LightStorage,
+    light_id: ShadowableOmnidirectionalLightID,
+) {
+    let Some(light) = light_storage.get_shadowable_omnidirectional_light(light_id) else {
+        return;
+    };
+
+    let light_sphere_from_unit_sphere = InstanceModelViewTransform {
+        translation: light.camera_space_position().coords,
+        scaling: light.max_reach(),
         rotation: UnitQuaternion::identity(),
     };
 
@@ -349,7 +359,7 @@ fn buffer_transform_for_light_sphere_gizmo(
 fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     instance_feature_manager: &mut InstanceFeatureManager,
     light_storage: &LightStorage,
-    light_id: LightID,
+    light_id: ShadowableOmnidirectionalLightID,
 ) {
     let Some(light) = light_storage.get_shadowable_omnidirectional_light(light_id) else {
         return;
@@ -388,7 +398,7 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
     instance_feature_manager: &mut InstanceFeatureManager,
     light_storage: &LightStorage,
     scene_camera: &SceneCamera,
-    light_id: LightID,
+    light_id: ShadowableUnidirectionalLightID,
 ) {
     let Some(light) = light_storage.get_shadowable_unidirectional_light(light_id) else {
         return;

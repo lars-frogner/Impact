@@ -135,67 +135,44 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// Handle to an [`AmbientLight`].
+    /// The ID of an [`AmbientLight`] in the [`LightStorage`].
     #[roc(parents = "Light")]
     #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct AmbientLightHandle {
-        /// The ID of the [`AmbientLight`] in the [`LightStorage`].
-        pub id: LightID,
-    }
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct AmbientLightID(u32);
 }
 
 define_component_type! {
-    /// Handle to an [`OmnidirectionalLight`].
+    /// The ID of an [`OmnidirectionalLight`] in the [`LightStorage`].
     #[roc(parents = "Light")]
     #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct OmnidirectionalLightHandle {
-        /// The ID of the [`OmnidirectionalLight`] in the [`LightStorage`].
-        pub id: LightID,
-    }
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct OmnidirectionalLightID(u32);
 }
 
 define_component_type! {
-    /// Handle to a [`ShadowableOmnidirectionalLight`].
+    /// The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightStorage`].
     #[roc(parents = "Light")]
     #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ShadowableOmnidirectionalLightHandle {
-        /// The ID of the [`ShadowableOmnidirectionalLight`] in the
-        /// [`LightStorage`].
-        pub id: LightID,
-    }
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct ShadowableOmnidirectionalLightID(u32);
 }
 
 define_component_type! {
-    /// Handle to a [`UnidirectionalLight`].
+    /// The ID of a [`UnidirectionalLight`] in the [`LightStorage`].
     #[roc(parents = "Light")]
     #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct UnidirectionalLightHandle {
-        /// The ID of the [`UnidirectionalLight`] in the [`LightStorage`].
-        pub id: LightID,
-    }
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct UnidirectionalLightID(u32);
 }
 
 define_component_type! {
-    /// Handle to a [`ShadowableUnidirectionalLight`].
+    /// The ID of a [`ShadowableUnidirectionalLight`] in the [`LightStorage`].
     #[roc(parents = "Light")]
     #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ShadowableUnidirectionalLightHandle {
-        /// The ID of the [`ShadowableUnidirectionalLight`] in the
-        /// [`LightStorage`].
-        pub id: LightID,
-    }
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct ShadowableUnidirectionalLightID(u32);
 }
-
-/// Identifier for a light in a [`LightStorage`].
-#[roc(parents = "Light")]
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct LightID(u32);
 
 /// A spatially uniform and isotropic light field, represented by an RGB
 /// incident luminance that applies to any surface affected by the light.
@@ -368,13 +345,14 @@ bitflags! {
     }
 }
 
-type LightUniformBuffer<L> = UniformBuffer<LightID, L>;
-type AmbientLightUniformBuffer = LightUniformBuffer<AmbientLight>;
-type OmnidirectionalLightUniformBuffer = LightUniformBuffer<OmnidirectionalLight>;
+type AmbientLightUniformBuffer = UniformBuffer<AmbientLightID, AmbientLight>;
+type OmnidirectionalLightUniformBuffer =
+    UniformBuffer<OmnidirectionalLightID, OmnidirectionalLight>;
 type ShadowableOmnidirectionalLightUniformBuffer =
-    LightUniformBuffer<ShadowableOmnidirectionalLight>;
-type UnidirectionalLightUniformBuffer = LightUniformBuffer<UnidirectionalLight>;
-type ShadowableUnidirectionalLightUniformBuffer = LightUniformBuffer<ShadowableUnidirectionalLight>;
+    UniformBuffer<ShadowableOmnidirectionalLightID, ShadowableOmnidirectionalLight>;
+type UnidirectionalLightUniformBuffer = UniformBuffer<UnidirectionalLightID, UnidirectionalLight>;
+type ShadowableUnidirectionalLightUniformBuffer =
+    UniformBuffer<ShadowableUnidirectionalLightID, ShadowableUnidirectionalLight>;
 
 /// Container for all light sources in a scene.
 #[derive(Debug)]
@@ -462,13 +440,61 @@ impl ShadowableUnidirectionalEmission {
     }
 }
 
-impl LightID {
-    pub fn to_u32(&self) -> u32 {
-        self.0
+impl From<AmbientLightID> for u32 {
+    fn from(id: AmbientLightID) -> u32 {
+        id.0
     }
 }
 
-impl std::fmt::Display for LightID {
+impl std::fmt::Display for AmbientLightID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<OmnidirectionalLightID> for u32 {
+    fn from(id: OmnidirectionalLightID) -> u32 {
+        id.0
+    }
+}
+
+impl std::fmt::Display for OmnidirectionalLightID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<ShadowableOmnidirectionalLightID> for u32 {
+    fn from(id: ShadowableOmnidirectionalLightID) -> u32 {
+        id.0
+    }
+}
+
+impl std::fmt::Display for ShadowableOmnidirectionalLightID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<UnidirectionalLightID> for u32 {
+    fn from(id: UnidirectionalLightID) -> u32 {
+        id.0
+    }
+}
+
+impl std::fmt::Display for UnidirectionalLightID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<ShadowableUnidirectionalLightID> for u32 {
+    fn from(id: ShadowableUnidirectionalLightID) -> u32 {
+        id.0
+    }
+}
+
+impl std::fmt::Display for ShadowableUnidirectionalLightID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -504,13 +530,13 @@ impl LightStorage {
 
     /// Returns a reference to the [`UniformBuffer`] holding all
     /// [`AmbientLight`]s.
-    pub fn ambient_light_buffer(&self) -> &UniformBuffer<LightID, AmbientLight> {
+    pub fn ambient_light_buffer(&self) -> &AmbientLightUniformBuffer {
         &self.ambient_light_buffer
     }
 
     /// Returns a reference to the [`UniformBuffer`] holding all
     /// [`OmnidirectionalLight`]s.
-    pub fn omnidirectional_light_buffer(&self) -> &UniformBuffer<LightID, OmnidirectionalLight> {
+    pub fn omnidirectional_light_buffer(&self) -> &OmnidirectionalLightUniformBuffer {
         &self.omnidirectional_light_buffer
     }
 
@@ -518,13 +544,13 @@ impl LightStorage {
     /// [`ShadowableOmnidirectionalLight`]s.
     pub fn shadowable_omnidirectional_light_buffer(
         &self,
-    ) -> &UniformBuffer<LightID, ShadowableOmnidirectionalLight> {
+    ) -> &ShadowableOmnidirectionalLightUniformBuffer {
         &self.shadowable_omnidirectional_light_buffer
     }
 
     /// Returns a reference to the [`UniformBuffer`] holding all
     /// [`UnidirectionalLight`]s.
-    pub fn unidirectional_light_buffer(&self) -> &UniformBuffer<LightID, UnidirectionalLight> {
+    pub fn unidirectional_light_buffer(&self) -> &UnidirectionalLightUniformBuffer {
         &self.unidirectional_light_buffer
     }
 
@@ -532,7 +558,7 @@ impl LightStorage {
     /// [`ShadowableUnidirectionalLight`]s.
     pub fn shadowable_unidirectional_light_buffer(
         &self,
-    ) -> &UniformBuffer<LightID, ShadowableUnidirectionalLight> {
+    ) -> &ShadowableUnidirectionalLightUniformBuffer {
         &self.shadowable_unidirectional_light_buffer
     }
 
@@ -540,8 +566,8 @@ impl LightStorage {
     ///
     /// # Returns
     /// A new [`LightID`] representing the added light source.
-    pub fn add_ambient_light(&mut self, ambient_light: AmbientLight) -> LightID {
-        let light_id = self.create_new_light_id();
+    pub fn add_ambient_light(&mut self, ambient_light: AmbientLight) -> AmbientLightID {
+        let light_id = AmbientLightID(self.create_new_light_id());
         self.ambient_light_buffer
             .add_uniform(light_id, ambient_light);
 
@@ -558,8 +584,8 @@ impl LightStorage {
     pub fn add_omnidirectional_light(
         &mut self,
         omnidirectional_light: OmnidirectionalLight,
-    ) -> LightID {
-        let light_id = self.create_new_light_id();
+    ) -> OmnidirectionalLightID {
+        let light_id = OmnidirectionalLightID(self.create_new_light_id());
         self.omnidirectional_light_buffer
             .add_uniform(light_id, omnidirectional_light);
         light_id
@@ -572,8 +598,8 @@ impl LightStorage {
     pub fn add_shadowable_omnidirectional_light(
         &mut self,
         omnidirectional_light: ShadowableOmnidirectionalLight,
-    ) -> LightID {
-        let light_id = self.create_new_light_id();
+    ) -> ShadowableOmnidirectionalLightID {
+        let light_id = ShadowableOmnidirectionalLightID(self.create_new_light_id());
         self.shadowable_omnidirectional_light_buffer
             .add_uniform(light_id, omnidirectional_light);
         light_id
@@ -586,8 +612,8 @@ impl LightStorage {
     pub fn add_unidirectional_light(
         &mut self,
         unidirectional_light: UnidirectionalLight,
-    ) -> LightID {
-        let light_id = self.create_new_light_id();
+    ) -> UnidirectionalLightID {
+        let light_id = UnidirectionalLightID(self.create_new_light_id());
         self.unidirectional_light_buffer
             .add_uniform(light_id, unidirectional_light);
         light_id
@@ -600,8 +626,8 @@ impl LightStorage {
     pub fn add_shadowable_unidirectional_light(
         &mut self,
         unidirectional_light: ShadowableUnidirectionalLight,
-    ) -> LightID {
-        let light_id = self.create_new_light_id();
+    ) -> ShadowableUnidirectionalLightID {
+        let light_id = ShadowableUnidirectionalLightID(self.create_new_light_id());
         self.shadowable_unidirectional_light_buffer
             .add_uniform(light_id, unidirectional_light);
         light_id
@@ -611,7 +637,7 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no ambient light with the given ID exists.
-    pub fn remove_ambient_light(&mut self, light_id: LightID) {
+    pub fn remove_ambient_light(&mut self, light_id: AmbientLightID) {
         self.total_ambient_luminance -= self.ambient_light_buffer.uniform(light_id).luminance;
         self.ambient_light_buffer.remove_uniform(light_id);
         self.update_max_reach_for_omnidirectional_lights();
@@ -621,7 +647,7 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no omnidirectional light with the given ID exists.
-    pub fn remove_omnidirectional_light(&mut self, light_id: LightID) {
+    pub fn remove_omnidirectional_light(&mut self, light_id: OmnidirectionalLightID) {
         self.omnidirectional_light_buffer.remove_uniform(light_id);
     }
 
@@ -630,7 +656,10 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no shadowable omnidirectional light with the given ID exists.
-    pub fn remove_shadowable_omnidirectional_light(&mut self, light_id: LightID) {
+    pub fn remove_shadowable_omnidirectional_light(
+        &mut self,
+        light_id: ShadowableOmnidirectionalLightID,
+    ) {
         self.shadowable_omnidirectional_light_buffer
             .remove_uniform(light_id);
     }
@@ -639,7 +668,7 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no unidirectional light with the given ID exists.
-    pub fn remove_unidirectional_light(&mut self, light_id: LightID) {
+    pub fn remove_unidirectional_light(&mut self, light_id: UnidirectionalLightID) {
         self.unidirectional_light_buffer.remove_uniform(light_id);
     }
 
@@ -648,7 +677,10 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no shadowable unidirectional light with the given ID exists.
-    pub fn remove_shadowable_unidirectional_light(&mut self, light_id: LightID) {
+    pub fn remove_shadowable_unidirectional_light(
+        &mut self,
+        light_id: ShadowableUnidirectionalLightID,
+    ) {
         self.shadowable_unidirectional_light_buffer
             .remove_uniform(light_id);
     }
@@ -658,7 +690,11 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no ambient light with the given ID exists.
-    pub fn set_ambient_light_illuminance(&mut self, light_id: LightID, illuminance: Illumninance) {
+    pub fn set_ambient_light_illuminance(
+        &mut self,
+        light_id: AmbientLightID,
+        illuminance: Illumninance,
+    ) {
         let light = self
             .ambient_light_buffer
             .get_uniform_mut(light_id)
@@ -673,7 +709,10 @@ impl LightStorage {
 
     /// Returns a reference to the [`OmnidirectionalLight`] with the given
     /// ID, or [`None`] if it does not exist.
-    pub fn get_omnidirectional_light(&self, light_id: LightID) -> Option<&OmnidirectionalLight> {
+    pub fn get_omnidirectional_light(
+        &self,
+        light_id: OmnidirectionalLightID,
+    ) -> Option<&OmnidirectionalLight> {
         self.omnidirectional_light_buffer.get_uniform(light_id)
     }
 
@@ -681,7 +720,7 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no omnidirectional light with the given ID exists.
-    pub fn omnidirectional_light(&self, light_id: LightID) -> &OmnidirectionalLight {
+    pub fn omnidirectional_light(&self, light_id: OmnidirectionalLightID) -> &OmnidirectionalLight {
         self.get_omnidirectional_light(light_id)
             .expect("Requested missing omnidirectional light")
     }
@@ -690,7 +729,7 @@ impl LightStorage {
     /// given ID, or [`None`] if it does not exist.
     pub fn get_shadowable_omnidirectional_light(
         &self,
-        light_id: LightID,
+        light_id: ShadowableOmnidirectionalLightID,
     ) -> Option<&ShadowableOmnidirectionalLight> {
         self.shadowable_omnidirectional_light_buffer
             .get_uniform(light_id)
@@ -701,7 +740,10 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no omnidirectional light with the given ID exists.
-    pub fn omnidirectional_light_mut(&mut self, light_id: LightID) -> &mut OmnidirectionalLight {
+    pub fn omnidirectional_light_mut(
+        &mut self,
+        light_id: OmnidirectionalLightID,
+    ) -> &mut OmnidirectionalLight {
         self.omnidirectional_light_buffer
             .get_uniform_mut(light_id)
             .expect("Requested missing omnidirectional light")
@@ -714,7 +756,7 @@ impl LightStorage {
     /// If no shadowable omnidirectional light with the given ID exists.
     pub fn shadowable_omnidirectional_light(
         &self,
-        light_id: LightID,
+        light_id: ShadowableOmnidirectionalLightID,
     ) -> &ShadowableOmnidirectionalLight {
         self.get_shadowable_omnidirectional_light(light_id)
             .expect("Requested missing shadowable omnidirectional light")
@@ -727,7 +769,7 @@ impl LightStorage {
     /// If no shadowable omnidirectional light with the given ID exists.
     pub fn shadowable_omnidirectional_light_mut(
         &mut self,
-        light_id: LightID,
+        light_id: ShadowableOmnidirectionalLightID,
     ) -> &mut ShadowableOmnidirectionalLight {
         self.shadowable_omnidirectional_light_buffer
             .get_uniform_mut(light_id)
@@ -736,7 +778,10 @@ impl LightStorage {
 
     /// Returns a reference to the [`UnidirectionalLight`] with the given
     /// ID, or [`None`] if it does not exist.
-    pub fn get_unidirectional_light(&self, light_id: LightID) -> Option<&UnidirectionalLight> {
+    pub fn get_unidirectional_light(
+        &self,
+        light_id: UnidirectionalLightID,
+    ) -> Option<&UnidirectionalLight> {
         self.unidirectional_light_buffer.get_uniform(light_id)
     }
 
@@ -744,7 +789,7 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no unidirectional light with the given ID exists.
-    pub fn unidirectional_light(&self, light_id: LightID) -> &UnidirectionalLight {
+    pub fn unidirectional_light(&self, light_id: UnidirectionalLightID) -> &UnidirectionalLight {
         self.get_unidirectional_light(light_id)
             .expect("Requested missing unidirectional light")
     }
@@ -754,7 +799,10 @@ impl LightStorage {
     ///
     /// # Panics
     /// If no unidirectional light with the given ID exists.
-    pub fn unidirectional_light_mut(&mut self, light_id: LightID) -> &mut UnidirectionalLight {
+    pub fn unidirectional_light_mut(
+        &mut self,
+        light_id: UnidirectionalLightID,
+    ) -> &mut UnidirectionalLight {
         self.unidirectional_light_buffer
             .get_uniform_mut(light_id)
             .expect("Requested missing unidirectional light")
@@ -764,7 +812,7 @@ impl LightStorage {
     /// ID, or [`None`] if it does not exist.
     pub fn get_shadowable_unidirectional_light(
         &self,
-        light_id: LightID,
+        light_id: ShadowableUnidirectionalLightID,
     ) -> Option<&ShadowableUnidirectionalLight> {
         self.shadowable_unidirectional_light_buffer
             .get_uniform(light_id)
@@ -777,7 +825,7 @@ impl LightStorage {
     /// If no shadowable unidirectional light with the given ID exists.
     pub fn shadowable_unidirectional_light(
         &self,
-        light_id: LightID,
+        light_id: ShadowableUnidirectionalLightID,
     ) -> &ShadowableUnidirectionalLight {
         self.get_shadowable_unidirectional_light(light_id)
             .expect("Requested missing shadowable unidirectional light")
@@ -790,7 +838,7 @@ impl LightStorage {
     /// If no shadowable unidirectional light with the given ID exists.
     pub fn shadowable_unidirectional_light_mut(
         &mut self,
-        light_id: LightID,
+        light_id: ShadowableUnidirectionalLightID,
     ) -> &mut ShadowableUnidirectionalLight {
         self.shadowable_unidirectional_light_buffer
             .get_uniform_mut(light_id)
@@ -824,7 +872,7 @@ impl LightStorage {
     /// each item contains the light ID and a mutable reference to the light.
     pub fn omnidirectional_lights_with_ids_mut(
         &mut self,
-    ) -> impl Iterator<Item = (LightID, &mut OmnidirectionalLight)> {
+    ) -> impl Iterator<Item = (OmnidirectionalLightID, &mut OmnidirectionalLight)> {
         self.omnidirectional_light_buffer
             .valid_uniforms_with_ids_mut()
     }
@@ -834,7 +882,12 @@ impl LightStorage {
     /// reference to the light.
     pub fn shadowable_omnidirectional_lights_with_ids_mut(
         &mut self,
-    ) -> impl Iterator<Item = (LightID, &mut ShadowableOmnidirectionalLight)> {
+    ) -> impl Iterator<
+        Item = (
+            ShadowableOmnidirectionalLightID,
+            &mut ShadowableOmnidirectionalLight,
+        ),
+    > {
         self.shadowable_omnidirectional_light_buffer
             .valid_uniforms_with_ids_mut()
     }
@@ -843,7 +896,7 @@ impl LightStorage {
     /// each item contains the light ID and a mutable reference to the light.
     pub fn unidirectional_lights_with_ids_muts(
         &mut self,
-    ) -> impl Iterator<Item = (LightID, &mut UnidirectionalLight)> {
+    ) -> impl Iterator<Item = (UnidirectionalLightID, &mut UnidirectionalLight)> {
         self.unidirectional_light_buffer
             .valid_uniforms_with_ids_mut()
     }
@@ -853,7 +906,12 @@ impl LightStorage {
     /// reference to the light.
     pub fn shadowable_unidirectional_lights_with_ids_mut(
         &mut self,
-    ) -> impl Iterator<Item = (LightID, &mut ShadowableUnidirectionalLight)> {
+    ) -> impl Iterator<
+        Item = (
+            ShadowableUnidirectionalLightID,
+            &mut ShadowableUnidirectionalLight,
+        ),
+    > {
         self.shadowable_unidirectional_light_buffer
             .valid_uniforms_with_ids_mut()
     }
@@ -894,8 +952,8 @@ impl LightStorage {
         }
     }
 
-    fn create_new_light_id(&mut self) -> LightID {
-        let light_id = LightID(self.light_id_counter);
+    fn create_new_light_id(&mut self) -> u32 {
+        let light_id = self.light_id_counter;
         self.light_id_counter = self.light_id_counter.checked_add(1).unwrap();
         light_id
     }

@@ -6,8 +6,7 @@ use crate::{
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_light::{
-    OmnidirectionalLightHandle, ShadowableOmnidirectionalLightHandle,
-    ShadowableUnidirectionalLightHandle,
+    OmnidirectionalLightID, ShadowableOmnidirectionalLightID, ShadowableUnidirectionalLightID,
 };
 
 /// Adds the [`GizmosComp`] component to the new entity if it has any of the
@@ -43,23 +42,23 @@ pub fn setup_gizmos_for_new_entity(
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [OmnidirectionalLightHandle],
+        [OmnidirectionalLightID],
         ![ReferenceFrameComp]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [ShadowableOmnidirectionalLightHandle],
-        ![ReferenceFrameComp, OmnidirectionalLightHandle]
+        [ShadowableOmnidirectionalLightID],
+        ![ReferenceFrameComp, OmnidirectionalLightID]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [ShadowableUnidirectionalLightHandle],
+        [ShadowableUnidirectionalLightID],
         ![
             ReferenceFrameComp,
-            OmnidirectionalLightHandle,
-            ShadowableOmnidirectionalLightHandle
+            OmnidirectionalLightID,
+            ShadowableOmnidirectionalLightID
         ]
     );
     setup!(
@@ -68,9 +67,9 @@ pub fn setup_gizmos_for_new_entity(
         [CollidableComp],
         ![
             ReferenceFrameComp,
-            OmnidirectionalLightHandle,
-            ShadowableOmnidirectionalLightHandle,
-            ShadowableUnidirectionalLightHandle
+            OmnidirectionalLightID,
+            ShadowableOmnidirectionalLightID,
+            ShadowableUnidirectionalLightID
         ]
     );
 }

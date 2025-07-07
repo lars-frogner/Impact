@@ -1,8 +1,10 @@
 //! Buffering of light source data for rendering.
 
 use crate::{
-    AmbientLight, LightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
-    ShadowableOmnidirectionalLight, ShadowableUnidirectionalLight, UnidirectionalLight,
+    AmbientLight, AmbientLightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
+    OmnidirectionalLightID, ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
+    ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalLight,
+    UnidirectionalLightID,
     shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
 };
 use impact_containers::CollectionChange;
@@ -15,18 +17,20 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::ConstStringHash64;
-use std::sync::OnceLock;
+use std::{fmt, hash::Hash, sync::OnceLock};
 
 /// Manager of the set of uniform GPU buffers holding light source render
 /// data. Also manages the bind groups for these buffers and the associated
 /// shadow map textures.
 #[derive(Debug)]
 pub struct LightGPUBufferManager {
-    ambient_light_gpu_buffer: UniformGPUBufferWithLightIDs,
-    omnidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs,
-    shadowable_omnidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs,
-    unidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs,
-    shadowable_unidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs,
+    ambient_light_gpu_buffer: UniformGPUBufferWithLightIDs<AmbientLightID>,
+    omnidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs<OmnidirectionalLightID>,
+    shadowable_omnidirectional_light_gpu_buffer:
+        UniformGPUBufferWithLightIDs<ShadowableOmnidirectionalLightID>,
+    unidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs<UnidirectionalLightID>,
+    shadowable_unidirectional_light_gpu_buffer:
+        UniformGPUBufferWithLightIDs<ShadowableUnidirectionalLightID>,
     ambient_light_bind_group: wgpu::BindGroup,
     omnidirectional_light_bind_group: wgpu::BindGroup,
     shadowable_omnidirectional_light_bind_group: wgpu::BindGroup,
@@ -54,9 +58,9 @@ pub struct UnidirectionalLightShadowMapManager {
 }
 
 #[derive(Debug)]
-struct UniformGPUBufferWithLightIDs {
+struct UniformGPUBufferWithLightIDs<ID> {
     uniform_gpu_buffer: MultiUniformGPUBuffer,
-    light_ids: Vec<LightID>,
+    light_ids: Vec<ID>,
 }
 
 static AMBIENT_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
@@ -196,32 +200,32 @@ impl LightGPUBufferManager {
 
     /// Returns the slice of IDs of all the [`AmbientLight`]s currently residing
     /// in the ambient light GPU buffer.
-    pub fn ambient_light_ids(&self) -> &[LightID] {
+    pub fn ambient_light_ids(&self) -> &[AmbientLightID] {
         self.ambient_light_gpu_buffer.light_ids()
     }
 
     /// Returns the slice of IDs of all the [`OmnidirectionalLight`]s currently
     /// residing in the omnidirectional light GPU buffer.
-    pub fn omnidirectional_light_ids(&self) -> &[LightID] {
+    pub fn omnidirectional_light_ids(&self) -> &[OmnidirectionalLightID] {
         self.omnidirectional_light_gpu_buffer.light_ids()
     }
 
     /// Returns the slice of IDs of all the [`ShadowableOmnidirectionalLight`]s
     /// currently residing in the shadowable omnidirectional light GPU
     /// buffer.
-    pub fn shadowable_omnidirectional_light_ids(&self) -> &[LightID] {
+    pub fn shadowable_omnidirectional_light_ids(&self) -> &[ShadowableOmnidirectionalLightID] {
         self.shadowable_omnidirectional_light_gpu_buffer.light_ids()
     }
 
     /// Returns the slice of IDs of all the [`UnidirectionalLight`]s currently
     /// residing in the unidirectional light GPU buffer.
-    pub fn unidirectional_light_ids(&self) -> &[LightID] {
+    pub fn unidirectional_light_ids(&self) -> &[UnidirectionalLightID] {
         self.unidirectional_light_gpu_buffer.light_ids()
     }
 
     /// Returns the slice of IDs of all the [`ShadowableUnidirectionalLight`]s
     /// currently residing in the unidirectional light GPU buffer.
-    pub fn shadowable_unidirectional_light_ids(&self) -> &[LightID] {
+    pub fn shadowable_unidirectional_light_ids(&self) -> &[ShadowableUnidirectionalLightID] {
         self.shadowable_unidirectional_light_gpu_buffer.light_ids()
     }
 
@@ -539,9 +543,9 @@ impl LightGPUBufferManager {
         })
     }
 
-    fn create_light_bind_group(
+    fn create_light_bind_group<ID: Copy + Eq + Hash + fmt::Debug>(
         device: &wgpu::Device,
-        light_gpu_buffer: &UniformGPUBufferWithLightIDs,
+        light_gpu_buffer: &UniformGPUBufferWithLightIDs<ID>,
         layout: &wgpu::BindGroupLayout,
         label: &str,
     ) -> wgpu::BindGroup {
@@ -681,12 +685,15 @@ impl UnidirectionalLightShadowMapManager {
     }
 }
 
-impl UniformGPUBufferWithLightIDs {
+impl<ID> UniformGPUBufferWithLightIDs<ID>
+where
+    ID: Copy + Eq + Hash + fmt::Debug,
+{
     /// Creates a new uniform GPU buffer together with a list of light IDs
     /// initialized from the given uniform buffer.
     fn for_uniform_buffer<U>(
         graphics_device: &GraphicsDevice,
-        uniform_buffer: &UniformBuffer<LightID, U>,
+        uniform_buffer: &UniformBuffer<ID, U>,
         visibility: wgpu::ShaderStages,
     ) -> Self
     where
@@ -706,14 +713,14 @@ impl UniformGPUBufferWithLightIDs {
         &self.uniform_gpu_buffer
     }
 
-    fn light_ids(&self) -> &[LightID] {
+    fn light_ids(&self) -> &[ID] {
         &self.light_ids
     }
 
     fn transfer_uniforms_to_gpu_buffer<U>(
         &mut self,
         graphics_device: &GraphicsDevice,
-        uniform_buffer: &UniformBuffer<LightID, U>,
+        uniform_buffer: &UniformBuffer<ID, U>,
     ) -> UniformTransferResult
     where
         U: UniformBufferable,

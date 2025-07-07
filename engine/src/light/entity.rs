@@ -4,10 +4,10 @@ use crate::physics::motion::components::ReferenceFrameComp;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_light::{
-    AmbientEmission, AmbientLightHandle, LightStorage, OmnidirectionalEmission,
-    OmnidirectionalLightHandle, ShadowableOmnidirectionalEmission,
-    ShadowableOmnidirectionalLightHandle, ShadowableUnidirectionalEmission,
-    ShadowableUnidirectionalLightHandle, UnidirectionalEmission, UnidirectionalLightHandle, setup,
+    AmbientEmission, AmbientLightID, LightStorage, OmnidirectionalEmission, OmnidirectionalLightID,
+    ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
+    ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
+    UnidirectionalLightID, setup,
 };
 use impact_scene::{SceneEntityFlags, camera::SceneCamera};
 use nalgebra::Similarity3;
@@ -54,13 +54,13 @@ fn setup_ambient_light_for_new_entity(
         components,
         |ambient_emission: &AmbientEmission,
          flags: Option<&SceneEntityFlags>|
-         -> (AmbientLightHandle, SceneEntityFlags) {
+         -> (AmbientLightID, SceneEntityFlags) {
             (
                 setup::setup_ambient_light(&mut light_storage, ambient_emission, desynchronized),
                 flags.copied().unwrap_or_default(),
             )
         },
-        ![AmbientLightHandle]
+        ![AmbientLightID]
     );
 }
 
@@ -92,7 +92,7 @@ fn setup_omnidirectional_light_for_new_entity(
         |frame: &ReferenceFrameComp,
          omnidirectional_emission: &OmnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
-         -> (OmnidirectionalLightHandle, SceneEntityFlags) {
+         -> (OmnidirectionalLightID, SceneEntityFlags) {
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_omnidirectional_light(
@@ -106,7 +106,7 @@ fn setup_omnidirectional_light_for_new_entity(
                 flags,
             )
         },
-        ![OmnidirectionalLightHandle]
+        ![OmnidirectionalLightID]
     );
 
     setup!(
@@ -125,7 +125,7 @@ fn setup_omnidirectional_light_for_new_entity(
         |frame: &ReferenceFrameComp,
          omnidirectional_emission: &ShadowableOmnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
-         -> (ShadowableOmnidirectionalLightHandle, SceneEntityFlags) {
+         -> (ShadowableOmnidirectionalLightID, SceneEntityFlags) {
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_shadowable_omnidirectional_light(
@@ -139,7 +139,7 @@ fn setup_omnidirectional_light_for_new_entity(
                 flags,
             )
         },
-        ![ShadowableOmnidirectionalLightHandle]
+        ![ShadowableOmnidirectionalLightID]
     );
 }
 
@@ -170,7 +170,7 @@ fn setup_unidirectional_light_for_new_entity(
         components,
         |unidirectional_emission: &UnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
-         -> (UnidirectionalLightHandle, SceneEntityFlags) {
+         -> (UnidirectionalLightID, SceneEntityFlags) {
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_unidirectional_light(
@@ -183,7 +183,7 @@ fn setup_unidirectional_light_for_new_entity(
                 flags,
             )
         },
-        ![UnidirectionalLightHandle]
+        ![UnidirectionalLightID]
     );
 
     setup!(
@@ -201,7 +201,7 @@ fn setup_unidirectional_light_for_new_entity(
         components,
         |unidirectional_emission: &ShadowableUnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
-         -> (ShadowableUnidirectionalLightHandle, SceneEntityFlags) {
+         -> (ShadowableUnidirectionalLightID, SceneEntityFlags) {
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_shadowable_unidirectional_light(
@@ -214,6 +214,6 @@ fn setup_unidirectional_light_for_new_entity(
                 flags,
             )
         },
-        ![ShadowableUnidirectionalLightHandle]
+        ![ShadowableUnidirectionalLightID]
     );
 }
