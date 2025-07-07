@@ -1,10 +1,10 @@
-# Hash: 4e2519037cf2306341ae9a946271d5139d157c12c49d46f2dacc9f5756deeb4c
-# Generated: 2025-07-06T18:04:01+00:00
-# Rust type: impact_light::AmbientLightHandle
+# Hash: 5fa673939fa1ce4db0b1c6e9d41ebe9a7b0ba35aa9457055cdaa301189002eb8
+# Generated: 2025-07-07T18:59:18+00:00
+# Rust type: impact_light::UnidirectionalLightID
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
-    AmbientLightHandle,
+    UnidirectionalLightID,
     add,
     add_multiple,
     write_bytes,
@@ -13,39 +13,35 @@ module [
 
 import Entity
 import Entity.Arg
-import Light.LightID
 import core.Builtin
 
-## Handle to an [`AmbientLight`].
-AmbientLightHandle : {
-    ## The ID of the [`AmbientLight`] in the [`LightStorage`].
-    id : Light.LightID.LightID,
-}
+## The ID of a [`UnidirectionalLight`] in the [`LightStorage`].
+UnidirectionalLightID : U32
 
-## Adds a value of the [AmbientLightHandle] component to an entity's data.
+## Adds a value of the [UnidirectionalLightID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, AmbientLightHandle -> Entity.Data
+add : Entity.Data, UnidirectionalLightID -> Entity.Data
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [AmbientLightHandle] component to the data of
+## Adds multiple values of the [UnidirectionalLightID] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (AmbientLightHandle) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted UnidirectionalLightID -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in AmbientLightHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in UnidirectionalLightID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, AmbientLightHandle -> List U8
+write_packet : List U8, UnidirectionalLightID -> List U8
 write_packet = |bytes, val|
-    type_id = 2583830595452311522
+    type_id = 1089288421620352359
     size = 4
     alignment = 4
     bytes
@@ -55,9 +51,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List AmbientLightHandle -> List U8
+write_multi_packet : List U8, List UnidirectionalLightID -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 2583830595452311522
+    type_id = 1089288421620352359
     size = 4
     alignment = 4
     count = List.len(vals)
@@ -74,22 +70,21 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [AmbientLightHandle] into the binary representation
+## Serializes a value of [UnidirectionalLightID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, AmbientLightHandle -> List U8
+write_bytes : List U8, UnidirectionalLightID -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(4)
-    |> Light.LightID.write_bytes(value.id)
+    |> Builtin.write_bytes_u32(value)
 
-## Deserializes a value of [AmbientLightHandle] from its bytes in the
+## Deserializes a value of [UnidirectionalLightID] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result AmbientLightHandle _
+from_bytes : List U8 -> Result UnidirectionalLightID _
 from_bytes = |bytes|
     Ok(
-        {
-            id: bytes |> List.sublist({ start: 0, len: 4 }) |> Light.LightID.from_bytes?,
-        },
+        (
+            bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?),
     )
 
 test_roundtrip : {} -> Result {} _

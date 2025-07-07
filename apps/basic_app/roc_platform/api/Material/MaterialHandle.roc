@@ -1,8 +1,8 @@
-# Hash: 49fa3a2d6993d29bee4dc665c60b8770cb05a120937f86e0ee66e5ce26d5f0ff
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 03a03d9f738addb5c2b7b9bbeb31d68a0be90012ac38a5ef796d3afe94571b9d
+# Generated: 2025-07-07T18:59:18+00:00
 # Rust type: impact_material::MaterialHandle
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     MaterialHandle,
     add,
@@ -24,7 +24,7 @@ MaterialHandle : {
     ## The ID of the material's [`MaterialSpecification`].
     material_id : Material.MaterialID.MaterialID,
     ## The ID of the entry for the material's per-instance material properties
-    ## in the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage)
+    ## in the [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage)
     ## (may be N/A).
     material_property_feature_id : Model.InstanceFeatureID.InstanceFeatureID,
     ## The ID of the material's [`MaterialPropertyTextureGroup`] (may represent

@@ -1,8 +1,8 @@
-# Hash: c58da607870bb62478a5205315ba4e7cc68ef40c74aeb5300ea31ec2bb899022
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 2152052f5ecc4e6243da608d9695e1670e9a0973436f1a9c0aec53561e7cfa8f
+# Generated: 2025-07-07T19:02:48+00:00
 # Rust type: impact_scene::SceneGraphModelInstanceNodeHandle
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     SceneGraphModelInstanceNodeHandle,
     new,
@@ -22,24 +22,24 @@ import core.Builtin
 ## Handle to a model instance node in a scene graph.
 SceneGraphModelInstanceNodeHandle : {
     ## The ID of the model instance node in the
-    ## [`SceneGraph`](crate::scene::SceneGraph).
+    ## [`SceneGraph`](crate::graph::SceneGraph).
     id : Scene.ModelInstanceNodeID.ModelInstanceNodeID,
 }
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## model instance node with the given ID.
 new : Scene.ModelInstanceNodeID.ModelInstanceNodeID -> SceneGraphModelInstanceNodeHandle
 new = |node_id|
     { id: node_id }
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## model instance node with the given ID.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Scene.ModelInstanceNodeID.ModelInstanceNodeID -> Entity.Data
 add_new = |entity_data, node_id|
     add(entity_data, new(node_id))
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## model instance node with the given ID.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.

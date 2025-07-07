@@ -1,8 +1,8 @@
-# Hash: 329ea28240d7049cf77d32c17512f1b2db746cdad1309a3d7c13dbe7bcd14e1c
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 4d5ddc8ea4b73736f543285ad8ad2a4dc828d850e31d4f7657fff8cac3615b31
+# Generated: 2025-07-07T19:02:48+00:00
 # Rust type: impact_scene::SceneGraphGroupNodeHandle
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: 503a2ec (dirty)
 module [
     SceneGraphGroupNodeHandle,
     new,
@@ -22,24 +22,24 @@ import core.Builtin
 ## Handle to a group node in a scene graph.
 SceneGraphGroupNodeHandle : {
     ## The ID of the group node in the
-    ## [`SceneGraph`](crate::scene::SceneGraph).
+    ## [`SceneGraph`](crate::graph::SceneGraph).
     id : Scene.GroupNodeID.GroupNodeID,
 }
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## group node with the given ID.
 new : Scene.GroupNodeID.GroupNodeID -> SceneGraphGroupNodeHandle
 new = |node_id|
     { id: node_id }
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## group node with the given ID.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Scene.GroupNodeID.GroupNodeID -> Entity.Data
 add_new = |entity_data, node_id|
     add(entity_data, new(node_id))
 
-## Creates a new handle to the [`SceneGraph`](crate::scene::SceneGraph)
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
 ## group node with the given ID.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
