@@ -207,25 +207,25 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
-            if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
-                let scene = engine.scene().read().unwrap();
-                let scene_camera = scene.scene_camera().read().unwrap();
-                if let Some(scene_camera) = scene_camera.as_ref() {
-                    scene.scene_graph()
-                        .read()
-                        .unwrap()
-                        .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
-                            &mut scene.light_storage().write().unwrap(),
-                            &mut scene.instance_feature_manager().write().unwrap(),
-                            scene_camera,
-                        );
+            let shadow_mapping_enabled = engine.renderer().read().unwrap().shadow_mapping_config().enabled;
+            let scene = engine.scene().read().unwrap();
+            let scene_camera = scene.scene_camera().read().unwrap();
+            if let Some(scene_camera) = scene_camera.as_ref() {
+                scene.scene_graph()
+                    .read()
+                    .unwrap()
+                    .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
+                        &mut scene.light_storage().write().unwrap(),
+                        &mut scene.instance_feature_manager().write().unwrap(),
+                        scene_camera,
+                        shadow_mapping_enabled,
+                    );
 
-                    engine
-                        .renderer()
-                        .read()
-                        .unwrap()
-                        .declare_render_resources_desynchronized();
-                }
+                engine
+                    .renderer()
+                    .read()
+                    .unwrap()
+                    .declare_render_resources_desynchronized();
             }
             Ok(())
         })
@@ -251,25 +251,25 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
-            if engine.renderer().read().unwrap().shadow_mapping_config().enabled {
-                let scene = engine.scene().read().unwrap();
-                let scene_camera = scene.scene_camera().read().unwrap();
-                if let Some(scene_camera) = scene_camera.as_ref() {
-                    scene.scene_graph()
-                        .read()
-                        .unwrap()
-                        .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
-                            &mut scene.light_storage().write().unwrap(),
-                            &mut scene.instance_feature_manager().write().unwrap(),
-                            scene_camera,
-                        );
+            let shadow_mapping_enabled = engine.renderer().read().unwrap().shadow_mapping_config().enabled;
+            let scene = engine.scene().read().unwrap();
+            let scene_camera = scene.scene_camera().read().unwrap();
+            if let Some(scene_camera) = scene_camera.as_ref() {
+                scene.scene_graph()
+                    .read()
+                    .unwrap()
+                    .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
+                        &mut scene.light_storage().write().unwrap(),
+                        &mut scene.instance_feature_manager().write().unwrap(),
+                        scene_camera,
+                        shadow_mapping_enabled,
+                    );
 
-                    engine
-                        .renderer()
-                        .read()
-                        .unwrap()
-                        .declare_render_resources_desynchronized();
-                }
+                engine
+                    .renderer()
+                    .read()
+                    .unwrap()
+                    .declare_render_resources_desynchronized();
             }
             Ok(())
         })
