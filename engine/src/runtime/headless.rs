@@ -3,7 +3,7 @@
 use crate::{runtime::Runtime, ui::NoUserInterface};
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::PathBuf};
 
 pub type HeadlessRuntime = Runtime<NoUserInterface>;
 
@@ -22,8 +22,9 @@ pub struct HeadlessConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HeadlessActions {
-    /// Whether to save a screenshot of the rendered scene on termination.
-    pub save_screenshot_on_exit: bool,
+    /// If specified, a screenshot of the rendered scene will be captured upon
+    /// termination and saved to the specified path.
+    pub save_exit_screenshot_to: Option<PathBuf>,
 }
 
 /// When headless execution should terminate.
@@ -42,7 +43,7 @@ impl Default for HeadlessConfig {
                 NonZeroU32::new(1200).unwrap(),
             ),
             actions: HeadlessActions {
-                save_screenshot_on_exit: false,
+                save_exit_screenshot_to: None,
             },
             termination_criterion: TerminationCriterion::IterationCountReached { count: 1 },
         }
@@ -87,9 +88,8 @@ pub fn run_headless(
         }
     }
 
-    if actions.save_screenshot_on_exit {
-        runtime.engine().request_screenshot_save();
-        runtime.engine().save_screenshots()?;
+    if let Some(path) = &actions.save_exit_screenshot_to {
+        runtime.engine().capture_screenshot(Some(path))?;
     }
 
     Ok(())

@@ -235,11 +235,19 @@ impl Engine {
         self.metrics.read().unwrap()
     }
 
-    /// Captures any screenshots or related textures requested through the
-    /// [`ScreenCapturer`].
-    pub fn save_screenshots(&self) -> Result<()> {
+    /// Captures and saves a screenshot to the specified path, or, if not
+    /// specified, to a timestamped PNG file in the current directory.
+    pub fn capture_screenshot(&self, output_path: Option<&Path>) -> Result<()> {
+        self.screen_capturer.request_screenshot_save();
         self.screen_capturer
-            .save_screenshot_if_requested(self.renderer())?;
+            .save_screenshot_if_requested(self.renderer(), output_path)
+    }
+
+    /// Captures and saves any screenshots or related textures requested through
+    /// the [`ScreenCapturer`].
+    pub fn save_requested_screenshots(&self) -> Result<()> {
+        self.screen_capturer
+            .save_screenshot_if_requested(self.renderer(), None)?;
 
         self.screen_capturer
             .save_omnidirectional_light_shadow_maps_if_requested(self.renderer())?;
