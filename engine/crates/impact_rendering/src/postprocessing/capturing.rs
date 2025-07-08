@@ -18,6 +18,7 @@ use impact_gpu::{
     device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
     shader::ShaderManager, storage::StorageGPUBufferManager, wgpu,
 };
+use impact_math::Bounds;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 
@@ -190,7 +191,7 @@ impl CapturingCamera {
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
     ) -> Result<Self> {
         let average_luminance_commands = AverageLuminanceComputeCommands::new(
-            config.average_luminance_computation,
+            config.average_luminance_computation.clone(),
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
@@ -214,12 +215,15 @@ impl CapturingCamera {
             gpu_resource_group_manager,
         )?;
 
-        let initial_exposure = match config.settings.sensitivity {
-            SensorSensitivity::Auto { .. } => 0.0,
-            SensorSensitivity::Manual { iso } => {
-                config.settings.compute_exposure_value_at_100_iso(iso)
-            }
-        };
+        let initial_exposure = config
+            .settings
+            .compute_exposure(|| {
+                Ok(config
+                    .average_luminance_computation
+                    .luminance_bounds
+                    .lower())
+            })
+            .unwrap();
 
         Ok(Self {
             settings: config.settings,
