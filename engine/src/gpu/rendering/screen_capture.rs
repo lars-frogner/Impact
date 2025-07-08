@@ -8,11 +8,14 @@ use impact_geometry::CubemapFace;
 use impact_gpu::texture;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
 use impact_rendering::{resource::BasicRenderResources, surface::RenderingSurface};
-use std::sync::{
-    RwLock,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{SystemTime, UNIX_EPOCH},
 };
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Helper for capturing screenshots and related textures.
 #[derive(Debug)]
@@ -61,8 +64,13 @@ impl ScreenCapturer {
 
     /// Checks if a screenshot capture was scheduled with
     /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
-    /// saves it as a timestamped PNG file in the current directory.
-    pub fn save_screenshot_if_requested(&self, renderer: &RwLock<RenderingSystem>) -> Result<()> {
+    /// saves it to the specified output path, or, if not specified, as a
+    /// timestamped PNG file in the current directory.
+    pub fn save_screenshot_if_requested(
+        &self,
+        renderer: &RwLock<RenderingSystem>,
+        output_path: Option<&Path>,
+    ) -> Result<()> {
         if self
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
@@ -83,19 +91,23 @@ impl ScreenCapturer {
                 }
             };
 
+            let timestamped_filename = PathBuf::from(format!(
+                "screenshot_{}.png",
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+            ));
+
+            let output_path = output_path.unwrap_or(timestamped_filename.as_path());
+
             texture::save_texture_as_image_file(
                 renderer.graphics_device(),
                 surface_texture,
                 0,
                 0,
                 true,
-                format!(
-                    "screenshot_{}.png",
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs()
-                ),
+                output_path,
             )?;
         }
 
