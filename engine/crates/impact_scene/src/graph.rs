@@ -763,6 +763,7 @@ impl SceneGraph {
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
         scene_camera: &SceneCamera,
+        shadow_mapping_enabled: bool,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
         let view_transform = scene_camera.view_transform();
@@ -792,6 +793,10 @@ impl SceneGraph {
                     &camera_space_bounding_sphere,
                     camera_space_aabb_for_visible_models.as_ref(),
                 );
+
+                if !shadow_mapping_enabled {
+                    continue;
+                }
 
                 for face in CubemapFace::all() {
                     // Begin a new range dedicated for tranforms to the current
@@ -939,6 +944,7 @@ impl SceneGraph {
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
         scene_camera: &SceneCamera,
+        shadow_mapping_enabled: bool,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
         let view_transform = scene_camera.view_transform();
@@ -969,6 +975,10 @@ impl SceneGraph {
                     camera_space_view_frustum,
                     &camera_space_bounding_sphere,
                 );
+
+                if !shadow_mapping_enabled {
+                    continue;
+                }
 
                 for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
                     // Begin a new range dedicated for tranforms to the current
