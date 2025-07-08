@@ -4,7 +4,7 @@ set -e
 LOG_LEVEL=${1:-info}
 
 mkdir -p lib roc_platform/lib
-DEBUG=1 ASAN=1 roc build.roc
+ROC_DEBUG=1 RUST_DEBUG=1 ASAN=1 roc build.roc
 
 cargo build --manifest-path cli/Cargo.toml
 

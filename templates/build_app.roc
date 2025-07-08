@@ -28,8 +28,13 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Mold
             _ -> Ld
 
-    debug_mode =
-        when Env.var!("DEBUG") is
+    roc_debug_mode =
+        when Env.var!("ROC_DEBUG") is
+            Ok(str) if !(Str.is_empty(str)) -> Debug
+            _ -> Release
+
+    rust_debug_mode =
+        when Env.var!("RUST_DEBUG") is
             Ok(str) if !(Str.is_empty(str)) -> Debug
             _ -> Release
 
@@ -47,11 +52,11 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, backend, linker, rust_debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
 
-    copy_app_lib!(app_dir, debug_mode, os_and_arch)?
+    copy_app_lib!(app_dir, rust_debug_mode, os_and_arch)?
 
-    roc_build_script!(app_dir, debug_mode)?
+    roc_build_script!(app_dir, roc_debug_mode)?
 
     link_script_with_platform!(platform_dir, app_dir)?
 
@@ -212,13 +217,13 @@ get_rust_target_folder! = |debug_mode, target_triple|
 
 roc_build_script! : Str, [Debug, Release] => Result {} _
 roc_build_script! = |app_dir, debug_mode|
-    Stdout.line!("Building Roc script")?
+    Stdout.line!("Building Roc script with options: ${Inspect.to_str(debug_mode)}")?
 
     base_args = ["build", "--no-link", "${app_dir}/scripts/main.roc", "--output", "${app_dir}/lib/script.o"]
     opt_args =
         when debug_mode is
             Debug -> []
-            Release -> ["--optimize"]
+            Release -> [] # "--optimize"]
 
     result = Cmd.exec!("roc", List.concat(base_args, opt_args))
 
