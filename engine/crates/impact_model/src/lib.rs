@@ -10,7 +10,9 @@ pub use transform::register_model_feature_types;
 
 use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{AlignedByteVec, Alignment, HashMap, KeyIndexMapper, NoHashKeyIndexMapper};
+use impact_containers::{
+    AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper,
+};
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_math::{self, Hash64};
 use roc_integration::roc;
@@ -61,6 +63,12 @@ pub trait InstanceFeature: Pod {
 pub struct InstanceFeatureManager<MID> {
     feature_storages: HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
     instance_buffers: HashMap<MID, ModelInstanceBuffer>,
+}
+
+/// Record of the state of an [`InstanceFeatureManager`].
+#[derive(Clone, Debug)]
+pub struct InstanceFeatureManagerState<MID> {
+    model_ids: HashSet<MID>,
 }
 
 /// Container for the [`DynamicInstanceFeatureBuffer`]s holding buffered
@@ -145,7 +153,7 @@ struct InstanceFeatureTypeDescriptor {
     alignment: Alignment,
 }
 
-impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
+impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
     /// Creates a new empty instance feature manager.
     pub fn new() -> Self {
         Self {
@@ -162,6 +170,14 @@ impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
         self.feature_storages
             .entry(Fe::FEATURE_TYPE_ID)
             .or_insert_with(|| InstanceFeatureStorage::new::<Fe>());
+    }
+
+    /// Records the current state of the instance feature manager and returns it as a
+    /// [`InstanceFeatureManagerState`].
+    pub fn record_state(&self) -> InstanceFeatureManagerState<MID> {
+        InstanceFeatureManagerState {
+            model_ids: self.instance_buffers.keys().cloned().collect(),
+        }
     }
 
     /// Whether the manager has instance feature buffers for the model with the
@@ -442,10 +458,12 @@ impl<MID: Eq + Hash> InstanceFeatureManager<MID> {
         }
     }
 
-    /// Clears all instance feature buffers and removes all features from the
-    /// storages.
-    pub fn clear_storages_and_buffers(&mut self) {
-        self.instance_buffers.clear();
+    /// Removes the instance buffers that are not part of the given manager
+    /// state. Also removes all buffered features in the feature storages.
+    pub fn reset_to_state(&mut self, state: &InstanceFeatureManagerState<MID>) {
+        self.instance_buffers
+            .retain(|model_id, _| state.model_ids.contains(model_id));
+
         for storage in self.feature_storages.values_mut() {
             storage.remove_all_features();
         }

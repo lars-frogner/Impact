@@ -143,7 +143,7 @@ impl FixedColorMaterialFeature {
     }
 }
 
-pub fn register_material_feature_types<MID: Eq + Hash>(
+pub fn register_material_feature_types<MID: Clone + Eq + Hash>(
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
 ) {
     instance_feature_manager.register_feature_type::<FixedColorMaterialFeature>();
@@ -160,7 +160,7 @@ pub fn register_material_feature_types<MID: Eq + Hash>(
 ///
 /// # Returns
 /// The ID of the created feature type and the ID of the created feature.
-pub fn create_physical_material_feature<MID: Eq + Hash>(
+pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
     uniform_color: Option<&UniformColor>,
     specular_reflectance: f32,
@@ -227,7 +227,7 @@ pub fn create_physical_material_feature<MID: Eq + Hash>(
 }
 
 impl UniformColorPhysicalMaterialFeature {
-    fn add_feature<MID: Eq + Hash>(
+    fn add_feature<MID: Clone + Eq + Hash>(
         instance_feature_manager: &mut InstanceFeatureManager<MID>,
         color: &UniformColor,
         specular_reflectance: f32,
@@ -249,7 +249,7 @@ impl UniformColorPhysicalMaterialFeature {
 }
 
 impl TexturedColorPhysicalMaterialFeature {
-    fn add_feature<MID: Eq + Hash>(
+    fn add_feature<MID: Clone + Eq + Hash>(
         instance_feature_manager: &mut InstanceFeatureManager<MID>,
         specular_reflectance: f32,
         roughness: f32,
@@ -269,7 +269,7 @@ impl TexturedColorPhysicalMaterialFeature {
 }
 
 impl UniformColorParallaxMappedPhysicalMaterialFeature {
-    fn add_feature<MID: Eq + Hash>(
+    fn add_feature<MID: Clone + Eq + Hash>(
         instance_feature_manager: &mut InstanceFeatureManager<MID>,
         color: &UniformColor,
         specular_reflectance: f32,
@@ -296,7 +296,7 @@ impl UniformColorParallaxMappedPhysicalMaterialFeature {
 }
 
 impl TexturedColorParallaxMappedPhysicalMaterialFeature {
-    fn add_feature<MID: Eq + Hash>(
+    fn add_feature<MID: Clone + Eq + Hash>(
         instance_feature_manager: &mut InstanceFeatureManager<MID>,
         specular_reflectance: f32,
         roughness: f32,

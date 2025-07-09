@@ -10,7 +10,10 @@ use impact_light::LightStorage;
 use impact_material::{MaterialLibrary, MaterialLibraryState};
 use impact_mesh::{MeshRepository, MeshRepositoryState};
 use impact_scene::{
-    camera::SceneCamera, graph::SceneGraph, model::InstanceFeatureManager, skybox::Skybox,
+    camera::SceneCamera,
+    graph::SceneGraph,
+    model::{InstanceFeatureManager, InstanceFeatureManagerState},
+    skybox::Skybox,
 };
 use std::sync::RwLock;
 
@@ -23,6 +26,7 @@ pub struct Scene {
     initial_material_library_state: MaterialLibraryState,
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
+    initial_instance_feature_manager_state: InstanceFeatureManagerState,
     voxel_manager: RwLock<VoxelManager>,
     scene_graph: RwLock<SceneGraph>,
     scene_camera: RwLock<Option<SceneCamera>>,
@@ -47,6 +51,7 @@ impl Scene {
     ) -> Self {
         let initial_mesh_repository_state = mesh_repository.record_state();
         let initial_material_library_state = material_library.record_state();
+        let initial_instance_feature_manager_state = instance_feature_manager.record_state();
         Self {
             mesh_repository: RwLock::new(mesh_repository),
             initial_mesh_repository_state,
@@ -54,6 +59,7 @@ impl Scene {
             initial_material_library_state,
             light_storage: RwLock::new(LightStorage::new()),
             instance_feature_manager: RwLock::new(instance_feature_manager),
+            initial_instance_feature_manager_state,
             voxel_manager: RwLock::new(voxel_manager),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
@@ -135,7 +141,7 @@ impl Scene {
         self.instance_feature_manager
             .write()
             .unwrap()
-            .clear_storages_and_buffers();
+            .reset_to_state(&self.initial_instance_feature_manager_state);
 
         self.voxel_manager
             .write()

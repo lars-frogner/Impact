@@ -218,7 +218,7 @@ impl_InstanceFeatureForGPU!(
     ]
 );
 
-pub fn register_model_feature_types<MID: Eq + Hash>(
+pub fn register_model_feature_types<MID: Clone + Eq + Hash>(
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
 ) {
     instance_feature_manager.register_feature_type::<InstanceModelViewTransform>();

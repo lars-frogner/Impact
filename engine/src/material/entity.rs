@@ -24,7 +24,7 @@ use std::{hash::Hash, sync::RwLock};
 /// texture set to the material library if not already present, registers the
 /// material in the instance feature manager and adds the appropriate material
 /// component to the entity.
-pub fn setup_material_for_new_entity<MID: Eq + Hash>(
+pub fn setup_material_for_new_entity<MID: Clone + Eq + Hash>(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &RwLock<MaterialLibrary>,
@@ -62,7 +62,7 @@ pub fn setup_material_for_new_entity<MID: Eq + Hash>(
 /// for this material, and if so, registers the material in the given
 /// instance feature manager and adds the appropriate material component
 /// to the entity.
-fn setup_fixed_color_material_for_new_entity<MID: Eq + Hash>(
+fn setup_fixed_color_material_for_new_entity<MID: Clone + Eq + Hash>(
     material_library: &RwLock<MaterialLibrary>,
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     components: &mut ArchetypeComponentStorage,
@@ -119,7 +119,7 @@ fn setup_fixed_texture_material_for_new_entity(
 /// property texture set to the material library if not already present,
 /// registers the material in the instance feature manager and adds the
 /// appropriate material component to the entity.
-fn setup_physical_material_for_new_entity<MID: Eq + Hash>(
+fn setup_physical_material_for_new_entity<MID: Clone + Eq + Hash>(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &RwLock<MaterialLibrary>,
