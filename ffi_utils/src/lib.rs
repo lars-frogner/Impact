@@ -35,7 +35,7 @@ macro_rules! define_ffi {
                     .canonicalize()
                     .with_context(|| format!("Failed to resolve library path {}", library_path.display()))?;
 
-                log::debug!("Loading dynamic library at {}", library_path.display());
+                ::impact_log::debug!("Loading dynamic library at {}", library_path.display());
                 Ok(unsafe { ::libloading::Library::new(library_path)? })
             });
 
@@ -51,7 +51,7 @@ macro_rules! define_ffi {
                     Ok(Self {
                         $(
                             $symbol: {
-                                log::debug!("Loading symbol {}", stringify!($symbol));
+                                ::impact_log::debug!("Loading symbol {}", stringify!($symbol));
                                 unsafe { lib.get::<$symbol>(stringify!($symbol).as_bytes())? }
                             },
                         )*

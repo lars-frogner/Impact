@@ -123,9 +123,9 @@ impact = { path = "../../engine", features = ["window", "egui", "obj", "ply"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_ecs = { path = "../../engine/crates/impact_ecs" }
 impact_io = { path = "../../engine/crates/impact_io" }
+impact_log = { path = "../../engine/crates/impact_log" }
 inventory = "0.3"
 libloading = "0.8"
-log = "0.4"
 paste = "1.0"
 rand = { version = "0.9", optional = true }
 roc_platform_core = { path = "../../roc_platform/core" }

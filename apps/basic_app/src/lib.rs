@@ -53,22 +53,22 @@ impl BasicApp {
 impl Application for BasicApp {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write().unwrap() = Some(engine.clone());
-        log::debug!("Engine initialized");
+        impact_log::debug!("Engine initialized");
 
-        log::debug!("Setting up UI");
+        impact_log::debug!("Setting up UI");
         self.user_interface.read().unwrap().setup(&engine);
 
-        log::debug!("Setting up scene");
+        impact_log::debug!("Setting up scene");
         scripting::setup_scene()
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
-        log::trace!("Handling keyboard event {event:?}");
+        impact_log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
-        log::trace!("Handling mouse button event {event:?}");
+        impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
