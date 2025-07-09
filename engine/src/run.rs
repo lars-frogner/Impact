@@ -11,7 +11,7 @@ pub mod headless {
         },
     };
     use anyhow::Result;
-    use std::{num::NonZeroU32, sync::Arc};
+    use std::sync::Arc;
 
     pub fn run(
         app: Arc<dyn Application>,
@@ -19,24 +19,17 @@ pub mod headless {
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
     ) -> Result<()> {
-        let HeadlessConfig {
-            surface_size,
-            actions,
-            termination_criterion,
-        } = headless_config;
-
-        let runtime = create_runtime(app, surface_size, runtime_config, engine_config)?;
-
-        run_headless(runtime, actions, termination_criterion)
+        let runtime = create_runtime(app, headless_config, runtime_config, engine_config)?;
+        run_headless(runtime)
     }
 
     fn create_runtime(
         app: Arc<dyn Application>,
-        surface_size: (NonZeroU32, NonZeroU32),
+        headless_config: HeadlessConfig,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
     ) -> Result<HeadlessRuntime> {
-        let (width, height) = surface_size;
+        let (width, height) = headless_config.surface_size;
         let graphics = gpu::initialize_for_headless_rendering(width, height)?;
 
         let engine = Engine::new(engine_config, app, graphics)?;
