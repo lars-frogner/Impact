@@ -18,7 +18,6 @@ pub mod headless {
         headless_config: HeadlessConfig,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
-        on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
     ) -> Result<()> {
         let HeadlessConfig {
             surface_size,
@@ -26,13 +25,7 @@ pub mod headless {
             termination_criterion,
         } = headless_config;
 
-        let runtime = create_runtime(
-            app,
-            surface_size,
-            runtime_config,
-            engine_config,
-            on_engine_created,
-        )?;
+        let runtime = create_runtime(app, surface_size, runtime_config, engine_config)?;
 
         run_headless(runtime, actions, termination_criterion)
     }
@@ -42,18 +35,18 @@ pub mod headless {
         surface_size: (NonZeroU32, NonZeroU32),
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
-        on_engine_created: impl FnOnce(Arc<Engine>),
     ) -> Result<HeadlessRuntime> {
         let (width, height) = surface_size;
         let graphics = gpu::initialize_for_headless_rendering(width, height)?;
 
-        let engine = Engine::new(engine_config, app.clone(), graphics)?;
+        let engine = Engine::new(engine_config, app, graphics)?;
 
         let runtime = Runtime::new_without_ui(engine, runtime_config)?;
 
-        on_engine_created(runtime.arc_engine());
-
-        runtime.engine().app().setup_scene()?;
+        runtime
+            .engine()
+            .app()
+            .on_engine_initialized(runtime.arc_engine())?;
 
         Ok(runtime)
     }
@@ -77,18 +70,9 @@ pub mod window {
         window_config: WindowConfig,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
-        on_engine_created: impl FnOnce(Arc<Engine>) + 'static,
     ) -> Result<()> {
         let mut runtime_handler = WindowRuntimeHandler::new(
-            |window| {
-                create_runtime(
-                    app,
-                    window,
-                    runtime_config,
-                    engine_config,
-                    on_engine_created,
-                )
-            },
+            |window| create_runtime(app, window, runtime_config, engine_config),
             window_config,
         );
         runtime_handler.run()
@@ -99,7 +83,6 @@ pub mod window {
         window: Window,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
-        on_engine_created: impl FnOnce(Arc<Engine>),
     ) -> Result<Runtime<EguiUserInterface>> {
         let graphics = gpu::initialize_for_window_rendering(&window)?;
 
@@ -110,9 +93,10 @@ pub mod window {
 
         let runtime = Runtime::new(engine, user_interface, runtime_config)?;
 
-        on_engine_created(runtime.arc_engine());
-
-        runtime.engine().app().setup_scene()?;
+        runtime
+            .engine()
+            .app()
+            .on_engine_initialized(runtime.arc_engine())?;
 
         Ok(runtime)
     }

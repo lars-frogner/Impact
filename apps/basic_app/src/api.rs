@@ -2,7 +2,7 @@
 
 pub mod ffi;
 
-use crate::{BasicApp, BasicAppConfig};
+use crate::{BasicApp, BasicAppConfig, ENGINE};
 use anyhow::{Result, bail};
 use impact::{
     engine::{Engine, command::EngineCommand},
@@ -11,12 +11,7 @@ use impact::{
 };
 use impact_dev_ui::{UICommand, UICommandQueue, UserInterface};
 use impact_ecs::world::EntityID;
-use std::{
-    path::Path,
-    sync::{Arc, RwLock},
-};
-
-static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
+use std::{path::Path, sync::Arc};
 
 pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
 
@@ -33,16 +28,7 @@ pub fn run_with_config(config: BasicAppConfig) -> Result<()> {
     let user_interface = UserInterface::new(ui_config);
     let app = Arc::new(BasicApp::new(user_interface));
 
-    run_engine(
-        app,
-        window_config,
-        runtime_config,
-        engine_config,
-        |engine| {
-            *ENGINE.write().unwrap() = Some(engine);
-            log::debug!("Engine initialized");
-        },
-    )
+    run_engine(app, window_config, runtime_config, engine_config)
 }
 
 pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {

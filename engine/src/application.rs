@@ -1,14 +1,11 @@
 //! Interfacing with the application using the engine.
 
-#[allow(unused_imports)]
 use crate::engine::Engine;
 use anyhow::Result;
+use std::sync::Arc;
 
 pub trait Application: Send + Sync + std::fmt::Debug {
-    #[cfg(feature = "window")]
-    fn setup_ui(&self, engine: &Engine);
-
-    fn setup_scene(&self) -> Result<()>;
+    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()>;
 
     #[cfg(feature = "window")]
     fn handle_keyboard_event(&self, event: crate::window::input::key::KeyboardEvent) -> Result<()>;
