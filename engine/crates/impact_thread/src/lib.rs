@@ -349,6 +349,17 @@ impl ThreadPoolTaskErrors {
     }
 }
 
+impl fmt::Display for ThreadPoolTaskErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (task_id, err) in &self.errors {
+            writeln!(f, "Error for task {task_id}: {err}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ThreadPoolTaskErrors {}
+
 impl<M> ThreadPoolChannel<M> {
     fn new() -> Self {
         let (sender, receiver) = mpsc::channel::<WorkerInstruction<M>>();

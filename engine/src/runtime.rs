@@ -13,7 +13,6 @@ use crate::{
     ui::{NoUserInterface, UserInterface},
 };
 use anyhow::Result;
-use impact_thread::ThreadPoolResult;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -83,7 +82,7 @@ impl<UI> Runtime<UI> {
         &self.game_loop
     }
 
-    pub fn perform_game_loop_iteration(&mut self) -> ThreadPoolResult {
+    pub fn perform_game_loop_iteration(&mut self) -> Result<()> {
         self.game_loop
             .perform_iteration(&self.engine, &self.task_scheduler)
     }

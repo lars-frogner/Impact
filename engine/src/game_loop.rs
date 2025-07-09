@@ -8,8 +8,8 @@ use crate::{
     runtime::tasks::RuntimeTaskScheduler,
     ui::tasks::UserInterfaceTag,
 };
+use anyhow::Result;
 use impact_scheduling::define_execution_tag_set;
-use impact_thread::ThreadPoolResult;
 use serde::{Deserialize, Serialize};
 use std::{
     num::NonZeroU32,
@@ -50,7 +50,7 @@ impl GameLoop {
         &mut self,
         engine: &Engine,
         task_scheduler: &RuntimeTaskScheduler,
-    ) -> ThreadPoolResult {
+    ) -> Result<()> {
         let execution_result = impact_log::with_timing_info_logging!("Game loop iteration"; {
             task_scheduler.execute_and_wait(&ALL_SYSTEMS)
         });
@@ -60,7 +60,7 @@ impl GameLoop {
 
             // Pass any unhandled errors to caller
             if task_errors.n_errors() > 0 {
-                return Err(task_errors);
+                return Err(task_errors.into());
             }
         }
 

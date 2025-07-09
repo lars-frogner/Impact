@@ -1,7 +1,7 @@
 //! Headless execution of a [`Runtime`].
 
 use crate::{runtime::Runtime, ui::NoUserInterface};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, path::PathBuf};
 
@@ -80,12 +80,8 @@ pub fn run_headless(
     let mut iteration_count = 0;
 
     while !termination_criterion.should_terminate(&runtime, iteration_count) {
-        let result = runtime.perform_game_loop_iteration();
+        runtime.perform_game_loop_iteration()?;
         iteration_count += 1;
-
-        if let Err(errors) = result {
-            bail!("A task encountered a fatal error: {errors:?}")
-        }
     }
 
     if let Some(path) = &actions.save_exit_screenshot_to {
