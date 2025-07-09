@@ -162,8 +162,8 @@ where
             WindowEvent::RedrawRequested => {
                 let result = runtime.perform_game_loop_iteration();
 
-                if let Err(errors) = result {
-                    impact_log::error!("Aborting due to fatal errors: {errors:?}");
+                if let Err(error) = result {
+                    impact_log::error!("Aborting due to fatal error: {error}");
                     event_loop.exit();
                 } else {
                     window.request_redraw();
