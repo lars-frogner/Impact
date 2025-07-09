@@ -173,7 +173,7 @@ impl Engine {
     }
 
     /// Returns a reference to the [`Application`].
-    pub fn app(&self) -> &dyn Application {
+    pub(crate) fn app(&self) -> &dyn Application {
         self.app.as_ref()
     }
 
