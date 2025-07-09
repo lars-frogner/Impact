@@ -23,8 +23,10 @@ use impact_dev_ui::{UserInterface, UserInterfaceConfig};
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
+
+static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 
 #[derive(Debug)]
 pub struct BasicApp {
@@ -49,11 +51,13 @@ impl BasicApp {
 }
 
 impl Application for BasicApp {
-    fn setup_ui(&self, engine: &Engine) {
-        self.user_interface.read().unwrap().setup(engine);
-    }
+    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
+        *ENGINE.write().unwrap() = Some(engine.clone());
+        log::debug!("Engine initialized");
 
-    fn setup_scene(&self) -> Result<()> {
+        log::debug!("Setting up UI");
+        self.user_interface.read().unwrap().setup(&engine);
+
         log::debug!("Setting up scene");
         scripting::setup_scene()
     }
