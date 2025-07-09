@@ -41,6 +41,7 @@ pub enum EngineCommand {
     Control(ControlCommand),
     Capture(CaptureCommand),
     Instrumentation(InstrumentationCommand),
+    Shutdown,
 }
 
 impl Engine {
@@ -53,6 +54,10 @@ impl Engine {
             EngineCommand::Capture(command) => self.execute_capture_command(command),
             EngineCommand::Instrumentation(command) => {
                 self.execute_instrumentation_command(command)
+            }
+            EngineCommand::Shutdown => {
+                self.request_shutdown();
+                Ok(())
             }
         }
     }
