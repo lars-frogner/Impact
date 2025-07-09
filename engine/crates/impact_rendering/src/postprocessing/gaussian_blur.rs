@@ -10,6 +10,7 @@ use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
     assert_uniform_valid,
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
     shader::ShaderManager,
@@ -177,6 +178,7 @@ pub fn create_gaussian_blur_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     blending: Blending,
@@ -222,6 +224,7 @@ pub fn create_gaussian_blur_render_pass(
         shader_manager,
         render_attachment_texture_manager,
         gpu_resource_group_manager,
+        bind_group_layout_registry,
         &shader_template,
         Cow::Owned(format!(
             "Gaussian blur pass from {input_render_attachment_quantity} into {output_render_attachment_quantity}"

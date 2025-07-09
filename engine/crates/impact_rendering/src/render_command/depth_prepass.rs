@@ -13,7 +13,8 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashSet;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_material::{MaterialLibrary, MaterialShaderInput};
 use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
@@ -34,6 +35,7 @@ impl DepthPrepass {
     pub fn new(
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         write_stencil_value: StencilValue,
         config: &BasicRenderingConfig,
     ) -> Self {
@@ -44,11 +46,14 @@ impl DepthPrepass {
 
         let push_constants = ModelDepthPrepassShaderTemplate::push_constants();
 
+        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+            graphics_device,
+            bind_group_layout_registry,
+        );
+
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[CameraGPUBufferManager::get_or_create_bind_group_layout(
-                graphics_device,
-            )],
+            &[&camera_bind_group_layout],
             &push_constants.create_ranges(),
             "Depth prepass render pipeline layout",
         );

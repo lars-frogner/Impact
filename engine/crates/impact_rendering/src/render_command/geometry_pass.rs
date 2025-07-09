@@ -17,7 +17,8 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_material::MaterialLibrary;
 use impact_mesh::VertexAttributeSet;
@@ -86,6 +87,7 @@ impl GeometryPass {
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
         render_resources: &R,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<()>
     where
         R: BasicRenderResources,
@@ -128,6 +130,7 @@ impl GeometryPass {
             shader_manager,
             material_library,
             render_resources,
+            bind_group_layout_registry,
             &added_models,
         )
     }
@@ -138,10 +141,13 @@ impl GeometryPass {
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
         render_resources: &impl BasicRenderResources,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         models: impl IntoIterator<Item = &'a ModelID>,
     ) -> Result<()> {
-        let camera_bind_group_layout =
-            CameraGPUBufferManager::get_or_create_bind_group_layout(graphics_device);
+        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+            graphics_device,
+            bind_group_layout_registry,
+        );
 
         for model_id in models {
             let material_handle = model_id.material_handle();
@@ -174,7 +180,7 @@ impl GeometryPass {
                                     material_property_texture_group.bind_group_layout()
                                 });
 
-                            let mut bind_group_layouts = vec![camera_bind_group_layout];
+                            let mut bind_group_layouts = vec![&camera_bind_group_layout];
                             if let Some(material_texture_bind_group_layout) =
                                 material_texture_bind_group_layout
                             {

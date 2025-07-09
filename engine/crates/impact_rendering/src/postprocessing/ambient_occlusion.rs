@@ -17,6 +17,7 @@ use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
     assert_uniform_valid,
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -92,6 +93,7 @@ impl AmbientOcclusionRenderCommands {
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         let computation_pass = create_ambient_occlusion_computation_render_pass(
             graphics_device,
@@ -99,6 +101,7 @@ impl AmbientOcclusionRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
             config.sample_count,
             config.sample_radius,
             config.intensity,
@@ -111,6 +114,7 @@ impl AmbientOcclusionRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
         )?;
 
         let disabled_pass = create_unoccluded_ambient_reflected_luminance_application_render_pass(
@@ -119,6 +123,7 @@ impl AmbientOcclusionRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
         )?;
 
         Ok(Self {
@@ -284,6 +289,7 @@ fn create_ambient_occlusion_computation_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
     sample_count: u32,
     sample_radius: f32,
     intensity_scale: f32,
@@ -325,6 +331,7 @@ fn create_ambient_occlusion_computation_render_pass(
         shader_manager,
         render_attachment_texture_manager,
         gpu_resource_group_manager,
+        bind_group_layout_registry,
         &shader_template,
         Cow::Borrowed("Ambient occlusion computation pass"),
     )
@@ -339,6 +346,7 @@ fn create_ambient_occlusion_application_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &GPUResourceGroupManager,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
 ) -> Result<PostprocessingRenderPass> {
     PostprocessingRenderPass::new(
         graphics_device,
@@ -346,6 +354,7 @@ fn create_ambient_occlusion_application_render_pass(
         shader_manager,
         render_attachment_texture_manager,
         gpu_resource_group_manager,
+        bind_group_layout_registry,
         &AmbientOcclusionApplicationShaderTemplate::new(),
         Cow::Borrowed("Ambient occlusion application pass"),
     )
@@ -357,6 +366,7 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &GPUResourceGroupManager,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
 ) -> Result<PostprocessingRenderPass> {
     let shader_template = PassthroughShaderTemplate::new(
         RenderAttachmentQuantity::LuminanceAux,
@@ -370,6 +380,7 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
         shader_manager,
         render_attachment_texture_manager,
         gpu_resource_group_manager,
+        bind_group_layout_registry,
         &shader_template,
         Cow::Borrowed("Ambient light application pass without occlusion"),
     )

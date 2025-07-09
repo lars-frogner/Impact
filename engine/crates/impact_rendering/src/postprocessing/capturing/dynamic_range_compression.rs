@@ -10,8 +10,9 @@ use crate::{
 };
 use anyhow::Result;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
-    shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    wgpu,
 };
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,7 @@ impl DynamicRangeCompressionRenderCommands {
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         // The last shader before dynamic range compression (the TAA shader)
         // writes to the luminance history attachment
@@ -83,6 +85,7 @@ impl DynamicRangeCompressionRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
             input_render_attachment_quantity,
             ToneMappingMethod::None,
         )?;
@@ -93,6 +96,7 @@ impl DynamicRangeCompressionRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
             input_render_attachment_quantity,
             ToneMappingMethod::ACES,
         )?;
@@ -103,6 +107,7 @@ impl DynamicRangeCompressionRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
             input_render_attachment_quantity,
             ToneMappingMethod::KhronosPBRNeutral,
         )?;
@@ -189,6 +194,7 @@ fn create_dynamic_range_compression_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &GPUResourceGroupManager,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     tone_mapping_method: ToneMappingMethod,
 ) -> Result<PostprocessingRenderPass> {
@@ -203,6 +209,7 @@ fn create_dynamic_range_compression_render_pass(
         shader_manager,
         render_attachment_texture_manager,
         gpu_resource_group_manager,
+        bind_group_layout_registry,
         &shader_template,
         Cow::Owned(format!(
             "Dynamic range compression pass ({tone_mapping_method})"

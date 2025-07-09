@@ -11,8 +11,9 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_containers::HashMap;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
-    shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    wgpu,
 };
 use std::borrow::Cow;
 
@@ -44,6 +45,7 @@ impl RenderAttachmentVisualizationPasses {
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         let mut passes =
             HashMap::with_capacity_and_hasher(Self::SUPPORTED_QUANTITIES.len(), Default::default());
@@ -57,6 +59,7 @@ impl RenderAttachmentVisualizationPasses {
                     shader_manager,
                     render_attachment_texture_manager,
                     gpu_resource_group_manager,
+                    bind_group_layout_registry,
                     &shader_template,
                     Cow::Owned(format!(
                         "Visualization pass for render attachment: {quantity:?}"

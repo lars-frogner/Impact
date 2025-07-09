@@ -86,6 +86,7 @@ impl RenderingSystem {
                 &self.rendering_surface,
                 &mut self.shader_manager.write().unwrap(),
                 &mut self.render_attachment_texture_manager.write().unwrap(),
+                &self.bind_group_layout_registry,
                 &self.basic_config,
             );
         }

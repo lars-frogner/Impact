@@ -48,6 +48,7 @@ impl PostprocessingRenderPass {
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
+        bind_group_layout_registry: &impact_gpu::bind_group_layout::BindGroupLayoutRegistry,
         shader_template: &impl PostprocessingShaderTemplate,
         label: Cow<'static, str>,
     ) -> Result<Self> {
@@ -67,6 +68,7 @@ impl PostprocessingRenderPass {
         if uses_camera {
             bind_group_layouts.push(CameraGPUBufferManager::get_or_create_bind_group_layout(
                 graphics_device,
+                bind_group_layout_registry,
             ));
         }
 
@@ -76,7 +78,8 @@ impl PostprocessingRenderPass {
                     .create_and_get_render_attachment_texture_bind_group_layouts(
                         graphics_device,
                         &input_render_attachments,
-                    ),
+                    )
+                    .cloned(),
             );
         }
 
@@ -90,12 +93,14 @@ impl PostprocessingRenderPass {
                     )
                 })?;
 
-            bind_group_layouts.push(gpu_resource_group.bind_group_layout());
+            bind_group_layouts.push(gpu_resource_group.bind_group_layout().clone());
         }
 
+        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
+            bind_group_layouts.iter().collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &bind_group_layouts,
+            &bind_group_layout_refs,
             &push_constants.create_ranges(),
             &format!("Postprocessing pass render pipeline layout ({label})"),
         );

@@ -16,6 +16,7 @@ use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
     assert_uniform_valid,
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -92,6 +93,7 @@ impl TemporalAntiAliasingRenderCommands {
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         let copy_command = create_temporal_anti_aliasing_texture_copy_command();
 
@@ -101,6 +103,7 @@ impl TemporalAntiAliasingRenderCommands {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
             config.current_frame_weight,
             config.variance_clipping_threshold,
         )?;
@@ -213,6 +216,7 @@ fn create_temporal_anti_aliasing_blending_render_pass(
     shader_manager: &mut ShaderManager,
     render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
     current_frame_weight: f32,
     variance_clipping_threshold: f32,
 ) -> Result<PostprocessingRenderPass> {
@@ -252,6 +256,7 @@ fn create_temporal_anti_aliasing_blending_render_pass(
         shader_manager,
         render_attachment_texture_manager,
         gpu_resource_group_manager,
+        bind_group_layout_registry,
         &shader_template,
         Cow::Borrowed("Temporal anti-aliasing blend pass"),
     )
