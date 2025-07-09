@@ -20,6 +20,7 @@ use std::{
 /// A loop driving simulation and rendering in an [`Engine`].
 #[derive(Debug)]
 pub struct GameLoop {
+    iteration: u64,
     frame_rate_tracker: FrameDurationTracker,
     start_time: Instant,
     previous_iter_end_time: Instant,
@@ -39,6 +40,7 @@ impl GameLoop {
         let start_time = Instant::now();
         let previous_iter_end_time = start_time;
         Self {
+            iteration: 0,
             frame_rate_tracker,
             start_time,
             previous_iter_end_time,
@@ -66,7 +68,9 @@ impl GameLoop {
 
         engine.renderer().write().unwrap().present();
 
-        engine.app().on_game_loop_iteration_completed()?;
+        engine
+            .app()
+            .on_game_loop_iteration_completed(self.iteration)?;
 
         let iter_end_time = self.wait_for_target_frame_duration();
 
@@ -89,7 +93,13 @@ impl GameLoop {
             self.start_time.elapsed().as_secs_f64()
         );
 
+        self.iteration += 1;
+
         Ok(())
+    }
+
+    pub fn iteration(&self) -> u64 {
+        self.iteration
     }
 
     pub fn elapsed_time(&self) -> Duration {
