@@ -15,6 +15,7 @@ pub enum SceneCommand {
         entity_id: EntityID,
         state: ActiveState,
     },
+    Clear,
 }
 
 impl Scene {

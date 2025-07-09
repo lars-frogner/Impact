@@ -224,6 +224,15 @@ impl<G: CollidableGeometry> PhysicsSimulator<G> {
         impact_log::info!("Simulation time: {:.1}", self.simulation_time);
     }
 
+    /// Resets the simulator to the initial empty state and sets the simulation
+    /// time to zero.
+    pub fn reset(&mut self) {
+        self.rigid_body_force_manager.read().unwrap().clear();
+        self.constraint_manager.write().unwrap().clear();
+        self.collision_world.write().unwrap().clear();
+        self.simulation_time = 0.0;
+    }
+
     fn do_advance_simulation(
         &mut self,
         ecs_world: &RwLock<ECSWorld>,

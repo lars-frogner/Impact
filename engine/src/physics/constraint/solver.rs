@@ -264,6 +264,13 @@ impl ConstraintSolver {
         self.body_index_map.clear();
     }
 
+    /// Removes all stored constraint solver state.
+    pub fn clear(&mut self) {
+        self.clear_prepared_bodies();
+        self.contacts.clear();
+        self.spherical_joints.clear();
+    }
+
     fn prepare_constraint_for_body_pair<C: TwoBodyConstraint>(
         &mut self,
         ecs_world: &ECSWorld,
@@ -409,6 +416,11 @@ where
                 len -= 1;
             }
         }
+    }
+
+    fn clear(&mut self) {
+        self.constraints.clear();
+        self.constraint_index_map.clear();
     }
 }
 

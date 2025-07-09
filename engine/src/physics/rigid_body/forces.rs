@@ -71,6 +71,11 @@ impl RigidBodyForceManager {
     pub fn perform_post_simulation_step_actions(&self, ecs_world: &ECSWorld) {
         spring::systems::synchronize_spring_positions_and_orientations(ecs_world);
     }
+
+    /// Removes all stored force state.
+    pub fn clear(&self) {
+        self.drag_load_map_repository.write().unwrap().clear();
+    }
 }
 
 fn reset_forces_and_torques(ecs_world: &ECSWorld) {

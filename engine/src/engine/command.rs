@@ -134,6 +134,7 @@ impl Engine {
             } => {
                 self.set_scene_entity_active_state(entity, state)?;
             }
+            SceneCommand::Clear => self.reset_world(),
         }
         Ok(())
     }

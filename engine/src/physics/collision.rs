@@ -223,6 +223,12 @@ impl<G: CollidableGeometry> CollisionWorld<G> {
         }
     }
 
+    /// Removes all stored collision state.
+    pub fn clear(&mut self) {
+        self.collidable_descriptors.clear();
+        self.clear_spatial_state();
+    }
+
     fn collidables(&self, kind: CollidableKind) -> &[Collidable<G>] {
         &self.collidables[kind as usize]
     }

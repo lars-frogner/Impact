@@ -1,8 +1,8 @@
-# Hash: d32b91bc9a20e66458ecc6894a5b849d46994f32a9811bcf7216bca44da64002
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: e1e98944a8ab1ea1f846b176c45c5faadeea66232a4128a3daba526d484baf2a
+# Generated: 2025-07-09T11:00:13+00:00
 # Rust type: impact::scene::command::SceneCommand
 # Type category: Inline
-# Commit: ce2d27b (dirty)
+# Commit: 2499ba7 (dirty)
 module [
     SceneCommand,
     write_bytes,
@@ -19,6 +19,7 @@ SceneCommand : [
             entity_id : Entity.Id,
             state : Command.ActiveState.ActiveState,
         },
+    Clear,
 ]
 
 ## Serializes a value of [SceneCommand] into the binary representation
@@ -39,6 +40,12 @@ write_bytes = |bytes, value|
             |> List.append(1)
             |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
+
+        Clear ->
+            bytes
+            |> List.reserve(10)
+            |> List.append(2)
+            |> List.concat(List.repeat(0, 9))
 
 ## Deserializes a value of [SceneCommand] from its bytes in the
 ## representation used by the engine.
@@ -64,5 +71,6 @@ from_bytes = |bytes|
                 )
 
 
+            [2, ..] -> Ok(Clear)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))
