@@ -66,6 +66,8 @@ impl GameLoop {
 
         engine.renderer().write().unwrap().present();
 
+        engine.app().on_game_loop_iteration_completed()?;
+
         let iter_end_time = self.wait_for_target_frame_duration();
 
         let iter_duration = iter_end_time - self.previous_iter_end_time;
