@@ -41,7 +41,7 @@ pub fn setup_light_for_new_entity(
 /// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
 /// [`AmbientLight`](impact_light::AmbientLight) to the light storage and adds
-/// an [`AmbientLightHandle`] with the light's ID to the entity.
+/// an [`AmbientLightID`] with the light's ID to the entity.
 fn setup_ambient_light_for_new_entity(
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -68,8 +68,8 @@ fn setup_ambient_light_for_new_entity(
 /// components for this light source, and if so, adds the corresponding
 /// [`OmnidirectionalLight`](impact_light::OmnidirectionalLight) or
 /// [`ShadowableOmnidirectionalLight`](impact_light::ShadowableOmnidirectionalLight)
-/// to the light storage and adds a [`OmnidirectionalLightHandle`] or
-/// [`ShadowableOmnidirectionalLightHandle`] with the light's ID to the entity.
+/// to the light storage and adds a [`OmnidirectionalLightID`] or
+/// [`ShadowableOmnidirectionalLightID`] with the light's ID to the entity.
 fn setup_omnidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
@@ -147,8 +147,8 @@ fn setup_omnidirectional_light_for_new_entity(
 /// components for this light source, and if so, adds the corresponding
 /// [`UnidirectionalLight`](impact_light::UnidirectionalLight) or
 /// [`ShadowableUnidirectionalLight`](impact_light::ShadowableUnidirectionalLight)
-/// to the light storage and adds a [`UnidirectionalLightHandle`] or
-/// [`ShadowableUnidirectionalLightHandle`] with the light's ID to the entity.
+/// to the light storage and adds a [`UnidirectionalLightID`] or
+/// [`ShadowableUnidirectionalLightID`] with the light's ID to the entity.
 fn setup_unidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,

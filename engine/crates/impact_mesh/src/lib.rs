@@ -74,7 +74,8 @@ pub enum MeshPrimitive {
     LineSegment,
 }
 
-/// Repository where [`TriangleMesh`]es are stored under unique [`MeshID`]s.
+/// Repository where [`TriangleMesh`]es and [`LineSegmentMesh`]es are stored
+/// under unique [`TriangleMeshID`]s and [`LineSegmentMeshID`]s.
 #[derive(Debug, Default)]
 pub struct MeshRepository {
     triangle_meshes: HashMap<TriangleMeshID, TriangleMesh<f32>>,

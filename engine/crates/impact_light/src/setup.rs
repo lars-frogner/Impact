@@ -246,7 +246,7 @@ pub fn cleanup_light_for_removed_entity(
     cleanup_unidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
 }
 
-/// Checks if the given entity has a [`AmbientLightHandle`], and if so, removes
+/// Checks if the given entity has a [`AmbientLightID`], and if so, removes
 /// the assocated [`AmbientLight`] from the given [`LightStorage`].
 #[cfg(feature = "ecs")]
 fn cleanup_ambient_light_for_removed_entity(
@@ -264,8 +264,8 @@ fn cleanup_ambient_light_for_removed_entity(
     }
 }
 
-/// Checks if the given entity has a [`OmnidirectionalLightHandle`] or
-/// [`ShadowableOmnidirectionalLightHandle`], and if so, removes the assocated
+/// Checks if the given entity has a [`OmnidirectionalLightID`] or
+/// [`ShadowableOmnidirectionalLightID`], and if so, removes the assocated
 /// [`OmnidirectionalLight`] or [`ShadowableOmnidirectionalLight`] from the
 /// given [`LightStorage`].
 #[cfg(feature = "ecs")]
@@ -293,8 +293,8 @@ fn cleanup_omnidirectional_light_for_removed_entity(
     }
 }
 
-/// Checks if the given entity has a [`UnidirectionalLightHandle`] or
-/// [`ShadowableUnidirectionalLightHandle`], and if so, removes the assocated
+/// Checks if the given entity has a [`UnidirectionalLightID`] or
+/// [`ShadowableUnidirectionalLightID`], and if so, removes the assocated
 /// [`UnidirectionalLight`] or [`ShadowableUnidirectionalLight`] from the given
 /// [`LightStorage`].
 #[cfg(feature = "ecs")]

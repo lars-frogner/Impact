@@ -30,7 +30,8 @@ use equirectangular_map::EquirectangularMap;
 /// azimuthal angle phi and polar angle theta).
 pub type DragLoadMap<F> = EquirectangularMap<DragLoad<F>>;
 
-/// Repository where [`DragLoadMap`]s are stored under a unique [`MeshID`].
+/// Repository where [`DragLoadMap`]s are stored under a unique
+/// [`TriangleMeshID`].
 #[derive(Debug)]
 pub struct DragLoadMapRepository<F: Float> {
     config: DragLoadMapConfig,
