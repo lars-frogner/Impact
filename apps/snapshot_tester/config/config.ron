@@ -1,0 +1,11 @@
+(
+    testing: (
+        output_dir: "../snapshots/output",
+        reference_dir: "../snapshots/reference",
+        min_score_to_pass: 1.0,
+    ),
+    headless: (
+        surface_size: (768, 512),
+    ),
+    engine_config_path: "engine_config.ron",
+)
