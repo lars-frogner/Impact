@@ -1,8 +1,8 @@
-# Hash: 1be6d7a3fd6a222a12d57dfff2aa5ef6e17c765393eeabb802983a4058eadf44
-# Generated: 2025-07-06T18:04:01+00:00
+# Hash: 95da96a60783dbb11912cfb10b22a901a5d156485f90e2152ada8910fb912c54
+# Generated: 2025-07-09T18:13:50+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: ce2d27b (dirty)
+# Commit: 1a36922 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -23,6 +23,7 @@ EngineCommand : [
     Control Command.ControlCommand.ControlCommand,
     Capture Command.CaptureCommand.CaptureCommand,
     Instrumentation Command.InstrumentationCommand.InstrumentationCommand,
+    Shutdown,
 ]
 
 ## Serializes a value of [EngineCommand] into the binary representation
@@ -70,6 +71,12 @@ write_bytes = |bytes, value|
             |> List.append(5)
             |> Command.InstrumentationCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 31))
+
+        Shutdown ->
+            bytes
+            |> List.reserve(34)
+            |> List.append(6)
+            |> List.concat(List.repeat(0, 33))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
 ## representation used by the engine.
@@ -121,5 +128,6 @@ from_bytes = |bytes|
                     ),
                 )
 
+            [6, ..] -> Ok(Shutdown)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))
