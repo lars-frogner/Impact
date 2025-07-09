@@ -24,12 +24,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
         os: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
           - workspace: roc_platform/core
             os: windows-latest
           - workspace: apps/basic_app
+            os: windows-latest
+          - workspace: apps/snapshot_tester
             os: windows-latest
 
     runs-on: ${{ matrix.os }}
@@ -185,12 +194,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
         os: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
           - workspace: roc_platform/core
             os: windows-latest
           - workspace: apps/basic_app
+            os: windows-latest
+          - workspace: apps/snapshot_tester
             os: windows-latest
 
     runs-on: ${{ matrix.os }}
@@ -228,7 +246,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
 
     runs-on: ubuntu-latest
 
@@ -257,7 +282,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
 
     runs-on: ubuntu-latest
 
@@ -284,12 +316,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [engine, roc_integration, roc_platform/core, apps/basic_app]
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
         os: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
           - workspace: roc_platform/core
             os: windows-latest
           - workspace: apps/basic_app
+            os: windows-latest
+          - workspace: apps/snapshot_tester
             os: windows-latest
 
     runs-on: ${{ matrix.os }}
