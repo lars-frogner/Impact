@@ -13,6 +13,7 @@ use impact::{
     application::Application,
     egui,
     engine::{Engine, EngineConfig},
+    impact_io,
     runtime::RuntimeConfig,
     window::{
         WindowConfig,
