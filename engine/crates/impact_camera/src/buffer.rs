@@ -5,6 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_geometry::Frustum;
 use impact_gpu::{
     assert_uniform_valid,
+    bind_group_layout::BindGroupLayoutRegistry,
     buffer::GPUBuffer,
     device::GraphicsDevice,
     uniform::{self, UniformBufferable},
@@ -12,10 +13,7 @@ use impact_gpu::{
 };
 use impact_math::{ConstStringHash64, HaltonSequence};
 use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
-use std::{
-    borrow::Cow,
-    sync::{LazyLock, OnceLock},
-};
+use std::{borrow::Cow, sync::LazyLock};
 
 /// Represents a camera that can buffered in a GPU buffer.
 pub trait BufferableCamera {
@@ -75,15 +73,17 @@ pub struct CameraProjectionUniform {
 static JITTER_OFFSETS: LazyLock<[Vector4<f32>; JITTER_COUNT]> =
     LazyLock::new(CameraProjectionUniform::generate_jitter_offsets);
 
-static CAMERA_PROJECTION_UNIFORM_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
-
 impl CameraGPUBufferManager {
     const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
+    const LAYOUT_ID: ConstStringHash64 = ConstStringHash64::new("CameraProjectionUniform");
 
     /// Creates a new manager with GPU resources initialized from the given
     /// camera.
-    pub fn for_camera(graphics_device: &GraphicsDevice, camera: &impl BufferableCamera) -> Self {
+    pub fn for_camera(
+        graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+        camera: &impl BufferableCamera,
+    ) -> Self {
         let view_transform = *camera.view_transform();
 
         let projection_uniform = CameraProjectionUniform::new(camera);
@@ -94,12 +94,13 @@ impl CameraGPUBufferManager {
             Cow::Borrowed("Camera"),
         );
 
-        let bind_group_layout = Self::get_or_create_bind_group_layout(graphics_device);
+        let bind_group_layout =
+            Self::get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry);
 
         let bind_group = Self::create_bind_group(
             graphics_device.device(),
             &projection_uniform_gpu_buffer,
-            bind_group_layout,
+            &bind_group_layout,
         );
 
         Self {
@@ -116,9 +117,11 @@ impl CameraGPUBufferManager {
     /// The layout will remain valid even though the projection may change.
     pub fn get_or_create_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        CAMERA_PROJECTION_UNIFORM_BIND_GROUP_LAYOUT
-            .get_or_init(|| Self::create_bind_group_layout(graphics_device.device()))
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(Self::LAYOUT_ID, || {
+            Self::create_bind_group_layout(graphics_device.device())
+        })
     }
 
     /// Returns the bind group for the camera projection uniform.

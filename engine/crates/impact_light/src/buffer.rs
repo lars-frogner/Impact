@@ -10,6 +10,7 @@ use crate::{
 use impact_containers::CollectionChange;
 use impact_gpu::{
     assert_uniform_valid,
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     uniform::{
         self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
@@ -17,7 +18,7 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::ConstStringHash64;
-use std::{fmt, hash::Hash, sync::OnceLock};
+use std::{fmt, hash::Hash};
 
 /// Manager of the set of uniform GPU buffers holding light source render
 /// data. Also manages the bind groups for these buffers and the associated
@@ -63,19 +64,6 @@ struct UniformGPUBufferWithLightIDs<ID> {
     light_ids: Vec<ID>,
 }
 
-static AMBIENT_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
-static OMNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
-static SHADOWABLE_OMNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
-static UNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
-static SHADOWABLE_UNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
-
-static OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
-static UNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
-
 impl LightGPUBufferManager {
     const AMBIENT_LIGHT_VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::FRAGMENT;
     const OMNIDIRECTIONAL_LIGHT_VISIBILITY: wgpu::ShaderStages =
@@ -86,6 +74,21 @@ impl LightGPUBufferManager {
     const SHADOWABLE_UNIDIRECTIONAL_LIGHT_VISIBILITY: wgpu::ShaderStages =
         wgpu::ShaderStages::VERTEX_FRAGMENT;
 
+    const AMBIENT_LIGHT_LAYOUT_ID: ConstStringHash64 = ConstStringHash64::new("AmbientLight");
+    const OMNIDIRECTIONAL_LIGHT_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("OmnidirectionalLight");
+    const SHADOWABLE_OMNIDIRECTIONAL_LIGHT_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("ShadowableOmnidirectionalLight");
+    const UNIDIRECTIONAL_LIGHT_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("UnidirectionalLight");
+    const SHADOWABLE_UNIDIRECTIONAL_LIGHT_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("ShadowableUnidirectionalLight");
+
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("OmnidirectionalLightShadowMap");
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("UnidirectionalLightShadowMap");
+
     /// The binding location of one of the light uniform buffers.
     pub const fn light_binding() -> u32 {
         0
@@ -95,6 +98,7 @@ impl LightGPUBufferManager {
     /// [`LightStorage`].
     pub fn for_light_storage(
         graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_storage: &LightStorage,
         shadow_mapping_config: &ShadowMappingConfig,
     ) -> Self {
@@ -126,45 +130,59 @@ impl LightGPUBufferManager {
                 Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_VISIBILITY,
             );
 
-        let ambient_light_bind_group_layout =
-            Self::get_or_create_ambient_light_bind_group_layout(graphics_device);
+        let ambient_light_bind_group_layout = Self::get_or_create_ambient_light_bind_group_layout(
+            graphics_device,
+            bind_group_layout_registry,
+        );
         let omnidirectional_light_bind_group_layout =
-            Self::get_or_create_omnidirectional_light_bind_group_layout(graphics_device);
+            Self::get_or_create_omnidirectional_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
         let shadowable_omnidirectional_light_bind_group_layout =
-            Self::get_or_create_shadowable_omnidirectional_light_bind_group_layout(graphics_device);
+            Self::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
         let unidirectional_light_bind_group_layout =
-            Self::get_or_create_unidirectional_light_bind_group_layout(graphics_device);
+            Self::get_or_create_unidirectional_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
         let shadowable_unidirectional_light_bind_group_layout =
-            Self::get_or_create_shadowable_unidirectional_light_bind_group_layout(graphics_device);
+            Self::get_or_create_shadowable_unidirectional_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
 
         let ambient_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
             &ambient_light_gpu_buffer,
-            ambient_light_bind_group_layout,
+            &ambient_light_bind_group_layout,
             "Ambient light bind group",
         );
         let omnidirectional_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
             &omnidirectional_light_gpu_buffer,
-            omnidirectional_light_bind_group_layout,
+            &omnidirectional_light_bind_group_layout,
             "Omnidirectional light bind group",
         );
         let shadowable_omnidirectional_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
             &shadowable_omnidirectional_light_gpu_buffer,
-            shadowable_omnidirectional_light_bind_group_layout,
+            &shadowable_omnidirectional_light_bind_group_layout,
             "Shadowable omnidirectional light bind group",
         );
         let unidirectional_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
             &unidirectional_light_gpu_buffer,
-            unidirectional_light_bind_group_layout,
+            &unidirectional_light_bind_group_layout,
             "Unidirectional light bind group",
         );
         let shadowable_unidirectional_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
             &shadowable_unidirectional_light_gpu_buffer,
-            shadowable_unidirectional_light_bind_group_layout,
+            &shadowable_unidirectional_light_bind_group_layout,
             "Shadowable unidirectional light bind group",
         );
 
@@ -315,6 +333,7 @@ impl LightGPUBufferManager {
     pub fn sync_with_light_storage(
         &mut self,
         graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_storage: &LightStorage,
     ) {
         let shadowable_omnidirectional_light_buffer_change = light_storage
@@ -360,7 +379,10 @@ impl LightGPUBufferManager {
             self.ambient_light_bind_group = Self::create_light_bind_group(
                 graphics_device.device(),
                 &self.ambient_light_gpu_buffer,
-                Self::get_or_create_ambient_light_bind_group_layout(graphics_device),
+                &Self::get_or_create_ambient_light_bind_group_layout(
+                    graphics_device,
+                    bind_group_layout_registry,
+                ),
                 "Ambient light bind group",
             );
         }
@@ -369,7 +391,10 @@ impl LightGPUBufferManager {
             self.omnidirectional_light_bind_group = Self::create_light_bind_group(
                 graphics_device.device(),
                 &self.omnidirectional_light_gpu_buffer,
-                Self::get_or_create_omnidirectional_light_bind_group_layout(graphics_device),
+                &Self::get_or_create_omnidirectional_light_bind_group_layout(
+                    graphics_device,
+                    bind_group_layout_registry,
+                ),
                 "Omnidirectional light bind group",
             );
         }
@@ -380,8 +405,9 @@ impl LightGPUBufferManager {
             self.shadowable_omnidirectional_light_bind_group = Self::create_light_bind_group(
                 graphics_device.device(),
                 &self.shadowable_omnidirectional_light_gpu_buffer,
-                Self::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
+                &Self::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
                     graphics_device,
+                    bind_group_layout_registry,
                 ),
                 "Shadowable omnidirectional light bind group",
             );
@@ -391,7 +417,10 @@ impl LightGPUBufferManager {
             self.unidirectional_light_bind_group = Self::create_light_bind_group(
                 graphics_device.device(),
                 &self.unidirectional_light_gpu_buffer,
-                Self::get_or_create_unidirectional_light_bind_group_layout(graphics_device),
+                &Self::get_or_create_unidirectional_light_bind_group_layout(
+                    graphics_device,
+                    bind_group_layout_registry,
+                ),
                 "Unidirectional light bind group",
             );
         }
@@ -402,8 +431,9 @@ impl LightGPUBufferManager {
             self.shadowable_unidirectional_light_bind_group = Self::create_light_bind_group(
                 graphics_device.device(),
                 &self.shadowable_unidirectional_light_gpu_buffer,
-                Self::get_or_create_shadowable_unidirectional_light_bind_group_layout(
+                &Self::get_or_create_shadowable_unidirectional_light_bind_group_layout(
                     graphics_device,
+                    bind_group_layout_registry,
                 ),
                 "Shadowable unidirectional light bind group",
             );
@@ -434,51 +464,67 @@ impl LightGPUBufferManager {
     /// or creates it if it has not already been created.
     pub fn get_or_create_ambient_light_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        AMBIENT_LIGHT_BIND_GROUP_LAYOUT
-            .get_or_init(|| Self::create_ambient_light_bind_group_layout(graphics_device.device()))
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(Self::AMBIENT_LIGHT_LAYOUT_ID, || {
+            Self::create_ambient_light_bind_group_layout(graphics_device.device())
+        })
     }
 
     /// Returns the bind group layout for the omnidirectional light uniform
     /// buffer, or creates it if it has not already been created.
     pub fn get_or_create_omnidirectional_light_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        OMNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT.get_or_init(|| {
-            Self::create_omnidirectional_light_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry
+            .get_or_create_layout(Self::OMNIDIRECTIONAL_LIGHT_LAYOUT_ID, || {
+                Self::create_omnidirectional_light_bind_group_layout(graphics_device.device())
+            })
     }
 
     /// Returns the bind group layout for the shadowable omnidirectional light
     /// uniform buffer, or creates it if it has not already been created.
     pub fn get_or_create_shadowable_omnidirectional_light_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        SHADOWABLE_OMNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT.get_or_init(|| {
-            Self::create_shadowable_omnidirectional_light_bind_group_layout(
-                graphics_device.device(),
-            )
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(
+            Self::SHADOWABLE_OMNIDIRECTIONAL_LIGHT_LAYOUT_ID,
+            || {
+                Self::create_shadowable_omnidirectional_light_bind_group_layout(
+                    graphics_device.device(),
+                )
+            },
+        )
     }
 
     /// Returns the bind group layout for the unidirectional light uniform
     /// buffer, or creates it if it has not already been created.
     pub fn get_or_create_unidirectional_light_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        UNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT.get_or_init(|| {
-            Self::create_unidirectional_light_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry
+            .get_or_create_layout(Self::UNIDIRECTIONAL_LIGHT_LAYOUT_ID, || {
+                Self::create_unidirectional_light_bind_group_layout(graphics_device.device())
+            })
     }
 
     /// Returns the bind group layout for the shadowable unidirectional light
     /// uniform buffer, or creates it if it has not already been created.
     pub fn get_or_create_shadowable_unidirectional_light_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        SHADOWABLE_UNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT.get_or_init(|| {
-            Self::create_shadowable_unidirectional_light_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(
+            Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_LAYOUT_ID,
+            || {
+                Self::create_shadowable_unidirectional_light_bind_group_layout(
+                    graphics_device.device(),
+                )
+            },
+        )
     }
 
     fn create_ambient_light_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -588,10 +634,12 @@ impl OmnidirectionalLightShadowMapManager {
     /// samplers, or creates it if it has not already been created.
     pub fn get_or_create_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT.get_or_init(|| {
-            ShadowCubemapTexture::create_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(
+            LightGPUBufferManager::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID,
+            || ShadowCubemapTexture::create_bind_group_layout(graphics_device.device()),
+        )
     }
 
     fn create_new_textures_if_required(
@@ -649,10 +697,12 @@ impl UnidirectionalLightShadowMapManager {
     /// samplers, or creates it if it has not already been created.
     pub fn get_or_create_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        UNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT.get_or_init(|| {
-            CascadedShadowMapTexture::create_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(
+            LightGPUBufferManager::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID,
+            || CascadedShadowMapTexture::create_bind_group_layout(graphics_device.device()),
+        )
     }
 
     fn create_new_textures_if_required(

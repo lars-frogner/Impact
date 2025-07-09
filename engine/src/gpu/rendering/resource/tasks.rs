@@ -56,6 +56,7 @@ define_task!(
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
                     renderer.graphics_device(),
+                    renderer.bind_group_layout_registry(),
                     render_resource_manager
                         .desynchronized()
                         .camera_buffer_manager
@@ -144,6 +145,7 @@ define_task!(
                 DesynchronizedRenderResources::sync_voxel_resources_with_voxel_manager(
                     renderer.graphics_device(),
                     engine.assets(),
+                    renderer.bind_group_layout_registry(),
                     render_resource_manager
                         .desynchronized()
                         .voxel_resource_managers
@@ -182,6 +184,7 @@ define_task!(
                 let light_storage = scene.light_storage().read().unwrap();
                 DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
                     renderer.graphics_device(),
+                    renderer.bind_group_layout_registry(),
                     render_resource_manager
                         .desynchronized()
                         .light_buffer_manager

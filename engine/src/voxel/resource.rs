@@ -16,6 +16,7 @@ use anyhow::Result;
 use bytemuck::Pod;
 use impact_gpu::{
     assert_uniform_valid,
+    bind_group_layout::BindGroupLayoutRegistry,
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
     indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
@@ -33,7 +34,7 @@ use impact_mesh::buffer::{
     new_vertex_gpu_buffer_with_spare_capacity,
 };
 use impact_rendering::push_constant::BasicPushConstantVariant;
-use std::{borrow::Cow, mem, ops::Range, sync::OnceLock};
+use std::{borrow::Cow, mem, ops::Range};
 
 /// Owner and manager of the GPU resources for all voxel materials.
 #[derive(Debug)]
@@ -85,13 +86,17 @@ pub enum VoxelPushConstantVariant {
     Rendering(BasicPushConstantVariant),
 }
 
-static MATERIAL_RESOURCES_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+impl VoxelMaterialGPUResourceManager {
+    const MATERIAL_RESOURCES_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("VoxelMaterialResources");
+}
 
-static POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
-
-static CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
-    OnceLock::new();
+impl VoxelObjectGPUBufferManager {
+    const POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("VoxelPositionAndNormalBuffer");
+    const CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
+        ConstStringHash64::new("VoxelChunkSubmeshAndArgumentBuffer");
+}
 
 impl VoxelMaterialGPUResourceManager {
     pub const fn fixed_properties_binding() -> u32 {
@@ -120,6 +125,7 @@ impl VoxelMaterialGPUResourceManager {
         graphics_device: &GraphicsDevice,
         assets: &mut Assets,
         voxel_type_registry: &VoxelTypeRegistry,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         let fixed_property_buffer = GPUBuffer::new_full_uniform_buffer(
             graphics_device,
@@ -166,10 +172,11 @@ impl VoxelMaterialGPUResourceManager {
 
         let sampler = &assets.samplers[&color_texture_array.sampler_id().unwrap()];
 
-        let bind_group_layout = Self::get_or_create_bind_group_layout(graphics_device);
+        let bind_group_layout =
+            Self::get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry);
         let bind_group = Self::create_bind_group(
             graphics_device.device(),
-            bind_group_layout,
+            &bind_group_layout,
             &fixed_property_buffer,
             color_texture_array,
             roughness_texture_array,
@@ -193,9 +200,12 @@ impl VoxelMaterialGPUResourceManager {
     /// after creating and caching it if it has not already been created.
     pub fn get_or_create_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        MATERIAL_RESOURCES_BIND_GROUP_LAYOUT
-            .get_or_init(|| Self::create_bind_group_layout(graphics_device.device()))
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry
+            .get_or_create_layout(Self::MATERIAL_RESOURCES_BIND_GROUP_LAYOUT_ID, || {
+                Self::create_bind_group_layout(graphics_device.device())
+            })
     }
 
     /// Returns the bind group for the voxel material resources.
@@ -271,6 +281,7 @@ impl VoxelObjectGPUBufferManager {
         graphics_device: &GraphicsDevice,
         voxel_object_id: VoxelObjectID,
         voxel_object: &MeshedChunkedVoxelObject,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
         let mesh = voxel_object.mesh();
 
@@ -317,17 +328,23 @@ impl VoxelObjectGPUBufferManager {
         );
 
         let position_and_normal_buffer_bind_group_layout =
-            Self::get_or_create_position_and_normal_buffer_bind_group_layout(graphics_device);
+            Self::get_or_create_position_and_normal_buffer_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
 
         let chunk_submesh_and_argument_buffer_bind_group_layout =
-            Self::get_or_create_submesh_and_argument_buffer_bind_group_layout(graphics_device);
+            Self::get_or_create_submesh_and_argument_buffer_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
 
         let position_and_normal_buffer_bind_group =
             Self::create_position_and_normal_buffer_bind_group(
                 graphics_device.device(),
                 &position_buffer,
                 &normal_vector_buffer,
-                position_and_normal_buffer_bind_group_layout,
+                &position_and_normal_buffer_bind_group_layout,
             );
 
         let chunk_submesh_and_argument_buffer_bind_group =
@@ -335,7 +352,7 @@ impl VoxelObjectGPUBufferManager {
                 graphics_device.device(),
                 &chunk_submesh_buffer,
                 &indirect_argument_buffer,
-                chunk_submesh_and_argument_buffer_bind_group_layout,
+                &chunk_submesh_and_argument_buffer_bind_group_layout,
             );
 
         let chunk_submesh_and_indexed_argument_buffer_bind_group =
@@ -343,7 +360,7 @@ impl VoxelObjectGPUBufferManager {
                 graphics_device.device(),
                 &chunk_submesh_buffer,
                 &indexed_indirect_argument_buffer,
-                chunk_submesh_and_argument_buffer_bind_group_layout,
+                &chunk_submesh_and_argument_buffer_bind_group_layout,
             );
 
         Self {
@@ -435,10 +452,12 @@ impl VoxelObjectGPUBufferManager {
     /// created.
     pub fn get_or_create_position_and_normal_buffer_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT.get_or_init(|| {
-            Self::create_position_and_normal_buffer_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(
+            Self::POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT_ID,
+            || Self::create_position_and_normal_buffer_bind_group_layout(graphics_device.device()),
+        )
     }
 
     /// Returns the layout of the bind group for the chunk submesh and indirect
@@ -446,10 +465,12 @@ impl VoxelObjectGPUBufferManager {
     /// been created.
     pub fn get_or_create_submesh_and_argument_buffer_bind_group_layout(
         graphics_device: &GraphicsDevice,
-    ) -> &wgpu::BindGroupLayout {
-        CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT.get_or_init(|| {
-            Self::create_submesh_and_argument_buffer_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> wgpu::BindGroupLayout {
+        bind_group_layout_registry.get_or_create_layout(
+            Self::CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT_ID,
+            || Self::create_submesh_and_argument_buffer_bind_group_layout(graphics_device.device()),
+        )
     }
 
     /// Returns a reference to the bind group for the position and normal
@@ -476,6 +497,7 @@ impl VoxelObjectGPUBufferManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         voxel_object: &mut MeshedChunkedVoxelObject,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) {
         let mesh = voxel_object.mesh();
 
@@ -519,14 +541,17 @@ impl VoxelObjectGPUBufferManager {
             );
 
             let position_and_normal_buffer_bind_group_layout =
-                Self::get_or_create_position_and_normal_buffer_bind_group_layout(graphics_device);
+                Self::get_or_create_position_and_normal_buffer_bind_group_layout(
+                    graphics_device,
+                    bind_group_layout_registry,
+                );
 
             self.position_and_normal_buffer_bind_group =
                 Self::create_position_and_normal_buffer_bind_group(
                     graphics_device.device(),
                     &self.position_buffer,
                     &self.normal_vector_buffer,
-                    position_and_normal_buffer_bind_group_layout,
+                    &position_and_normal_buffer_bind_group_layout,
                 );
         } else {
             // If the updated vertex data still fits in the existing buffers, we write each
@@ -605,14 +630,17 @@ impl VoxelObjectGPUBufferManager {
             );
 
             let chunk_submesh_and_argument_buffer_bind_group_layout =
-                Self::get_or_create_submesh_and_argument_buffer_bind_group_layout(graphics_device);
+                Self::get_or_create_submesh_and_argument_buffer_bind_group_layout(
+                    graphics_device,
+                    bind_group_layout_registry,
+                );
 
             self.chunk_submesh_and_argument_buffer_bind_group =
                 Self::create_submesh_and_argument_buffer_bind_group(
                     graphics_device.device(),
                     &self.chunk_submesh_buffer,
                     &self.indirect_argument_buffer,
-                    chunk_submesh_and_argument_buffer_bind_group_layout,
+                    &chunk_submesh_and_argument_buffer_bind_group_layout,
                 );
 
             self.chunk_submesh_and_indexed_argument_buffer_bind_group =
@@ -620,7 +648,7 @@ impl VoxelObjectGPUBufferManager {
                     graphics_device.device(),
                     &self.chunk_submesh_buffer,
                     &self.indexed_indirect_argument_buffer,
-                    chunk_submesh_and_argument_buffer_bind_group_layout,
+                    &chunk_submesh_and_argument_buffer_bind_group_layout,
                 );
         } else {
             // If the updated chunks still fit in the existing buffer, we simply overwrite

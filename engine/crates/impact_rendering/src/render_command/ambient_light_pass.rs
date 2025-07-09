@@ -16,8 +16,9 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
-    shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    wgpu,
 };
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
 use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
@@ -41,6 +42,7 @@ impl AmbientLightPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
         let push_constants = AmbientLightShaderTemplate::push_constants();
         let input_render_attachments = AmbientLightShaderTemplate::input_render_attachments();
@@ -54,6 +56,7 @@ impl AmbientLightPass {
 
         let mut bind_group_layouts = vec![CameraGPUBufferManager::get_or_create_bind_group_layout(
             graphics_device,
+            bind_group_layout_registry,
         )];
 
         bind_group_layouts.extend(
@@ -61,19 +64,25 @@ impl AmbientLightPass {
                 .create_and_get_render_attachment_texture_bind_group_layouts(
                     graphics_device,
                     &input_render_attachments,
-                ),
+                )
+                .cloned(),
         );
 
         bind_group_layouts.push(
-            LightGPUBufferManager::get_or_create_ambient_light_bind_group_layout(graphics_device),
+            LightGPUBufferManager::get_or_create_ambient_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            ),
         );
 
         bind_group_layouts
-            .push(lookup_tables::specular_ggx_reflectance::get_or_create_texture_and_sampler_bind_group_layout(graphics_device));
+            .push(lookup_tables::specular_ggx_reflectance::get_or_create_texture_and_sampler_bind_group_layout(graphics_device, bind_group_layout_registry));
 
+        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
+            bind_group_layouts.iter().collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &bind_group_layouts,
+            &bind_group_layout_refs,
             &push_constants.create_ranges(),
             "Ambient light pass render pipeline layout",
         );

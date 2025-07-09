@@ -10,8 +10,9 @@ use crate::{
 use anyhow::Result;
 use gizmo_passes::GizmoPasses;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
-    shader::ShaderManager, storage::StorageGPUBufferManager,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    storage::StorageGPUBufferManager,
 };
 use impact_light::LightStorage;
 use impact_material::MaterialLibrary;
@@ -59,6 +60,7 @@ impl RenderCommandManager {
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         config: &BasicRenderingConfig,
     ) -> Self {
         let attachment_clearing_pass = AttachmentClearingPass::new(
@@ -71,6 +73,7 @@ impl RenderCommandManager {
         let non_physical_model_depth_prepass = DepthPrepass::new(
             graphics_device,
             shader_manager,
+            bind_group_layout_registry,
             StencilValue::NonPhysicalModel,
             config,
         );
@@ -78,29 +81,49 @@ impl RenderCommandManager {
         let geometry_pass = GeometryPass::new(config);
 
         let omnidirectional_light_shadow_map_update_passes =
-            OmnidirectionalLightShadowMapUpdatePasses::new(graphics_device, shader_manager);
+            OmnidirectionalLightShadowMapUpdatePasses::new(
+                graphics_device,
+                shader_manager,
+                bind_group_layout_registry,
+            );
 
         let unidirectional_light_shadow_map_update_passes =
-            UnidirectionalLightShadowMapUpdatePasses::new(graphics_device, shader_manager);
+            UnidirectionalLightShadowMapUpdatePasses::new(
+                graphics_device,
+                shader_manager,
+                bind_group_layout_registry,
+            );
 
         let ambient_light_pass = AmbientLightPass::new(
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
+            bind_group_layout_registry,
         );
 
         let directional_light_pass = DirectionalLightPass::new(
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
+            bind_group_layout_registry,
         );
 
         let skybox_pass = SkyboxPass::new(graphics_device, shader_manager);
 
-        let voxel_render_commands =
-            VoxelRenderCommands::new(graphics_device, shader_manager, &geometry_pass, config);
+        let voxel_render_commands = VoxelRenderCommands::new(
+            graphics_device,
+            shader_manager,
+            bind_group_layout_registry,
+            &geometry_pass,
+            config,
+        );
 
-        let gizmo_passes = GizmoPasses::new(graphics_device, rendering_surface, shader_manager);
+        let gizmo_passes = GizmoPasses::new(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            bind_group_layout_registry,
+        );
 
         Self {
             attachment_clearing_pass,
@@ -127,6 +150,7 @@ impl RenderCommandManager {
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
         render_resources: &R,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<()>
     where
         R: BasicRenderResources + VoxelRenderResources,
@@ -139,6 +163,7 @@ impl RenderCommandManager {
             shader_manager,
             material_library,
             render_resources,
+            bind_group_layout_registry,
         )?;
 
         self.omnidirectional_light_shadow_map_update_passes
@@ -172,6 +197,7 @@ impl RenderCommandManager {
         self.skybox_pass.sync_with_render_resources(
             graphics_device,
             shader_manager,
+            bind_group_layout_registry,
             render_resources,
         );
 

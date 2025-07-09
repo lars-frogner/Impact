@@ -29,6 +29,7 @@ define_task!(
                 &mut shader_manager,
                 &material_library,
                 render_resource_manager.synchronized(),
+                renderer.bind_group_layout_registry(),
             )
         })
     }

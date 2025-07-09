@@ -13,6 +13,7 @@ use crate::{
 use anyhow::Result;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
+use impact_gpu::bind_group_layout::BindGroupLayoutRegistry;
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
 use impact_mesh::{
     LineSegmentMeshID, TriangleMeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh,
@@ -289,6 +290,7 @@ impl DesynchronizedRenderResources {
     /// GPU buffer manager in sync with the given scene camera.
     fn sync_camera_buffer_with_scene_camera(
         graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         camera_buffer_manager: &mut Option<CameraGPUBufferManager>,
         scene_camera: Option<&SceneCamera>,
     ) {
@@ -300,6 +302,7 @@ impl DesynchronizedRenderResources {
                 // method is called
                 *camera_buffer_manager = Some(CameraGPUBufferManager::for_camera(
                     graphics_device,
+                    bind_group_layout_registry,
                     scene_camera,
                 ));
             }
@@ -388,6 +391,7 @@ impl DesynchronizedRenderResources {
     fn sync_voxel_resources_with_voxel_manager(
         graphics_device: &GraphicsDevice,
         assets: &RwLock<Assets>,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         (voxel_material_resource_manager, voxel_object_buffer_managers): &mut (
             Option<VoxelMaterialGPUResourceManager>,
             VoxelObjectGPUBufferManagerMap,
@@ -404,18 +408,26 @@ impl DesynchronizedRenderResources {
                     graphics_device,
                     &mut assets.write().unwrap(),
                     &voxel_manager.type_registry,
+                    bind_group_layout_registry,
                 )?);
         }
 
         for (voxel_object_id, voxel_object) in voxel_object_manager.voxel_objects_mut() {
             voxel_object_buffer_managers
                 .entry(*voxel_object_id)
-                .and_modify(|manager| manager.sync_with_voxel_object(graphics_device, voxel_object))
+                .and_modify(|manager| {
+                    manager.sync_with_voxel_object(
+                        graphics_device,
+                        voxel_object,
+                        bind_group_layout_registry,
+                    );
+                })
                 .or_insert_with(|| {
                     VoxelObjectGPUBufferManager::for_voxel_object(
                         graphics_device,
                         *voxel_object_id,
                         voxel_object,
+                        bind_group_layout_registry,
                     )
                 });
         }
@@ -431,17 +443,23 @@ impl DesynchronizedRenderResources {
     /// buffer manager in sync with the lights in the given light storage.
     fn sync_light_buffers_with_light_storage(
         graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_buffer_manager: &mut Option<LightGPUBufferManager>,
         light_storage: &LightStorage,
         shadow_mapping_config: &ShadowMappingConfig,
     ) {
         if let Some(light_buffer_manager) = light_buffer_manager {
-            light_buffer_manager.sync_with_light_storage(graphics_device, light_storage);
+            light_buffer_manager.sync_with_light_storage(
+                graphics_device,
+                bind_group_layout_registry,
+                light_storage,
+            );
         } else {
             // We initialize the light GPU buffer manager the first time this
             // method is called
             *light_buffer_manager = Some(LightGPUBufferManager::for_light_storage(
                 graphics_device,
+                bind_group_layout_registry,
                 light_storage,
                 shadow_mapping_config,
             ));

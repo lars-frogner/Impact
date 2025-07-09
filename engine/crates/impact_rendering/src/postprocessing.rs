@@ -20,6 +20,7 @@ use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
 use anyhow::Result;
 use capturing::{CapturingCamera, CapturingCameraConfig};
 use impact_gpu::{
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
@@ -90,6 +91,7 @@ impl Postprocessor {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         let ambient_occlusion_commands = AmbientOcclusionRenderCommands::new(
             ambient_occlusion_config,
@@ -98,6 +100,7 @@ impl Postprocessor {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
         )?;
 
         let temporal_anti_aliasing_commands = TemporalAntiAliasingRenderCommands::new(
@@ -107,6 +110,7 @@ impl Postprocessor {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
         )?;
 
         let capturing_camera = CapturingCamera::new(
@@ -117,6 +121,7 @@ impl Postprocessor {
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             storage_gpu_buffer_manager,
+            bind_group_layout_registry,
         )?;
 
         let render_attachment_visualization_passes = RenderAttachmentVisualizationPasses::new(
@@ -125,6 +130,7 @@ impl Postprocessor {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
         )?;
 
         Ok(Self {

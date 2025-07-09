@@ -11,7 +11,8 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
 use impact_scene::skybox::Skybox;
@@ -58,6 +59,7 @@ impl SkyboxPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         render_resources: &impl BasicRenderResources,
     ) {
         match (
@@ -76,10 +78,15 @@ impl SkyboxPass {
                     &SkyboxShaderTemplate,
                 );
 
+                let camera_bind_group_layout =
+                    CameraGPUBufferManager::get_or_create_bind_group_layout(
+                        graphics_device,
+                        bind_group_layout_registry,
+                    );
                 let pipeline_layout = render_command::create_render_pipeline_layout(
                     graphics_device.device(),
                     &[
-                        CameraGPUBufferManager::get_or_create_bind_group_layout(graphics_device),
+                        &camera_bind_group_layout,
                         skybox_resource_manager.bind_group_layout(),
                     ],
                     &self.push_constant_ranges,

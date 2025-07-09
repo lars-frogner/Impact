@@ -15,8 +15,9 @@ use dynamic_range_compression::{
     DynamicRangeCompressionConfig, DynamicRangeCompressionRenderCommands,
 };
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager,
-    shader::ShaderManager, storage::StorageGPUBufferManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    storage::StorageGPUBufferManager, wgpu,
 };
 use impact_math::Bounds;
 use roc_integration::roc;
@@ -189,6 +190,7 @@ impl CapturingCamera {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
         let average_luminance_commands = AverageLuminanceComputeCommands::new(
             config.average_luminance_computation.clone(),
@@ -213,6 +215,7 @@ impl CapturingCamera {
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
+            bind_group_layout_registry,
         )?;
 
         let initial_exposure = config

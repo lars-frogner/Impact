@@ -2,6 +2,7 @@
 
 use crate::brdf;
 use impact_gpu::{
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID},
     texture::{
@@ -12,8 +13,8 @@ use impact_gpu::{
     wgpu,
 };
 use impact_material::MaterialTextureProvider;
-use impact_math::{hash32, hash64};
-use std::sync::{LazyLock, OnceLock};
+use impact_math::{ConstStringHash64, hash32, hash64};
+use std::sync::LazyLock;
 
 const TEXTURE_NAME: &str = "specular_ggx_reflectance_lookup_table";
 
@@ -31,7 +32,8 @@ static SAMPLER_ID: LazyLock<SamplerID> = LazyLock::new(|| (&SAMPLER_CONFIG).into
 static RESOURCE_GROUP_ID: LazyLock<GPUResourceGroupID> =
     LazyLock::new(|| GPUResourceGroupID(hash64!("SpecularGGXReflectanceLookupTable")));
 
-static BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+const BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
+    ConstStringHash64::new("SpecularGGXReflectanceLookupTable");
 
 /// Returns the name of the specular GGX reflectance lookup table texture.
 pub const fn texture_name() -> &'static str {
@@ -81,8 +83,9 @@ pub fn create_resource_group(
 /// [`resource_group_id`]).
 pub fn get_or_create_texture_and_sampler_bind_group_layout(
     graphics_device: &GraphicsDevice,
-) -> &'static wgpu::BindGroupLayout {
-    BIND_GROUP_LAYOUT.get_or_init(|| {
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
+) -> wgpu::BindGroupLayout {
+    bind_group_layout_registry.get_or_create_layout(BIND_GROUP_LAYOUT_ID, || {
         let texture_entry = texture::create_texture_bind_group_layout_entry(
             0,
             VISIBILITY,

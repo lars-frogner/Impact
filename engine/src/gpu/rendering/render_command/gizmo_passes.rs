@@ -4,6 +4,7 @@ use crate::gizmo::{self, GizmoObscurability};
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     shader::{Shader, ShaderManager},
@@ -48,9 +49,12 @@ impl GizmoPasses {
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
-        let camera_bind_group_layout =
-            CameraGPUBufferManager::get_or_create_bind_group_layout(graphics_device);
+        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+            graphics_device,
+            bind_group_layout_registry,
+        );
 
         let vertex_buffer_layouts = Self::vertex_buffer_layouts();
 
@@ -64,7 +68,7 @@ impl GizmoPasses {
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[camera_bind_group_layout],
+            &[&camera_bind_group_layout],
             &[],
             "Gizmo pass render pipeline layout",
         );

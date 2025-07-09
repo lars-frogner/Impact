@@ -21,6 +21,7 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::{BufferableCamera, CameraGPUBufferManager};
 use impact_geometry::{Frustum, OrientedBox};
+use impact_gpu::bind_group_layout::BindGroupLayoutRegistry;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager};
 use impact_mesh::buffer::VertexBufferable;
 use impact_model::{
@@ -75,17 +76,20 @@ impl VoxelRenderCommands {
     pub fn new(
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         geometry_pass: &GeometryPass,
         config: &BasicRenderingConfig,
     ) -> Self {
         let geometry_pipeline = VoxelGeometryPipeline::new(
             graphics_device,
+            bind_group_layout_registry,
             geometry_pass.color_target_states().to_vec(),
             Some(geometry_pass.depth_stencil_state().clone()),
             config,
         );
 
-        let chunk_culling_pass = VoxelChunkCullingPass::new(graphics_device, shader_manager);
+        let chunk_culling_pass =
+            VoxelChunkCullingPass::new(graphics_device, shader_manager, bind_group_layout_registry);
 
         Self {
             geometry_pipeline,
@@ -280,17 +284,21 @@ impl VoxelRenderCommands {
 }
 
 impl VoxelChunkCullingPass {
-    fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
+    fn new(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> Self {
         let bind_group_layout =
             VoxelObjectGPUBufferManager::get_or_create_submesh_and_argument_buffer_bind_group_layout(
-                graphics_device,
+                graphics_device,bind_group_layout_registry
             );
 
         let push_constants = VoxelChunkCullingShaderTemplate::push_constants();
 
         let pipeline_layout = compute::create_compute_pipeline_layout(
             graphics_device.device(),
-            &[bind_group_layout],
+            &[&bind_group_layout],
             &push_constants.create_ranges(),
             "Voxel chunk culling pass compute pipeline layout",
         );
@@ -582,29 +590,36 @@ impl VoxelChunkCullingPass {
 impl VoxelGeometryPipeline {
     pub fn new(
         graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         color_target_states: Vec<Option<wgpu::ColorTargetState>>,
         depth_stencil_state: Option<wgpu::DepthStencilState>,
         config: &BasicRenderingConfig,
     ) -> Self {
         let push_constants = VoxelGeometryShaderTemplate::push_constants();
 
-        let camera_bind_group_layout =
-            CameraGPUBufferManager::get_or_create_bind_group_layout(graphics_device);
+        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+            graphics_device,
+            bind_group_layout_registry,
+        );
 
         let material_bind_group_layout =
-            VoxelMaterialGPUResourceManager::get_or_create_bind_group_layout(graphics_device);
+            VoxelMaterialGPUResourceManager::get_or_create_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
 
         let position_and_normal_buffer_bind_group_layout =
             VoxelObjectGPUBufferManager::get_or_create_position_and_normal_buffer_bind_group_layout(
                 graphics_device,
+                bind_group_layout_registry,
             );
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[
-                camera_bind_group_layout,
-                material_bind_group_layout,
-                position_and_normal_buffer_bind_group_layout,
+                &camera_bind_group_layout,
+                &material_bind_group_layout,
+                &position_and_normal_buffer_bind_group_layout,
             ],
             &push_constants.create_ranges(),
             "Voxel geometry pass render pipeline layout",

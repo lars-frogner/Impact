@@ -13,7 +13,8 @@ use anyhow::{Result, anyhow};
 use impact_containers::HashSet;
 use impact_geometry::{CubemapFace, Frustum, OrientedBox};
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_light::{
     LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
@@ -54,7 +55,11 @@ pub struct UnidirectionalLightShadowMapUpdatePasses {
 impl OmnidirectionalLightShadowMapUpdatePasses {
     const CLEAR_COLOR: wgpu::Color = wgpu::Color::WHITE;
 
-    pub fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
+    pub fn new(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> Self {
         let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
 
         let shader_template = OmnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
@@ -63,13 +68,15 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
         let push_constants = OmnidirectionalLightShadowMapShaderTemplate::push_constants();
 
+        let omnidirectional_light_bind_group_layout =
+            LightGPUBufferManager::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
+
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[
-                LightGPUBufferManager::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
-                    graphics_device,
-                ),
-            ],
+            &[&omnidirectional_light_bind_group_layout],
             &push_constants.create_ranges(),
             "Omnidirectional light shadow map update render pipeline layout",
         );
@@ -410,7 +417,11 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 impl UnidirectionalLightShadowMapUpdatePasses {
     const CLEAR_COLOR: wgpu::Color = wgpu::Color::WHITE;
 
-    pub fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
+    pub fn new(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+    ) -> Self {
         let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
 
         let shader_template = UnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
@@ -419,13 +430,15 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
         let push_constants = UnidirectionalLightShadowMapShaderTemplate::push_constants();
 
+        let unidirectional_light_bind_group_layout =
+            LightGPUBufferManager::get_or_create_shadowable_unidirectional_light_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            );
+
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[
-                LightGPUBufferManager::get_or_create_shadowable_unidirectional_light_bind_group_layout(
-                    graphics_device,
-                ),
-            ],
+            &[&unidirectional_light_bind_group_layout],
             &push_constants.create_ranges(),
             "Unidirectional light shadow map update render pipeline layout",
         );

@@ -11,8 +11,9 @@ pub mod tasks;
 use crate::{scene::Scene, ui::UserInterface};
 use anyhow::Result;
 use impact_gpu::{
-    device::GraphicsDevice, query::TimestampQueryManager, resource_group::GPUResourceGroupManager,
-    shader::ShaderManager, storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
+    query::TimestampQueryManager, resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator,
 };
 use impact_light::shadow_map::ShadowMappingConfig;
 use impact_rendering::{
@@ -40,6 +41,7 @@ pub struct RenderingSystem {
     surface_texture_to_present: Option<wgpu::SurfaceTexture>,
     mipmapper_generator: Arc<MipmapperGenerator>,
     shader_manager: RwLock<ShaderManager>,
+    bind_group_layout_registry: BindGroupLayoutRegistry,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_command_manager: RwLock<RenderCommandManager>,
     render_attachment_texture_manager: RwLock<RenderAttachmentTextureManager>,
@@ -85,11 +87,14 @@ impl RenderingSystem {
         let mut render_attachment_texture_manager =
             RenderAttachmentTextureManager::new(&graphics_device, &rendering_surface);
 
+        let bind_group_layout_registry = BindGroupLayoutRegistry::new();
+
         let render_command_manager = RenderCommandManager::new(
             &graphics_device,
             &rendering_surface,
             &mut shader_manager,
             &mut render_attachment_texture_manager,
+            &bind_group_layout_registry,
             &config.basic,
         );
 
@@ -107,6 +112,7 @@ impl RenderingSystem {
             &mut render_attachment_texture_manager,
             &mut gpu_resource_group_manager,
             &mut storage_gpu_buffer_manager,
+            &bind_group_layout_registry,
         )?;
 
         let timestamp_query_manager = TimestampQueryManager::new(
@@ -121,6 +127,7 @@ impl RenderingSystem {
             surface_texture_to_present: None,
             mipmapper_generator,
             shader_manager: RwLock::new(shader_manager),
+            bind_group_layout_registry,
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(render_command_manager),
             render_attachment_texture_manager: RwLock::new(render_attachment_texture_manager),
@@ -152,6 +159,11 @@ impl RenderingSystem {
     /// Returns a reference to the [`ShaderManager`], guarded by a [`RwLock`].
     pub fn shader_manager(&self) -> &RwLock<ShaderManager> {
         &self.shader_manager
+    }
+
+    /// Returns a reference to the [`BindGroupLayoutRegistry`].
+    pub fn bind_group_layout_registry(&self) -> &BindGroupLayoutRegistry {
+        &self.bind_group_layout_registry
     }
 
     /// Returns a reference to the [`RenderResourceManager`], guarded
