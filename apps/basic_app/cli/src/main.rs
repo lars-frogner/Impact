@@ -69,7 +69,7 @@ fn run(config_path: PathBuf) -> Result<()> {
                 config_path_bytes.len(),
             ))
         },
-        |error| Err(anyhow!("{:#}", error)),
+        |error| Err(anyhow!("{error:#}")),
     )
 }
 
@@ -84,7 +84,7 @@ fn fuzz(test: FuzzTest, iterations: u64, seed: u64, verbose: bool) -> Result<()>
                     if verbose { 1 } else { 0 },
                 ))
             },
-            |error| Err(anyhow!("{:#}", error)),
+            |error| Err(anyhow!("{error:#}")),
         ),
     }
 }
