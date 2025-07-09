@@ -17,7 +17,7 @@ define_ffi! {
 pub extern "C" fn roc_fx_execute_engine_command(
     command_bytes: &RocList<u8>,
 ) -> RocResult<(), RocStr> {
-    log::trace!("Platform: execute_engine_command called");
+    impact_log::trace!("Platform: execute_engine_command called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_execute_engine_command)(command_bytes) },
         to_roc_err,
@@ -26,7 +26,7 @@ pub extern "C" fn roc_fx_execute_engine_command(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn roc_fx_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
-    log::trace!("Platform: execute_ui_command called");
+    impact_log::trace!("Platform: execute_ui_command called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_execute_ui_command)(command_bytes) },
         to_roc_err,
@@ -38,7 +38,7 @@ pub extern "C" fn roc_fx_create_entity_with_id(
     entity_id: u64,
     component_bytes: &RocList<u8>,
 ) -> RocResult<(), RocStr> {
-    log::trace!("Platform: create_entity_with_id called");
+    impact_log::trace!("Platform: create_entity_with_id called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_create_entity_with_id)(entity_id, component_bytes) },
         to_roc_err,
@@ -47,7 +47,7 @@ pub extern "C" fn roc_fx_create_entity_with_id(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResult<u64, RocStr> {
-    log::trace!("Platform: create_entity called");
+    impact_log::trace!("Platform: create_entity called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_create_entity)(component_bytes) },
         to_roc_err,
@@ -58,7 +58,7 @@ pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResu
 pub extern "C" fn roc_fx_create_entities(
     component_bytes: &RocList<u8>,
 ) -> RocResult<RocList<u64>, RocStr> {
-    log::trace!("Platform: create_entities called");
+    impact_log::trace!("Platform: create_entities called");
     ImpactGameFFI::call(
         |ffi| unsafe { (ffi.roc_create_entities)(component_bytes) },
         to_roc_err,
