@@ -121,8 +121,6 @@ env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
 impact = { path = "../../engine", features = ["window", "egui", "obj", "ply"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
-impact_ecs = { path = "../../engine/crates/impact_ecs" }
-impact_io = { path = "../../engine/crates/impact_io" }
 impact_log = { path = "../../engine/crates/impact_log" }
 inventory = "0.3"
 libloading = "0.8"
