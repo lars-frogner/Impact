@@ -565,7 +565,7 @@ impl LightStorage {
     /// Adds the given [`AmbientLight`] to the storage.
     ///
     /// # Returns
-    /// A new [`LightID`] representing the added light source.
+    /// A new [`AmbientLightID`] representing the added light source.
     pub fn add_ambient_light(&mut self, ambient_light: AmbientLight) -> AmbientLightID {
         let light_id = AmbientLightID(self.create_new_light_id());
         self.ambient_light_buffer
@@ -580,7 +580,7 @@ impl LightStorage {
     /// Adds the given [`OmnidirectionalLight`] to the storage.
     ///
     /// # Returns
-    /// A new [`LightID`] representing the added light source.
+    /// A new [`OmnidirectionalLightID`] representing the added light source.
     pub fn add_omnidirectional_light(
         &mut self,
         omnidirectional_light: OmnidirectionalLight,
@@ -594,7 +594,8 @@ impl LightStorage {
     /// Adds the given [`ShadowableOmnidirectionalLight`] to the storage.
     ///
     /// # Returns
-    /// A new [`LightID`] representing the added light source.
+    /// A new [`ShadowableOmnidirectionalLightID`] representing the added light
+    /// source.
     pub fn add_shadowable_omnidirectional_light(
         &mut self,
         omnidirectional_light: ShadowableOmnidirectionalLight,
@@ -608,7 +609,7 @@ impl LightStorage {
     /// Adds the given [`UnidirectionalLight`] to the storage.
     ///
     /// # Returns
-    /// A new [`LightID`] representing the added light source.
+    /// A new [`UnidirectionalLightID`] representing the added light source.
     pub fn add_unidirectional_light(
         &mut self,
         unidirectional_light: UnidirectionalLight,
@@ -622,7 +623,8 @@ impl LightStorage {
     /// Adds the given [`ShadowableUnidirectionalLight`] to the storage.
     ///
     /// # Returns
-    /// A new [`LightID`] representing the added light source.
+    /// A new [`ShadowableUnidirectionalLightID`] representing the added light
+    /// source.
     pub fn add_shadowable_unidirectional_light(
         &mut self,
         unidirectional_light: ShadowableUnidirectionalLight,
