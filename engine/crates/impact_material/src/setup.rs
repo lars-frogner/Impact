@@ -9,7 +9,7 @@ use std::{hash::Hash, sync::RwLock};
 
 /// Removes the instance features assocated with the given [`MaterialHandle`]
 /// from the [`InstanceFeatureManager`].
-pub fn cleanup_material<MID: Eq + Hash>(
+pub fn cleanup_material<MID: Clone + Eq + Hash>(
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     material_handle: &MaterialHandle,
     desynchronized: &mut bool,
@@ -29,7 +29,7 @@ pub fn cleanup_material<MID: Eq + Hash>(
 /// Checks if the given entity has a [`MaterialHandle`], and if so, removes the
 /// assocated instance features from the given [`InstanceFeatureManager`].
 #[cfg(feature = "ecs")]
-pub fn cleanup_material_for_removed_entity<MID: Eq + Hash>(
+pub fn cleanup_material_for_removed_entity<MID: Clone + Eq + Hash>(
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,

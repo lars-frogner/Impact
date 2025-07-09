@@ -43,7 +43,7 @@ static FIXED_COLOR_MATERIAL_ID: LazyLock<MaterialID> =
 static FIXED_TEXTURE_MATERIAL_ID: LazyLock<MaterialID> =
     LazyLock::new(|| MaterialID(hash64!("FixedTextureMaterial")));
 
-pub fn setup_fixed_color_material<MID: Eq + Hash>(
+pub fn setup_fixed_color_material<MID: Clone + Eq + Hash>(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
     fixed_color: &FixedColor,

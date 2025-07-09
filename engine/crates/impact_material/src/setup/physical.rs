@@ -336,7 +336,7 @@ impl ParallaxMap {
     }
 }
 
-pub fn setup_physical_material<MID: Eq + Hash>(
+pub fn setup_physical_material<MID: Clone + Eq + Hash>(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &mut MaterialLibrary,

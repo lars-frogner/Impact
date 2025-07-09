@@ -20,6 +20,7 @@ pub struct ModelID {
 }
 
 pub type InstanceFeatureManager = impact_model::InstanceFeatureManager<ModelID>;
+pub type InstanceFeatureManagerState = impact_model::InstanceFeatureManagerState<ModelID>;
 
 impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the given triangle
