@@ -339,10 +339,12 @@ impl Engine {
         }
     }
 
-    /// Resets the scene and ECS world to the initial empty state.
-    pub fn clear_world(&self) {
+    /// Resets the scene, ECS world and physics simulator to the initial empty
+    /// state and sets the simulation time to zero.
+    pub fn reset_world(&self) {
         self.ecs_world.write().unwrap().remove_all_entities();
         self.scene.read().unwrap().clear();
+        self.simulator.write().unwrap().reset();
         self.renderer
             .read()
             .unwrap()

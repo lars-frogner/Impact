@@ -141,6 +141,11 @@ impl<F: Float> DragLoadMapRepository<F> {
     ) {
         let _ = self.add_drag_load_map(mesh_id, map);
     }
+
+    /// Removes all stored drag load maps.
+    pub fn clear(&mut self) {
+        self.drag_load_maps.clear();
+    }
 }
 
 impl DragLoadMapConfig {

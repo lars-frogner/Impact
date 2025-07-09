@@ -221,6 +221,12 @@ impl ConstraintManager {
             .apply_constrained_velocities_and_corrected_configurations(ecs_world);
     }
 
+    /// Removes all stored constraint state.
+    pub fn clear(&mut self) {
+        self.solver.clear();
+        self.spherical_joints.clear();
+    }
+
     fn create_new_constraint_id(&mut self) -> ConstraintID {
         let constraint_id = ConstraintID(self.constraint_id_counter);
         self.constraint_id_counter = self.constraint_id_counter.checked_add(1).unwrap();
