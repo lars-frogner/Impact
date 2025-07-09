@@ -14,7 +14,6 @@ import pf.Light.AmbientEmission
 import pf.Setup.BoxMesh
 import pf.Comp.ConstantRotation
 import pf.Setup.CylinderMesh
-import pf.Mesh.TriangleMeshHandle
 import pf.Comp.MotionControl
 import pf.Setup.NormalMap
 import pf.Comp.OrientationControl
@@ -34,7 +33,7 @@ import pf.Setup.UniformMetalness
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Velocity
-import pf.Mesh.MeshID as MeshID
+import pf.Mesh.TriangleMeshID as TriangleMeshID
 import pf.Physics.AngularVelocity
 import pf.Rendering.TextureID as TextureID
 
@@ -93,7 +92,7 @@ player =
 
 dragon =
     Entity.new
-    |> Mesh.TriangleMeshHandle.add_new(MeshID.from_name("dragon"))
+    |> TriangleMeshID.add_from_name("dragon")
     |> Comp.ReferenceFrame.add_new(
         (0.0, 3.5, 11.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
@@ -117,7 +116,7 @@ pole =
 
 abstract_object =
     Entity.new
-    |> Mesh.TriangleMeshHandle.add_new(MeshID.from_name("abstract_object"))
+    |> TriangleMeshID.add_from_name("abstract_object")
     |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((7.0, 9.7, 5.0), 0.02)
     |> Comp.ConstantRotation.add_new(
         0,
@@ -131,7 +130,7 @@ abstract_object =
 
 abstract_pyramid =
     Entity.new
-    |> Mesh.TriangleMeshHandle.add_new(MeshID.from_name("abstract_pyramid"))
+    |> TriangleMeshID.add_from_name("abstract_pyramid")
     |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((-1.0, 11.0, 9.0), 0.035)
     |> Comp.ConstantRotation.add_new(
         0,
@@ -165,7 +164,7 @@ sphere =
 
 abstract_cube =
     Entity.new
-    |> Mesh.TriangleMeshHandle.add_new(MeshID.from_name("abstract_cube"))
+    |> TriangleMeshID.add_from_name("abstract_cube")
     |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((-9.0, 7.8, 5.0), 0.016)
     |> Comp.ConstantRotation.add_new(
         0.0,
