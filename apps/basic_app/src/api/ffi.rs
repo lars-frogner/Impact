@@ -19,14 +19,14 @@ pub unsafe extern "C" fn run_with_config_at_path(
     let config_path = match unsafe { convert_string(config_path_ptr, config_path_len) } {
         Ok(config_path) => config_path,
         Err(error) => {
-            eprintln!("Invalid arguments to run_with_config_at_path: {error}");
+            eprintln!("Invalid arguments to run_with_config_at_path: {error:#}");
             return 1;
         }
     };
     match api::run_with_config_at_path(config_path) {
         Ok(()) => 0,
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("{error:#}");
             1
         }
     }
@@ -38,7 +38,7 @@ pub extern "C" fn fuzz_test_command_roundtrip(n_iterations: usize, seed: u64, ve
     match crate::scripting::fuzzing::fuzz_test_command_roundtrip(n_iterations, seed, verbose != 0) {
         Ok(()) => 0,
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("{error:#}");
             1
         }
     }
