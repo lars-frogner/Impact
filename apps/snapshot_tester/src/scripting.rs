@@ -9,7 +9,7 @@ use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 define_ffi! {
     name = ScriptFFI,
     lib_path_env = "SCRIPT_LIB_PATH",
-    lib_path_default = "../../../lib/libscript",
+    lib_path_default = "./libscript",
     roc__setup_scene_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
 }
 

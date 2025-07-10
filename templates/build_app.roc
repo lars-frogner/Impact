@@ -48,6 +48,11 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Fuzzing
             _ -> NoFuzzing
 
+    output_dir =
+        when Env.var!("OUTPUT_DIR") is
+            Ok(str) if !(Str.is_empty(str)) -> str
+            _ -> "dist"
+
     os_and_arch = get_os_and_arch!({})?
 
     build_platform!(platform_dir)?
@@ -59,6 +64,12 @@ main! = |_args|
     roc_build_script!(app_dir, roc_debug_mode)?
 
     link_script_with_platform!(platform_dir, app_dir)?
+
+    cargo_build_cli!(app_dir, rust_debug_mode, fuzzing_mode, os_and_arch)?
+
+    crate_name = find_crate_name!(app_dir)?
+
+    create_distribution!(app_dir, output_dir, crate_name, rust_debug_mode, os_and_arch)?
 
     Ok({})
 
@@ -164,6 +175,9 @@ copy_app_lib! : Str, [Debug, Release], OSAndArch => Result {} _
 copy_app_lib! = |app_dir, debug_mode, os_and_arch|
     Stdout.line!("Copying application library to application lib folder")?
 
+    Cmd.exec!("mkdir", ["-p", "${app_dir}/lib"])
+    |> Result.map_err(ErrCreatingLibDirectory)?
+
     crate_name = find_crate_name!(app_dir)?
     lib_extension = lib_file_extension(os_and_arch)
     target_triple = get_target_triple(os_and_arch)
@@ -257,3 +271,78 @@ link_script_with_platform! = |platform_dir, app_dir|
         ],
     )
     |> Result.map_err(ErrLinkingScriptWithPlatform)
+
+cargo_build_cli! : Str, [Debug, Release], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_cli! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building CLI binary with options: ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+
+    target_triple = get_target_triple(os_and_arch)
+
+    base_args = ["build", "--manifest-path", "${app_dir}/cli/Cargo.toml", "--target", target_triple]
+
+    debug_args =
+        when debug_mode is
+            Debug -> []
+            Release -> ["--release"]
+
+    fuzzing_args =
+        when fuzzing_mode is
+            NoFuzzing -> []
+            Fuzzing -> ["--features", "fuzzing"]
+
+    Cmd.exec!("cargo", List.concat(base_args, debug_args) |> List.concat(fuzzing_args))
+    |> Result.map_err(ErrBuildingCLI)
+
+create_distribution! : Str, Str, Str, [Debug, Release], OSAndArch => Result {} _
+create_distribution! = |app_dir, output_dir, crate_name, debug_mode, os_and_arch|
+    Stdout.line!("Creating distribution at ${output_dir}/")?
+
+    Cmd.exec!("mkdir", ["-p", "${output_dir}"])
+    |> Result.map_err(ErrCreatingDistDirectory)?
+
+    Cmd.exec!("cp", ["${app_dir}/lib/libapp", "${output_dir}/"])
+    |> Result.map_err(ErrCopyingToDistDirectory)?
+
+    Cmd.exec!("cp", ["${app_dir}/lib/libscript", "${output_dir}/"])
+    |> Result.map_err(ErrCopyingToDistDirectory)?
+
+    cli_target_dir = get_cli_target_dir!(app_dir, debug_mode, os_and_arch)
+    cli_binary_name = get_cli_binary_name(crate_name, os_and_arch)
+    cli_dest_name = get_cli_dest_name(crate_name, os_and_arch)
+
+    Cmd.exec!("cp", ["${cli_target_dir}${cli_binary_name}", "${output_dir}/${cli_dest_name}"])
+    |> Result.map_err(ErrCopyingToDistDirectory)?
+
+    Ok({})
+
+get_cli_target_dir! : Str, [Debug, Release], OSAndArch => Str
+get_cli_target_dir! = |app_dir, debug_mode, os_and_arch|
+    target_root =
+        when Env.var!("CARGO_TARGET_DIR") is
+            Ok(str) if !(Str.is_empty(str)) -> str
+            _ -> "${app_dir}/cli/target"
+
+    target_triple = get_target_triple(os_and_arch)
+    debug_or_release = if debug_mode == Debug then "debug" else "release"
+
+    when Env.var!("CARGO_BUILD_TARGET") is
+        Ok(target_env_var) ->
+            if Str.is_empty(target_env_var) then
+                "${target_root}/${target_triple}/${debug_or_release}/"
+            else
+                "${target_root}/${target_env_var}/${debug_or_release}/"
+
+        Err(_) ->
+            "${target_root}/${target_triple}/${debug_or_release}/"
+
+get_cli_binary_name : Str, OSAndArch -> Str
+get_cli_binary_name = |crate_name, os_and_arch|
+    when os_and_arch is
+        WindowsX64 | WindowsArm64 -> "${crate_name}_cli.exe"
+        _ -> "${crate_name}_cli"
+
+get_cli_dest_name : Str, OSAndArch -> Str
+get_cli_dest_name = |crate_name, os_and_arch|
+    when os_and_arch is
+        WindowsX64 | WindowsArm64 -> "${crate_name}.exe"
+        _ -> crate_name

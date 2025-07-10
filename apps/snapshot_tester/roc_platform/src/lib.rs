@@ -4,8 +4,8 @@ use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 define_ffi! {
     name = ImpactGameFFI,
-    lib_path_env = "BASIC_APP_LIB_PATH",
-    lib_path_default = "../../../lib/libapp",
+    lib_path_env = "APP_LIB_PATH",
+    lib_path_default = "./libapp",
     roc_execute_engine_command => unsafe extern "C" fn(&RocList<u8>) -> RocResult<(), RocStr>,
     roc_create_entity_with_id => unsafe extern "C" fn(u64, &RocList<u8>) -> RocResult<(), RocStr>,
     roc_create_entity => unsafe extern "C" fn(&RocList<u8>) -> RocResult<u64, RocStr>,
