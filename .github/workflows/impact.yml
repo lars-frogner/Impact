@@ -20,10 +20,10 @@ defaults:
   run:
     shell: bash
 
-# ───────────────────────────────────────────────────────────────
-# Build crates (debug + release)
-# ───────────────────────────────────────────────────────────────
 jobs:
+  # ───────────────────────────────────────────────────────────────
+  # Build crates
+  # ───────────────────────────────────────────────────────────────
   build:
     name: Build – ${{ matrix.workspace }} (${{ matrix.os }})
     strategy:
@@ -67,9 +67,57 @@ jobs:
         run: cargo build --release
 
   # ───────────────────────────────────────────────────────────────
-  # Build apps (debug + release)
+  # Check each feature
   # ───────────────────────────────────────────────────────────────
-  build_apps:
+  check-features:
+    name: Features – ${{ matrix.workspace }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        exclude:
+          - workspace: roc_platform/core
+            os: windows-latest
+          - workspace: apps/basic_app
+            os: windows-latest
+          - workspace: apps/snapshot_tester
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: r7kamura/rust-problem-matchers@v1
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: cargo hack check --each-feature
+        working-directory: ${{ matrix.workspace }}
+        run: cargo hack check --each-feature --no-dev-deps
+
+  # ───────────────────────────────────────────────────────────────
+  # Build apps
+  # ───────────────────────────────────────────────────────────────
+  build-apps:
     name: Apps – ${{ matrix.workspace }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -141,7 +189,7 @@ jobs:
   # AddressSanitizer tests
   # ───────────────────────────────────────────────────────────────
   test-asan:
-    name: ASan – ${{ matrix.os }}
+    name: ASan tests – ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -189,7 +237,7 @@ jobs:
   # Miri tests
   # ───────────────────────────────────────────────────────────────
   test-miri:
-    name: Miri – ${{ matrix.os }}
+    name: Miri tests – ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -228,6 +276,42 @@ jobs:
           MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-deterministic-floats"
         run: |
           cargo miri test --all-features --workspace
+
+  # ───────────────────────────────────────────────────────────────
+  # Snapshot tests
+  # ───────────────────────────────────────────────────────────────
+  test-snapshot:
+    name: Snapshot tests - ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      WORKSPACE: apps/snapshot_tester
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: r7kamura/rust-problem-matchers@v1
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ env.WORKSPACE }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
+
+      - id: roc
+        uses: hasnep/setup-roc@v0.5.0
+        with:
+          roc-version: nightly
+
+      - name: Run tests
+        working-directory: ${{ env.WORKSPACE }}
+        run: ./run.sh
 
   # ───────────────────────────────────────────────────────────────
   # Clippy
@@ -355,51 +439,3 @@ jobs:
       - name: cargo doc
         working-directory: ${{ matrix.workspace }}
         run: cargo doc --workspace --no-deps --document-private-items
-
-  # ───────────────────────────────────────────────────────────────
-  # Check each feature
-  # ───────────────────────────────────────────────────────────────
-  check-features:
-    name: Features – ${{ matrix.workspace }} (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        workspace:
-          [
-            engine,
-            roc_integration,
-            roc_platform/core,
-            apps/basic_app,
-            apps/snapshot_tester,
-          ]
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        exclude:
-          - workspace: roc_platform/core
-            os: windows-latest
-          - workspace: apps/basic_app
-            os: windows-latest
-          - workspace: apps/snapshot_tester
-            os: windows-latest
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
-
-      - uses: r7kamura/rust-problem-matchers@v1
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            ${{ matrix.workspace }}
-
-      - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
-
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-hack
-
-      - name: cargo hack check --each-feature
-        working-directory: ${{ matrix.workspace }}
-        run: cargo hack check --each-feature --no-dev-deps
