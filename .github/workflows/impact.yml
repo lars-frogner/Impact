@@ -16,94 +16,90 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
+# ───────────────────────────────────────────────────────────────
+# Build crates (debug + release)
+# ───────────────────────────────────────────────────────────────
 jobs:
-  # ───────────────────────────────────────────────────────────────
-  # Build (debug + release) on Linux, macOS, Windows
-  # ───────────────────────────────────────────────────────────────
   build:
+    name: Build – ${{ matrix.workspace }} (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        workspace:
-          [
-            engine,
-            roc_integration,
-            roc_platform/core,
-            apps/basic_app,
-            apps/snapshot_tester,
-          ]
+        workspace: [engine, roc_integration, roc_platform/core]
         os: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
           - workspace: roc_platform/core
             os: windows-latest
-          - workspace: apps/basic_app
-            os: windows-latest
-          - workspace: apps/snapshot_tester
-            os: windows-latest
-
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
       - uses: r7kamura/rust-problem-matchers@v1
 
-      - uses: actions/cache@v4
+      - uses: swatinem/rust-cache@v2
         with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          workspaces: |
+            ${{ matrix.workspace }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
 
-      - name: Debug build with no default features
+      - name: Debug build (no default features)
         working-directory: ${{ matrix.workspace }}
         run: cargo build --no-default-features
 
-      - name: Debug build with default features
+      - name: Debug build (default features)
         working-directory: ${{ matrix.workspace }}
         run: cargo build
 
-      - name: Debug build with all features
+      - name: Debug build (all features)
         working-directory: ${{ matrix.workspace }}
         run: cargo build --all-features
 
-      - name: Release build with default features
+      - name: Release build
         working-directory: ${{ matrix.workspace }}
         run: cargo build --release
 
   # ───────────────────────────────────────────────────────────────
-  # Regular tests (unit + integration) on all three OSes
+  # Regular tests
   # ───────────────────────────────────────────────────────────────
   test:
+    name: Tests – ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         workspace: [engine]
         os: [ubuntu-latest, macos-latest, windows-latest]
-
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
       - uses: r7kamura/rust-problem-matchers@v1
-      - uses: actions/cache@v4
+      - uses: swatinem/rust-cache@v2
         with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          workspaces: |
+            ${{ matrix.workspace }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
 
-      - name: Test with all features
+      - name: cargo test --all-features
         working-directory: ${{ matrix.workspace }}
         run: cargo test --all-features --workspace
 
   # ───────────────────────────────────────────────────────────────
-  # AddressSanitizer tests (Linux + macOS only)
+  # AddressSanitizer tests
   # ───────────────────────────────────────────────────────────────
   test-asan:
+    name: ASan – ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,25 +109,26 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
             target: x86_64-apple-darwin
-
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
       - uses: r7kamura/rust-problem-matchers@v1
-      - uses: actions/cache@v4
+      - uses: swatinem/rust-cache@v2
         with:
-          path: |
-            $HOME/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.workspace }}-${{ matrix.target }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          workspaces: |
+            ${{ matrix.workspace }}
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
-          components: rust-src
+          toolchain: nightly
+          profile: minimal
           targets: ${{ matrix.target }}
+          components: rust-src
 
-      # Runtime is already on macOS; install it only on Linux
-      - name: Install AddressSanitizer runtime
+      - name: Install ASan runtime (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
@@ -147,32 +144,35 @@ jobs:
           cargo test --all-features --workspace --target ${{ matrix.target }}
 
   # ───────────────────────────────────────────────────────────────
-  # Miri tests (all three OSes)
+  # Miri tests
   # ───────────────────────────────────────────────────────────────
   test-miri:
+    name: Miri – ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         workspace: [engine]
         os: [ubuntu-latest, macos-latest, windows-latest]
-
     runs-on: ${{ matrix.os }}
-
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
 
     steps:
       - uses: actions/checkout@v4
-      - uses: r7kamura/rust-problem-matchers@v1
-      - uses: actions/cache@v4
-        with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-            .miri-sysroot
-          key: ${{ runner.os }}-${{ matrix.workspace }}-nightly-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+        with: { fetch-depth: 1 }
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: r7kamura/rust-problem-matchers@v1
+
+      - uses: swatinem/rust-cache@v2
         with:
+          workspaces: |
+            ${{ matrix.workspace }}
+          extra-dirs: |
+            ${{ env.MIRI_SYSROOT }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
           components: miri
 
       - name: cargo miri setup
@@ -188,9 +188,10 @@ jobs:
           cargo miri test --all-features --workspace
 
   # ───────────────────────────────────────────────────────────────
-  # 4. Clippy (all OSes)
+  # Clippy
   # ───────────────────────────────────────────────────────────────
   lint-clippy:
+    name: Clippy – ${{ matrix.workspace }} (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -210,39 +211,41 @@ jobs:
             os: windows-latest
           - workspace: apps/snapshot_tester
             os: windows-latest
-
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
-      - uses: r7kamura/rust-problem-matchers@v1
-      - uses: actions/cache@v4
-        with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+        with: { fetch-depth: 1 }
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: r7kamura/rust-problem-matchers@v1
+      - uses: swatinem/rust-cache@v2
         with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
           components: clippy
 
-      - name: Clippy with no default features
+      - name: Clippy (no default features)
         working-directory: ${{ matrix.workspace }}
         run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
-      - name: Clippy with default features
+      - name: Clippy (default features)
         working-directory: ${{ matrix.workspace }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Clippy with all features
+      - name: Clippy (all features)
         working-directory: ${{ matrix.workspace }}
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   # ───────────────────────────────────────────────────────────────
-  # 5. Rustfmt (Linux)
+  # Rustfmt
   # ───────────────────────────────────────────────────────────────
   lint-fmt:
+    name: Rustfmt – ${{ matrix.workspace }}
     strategy:
       fail-fast: false
       matrix:
@@ -254,21 +257,22 @@ jobs:
             apps/basic_app,
             apps/snapshot_tester,
           ]
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-      - uses: r7kamura/rust-problem-matchers@v1
-      - uses: actions/cache@v4
-        with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+        with: { fetch-depth: 1 }
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: r7kamura/rust-problem-matchers@v1
+      - uses: swatinem/rust-cache@v2
         with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
           components: rustfmt
 
       - name: Rustfmt
@@ -276,9 +280,10 @@ jobs:
         run: cargo fmt --all -- --check
 
   # ───────────────────────────────────────────────────────────────
-  # 6. Build documentation (Linux)
+  # Docs
   # ───────────────────────────────────────────────────────────────
   docs:
+    name: Docs – ${{ matrix.workspace }}
     strategy:
       fail-fast: false
       matrix:
@@ -290,29 +295,30 @@ jobs:
             apps/basic_app,
             apps/snapshot_tester,
           ]
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
       - uses: r7kamura/rust-problem-matchers@v1
-      - uses: actions/cache@v4
+      - uses: swatinem/rust-cache@v2
         with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-          key: docs-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          workspaces: |
+            ${{ matrix.workspace }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
 
-      - name: Cargo doc
+      - name: cargo doc
         working-directory: ${{ matrix.workspace }}
         run: cargo doc --workspace --no-deps --document-private-items
 
   # ───────────────────────────────────────────────────────────────
-  # Check for each feature (all OSes)
+  # Check each feature
   # ───────────────────────────────────────────────────────────────
   check-features:
+    name: Features – ${{ matrix.workspace }} (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -332,23 +338,26 @@ jobs:
             os: windows-latest
           - workspace: apps/snapshot_tester
             os: windows-latest
-
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
       - uses: r7kamura/rust-problem-matchers@v1
 
-      - uses: actions/cache@v4
+      - uses: swatinem/rust-cache@v2
         with:
-          path: |
-            $HOME/.cargo/git
-            ci-target
-          key: ${{ runner.os }}-${{ matrix.workspace }}-stable-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace)) }}
+          workspaces: |
+            ${{ matrix.workspace }}
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@cargo-hack
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
 
-      - name: Check for each feature
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: cargo hack check --each-feature
         working-directory: ${{ matrix.workspace }}
         run: cargo hack check --each-feature --no-dev-deps
