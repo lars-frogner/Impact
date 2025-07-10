@@ -67,6 +67,52 @@ jobs:
         run: cargo build --release
 
   # ───────────────────────────────────────────────────────────────
+  # Build apps (debug + release)
+  # ───────────────────────────────────────────────────────────────
+  build_apps:
+    name: Apps – ${{ matrix.workspace }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [apps/basic_app, apps/snapshot_tester]
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: r7kamura/rust-problem-matchers@v1
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with: { toolchain: stable, profile: minimal, override: true }
+
+      - id: roc
+        uses: hasnep/setup-roc@v0.5.0
+        with:
+          roc-version: nightly
+
+      - name: Build (debug)
+        working-directory: ${{ matrix.workspace }}
+        env:
+          ROC_DEBUG: "1"
+          RUST_DEBUG: "1"
+        run: |
+          mkdir -p lib roc_platform/lib
+          roc build.roc
+
+      - name: Build (release)
+        working-directory: ${{ matrix.workspace }}
+        run: |
+          mkdir -p lib roc_platform/lib
+          roc build.roc
+
+  # ───────────────────────────────────────────────────────────────
   # Regular tests
   # ───────────────────────────────────────────────────────────────
   test:
