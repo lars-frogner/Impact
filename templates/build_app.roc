@@ -71,6 +71,8 @@ main! = |_args|
 
     create_distribution!(app_dir, output_dir, crate_name, rust_debug_mode, os_and_arch)?
 
+    Stdout.line!("Build complete")?
+
     Ok({})
 
 get_os_and_arch! : {} => Result OSAndArch _
