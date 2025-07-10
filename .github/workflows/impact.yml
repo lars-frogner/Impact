@@ -322,6 +322,13 @@ jobs:
         working-directory: ${{ env.WORKSPACE }}
         run: ./run.sh
 
+      - name: Upload output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-tester-output-${{ matrix.os }}
+          path: ${{ env.WORKSPACE }}/snapshots/output
+
   # ───────────────────────────────────────────────────────────────
   # Clippy
   # ───────────────────────────────────────────────────────────────
