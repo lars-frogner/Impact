@@ -315,6 +315,12 @@ jobs:
         with:
           roc-version: nightly
 
+      - name: Install wgpu-info
+        run: cargo install --locked wgpu-info
+
+      - name: Run wgpu-info
+        run: wgpu-info -v
+
       - name: Run tests
         working-directory: ${{ env.WORKSPACE }}
         run: ./run.sh
