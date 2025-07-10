@@ -31,6 +31,22 @@ impl GraphicsDevice {
     ) -> Result<Self> {
         let adapter = Self::create_adapter(wgpu_instance, compatible_surface).await?;
 
+        let adapter_info = adapter.get_info();
+        impact_log::info!(
+            "Using adapter: {{ \
+                name: {name}, \
+                device_type: {device_type:?}, \
+                driver: {driver}, \
+                driver_info: {driver_info}, \
+                backend: {backend} \
+            }}",
+            name = adapter_info.name,
+            device_type = adapter_info.device_type,
+            driver = adapter_info.driver,
+            driver_info = adapter_info.driver_info,
+            backend = adapter_info.backend,
+        );
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
