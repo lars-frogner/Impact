@@ -223,7 +223,7 @@ roc_build_script! = |app_dir, debug_mode|
     opt_args =
         when debug_mode is
             Debug -> []
-            Release -> [] # "--optimize"]
+            Release -> ["--optimize"]
 
     result = Cmd.exec!("roc", List.concat(base_args, opt_args))
 
