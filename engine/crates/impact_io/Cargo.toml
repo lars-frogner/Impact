@@ -7,11 +7,15 @@ license = { workspace = true }
 
 [features]
 ron = ["dep:ron", "dep:serde"]
+png = ["dep:png"]
+jpeg = ["dep:zune-jpeg"]
 
 [dependencies]
 anyhow = { workspace = true }
+png = { version = "0.17", optional = true }
 ron = { version = "0.10", optional = true }
 serde = { workspace = true, optional = true }
+zune-jpeg = { version = "0.4", optional = true }
 
 [lints]
 workspace = true

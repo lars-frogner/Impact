@@ -5,10 +5,7 @@ pub mod mipmap;
 use crate::{buffer, device::GraphicsDevice};
 use anyhow::{Context, Result, anyhow, bail};
 use bytemuck::Pod;
-use image::{
-    self, DynamicImage, GenericImageView, ImageBuffer, ImageReader, Luma, Rgba,
-    buffer::ConvertBuffer,
-};
+use impact_io::image::{self, Image, PixelFormat};
 use impact_math::{hash32, stringhash32_newtype};
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
@@ -267,7 +264,7 @@ impl Texture {
         sampler_id: Option<SamplerID>,
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
-        let image = open_image(image_path)?.decode()?;
+        let image = image::load_image_from_path(image_path)?;
         Self::from_image(
             graphics_device,
             mipmapper_generator,
@@ -299,7 +296,7 @@ impl Texture {
         sampler_id: Option<SamplerID>,
         label: &str,
     ) -> Result<Self> {
-        let image = image::load_from_memory(byte_buffer)?;
+        let image = image::load_image_from_bytes(byte_buffer)?;
         Self::from_image(
             graphics_device,
             mipmapper_generator,
@@ -324,7 +321,7 @@ impl Texture {
     pub fn from_image(
         graphics_device: &GraphicsDevice,
         mipmapper_generator: &MipmapperGenerator,
-        image: DynamicImage,
+        image: Image,
         texture_config: TextureConfig,
         sampler_id: Option<SamplerID>,
         label: &str,
@@ -334,11 +331,11 @@ impl Texture {
         let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
         let depth = NonZeroU32::new(1).unwrap();
 
-        if image.color().has_color() {
-            Self::create(
+        match image.pixel_format {
+            PixelFormat::Rgba8 => Self::create(
                 graphics_device,
                 Some(mipmapper_generator),
-                &image.into_rgba8(),
+                &image.data,
                 width,
                 height,
                 DepthOrArrayLayers::Depth(depth),
@@ -347,28 +344,29 @@ impl Texture {
                 texture_config,
                 sampler_id,
                 label,
-            )
-        } else {
-            if texture_config.color_space != ColorSpace::Linear {
-                bail!(
-                    "Unsupported color space {:?} for grayscale image {}",
-                    texture_config.color_space,
-                    label
-                );
+            ),
+            PixelFormat::Luma8 => {
+                if texture_config.color_space != ColorSpace::Linear {
+                    bail!(
+                        "Unsupported color space {:?} for grayscale image {}",
+                        texture_config.color_space,
+                        label
+                    );
+                }
+                Self::create(
+                    graphics_device,
+                    Some(mipmapper_generator),
+                    &image.data,
+                    width,
+                    height,
+                    DepthOrArrayLayers::Depth(depth),
+                    TexelDescription::Grayscale8,
+                    false,
+                    texture_config,
+                    sampler_id,
+                    label,
+                )
             }
-            Self::create(
-                graphics_device,
-                Some(mipmapper_generator),
-                &image.into_luma8(),
-                width,
-                height,
-                DepthOrArrayLayers::Depth(depth),
-                TexelDescription::Grayscale8,
-                false,
-                texture_config,
-                sampler_id,
-                label,
-            )
         }
     }
 
@@ -403,12 +401,12 @@ impl Texture {
         let front_image_path = front_image_path.as_ref();
         let back_image_path = back_image_path.as_ref();
 
-        let right_image = open_image(right_image_path)?.decode()?;
-        let left_image = open_image(left_image_path)?.decode()?;
-        let top_image = open_image(top_image_path)?.decode()?;
-        let bottom_image = open_image(bottom_image_path)?.decode()?;
-        let front_image = open_image(front_image_path)?.decode()?;
-        let back_image = open_image(back_image_path)?.decode()?;
+        let right_image = image::load_image_from_path(right_image_path)?;
+        let left_image = image::load_image_from_path(left_image_path)?;
+        let top_image = image::load_image_from_path(top_image_path)?;
+        let bottom_image = image::load_image_from_path(bottom_image_path)?;
+        let front_image = image::load_image_from_path(front_image_path)?;
+        let back_image = image::load_image_from_path(back_image_path)?;
 
         let label = format!(
             "Cubemap {{{}, {}, {}, {}, {}, {}}}",
@@ -448,12 +446,12 @@ impl Texture {
     ///   linear.
     pub fn from_cubemap_images(
         graphics_device: &GraphicsDevice,
-        right_image: DynamicImage,
-        left_image: DynamicImage,
-        top_image: DynamicImage,
-        bottom_image: DynamicImage,
-        front_image: DynamicImage,
-        back_image: DynamicImage,
+        right_image: Image,
+        left_image: Image,
+        top_image: Image,
+        bottom_image: Image,
+        front_image: Image,
+        back_image: Image,
         texture_config: TextureConfig,
         sampler_id: Option<SamplerID>,
         label: &str,
@@ -468,12 +466,12 @@ impl Texture {
             bail!("Inconsistent dimensions for cubemap texture images")
         }
 
-        let color = right_image.color();
-        if left_image.color() != color
-            || top_image.color() != color
-            || bottom_image.color() != color
-            || front_image.color() != color
-            || back_image.color() != color
+        let pixel_format = right_image.pixel_format;
+        if left_image.pixel_format != pixel_format
+            || top_image.pixel_format != pixel_format
+            || bottom_image.pixel_format != pixel_format
+            || front_image.pixel_format != pixel_format
+            || back_image.pixel_format != pixel_format
         {
             bail!("Inconsistent pixel formats for cubemap texture images")
         }
@@ -483,44 +481,47 @@ impl Texture {
         let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
         let array_layers = NonZeroU32::new(6).unwrap();
 
-        let (texel_description, byte_buffer) = if color.has_color() {
-            let texel_description = TexelDescription::Rgba8(texture_config.color_space);
+        let (texel_description, byte_buffer) = match pixel_format {
+            PixelFormat::Rgba8 => {
+                let texel_description = TexelDescription::Rgba8(texture_config.color_space);
 
-            let mut byte_buffer = Vec::with_capacity(
-                (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
-            );
-
-            byte_buffer.extend_from_slice(&right_image.into_rgba8());
-            byte_buffer.extend_from_slice(&left_image.into_rgba8());
-            byte_buffer.extend_from_slice(&top_image.into_rgba8());
-            byte_buffer.extend_from_slice(&bottom_image.into_rgba8());
-            byte_buffer.extend_from_slice(&front_image.into_rgba8());
-            byte_buffer.extend_from_slice(&back_image.into_rgba8());
-
-            (texel_description, byte_buffer)
-        } else {
-            if texture_config.color_space != ColorSpace::Linear {
-                bail!(
-                    "Unsupported color space {:?} for grayscale image {}",
-                    texture_config.color_space,
-                    label
+                let mut byte_buffer = Vec::with_capacity(
+                    (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
                 );
+
+                byte_buffer.extend_from_slice(&right_image.data);
+                byte_buffer.extend_from_slice(&left_image.data);
+                byte_buffer.extend_from_slice(&top_image.data);
+                byte_buffer.extend_from_slice(&bottom_image.data);
+                byte_buffer.extend_from_slice(&front_image.data);
+                byte_buffer.extend_from_slice(&back_image.data);
+
+                (texel_description, byte_buffer)
             }
+            PixelFormat::Luma8 => {
+                if texture_config.color_space != ColorSpace::Linear {
+                    bail!(
+                        "Unsupported color space {:?} for grayscale image {}",
+                        texture_config.color_space,
+                        label
+                    );
+                }
 
-            let texel_description = TexelDescription::Grayscale8;
+                let texel_description = TexelDescription::Grayscale8;
 
-            let mut byte_buffer = Vec::with_capacity(
-                (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
-            );
+                let mut byte_buffer = Vec::with_capacity(
+                    (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
+                );
 
-            byte_buffer.extend_from_slice(&right_image.into_luma8());
-            byte_buffer.extend_from_slice(&left_image.into_luma8());
-            byte_buffer.extend_from_slice(&top_image.into_luma8());
-            byte_buffer.extend_from_slice(&bottom_image.into_luma8());
-            byte_buffer.extend_from_slice(&front_image.into_luma8());
-            byte_buffer.extend_from_slice(&back_image.into_luma8());
+                byte_buffer.extend_from_slice(&right_image.data);
+                byte_buffer.extend_from_slice(&left_image.data);
+                byte_buffer.extend_from_slice(&top_image.data);
+                byte_buffer.extend_from_slice(&bottom_image.data);
+                byte_buffer.extend_from_slice(&front_image.data);
+                byte_buffer.extend_from_slice(&back_image.data);
 
-            (texel_description, byte_buffer)
+                (texel_description, byte_buffer)
+            }
         };
 
         Self::create(
@@ -565,11 +566,9 @@ impl Texture {
         I: ExactSizeIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let images = image_paths.into_iter().map(|image_path: P| {
-            open_image(image_path.as_ref())?
-                .decode()
-                .map_err(Into::into)
-        });
+        let images = image_paths
+            .into_iter()
+            .map(|image_path: P| image::load_image_from_path(image_path.as_ref()));
 
         Self::array_from_images(
             graphics_device,
@@ -604,7 +603,7 @@ impl Texture {
         label: &str,
     ) -> Result<Self>
     where
-        I: ExactSizeIterator<Item = Result<DynamicImage>>,
+        I: ExactSizeIterator<Item = Result<Image>>,
     {
         let mut images = images.into_iter();
         let n_images = images.len();
@@ -619,29 +618,26 @@ impl Texture {
             NonZeroU32::new(dimensions.1).ok_or_else(|| anyhow!("Image height is zero"))?;
         let array_layers = NonZeroU32::new(u32::try_from(n_images).unwrap()).unwrap();
 
-        let color = first_image.color();
-        let texel_description = if color.has_color() {
-            TexelDescription::Rgba8(texture_config.color_space)
-        } else {
-            if texture_config.color_space != ColorSpace::Linear {
-                bail!(
-                    "Unsupported color space {:?} for grayscale image {}",
-                    texture_config.color_space,
-                    label
-                );
+        let pixel_format = first_image.pixel_format;
+        let texel_description = match pixel_format {
+            PixelFormat::Rgba8 => TexelDescription::Rgba8(texture_config.color_space),
+            PixelFormat::Luma8 => {
+                if texture_config.color_space != ColorSpace::Linear {
+                    bail!(
+                        "Unsupported color space {:?} for grayscale image {}",
+                        texture_config.color_space,
+                        label
+                    );
+                }
+                TexelDescription::Grayscale8
             }
-            TexelDescription::Grayscale8
         };
 
         let mut byte_buffer = Vec::with_capacity(
             n_images * (width.get() * height.get() * texel_description.n_bytes()) as usize,
         );
 
-        if color.has_color() {
-            byte_buffer.extend_from_slice(&first_image.into_rgba8());
-        } else {
-            byte_buffer.extend_from_slice(&first_image.into_luma8());
-        }
+        byte_buffer.extend_from_slice(&first_image.data);
 
         for image in images {
             let image = image?;
@@ -650,15 +646,11 @@ impl Texture {
                 bail!("Inconsistent dimensions for texture array images")
             }
 
-            if image.color() != color {
+            if image.pixel_format != pixel_format {
                 bail!("Inconsistent pixel formats for texture array images")
             }
 
-            if color.has_color() {
-                byte_buffer.extend_from_slice(&image.into_rgba8());
-            } else {
-                byte_buffer.extend_from_slice(&image.into_luma8());
-            }
+            byte_buffer.extend_from_slice(&first_image.data);
         }
 
         Self::create(
@@ -1194,21 +1186,20 @@ pub fn create_sampler_bind_group_layout_entry(
 }
 
 /// Saves the texture at the given index of the given texture array as a color
-/// or grayscale image at the given output path. The image file format is
-/// automatically determined from the file extension.
+/// or grayscale PNG image at the given output path.
 ///
 /// # Errors
 /// Returns an error if:
 /// - The format of the given texture is not supported.
 /// - The mip level is invalid.
 /// - The texture array index is invalid.
-pub fn save_texture_as_image_file<P: AsRef<Path>>(
+pub fn save_texture_as_png_file(
     graphics_device: &GraphicsDevice,
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
     already_gamma_corrected: bool,
-    output_path: P,
+    output_path: impl AsRef<Path>,
 ) -> Result<()> {
     fn byte_to_float(byte: u8) -> f32 {
         f32::from(byte) / 255.0
@@ -1280,39 +1271,35 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
             }
 
             if matches!(format, wgpu::TextureFormat::R8Unorm) {
-                let mut image_buffer: ImageBuffer<Luma<u8>, _> =
-                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
-
                 if !already_gamma_corrected {
-                    for p in image_buffer.pixels_mut() {
-                        p.0[0] = linear_byte_to_srgb(p.0[0]);
+                    for pixel in &mut data {
+                        *pixel = linear_byte_to_srgb(*pixel);
                     }
                 }
 
-                let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
-
-                image_buffer.save(output_path)?;
+                image::save_luma8_as_png(&data, size.width, size.height, output_path)?;
             } else {
-                let mut image_buffer =
-                    ImageBuffer::<Rgba<u8>, _>::from_raw(size.width, size.height, data).unwrap();
+                let (rgba_data, rem) = data.as_chunks_mut::<4>();
+                assert!(rem.is_empty());
 
                 if matches!(
                     format,
                     wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
                 ) && !already_gamma_corrected
                 {
-                    for p in image_buffer.pixels_mut() {
-                        p.0[0] = linear_byte_to_srgb(p.0[0]);
-                        p.0[1] = linear_byte_to_srgb(p.0[1]);
-                        p.0[2] = linear_byte_to_srgb(p.0[2]);
+                    for rgba in rgba_data {
+                        rgba[0] = linear_byte_to_srgb(rgba[0]);
+                        rgba[1] = linear_byte_to_srgb(rgba[1]);
+                        rgba[2] = linear_byte_to_srgb(rgba[2]);
+                        rgba[3] = 255;
+                    }
+                } else {
+                    for rgba in rgba_data {
+                        rgba[3] = 255;
                     }
                 }
 
-                for p in image_buffer.pixels_mut() {
-                    p.0[3] = 255;
-                }
-
-                image_buffer.save(output_path)?;
+                image::save_rgba8_as_png(&data, size.width, size.height, output_path)?;
             }
         }
         wgpu::TextureFormat::Rgba16Float | wgpu::TextureFormat::R16Float => {
@@ -1331,23 +1318,33 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
             }
 
             if matches!(format, wgpu::TextureFormat::R16Float) {
-                let image_buffer: ImageBuffer<Luma<f32>, _> =
-                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+                let luma8_data: Vec<u8> = data.into_iter().map(float_to_byte).collect();
 
-                let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
-
-                image_buffer.save(output_path)?;
+                impact_io::image::save_luma8_as_png(
+                    &luma8_data,
+                    size.width,
+                    size.height,
+                    output_path,
+                )?;
             } else {
-                let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
-                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+                let (rgba_f32_data, rem) = data.as_chunks::<4>();
+                assert!(rem.is_empty());
 
-                for p in image_buffer.pixels_mut() {
-                    p.0[3] = 1.0;
+                let mut rgba8_data = Vec::with_capacity(data.len());
+
+                for &[r, g, b, _] in rgba_f32_data {
+                    rgba8_data.push(float_to_byte(r));
+                    rgba8_data.push(float_to_byte(g));
+                    rgba8_data.push(float_to_byte(b));
+                    rgba8_data.push(255);
                 }
 
-                let image_buffer: ImageBuffer<Rgba<u8>, _> = image_buffer.convert();
-
-                image_buffer.save(output_path)?;
+                impact_io::image::save_rgba8_as_png(
+                    &rgba8_data,
+                    size.width,
+                    size.height,
+                    output_path,
+                )?;
             }
         }
         wgpu::TextureFormat::Depth32Float
@@ -1364,17 +1361,16 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
             )?;
 
             if matches!(format, wgpu::TextureFormat::Rg32Float) {
-                let mut rgba_data = vec![0.0; 4 * data.len()];
-                for (source, dest) in data.iter().step_by(2).zip(rgba_data.iter_mut().step_by(4)) {
-                    *dest = *source;
-                }
-                for (source, dest) in data
-                    .iter()
-                    .skip(1)
-                    .step_by(2)
-                    .zip(rgba_data.iter_mut().skip(1).step_by(4))
-                {
-                    *dest = *source;
+                let (rg_data, rem) = data.as_chunks::<2>();
+                assert!(rem.is_empty());
+
+                let mut rgba_data = vec![0.0; data.len() * 2];
+
+                for (i, &[r, g]) in rg_data.iter().enumerate() {
+                    rgba_data[i * 4] = r;
+                    rgba_data[i * 4 + 1] = g;
+                    rgba_data[i * 4 + 2] = 0.0;
+                    rgba_data[i * 4 + 3] = 1.0;
                 }
                 data = rgba_data;
             }
@@ -1397,12 +1393,14 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                     }
                 }
 
-                let image_buffer: ImageBuffer<Luma<f32>, _> =
-                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+                let luma8_data: Vec<u8> = data.into_iter().map(float_to_byte).collect();
 
-                let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
-
-                image_buffer.save(output_path)?;
+                impact_io::image::save_luma8_as_png(
+                    &luma8_data,
+                    size.width,
+                    size.height,
+                    output_path,
+                )?;
             } else {
                 if !already_gamma_corrected {
                     for value in &mut data {
@@ -1410,16 +1408,14 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                     }
                 }
 
-                let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
-                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+                let luma8_data: Vec<u8> = data.into_iter().map(float_to_byte).collect();
 
-                for p in image_buffer.pixels_mut() {
-                    p.0[3] = 1.0;
-                }
-
-                let image_buffer: ImageBuffer<Rgba<u8>, _> = image_buffer.convert();
-
-                image_buffer.save(output_path)?;
+                impact_io::image::save_rgba8_as_png(
+                    &luma8_data,
+                    size.width,
+                    size.height,
+                    output_path,
+                )?;
             }
         }
         _ => {
@@ -1468,11 +1464,6 @@ where
     reader.read_to_end(&mut buffer)?;
     let (table, _) = bincode::serde::decode_from_slice(&buffer, bincode::config::standard())?;
     Ok(table)
-}
-
-fn open_image(image_path: &Path) -> Result<image::ImageReader<BufReader<File>>> {
-    ImageReader::open(image_path)
-        .with_context(|| format!("Failed to open image at {}", image_path.display()))
 }
 
 fn extract_texture_data_and_convert<IN: Pod, OUT: From<IN>>(

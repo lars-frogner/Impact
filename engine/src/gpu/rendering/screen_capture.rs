@@ -64,8 +64,8 @@ impl ScreenCapturer {
 
     /// Checks if a screenshot capture was scheduled with
     /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
-    /// saves it to the specified output path, or, if not specified, as a
-    /// timestamped PNG file in the current directory.
+    /// saves it as a PNG image to the specified output path, or, if not
+    /// specified, as a timestamped PNG file in the current directory.
     pub fn save_screenshot_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -101,7 +101,7 @@ impl ScreenCapturer {
 
             let output_path = output_path.unwrap_or(timestamped_filename.as_path());
 
-            texture::save_texture_as_image_file(
+            texture::save_texture_as_png_file(
                 renderer.graphics_device(),
                 surface_texture,
                 0,
@@ -141,7 +141,7 @@ impl ScreenCapturer {
                     .enumerate()
                 {
                     for face in CubemapFace::all() {
-                        texture.save_face_as_image_file(
+                        texture.save_face_as_png_file(
                             renderer.graphics_device(),
                             face,
                             format!(
@@ -192,7 +192,7 @@ impl ScreenCapturer {
                     .enumerate()
                 {
                     for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
-                        texture.save_cascade_as_image_file(
+                        texture.save_cascade_as_png_file(
                             renderer.graphics_device(),
                             cascade_idx,
                             format!(

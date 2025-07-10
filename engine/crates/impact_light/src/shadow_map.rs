@@ -139,16 +139,15 @@ impl ShadowCubemapTexture {
         &self.bind_group
     }
 
-    /// Saves the specified face texture as a grayscale image at the given
-    /// output path. The image file format is automatically determined from the
-    /// file extension.
-    pub fn save_face_as_image_file<P: AsRef<Path>>(
+    /// Saves the specified face texture as a grayscale PNG image at the given
+    /// output path.
+    pub fn save_face_as_png_file(
         &self,
         graphics_device: &GraphicsDevice,
         face: CubemapFace,
-        output_path: P,
+        output_path: impl AsRef<Path>,
     ) -> Result<()> {
-        texture::save_texture_as_image_file(
+        texture::save_texture_as_png_file(
             graphics_device,
             &self.texture,
             0,
@@ -329,16 +328,15 @@ impl CascadedShadowMapTexture {
         &self.bind_group
     }
 
-    /// Saves the specified cascade texture as a grayscale image at the given
-    /// output path. The image file format is automatically determined from the
-    /// file extension.
-    pub fn save_cascade_as_image_file<P: AsRef<Path>>(
+    /// Saves the specified cascade texture as a grayscale PNG image at the
+    /// given output path.
+    pub fn save_cascade_as_png_file(
         &self,
         graphics_device: &GraphicsDevice,
         cascade_idx: u32,
-        output_path: P,
+        output_path: impl AsRef<Path>,
     ) -> Result<()> {
-        texture::save_texture_as_image_file(
+        texture::save_texture_as_png_file(
             graphics_device,
             &self.texture,
             0,
