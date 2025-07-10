@@ -91,13 +91,29 @@ impl GraphicsDevice {
         wgpu_instance: &wgpu::Instance,
         compatible_surface: Option<&wgpu::Surface<'_>>,
     ) -> Result<wgpu::Adapter> {
-        wgpu_instance
+        let power_preference = wgpu::PowerPreference::HighPerformance;
+
+        let adapter = wgpu_instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                power_preference,
                 compatible_surface,
-                force_fallback_adapter: false, // Do not fallback to software rendering system
             })
-            .await
-            .ok_or_else(|| anyhow!("Could not find compatible adapter"))
+            .await;
+
+        // Fallback to software if hardware adapter was not found
+        let adapter = if adapter.is_none() {
+            wgpu_instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    force_fallback_adapter: true,
+                    power_preference,
+                    compatible_surface,
+                })
+                .await
+        } else {
+            adapter
+        };
+
+        adapter.ok_or_else(|| anyhow!("Could not find compatible adapter"))
     }
 }
