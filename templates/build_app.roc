@@ -167,8 +167,8 @@ copy_app_lib! = |app_dir, debug_mode, os_and_arch|
     crate_name = find_crate_name!(app_dir)?
     lib_extension = lib_file_extension(os_and_arch)
     target_triple = get_target_triple(os_and_arch)
-    rust_target_folder = get_rust_target_folder!(debug_mode, target_triple)
-    app_build_path = "${app_dir}/${rust_target_folder}lib${crate_name}.${lib_extension}"
+    rust_target_dir = get_rust_target_dir!(app_dir, debug_mode, target_triple)
+    app_build_path = "${rust_target_dir}lib${crate_name}.${lib_extension}"
     app_dest_path = "${app_dir}/lib/libapp"
 
     Cmd.exec!("cp", [app_build_path, app_dest_path])
@@ -201,19 +201,24 @@ lib_file_extension = |os_and_arch|
         LinuxArm64 | LinuxX64 -> "so"
         WindowsX64 | WindowsArm64 -> "dll"
 
-get_rust_target_folder! : [Debug, Release], Str => Str
-get_rust_target_folder! = |debug_mode, target_triple|
+get_rust_target_dir! : Str, [Debug, Release], Str => Str
+get_rust_target_dir! = |app_dir, debug_mode, target_triple|
+    target_root =
+        when Env.var!("CARGO_TARGET_DIR") is
+            Ok(str) if !(Str.is_empty(str)) -> str
+            _ -> "${app_dir}/target"
+
     debug_or_release = if debug_mode == Debug then "debug" else "release"
 
     when Env.var!("CARGO_BUILD_TARGET") is
         Ok(target_env_var) ->
             if Str.is_empty(target_env_var) then
-                "target/${target_triple}/${debug_or_release}/"
+                "${target_root}/${target_triple}/${debug_or_release}/"
             else
-                "target/${target_env_var}/${debug_or_release}/"
+                "${target_root}/${target_env_var}/${debug_or_release}/"
 
         Err(_) ->
-            "target/${target_triple}/${debug_or_release}/"
+            "${target_root}/${target_triple}/${debug_or_release}/"
 
 roc_build_script! : Str, [Debug, Release] => Result {} _
 roc_build_script! = |app_dir, debug_mode|
