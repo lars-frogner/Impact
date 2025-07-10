@@ -79,6 +79,9 @@ copy_platform_lib! : Str, Str => Result {} _
 copy_platform_lib! = |platform_dir, rust_target_folder|
     Stdout.line!("Copying platform library to platform lib folder")?
 
+    Cmd.exec!("mkdir", ["-p", "${platform_dir}/lib"])
+    |> Result.map_err(ErrCreatingLibDirectory)?
+
     platform_build_path = "${rust_target_folder}libroc_platform.a"
     platform_dest_path = "${platform_dir}/lib/"
 

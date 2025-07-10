@@ -102,15 +102,11 @@ jobs:
         env:
           ROC_DEBUG: "1"
           RUST_DEBUG: "1"
-        run: |
-          mkdir -p lib roc_platform/lib
-          roc build.roc
+        run: roc build.roc
 
       - name: Build (release)
         working-directory: ${{ matrix.workspace }}
-        run: |
-          mkdir -p lib roc_platform/lib
-          roc build.roc
+        run: roc build.roc
 
   # ───────────────────────────────────────────────────────────────
   # Regular tests

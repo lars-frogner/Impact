@@ -6,7 +6,7 @@ use std::path::PathBuf;
 define_ffi! {
     name = AppFFI,
     lib_path_env = "APP_LIB_PATH",
-    lib_path_default = "../../../lib/libapp",
+    lib_path_default = "./libapp",
     run_with_config_at_path => unsafe extern "C" fn(*const u8, usize) -> i32,
 }
 

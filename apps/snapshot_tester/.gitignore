@@ -1,5 +1,6 @@
 build
 lib
+dist
 scripts/main
 assets
 snapshots/output
