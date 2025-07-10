@@ -82,6 +82,11 @@ impl GraphicsDevice {
         &self.adapter
     }
 
+    /// Whether the graphics device supports the given features.
+    pub fn supports_features(&self, features: wgpu::Features) -> bool {
+        self.device.features().contains(features)
+    }
+
     /// Creates a handle to a graphics device that is compatible with the given
     /// surface, if provided.
     ///

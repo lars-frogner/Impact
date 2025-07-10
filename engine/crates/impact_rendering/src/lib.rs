@@ -11,12 +11,34 @@ pub mod resource;
 pub mod shader_templates;
 pub mod surface;
 
+use impact_gpu::{device::GraphicsDevice, wgpu};
+
 /// Basic rendering configuration options.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct BasicRenderingConfig {
     pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
+}
+
+impl BasicRenderingConfig {
+    /// Adjusts the configuration parameters to avoid using features not
+    /// supported by the given graphics device.
+    pub fn make_compatible_with_device(&mut self, graphics_device: &GraphicsDevice) {
+        if self.wireframe_mode_on
+            && !graphics_device.supports_features(wgpu::Features::POLYGON_MODE_LINE)
+        {
+            impact_log::warn!("Disabling wireframe mode due to missing device features");
+            self.wireframe_mode_on = false;
+        }
+
+        if self.timings_enabled
+            && !graphics_device.supports_features(wgpu::Features::TIMESTAMP_QUERY)
+        {
+            impact_log::warn!("Disabling timestamp queries due to missing device features");
+            self.timings_enabled = false;
+        }
+    }
 }
 
 impl Default for BasicRenderingConfig {

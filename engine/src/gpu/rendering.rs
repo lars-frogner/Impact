@@ -73,10 +73,12 @@ impl RenderingSystem {
     /// Creates a new rendering system using the given configuration, graphics
     /// device and rendering surface.
     pub fn new(
-        config: RenderingConfig,
+        mut config: RenderingConfig,
         graphics_device: Arc<GraphicsDevice>,
         rendering_surface: RenderingSurface,
     ) -> Result<Self> {
+        config.basic.make_compatible_with_device(&graphics_device);
+
         let mipmapper_generator = Arc::new(MipmapperGenerator::new(
             &graphics_device,
             MipmapperGenerator::DEFAULT_SUPPORTED_FORMATS,

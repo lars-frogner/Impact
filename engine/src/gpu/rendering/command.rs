@@ -2,7 +2,7 @@
 
 use super::RenderingSystem;
 use crate::{
-    command::{ModifiedActiveState, ToActiveState},
+    command::{ActiveState, ModifiedActiveState, ToActiveState},
     gpu::rendering::{
         RenderCommandManager,
         postprocessing::{
@@ -79,6 +79,20 @@ impl RenderingSystem {
     }
 
     pub fn set_wireframe_mode(&mut self, to: ToActiveState) -> ModifiedActiveState {
+        if !self
+            .graphics_device()
+            .supports_features(wgpu::Features::POLYGON_MODE_LINE)
+            && to != ToActiveState::Disabled
+        {
+            impact_log::warn!(
+                "Not enabling wireframe mode due to missing graphics device features"
+            );
+            return ModifiedActiveState {
+                state: ActiveState::Disabled,
+                changed: false,
+            };
+        }
+
         let state = to.set(&mut self.basic_config.wireframe_mode_on);
         if state.changed {
             *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
@@ -94,6 +108,20 @@ impl RenderingSystem {
     }
 
     pub fn set_render_pass_timings(&mut self, to: ToActiveState) -> ModifiedActiveState {
+        if !self
+            .graphics_device()
+            .supports_features(wgpu::Features::TIMESTAMP_QUERY)
+            && to != ToActiveState::Disabled
+        {
+            impact_log::warn!(
+                "Not enabling timestamp queries due to missing graphics device features"
+            );
+            return ModifiedActiveState {
+                state: ActiveState::Disabled,
+                changed: false,
+            };
+        }
+
         let state = to.set(&mut self.basic_config.timings_enabled);
         self.timestamp_query_manager
             .set_enabled(self.basic_config.timings_enabled);
