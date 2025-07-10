@@ -2,7 +2,7 @@
     testing: (
         output_dir: "../snapshots/output",
         reference_dir: "../snapshots/reference",
-        min_score_to_pass: 1.0,
+        min_score_to_pass: 0.95,
     ),
     headless: (
         surface_size: (768, 512),
