@@ -14,6 +14,6 @@ callbacks = {
 }
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
-handle_mouse_button_event! = |event|
+handle_mouse_button_event! = |_event|
     # Scenes.Asteroid.handle_mouse_button_event!(event)
     Ok({})
