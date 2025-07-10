@@ -25,6 +25,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 impact_containers = { path = "../impact_containers" }
 impact_io = { path = "../impact_io", optional = true }
+impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 naga = { version = "24.0", features = ["wgsl-out"] }
