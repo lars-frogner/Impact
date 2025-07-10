@@ -1,10 +1,9 @@
 pub mod rendering;
 
-use std::num::NonZeroU32;
-
 use anyhow::Result;
 use impact_gpu::device::GraphicsDevice;
 use impact_rendering::surface::RenderingSurface;
+use std::num::NonZeroU32;
 
 /// Interface to a graphics device and a surface that can be rendered to.
 #[derive(Debug)]
@@ -79,8 +78,6 @@ pub fn connect_to_graphics_device_for_rendering(
     let graphics_device = pollster::block_on(GraphicsDevice::connect(
         wgpu_instance,
         wgpu::Features::PUSH_CONSTANTS
-            | wgpu::Features::TIMESTAMP_QUERY
-            | wgpu::Features::POLYGON_MODE_LINE
             | wgpu::Features::DEPTH32FLOAT_STENCIL8
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::FLOAT32_FILTERABLE

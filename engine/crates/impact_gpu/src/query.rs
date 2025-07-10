@@ -11,7 +11,7 @@ use std::{borrow::Cow, iter, num::NonZeroU32, time::Duration};
 #[derive(Debug)]
 pub struct TimestampQueryManager {
     max_timestamps: NonZeroU32,
-    query_set: wgpu::QuerySet,
+    query_set: Option<wgpu::QuerySet>,
     query_resolve_buffer: GPUBuffer,
     timestamp_result_buffer: GPUBuffer,
     timestamp_pairs: Vec<Cow<'static, str>>,
@@ -36,13 +36,16 @@ pub struct TimestampQueryRegistry<'a> {
 impl TimestampQueryManager {
     /// Creates a new timestamp query manager, initializing the required GPU
     /// resources with capacity for the given maximum number of timestamps.
+    ///
     /// When `enabled` is `false`, the resources will still be initialized, but
     /// the [`TimestampQueryRegistry`] obtained by calling
     /// [`Self::create_timestamp_query_registry`] will not record any timestamp
     /// writes when requested.
     ///
     /// # Panics
-    /// If `max_timestamps` exceeds [`wgpu::QUERY_SET_MAX_QUERIES`].
+    /// - If `max_timestamps` exceeds [`wgpu::QUERY_SET_MAX_QUERIES`].
+    /// - If `enabled` is `true` but timestamp queries are not supported by the
+    ///   current graphics device.
     pub fn new(
         graphics_device: &GraphicsDevice,
         max_timestamps: NonZeroU32,
@@ -59,13 +62,23 @@ impl TimestampQueryManager {
             Cow::Borrowed("Timestamp"),
         );
 
-        let query_set = graphics_device
-            .device()
-            .create_query_set(&wgpu::QuerySetDescriptor {
-                label: Some("Timestamp query set"),
-                count: max_timestamps.get(),
-                ty: wgpu::QueryType::Timestamp,
-            });
+        let query_set = if graphics_device.supports_features(wgpu::Features::TIMESTAMP_QUERY) {
+            Some(
+                graphics_device
+                    .device()
+                    .create_query_set(&wgpu::QuerySetDescriptor {
+                        label: Some("Timestamp query set"),
+                        count: max_timestamps.get(),
+                        ty: wgpu::QueryType::Timestamp,
+                    }),
+            )
+        } else {
+            assert!(
+                !enabled,
+                "Timestamp queries are not supported by the current graphics device"
+            );
+            None
+        };
 
         Self {
             max_timestamps,
@@ -82,7 +95,15 @@ impl TimestampQueryManager {
     /// [`TimestampQueryRegistry`] obtained by calling
     /// [`Self::create_timestamp_query_registry`] will not register any
     /// timestamp queries when requested.
+    ///
+    /// # Panics
+    /// If `enabled` is `true` but timestamp queries are not supported by the
+    /// current graphics device.
     pub fn set_enabled(&mut self, enabled: bool) {
+        assert!(
+            self.query_set.is_some() || !enabled,
+            "Timestamp queries are not supported by the current graphics device"
+        );
         self.enabled = enabled;
     }
 
@@ -186,7 +207,7 @@ impl TimestampQueryManager {
             .set_n_valid_bytes(n_valid_bytes as usize);
 
         command_encoder.resolve_query_set(
-            &self.query_set,
+            self.query_set.as_ref().unwrap(),
             query_range,
             self.query_resolve_buffer.buffer(),
             0,
@@ -238,7 +259,7 @@ impl TimestampQueryRegistry<'_> {
     ) -> Option<wgpu::RenderPassTimestampWrites<'_>> {
         let (start_idx, end_idx) = self.manager.register_writes_and_get_query_indices(tag)?;
         Some(wgpu::RenderPassTimestampWrites {
-            query_set: &self.manager.query_set,
+            query_set: self.manager.query_set.as_ref().unwrap(),
             beginning_of_pass_write_index: Some(start_idx),
             end_of_pass_write_index: Some(end_idx),
         })
@@ -265,14 +286,15 @@ impl TimestampQueryRegistry<'_> {
             } else {
                 (None, Some(end_idx))
             };
+            let query_set = self.manager.query_set.as_ref().unwrap();
             [
                 Some(wgpu::RenderPassTimestampWrites {
-                    query_set: &self.manager.query_set,
+                    query_set,
                     beginning_of_pass_write_index: Some(start_idx),
                     end_of_pass_write_index: end_of_first_pass_write_index,
                 }),
                 Some(wgpu::RenderPassTimestampWrites {
-                    query_set: &self.manager.query_set,
+                    query_set,
                     beginning_of_pass_write_index: None,
                     end_of_pass_write_index: end_of_last_pass_write_index,
                 }),
@@ -291,7 +313,7 @@ impl TimestampQueryRegistry<'_> {
     ) -> Option<wgpu::ComputePassTimestampWrites<'_>> {
         let (start_idx, end_idx) = self.manager.register_writes_and_get_query_indices(tag)?;
         Some(wgpu::ComputePassTimestampWrites {
-            query_set: &self.manager.query_set,
+            query_set: self.manager.query_set.as_ref().unwrap(),
             beginning_of_pass_write_index: Some(start_idx),
             end_of_pass_write_index: Some(end_idx),
         })
@@ -317,14 +339,15 @@ impl TimestampQueryRegistry<'_> {
             } else {
                 (None, Some(end_idx))
             };
+            let query_set = self.manager.query_set.as_ref().unwrap();
             [
                 Some(wgpu::ComputePassTimestampWrites {
-                    query_set: &self.manager.query_set,
+                    query_set,
                     beginning_of_pass_write_index: Some(start_idx),
                     end_of_pass_write_index: end_of_first_pass_write_index,
                 }),
                 Some(wgpu::ComputePassTimestampWrites {
-                    query_set: &self.manager.query_set,
+                    query_set,
                     beginning_of_pass_write_index: None,
                     end_of_pass_write_index: end_of_last_pass_write_index,
                 }),
