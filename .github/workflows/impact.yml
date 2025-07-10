@@ -301,6 +301,12 @@ jobs:
           workspaces: |
             ${{ env.WORKSPACE }}
 
+      - name: Cache generated lookup tables
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKSPACE }}/assets/lookup_tables
+          key: ${{ runner.os }}-${{ env.WORKSPACE }}-assets-${{ hashFiles('engine/crates/impact_rendering/src/brdf.rs') }}
+
       - uses: dtolnay/rust-toolchain@v1
         with: { toolchain: stable, profile: minimal, override: true }
 
