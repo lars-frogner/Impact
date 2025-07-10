@@ -19,6 +19,7 @@ use impact::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    fs,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -55,15 +56,14 @@ pub struct TestingConfig {
 
 impl SnapshotTester {
     pub fn new(config: TestingConfig) -> Result<Self> {
-        if !config.output_dir.is_dir() {
-            bail!("Invalid output directory: {}", config.output_dir.display());
-        }
         if !config.reference_dir.is_dir() {
             bail!(
-                "Invalid reference directory: {}",
+                "Missing reference directory: {}",
                 config.reference_dir.display()
             );
         }
+
+        fs::create_dir_all(&config.output_dir)?;
 
         if config.output_dir.canonicalize()? == config.reference_dir.canonicalize()? {
             bail!("Reference and output directories can not be the same");
