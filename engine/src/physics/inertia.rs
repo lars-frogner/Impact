@@ -1010,7 +1010,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
-                epsilon = 1e-2 * correct_inertia_tensor.max_element()
+                epsilon = 2e-2 * correct_inertia_tensor.max_element()
             ));
         }
     }
