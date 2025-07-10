@@ -1,0 +1,30 @@
+# This action is originally from the `wgpu` repository.
+name: Install Mesa
+description: Install Mesa
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        MESA_VERSION: "24.3.4"
+        CI_BINARY_BUILD: "build20"
+      run: |
+        set -e
+
+        curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
+        mkdir mesa
+        tar xpf mesa.tar.xz -C mesa
+
+        cat > icd.json <<EOF
+        {
+          "ICD": {
+            "api_version": "1.1.255",
+            "library_path": "$PWD/mesa/lib/x86_64-linux-gnu/libvulkan_lvp.so"
+          },
+          "file_format_version": "1.0.0"
+        }
+        EOF
+
+        echo "VK_DRIVER_FILES=$PWD/icd.json" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+        echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
