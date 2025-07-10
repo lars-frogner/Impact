@@ -25,25 +25,30 @@ main! = |_args|
 
     cargo_build_platform!(platform_dir, linker, debug_mode)?
 
-    rust_target_folder = get_rust_target_folder!(debug_mode)
+    rust_target_dir = get_rust_target_dir!(platform_dir, debug_mode)
 
-    copy_platform_lib!(platform_dir, rust_target_folder)?
+    copy_platform_lib!(platform_dir, rust_target_dir)?
 
     Ok({})
 
-get_rust_target_folder! : [Debug, Release] => Str
-get_rust_target_folder! = |debug_mode|
+get_rust_target_dir! : Str, [Debug, Release] => Str
+get_rust_target_dir! = |platform_dir, debug_mode|
+    target_root =
+        when Env.var!("CARGO_TARGET_DIR") is
+            Ok(str) if !(Str.is_empty(str)) -> str
+            _ -> "${platform_dir}/target"
+
     debug_or_release = if debug_mode == Debug then "debug" else "release"
 
     when Env.var!("CARGO_BUILD_TARGET") is
         Ok(target_env_var) ->
             if Str.is_empty(target_env_var) then
-                "target/${debug_or_release}/"
+                "${target_root}/${debug_or_release}/"
             else
-                "target/${target_env_var}/${debug_or_release}/"
+                "${target_root}/${target_env_var}/${debug_or_release}/"
 
         Err(_) ->
-            "target/${debug_or_release}/"
+            "${target_root}/${debug_or_release}/"
 
 cargo_build_platform! : Str, [Ld, Mold], [Debug, Release] => Result {} _
 cargo_build_platform! = |platform_dir, linker, debug_mode|
@@ -74,7 +79,7 @@ copy_platform_lib! : Str, Str => Result {} _
 copy_platform_lib! = |platform_dir, rust_target_folder|
     Stdout.line!("Copying platform library to platform lib folder")?
 
-    platform_build_path = "${platform_dir}/${rust_target_folder}libroc_platform.a"
+    platform_build_path = "${rust_target_folder}libroc_platform.a"
     platform_dest_path = "${platform_dir}/lib/"
 
     Cmd.exec!("cp", [platform_build_path, platform_dest_path])
