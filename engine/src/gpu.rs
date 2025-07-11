@@ -1,7 +1,7 @@
 pub mod rendering;
 
 use anyhow::Result;
-use impact_gpu::{device::GraphicsDevice, wgpu};
+use impact_gpu::{device::GraphicsDevice, vertex_attribute_ranges, wgpu};
 use impact_rendering::surface::RenderingSurface;
 use std::num::NonZeroU32;
 
@@ -87,12 +87,7 @@ pub fn connect_to_graphics_device_for_rendering(
             max_bind_groups: 7,
             max_push_constant_size: 256,
             max_color_attachment_bytes_per_sample: 64,
-            // This is a workaround for a (presumably) bug introduced in
-            // wgpu 0.24 where the highest `VertexAttribute::shader_location`
-            // rather than the actual sum of the lengths of
-            // `VertexBufferLayout::attributes` is compared against
-            // `max_vertex_attributes`
-            max_vertex_attributes: 32,
+            max_vertex_attributes: vertex_attribute_ranges::TOTAL_LOCATIONS,
             ..wgpu::Limits::default()
         },
         wgpu::MemoryHints::Performance,

@@ -11,6 +11,7 @@ use impact_containers::CollectionChange;
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
+    vertex_attribute_ranges::MESH_START,
     wgpu,
 };
 use std::{borrow::Cow, mem};
@@ -48,17 +49,15 @@ pub struct MeshGPUBufferManager {
     label: String,
 }
 
-const MESH_VERTEX_BINDING_START: u32 = 10;
-
 /// Binding location of a specific type of mesh vertex attribute.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MeshVertexAttributeLocation {
-    Position = MESH_VERTEX_BINDING_START,
-    NormalVector = (MESH_VERTEX_BINDING_START + 1),
-    TextureCoords = (MESH_VERTEX_BINDING_START + 2),
-    TangentSpaceQuaternion = (MESH_VERTEX_BINDING_START + 3),
-    Color = (MESH_VERTEX_BINDING_START + 4),
+    Position = MESH_START,
+    NormalVector = MESH_START + 1,
+    TextureCoords = MESH_START + 2,
+    TangentSpaceQuaternion = MESH_START + 3,
+    Color = MESH_START + 4,
 }
 
 impl MeshGPUBufferManager {

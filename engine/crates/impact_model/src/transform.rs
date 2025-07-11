@@ -2,6 +2,7 @@
 
 use crate::{InstanceFeatureManager, impl_InstanceFeatureForGPU};
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
 use std::hash::Hash;
@@ -44,19 +45,17 @@ pub struct InstanceModelViewTransformWithPrevious {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InstanceModelLightTransform(InstanceModelViewTransform);
 
-const INSTANCE_VERTEX_BINDING_START: u32 = 0;
-
 impl InstanceModelViewTransform {
     /// Returns the binding location of the transform's rotation quaternion in
     /// the instance buffer.
     pub const fn rotation_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START
+        INSTANCE_START
     }
 
     /// Returns the binding location of the transform's translation and scaling
     /// in the instance buffer.
     pub const fn translation_and_scaling_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START + 1
+        INSTANCE_START + 1
     }
 
     /// Creates a new identity transform.
@@ -106,25 +105,25 @@ impl InstanceModelViewTransformWithPrevious {
     /// Returns the binding location of the current frame's transform's rotation
     /// quaternion in the instance buffer.
     pub const fn current_rotation_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START
+        INSTANCE_START
     }
 
     /// Returns the binding location of the current frame's transform's
     /// translation and scaling in the instance buffer.
     pub const fn current_translation_and_scaling_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START + 1
+        INSTANCE_START + 1
     }
 
     /// Returns the binding location of the previous frame's transform's
     /// rotation quaternion in the instance buffer.
     pub const fn previous_rotation_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START + 2
+        INSTANCE_START + 2
     }
 
     /// Returns the binding location of the previous frame's transform's
     /// translation and scaling in the instance buffer.
     pub const fn previous_translation_and_scaling_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START + 3
+        INSTANCE_START + 3
     }
 
     /// Uses the identity transform for the previous frame.
@@ -153,13 +152,13 @@ impl InstanceModelLightTransform {
     /// Returns the binding location of the transform's rotation quaternion in
     /// the instance buffer.
     pub const fn rotation_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START
+        INSTANCE_START
     }
 
     /// Returns the binding location of the transform's translation and scaling
     /// in the instance buffer.
     pub const fn translation_and_scaling_location() -> u32 {
-        INSTANCE_VERTEX_BINDING_START + 1
+        INSTANCE_START + 1
     }
 
     /// Creates a new identity transform.
@@ -195,26 +194,26 @@ impl AsInstanceModelViewTransform for InstanceModelLightTransform {
 impl_InstanceFeatureForGPU!(
     InstanceModelViewTransform,
     wgpu::vertex_attr_array![
-        INSTANCE_VERTEX_BINDING_START => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
+        INSTANCE_START => Float32x4,
+        INSTANCE_START + 1 => Float32x4,
     ]
 );
 
 impl_InstanceFeatureForGPU!(
     InstanceModelViewTransformWithPrevious,
     wgpu::vertex_attr_array![
-        INSTANCE_VERTEX_BINDING_START => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 3 => Float32x4,
+        INSTANCE_START => Float32x4,
+        INSTANCE_START + 1 => Float32x4,
+        INSTANCE_START + 2 => Float32x4,
+        INSTANCE_START + 3 => Float32x4,
     ]
 );
 
 impl_InstanceFeatureForGPU!(
     InstanceModelLightTransform,
     wgpu::vertex_attr_array![
-        INSTANCE_VERTEX_BINDING_START => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
+        INSTANCE_START => Float32x4,
+        INSTANCE_START + 1 => Float32x4,
     ]
 );
 
