@@ -14,6 +14,7 @@ pub mod shader;
 pub mod storage;
 pub mod texture;
 pub mod uniform;
+pub mod vertex_attribute_ranges;
 
 pub use naga;
 pub use wgpu;

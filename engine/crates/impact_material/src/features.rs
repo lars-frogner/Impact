@@ -6,6 +6,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_gpu::vertex_attribute_ranges::MATERIAL_START;
 use impact_gpu::wgpu;
 use impact_model::InstanceFeatureManager;
 use impact_model::{
@@ -14,19 +15,17 @@ use impact_model::{
 use nalgebra::Vector2;
 use std::hash::Hash;
 
-const MATERIAL_VERTEX_BINDING_START: u32 = 20;
-
 /// Vertex attribute location of a specific type of material instance feature.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MaterialInstanceFeatureLocation {
-    SpecularReflectance = MATERIAL_VERTEX_BINDING_START,
-    Roughness = (MATERIAL_VERTEX_BINDING_START + 1),
-    Metalness = (MATERIAL_VERTEX_BINDING_START + 2),
-    EmissiveLuminance = (MATERIAL_VERTEX_BINDING_START + 3),
-    Color = (MATERIAL_VERTEX_BINDING_START + 4),
-    ParallaxDisplacementScale = (MATERIAL_VERTEX_BINDING_START + 5),
-    ParallaxUVPerDistance = (MATERIAL_VERTEX_BINDING_START + 6),
+    SpecularReflectance = MATERIAL_START,
+    Roughness = MATERIAL_START + 1,
+    Metalness = MATERIAL_START + 2,
+    EmissiveLuminance = MATERIAL_START + 3,
+    Color = MATERIAL_START + 4,
+    ParallaxDisplacementScale = MATERIAL_START + 5,
+    ParallaxUVPerDistance = MATERIAL_START + 6,
 }
 
 bitflags! {

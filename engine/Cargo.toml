@@ -192,9 +192,9 @@ bytemuck = { workspace = true }
 cfg-if = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
-egui = { version = "0.31", features = ["log"], optional = true }
-egui-wgpu = { version = "0.31", optional = true }
-egui-winit = { version = "0.31", optional = true }
+egui = { version = "0.32", features = ["log"], optional = true }
+egui-wgpu = { version = "0.32", optional = true }
+egui-winit = { version = "0.32", optional = true }
 glam = "0.30"
 half = { version = "2.6", features = ["bytemuck"] }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
