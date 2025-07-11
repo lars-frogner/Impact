@@ -18,7 +18,6 @@ use std::{
     num::NonZeroU32,
     path::Path,
 };
-use wgpu::util::DeviceExt;
 
 stringhash32_newtype!(
     /// Identifier for specific textures.
@@ -1503,8 +1502,8 @@ fn extract_texture_bytes(
     let size = texture
         .size()
         .mip_level_size(mip_level, texture.dimension());
-    let width = size.width;
-    let height = size.height;
+    let width = u64::from(size.width);
+    let height = u64::from(size.height);
 
     let format = texture.format();
 
@@ -1514,22 +1513,34 @@ fn extract_texture_bytes(
         wgpu::TextureAspect::All
     };
 
-    let texel_size = texture
-        .format()
-        .block_copy_size(Some(aspect))
-        .expect("Texel block size unavailable");
+    let block_size = u64::from(
+        texture
+            .format()
+            .block_copy_size(Some(aspect))
+            .expect("Texel block size unavailable"),
+    );
+
+    let block_dim = u64::from(format.block_dimensions().0);
+    let blocks_per_row = width.div_ceil(block_dim);
+    let bytes_per_row = block_size * blocks_per_row;
+
+    const ALIGNMENT: u64 = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64;
+
+    let padded_bytes_per_row = bytes_per_row.div_ceil(ALIGNMENT) * ALIGNMENT;
+    assert!(u32::try_from(padded_bytes_per_row).is_ok());
+
+    let padded_layer_size = padded_bytes_per_row * height;
+    let padded_buffer_size = padded_layer_size * u64::from(texture.depth_or_array_layers());
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Texture copy encoder"),
     });
 
-    let raw_buffer =
-        vec![0; (texel_size * width * height * texture.depth_or_array_layers()) as usize];
-
-    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        contents: raw_buffer.as_slice(),
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        size: padded_buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         label: Some("Texture buffer"),
+        mapped_at_creation: false,
     });
 
     command_encoder.copy_texture_to_buffer(
@@ -1543,8 +1554,8 @@ fn extract_texture_bytes(
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(texel_size * width),
-                rows_per_image: Some(height),
+                bytes_per_row: Some(padded_bytes_per_row as u32),
+                rows_per_image: Some(height as u32),
             },
         },
         size,
@@ -1554,12 +1565,27 @@ fn extract_texture_bytes(
 
     let buffer_view = buffer::map_buffer_slice_to_cpu(device, buffer.slice(..))?;
 
-    // Extract only the data of the texture with the given texture array index
-    let texture_image_size = (texel_size * width * height) as usize;
-    let buffer_view = &buffer_view
-        [texture_array_idx * texture_image_size..(texture_array_idx + 1) * texture_image_size];
+    let texture_image_size = (bytes_per_row * height) as usize;
 
-    Ok(buffer_view.to_vec())
+    // Extract only the data of the texture with the given texture array index
+    let layer_start = texture_array_idx * padded_layer_size as usize;
+
+    // Return the buffer data directly if there is no padding
+    if bytes_per_row == padded_bytes_per_row {
+        return Ok(buffer_view[layer_start..layer_start + texture_image_size].to_vec());
+    }
+
+    let mut image_buffer = Vec::with_capacity(texture_image_size);
+
+    // Only copy over non-padding data
+    for row_idx in 0..height as usize {
+        let start = layer_start + row_idx * padded_bytes_per_row as usize;
+        let end = start + bytes_per_row as usize;
+        image_buffer.extend_from_slice(&buffer_view[start..end]);
+    }
+    assert_eq!(image_buffer.len(), texture_image_size);
+
+    Ok(image_buffer)
 }
 
 fn convert_bgra8_to_rgba8(bgra_bytes: &mut [u8]) {
