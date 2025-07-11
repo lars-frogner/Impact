@@ -27,6 +27,7 @@ use impact_gpu::{
         TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
     },
     uniform::{self, UniformBufferable},
+    wgpu,
 };
 use impact_math::ConstStringHash64;
 use impact_mesh::buffer::{

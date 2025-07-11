@@ -13,7 +13,7 @@ use anyhow::Result;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     query::TimestampQueryManager, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator,
+    storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator, wgpu,
 };
 use impact_light::shadow_map::ShadowMappingConfig;
 use impact_rendering::{

@@ -1,7 +1,7 @@
 pub mod rendering;
 
 use anyhow::Result;
-use impact_gpu::device::GraphicsDevice;
+use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_rendering::surface::RenderingSurface;
 use std::num::NonZeroU32;
 

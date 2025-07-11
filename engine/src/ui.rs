@@ -9,7 +9,7 @@ pub mod window;
 
 use crate::engine::Engine;
 use anyhow::Result;
-use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry};
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, wgpu};
 use impact_rendering::surface::RenderingSurface;
 
 /// Core trait that all user interface implementations must implement.

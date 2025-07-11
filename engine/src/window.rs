@@ -3,6 +3,7 @@
 pub mod input;
 
 use anyhow::Result;
+use impact_gpu::wgpu;
 use impact_rendering::surface::window::SurfaceWindow;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, sync::Arc};
