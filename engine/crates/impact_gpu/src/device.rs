@@ -1,6 +1,6 @@
 //! Graphics device.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 /// Interface to a connected graphics device.
 #[derive(Debug)]
@@ -48,15 +48,13 @@ impl GraphicsDevice {
         );
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    required_features,
-                    required_limits,
-                    memory_hints,
-                    label: None,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features,
+                required_limits,
+                memory_hints,
+                label: None,
+                trace: wgpu::Trace::Off,
+            })
             .await?;
 
         Ok(Self {
@@ -107,7 +105,7 @@ impl GraphicsDevice {
             .await;
 
         // Fallback to software if hardware adapter was not found
-        let adapter = if adapter.is_none() {
+        if adapter.is_err() {
             wgpu_instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     force_fallback_adapter: true,
@@ -117,8 +115,7 @@ impl GraphicsDevice {
                 .await
         } else {
             adapter
-        };
-
-        adapter.ok_or_else(|| anyhow!("Could not find compatible adapter"))
+        }
+        .map_err(Into::into)
     }
 }
