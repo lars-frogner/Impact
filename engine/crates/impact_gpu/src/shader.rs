@@ -44,6 +44,12 @@ pub struct EntryPointNames {
     /// Name of the compute entry point function, or [`None`] if there is no
     /// compute entry point.
     pub compute: Option<Cow<'static, str>>,
+    /// Name of the mesh entry point function, or [`None`] if there is no
+    /// mesh entry point.
+    pub mesh: Option<Cow<'static, str>>,
+    /// Name of the task entry point function, or [`None`] if there is no
+    /// task entry point.
+    pub task: Option<Cow<'static, str>>,
 }
 
 impl ShaderManager {
@@ -335,6 +341,8 @@ impl EntryPointNames {
             vertex: None,
             fragment: None,
             compute: None,
+            mesh: None,
+            task: None,
         };
         for entry_point in &module.entry_points {
             match entry_point.stage {
@@ -346,6 +354,12 @@ impl EntryPointNames {
                 }
                 ShaderStage::Compute => {
                     entry_point_names.compute = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::Mesh => {
+                    entry_point_names.mesh = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::Task => {
+                    entry_point_names.task = Some(Cow::Owned(entry_point.name.clone()));
                 }
             }
         }

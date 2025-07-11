@@ -605,7 +605,7 @@ pub fn map_buffer_slice_to_cpu<'a>(
         *map_result_sender.lock().unwrap() = Some(result);
     });
 
-    device.poll(wgpu::Maintain::Wait).panic_on_timeout();
+    device.poll(wgpu::PollType::Wait)?;
 
     map_result_receiver.lock().unwrap().take().unwrap()?;
 
