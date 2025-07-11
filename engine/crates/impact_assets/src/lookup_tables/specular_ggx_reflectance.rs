@@ -1,6 +1,6 @@
 //! Specular GGX reflectance lookup table.
 
-use crate::assets::Assets;
+use crate::Assets;
 use anyhow::Result;
 use impact_gpu::resource_group::GPUResourceGroupManager;
 use impact_rendering::lookup_tables::specular_ggx_reflectance;

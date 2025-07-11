@@ -7,7 +7,7 @@ use impact_containers::HashMap;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{
-        self, Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
+        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
         TextureLookupTable, mipmap::MipmapperGenerator,
     },
 };
@@ -107,6 +107,7 @@ impl Assets {
     /// # Errors
     /// Returns an error if the asset file does not exist or is invalid.
     /// See also [`Self::load_specified_assets`].
+    #[cfg(feature = "ron")]
     pub fn load_assets_specified_in_config(&mut self) -> Result<AssetSpecifications> {
         let Some(asset_file_path) = self.config.asset_file_path.as_ref() else {
             return Ok(AssetSpecifications::default());
@@ -425,9 +426,9 @@ impl Assets {
         self.load_texture_from_generated_lookup_table(
             texture_name,
             || {
-                texture::read_lookup_table_from_file(table_file_path).or_else(|_| {
+                impact_gpu::texture::read_lookup_table_from_file(table_file_path).or_else(|_| {
                     let table = compute_table();
-                    texture::save_lookup_table_to_file(&table, table_file_path)?;
+                    impact_gpu::texture::save_lookup_table_to_file(&table, table_file_path)?;
                     Ok(table)
                 })
             },
@@ -470,6 +471,7 @@ impl Default for AssetConfig {
 impl AssetSpecifications {
     /// Parses the specifications from the RON file at the given path and
     /// resolves any specified paths.
+    #[cfg(feature = "ron")]
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
         let file_path = file_path.as_ref();
         let mut specs: Self = impact_io::parse_ron_file(file_path)?;
@@ -481,6 +483,7 @@ impl AssetSpecifications {
 
     /// Resolves all paths in the specifications by prepending the given root
     /// path to all paths.
+    #[cfg(feature = "ron")]
     fn resolve_paths(&mut self, root_path: &Path) {
         for specification in &mut self.textures {
             specification.resolve_paths(root_path);

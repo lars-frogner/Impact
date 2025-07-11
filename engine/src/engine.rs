@@ -13,7 +13,6 @@ pub mod window;
 
 use crate::{
     application::Application,
-    assets::{AssetConfig, Assets, lookup_tables},
     component::ComponentRegistry,
     control::{self, ControllerConfig, MotionController, OrientationController},
     gizmo::{self, GizmoConfig, GizmoManager},
@@ -27,6 +26,7 @@ use crate::{
     voxel::{self, VoxelConfig, VoxelManager},
 };
 use anyhow::{Result, anyhow};
+use impact_assets::{AssetConfig, Assets, lookup_tables};
 use impact_ecs::{
     component::Component,
     world::{EntityID, World as ECSWorld},

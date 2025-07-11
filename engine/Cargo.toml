@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/impact_assets",
     "crates/impact_camera",
     "crates/impact_containers",
     "crates/impact_dev_ui",
@@ -197,6 +198,7 @@ egui-wgpu = { version = "0.32", optional = true }
 egui-winit = { version = "0.32", optional = true }
 glam = "0.30"
 half = { version = "2.6", features = ["bytemuck"] }
+impact_assets = { path = "crates/impact_assets", features = ["ron"] }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }
 impact_ecs = { path = "crates/impact_ecs" }

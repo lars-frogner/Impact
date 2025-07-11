@@ -4,7 +4,6 @@
 mod macros;
 
 pub mod application;
-pub mod assets;
 pub mod camera;
 pub mod command;
 pub mod component;
@@ -31,6 +30,7 @@ pub mod window;
 #[cfg(feature = "profiling")]
 pub mod profiling;
 
+pub use impact_assets;
 pub use impact_camera;
 pub use impact_containers;
 pub use impact_ecs;

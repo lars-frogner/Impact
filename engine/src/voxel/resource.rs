@@ -1,19 +1,17 @@
 //! Rendering resources for voxel objects.
 
-use crate::{
-    assets::Assets,
-    voxel::{
-        VoxelObjectID,
-        mesh::{
-            ChunkSubmesh, CullingFrustum, MeshedChunkedVoxelObject, VoxelMeshIndex,
-            VoxelMeshIndexMaterials, VoxelMeshModifications, VoxelMeshVertexNormalVector,
-            VoxelMeshVertexPosition,
-        },
-        voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
+use crate::voxel::{
+    VoxelObjectID,
+    mesh::{
+        ChunkSubmesh, CullingFrustum, MeshedChunkedVoxelObject, VoxelMeshIndex,
+        VoxelMeshIndexMaterials, VoxelMeshModifications, VoxelMeshVertexNormalVector,
+        VoxelMeshVertexPosition,
     },
+    voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
 };
 use anyhow::Result;
 use bytemuck::Pod;
+use impact_assets::Assets;
 use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
