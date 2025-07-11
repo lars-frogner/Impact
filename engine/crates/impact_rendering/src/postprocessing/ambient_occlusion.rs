@@ -27,7 +27,6 @@ use impact_gpu::{
 };
 use impact_math::{ConstStringHash64, Float, HaltonSequence, hash64};
 use nalgebra::Vector4;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// The maximum number of samples that can be used for computing ambient
@@ -35,7 +34,8 @@ use std::borrow::Cow;
 pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 16;
 
 /// Configuration options for ambient occlusion.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct AmbientOcclusionConfig {
     /// Whether ambient occlusion is enabled.
     pub enabled: bool,

@@ -25,11 +25,11 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{ConstStringHash64, hash64};
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// Configuration options for temporal anti-aliasing.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct TemporalAntiAliasingConfig {
     /// Whether temporal anti-aliasing is enabled.
     pub enabled: bool,

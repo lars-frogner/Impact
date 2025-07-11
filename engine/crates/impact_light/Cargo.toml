@@ -6,21 +6,21 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-ecs = ["dep:impact_ecs"]
-roc_codegen = ["roc_integration/roc_codegen"]
+ecs = ["dep:inventory", "dep:impact_ecs"]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 
 [dependencies]
 anyhow = { workspace = true }
 approx = { workspace = true }
-bitflags = { workspace = true }
+bitflags = { workspace = true, features = ["bytemuck"] }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_math = { path = "../impact_math" }
-inventory = { workspace = true }
+inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
 paste = { workspace = true }
