@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use anyhow::Result;
+use impact_gpu::wgpu;
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,
     postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,

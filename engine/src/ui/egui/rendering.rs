@@ -1,7 +1,7 @@
 //! Rendering of [`egui`] based user interfaces.
 
 use core::fmt;
-use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry};
+use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, wgpu};
 use impact_rendering::render_command;
 use impact_rendering::surface::RenderingSurface;
 use std::borrow::Cow;

@@ -12,7 +12,7 @@ use gizmo_passes::GizmoPasses;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    storage::StorageGPUBufferManager,
+    storage::StorageGPUBufferManager, wgpu,
 };
 use impact_light::LightStorage;
 use impact_material::MaterialLibrary;

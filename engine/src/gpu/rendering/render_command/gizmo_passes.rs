@@ -8,6 +8,7 @@ use impact_gpu::{
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     shader::{Shader, ShaderManager},
+    wgpu,
 };
 use impact_mesh::{
     MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,

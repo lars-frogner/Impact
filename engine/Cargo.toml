@@ -215,7 +215,6 @@ impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
 impact_scheduling = { path = "crates/impact_scheduling" }
 impact_thread = { path = "crates/impact_thread" }
 inventory = { workspace = true }
-naga = { version = "24.0", features = ["wgsl-out"] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }
 noise = "0.9"
@@ -230,7 +229,6 @@ roots = "0.0.8"
 serde = { workspace = true }
 simba = "0.9"
 tinyvec = { version = "1.9", features = ["alloc"] }
-wgpu = { version = "24.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30", features = ["serde"], optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 

@@ -5,6 +5,7 @@ use crate::{
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
+use impact_gpu::wgpu;
 use impact_scheduling::{Task, define_execution_tag, define_task};
 use impact_thread::ThreadPoolTaskErrors;
 
