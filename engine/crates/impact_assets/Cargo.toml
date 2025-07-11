@@ -1,0 +1,24 @@
+[package]
+name = "impact_assets"
+description = "Asset management for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[features]
+ron = ["impact_io/ron"]
+
+[dependencies]
+anyhow = { workspace = true }
+impact_containers = { path = "../impact_containers" }
+impact_gpu = { path = "../impact_gpu", features = ["bincode"] }
+impact_io = { path = "../impact_io" }
+impact_log = { path = "../impact_log" }
+impact_material = { path = "../impact_material" }
+impact_math = { path = "../impact_math" }
+impact_mesh = { path = "../impact_mesh", features = ["serde"] }
+impact_rendering = { path = "../impact_rendering" }
+serde = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,7 +3,6 @@
 pub mod tasks;
 
 use crate::{
-    assets::Assets,
     gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
     voxel::{
         VoxelManager, VoxelObjectID,
@@ -11,6 +10,7 @@ use crate::{
     },
 };
 use anyhow::Result;
+use impact_assets::Assets;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_gpu::bind_group_layout::BindGroupLayoutRegistry;

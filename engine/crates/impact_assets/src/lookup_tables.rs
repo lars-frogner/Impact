@@ -2,7 +2,7 @@
 
 pub mod specular_ggx_reflectance;
 
-use crate::assets::Assets;
+use crate::Assets;
 use anyhow::Result;
 use impact_gpu::resource_group::GPUResourceGroupManager;
 
