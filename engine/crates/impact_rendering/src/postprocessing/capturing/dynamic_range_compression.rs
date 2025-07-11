@@ -15,11 +15,11 @@ use impact_gpu::{
     wgpu,
 };
 use roc_integration::roc;
-use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 
 /// Configuration options for dynamic range compression.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, Default)]
 pub struct DynamicRangeCompressionConfig {
     /// The method to use for tone mapping.
     pub tone_mapping_method: ToneMappingMethod,
@@ -28,7 +28,8 @@ pub struct DynamicRangeCompressionConfig {
 /// The method to use for tone mapping.
 #[roc(parents = "Rendering")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ToneMappingMethod {
     None,
     #[default]

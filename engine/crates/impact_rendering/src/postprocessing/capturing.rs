@@ -21,11 +21,14 @@ use impact_gpu::{
 };
 use impact_math::Bounds;
 use roc_integration::roc;
-use serde::{Deserialize, Serialize};
 
 /// Configuration options for a capturing camera.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
 pub struct CapturingCameraConfig {
     /// The settings for the camera.
     pub settings: CameraSettings,
@@ -39,7 +42,8 @@ pub struct CapturingCameraConfig {
 }
 
 /// Capturing settings for a camera.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct CameraSettings {
     /// The relative aperture of the camera, which is the ratio of the focal
     /// length to the aperture diameter.
@@ -64,7 +68,8 @@ pub struct CameraSettings {
 /// value or determined automatically based on the incident luminance, with
 /// optional exposure value compensation in f-stops.
 #[roc(parents = "Rendering")]
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug)]
 pub enum SensorSensitivity {
     Manual { iso: f32 },
     Auto { ev_compensation: f32 },

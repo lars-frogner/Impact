@@ -25,11 +25,11 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{Bounds, ConstStringHash64, UpperExclusiveBounds, hash64};
-use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, mem, sync::LazyLock};
 
 /// Configuration options for computing average captured luminance.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct AverageLuminanceComputationConfig {
     /// The range of luminance values that the histogram used for computing
     /// average luminance should cover (luminance values outside these bounds

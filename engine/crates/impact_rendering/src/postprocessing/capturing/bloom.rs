@@ -31,11 +31,11 @@ use impact_gpu::{
     wgpu,
 };
 use impact_mesh::VertexAttributeSet;
-use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, num::NonZeroU32};
 
 /// Configuration options for bloom.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct BloomConfig {
     /// Whether bloom is enabled.
     pub enabled: bool,

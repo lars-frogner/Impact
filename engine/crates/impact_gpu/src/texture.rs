@@ -3,7 +3,7 @@
 pub mod mipmap;
 
 use crate::{buffer, device::GraphicsDevice};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail};
 use bytemuck::Pod;
 use impact_io::image::{self, Image, PixelFormat};
 use impact_math::{hash32, stringhash32_newtype};
@@ -12,9 +12,7 @@ use ordered_float::OrderedFloat;
 use roc_integration::roc;
 use std::{
     borrow::Cow,
-    fs::File,
     hash::{DefaultHasher, Hash, Hasher},
-    io::BufReader,
     num::NonZeroU32,
     path::Path,
 };
@@ -1449,7 +1447,11 @@ pub fn read_lookup_table_from_file<T>(file_path: impl AsRef<Path>) -> Result<Tex
 where
     T: TexelType + serde::de::DeserializeOwned,
 {
-    use std::io::Read;
+    use anyhow::Context;
+    use std::{
+        fs::File,
+        io::{BufReader, Read},
+    };
 
     let file_path = file_path.as_ref();
     let file = File::open(file_path).with_context(|| {
