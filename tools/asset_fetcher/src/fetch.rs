@@ -6,7 +6,12 @@ use std::{
     path::Path,
 };
 use tempfile::NamedTempFile;
-use ureq::http::{HeaderMap, HeaderValue};
+use ureq::{
+    Agent,
+    config::Config,
+    http::{HeaderMap, HeaderValue},
+    tls::{TlsConfig, TlsProvider},
+};
 
 /// Fetches an asset from its provider and extracts it to the target directory.
 ///
@@ -31,6 +36,8 @@ pub fn fetch_asset(asset: &Asset, target_dir: &Path) -> Result<()> {
         bail!("No downloads found for asset '{}'", asset.name);
     }
 
+    let agent = create_ureq_agent();
+
     // Process each download
     for (index, download) in downloads.iter().enumerate() {
         println!(
@@ -40,7 +47,8 @@ pub fn fetch_asset(asset: &Asset, target_dir: &Path) -> Result<()> {
             download.url
         );
 
-        let mut response = ureq::get(&download.url)
+        let mut response = agent
+            .get(&download.url)
             .call()
             .with_context(|| format!("Failed GET request for {}", download.url))?;
 
@@ -94,6 +102,18 @@ pub fn fetch_asset(asset: &Asset, target_dir: &Path) -> Result<()> {
         downloads.len()
     );
     Ok(())
+}
+
+pub fn create_ureq_agent() -> Agent {
+    let config = Config::builder()
+        .tls_config(
+            TlsConfig::builder()
+                .provider(TlsProvider::NativeTls)
+                .build(),
+        )
+        .build();
+
+    config.new_agent()
 }
 
 /// Streams response data to a temporary file in the target directory.
