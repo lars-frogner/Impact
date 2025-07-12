@@ -1,6 +1,6 @@
 //! Poly Haven provider implementation.
 
-use crate::providers::AssetDownload;
+use crate::{fetch, providers::AssetDownload};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::io::Read;
@@ -206,7 +206,8 @@ impl AssetInfo {
     fn get_texture_downloads(&self, info: &TextureAssetInfo) -> Result<Vec<AssetDownload>> {
         let api_url = format!("https://api.polyhaven.com/files/{}", info.id);
 
-        let mut response = ureq::get(&api_url)
+        let mut response = fetch::create_ureq_agent()
+            .get(&api_url)
             .header("User-Agent", "ImpactGameEngineAssetFetcher/0.1")
             .call()
             .context("Failed to query Poly Haven API")?;
@@ -451,7 +452,8 @@ impl AssetInfo {
         // since the texture API response doesn't contain model export data
         let api_url = format!("https://api.polyhaven.com/files/{}", info.id);
 
-        let mut response = ureq::get(&api_url)
+        let mut response = fetch::create_ureq_agent()
+            .get(&api_url)
             .call()
             .context("Failed to query Poly Haven API for model")?;
 
