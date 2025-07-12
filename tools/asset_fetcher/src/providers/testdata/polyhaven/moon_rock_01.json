@@ -1,0 +1,1199 @@
+{
+  "blend": {
+    "16k": {
+      "blend": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/16k/moon_rock_01/moon_rock_01_16k.blend",
+        "md5": "b3b21aae89db64d412977d81dff359c0",
+        "size": 665281,
+        "include": {
+          "textures/moon_rock_01_diff_16k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_diff_16k.jpg",
+            "md5": "8de5140d8010c289d9f5867585a39202",
+            "size": 29093494
+          },
+          "textures/moon_rock_01_disp_16k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_disp_16k.png",
+            "md5": "a1c934a70090e47c5811a269fd4b3493",
+            "size": 135160896
+          },
+          "textures/moon_rock_01_nor_gl_16k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_nor_gl_16k.exr",
+            "md5": "45cefb64b6de5dee909e2029e89564f4",
+            "size": 104467945
+          },
+          "textures/moon_rock_01_rough_16k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_rough_16k.exr",
+            "md5": "3e1b3c520b26191a0e28691d61d0cc77",
+            "size": 9929249
+          }
+        }
+      }
+    },
+    "1k": {
+      "blend": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/1k/moon_rock_01/moon_rock_01_1k.blend",
+        "md5": "5d8f150665a141f590f980745738857d",
+        "size": 665203,
+        "include": {
+          "textures/moon_rock_01_diff_1k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_diff_1k.jpg",
+            "md5": "a992fbfe67efe76ac04658b355d38d6b",
+            "size": 276420
+          },
+          "textures/moon_rock_01_disp_1k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_disp_1k.png",
+            "md5": "c729344bfc7003c326ca3785d2963207",
+            "size": 1597127
+          },
+          "textures/moon_rock_01_nor_gl_1k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_nor_gl_1k.exr",
+            "md5": "fbcefdcd5859bc98d600726bb23e4f5a",
+            "size": 1376905
+          },
+          "textures/moon_rock_01_rough_1k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_rough_1k.exr",
+            "md5": "5e8b70e662699ebdf01a9eaa9e0bdee7",
+            "size": 142390
+          }
+        }
+      }
+    },
+    "2k": {
+      "blend": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/moon_rock_01/moon_rock_01_2k.blend",
+        "md5": "892454b2dbcc7b02f1e7e9f4d00b19cb",
+        "size": 665287,
+        "include": {
+          "textures/moon_rock_01_diff_2k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_diff_2k.jpg",
+            "md5": "1f5e7da80ba4843b2e11768ee5b2d1fc",
+            "size": 928360
+          },
+          "textures/moon_rock_01_disp_2k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_disp_2k.png",
+            "md5": "6d3a6a845542abf5fef71f334a42d762",
+            "size": 5860702
+          },
+          "textures/moon_rock_01_nor_gl_2k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_nor_gl_2k.exr",
+            "md5": "a8a34276f96cb0300ae123ce2a34208d",
+            "size": 4647279
+          },
+          "textures/moon_rock_01_rough_2k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_rough_2k.exr",
+            "md5": "fa2c5f24b0b99c1b9951b252846e19b4",
+            "size": 437925
+          }
+        }
+      }
+    },
+    "4k": {
+      "blend": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/4k/moon_rock_01/moon_rock_01_4k.blend",
+        "md5": "e4255b9daed315da18b58ea7bddf5db4",
+        "size": 665087,
+        "include": {
+          "textures/moon_rock_01_diff_4k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_diff_4k.jpg",
+            "md5": "7d9e34f7bd43b60175d05d0a0176b25b",
+            "size": 3029570
+          },
+          "textures/moon_rock_01_disp_4k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_disp_4k.png",
+            "md5": "9df9d81d42a869098eb4bcb8ec0d4c74",
+            "size": 21342394
+          },
+          "textures/moon_rock_01_nor_gl_4k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_nor_gl_4k.exr",
+            "md5": "86e98a2fd151754a58299eaaea7a411a",
+            "size": 14546755
+          },
+          "textures/moon_rock_01_rough_4k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_rough_4k.exr",
+            "md5": "f9d4dcae3a49a2c444b8ce1552b068e6",
+            "size": 1332744
+          }
+        }
+      }
+    },
+    "8k": {
+      "blend": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/8k/moon_rock_01/moon_rock_01_8k.blend",
+        "md5": "0e50b953e14191280c703e4a0dc08481",
+        "size": 665180,
+        "include": {
+          "textures/moon_rock_01_diff_8k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_diff_8k.jpg",
+            "md5": "c2772118b1186f0450689b9fdc481814",
+            "size": 9443635
+          },
+          "textures/moon_rock_01_disp_8k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_disp_8k.png",
+            "md5": "72498a16e219f26caec5d747f218018a",
+            "size": 66712302
+          },
+          "textures/moon_rock_01_nor_gl_8k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_nor_gl_8k.exr",
+            "md5": "b4e0060cab9b66220abcc6ce5a658b2d",
+            "size": 39061343
+          },
+          "textures/moon_rock_01_rough_8k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_rough_8k.exr",
+            "md5": "1a1cc7d9e896db8857a304fa9a86b216",
+            "size": 3828242
+          }
+        }
+      }
+    }
+  },
+  "AO": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_ao_16k.exr",
+        "md5": "89959c55a6c5ad753e6fc87cfadccfb4",
+        "size": 41013372
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_ao_16k.jpg",
+        "md5": "9b438fc64559057764f1d2e932be12a2",
+        "size": 48244043
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_ao_16k.png",
+        "md5": "ab645c75241926d3a60e639f98e41071",
+        "size": 59265790
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_ao_1k.exr",
+        "md5": "1f5b298d137dacedd555623a118e6a3e",
+        "size": 358382
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_ao_1k.jpg",
+        "md5": "1b3c68d5468a2bf1a1b2afc7699e7db1",
+        "size": 347510
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_ao_1k.png",
+        "md5": "494616a70732734a2b225f596b1dd1ba",
+        "size": 1134737
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_ao_2k.exr",
+        "md5": "c1e47555a13a7374a96ac86a7b4610d4",
+        "size": 1171553
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_ao_2k.jpg",
+        "md5": "80d63db9f843481e65ff031240935702",
+        "size": 1204589
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_ao_2k.png",
+        "md5": "e978a54ed4ad2a9c2a20a513853f716b",
+        "size": 3752545
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_ao_4k.exr",
+        "md5": "51034d94c5ed5a0a9db9e043ada37c15",
+        "size": 3791110
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_ao_4k.jpg",
+        "md5": "0d02ff4ff82d4c9dabe74ed5b61c7035",
+        "size": 4096968
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_ao_4k.png",
+        "md5": "60c2c4b0c3e8cadcb8d1f465b8cf6b41",
+        "size": 11330363
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_ao_8k.exr",
+        "md5": "48c7e48a06db8bd579508d39116663d3",
+        "size": 11892300
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_ao_8k.jpg",
+        "md5": "1f1add45026324decfa908c3b0afbb7c",
+        "size": 13455864
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_ao_8k.png",
+        "md5": "5925f83b37d97a2892b4410c36212e61",
+        "size": 28648352
+      }
+    }
+  },
+  "arm": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_arm_16k.exr",
+        "md5": "af934e54caf9072c9427bb3997129c16",
+        "size": 50053056
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_arm_16k.jpg",
+        "md5": "3ce703e5b408773135d56a62e99956b9",
+        "size": 39476854
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_arm_16k.png",
+        "md5": "d7b9865f13499865907dca344dc55705",
+        "size": 326715123
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_arm_1k.exr",
+        "md5": "aee722ee5d680bf2e504be6350c5cb9b",
+        "size": 511048
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_arm_1k.jpg",
+        "md5": "3b3903efc7c304151e6238fd3d6e3557",
+        "size": 330395
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_arm_1k.png",
+        "md5": "e8d24ab48c70827ae66fc08ecc8d62e8",
+        "size": 2860403
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_arm_2k.exr",
+        "md5": "bce0edc36e3a4fecfbe3133952b3249d",
+        "size": 1630857
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_arm_2k.jpg",
+        "md5": "1e30d0c2a7f2b5227c7fd2e82534fd5b",
+        "size": 1129038
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_arm_2k.png",
+        "md5": "6eb50a7b281a36a63c0a3b7ad7d05980",
+        "size": 10154067
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_arm_4k.exr",
+        "md5": "038144bd1d62baaf2c28a0933474a4a1",
+        "size": 5201999
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_arm_4k.jpg",
+        "md5": "de8a964f4bdf13f886865d2bd617f101",
+        "size": 3800204
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_arm_4k.png",
+        "md5": "99ea3b8c3fda943c5d110e7b68594ce7",
+        "size": 34840517
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_arm_8k.exr",
+        "md5": "3e4d246cbc490f2f5030c8708b64ebbe",
+        "size": 16003261
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_arm_8k.jpg",
+        "md5": "51bd6b2fb4cb5caa6de4ecc7fc2aea76",
+        "size": 12316697
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_arm_8k.png",
+        "md5": "1cb397c9f194b1f679c74e442e74c1fb",
+        "size": 111318972
+      }
+    }
+  },
+  "Diffuse": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_diff_16k.exr",
+        "md5": "fa5b1cb41b2d3234e22b5768fa772eea",
+        "size": 34497304
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_diff_16k.jpg",
+        "md5": "8de5140d8010c289d9f5867585a39202",
+        "size": 29093494
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_diff_16k.png",
+        "md5": "a08ad5e8c816b93a9b9c86b3274289f0",
+        "size": 798566474
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_diff_1k.exr",
+        "md5": "68df1b062cc751f6e9b46204fff79a4a",
+        "size": 391088
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_diff_1k.jpg",
+        "md5": "a992fbfe67efe76ac04658b355d38d6b",
+        "size": 276420
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_diff_1k.png",
+        "md5": "e6288a5125aa4087873a628e95349993",
+        "size": 4205910
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_diff_2k.exr",
+        "md5": "2f060ab7ca32f0099d571ac68f398623",
+        "size": 1257214
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_diff_2k.jpg",
+        "md5": "1f5e7da80ba4843b2e11768ee5b2d1fc",
+        "size": 928360
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_diff_2k.png",
+        "md5": "22a9f613f67c19cb4e2a694c0a383697",
+        "size": 15669766
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_diff_4k.exr",
+        "md5": "a191bba9f2cd205b285852cc4ce4c3f0",
+        "size": 4016169
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_diff_4k.jpg",
+        "md5": "7d9e34f7bd43b60175d05d0a0176b25b",
+        "size": 3029570
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_diff_4k.png",
+        "md5": "365c01409e1bed88bf5c1ec3ee50d8ed",
+        "size": 58255058
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_diff_8k.exr",
+        "md5": "3595a13d5f8bad52cbbd47a03d592217",
+        "size": 12324475
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_diff_8k.jpg",
+        "md5": "c2772118b1186f0450689b9fdc481814",
+        "size": 9443635
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_diff_8k.png",
+        "md5": "6710b60fda02f890993cbb0230376a24",
+        "size": 214695723
+      }
+    }
+  },
+  "Displacement": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_disp_16k.exr",
+        "md5": "859bfb87e1e8f42729d489b90089fbe9",
+        "size": 19593665
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_disp_16k.jpg",
+        "md5": "dd41acd989c881f0402e413e44abf576",
+        "size": 26394777
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_disp_16k.png",
+        "md5": "a1c934a70090e47c5811a269fd4b3493",
+        "size": 135160896
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_disp_1k.exr",
+        "md5": "f4b25bb83d30787bcd8e3cb61f377aa4",
+        "size": 390445
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_disp_1k.jpg",
+        "md5": "91832eb694fb71441d27c9c2aae670e4",
+        "size": 344051
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_disp_1k.png",
+        "md5": "c729344bfc7003c326ca3785d2963207",
+        "size": 1597127
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_disp_2k.exr",
+        "md5": "9621e02f8a7809419ef19f5587435a1c",
+        "size": 1020324
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_disp_2k.jpg",
+        "md5": "3e28dc59d2ee43b4cc5c9e5a749bb417",
+        "size": 963906
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_disp_2k.png",
+        "md5": "6d3a6a845542abf5fef71f334a42d762",
+        "size": 5860702
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_disp_4k.exr",
+        "md5": "f2bf328a3e7e3145f48c3bdf9ca9588c",
+        "size": 2771825
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_disp_4k.jpg",
+        "md5": "bbb279a9a5659c3f3d47b30a40a34ad8",
+        "size": 2811240
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_disp_4k.png",
+        "md5": "9df9d81d42a869098eb4bcb8ec0d4c74",
+        "size": 21342394
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_disp_8k.exr",
+        "md5": "95074f143b0b14b5b06ab19a65cf5a81",
+        "size": 7418248
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_disp_8k.jpg",
+        "md5": "2c7c90d96ca963aef3180aeea7cbde5f",
+        "size": 8519215
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_disp_8k.png",
+        "md5": "72498a16e219f26caec5d747f218018a",
+        "size": 66712302
+      }
+    }
+  },
+  "nor_dx": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_nor_dx_16k.exr",
+        "md5": "030e3a8d01e1976b28e1bab7d2ad6f45",
+        "size": 104548229
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_nor_dx_16k.jpg",
+        "md5": "0de984e5e8a7f1190eb6983ecf39b14c",
+        "size": 62943881
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_nor_dx_16k.png",
+        "md5": "ecc059af32d7bb196132f9033f389d28",
+        "size": 530816922
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_nor_dx_1k.exr",
+        "md5": "9d27eef4ff4fcc67e880a5fb3c8706a4",
+        "size": 1377429
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_nor_dx_1k.jpg",
+        "md5": "42450cd4b1fd4cea2574897fc31d28a4",
+        "size": 644971
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_nor_dx_1k.png",
+        "md5": "66962756115e685405b12301d7913b23",
+        "size": 4529598
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_nor_dx_2k.exr",
+        "md5": "911f187abc489cd2f9d93670a8b18a26",
+        "size": 4648419
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_nor_dx_2k.jpg",
+        "md5": "3cbd5031a3a6235ecbade1e3c9b8df8f",
+        "size": 2200215
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_nor_dx_2k.png",
+        "md5": "3ff81a3e4e7fb8dbde1f98a108c3da45",
+        "size": 16695233
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_nor_dx_4k.exr",
+        "md5": "bc5e2ade4d5c7dbbdb7246445e4a4def",
+        "size": 14551700
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_nor_dx_4k.jpg",
+        "md5": "2d59dc5f277e41d73df4a1f682e76011",
+        "size": 7226014
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_nor_dx_4k.png",
+        "md5": "f125fb70522602290ab1986774c59524",
+        "size": 60421629
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_nor_dx_8k.exr",
+        "md5": "15d066bd2708cf5b6082b0483c5a2ea7",
+        "size": 39096621
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_nor_dx_8k.jpg",
+        "md5": "56836777506d479cbb8e9fc65e23728f",
+        "size": 21790283
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_nor_dx_8k.png",
+        "md5": "4b88705360263121d101c27d41a964e2",
+        "size": 204045507
+      }
+    }
+  },
+  "nor_gl": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_nor_gl_16k.exr",
+        "md5": "45cefb64b6de5dee909e2029e89564f4",
+        "size": 104467945
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_nor_gl_16k.jpg",
+        "md5": "54d5c2d90cf0cd321a05f14b4f2cba97",
+        "size": 63153293
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_nor_gl_16k.png",
+        "md5": "7400f1f6693040b9bd97db690a142fb9",
+        "size": 533728637
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_nor_gl_1k.exr",
+        "md5": "fbcefdcd5859bc98d600726bb23e4f5a",
+        "size": 1376905
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_nor_gl_1k.jpg",
+        "md5": "5b35b983a7b7c4ce8084cbb24e6381fe",
+        "size": 645780
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_nor_gl_1k.png",
+        "md5": "9e35a60742325ebe355b79bff82bee27",
+        "size": 4529872
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_nor_gl_2k.exr",
+        "md5": "a8a34276f96cb0300ae123ce2a34208d",
+        "size": 4647279
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_nor_gl_2k.jpg",
+        "md5": "135740c0bc315d13767dede4a79e3cd7",
+        "size": 2202625
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_nor_gl_2k.png",
+        "md5": "6826482d35cfe5c57116140d6619f5d7",
+        "size": 16694941
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_nor_gl_4k.exr",
+        "md5": "86e98a2fd151754a58299eaaea7a411a",
+        "size": 14546755
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_nor_gl_4k.jpg",
+        "md5": "7f6490a93c842d1f05575d70974faa0d",
+        "size": 7243937
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_nor_gl_4k.png",
+        "md5": "63a027af2975bd688fa2314bb8d8a5fe",
+        "size": 60420771
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_nor_gl_8k.exr",
+        "md5": "b4e0060cab9b66220abcc6ce5a658b2d",
+        "size": 39061343
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_nor_gl_8k.jpg",
+        "md5": "163eadb5a4bb16900be25678bef96c86",
+        "size": 21879875
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_nor_gl_8k.png",
+        "md5": "ab0040a96c6caa83f4a73efda7c768b8",
+        "size": 204061792
+      }
+    }
+  },
+  "Rough": {
+    "16k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_rough_16k.exr",
+        "md5": "3e1b3c520b26191a0e28691d61d0cc77",
+        "size": 9929249
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_rough_16k.jpg",
+        "md5": "2f60d714139bbab8ae748a2a593f411e",
+        "size": 15242487
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_rough_16k.png",
+        "md5": "ff90ad59cdc3ae2aee9e9efb523682da",
+        "size": 205768604
+      }
+    },
+    "1k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_rough_1k.exr",
+        "md5": "5e8b70e662699ebdf01a9eaa9e0bdee7",
+        "size": 142390
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_rough_1k.jpg",
+        "md5": "858cba639b95d23887c70b66c0fac569",
+        "size": 163696
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_rough_1k.png",
+        "md5": "f135ce901656df3012716997a4e96eaa",
+        "size": 1276119
+      }
+    },
+    "2k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_rough_2k.exr",
+        "md5": "fa2c5f24b0b99c1b9951b252846e19b4",
+        "size": 437925
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_rough_2k.jpg",
+        "md5": "611351994ccacbde8975177a7e4fbeff",
+        "size": 545315
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_rough_2k.png",
+        "md5": "0bccfeefbdea5a1177415f332f86dbe1",
+        "size": 4759762
+      }
+    },
+    "4k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_rough_4k.exr",
+        "md5": "f9d4dcae3a49a2c444b8ce1552b068e6",
+        "size": 1332744
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_rough_4k.jpg",
+        "md5": "c5eba17776fb3a4aa99fe6069415cf7b",
+        "size": 1782120
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_rough_4k.png",
+        "md5": "7f512555c6e747f16f8d837ac85ee3fc",
+        "size": 17683728
+      }
+    },
+    "8k": {
+      "exr": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_rough_8k.exr",
+        "md5": "1a1cc7d9e896db8857a304fa9a86b216",
+        "size": 3828242
+      },
+      "jpg": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_rough_8k.jpg",
+        "md5": "35acaed20e872704869bdc2cc34c78a8",
+        "size": 5425886
+      },
+      "png": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_rough_8k.png",
+        "md5": "12de14e941db42d89488d9c3ad8ccb44",
+        "size": 62805675
+      }
+    }
+  },
+  "fbx": {
+    "16k": {
+      "fbx": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/16k/moon_rock_01/moon_rock_01_16k.fbx",
+        "md5": "e635ae96fe7d175751dc6dcb4f095146",
+        "size": 594492,
+        "include": {
+          "textures/moon_rock_01_diff_16k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_diff_16k.jpg",
+            "md5": "8de5140d8010c289d9f5867585a39202",
+            "size": 29093494
+          },
+          "textures/moon_rock_01_disp_16k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_disp_16k.png",
+            "md5": "a1c934a70090e47c5811a269fd4b3493",
+            "size": 135160896
+          },
+          "textures/moon_rock_01_nor_gl_16k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_nor_gl_16k.exr",
+            "md5": "45cefb64b6de5dee909e2029e89564f4",
+            "size": 104467945
+          },
+          "textures/moon_rock_01_rough_16k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_rough_16k.exr",
+            "md5": "3e1b3c520b26191a0e28691d61d0cc77",
+            "size": 9929249
+          }
+        }
+      }
+    },
+    "1k": {
+      "fbx": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/1k/moon_rock_01/moon_rock_01_1k.fbx",
+        "md5": "99a132938e8c8619cbe230d32ef33198",
+        "size": 594460,
+        "include": {
+          "textures/moon_rock_01_diff_1k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_diff_1k.jpg",
+            "md5": "a992fbfe67efe76ac04658b355d38d6b",
+            "size": 276420
+          },
+          "textures/moon_rock_01_disp_1k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_disp_1k.png",
+            "md5": "c729344bfc7003c326ca3785d2963207",
+            "size": 1597127
+          },
+          "textures/moon_rock_01_nor_gl_1k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_nor_gl_1k.exr",
+            "md5": "fbcefdcd5859bc98d600726bb23e4f5a",
+            "size": 1376905
+          },
+          "textures/moon_rock_01_rough_1k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_rough_1k.exr",
+            "md5": "5e8b70e662699ebdf01a9eaa9e0bdee7",
+            "size": 142390
+          }
+        }
+      }
+    },
+    "2k": {
+      "fbx": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/2k/moon_rock_01/moon_rock_01_2k.fbx",
+        "md5": "941c222262720b9089270c80e424623a",
+        "size": 594460,
+        "include": {
+          "textures/moon_rock_01_diff_2k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_diff_2k.jpg",
+            "md5": "1f5e7da80ba4843b2e11768ee5b2d1fc",
+            "size": 928360
+          },
+          "textures/moon_rock_01_disp_2k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_disp_2k.png",
+            "md5": "6d3a6a845542abf5fef71f334a42d762",
+            "size": 5860702
+          },
+          "textures/moon_rock_01_nor_gl_2k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_nor_gl_2k.exr",
+            "md5": "a8a34276f96cb0300ae123ce2a34208d",
+            "size": 4647279
+          },
+          "textures/moon_rock_01_rough_2k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_rough_2k.exr",
+            "md5": "fa2c5f24b0b99c1b9951b252846e19b4",
+            "size": 437925
+          }
+        }
+      }
+    },
+    "4k": {
+      "fbx": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/4k/moon_rock_01/moon_rock_01_4k.fbx",
+        "md5": "3d81c0c825d1469a8a6a13118bd5152b",
+        "size": 594460,
+        "include": {
+          "textures/moon_rock_01_diff_4k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_diff_4k.jpg",
+            "md5": "7d9e34f7bd43b60175d05d0a0176b25b",
+            "size": 3029570
+          },
+          "textures/moon_rock_01_disp_4k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_disp_4k.png",
+            "md5": "9df9d81d42a869098eb4bcb8ec0d4c74",
+            "size": 21342394
+          },
+          "textures/moon_rock_01_nor_gl_4k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_nor_gl_4k.exr",
+            "md5": "86e98a2fd151754a58299eaaea7a411a",
+            "size": 14546755
+          },
+          "textures/moon_rock_01_rough_4k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_rough_4k.exr",
+            "md5": "f9d4dcae3a49a2c444b8ce1552b068e6",
+            "size": 1332744
+          }
+        }
+      }
+    },
+    "8k": {
+      "fbx": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/8k/moon_rock_01/moon_rock_01_8k.fbx",
+        "md5": "838ce756ddc18acaeaa1578e62867a8c",
+        "size": 594460,
+        "include": {
+          "textures/moon_rock_01_diff_8k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_diff_8k.jpg",
+            "md5": "c2772118b1186f0450689b9fdc481814",
+            "size": 9443635
+          },
+          "textures/moon_rock_01_disp_8k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_disp_8k.png",
+            "md5": "72498a16e219f26caec5d747f218018a",
+            "size": 66712302
+          },
+          "textures/moon_rock_01_nor_gl_8k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_nor_gl_8k.exr",
+            "md5": "b4e0060cab9b66220abcc6ce5a658b2d",
+            "size": 39061343
+          },
+          "textures/moon_rock_01_rough_8k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_rough_8k.exr",
+            "md5": "1a1cc7d9e896db8857a304fa9a86b216",
+            "size": 3828242
+          }
+        }
+      }
+    }
+  },
+  "gltf": {
+    "16k": {
+      "gltf": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/16k/moon_rock_01/moon_rock_01_16k.gltf",
+        "md5": "a7733d226ae0a5b5688e7b3e59f9f704",
+        "size": 7091,
+        "include": {
+          "textures/moon_rock_01_nor_gl_16k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_nor_gl_16k.jpg",
+            "md5": "54d5c2d90cf0cd321a05f14b4f2cba97",
+            "size": 63153293
+          },
+          "textures/moon_rock_01_diff_16k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_diff_16k.jpg",
+            "md5": "8de5140d8010c289d9f5867585a39202",
+            "size": 29093494
+          },
+          "textures/moon_rock_01_arm_16k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_arm_16k.jpg",
+            "md5": "3ce703e5b408773135d56a62e99956b9",
+            "size": 39476854
+          },
+          "moon_rock_01.bin": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/moon_rock_01/moon_rock_01.bin",
+            "md5": "5dc30dc1be5e8dd5fff64dd824cad828",
+            "size": 448168
+          }
+        }
+      }
+    },
+    "1k": {
+      "gltf": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/moon_rock_01/moon_rock_01_1k.gltf",
+        "md5": "86c6b4f7792f9600ae33cb3b4d42bb20",
+        "size": 7088,
+        "include": {
+          "textures/moon_rock_01_nor_gl_1k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_nor_gl_1k.jpg",
+            "md5": "5b35b983a7b7c4ce8084cbb24e6381fe",
+            "size": 645780
+          },
+          "textures/moon_rock_01_diff_1k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_diff_1k.jpg",
+            "md5": "a992fbfe67efe76ac04658b355d38d6b",
+            "size": 276420
+          },
+          "textures/moon_rock_01_arm_1k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_arm_1k.jpg",
+            "md5": "3b3903efc7c304151e6238fd3d6e3557",
+            "size": 330395
+          },
+          "moon_rock_01.bin": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/moon_rock_01/moon_rock_01.bin",
+            "md5": "5dc30dc1be5e8dd5fff64dd824cad828",
+            "size": 448168
+          }
+        }
+      }
+    },
+    "2k": {
+      "gltf": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/moon_rock_01/moon_rock_01_2k.gltf",
+        "md5": "bd5ed0a3da1ee52b638828d1759f8bb9",
+        "size": 7088,
+        "include": {
+          "textures/moon_rock_01_nor_gl_2k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_nor_gl_2k.jpg",
+            "md5": "135740c0bc315d13767dede4a79e3cd7",
+            "size": 2202625
+          },
+          "textures/moon_rock_01_diff_2k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_diff_2k.jpg",
+            "md5": "1f5e7da80ba4843b2e11768ee5b2d1fc",
+            "size": 928360
+          },
+          "textures/moon_rock_01_arm_2k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_arm_2k.jpg",
+            "md5": "1e30d0c2a7f2b5227c7fd2e82534fd5b",
+            "size": 1129038
+          },
+          "moon_rock_01.bin": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/moon_rock_01/moon_rock_01.bin",
+            "md5": "5dc30dc1be5e8dd5fff64dd824cad828",
+            "size": 448168
+          }
+        }
+      }
+    },
+    "4k": {
+      "gltf": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/moon_rock_01/moon_rock_01_4k.gltf",
+        "md5": "a473f2866464d0382d0005225657f0f2",
+        "size": 7088,
+        "include": {
+          "textures/moon_rock_01_nor_gl_4k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_nor_gl_4k.jpg",
+            "md5": "7f6490a93c842d1f05575d70974faa0d",
+            "size": 7243937
+          },
+          "textures/moon_rock_01_diff_4k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_diff_4k.jpg",
+            "md5": "7d9e34f7bd43b60175d05d0a0176b25b",
+            "size": 3029570
+          },
+          "textures/moon_rock_01_arm_4k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_arm_4k.jpg",
+            "md5": "de8a964f4bdf13f886865d2bd617f101",
+            "size": 3800204
+          },
+          "moon_rock_01.bin": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/moon_rock_01/moon_rock_01.bin",
+            "md5": "5dc30dc1be5e8dd5fff64dd824cad828",
+            "size": 448168
+          }
+        }
+      }
+    },
+    "8k": {
+      "gltf": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/moon_rock_01/moon_rock_01_8k.gltf",
+        "md5": "fb23a01fa945f690643a0f081d0cb343",
+        "size": 7088,
+        "include": {
+          "textures/moon_rock_01_nor_gl_8k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_nor_gl_8k.jpg",
+            "md5": "163eadb5a4bb16900be25678bef96c86",
+            "size": 21879875
+          },
+          "textures/moon_rock_01_diff_8k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_diff_8k.jpg",
+            "md5": "c2772118b1186f0450689b9fdc481814",
+            "size": 9443635
+          },
+          "textures/moon_rock_01_arm_8k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_arm_8k.jpg",
+            "md5": "51bd6b2fb4cb5caa6de4ecc7fc2aea76",
+            "size": 12316697
+          },
+          "moon_rock_01.bin": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/moon_rock_01/moon_rock_01.bin",
+            "md5": "5dc30dc1be5e8dd5fff64dd824cad828",
+            "size": 448168
+          }
+        }
+      }
+    }
+  },
+  "usd": {
+    "16k": {
+      "usd": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/usd/16k/moon_rock_01/moon_rock_01_16k.usdc",
+        "md5": "466c01527c531d3c1f3c5910240e0f7c",
+        "size": 701278,
+        "include": {
+          "textures/moon_rock_01_diff_16k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/16k/moon_rock_01/moon_rock_01_diff_16k.jpg",
+            "md5": "8de5140d8010c289d9f5867585a39202",
+            "size": 29093494
+          },
+          "textures/moon_rock_01_disp_16k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/16k/moon_rock_01/moon_rock_01_disp_16k.png",
+            "md5": "a1c934a70090e47c5811a269fd4b3493",
+            "size": 135160896
+          },
+          "textures/moon_rock_01_nor_gl_16k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_nor_gl_16k.exr",
+            "md5": "45cefb64b6de5dee909e2029e89564f4",
+            "size": 104467945
+          },
+          "textures/moon_rock_01_rough_16k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/16k/moon_rock_01/moon_rock_01_rough_16k.exr",
+            "md5": "3e1b3c520b26191a0e28691d61d0cc77",
+            "size": 9929249
+          }
+        }
+      }
+    },
+    "1k": {
+      "usd": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/usd/1k/moon_rock_01/moon_rock_01_1k.usdc",
+        "md5": "cb5a72970dbbf4727a3df59b7388eb6a",
+        "size": 701277,
+        "include": {
+          "textures/moon_rock_01_diff_1k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moon_rock_01/moon_rock_01_diff_1k.jpg",
+            "md5": "a992fbfe67efe76ac04658b355d38d6b",
+            "size": 276420
+          },
+          "textures/moon_rock_01_disp_1k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moon_rock_01/moon_rock_01_disp_1k.png",
+            "md5": "c729344bfc7003c326ca3785d2963207",
+            "size": 1597127
+          },
+          "textures/moon_rock_01_nor_gl_1k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_nor_gl_1k.exr",
+            "md5": "fbcefdcd5859bc98d600726bb23e4f5a",
+            "size": 1376905
+          },
+          "textures/moon_rock_01_rough_1k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moon_rock_01/moon_rock_01_rough_1k.exr",
+            "md5": "5e8b70e662699ebdf01a9eaa9e0bdee7",
+            "size": 142390
+          }
+        }
+      }
+    },
+    "2k": {
+      "usd": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/usd/2k/moon_rock_01/moon_rock_01_2k.usdc",
+        "md5": "ef4ea7f1819774ce7e15ed8948697e7e",
+        "size": 701277,
+        "include": {
+          "textures/moon_rock_01_diff_2k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/moon_rock_01/moon_rock_01_diff_2k.jpg",
+            "md5": "1f5e7da80ba4843b2e11768ee5b2d1fc",
+            "size": 928360
+          },
+          "textures/moon_rock_01_disp_2k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/moon_rock_01/moon_rock_01_disp_2k.png",
+            "md5": "6d3a6a845542abf5fef71f334a42d762",
+            "size": 5860702
+          },
+          "textures/moon_rock_01_nor_gl_2k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_nor_gl_2k.exr",
+            "md5": "a8a34276f96cb0300ae123ce2a34208d",
+            "size": 4647279
+          },
+          "textures/moon_rock_01_rough_2k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/moon_rock_01/moon_rock_01_rough_2k.exr",
+            "md5": "fa2c5f24b0b99c1b9951b252846e19b4",
+            "size": 437925
+          }
+        }
+      }
+    },
+    "4k": {
+      "usd": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/usd/4k/moon_rock_01/moon_rock_01_4k.usdc",
+        "md5": "b52ebab43989f2e178bdcfc9523a8f2b",
+        "size": 701277,
+        "include": {
+          "textures/moon_rock_01_diff_4k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/4k/moon_rock_01/moon_rock_01_diff_4k.jpg",
+            "md5": "7d9e34f7bd43b60175d05d0a0176b25b",
+            "size": 3029570
+          },
+          "textures/moon_rock_01_disp_4k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/4k/moon_rock_01/moon_rock_01_disp_4k.png",
+            "md5": "9df9d81d42a869098eb4bcb8ec0d4c74",
+            "size": 21342394
+          },
+          "textures/moon_rock_01_nor_gl_4k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_nor_gl_4k.exr",
+            "md5": "86e98a2fd151754a58299eaaea7a411a",
+            "size": 14546755
+          },
+          "textures/moon_rock_01_rough_4k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/4k/moon_rock_01/moon_rock_01_rough_4k.exr",
+            "md5": "f9d4dcae3a49a2c444b8ce1552b068e6",
+            "size": 1332744
+          }
+        }
+      }
+    },
+    "8k": {
+      "usd": {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/usd/8k/moon_rock_01/moon_rock_01_8k.usdc",
+        "md5": "bd8681c0d83f35ebfb94030f3cddf45a",
+        "size": 701277,
+        "include": {
+          "textures/moon_rock_01_diff_8k.jpg": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/8k/moon_rock_01/moon_rock_01_diff_8k.jpg",
+            "md5": "c2772118b1186f0450689b9fdc481814",
+            "size": 9443635
+          },
+          "textures/moon_rock_01_disp_8k.png": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/8k/moon_rock_01/moon_rock_01_disp_8k.png",
+            "md5": "72498a16e219f26caec5d747f218018a",
+            "size": 66712302
+          },
+          "textures/moon_rock_01_nor_gl_8k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_nor_gl_8k.exr",
+            "md5": "b4e0060cab9b66220abcc6ce5a658b2d",
+            "size": 39061343
+          },
+          "textures/moon_rock_01_rough_8k.exr": {
+            "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/8k/moon_rock_01/moon_rock_01_rough_8k.exr",
+            "md5": "1a1cc7d9e896db8857a304fa9a86b216",
+            "size": 3828242
+          }
+        }
+      }
+    }
+  }
+}

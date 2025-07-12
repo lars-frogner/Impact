@@ -1,5 +1,5 @@
 use crate::asset::Asset;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use std::{
     fs,
     io::{self, Write},
@@ -10,43 +10,89 @@ use ureq::http::{HeaderMap, HeaderValue};
 
 /// Fetches an asset from its provider and extracts it to the target directory.
 ///
-/// Creates a subdirectory named after the asset within `target_dir` and downloads
-/// the asset content there. Supports ZIP archives (automatically extracted) and
-/// individual files.
+/// Creates a subdirectory named after the asset within `target_dir` and
+/// downloads the asset content there. Supports both single and multiple
+/// downloads per asset.
 pub fn fetch_asset(asset: &Asset, target_dir: &Path) -> Result<()> {
     let asset_dir = target_dir.join(&asset.name);
     if asset_dir.exists() {
         bail!("Asset directory already exists: {}", asset_dir.display());
     }
 
-    let uri = asset.info.obtain_fetch_uri();
+    println!("Fetching asset '{}'", asset.name);
 
-    println!("Fetching asset '{}' from {}", asset.name, uri);
+    // Get all downloads for this asset
+    let downloads = asset
+        .info
+        .get_downloads()
+        .context("Failed to get download information for asset")?;
 
-    let mut response = ureq::get(&uri).call().context("Failed GET request")?;
-
-    let content_type = get_content_type(response.headers()).map(ToString::to_string);
-
-    let response_body_reader = io::BufReader::new(response.body_mut().as_reader());
-    let response_body_file = stream_to_temp_file(response_body_reader, target_dir)?;
-
-    let magic_bytes =
-        read_magic_bytes(response_body_file.as_file()).context("Failed to read magic bytes")?;
-
-    if looks_like_zip(content_type.as_deref(), &magic_bytes, &uri) {
-        let archive_file = response_body_file.reopen()?;
-        let archive_file_reader = io::BufReader::new(archive_file);
-        extract_zip_archive(archive_file_reader, &asset_dir)
-            .context("Failed to extract ZIP archive")?;
-    } else {
-        let asset_file_name = file_name_from_uri(&uri)?;
-        let file_path = asset_dir.join(asset_file_name);
-        fs::create_dir_all(&asset_dir)?;
-        persist_or_copy(response_body_file, &file_path)
-            .context("Failed to persist downloaded asset file")?;
+    if downloads.is_empty() {
+        bail!("No downloads found for asset '{}'", asset.name);
     }
 
-    println!("Successfully fetched asset '{}'", asset.name);
+    // Process each download
+    for (index, download) in downloads.iter().enumerate() {
+        println!(
+            "  Downloading file {}/{}: {}",
+            index + 1,
+            downloads.len(),
+            download.url
+        );
+
+        let mut response = ureq::get(&download.url)
+            .call()
+            .with_context(|| format!("Failed GET request for {}", download.url))?;
+
+        let content_type = get_content_type(response.headers()).map(ToString::to_string);
+
+        let response_body_reader = io::BufReader::new(response.body_mut().as_reader());
+        let response_body_file = stream_to_temp_file(response_body_reader, target_dir)?;
+
+        // Verify file size if provided
+        if let Some(expected_size) = download.size {
+            let actual_size = response_body_file.as_file().metadata()?.len();
+            if actual_size != expected_size {
+                bail!(
+                    "File size mismatch for {}: expected {} bytes, got {} bytes",
+                    download.url,
+                    expected_size,
+                    actual_size
+                );
+            }
+        }
+
+        // TODO: Verify MD5 hash if provided
+        // This would require reading the file and computing the hash
+
+        let magic_bytes =
+            read_magic_bytes(response_body_file.as_file()).context("Failed to read magic bytes")?;
+
+        if looks_like_zip(content_type.as_deref(), &magic_bytes, &download.url) {
+            // Extract ZIP archive directly to asset directory
+            let archive_file = response_body_file.reopen()?;
+            let archive_file_reader = io::BufReader::new(archive_file);
+            extract_zip_archive(archive_file_reader, &asset_dir)
+                .context("Failed to extract ZIP archive")?;
+        } else {
+            // Save individual file to the specified path within asset directory
+            let file_path = asset_dir.join(&download.file_path);
+
+            // Create parent directories if needed
+            if let Some(parent) = file_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            persist_or_copy(response_body_file, &file_path)
+                .context("Failed to persist downloaded asset file")?;
+        }
+    }
+
+    println!(
+        "Successfully fetched asset '{}' ({} files)",
+        asset.name,
+        downloads.len()
+    );
     Ok(())
 }
 
@@ -133,13 +179,6 @@ where
     }
 
     Ok(())
-}
-
-/// Extracts the filename from a URI by taking the last path segment.
-fn file_name_from_uri(uri: &str) -> Result<&str> {
-    uri.rsplit('/')
-        .next()
-        .ok_or_else(|| anyhow!("Got empty URI"))
 }
 
 /// Attempts to move a temporary file to the target path, falling back to copy
