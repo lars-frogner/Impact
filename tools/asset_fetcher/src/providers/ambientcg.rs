@@ -1,5 +1,7 @@
 //! AmbientCG provider implementation.
 
+use crate::providers::AssetDownload;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 /// Asset information specific to AmbientCG provider.
@@ -12,12 +14,12 @@ pub enum AssetInfo {
 /// Information required to fetch a surface material from AmbientCG.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SurfaceAssetInfo {
-    /// AmbientCG asset ID (e.g., "Grass001", "Bricks075")
+    /// AmbientCG asset ID (e.g., "Grass001", "Bricks075").
     pub id: String,
-    /// Texture resolution, defaults to 4K
+    /// Texture resolution, defaults to 4K.
     #[serde(default)]
     pub resolution: Resolution,
-    /// Image format, defaults to JPG
+    /// Image format, defaults to JPG.
     #[serde(default)]
     pub format: SurfaceAssetFormat,
 }
@@ -25,24 +27,24 @@ pub struct SurfaceAssetInfo {
 /// Available texture resolutions on AmbientCG.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Resolution {
-    /// 1024x1024 resolution
+    /// 1024x1024 resolution.
     OneK,
-    /// 2048x2048 resolution
+    /// 2048x2048 resolution.
     TwoK,
-    /// 4096x4096 resolution (default)
+    /// 4096x4096 resolution (default).
     #[default]
     FourK,
-    /// 8192x8192 resolution
+    /// 8192x8192 resolution.
     EightK,
 }
 
 /// Available image formats for surface materials.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SurfaceAssetFormat {
-    /// JPEG format (default, smaller file size)
+    /// JPEG format (default, smaller file size).
     #[default]
     Jpg,
-    /// PNG format (lossless, larger file size)
+    /// PNG format (lossless, larger file size).
     Png,
 }
 
@@ -67,19 +69,26 @@ impl SurfaceAssetFormat {
 }
 
 impl AssetInfo {
-    /// Constructs the download URI for this AmbientCG asset.
+    /// Gets all downloads required for this AmbientCG asset.
     ///
-    /// Creates a URL pointing to the ZIP archive containing all texture maps
-    /// (color, normal, roughness, etc.) for the specified asset.
-    pub fn obtain_fetch_uri(&self) -> String {
+    /// AmbientCG provides assets as ZIP archives containing all texture maps,
+    /// so this always returns a single download.
+    pub fn get_downloads(&self) -> Result<Vec<AssetDownload>> {
         match self {
             Self::Surface(info) => {
-                format!(
+                let url = format!(
                     "https://ambientcg.com/get?file={}_{}_{}.zip",
                     info.id,
                     info.resolution.as_str(),
                     info.format.as_str()
-                )
+                );
+
+                Ok(vec![AssetDownload {
+                    url,
+                    file_path: format!("{}_{}.zip", info.id, info.resolution.as_str()),
+                    size: None,
+                    md5: None,
+                }])
             }
         }
     }
