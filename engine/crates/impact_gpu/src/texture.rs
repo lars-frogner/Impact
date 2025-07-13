@@ -647,7 +647,7 @@ impl Texture {
                 bail!("Inconsistent pixel formats for texture array images")
             }
 
-            byte_buffer.extend_from_slice(&first_image.data);
+            byte_buffer.extend_from_slice(&image.data);
         }
 
         Self::create(
