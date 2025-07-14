@@ -1,8 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion control.
 
-use crate::physics::motion::Velocity;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use impact_physics::quantities::Velocity;
 use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose motion

@@ -3,7 +3,6 @@
 use crate::{
     camera::{self, entity::CameraRenderState},
     light, material, mesh,
-    physics::motion::components::ReferenceFrameComp,
     scene::Scene,
     voxel,
 };
@@ -13,9 +12,11 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, World as ECSWorld},
 };
+use impact_geometry::ReferenceFrame;
 use impact_gpu::device::GraphicsDevice;
 use impact_material::{MaterialHandle, MaterialTextureProvider};
 use impact_mesh::TriangleMeshID;
+use impact_physics::rigid_body::RigidBodyManager;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
@@ -32,6 +33,7 @@ impl Scene {
         &self,
         graphics_device: &GraphicsDevice,
         texture_provider: &impl MaterialTextureProvider,
+        rigid_body_manager: &RwLock<RigidBodyManager>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut bool,
     ) -> Result<()> {
@@ -57,7 +59,11 @@ impl Scene {
             desynchronized,
         )?;
 
-        voxel::entity::setup_voxel_object_for_new_entity(&self.voxel_manager, components)?;
+        voxel::entity::setup_voxel_object_for_new_entity(
+            rigid_body_manager,
+            self.voxel_manager(),
+            components,
+        )?;
 
         mesh::entity::generate_missing_vertex_properties_for_new_entity_mesh(
             self.mesh_repository(),
@@ -162,7 +168,7 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |frame: Option<&ReferenceFrameComp>,
+            |frame: Option<&ReferenceFrame>,
              parent: Option<&SceneGraphParentNodeHandle>|
              -> SceneGraphGroupNodeHandle {
                 let group_to_parent_transform = frame
@@ -195,7 +201,7 @@ impl Scene {
             components,
             |mesh: &TriangleMeshID,
              material: &MaterialHandle,
-             frame: Option<&ReferenceFrameComp>,
+             frame: Option<&ReferenceFrame>,
              parent: Option<&SceneGraphParentNodeHandle>,
              flags: Option<&SceneEntityFlags>|
              -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {

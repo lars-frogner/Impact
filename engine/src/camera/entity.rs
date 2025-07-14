@@ -1,9 +1,9 @@
 //! Management of camera-related components for entities.
 
-use crate::physics::motion::components::ReferenceFrameComp;
 use anyhow::{Result, bail};
 use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_geometry::ReferenceFrame;
 use impact_math::UpperExclusiveBounds;
 use impact_scene::{
     SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera, graph::SceneGraph,
@@ -79,7 +79,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let mut scene_graph = scene_graph.write().unwrap();
         },
         components,
-        |frame: Option<&ReferenceFrameComp>,
+        |frame: Option<&ReferenceFrame>,
          camera_props: &setup::PerspectiveCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
@@ -154,7 +154,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let mut scene_graph = scene_graph.write().unwrap();
         },
         components,
-        |frame: Option<&ReferenceFrameComp>,
+        |frame: Option<&ReferenceFrame>,
          camera_props: &setup::OrthographicCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {

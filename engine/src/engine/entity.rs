@@ -1,7 +1,11 @@
 //! Management of entities in the engine.
 
 use super::Engine;
-use crate::{camera::entity::CameraRenderState, gizmo};
+use crate::{
+    camera::entity::CameraRenderState,
+    gizmo,
+    physics::entity::{cleanup_physics_for_removed_entity, setup_physics_for_new_entity},
+};
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
@@ -66,10 +70,7 @@ impl Engine {
 
         let entry = ecs_world.entity(entity_id);
 
-        self.simulator()
-            .read()
-            .unwrap()
-            .perform_cleanup_for_removed_entity(&entry);
+        cleanup_physics_for_removed_entity(&self.simulator().read().unwrap(), &entry);
 
         let mut render_resources_desynchronized = false;
 
@@ -125,17 +126,16 @@ impl Engine {
         self.scene().read().unwrap().perform_setup_for_new_entity(
             self.graphics_device(),
             &*self.assets().read().unwrap(),
+            self.simulator().read().unwrap().rigid_body_manager(),
             components,
             &mut render_resources_desynchronized,
         )?;
 
-        self.simulator()
-            .read()
-            .unwrap()
-            .perform_setup_for_new_entity(
-                self.scene().read().unwrap().mesh_repository(),
-                components,
-            )?;
+        setup_physics_for_new_entity(
+            &self.simulator().read().unwrap(),
+            self.scene().read().unwrap().mesh_repository(),
+            components,
+        )?;
 
         self.scene().read().unwrap().add_new_entity_to_scene_graph(
             &self.ecs_world,

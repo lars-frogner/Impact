@@ -1,10 +1,11 @@
-# Hash: f2c7b849f8af8cdc35863f15bc3e1cf78bcc1ecdb198bee6fedb0085fb3000fc
-# Generated: 2025-07-06T18:04:01+00:00
-# Rust type: impact::physics::material::ContactResponseParameters
+# Hash: 97b65094bd37680d256056da2f5eccaed0332b1cc434056fe45f5815abb1722b
+# Generated: 2025-07-13T20:18:37+00:00
+# Rust type: impact_physics::material::ContactResponseParameters
 # Type category: POD
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     ContactResponseParameters,
+    new,
     write_bytes,
     from_bytes,
 ]
@@ -25,6 +26,10 @@ ContactResponseParameters : {
     ## sliding across each other.
     dynamic_friction_coef : F64,
 }
+
+new : F64, F64, F64 -> ContactResponseParameters
+new = |restitution_coef, static_friction_coef, dynamic_friction_coef|
+    { restitution_coef, static_friction_coef, dynamic_friction_coef }
 
 ## Serializes a value of [ContactResponseParameters] into the binary representation
 ## expected by the engine and appends the bytes to the list.

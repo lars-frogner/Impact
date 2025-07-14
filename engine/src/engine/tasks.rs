@@ -10,13 +10,6 @@ impl Engine {
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
-        self.simulator
-            .read()
-            .unwrap()
-            .handle_task_errors(task_errors);
-
-        self.scene.read().unwrap().handle_task_errors(task_errors);
-
         self.renderer
             .read()
             .unwrap()

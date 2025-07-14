@@ -1,8 +1,8 @@
 # Hash: 4ce5d818ae1c671a705f8caed703f9dfe4f4b781f2cbb67b8724e6ad2926eb68
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: impact_mesh::setup::PlanarTextureProjection
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     PlanarTextureProjection,
     new,

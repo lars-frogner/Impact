@@ -21,7 +21,7 @@ use crate::{
         rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     },
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
-    physics::{PhysicsConfig, PhysicsSimulator},
+    physics::PhysicsSimulator,
     scene::Scene,
     voxel::{self, VoxelConfig, VoxelManager},
 };
@@ -34,6 +34,7 @@ use impact_ecs::{
 use impact_gpu::device::GraphicsDevice;
 use impact_material::MaterialLibrary;
 use impact_mesh::MeshRepository;
+use impact_physics::PhysicsConfig;
 use impact_scene::model::InstanceFeatureManager;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -320,21 +321,24 @@ impl Engine {
             return;
         }
         let ecs_world = self.ecs_world().read().unwrap();
-        let time_step_duration = self.simulator.read().unwrap().scaled_time_step_duration();
+        let simulator = self.simulator.read().unwrap();
+        let mut rigid_body_manager = simulator.rigid_body_manager().write().unwrap();
+        let time_step_duration = simulator.scaled_time_step_duration();
 
         if let Some(orientation_controller) = &self.orientation_controller {
-            control::orientation::systems::update_rotation_of_controlled_entities(
+            control::orientation::systems::update_controlled_entity_angular_velocities(
                 &ecs_world,
+                &mut rigid_body_manager,
                 orientation_controller.lock().unwrap().as_mut(),
                 time_step_duration,
             );
         }
 
         if let Some(motion_controller) = &self.motion_controller {
-            control::motion::systems::update_motion_of_controlled_entities(
+            control::motion::systems::update_controlled_entity_velocities(
                 &ecs_world,
+                &mut rigid_body_manager,
                 motion_controller.lock().unwrap().as_ref(),
-                time_step_duration,
             );
         }
     }

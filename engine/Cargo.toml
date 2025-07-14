@@ -15,6 +15,7 @@ members = [
     "crates/impact_math",
     "crates/impact_mesh",
     "crates/impact_model",
+    "crates/impact_physics",
     "crates/impact_profiling",
     "crates/impact_rendering",
     "crates/impact_scene",
@@ -35,7 +36,7 @@ bincode = { version = "2.0", default-features = false, features = [
     "std",
     "serde",
 ] }
-bitflags = "2.9"
+bitflags = { version = "2.9", features = ["bytemuck"] }
 bytemuck = { version = "1.23", features = ["derive"] }
 cfg-if = "1.0"
 clap = { version = "4.5", features = ["derive"] }
@@ -47,6 +48,8 @@ num-traits = "0.2"
 paste = "1.0"
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
+simba = "0.9"
+tinyvec = { version = "1.9", features = ["alloc"] }
 
 [workspace.lints.rust]
 future_incompatible = "warn"
@@ -150,20 +153,6 @@ build = "build.rs"
 
 [features]
 default = ["window"]
-arbitrary = [
-    "dep:arbitrary",
-    "impact_ecs/arbitrary",
-    "impact_gpu/arbitrary",
-    "impact_math/arbitrary",
-    "impact_scene/arbitrary",
-    "impact_rendering/arbitrary",
-]
-cli = ["dep:clap"]
-egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
-flamegraph = ["profiling"]
-fuzzing = ["arbitrary"]
-ply = ["impact_mesh/ply"]
-profiling = ["impact_profiling"]
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_camera/roc_codegen",
@@ -175,10 +164,26 @@ roc_codegen = [
     "impact_math/roc_codegen",
     "impact_mesh/roc_codegen",
     "impact_model/roc_codegen",
+    "impact_physics/roc_codegen",
     "impact_scene/roc_codegen",
     "impact_rendering/roc_codegen",
     "roc_integration/roc_codegen",
 ]
+arbitrary = [
+    "dep:arbitrary",
+    "impact_ecs/arbitrary",
+    "impact_gpu/arbitrary",
+    "impact_math/arbitrary",
+    "impact_physics/arbitrary",
+    "impact_math/arbitrary",
+    "impact_rendering/arbitrary",
+]
+cli = ["dep:clap"]
+egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
+flamegraph = ["profiling"]
+fuzzing = ["arbitrary"]
+ply = ["impact_mesh/ply"]
+profiling = ["impact_profiling"]
 obj = ["impact_mesh/obj"]
 unchecked = []
 window = ["dep:winit", "impact_rendering/window"]
@@ -188,7 +193,7 @@ anyhow = { workspace = true }
 approx = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bincode = { workspace = true }
-bitflags = { workspace = true, features = ["bytemuck"] }
+bitflags = { workspace = true }
 bytemuck = { workspace = true }
 cfg-if = { workspace = true }
 clap = { workspace = true, optional = true }
@@ -202,7 +207,7 @@ impact_assets = { path = "crates/impact_assets", features = ["ron"] }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }
 impact_ecs = { path = "crates/impact_ecs" }
-impact_geometry = { path = "crates/impact_geometry" }
+impact_geometry = { path = "crates/impact_geometry", features = ["ecs"] }
 impact_gpu = { path = "crates/impact_gpu", features = ["bincode", "serde"] }
 impact_io = { path = "crates/impact_io", features = ["ron"] }
 impact_light = { path = "crates/impact_light", features = ["ecs", "serde"] }
@@ -211,6 +216,11 @@ impact_material = { path = "crates/impact_material", features = ["ecs"] }
 impact_math = { path = "crates/impact_math", features = ["serde"] }
 impact_mesh = { path = "crates/impact_mesh", features = ["ecs", "serde"] }
 impact_model = { path = "crates/impact_model" }
+impact_physics = { path = "crates/impact_physics", features = [
+    "bincode",
+    "ecs",
+    "serde",
+] }
 impact_profiling = { path = "crates/impact_profiling", optional = true }
 impact_rendering = { path = "crates/impact_rendering", features = ["serde"] }
 impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
@@ -229,8 +239,8 @@ regex = "1.11"
 roc_integration = { path = "../roc_integration" }
 roots = "0.0.8"
 serde = { workspace = true }
-simba = "0.9"
-tinyvec = { version = "1.9", features = ["alloc"] }
+simba = { workspace = true }
+tinyvec = { workspace = true }
 winit = { version = "0.30", features = ["serde"], optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 

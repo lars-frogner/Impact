@@ -1,8 +1,8 @@
 # Hash: c48519b25704b7dc3c8329807ceccb919fa4c626c4eda7e68ccc0a52a0fcd2a2
-# Generated: 2025-07-09T20:34:23+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: snapshot_tester::testing::TestScene
 # Type category: Inline
-# Commit: fe0b948 (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     TestScene,
     write_bytes,

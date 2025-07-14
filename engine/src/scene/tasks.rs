@@ -48,8 +48,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing lights in storage", engine, {
-            let scene = engine.scene().read().unwrap();
             let ecs_world = engine.ecs_world().read().unwrap();
+            let scene = engine.scene().read().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
             let mut light_storage = scene.light_storage().write().unwrap();
             scene::systems::sync_lights_in_storage(

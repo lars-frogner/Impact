@@ -1,31 +1,26 @@
 //! Benchmarks for constraint resolution.
 
-use crate::physics::{
+use impact_geometry::{ReferenceFrame, Sphere};
+use impact_physics::{
     collision::{
-        CollidableKind, Collision,
-        components::CollidableComp,
-        geometry::basic::{CollidableGeometry, CollisionWorld},
+        self, CollidableKind, Collision,
+        collidable::basic::{CollisionWorld, LocalCollidable},
+        setup::SphericalCollidable,
     },
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     fph,
-    inertia::InertialProperties,
-    material::{ContactResponseParameters, components::UniformContactResponseComp},
-    motion::{
-        AngularVelocity, Orientation, Position, Velocity,
-        components::{ReferenceFrameComp, VelocityComp},
-    },
-    rigid_body::{RigidBody, components::RigidBodyComp},
+    material::ContactResponseParameters,
+    quantities::{Motion, Position, Velocity},
+    rigid_body::{self, DynamicRigidBodyID, RigidBodyManager, setup::DynamicRigidBodySubstance},
 };
-use impact_ecs::world::{EntityID, World as ECSWorld};
-use impact_geometry::Sphere;
 use impact_profiling::Profiler;
 use nalgebra::point;
 
 pub fn prepare_contacts(profiler: impl Profiler) {
-    let mut ecs_world = ECSWorld::default();
+    let mut rigid_body_manager = RigidBodyManager::new();
     let mut collision_world = CollisionWorld::new();
 
-    setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
+    setup_stationary_overlapping_spheres(&mut rigid_body_manager, &mut collision_world);
 
     let mut contacts = Vec::new();
     collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
@@ -37,8 +32,8 @@ pub fn prepare_contacts(profiler: impl Profiler) {
               }| {
             for contact in contact_manifold.contacts() {
                 contacts.push((
-                    collider_a.entity_id(),
-                    collider_b.entity_id(),
+                    collider_a.rigid_body_id(),
+                    collider_b.rigid_body_id(),
                     contact.clone(),
                 ));
             }
@@ -49,7 +44,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 
     profiler.profile(&mut || {
         constraint_manager.prepare_specific_contacts_only(
-            &ecs_world,
+            &rigid_body_manager,
             contacts
                 .iter()
                 .map(|(entity_a, entity_b, contact)| (*entity_a, *entity_b, contact)),
@@ -58,16 +53,16 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 }
 
 pub fn solve_contact_velocities(profiler: impl Profiler) {
-    let mut ecs_world = ECSWorld::default();
+    let mut rigid_body_manager = RigidBodyManager::new();
     let mut collision_world = CollisionWorld::new();
 
-    setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
+    setup_stationary_overlapping_spheres(&mut rigid_body_manager, &mut collision_world);
 
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(&ecs_world, &collision_world, &());
+    constraint_manager.prepare_constraints(&rigid_body_manager, &collision_world, &());
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().clone();
@@ -77,16 +72,16 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
 }
 
 pub fn correct_contact_configurations(profiler: impl Profiler) {
-    let mut ecs_world = ECSWorld::default();
+    let mut rigid_body_manager = RigidBodyManager::new();
     let mut collision_world = CollisionWorld::new();
 
-    setup_stationary_overlapping_spheres(&mut ecs_world, &mut collision_world);
+    setup_stationary_overlapping_spheres(&mut rigid_body_manager, &mut collision_world);
 
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
         n_positional_correction_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(&ecs_world, &collision_world, &());
+    constraint_manager.prepare_constraints(&rigid_body_manager, &collision_world, &());
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().clone();
@@ -116,10 +111,10 @@ impl SphereBody {
 }
 
 fn setup_sphere_bodies(
-    ecs_world: &mut ECSWorld,
+    rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = SphereBody>,
-) -> Vec<EntityID> {
+) -> Vec<DynamicRigidBodyID> {
     bodies
         .into_iter()
         .map(
@@ -128,57 +123,50 @@ fn setup_sphere_bodies(
                  mass_density,
                  velocity,
              }| {
-                let collidable_id = collision_world.add_collidable(
+                let frame = ReferenceFrame::unoriented(*sphere.center());
+                let motion = Motion::linear(velocity);
+
+                let (rigid_body_id, _frame, _motion) =
+                    rigid_body::setup::setup_dynamic_rigid_body_for_uniform_sphere(
+                        rigid_body_manager,
+                        &DynamicRigidBodySubstance { mass_density },
+                        frame,
+                        motion,
+                    );
+
+                let collidable = SphericalCollidable::new(
                     CollidableKind::Dynamic,
-                    CollidableGeometry::local_sphere(Sphere::new(
-                        Position::origin(),
-                        sphere.radius(),
-                    )),
+                    Sphere::new(Position::origin(), sphere.radius()),
+                    ContactResponseParameters {
+                        restitution_coef: 0.6,
+                        ..Default::default()
+                    },
                 );
 
-                let frame =
-                    ReferenceFrameComp::for_rigid_body(*sphere.center(), Orientation::identity());
-
-                let entity_id = ecs_world
-                    .create_entity((
-                        &frame,
-                        &VelocityComp::linear(velocity),
-                        &RigidBodyComp(RigidBody::new(
-                            InertialProperties::of_uniform_sphere(mass_density),
-                            Orientation::identity(),
-                            1.0,
-                            &velocity,
-                            &AngularVelocity::zero(),
-                        )),
-                        &UniformContactResponseComp(ContactResponseParameters {
-                            restitution_coef: 0.6,
-                            ..Default::default()
-                        }),
-                        &CollidableComp { collidable_id },
-                    ))
-                    .unwrap();
-
-                collision_world.synchronize_collidable(
-                    collidable_id,
-                    entity_id,
-                    frame.create_transform_to_parent_space(),
+                collision::setup::setup_spherical_collidable(
+                    collision_world,
+                    rigid_body_id.into(),
+                    &collidable,
+                    LocalCollidable::Sphere,
                 );
 
-                entity_id
+                rigid_body_id
             },
         )
         .collect()
 }
 
 fn setup_stationary_overlapping_spheres(
-    ecs_world: &mut ECSWorld,
+    rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
 ) {
     setup_sphere_bodies(
-        ecs_world,
+        rigid_body_manager,
         collision_world,
         (0..500).map(|i| {
             SphereBody::stationary(Sphere::new(point![fph::from(i) - 0.05, 0.0, 0.0], 0.5), 1.0)
         }),
     );
+
+    collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
 }

@@ -14,15 +14,7 @@ use crate::{
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
     },
-    physics::{
-        collision::{
-            CollidableID, CollidableKind,
-            components::CollidableComp,
-            geometry::voxel::{CollidableGeometry, CollisionWorld},
-        },
-        motion::components::{ReferenceFrameComp, VelocityComp},
-        rigid_body::{RigidBody, components::RigidBodyComp},
-    },
+    physics::collision::collidable::voxel::{Collidable, CollisionWorld},
     voxel::{
         VoxelManager, VoxelObjectID, VoxelObjectManager,
         chunks::{CHUNK_SIZE, VoxelChunk},
@@ -32,12 +24,18 @@ use crate::{
 use approx::abs_diff_ne;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_geometry::ReferenceFrame;
 use impact_light::{
     LightStorage, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
 };
 use impact_math::Angle;
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
+use impact_physics::{
+    collision::{CollidableID, CollidableKind},
+    quantities::Motion,
+    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+};
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle,
     camera::SceneCamera,
@@ -69,6 +67,7 @@ pub fn update_visibility_flags_for_gizmo(
 /// gizmo's dedicated buffer.
 pub fn buffer_transforms_for_gizmos(
     ecs_world: &ECSWorld,
+    rigid_body_manager: &RigidBodyManager,
     instance_feature_manager: &mut InstanceFeatureManager,
     gizmo_manager: &GizmoManager,
     collision_world: &CollisionWorld,
@@ -171,8 +170,8 @@ pub fn buffer_transforms_for_gizmos(
     );
 
     query!(ecs_world, |gizmos: &GizmosComp,
-                       frame: &ReferenceFrameComp,
-                       velocity: &VelocityComp,
+                       frame: &ReferenceFrame,
+                       motion: &Motion,
                        flags: &SceneEntityFlags| {
         if !gizmos
             .visible_gizmos
@@ -187,14 +186,14 @@ pub fn buffer_transforms_for_gizmos(
             scene_camera,
             &camera_position,
             frame,
-            velocity,
+            motion,
             gizmos.visible_gizmos,
         );
     });
 
     query!(ecs_world, |gizmos: &GizmosComp,
-                       frame: &ReferenceFrameComp,
-                       rigid_body: &RigidBodyComp,
+                       frame: &ReferenceFrame,
+                       rigid_body_id: &DynamicRigidBodyID,
                        flags: &SceneEntityFlags| {
         if !gizmos.visible_gizmos.intersects(
             GizmoSet::CENTER_OF_MASS
@@ -206,18 +205,19 @@ pub fn buffer_transforms_for_gizmos(
             return;
         }
         buffer_transforms_for_dynamics_gizmos(
+            rigid_body_manager,
             instance_feature_manager,
             gizmo_manager.parameters(),
             scene_camera,
             &camera_position,
             frame,
-            &rigid_body.0,
+            *rigid_body_id,
             gizmos.visible_gizmos,
         );
     });
 
     query!(ecs_world, |gizmos: &GizmosComp,
-                       collidable: &CollidableComp,
+                       collidable: &CollidableID,
                        flags: &SceneEntityFlags| {
         if !gizmos.visible_gizmos.intersects(
             GizmoSet::DYNAMIC_COLLIDER
@@ -233,7 +233,7 @@ pub fn buffer_transforms_for_gizmos(
             &voxel_manager.object_manager,
             scene_camera,
             &camera_position,
-            collidable.collidable_id,
+            *collidable,
             gizmos.visible_gizmos,
         );
     });
@@ -438,12 +438,12 @@ fn buffer_transforms_for_kinematics_gizmos(
     parameters: &GizmoParameters,
     scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
-    frame: &ReferenceFrameComp,
-    velocity: &VelocityComp,
+    frame: &ReferenceFrame,
+    motion: &Motion,
     visible_gizmos: GizmoSet,
 ) {
     if visible_gizmos.contains(GizmoType::LinearVelocity.as_set()) {
-        let (direction, speed) = UnitVector3::new_and_get(velocity.linear);
+        let (direction, speed) = UnitVector3::new_and_get(motion.linear_velocity);
 
         let length = parameters.linear_velocity_scale * speed;
 
@@ -462,7 +462,8 @@ fn buffer_transforms_for_kinematics_gizmos(
     }
 
     if visible_gizmos.contains(GizmoType::AngularVelocity.as_set()) {
-        let length = parameters.angular_velocity_scale * velocity.angular.angular_speed().radians();
+        let length =
+            parameters.angular_velocity_scale * motion.angular_velocity.angular_speed().radians();
 
         if abs_diff_ne!(length, 0.0) {
             instance_feature_manager.buffer_instance_feature(
@@ -471,7 +472,7 @@ fn buffer_transforms_for_kinematics_gizmos(
                     scene_camera,
                     camera_position,
                     frame.position,
-                    *velocity.angular.axis_of_rotation(),
+                    *motion.angular_velocity.axis_of_rotation(),
                     length,
                 ),
             );
@@ -480,14 +481,19 @@ fn buffer_transforms_for_kinematics_gizmos(
 }
 
 fn buffer_transforms_for_dynamics_gizmos(
+    rigid_body_manager: &RigidBodyManager,
     instance_feature_manager: &mut InstanceFeatureManager,
     parameters: &GizmoParameters,
     scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
-    frame: &ReferenceFrameComp,
-    rigid_body: &RigidBody,
+    frame: &ReferenceFrame,
+    rigid_body_id: DynamicRigidBodyID,
     visible_gizmos: GizmoSet,
 ) {
+    let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) else {
+        return;
+    };
+
     if visible_gizmos.contains(GizmoType::CenterOfMass.as_set()) {
         let radius = sphere_radius_from_mass_and_density(
             rigid_body.mass(),
@@ -664,9 +670,9 @@ fn buffer_transforms_for_collider_gizmos(
         return;
     };
 
-    match collidable.geometry() {
-        CollidableGeometry::Sphere(sphere_geometry) => {
-            let sphere = sphere_geometry.sphere();
+    match collidable.collidable() {
+        Collidable::Sphere(sphere_collidable) => {
+            let sphere = sphere_collidable.sphere();
 
             let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
                 sphere.center().coords.cast().into(),
@@ -682,8 +688,8 @@ fn buffer_transforms_for_collider_gizmos(
                 &InstanceModelViewTransform::from(model_to_camera_transform),
             );
         }
-        CollidableGeometry::Plane(plane_geometry) => {
-            let plane = plane_geometry.plane();
+        Collidable::Plane(plane_collidable) => {
+            let plane = plane_collidable.plane();
 
             // Make the plane appear infinite by putting the center of the mesh
             // at the camera position (projected so as not to change the plane
@@ -704,9 +710,9 @@ fn buffer_transforms_for_collider_gizmos(
                 &InstanceModelViewTransform::from(model_to_camera_transform),
             );
         }
-        CollidableGeometry::VoxelObject(voxel_object_geometry) => {
+        Collidable::VoxelObject(voxel_object_collidable) => {
             let Some(voxel_object) =
-                voxel_object_manager.get_voxel_object(voxel_object_geometry.object_id())
+                voxel_object_manager.get_voxel_object(voxel_object_collidable.object_id())
             else {
                 return;
             };
@@ -714,8 +720,9 @@ fn buffer_transforms_for_collider_gizmos(
 
             let voxel_radius = 0.5 * voxel_object.voxel_extent();
 
-            let transform_from_object_to_world_space =
-                voxel_object_geometry.transform_to_object_space().inverse();
+            let transform_from_object_to_world_space = voxel_object_collidable
+                .transform_to_object_space()
+                .inverse();
 
             let transform_from_object_to_camera_space =
                 scene_camera.view_transform().cast() * transform_from_object_to_world_space;

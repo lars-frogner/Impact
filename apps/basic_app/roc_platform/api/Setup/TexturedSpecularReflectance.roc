@@ -1,8 +1,8 @@
 # Hash: f50c1ea575d9fadde6d5603337b37eb2229893f460d76b0ac998ee58c6767f8d
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T19:49:53+00:00
 # Rust type: impact_material::setup::physical::TexturedSpecularReflectance
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     TexturedSpecularReflectance,
     unscaled,

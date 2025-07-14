@@ -1,8 +1,8 @@
 # Hash: 6915a8f327416245c028d6e5663014ceec6a8a8a3c5c48a0c3f7c85d9255f760
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T19:49:53+00:00
 # Rust type: impact::window::input::key::NumberKey
 # Type category: Inline
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     NumberKey,
     write_bytes,

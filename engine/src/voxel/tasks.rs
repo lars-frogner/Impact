@@ -19,12 +19,19 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Applying voxel absorbers", engine, {
+            let ecs_world = engine.ecs_world().read().unwrap();
             let simulator = engine.simulator().read().unwrap();
+            let mut rigid_body_manager = simulator.rigid_body_manager().write().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
-            let ecs_world = engine.ecs_world().read().unwrap();
-            voxel::systems::apply_absorption(&simulator, &mut voxel_manager, &scene_graph, &ecs_world);
+            voxel::systems::apply_absorption(
+                &ecs_world,
+                &mut rigid_body_manager,
+                &mut voxel_manager,
+                &scene_graph,
+                simulator.time_step_duration(),
+            );
             Ok(())
         })
     }

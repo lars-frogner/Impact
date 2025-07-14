@@ -1,8 +1,8 @@
 # Hash: 95da96a60783dbb11912cfb10b22a901a5d156485f90e2152ada8910fb912c54
-# Generated: 2025-07-09T18:13:08+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: 1a36922 (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     EngineCommand,
     write_bytes,

@@ -1,9 +1,7 @@
 //! Controller commands.
 
-use crate::{
-    control::{MotionDirection, MotionState},
-    physics::fph,
-};
+use crate::control::{MotionDirection, MotionState};
+use impact_physics::fph;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]

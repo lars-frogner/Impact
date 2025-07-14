@@ -9,9 +9,9 @@ import pf.Entity
 import pf.Setup.BoxMesh
 import pf.Comp.ReferenceFrame
 import pf.Setup.UniformColor
-import pf.Comp.UniformRigidBody
+import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Velocity
+import pf.Comp.Motion
 import pf.Physics.AngularVelocity as AngularVelocity
 import Scenes.Blank
 
@@ -35,7 +35,7 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
     body_base =
         Entity.new
         |> Setup.BoxMesh.add_new(3, 2, 1, Outside)
-        |> Comp.UniformRigidBody.add({ mass_density: 1 / 6 })
+        |> Setup.DynamicRigidBodySubstance.add({ mass_density: 1 / 6 })
         |> Setup.UniformColor.add((0.1, 0.1, 0.7))
         |> Setup.UniformSpecularReflectance.add_in_range_of(
             Setup.UniformSpecularReflectance.plastic,
@@ -44,8 +44,8 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
 
     major_axis_body =
         body_base
-        |> Comp.ReferenceFrame.add_for_unoriented_rigid_body(major_axis_body_position)
-        |> Comp.Velocity.add_angular(
+        |> Comp.ReferenceFrame.add_unoriented(major_axis_body_position)
+        |> Comp.Motion.add_angular(
             AngularVelocity.from_vector(
                 (
                     angular_velocity_perturbation,
@@ -57,8 +57,8 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
 
     intermediate_axis_body =
         body_base
-        |> Comp.ReferenceFrame.add_for_unoriented_rigid_body(intermediate_axis_body_position)
-        |> Comp.Velocity.add_angular(
+        |> Comp.ReferenceFrame.add_unoriented(intermediate_axis_body_position)
+        |> Comp.Motion.add_angular(
             AngularVelocity.from_vector(
                 (
                     angular_velocity_perturbation,
@@ -70,8 +70,8 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
 
     minor_axis_body =
         body_base
-        |> Comp.ReferenceFrame.add_for_unoriented_rigid_body(minor_axis_body_position)
-        |> Comp.Velocity.add_angular(
+        |> Comp.ReferenceFrame.add_unoriented(minor_axis_body_position)
+        |> Comp.Motion.add_angular(
             AngularVelocity.from_vector(
                 (
                     angular_speed,

@@ -1,8 +1,8 @@
 # Hash: 9f1645f47f638539e617ec2653e85103382cfc53e3ad1597d1212a36e4a3df2b
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: impact::voxel::components::SameVoxelTypeComp
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     SameVoxelType,
     new,

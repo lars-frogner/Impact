@@ -15,15 +15,15 @@ use crate::{
         screen_capture::command::{CaptureCommand, SaveShadowMapsFor},
     },
     instrumentation::command::InstrumentationCommand,
-    physics::{
-        command::{PhysicsCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
-        fph,
-        medium::UniformMedium,
+    physics::command::{
+        PhysicsCommand, ToSimulationSpeedMultiplier, ToSubstepCount, set_simulation_speed,
+        set_simulation_substep_count,
     },
     scene::command::SceneCommand,
 };
 use anyhow::Result;
 use impact_ecs::world::EntityID;
+use impact_physics::{fph, medium::UniformMedium};
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,
     postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
@@ -264,17 +264,14 @@ impl Engine {
 
     pub fn set_simulation_substep_count(&self, to: ToSubstepCount) -> u32 {
         impact_log::info!("Setting simulation substep count to {to:?}");
-        self.simulator
-            .write()
-            .unwrap()
-            .set_simulation_substep_count(to)
+        set_simulation_substep_count(&mut self.simulator.write().unwrap(), to)
     }
 
     pub fn set_simulation_speed(&self, to: ToSimulationSpeedMultiplier) -> f64 {
         impact_log::info!("Setting simulation speed to {to:?}");
         let mut simulator = self.simulator.write().unwrap();
         let old_multiplier = simulator.simulation_speed_multiplier();
-        let new_multiplier = simulator.set_simulation_speed(to);
+        let new_multiplier = set_simulation_speed(&mut simulator, to);
         drop(simulator);
 
         if new_multiplier != old_multiplier {

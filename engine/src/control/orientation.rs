@@ -4,8 +4,8 @@ pub mod components;
 pub mod systems;
 
 use super::OrientationController;
-use crate::physics::{fph, motion::Orientation};
 use impact_math::{Angle, Degrees, Radians};
+use impact_physics::{fph, quantities::Orientation};
 use nalgebra::{UnitQuaternion, Vector3};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;

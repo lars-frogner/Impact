@@ -1,10 +1,7 @@
 //! Commands for operating the physics simulator.
 
-use super::PhysicsSimulator;
-use crate::{
-    command::ToActiveState,
-    physics::{fph, medium::UniformMedium},
-};
+use crate::{command::ToActiveState, physics::PhysicsSimulator};
+use impact_physics::{fph, medium::UniformMedium};
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -35,44 +32,45 @@ pub enum ToSimulationSpeedMultiplier {
     Specific(fph),
 }
 
-impl PhysicsSimulator {
-    pub fn set_simulation_substep_count(&mut self, to: ToSubstepCount) -> u32 {
-        match to {
-            ToSubstepCount::HigherBy(incr) => {
-                self.config.n_substeps += incr;
-            }
-            ToSubstepCount::LowerBy(decr) => {
-                self.config.n_substeps = self.config.n_substeps.saturating_sub(decr).max(1);
-            }
-            ToSubstepCount::Specific(n_substeps) => {
-                self.config.n_substeps = n_substeps.max(1);
-            }
+pub fn set_simulation_substep_count(simulator: &mut PhysicsSimulator, to: ToSubstepCount) -> u32 {
+    let n_substeps = simulator.n_substeps_mut();
+    match to {
+        ToSubstepCount::HigherBy(incr) => {
+            *n_substeps += incr;
         }
-        self.config.n_substeps
-    }
-
-    pub fn set_simulation_speed(&mut self, to: ToSimulationSpeedMultiplier) -> fph {
-        const MIN_ABS_MULTIPLIER: fph = 1e-9;
-
-        let mut new_multiplier = match to {
-            ToSimulationSpeedMultiplier::Higher => {
-                self.simulation_speed_multiplier
-                    * self.config.simulation_speed_multiplier_increment_factor
-            }
-            ToSimulationSpeedMultiplier::Lower => {
-                self.simulation_speed_multiplier
-                    / self.config.simulation_speed_multiplier_increment_factor
-            }
-            ToSimulationSpeedMultiplier::Specific(multiplier) => multiplier,
-        };
-
-        if new_multiplier.abs() < MIN_ABS_MULTIPLIER {
-            new_multiplier = MIN_ABS_MULTIPLIER;
+        ToSubstepCount::LowerBy(decr) => {
+            *n_substeps = n_substeps.saturating_sub(decr).max(1);
         }
-        self.simulation_speed_multiplier = new_multiplier;
-
-        new_multiplier
+        ToSubstepCount::Specific(n) => {
+            *n_substeps = n.max(1);
+        }
     }
+    *n_substeps
+}
+
+pub fn set_simulation_speed(
+    simulator: &mut PhysicsSimulator,
+    to: ToSimulationSpeedMultiplier,
+) -> fph {
+    const INCREMENT_FACTOR: fph = 1.1;
+    const MIN_ABS_MULTIPLIER: fph = 1e-9;
+
+    let mut new_multiplier = match to {
+        ToSimulationSpeedMultiplier::Higher => {
+            simulator.simulation_speed_multiplier() * INCREMENT_FACTOR
+        }
+        ToSimulationSpeedMultiplier::Lower => {
+            simulator.simulation_speed_multiplier() / INCREMENT_FACTOR
+        }
+        ToSimulationSpeedMultiplier::Specific(multiplier) => multiplier,
+    };
+
+    if new_multiplier.abs() < MIN_ABS_MULTIPLIER {
+        new_multiplier = MIN_ABS_MULTIPLIER;
+    }
+    *simulator.simulation_speed_multiplier_mut() = new_multiplier;
+
+    new_multiplier
 }
 
 impl PartialEq for ToSimulationSpeedMultiplier {

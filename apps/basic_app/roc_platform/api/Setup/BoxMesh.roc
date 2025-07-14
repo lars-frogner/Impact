@@ -1,8 +1,8 @@
 # Hash: efa8888ebf4fe61a52b5ecbb9f20e68964b548d145cd81987723f7706a94fa78
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T19:49:53+00:00
 # Rust type: impact_mesh::setup::BoxMesh
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     BoxMesh,
     unit_cube,
