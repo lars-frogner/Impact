@@ -185,7 +185,7 @@ pub struct VoxelObjectComp {
 /// at the full radius.
 ///
 /// Does nothing if the entity does not have a
-/// [`crate::physics::motion::components::ReferenceFrameComp`].
+/// [`impact_geometry::ReferenceFrame`].
 #[roc(parents = "Comp", name = "VoxelAbsorbingSphere")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
@@ -204,7 +204,7 @@ pub struct VoxelAbsorbingSphereComp {
 /// quadratically to zero at the capsule boundary.
 ///
 /// Does nothing if the entity does not have a
-/// [`crate::physics::motion::components::ReferenceFrameComp`].
+/// [`impact_geometry::ReferenceFrame`].
 #[roc(parents = "Comp", name = "VoxelAbsorbingCapsule")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]

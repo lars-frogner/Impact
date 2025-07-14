@@ -25,7 +25,7 @@ import core.Vector3
 ## quadratically to zero at the capsule boundary.
 ##
 ## Does nothing if the entity does not have a
-## [`crate::physics::motion::components::ReferenceFrameComp`].
+## [`impact_geometry::ReferenceFrame`].
 VoxelAbsorbingCapsule : {
     ## The offset of the starting point of the capsule's central line segment
     ## in the reference frame of the entity.
@@ -74,15 +74,20 @@ add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
 ## line segment).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted F64, Entity.Arg.Broadcasted F64 -> Result Entity.MultiData Str
 add_multiple_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
     add_multiple(
         entity_data,
-        All(Entity.Arg.broadcasted_map4(
-            offset_to_segment_start, segment_vector, radius, rate,
-            Entity.multi_count(entity_data),
-            new
-        ))
+        All(
+            Entity.Arg.broadcasted_map4(
+                offset_to_segment_start,
+                segment_vector,
+                radius,
+                rate,
+                Entity.multi_count(entity_data),
+                new,
+            ),
+        ),
     )
 
 ## Adds a value of the [VoxelAbsorbingCapsule] component to an entity's data.
@@ -97,7 +102,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelAbsorbingCapsule) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted VoxelAbsorbingCapsule -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

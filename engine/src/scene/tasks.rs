@@ -15,7 +15,7 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform of
     /// each [`SceneGraph`](crate::scene::SceneGraph) node representing an
     /// entity that also has the
-    /// [`ReferenceFrameComp`](crate::physics::motion::components::ReferenceFrameComp)
+    /// [`ReferenceFrame`](impact_geometry::ReferenceFrame)
     /// component so that the translational, rotational and scaling parts match
     /// the origin offset, position, orientation and scaling. Also updates any
     /// flags for the node to match the entity's
