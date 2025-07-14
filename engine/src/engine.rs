@@ -363,8 +363,31 @@ impl Engine {
         self.controls_enabled.store(enabled, Ordering::Relaxed);
 
         if !enabled {
+            let ecs_world = self.ecs_world.read().unwrap();
+            let simulator = self.simulator.read().unwrap();
+            let mut rigid_body_manager = simulator.rigid_body_manager().write().unwrap();
+
             if let Some(motion_controller) = &self.motion_controller {
-                motion_controller.lock().unwrap().stop();
+                let mut motion_controller = motion_controller.lock().unwrap();
+                motion_controller.stop();
+
+                control::motion::systems::update_controlled_entity_velocities(
+                    &ecs_world,
+                    &mut rigid_body_manager,
+                    motion_controller.as_ref(),
+                );
+            }
+
+            if let Some(orientation_controller) = &self.orientation_controller {
+                let mut orientation_controller = orientation_controller.lock().unwrap();
+                orientation_controller.reset_orientation_change();
+
+                control::orientation::systems::update_controlled_entity_angular_velocities(
+                    &ecs_world,
+                    &mut rigid_body_manager,
+                    orientation_controller.as_mut(),
+                    simulator.time_step_duration(),
+                );
             }
         }
     }
