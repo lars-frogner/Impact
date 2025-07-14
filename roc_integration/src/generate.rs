@@ -47,6 +47,15 @@ pub struct GenerateOptions {
     pub verbose: bool,
 }
 
+/// Options for cleaning generated code.
+#[derive(Clone, Debug)]
+pub struct CleanOptions {
+    /// Whether to print progress and status messages.
+    pub verbose: bool,
+    /// Whether to recursively clean subdirectories.
+    pub recursive: bool,
+}
+
 /// Roc code generation options.
 #[derive(Clone, Debug)]
 pub struct RocGenerateOptions {
@@ -312,6 +321,51 @@ pub fn generate_roc(
     }
 
     Ok(())
+}
+
+pub fn clean_generated_roc(target_dir: impl AsRef<Path>, options: CleanOptions) -> Result<()> {
+    let target_dir = target_dir.as_ref();
+
+    if !target_dir.exists() {
+        return Ok(());
+    }
+
+    clean_generated_roc_impl(target_dir, &options)
+}
+
+fn clean_generated_roc_impl(dir: &Path, options: &CleanOptions) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() && options.recursive {
+            clean_generated_roc_impl(&path, options)?;
+        } else if path.is_file()
+            && path.extension().and_then(|s| s.to_str()) == Some("roc")
+            && is_generated_roc_file(&path)?
+        {
+            if options.verbose {
+                println!("Deleting generated roc file: {}", path.display());
+            }
+            fs::remove_file(&path).with_context(|| {
+                format!("Failed to delete generated roc file: {}", path.display())
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn is_generated_roc_file(path: &Path) -> Result<bool> {
+    let file =
+        File::open(path).with_context(|| format!("Failed to open file: {}", path.display()))?;
+    let mut reader = BufReader::new(file);
+
+    // Try to parse the header - if it succeeds, this is a generated file
+    match ModuleHeader::parse_if_valid(&mut reader) {
+        Ok(Some(_)) => Ok(true),
+        Ok(None) | Err(_) => Ok(false), // If parsing fails, assume it's not a generated file
+    }
 }
 
 fn generate_roc_modules<'a, 'b>(
