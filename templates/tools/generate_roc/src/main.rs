@@ -9,7 +9,7 @@ pub use target_crate;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use roc_integration::generate::{
-    self, GenerateOptions, ListOptions, ListedRocTypeCategory, RocGenerateOptions,
+    self, CleanOptions, GenerateOptions, ListOptions, ListedRocTypeCategory, RocGenerateOptions,
 };
 use std::path::PathBuf;
 
@@ -52,6 +52,18 @@ enum Command {
         #[arg(long, value_name = "MODULES", value_delimiter = ' ', num_args = 1..)]
         only: Vec<String>,
     },
+    /// Remove generated Roc files
+    Clean {
+        /// Print info messages
+        #[arg(short, long)]
+        verbose: bool,
+        /// Recurse into subdirectories
+        #[arg(short, long)]
+        recursive: bool,
+        /// Path to the directory containing generated Roc files
+        #[arg(short, long, value_name = "PATH")]
+        target_dir: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -85,6 +97,14 @@ fn main() -> Result<()> {
             };
             let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
             generate::generate_roc(target_dir, options, roc_options, &component_type_ids)?;
+        }
+        Command::Clean {
+            verbose,
+            recursive,
+            target_dir,
+        } => {
+            let options = CleanOptions { verbose, recursive };
+            generate::clean_generated_roc(target_dir, options)?;
         }
     }
 
