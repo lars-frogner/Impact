@@ -25,6 +25,7 @@ impl GraphicsDevice {
     pub async fn connect(
         wgpu_instance: &wgpu::Instance,
         required_features: wgpu::Features,
+        desired_features: wgpu::Features,
         required_limits: wgpu::Limits,
         memory_hints: wgpu::MemoryHints,
         compatible_surface: Option<&wgpu::Surface<'_>>,
@@ -47,9 +48,11 @@ impl GraphicsDevice {
             backend = adapter_info.backend,
         );
 
+        let features = required_features | (desired_features & adapter.features());
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                required_features,
+                required_features: features,
                 required_limits,
                 memory_hints,
                 label: None,
