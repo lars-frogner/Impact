@@ -4,7 +4,7 @@ use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
-use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
+use nalgebra::{Isometry3, Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -157,15 +157,25 @@ impl<F: Float> Plane<F> {
 
     /// Computes the plane resulting from transforming this plane with the given
     /// similarity transform.
-    pub fn transformed(&self, transformation: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
         let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
-        let transformed_point_in_plane = transformation.transform_point(&point_in_plane);
+        let transformed_point_in_plane = transform.transform_point(&point_in_plane);
         let transformed_unit_normal = UnitVector3::new_unchecked(
-            transformation
+            transform
                 .isometry
                 .rotation
                 .transform_vector(&self.unit_normal),
         );
+        Self::from_normal_and_point(transformed_unit_normal, &transformed_point_in_plane)
+    }
+
+    /// Computes the plane resulting from transforming this plane with the given
+    /// isometry transform.
+    pub fn translated_and_rotated(&self, transform: &Isometry3<F>) -> Self {
+        let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
+        let transformed_point_in_plane = transform.transform_point(&point_in_plane);
+        let transformed_unit_normal =
+            UnitVector3::new_unchecked(transform.rotation.transform_vector(&self.unit_normal));
         Self::from_normal_and_point(transformed_unit_normal, &transformed_point_in_plane)
     }
 

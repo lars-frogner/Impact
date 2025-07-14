@@ -4,9 +4,9 @@ pub mod command;
 pub mod motion;
 pub mod orientation;
 
-use crate::physics::{
+use impact_physics::{
     fph,
-    motion::{Orientation, Velocity},
+    quantities::{Orientation, Velocity},
 };
 use motion::{
     MotionControllerConfig, MotionDirection, MotionState, SemiDirectionalMotionController,

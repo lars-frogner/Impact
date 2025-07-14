@@ -16,15 +16,16 @@ import pf.Light.AmbientEmission
 import pf.Comp.MotionControl
 import pf.Comp.OrientationControl
 import pf.Setup.PerspectiveCamera
-import pf.Comp.PlaneCollidable
+import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Light.ShadowableUnidirectionalEmission
 import pf.Setup.UniformColor
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Velocity
+import pf.Comp.Motion
 import pf.Rendering.TextureID
+import pf.Physics.ContactResponseParameters
 
 entity_ids = {
     player: Entity.id("player"),
@@ -52,7 +53,7 @@ player =
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
-    |> Comp.Velocity.add_stationary
+    |> Comp.Motion.add_stationary
     |> Comp.MotionControl.add_new
     |> Comp.OrientationControl.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
@@ -61,7 +62,11 @@ ground =
     Entity.new
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ReferenceFrame.add_unoriented_scaled(Point3.origin, 1000)
-    |> Comp.PlaneCollidable.add_new(Static, Plane.new(UnitVector3.y_axis, 0.0))
+    |> Setup.PlanarCollidable.add_new(
+        Static,
+        Plane.new(UnitVector3.y_axis, 0.0),
+        Physics.ContactResponseParameters.new(0.0, 0.0, 0.0),
+    )
     |> Setup.UniformColor.add((0.9, 0.9, 0.9))
     |> Setup.UniformSpecularReflectance.add(0.01)
     |> Setup.UniformRoughness.add(0.5)

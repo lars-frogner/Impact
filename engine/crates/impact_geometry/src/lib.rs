@@ -1,11 +1,15 @@
 //! Geometrical objects.
 
+#[macro_use]
+mod macros;
+
 mod axis_aligned_box;
 mod capsule;
 mod frustum;
 mod oriented_box;
 mod plane;
 mod projection;
+mod reference_frame;
 mod sphere;
 
 pub use axis_aligned_box::AxisAlignedBox;
@@ -14,6 +18,7 @@ pub use frustum::Frustum;
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
+pub use reference_frame::ReferenceFrame;
 pub use sphere::Sphere;
 
 use impact_math::Float;

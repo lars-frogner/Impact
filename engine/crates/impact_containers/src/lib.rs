@@ -17,3 +17,6 @@ pub use rustc_hash::FxHashSet as HashSet;
 pub type NoHashMap<K, V> = std::collections::HashMap<K, V, nohash_hasher::BuildNoHashHasher<K>>;
 pub type NoHashSet<K> = std::collections::HashSet<K, nohash_hasher::BuildNoHashHasher<K>>;
 pub type NoHashKeyIndexMapper<K> = KeyIndexMapper<K, nohash_hasher::BuildNoHashHasher<K>>;
+
+pub type IndexMap<K, V> = indexmap::IndexMap<K, V, rustc_hash::FxBuildHasher>;
+pub type IndexSet<K> = indexmap::IndexSet<K, rustc_hash::FxBuildHasher>;

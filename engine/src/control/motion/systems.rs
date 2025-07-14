@@ -1,49 +1,56 @@
 //! ECS systems related to motion control.
 
-use crate::{
-    control::{MotionController, motion::components::MotionControlComp},
-    physics::{
-        fph,
-        motion::components::{ReferenceFrameComp, VelocityComp},
-        rigid_body::components::RigidBodyComp,
-    },
-};
+use crate::control::{MotionController, motion::components::MotionControlComp};
 use impact_ecs::{query, world::World as ECSWorld};
+use impact_geometry::ReferenceFrame;
+use impact_physics::{
+    quantities::Motion,
+    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
+};
 
 /// Updates the world-space velocities of all entities controlled by the given
-/// motion controller, and advances their positions by the given time step
-/// duration when applicable.
-pub fn update_motion_of_controlled_entities(
+/// motion controller.
+pub fn update_controlled_entity_velocities(
     ecs_world: &ECSWorld,
+    rigid_body_manager: &mut RigidBodyManager,
     motion_controller: &(impl MotionController + ?Sized),
-    time_step_duration: fph,
 ) {
     query!(
         ecs_world,
         |motion_control: &mut MotionControlComp,
-         velocity: &mut VelocityComp,
-         frame: &mut ReferenceFrameComp| {
+         motion: &mut Motion,
+         frame: &ReferenceFrame,
+         rigid_body_id: &KinematicRigidBodyID| {
             let new_control_velocity =
                 motion_controller.compute_control_velocity(&frame.orientation);
-            motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.linear);
 
-            frame.position += velocity.linear * time_step_duration;
-        },
-        ![RigidBodyComp]
+            motion_control
+                .apply_new_control_velocity(new_control_velocity, &mut motion.linear_velocity);
+
+            if let Some(rigid_body) =
+                rigid_body_manager.get_kinematic_rigid_body_mut(*rigid_body_id)
+            {
+                rigid_body.set_velocity(motion.linear_velocity);
+            }
+        }
     );
 
     query!(
         ecs_world,
         |motion_control: &mut MotionControlComp,
-         rigid_body: &mut RigidBodyComp,
-         velocity: &mut VelocityComp,
-         frame: &ReferenceFrameComp| {
+         motion: &mut Motion,
+         frame: &ReferenceFrame,
+         rigid_body_id: &DynamicRigidBodyID| {
             let new_control_velocity =
                 motion_controller.compute_control_velocity(&frame.orientation);
 
-            motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.linear);
+            motion_control
+                .apply_new_control_velocity(new_control_velocity, &mut motion.linear_velocity);
 
-            rigid_body.0.synchronize_momentum(&velocity.linear);
+            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(*rigid_body_id)
+            {
+                rigid_body.synchronize_momentum(&motion.linear_velocity);
+            }
         }
     );
 }

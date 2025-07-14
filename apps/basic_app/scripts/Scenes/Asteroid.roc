@@ -29,7 +29,7 @@ import pf.Setup.UniformColor
 import pf.Setup.UniformEmissiveLuminance
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Velocity
+import pf.Comp.Motion
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
 import pf.Comp.VoxelSphereUnion
@@ -46,7 +46,6 @@ entity_ids = {
     absorbing_sphere: Entity.id("absorbing_sphere"),
     ground: Entity.id("ground"),
     asteroid: Entity.id("asteroid"),
-    asteroid2: Entity.id("asteroid2"),
     ambient_light: Entity.id("ambient_light"),
     omnidirectional_light: Entity.id("omnidirectional_light"),
     unidirectional_light: Entity.id("unidirectional_light"),
@@ -62,7 +61,6 @@ setup! = |_|
     Entity.create_with_id!(entity_ids.absorbing_sphere, absorbing_sphere)?
     Entity.create_with_id!(entity_ids.ground, ground)?
     Entity.create_with_id!(entity_ids.asteroid, asteroid)?
-    Entity.create_with_id!(entity_ids.asteroid2, asteroid2)?
     Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
     Entity.create_with_id!(entity_ids.omnidirectional_light, omnidirectional_light)?
     Entity.create_with_id!(entity_ids.unidirectional_light, unidirectional_light)?
@@ -94,7 +92,7 @@ player =
         (0.0, 0.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
-    |> Comp.Velocity.add_stationary
+    |> Comp.Motion.add_stationary
     |> Comp.MotionControl.add_new
     |> Comp.OrientationControl.add_new
     |> Setup.SceneGraphGroup.add
@@ -147,15 +145,7 @@ asteroid =
     |> Comp.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
     |> Comp.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
     |> Comp.MultifractalNoiseModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
-    |> Comp.Velocity.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
-
-asteroid2 =
-    Entity.new
-    |> Comp.ReferenceFrame.add_unoriented((0, 10, 30))
-    |> Comp.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
-    |> Comp.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
-    |> Comp.MultifractalNoiseModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
-    |> Comp.Velocity.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
+    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
 
 ambient_light =
     Entity.new

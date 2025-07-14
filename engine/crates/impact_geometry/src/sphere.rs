@@ -5,7 +5,7 @@ use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
 use na::{Similarity3, UnitQuaternion, vector};
-use nalgebra::{self as na, Point3};
+use nalgebra::{self as na, Isometry3, Point3};
 
 /// A sphere represented by the center point and the radius.
 #[repr(C)]
@@ -190,6 +190,12 @@ impl<F: Float> Sphere<F> {
             transform.transform_point(self.center()),
             transform.scaling() * self.radius(),
         )
+    }
+
+    /// Computes the sphere resulting from transforming this
+    /// sphere with the given isometry transform.
+    pub fn translated_and_rotated(&self, transform: &Isometry3<F>) -> Self {
+        Self::new(transform.transform_point(self.center()), self.radius())
     }
 
     /// Finds the smallest sphere that fully encloses this and

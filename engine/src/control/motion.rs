@@ -4,12 +4,12 @@ pub mod components;
 pub mod systems;
 
 use super::{MotionChanged, MotionController};
-use crate::physics::{
-    fph,
-    motion::{Orientation, Velocity},
-};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use impact_math::Float;
+use impact_physics::{
+    fph,
+    quantities::{Orientation, Velocity},
+};
 use nalgebra::vector;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};

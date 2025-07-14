@@ -1,8 +1,8 @@
 # Hash: a86c3a221921a7c850c7ec145cef802dfb4e7e4ca277635bc44d921c543c28ca
-# Generated: 2025-07-06T18:04:01+00:00
-# Rust type: impact::physics::motion::AngularVelocity
+# Generated: 2025-07-13T20:18:37+00:00
+# Rust type: impact_physics::quantities::AngularVelocity
 # Type category: POD
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     AngularVelocity,
     new,

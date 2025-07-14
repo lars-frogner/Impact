@@ -9,15 +9,16 @@ import core.UnitQuaternion
 import core.UnitVector3
 import pf.Entity
 import pf.Setup.BoxMesh
-import pf.Comp.HarmonicOscillatorTrajectory
+import pf.Setup.HarmonicOscillatorTrajectory
 import pf.Comp.ReferenceFrame
 import pf.Setup.SphereMesh
-import pf.Comp.Spring
 import pf.Setup.UniformColor
-import pf.Comp.UniformRigidBody
+import pf.Setup.DynamicDynamicSpringForceGenerator
+import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Velocity
+import pf.Comp.Motion
 import pf.Physics.Spring
+import pf.Physics.SpringForce
 import Scenes.Blank
 
 entity_ids = {
@@ -49,9 +50,9 @@ create_entities! = |position, mass, spring_constant, amplitude|
     dynamic_body =
         Entity.new
         |> Setup.BoxMesh.add_unit_cube
-        |> Comp.UniformRigidBody.add({ mass_density: mass })
-        |> Comp.ReferenceFrame.add_for_unoriented_rigid_body(mass_position)
-        |> Comp.Velocity.add_stationary
+        |> Setup.DynamicRigidBodySubstance.add({ mass_density: mass })
+        |> Comp.ReferenceFrame.add_unoriented(mass_position)
+        |> Comp.Motion.add_stationary
         |> Setup.UniformColor.add((0.1, 0.1, 0.7))
         |> Setup.UniformSpecularReflectance.add_in_range_of(
             Setup.UniformSpecularReflectance.plastic,
@@ -61,20 +62,22 @@ create_entities! = |position, mass, spring_constant, amplitude|
     spring =
         Entity.new
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
-        |> Comp.Spring.add_new(
+        |> Setup.DynamicDynamicSpringForceGenerator.add_new(
             entity_ids.attachment_point,
             entity_ids.dynamic_body,
-            Point3.origin,
-            Point3.origin,
-            Physics.Spring.standard(spring_constant, 0, amplitude + 0.5),
+            Physics.SpringForce.new(
+                Physics.Spring.standard(spring_constant, 0, amplitude + 0.5),
+                Point3.origin,
+                Point3.origin,
+            ),
         )
 
     kinematic_body =
         Entity.new
         |> Setup.BoxMesh.add_unit_cube
-        |> Comp.ReferenceFrame.add_for_driven_trajectory(UnitQuaternion.identity)
-        |> Comp.Velocity.add_stationary
-        |> Comp.HarmonicOscillatorTrajectory.add_new(
+        |> Comp.ReferenceFrame.add_unlocated(UnitQuaternion.identity)
+        |> Comp.Motion.add_stationary
+        |> Setup.HarmonicOscillatorTrajectory.add_new(
             0.25 * period,
             reference_position,
             UnitVector3.y_axis,

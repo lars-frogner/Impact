@@ -1,8 +1,8 @@
 # Hash: 9eb9adaa71d83ca286a669fb0c6f77acde32d0abcc4f95619bf2a9edc2dc4cef
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T19:49:53+00:00
 # Rust type: impact::window::input::key::KeyboardKey
 # Type category: Inline
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     KeyboardKey,
     write_bytes,

@@ -1,8 +1,8 @@
 # Hash: 5a490e1d8d4168c0d869349766b7357a81ed42575b08520748b185a5cb3c6ca4
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T19:49:53+00:00
 # Rust type: impact::voxel::components::VoxelObjectComp
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     VoxelObject,
     add,

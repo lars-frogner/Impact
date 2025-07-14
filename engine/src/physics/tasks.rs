@@ -1,13 +1,12 @@
 //! Tasks for physics.
 
 use crate::{
-    physics::{PhysicsSimulator, motion},
+    physics::systems::synchronize_rigid_body_components,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
 };
 use anyhow::Result;
 use impact_scheduling::{define_execution_tag, define_task};
-use impact_thread::ThreadPoolTaskErrors;
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s
@@ -50,7 +49,6 @@ define_task!(
                 .write()
                 .unwrap()
                 .advance_simulation(
-                    engine.ecs_world(),
                     &engine.scene()
                         .read()
                         .unwrap()
@@ -64,15 +62,33 @@ define_task!(
     }
 );
 
-impl PhysicsSimulator {
-    /// Identifies physics-related errors that need special handling in the
-    /// given set of task errors and handles them.
-    pub fn handle_task_errors(&self, _task_errors: &mut ThreadPoolTaskErrors) {}
-}
+define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the
+    /// [`ReferenceFrame`](impact_geometry::ReferenceFrame) and
+    /// [`Motion`](impact_physics::quantities::Motion) components of entities
+    /// with the
+    /// [`DynamicRigidBodyID`](impact_physics::rigid_body::DynamicRigidBodyID)
+    /// or
+    /// [`KinematicRigidBodyID`](impact_physics::rigid_body::KinematicRigidBodyID)
+    /// component to match the current state of the rigid body.
+    [pub] SyncRigidBodyComponents,
+    depends_on = [AdvanceSimulation],
+    execute_on = [PhysicsTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Synchronizing rigid body components", engine, {
+            let ecs_world = engine.ecs_world().read().unwrap();
+            let simulator = engine.simulator().read().unwrap();
+            let rigid_body_manager = simulator.rigid_body_manager().read().unwrap();
+            synchronize_rigid_body_components(&ecs_world, &rigid_body_manager);
+            Ok(())
+        })
+    }
+);
 
 /// Registers all tasks needed for physics in the given task scheduler.
 pub fn register_physics_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     task_scheduler.register_task(UpdateControlledEntities)?;
     task_scheduler.register_task(AdvanceSimulation)?;
-    motion::tasks::register_motion_tasks(task_scheduler)
+    task_scheduler.register_task(SyncRigidBodyComponents)
 }

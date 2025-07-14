@@ -13,7 +13,7 @@ import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
 import core.Vector3
 import pf.Command
 import pf.Light.AmbientEmission
-import pf.Comp.ConstantRotation
+import pf.Setup.ConstantRotation
 import pf.Comp.MotionControl
 import pf.Setup.NormalMap
 import pf.Light.OmnidirectionalEmission
@@ -21,24 +21,23 @@ import pf.Comp.OrientationControl
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
-import pf.Comp.PlaneCollidable
+import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.SameVoxelType
 import pf.Setup.SceneGraphGroup
 import pf.Light.ShadowableUnidirectionalEmission
-import pf.Comp.SphereCollidable
+import pf.Setup.SphericalCollidable
 import pf.Setup.SphereMesh
-import pf.Comp.Static
 import pf.Setup.TexturedColor
 import pf.Setup.TexturedRoughness
-import pf.Comp.UniformContactResponse
-import pf.Comp.UniformGravity
-import pf.Comp.UniformRigidBody
+import pf.Physics.ContactResponseParameters
+import pf.Setup.ConstantAcceleration
+import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Velocity
+import pf.Comp.Motion
 import pf.Comp.VoxelBox
-import pf.Comp.VoxelObjectCollidable
+import pf.Setup.VoxelCollidable
 import pf.Entity
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Rendering.TextureID as TextureID
@@ -73,13 +72,13 @@ setup! = |_|
 
     create_room!(
         room_extent,
-        20,
+        0 * 20,
         create_texture_ids("concrete"),
     )?
 
     voxel_extent = 0.25
     box_size = 6.0
-    Entity.create_with_id!(entity_ids.voxel_box, voxel_box(voxel_extent, box_size, room_extent))?
+    # Entity.create_with_id!(entity_ids.voxel_box, voxel_box(voxel_extent, box_size, room_extent))?
 
     Ok({})
 
@@ -91,7 +90,7 @@ player =
         (0, 0, -5),
         UnitQuaternion.from_axis_angle(y_axis, Num.pi),
     )
-    |> Comp.Velocity.add_stationary
+    |> Comp.Motion.add_stationary
     |> Comp.MotionControl.add_new
     |> Comp.OrientationControl.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
@@ -136,24 +135,16 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
             All(scaled_positions),
             Same(radius),
         )?
-        |> Comp.Velocity.add_multiple_stationary
-        |> Comp.UniformRigidBody.add_multiple(
+        |> Comp.Motion.add_multiple_stationary
+        |> Setup.DynamicRigidBodySubstance.add_multiple(
             Same({ mass_density: 1.0 }),
         )?
-        |> Comp.UniformContactResponse.add_multiple(
-            Same(
-                {
-                    restitution_coef: 0.7,
-                    static_friction_coef: 0.5,
-                    dynamic_friction_coef: 0.3,
-                },
-            ),
-        )?
-        |> Comp.SphereCollidable.add_multiple_new(
+        |> Setup.SphericalCollidable.add_multiple_new(
             Same(Dynamic),
-            Same(Sphere.new(Point3.origin, radius)),
+            Same(Sphere.new(Point3.origin, radius * radius)),
+            Same(Physics.ContactResponseParameters.new(0.7, 0.5, 0.3)),
         )?
-        |> Comp.UniformGravity.add_multiple_earth
+        |> Setup.ConstantAcceleration.add_multiple_earth
         |> Setup.TexturedColor.add_multiple(
             Same(texture_ids.color),
         )?
@@ -200,26 +191,18 @@ create_room! = |extent, angular_speed, texture_ids|
             All(wall_orientations),
             Same(extent),
         )?
-        |> Comp.ConstantRotation.add_multiple_new(
+        |> Setup.ConstantRotation.add_multiple_new(
             Same(0),
             All(wall_orientations),
             Same(angular_velocity),
         )?
-        |> Comp.Velocity.add_multiple_angular(
+        |> Comp.Motion.add_multiple_angular(
             Same(angular_velocity),
         )?
-        |> Comp.UniformContactResponse.add_multiple(
-            Same(
-                {
-                    restitution_coef: 0.2,
-                    static_friction_coef: 0.7,
-                    dynamic_friction_coef: 0.5,
-                },
-            ),
-        )?
-        |> Comp.PlaneCollidable.add_multiple_new(
+        |> Setup.PlanarCollidable.add_multiple_new(
             Same(Static),
-            Same(Plane.new(y_axis, 0)),
+            Same(Plane.new(y_axis, -0.5 * extent)),
+            Same(Physics.ContactResponseParameters.new(0.2, 0.7, 0.5)),
         )?
         |> Setup.TexturedColor.add_multiple(
             Same(texture_ids.color),
@@ -280,6 +263,8 @@ voxel_box = |voxel_extent, box_size, room_extent|
             0.0,
         ),
     )
-    # |> Comp.Velocity.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(50)))
-    |> Comp.VoxelObjectCollidable.add_new(Static)
-    |> Comp.Static.add
+    # |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(50)))
+    |> Setup.VoxelCollidable.add_new(
+        Static,
+        Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
+    )

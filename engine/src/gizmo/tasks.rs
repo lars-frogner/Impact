@@ -65,6 +65,7 @@ define_task!(
             let current_frame_count = engine.renderer().read().unwrap().current_frame_count();
             let gizmo_manager = engine.gizmo_manager().read().unwrap();
             let simulator = engine.simulator().read().unwrap();
+            let rigid_body_manager = simulator.rigid_body_manager().read().unwrap();
             let collision_world = simulator.collision_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
@@ -75,6 +76,7 @@ define_task!(
 
             gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
+                &rigid_body_manager,
                 &mut instance_feature_manager,
                 &gizmo_manager,
                 &collision_world,

@@ -1,8 +1,8 @@
 //! Management of lights for entities.
 
-use crate::physics::motion::components::ReferenceFrameComp;
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_geometry::ReferenceFrame;
 use impact_light::{
     AmbientEmission, AmbientLightID, LightStorage, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
@@ -89,7 +89,7 @@ fn setup_omnidirectional_light_for_new_entity(
             let mut light_storage = light_storage.write().unwrap();
         },
         components,
-        |frame: &ReferenceFrameComp,
+        |frame: &ReferenceFrame,
          omnidirectional_emission: &OmnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
          -> (OmnidirectionalLightID, SceneEntityFlags) {
@@ -122,7 +122,7 @@ fn setup_omnidirectional_light_for_new_entity(
             let mut light_storage = light_storage.write().unwrap();
         },
         components,
-        |frame: &ReferenceFrameComp,
+        |frame: &ReferenceFrame,
          omnidirectional_emission: &ShadowableOmnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
          -> (ShadowableOmnidirectionalLightID, SceneEntityFlags) {

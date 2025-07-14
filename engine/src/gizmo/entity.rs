@@ -1,13 +1,12 @@
 //! Management of gizmo visibility for entities.
 
-use crate::{
-    gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp},
-    physics::{collision::components::CollidableComp, motion::components::ReferenceFrameComp},
-};
+use crate::gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_geometry::ReferenceFrame;
 use impact_light::{
     OmnidirectionalLightID, ShadowableOmnidirectionalLightID, ShadowableUnidirectionalLightID,
 };
+use impact_physics::collision::CollidableID;
 
 /// Adds the [`GizmosComp`] component to the new entity if it has any of the
 /// relevant components. The component is initialized based on which gizmos are
@@ -37,26 +36,26 @@ pub fn setup_gizmos_for_new_entity(
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [ReferenceFrameComp]
+        [ReferenceFrame]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
         [OmnidirectionalLightID],
-        ![ReferenceFrameComp]
+        ![ReferenceFrame]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
         [ShadowableOmnidirectionalLightID],
-        ![ReferenceFrameComp, OmnidirectionalLightID]
+        ![ReferenceFrame, OmnidirectionalLightID]
     );
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
         [ShadowableUnidirectionalLightID],
         ![
-            ReferenceFrameComp,
+            ReferenceFrame,
             OmnidirectionalLightID,
             ShadowableOmnidirectionalLightID
         ]
@@ -64,9 +63,9 @@ pub fn setup_gizmos_for_new_entity(
     setup!(
         components,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
-        [CollidableComp],
+        [CollidableID],
         ![
-            ReferenceFrameComp,
+            ReferenceFrame,
             OmnidirectionalLightID,
             ShadowableOmnidirectionalLightID,
             ShadowableUnidirectionalLightID

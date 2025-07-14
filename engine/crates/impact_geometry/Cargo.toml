@@ -6,12 +6,14 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
+ecs = ["dep:inventory", "dep:impact_ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
 approx = { workspace = true }
 bytemuck = { workspace = true }
+impact_ecs = { path = "../impact_ecs", optional = true }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }

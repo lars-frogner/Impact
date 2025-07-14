@@ -1,8 +1,8 @@
-# Hash: 184dd8519c579332dd2a5f08fface71b19009187f709758535bfe0b4abb78060
-# Generated: 2025-07-06T18:04:01+00:00
-# Rust type: impact::physics::motion::components::ReferenceFrameComp
+# Hash: ad24fbb2ecd7f645f434377ccaa83183834e6f1d12bbb35a827823109e965480
+# Generated: 2025-07-13T19:49:53+00:00
+# Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     ReferenceFrame,
     new,
@@ -16,22 +16,6 @@ module [
     unoriented_scaled_with_offset_origin,
     scaled_with_offset_origin,
     with_offset_origin,
-    for_rigid_body,
-    for_scaled_rigid_body,
-    for_unoriented_rigid_body,
-    for_scaled_unoriented_rigid_body,
-    for_driven_rotation,
-    for_scaled_driven_rotation,
-    for_driven_rotation_around_offset_origin,
-    for_scaled_driven_rotation_around_offset_origin,
-    for_driven_trajectory,
-    for_scaled_driven_trajectory,
-    for_driven_trajectory_with_offset_origin,
-    for_scaled_driven_trajectory_with_offset_origin,
-    for_driven_trajectory_and_rotation,
-    for_scaled_driven_trajectory_and_rotation,
-    for_driven_trajectory_and_rotation_with_offset_origin,
-    for_scaled_driven_trajectory_and_rotation_with_offset_origin,
     add_new,
     add_multiple_new,
     add_unscaled,
@@ -54,38 +38,6 @@ module [
     add_multiple_scaled_with_offset_origin,
     add_with_offset_origin,
     add_multiple_with_offset_origin,
-    add_for_rigid_body,
-    add_multiple_for_rigid_body,
-    add_for_scaled_rigid_body,
-    add_multiple_for_scaled_rigid_body,
-    add_for_unoriented_rigid_body,
-    add_multiple_for_unoriented_rigid_body,
-    add_for_scaled_unoriented_rigid_body,
-    add_multiple_for_scaled_unoriented_rigid_body,
-    add_for_driven_rotation,
-    add_multiple_for_driven_rotation,
-    add_for_scaled_driven_rotation,
-    add_multiple_for_scaled_driven_rotation,
-    add_for_driven_rotation_around_offset_origin,
-    add_multiple_for_driven_rotation_around_offset_origin,
-    add_for_scaled_driven_rotation_around_offset_origin,
-    add_multiple_for_scaled_driven_rotation_around_offset_origin,
-    add_for_driven_trajectory,
-    add_multiple_for_driven_trajectory,
-    add_for_scaled_driven_trajectory,
-    add_multiple_for_scaled_driven_trajectory,
-    add_for_driven_trajectory_with_offset_origin,
-    add_multiple_for_driven_trajectory_with_offset_origin,
-    add_for_scaled_driven_trajectory_with_offset_origin,
-    add_multiple_for_scaled_driven_trajectory_with_offset_origin,
-    add_for_driven_trajectory_and_rotation,
-    add_multiple_for_driven_trajectory_and_rotation,
-    add_for_scaled_driven_trajectory_and_rotation,
-    add_multiple_for_scaled_driven_trajectory_and_rotation,
-    add_for_driven_trajectory_and_rotation_with_offset_origin,
-    add_multiple_for_driven_trajectory_and_rotation_with_offset_origin,
-    add_for_scaled_driven_trajectory_and_rotation_with_offset_origin,
-    add_multiple_for_scaled_driven_trajectory_and_rotation_with_offset_origin,
     add,
     add_multiple,
     write_bytes,
@@ -99,8 +51,9 @@ import core.Point3
 import core.UnitQuaternion
 import core.Vector3
 
-## [`Component`](impact_ecs::component::Component) for entities that have a
-## reference frame defined by position, orientation and scaling.
+## A reference frame defined an origin position, an orientation and a scale
+## factor, as well as an internal offset for displacing the origin within
+## the reference frame.
 ReferenceFrame : {
     ## The offset, expressed in the entity's reference frame (before scaling),
     ## from the original origin of the entity's reference frame to the point
@@ -116,24 +69,21 @@ ReferenceFrame : {
     scaling : F64,
 }
 
-## Creates a new reference frame component with the given position,
-## orientation and scaling, retaining the original origin of the entity's
-## reference frame.
+## Creates a new reference frame with the given position, orientation and
+## scaling, retaining the original origin of the entity's reference frame.
 new : Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> ReferenceFrame
 new = |position, orientation, scaling|
     { origin_offset: Vector3.zero, position, orientation, scaling }
 
-## Creates a new reference frame component with the given position,
-## orientation and scaling, retaining the original origin of the entity's
-## reference frame.
+## Creates a new reference frame with the given position, orientation and
+## scaling, retaining the original origin of the entity's reference frame.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> Entity.Data
 add_new = |entity_data, position, orientation, scaling|
     add(entity_data, new(position, orientation, scaling))
 
-## Creates a new reference frame component with the given position,
-## orientation and scaling, retaining the original origin of the entity's
-## reference frame.
+## Creates a new reference frame with the given position, orientation and
+## scaling, retaining the original origin of the entity's reference frame.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -147,24 +97,24 @@ add_multiple_new = |entity_data, position, orientation, scaling|
         ))
     )
 
-## Creates a new reference frame component with the given position and
-## orientation, retaining the original origin of the entity's reference
-## frame and no scaling.
+## Creates a new reference frame with the given position and orientation,
+## retaining the original origin of the entity's reference frame and no
+## scaling.
 unscaled : Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
 unscaled = |position, orientation|
     new(position, orientation, 1.0)
 
-## Creates a new reference frame component with the given position and
-## orientation, retaining the original origin of the entity's reference
-## frame and no scaling.
+## Creates a new reference frame with the given position and orientation,
+## retaining the original origin of the entity's reference frame and no
+## scaling.
 ## Adds the component to the given entity's data.
 add_unscaled : Entity.Data, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
 add_unscaled = |entity_data, position, orientation|
     add(entity_data, unscaled(position, orientation))
 
-## Creates a new reference frame component with the given position and
-## orientation, retaining the original origin of the entity's reference
-## frame and no scaling.
+## Creates a new reference frame with the given position and orientation,
+## retaining the original origin of the entity's reference frame and no
+## scaling.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unscaled : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
@@ -178,24 +128,24 @@ add_multiple_unscaled = |entity_data, position, orientation|
         ))
     )
 
-## Creates a new reference frame component with the given position,
-## retaining the original origin of the entity's reference frame and the
-## identity orientation and scaling.
+## Creates a new reference frame with the given position, retaining the
+## original origin of the entity's reference frame and the identity
+## orientation and scaling.
 unoriented : Point3.Point3 Binary64 -> ReferenceFrame
 unoriented = |position|
     unoriented_scaled(position, 1.0)
 
-## Creates a new reference frame component with the given position,
-## retaining the original origin of the entity's reference frame and the
-## identity orientation and scaling.
+## Creates a new reference frame with the given position, retaining the
+## original origin of the entity's reference frame and the identity
+## orientation and scaling.
 ## Adds the component to the given entity's data.
 add_unoriented : Entity.Data, Point3.Point3 Binary64 -> Entity.Data
 add_unoriented = |entity_data, position|
     add(entity_data, unoriented(position))
 
-## Creates a new reference frame component with the given position,
-## retaining the original origin of the entity's reference frame and the
-## identity orientation and scaling.
+## Creates a new reference frame with the given position, retaining the
+## original origin of the entity's reference frame and the identity
+## orientation and scaling.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unoriented : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
@@ -209,24 +159,24 @@ add_multiple_unoriented = |entity_data, position|
         ))
     )
 
-## Creates a new reference frame component with the given position and
-## scaling, retaining the original origin of the entity's reference frame
-## and the identity orientation.
+## Creates a new reference frame with the given position and scaling,
+## retaining the original origin of the entity's reference frame and the
+## identity orientation.
 unoriented_scaled : Point3.Point3 Binary64, F64 -> ReferenceFrame
 unoriented_scaled = |position, scaling|
     new(position, UnitQuaternion.identity, scaling)
 
-## Creates a new reference frame component with the given position and
-## scaling, retaining the original origin of the entity's reference frame
-## and the identity orientation.
+## Creates a new reference frame with the given position and scaling,
+## retaining the original origin of the entity's reference frame and the
+## identity orientation.
 ## Adds the component to the given entity's data.
 add_unoriented_scaled : Entity.Data, Point3.Point3 Binary64, F64 -> Entity.Data
 add_unoriented_scaled = |entity_data, position, scaling|
     add(entity_data, unoriented_scaled(position, scaling))
 
-## Creates a new reference frame component with the given position and
-## scaling, retaining the original origin of the entity's reference frame
-## and the identity orientation.
+## Creates a new reference frame with the given position and scaling,
+## retaining the original origin of the entity's reference frame and the
+## identity orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unoriented_scaled : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -240,24 +190,24 @@ add_multiple_unoriented_scaled = |entity_data, position, scaling|
         ))
     )
 
-## Creates a new reference frame component with the given orientation,
-## retaining the original origin of the entity's reference frame and
-## located at the origin with no scaling.
+## Creates a new reference frame with the given orientation, retaining the
+## original origin of the entity's reference frame and located at the
+## origin with no scaling.
 unlocated : UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
 unlocated = |orientation|
     unlocated_scaled(orientation, 1.0)
 
-## Creates a new reference frame component with the given orientation,
-## retaining the original origin of the entity's reference frame and
-## located at the origin with no scaling.
+## Creates a new reference frame with the given orientation, retaining the
+## original origin of the entity's reference frame and located at the
+## origin with no scaling.
 ## Adds the component to the given entity's data.
 add_unlocated : Entity.Data, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
 add_unlocated = |entity_data, orientation|
     add(entity_data, unlocated(orientation))
 
-## Creates a new reference frame component with the given orientation,
-## retaining the original origin of the entity's reference frame and
-## located at the origin with no scaling.
+## Creates a new reference frame with the given orientation, retaining the
+## original origin of the entity's reference frame and located at the
+## origin with no scaling.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unlocated : Entity.MultiData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
@@ -271,24 +221,24 @@ add_multiple_unlocated = |entity_data, orientation|
         ))
     )
 
-## Creates a new reference frame component with the given orientation and
-## scaling, retaining the original origin of the entity's reference frame
-## and located at the origin.
+## Creates a new reference frame with the given orientation and scaling,
+## retaining the original origin of the entity's reference frame and
+## located at the origin.
 unlocated_scaled : UnitQuaternion.UnitQuaternion Binary64, F64 -> ReferenceFrame
 unlocated_scaled = |orientation, scaling|
     new(Point3.origin, orientation, scaling)
 
-## Creates a new reference frame component with the given orientation and
-## scaling, retaining the original origin of the entity's reference frame
-## and located at the origin.
+## Creates a new reference frame with the given orientation and scaling,
+## retaining the original origin of the entity's reference frame and
+## located at the origin.
 ## Adds the component to the given entity's data.
 add_unlocated_scaled : Entity.Data, UnitQuaternion.UnitQuaternion Binary64, F64 -> Entity.Data
 add_unlocated_scaled = |entity_data, orientation, scaling|
     add(entity_data, unlocated_scaled(orientation, scaling))
 
-## Creates a new reference frame component with the given orientation and
-## scaling, retaining the original origin of the entity's reference frame
-## and located at the origin.
+## Creates a new reference frame with the given orientation and scaling,
+## retaining the original origin of the entity's reference frame and
+## located at the origin.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unlocated_scaled : Entity.MultiData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -302,24 +252,24 @@ add_multiple_unlocated_scaled = |entity_data, orientation, scaling|
         ))
     )
 
-## Creates a new reference frame component with the given scaling,
-## retaining the original origin of the entity's reference frame and
-## located at the origin with the identity orientation.
+## Creates a new reference frame with the given scaling, retaining the
+## original origin of the entity's reference frame and located at the
+## origin with the identity orientation.
 scaled : F64 -> ReferenceFrame
 scaled = |scaling|
     unoriented_scaled(Point3.origin, scaling)
 
-## Creates a new reference frame component with the given scaling,
-## retaining the original origin of the entity's reference frame and
-## located at the origin with the identity orientation.
+## Creates a new reference frame with the given scaling, retaining the
+## original origin of the entity's reference frame and located at the
+## origin with the identity orientation.
 ## Adds the component to the given entity's data.
 add_scaled : Entity.Data, F64 -> Entity.Data
 add_scaled = |entity_data, scaling|
     add(entity_data, scaled(scaling))
 
-## Creates a new reference frame component with the given scaling,
-## retaining the original origin of the entity's reference frame and
-## located at the origin with the identity orientation.
+## Creates a new reference frame with the given scaling, retaining the
+## original origin of the entity's reference frame and located at the
+## origin with the identity orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_scaled : Entity.MultiData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -333,21 +283,21 @@ add_multiple_scaled = |entity_data, scaling|
         ))
     )
 
-## Creates a new reference frame component with the given origin offset and
-## position, and with the identity orientation and scaling.
+## Creates a new reference frame with the given origin offset and position,
+## and with the identity orientation and scaling.
 unoriented_with_offset_origin : Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> ReferenceFrame
 unoriented_with_offset_origin = |origin_offset, position|
     unoriented_scaled_with_offset_origin(origin_offset, position, 1.0)
 
-## Creates a new reference frame component with the given origin offset and
-## position, and with the identity orientation and scaling.
+## Creates a new reference frame with the given origin offset and position,
+## and with the identity orientation and scaling.
 ## Adds the component to the given entity's data.
 add_unoriented_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> Entity.Data
 add_unoriented_with_offset_origin = |entity_data, origin_offset, position|
     add(entity_data, unoriented_with_offset_origin(origin_offset, position))
 
-## Creates a new reference frame component with the given origin offset and
-## position, and with the identity orientation and scaling.
+## Creates a new reference frame with the given origin offset and position,
+## and with the identity orientation and scaling.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unoriented_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
@@ -361,21 +311,21 @@ add_multiple_unoriented_with_offset_origin = |entity_data, origin_offset, positi
         ))
     )
 
-## Creates a new reference frame component with the given origin offset,
-## position and scaling, and with the identity orientation.
+## Creates a new reference frame with the given origin offset, position and
+## scaling, and with the identity orientation.
 unoriented_scaled_with_offset_origin : Vector3.Vector3 Binary64, Point3.Point3 Binary64, F64 -> ReferenceFrame
 unoriented_scaled_with_offset_origin = |origin_offset, position, scaling|
     scaled_with_offset_origin(origin_offset, position, UnitQuaternion.identity, scaling)
 
-## Creates a new reference frame component with the given origin offset,
-## position and scaling, and with the identity orientation.
+## Creates a new reference frame with the given origin offset, position and
+## scaling, and with the identity orientation.
 ## Adds the component to the given entity's data.
 add_unoriented_scaled_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64, F64 -> Entity.Data
 add_unoriented_scaled_with_offset_origin = |entity_data, origin_offset, position, scaling|
     add(entity_data, unoriented_scaled_with_offset_origin(origin_offset, position, scaling))
 
-## Creates a new reference frame component with the given origin offset,
-## position and scaling, and with the identity orientation.
+## Creates a new reference frame with the given origin offset, position and
+## scaling, and with the identity orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_unoriented_scaled_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -389,21 +339,21 @@ add_multiple_unoriented_scaled_with_offset_origin = |entity_data, origin_offset,
         ))
     )
 
-## Creates a new reference frame component with the given origin offset,
-## position orientation, and scaling.
+## Creates a new reference frame with the given origin offset, position
+## orientation, and scaling.
 scaled_with_offset_origin : Vector3.Vector3 Binary64, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> ReferenceFrame
 scaled_with_offset_origin = |origin_offset, position, orientation, scaling|
     { origin_offset, position, orientation, scaling }
 
-## Creates a new reference frame component with the given origin offset,
-## position orientation, and scaling.
+## Creates a new reference frame with the given origin offset, position
+## orientation, and scaling.
 ## Adds the component to the given entity's data.
 add_scaled_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> Entity.Data
 add_scaled_with_offset_origin = |entity_data, origin_offset, position, orientation, scaling|
     add(entity_data, scaled_with_offset_origin(origin_offset, position, orientation, scaling))
 
-## Creates a new reference frame component with the given origin offset,
-## position orientation, and scaling.
+## Creates a new reference frame with the given origin offset, position
+## orientation, and scaling.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_scaled_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -417,21 +367,21 @@ add_multiple_scaled_with_offset_origin = |entity_data, origin_offset, position, 
         ))
     )
 
-## Creates a new reference frame component with the given origin offset,
-## position and orientation and no scaling.
+## Creates a new reference frame with the given origin offset, position and
+## orientation and no scaling.
 with_offset_origin : Vector3.Vector3 Binary64, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
 with_offset_origin = |origin_offset, position, orientation|
     scaled_with_offset_origin(origin_offset, position, orientation, 1.0)
 
-## Creates a new reference frame component with the given origin offset,
-## position and orientation and no scaling.
+## Creates a new reference frame with the given origin offset, position and
+## orientation and no scaling.
 ## Adds the component to the given entity's data.
 add_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
 add_with_offset_origin = |entity_data, origin_offset, position, orientation|
     add(entity_data, with_offset_origin(origin_offset, position, orientation))
 
-## Creates a new reference frame component with the given origin offset,
-## position and orientation and no scaling.
+## Creates a new reference frame with the given origin offset, position and
+## orientation and no scaling.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
@@ -442,524 +392,6 @@ add_multiple_with_offset_origin = |entity_data, origin_offset, position, orienta
             origin_offset, position, orientation,
             Entity.multi_count(entity_data),
             with_offset_origin
-        ))
-    )
-
-## Creates a new reference frame component with the given position and
-## orientation for a rigid body and no scaling. The origin offset will be
-## set to the center of mass.
-for_rigid_body : Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
-for_rigid_body = |position, orientation|
-    for_scaled_rigid_body(position, orientation, 1.0)
-
-## Creates a new reference frame component with the given position and
-## orientation for a rigid body and no scaling. The origin offset will be
-## set to the center of mass.
-## Adds the component to the given entity's data.
-add_for_rigid_body : Entity.Data, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
-add_for_rigid_body = |entity_data, position, orientation|
-    add(entity_data, for_rigid_body(position, orientation))
-
-## Creates a new reference frame component with the given position and
-## orientation for a rigid body and no scaling. The origin offset will be
-## set to the center of mass.
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_rigid_body : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
-add_multiple_for_rigid_body = |entity_data, position, orientation|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            position, orientation,
-            Entity.multi_count(entity_data),
-            for_rigid_body
-        ))
-    )
-
-## Creates a new reference frame component with the given position,
-## orientation and scaling for a rigid body. The origin offset will be set
-## to the center of mass.
-for_scaled_rigid_body : Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> ReferenceFrame
-for_scaled_rigid_body = |position, orientation, scaling|
-    new(position, orientation, scaling)
-
-## Creates a new reference frame component with the given position,
-## orientation and scaling for a rigid body. The origin offset will be set
-## to the center of mass.
-## Adds the component to the given entity's data.
-add_for_scaled_rigid_body : Entity.Data, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> Entity.Data
-add_for_scaled_rigid_body = |entity_data, position, orientation, scaling|
-    add(entity_data, for_scaled_rigid_body(position, orientation, scaling))
-
-## Creates a new reference frame component with the given position,
-## orientation and scaling for a rigid body. The origin offset will be set
-## to the center of mass.
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_rigid_body : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_rigid_body = |entity_data, position, orientation, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map3(
-            position, orientation, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_rigid_body
-        ))
-    )
-
-## Creates a new reference frame component with the given position for a
-## rigid body with the identity orientation and scaling. The origin offset
-## will be set to the center of mass.
-for_unoriented_rigid_body : Point3.Point3 Binary64 -> ReferenceFrame
-for_unoriented_rigid_body = |position|
-    unoriented(position)
-
-## Creates a new reference frame component with the given position for a
-## rigid body with the identity orientation and scaling. The origin offset
-## will be set to the center of mass.
-## Adds the component to the given entity's data.
-add_for_unoriented_rigid_body : Entity.Data, Point3.Point3 Binary64 -> Entity.Data
-add_for_unoriented_rigid_body = |entity_data, position|
-    add(entity_data, for_unoriented_rigid_body(position))
-
-## Creates a new reference frame component with the given position for a
-## rigid body with the identity orientation and scaling. The origin offset
-## will be set to the center of mass.
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_unoriented_rigid_body : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
-add_multiple_for_unoriented_rigid_body = |entity_data, position|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map1(
-            position,
-            Entity.multi_count(entity_data),
-            for_unoriented_rigid_body
-        ))
-    )
-
-## Creates a new reference frame component with the given position and
-## scaling for a rigid body with the identity orientation. The origin
-## offset will be set to the center of mass.
-for_scaled_unoriented_rigid_body : Point3.Point3 Binary64, F64 -> ReferenceFrame
-for_scaled_unoriented_rigid_body = |position, scaling|
-    unoriented_scaled(position, scaling)
-
-## Creates a new reference frame component with the given position and
-## scaling for a rigid body with the identity orientation. The origin
-## offset will be set to the center of mass.
-## Adds the component to the given entity's data.
-add_for_scaled_unoriented_rigid_body : Entity.Data, Point3.Point3 Binary64, F64 -> Entity.Data
-add_for_scaled_unoriented_rigid_body = |entity_data, position, scaling|
-    add(entity_data, for_scaled_unoriented_rigid_body(position, scaling))
-
-## Creates a new reference frame component with the given position and
-## scaling for a rigid body with the identity orientation. The origin
-## offset will be set to the center of mass.
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_unoriented_rigid_body : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_unoriented_rigid_body = |entity_data, position, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            position, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_unoriented_rigid_body
-        ))
-    )
-
-## Creates a new reference frame component with the given position for an
-## entity whose orientation will be evolved analytically (and thus should
-## not be initialised in this component).
-for_driven_rotation : Point3.Point3 Binary64 -> ReferenceFrame
-for_driven_rotation = |position|
-    unoriented(position)
-
-## Creates a new reference frame component with the given position for an
-## entity whose orientation will be evolved analytically (and thus should
-## not be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_driven_rotation : Entity.Data, Point3.Point3 Binary64 -> Entity.Data
-add_for_driven_rotation = |entity_data, position|
-    add(entity_data, for_driven_rotation(position))
-
-## Creates a new reference frame component with the given position for an
-## entity whose orientation will be evolved analytically (and thus should
-## not be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_driven_rotation : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
-add_multiple_for_driven_rotation = |entity_data, position|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map1(
-            position,
-            Entity.multi_count(entity_data),
-            for_driven_rotation
-        ))
-    )
-
-## Creates a new reference frame component with the given position and
-## scaling for an entity whose orientation will be evolved analytically
-## (and thus should not be initialised in this component).
-for_scaled_driven_rotation : Point3.Point3 Binary64, F64 -> ReferenceFrame
-for_scaled_driven_rotation = |position, scaling|
-    unoriented_scaled(position, scaling)
-
-## Creates a new reference frame component with the given position and
-## scaling for an entity whose orientation will be evolved analytically
-## (and thus should not be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_scaled_driven_rotation : Entity.Data, Point3.Point3 Binary64, F64 -> Entity.Data
-add_for_scaled_driven_rotation = |entity_data, position, scaling|
-    add(entity_data, for_scaled_driven_rotation(position, scaling))
-
-## Creates a new reference frame component with the given position and
-## scaling for an entity whose orientation will be evolved analytically
-## (and thus should not be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_driven_rotation : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_driven_rotation = |entity_data, position, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            position, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_driven_rotation
-        ))
-    )
-
-## Creates a new reference frame component with the given origin offset and
-## position for an entity with no scaling whose orientation will be evolved
-## analytically (and thus should not be initialised in this component).
-for_driven_rotation_around_offset_origin : Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> ReferenceFrame
-for_driven_rotation_around_offset_origin = |origin_offset, position|
-    unoriented_with_offset_origin(origin_offset, position)
-
-## Creates a new reference frame component with the given origin offset and
-## position for an entity with no scaling whose orientation will be evolved
-## analytically (and thus should not be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_driven_rotation_around_offset_origin : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> Entity.Data
-add_for_driven_rotation_around_offset_origin = |entity_data, origin_offset, position|
-    add(entity_data, for_driven_rotation_around_offset_origin(origin_offset, position))
-
-## Creates a new reference frame component with the given origin offset and
-## position for an entity with no scaling whose orientation will be evolved
-## analytically (and thus should not be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_driven_rotation_around_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
-add_multiple_for_driven_rotation_around_offset_origin = |entity_data, origin_offset, position|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            origin_offset, position,
-            Entity.multi_count(entity_data),
-            for_driven_rotation_around_offset_origin
-        ))
-    )
-
-## Creates a new reference frame component with the given origin offset,
-## position and scaling for an entity whose orientation will be evolved
-## analytically (and thus should not be initialised in this component).
-for_scaled_driven_rotation_around_offset_origin : Vector3.Vector3 Binary64, Point3.Point3 Binary64, F64 -> ReferenceFrame
-for_scaled_driven_rotation_around_offset_origin = |origin_offset, position, scaling|
-    unoriented_scaled_with_offset_origin(origin_offset, position, scaling)
-
-## Creates a new reference frame component with the given origin offset,
-## position and scaling for an entity whose orientation will be evolved
-## analytically (and thus should not be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_scaled_driven_rotation_around_offset_origin : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64, F64 -> Entity.Data
-add_for_scaled_driven_rotation_around_offset_origin = |entity_data, origin_offset, position, scaling|
-    add(entity_data, for_scaled_driven_rotation_around_offset_origin(origin_offset, position, scaling))
-
-## Creates a new reference frame component with the given origin offset,
-## position and scaling for an entity whose orientation will be evolved
-## analytically (and thus should not be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_driven_rotation_around_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_driven_rotation_around_offset_origin = |entity_data, origin_offset, position, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map3(
-            origin_offset, position, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_driven_rotation_around_offset_origin
-        ))
-    )
-
-## Creates a new reference frame component with the given orientation for
-## an entity with no scaling whose trajectory will be evolved analytically
-## (and whose position should thus not be initialised in this component).
-for_driven_trajectory : UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
-for_driven_trajectory = |orientation|
-    unlocated(orientation)
-
-## Creates a new reference frame component with the given orientation for
-## an entity with no scaling whose trajectory will be evolved analytically
-## (and whose position should thus not be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_driven_trajectory : Entity.Data, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
-add_for_driven_trajectory = |entity_data, orientation|
-    add(entity_data, for_driven_trajectory(orientation))
-
-## Creates a new reference frame component with the given orientation for
-## an entity with no scaling whose trajectory will be evolved analytically
-## (and whose position should thus not be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_driven_trajectory : Entity.MultiData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
-add_multiple_for_driven_trajectory = |entity_data, orientation|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map1(
-            orientation,
-            Entity.multi_count(entity_data),
-            for_driven_trajectory
-        ))
-    )
-
-## Creates a new reference frame component with the given orientation and
-## scaling for an entity whose trajectory will be evolved analytically (and
-## whose position should thus not be initialised in this component).
-for_scaled_driven_trajectory : UnitQuaternion.UnitQuaternion Binary64, F64 -> ReferenceFrame
-for_scaled_driven_trajectory = |orientation, scaling|
-    unlocated_scaled(orientation, scaling)
-
-## Creates a new reference frame component with the given orientation and
-## scaling for an entity whose trajectory will be evolved analytically (and
-## whose position should thus not be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_scaled_driven_trajectory : Entity.Data, UnitQuaternion.UnitQuaternion Binary64, F64 -> Entity.Data
-add_for_scaled_driven_trajectory = |entity_data, orientation, scaling|
-    add(entity_data, for_scaled_driven_trajectory(orientation, scaling))
-
-## Creates a new reference frame component with the given orientation and
-## scaling for an entity whose trajectory will be evolved analytically (and
-## whose position should thus not be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_driven_trajectory : Entity.MultiData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_driven_trajectory = |entity_data, orientation, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            orientation, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_driven_trajectory
-        ))
-    )
-
-## Creates a new reference frame component with the given origin offset and
-## orientation for an entity with no scaling whose trajectory will be
-## evolved analytically (and whose position should thus not be initialised
-## in this component).
-for_driven_trajectory_with_offset_origin : Vector3.Vector3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
-for_driven_trajectory_with_offset_origin = |origin_offset, orientation|
-    for_scaled_driven_trajectory_with_offset_origin(origin_offset, orientation, 1.0)
-
-## Creates a new reference frame component with the given origin offset and
-## orientation for an entity with no scaling whose trajectory will be
-## evolved analytically (and whose position should thus not be initialised
-## in this component).
-## Adds the component to the given entity's data.
-add_for_driven_trajectory_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
-add_for_driven_trajectory_with_offset_origin = |entity_data, origin_offset, orientation|
-    add(entity_data, for_driven_trajectory_with_offset_origin(origin_offset, orientation))
-
-## Creates a new reference frame component with the given origin offset and
-## orientation for an entity with no scaling whose trajectory will be
-## evolved analytically (and whose position should thus not be initialised
-## in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_driven_trajectory_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
-add_multiple_for_driven_trajectory_with_offset_origin = |entity_data, origin_offset, orientation|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            origin_offset, orientation,
-            Entity.multi_count(entity_data),
-            for_driven_trajectory_with_offset_origin
-        ))
-    )
-
-## Creates a new reference frame component with the given origin offset,
-## orientation and scaling for an entity whose trajectory will be evolved
-## analytically (and whose position should thus not be initialised in this
-## component).
-for_scaled_driven_trajectory_with_offset_origin : Vector3.Vector3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> ReferenceFrame
-for_scaled_driven_trajectory_with_offset_origin = |origin_offset, orientation, scaling|
-    scaled_with_offset_origin(origin_offset, Point3.origin, orientation, scaling)
-
-## Creates a new reference frame component with the given origin offset,
-## orientation and scaling for an entity whose trajectory will be evolved
-## analytically (and whose position should thus not be initialised in this
-## component).
-## Adds the component to the given entity's data.
-add_for_scaled_driven_trajectory_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, UnitQuaternion.UnitQuaternion Binary64, F64 -> Entity.Data
-add_for_scaled_driven_trajectory_with_offset_origin = |entity_data, origin_offset, orientation, scaling|
-    add(entity_data, for_scaled_driven_trajectory_with_offset_origin(origin_offset, orientation, scaling))
-
-## Creates a new reference frame component with the given origin offset,
-## orientation and scaling for an entity whose trajectory will be evolved
-## analytically (and whose position should thus not be initialised in this
-## component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_driven_trajectory_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_driven_trajectory_with_offset_origin = |entity_data, origin_offset, orientation, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map3(
-            origin_offset, orientation, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_driven_trajectory_with_offset_origin
-        ))
-    )
-
-## Creates a new reference frame component for an entity with no scaling
-## whose trajectory and orientation will be evolved analytically (and whose
-## position and orientation should thus not be initialised in this
-## component).
-for_driven_trajectory_and_rotation : {} -> ReferenceFrame
-for_driven_trajectory_and_rotation = |{}|
-    {
-        origin_offset: Vector3.zero,
-        position: Point3.origin,
-        orientation: UnitQuaternion.identity,
-        scaling: 1.0,
-    }
-
-## Creates a new reference frame component for an entity with no scaling
-## whose trajectory and orientation will be evolved analytically (and whose
-## position and orientation should thus not be initialised in this
-## component).
-## Adds the component to the given entity's data.
-add_for_driven_trajectory_and_rotation : Entity.Data -> Entity.Data
-add_for_driven_trajectory_and_rotation = |entity_data|
-    add(entity_data, for_driven_trajectory_and_rotation({}))
-
-## Creates a new reference frame component for an entity with no scaling
-## whose trajectory and orientation will be evolved analytically (and whose
-## position and orientation should thus not be initialised in this
-## component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_driven_trajectory_and_rotation : Entity.MultiData -> Entity.MultiData
-add_multiple_for_driven_trajectory_and_rotation = |entity_data|
-    res = add_multiple(
-        entity_data,
-        Same(for_driven_trajectory_and_rotation({}))
-    )
-    when res is
-        Ok(res_data) -> res_data
-        Err(err) -> crash "unexpected error in ReferenceFrame.add_multiple_for_driven_trajectory_and_rotation: ${Inspect.to_str(err)}"
-
-## Creates a new reference frame component for an entity with the given
-## scaling whose trajectory and orientation will be evolved analytically
-## (and whose position and orientation should thus not be initialised in
-## this component).
-for_scaled_driven_trajectory_and_rotation : F64 -> ReferenceFrame
-for_scaled_driven_trajectory_and_rotation = |scaling|
-    scaled(scaling)
-
-## Creates a new reference frame component for an entity with the given
-## scaling whose trajectory and orientation will be evolved analytically
-## (and whose position and orientation should thus not be initialised in
-## this component).
-## Adds the component to the given entity's data.
-add_for_scaled_driven_trajectory_and_rotation : Entity.Data, F64 -> Entity.Data
-add_for_scaled_driven_trajectory_and_rotation = |entity_data, scaling|
-    add(entity_data, for_scaled_driven_trajectory_and_rotation(scaling))
-
-## Creates a new reference frame component for an entity with the given
-## scaling whose trajectory and orientation will be evolved analytically
-## (and whose position and orientation should thus not be initialised in
-## this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_driven_trajectory_and_rotation : Entity.MultiData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_driven_trajectory_and_rotation = |entity_data, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map1(
-            scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_driven_trajectory_and_rotation
-        ))
-    )
-
-## Creates a new reference frame component with the given origin offset for
-## an entity with no scaling whose trajectory and orientation will be
-## evolved analytically (and whose position and orientation should thus not
-## be initialised in this component).
-for_driven_trajectory_and_rotation_with_offset_origin : Vector3.Vector3 Binary64 -> ReferenceFrame
-for_driven_trajectory_and_rotation_with_offset_origin = |origin_offset|
-    for_scaled_driven_trajectory_and_rotation_with_offset_origin(origin_offset, 1.0)
-
-## Creates a new reference frame component with the given origin offset for
-## an entity with no scaling whose trajectory and orientation will be
-## evolved analytically (and whose position and orientation should thus not
-## be initialised in this component).
-## Adds the component to the given entity's data.
-add_for_driven_trajectory_and_rotation_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64 -> Entity.Data
-add_for_driven_trajectory_and_rotation_with_offset_origin = |entity_data, origin_offset|
-    add(entity_data, for_driven_trajectory_and_rotation_with_offset_origin(origin_offset))
-
-## Creates a new reference frame component with the given origin offset for
-## an entity with no scaling whose trajectory and orientation will be
-## evolved analytically (and whose position and orientation should thus not
-## be initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_driven_trajectory_and_rotation_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiData Str
-add_multiple_for_driven_trajectory_and_rotation_with_offset_origin = |entity_data, origin_offset|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map1(
-            origin_offset,
-            Entity.multi_count(entity_data),
-            for_driven_trajectory_and_rotation_with_offset_origin
-        ))
-    )
-
-## Creates a new reference frame component with the given origin offset and
-## scaling for an entity whose trajectory and orientation will be evolved
-## analytically (and whose position and orientation should thus not be
-## initialised in this component).
-for_scaled_driven_trajectory_and_rotation_with_offset_origin : Vector3.Vector3 Binary64, F64 -> ReferenceFrame
-for_scaled_driven_trajectory_and_rotation_with_offset_origin = |origin_offset, scaling|
-    for_scaled_driven_trajectory_with_offset_origin(origin_offset, UnitQuaternion.identity, scaling)
-
-## Creates a new reference frame component with the given origin offset and
-## scaling for an entity whose trajectory and orientation will be evolved
-## analytically (and whose position and orientation should thus not be
-## initialised in this component).
-## Adds the component to the given entity's data.
-add_for_scaled_driven_trajectory_and_rotation_with_offset_origin : Entity.Data, Vector3.Vector3 Binary64, F64 -> Entity.Data
-add_for_scaled_driven_trajectory_and_rotation_with_offset_origin = |entity_data, origin_offset, scaling|
-    add(entity_data, for_scaled_driven_trajectory_and_rotation_with_offset_origin(origin_offset, scaling))
-
-## Creates a new reference frame component with the given origin offset and
-## scaling for an entity whose trajectory and orientation will be evolved
-## analytically (and whose position and orientation should thus not be
-## initialised in this component).
-## Adds multiple values of the component to the data of
-## a set of entities of the same archetype's data.
-add_multiple_for_scaled_driven_trajectory_and_rotation_with_offset_origin : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
-add_multiple_for_scaled_driven_trajectory_and_rotation_with_offset_origin = |entity_data, origin_offset, scaling|
-    add_multiple(
-        entity_data,
-        All(Entity.Arg.broadcasted_map2(
-            origin_offset, scaling,
-            Entity.multi_count(entity_data),
-            for_scaled_driven_trajectory_and_rotation_with_offset_origin
         ))
     )
 
@@ -986,7 +418,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, ReferenceFrame -> List U8
 write_packet = |bytes, val|
-    type_id = 32432739310383407
+    type_id = 13511111226856695413
     size = 88
     alignment = 8
     bytes
@@ -998,7 +430,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List ReferenceFrame -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 32432739310383407
+    type_id = 13511111226856695413
     size = 88
     alignment = 8
     count = List.len(vals)

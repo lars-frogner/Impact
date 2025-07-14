@@ -1,21 +1,13 @@
 //! ECS systems related to voxels.
 
-use crate::{
-    physics::{
-        PhysicsSimulator, fph,
-        inertia::InertialProperties,
-        motion::components::{ReferenceFrameComp, VelocityComp},
-        rigid_body::components::RigidBodyComp,
+use crate::voxel::{
+    StagedVoxelObject, VoxelManager, VoxelObjectManager,
+    chunks::{
+        ChunkedVoxelObject,
+        disconnection::DisconnectedVoxelObject,
+        inertia::{VoxelObjectInertialPropertyManager, VoxelObjectInertialPropertyUpdater},
     },
-    voxel::{
-        StagedVoxelObject, VoxelManager, VoxelObjectManager,
-        chunks::{
-            ChunkedVoxelObject,
-            disconnection::DisconnectedVoxelObject,
-            inertia::{VoxelObjectInertialPropertyManager, VoxelObjectInertialPropertyUpdater},
-        },
-        components::{VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelObjectComp},
-    },
+    components::{VoxelAbsorbingCapsuleComp, VoxelAbsorbingSphereComp, VoxelObjectComp},
 };
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
@@ -23,22 +15,30 @@ use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
+use impact_geometry::ReferenceFrame;
+use impact_physics::{
+    fph,
+    inertia::InertialProperties,
+    quantities::Motion,
+    rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
+};
 use impact_scene::{SceneEntityFlags, SceneGraphParentNodeHandle, graph::SceneGraph};
 use nalgebra::{Similarity3, Vector3};
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
 pub fn apply_absorption(
-    simulator: &PhysicsSimulator,
+    ecs_world: &ECSWorld,
+    rigid_body_manager: &mut RigidBodyManager,
     voxel_manager: &mut VoxelManager,
     scene_graph: &SceneGraph,
-    ecs_world: &ECSWorld,
+    time_step_duration: fph,
 ) {
     query!(ecs_world, |entity_id: EntityID,
                        voxel_object: &VoxelObjectComp,
-                       reference_frame: &mut ReferenceFrameComp,
-                       velocity: &mut VelocityComp,
-                       rigid_body: &mut RigidBodyComp,
+                       reference_frame: &mut ReferenceFrame,
+                       velocity: &mut Motion,
+                       rigid_body_id: &DynamicRigidBodyID,
                        flags: &SceneEntityFlags| {
         if flags.is_disabled() {
             return;
@@ -64,12 +64,10 @@ pub fn apply_absorption(
             voxel_manager.type_registry.mass_densities(),
         );
 
-        let time_step_duration = simulator.time_step_duration();
-
         query!(
             ecs_world,
             |absorbing_sphere: &VoxelAbsorbingSphereComp,
-             sphere_frame: &ReferenceFrameComp,
+             sphere_frame: &ReferenceFrame,
              flags: &SceneEntityFlags| {
                 if flags.is_disabled() {
                     return;
@@ -93,7 +91,7 @@ pub fn apply_absorption(
         query!(
             ecs_world,
             |absorbing_sphere: &VoxelAbsorbingSphereComp,
-             sphere_frame: &ReferenceFrameComp,
+             sphere_frame: &ReferenceFrame,
              parent: &SceneGraphParentNodeHandle,
              flags: &SceneEntityFlags| {
                 if flags.is_disabled() {
@@ -119,7 +117,7 @@ pub fn apply_absorption(
         query!(
             ecs_world,
             |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
-             capsule_frame: &ReferenceFrameComp,
+             capsule_frame: &ReferenceFrame,
              flags: &SceneEntityFlags| {
                 if flags.is_disabled() {
                     return;
@@ -143,7 +141,7 @@ pub fn apply_absorption(
         query!(
             ecs_world,
             |absorbing_capsule: &VoxelAbsorbingCapsuleComp,
-             capsule_frame: &ReferenceFrameComp,
+             capsule_frame: &ReferenceFrame,
              parent: &SceneGraphParentNodeHandle,
              flags: &SceneEntityFlags| {
                 if flags.is_disabled() {
@@ -168,13 +166,14 @@ pub fn apply_absorption(
 
         if object.invalidated_mesh_chunk_indices().len() > 0 {
             handle_voxel_object_after_removing_voxels(
+                rigid_body_manager,
                 voxel_manager,
                 ecs_world,
                 entity_id,
                 voxel_object,
                 reference_frame,
                 velocity,
-                rigid_body,
+                *rigid_body_id,
             );
         }
     });
@@ -249,13 +248,14 @@ fn apply_capsule_absorption(
 }
 
 fn handle_voxel_object_after_removing_voxels(
+    rigid_body_manager: &mut RigidBodyManager,
     voxel_manager: &mut VoxelManager,
     ecs_world: &ECSWorld,
     entity_id: EntityID,
     voxel_object: &VoxelObjectComp,
-    reference_frame: &mut ReferenceFrameComp,
-    velocity: &mut VelocityComp,
-    rigid_body: &mut RigidBodyComp,
+    reference_frame: &mut ReferenceFrame,
+    motion: &mut Motion,
+    rigid_body_id: DynamicRigidBodyID,
 ) {
     let (object, inertial_property_manager) = voxel_manager
         .object_manager
@@ -264,6 +264,10 @@ fn handle_voxel_object_after_removing_voxels(
     let object = object
         .expect("Missing voxel object for entity with VoxelObjectComp")
         .object_mut();
+
+    let rigid_body = rigid_body_manager
+        .get_dynamic_rigid_body_mut(rigid_body_id)
+        .expect("Missing dynamic rigid body for entity with VoxelObjectComp");
 
     let inertial_property_manager = inertial_property_manager
         .expect("Missing inertial property manager for entity with VoxelObjectComp");
@@ -301,7 +305,7 @@ fn handle_voxel_object_after_removing_voxels(
         )
     {
         let original_reference_frame = *reference_frame;
-        let original_velocity = *velocity;
+        let original_motion = *motion;
         let original_rigid_body = *rigid_body;
 
         // The inertial properties of the original object have now changed, and if the
@@ -323,7 +327,7 @@ fn handle_voxel_object_after_removing_voxels(
 
             update_physics_components_after_disconnection(
                 reference_frame,
-                velocity,
+                motion,
                 rigid_body,
                 new_inertial_properties,
                 &local_center_of_mass_displacement,
@@ -332,11 +336,12 @@ fn handle_voxel_object_after_removing_voxels(
 
         // We also need to handle the part that was disconnected
         handle_disconnected_voxel_object(
+            rigid_body_manager,
             &mut voxel_manager.object_manager,
             ecs_world,
             entity_id,
             original_reference_frame,
-            original_velocity,
+            original_motion,
             original_rigid_body,
             disconnected_voxel_object,
             disconnected_object_inertial_property_manager,
@@ -356,17 +361,18 @@ fn handle_voxel_object_after_removing_voxels(
 
 #[allow(clippy::large_types_passed_by_value)]
 fn handle_disconnected_voxel_object(
+    rigid_body_manager: &mut RigidBodyManager,
     voxel_object_manager: &mut VoxelObjectManager,
     ecs_world: &ECSWorld,
     parent_entity_id: EntityID,
-    original_reference_frame: ReferenceFrameComp,
-    original_velocity: VelocityComp,
-    original_rigid_body: RigidBodyComp,
+    original_reference_frame: ReferenceFrame,
+    original_motion: Motion,
+    original_rigid_body: DynamicRigidBody,
     object: DisconnectedVoxelObject,
     mut inertial_property_manager: VoxelObjectInertialPropertyManager,
 ) {
     let mut reference_frame = original_reference_frame;
-    let mut velocity = original_velocity;
+    let mut motion = original_motion;
     let mut rigid_body = original_rigid_body;
 
     // We must compute the center of mass displacement *before* offsetting the
@@ -396,14 +402,16 @@ fn handle_disconnected_voxel_object(
 
     update_physics_components_after_disconnection(
         &mut reference_frame,
-        &mut velocity,
+        &mut motion,
         &mut rigid_body,
         inertial_property_manager.derive_inertial_properties(),
         &local_center_of_mass_displacement,
     );
 
+    let rigid_body_id = rigid_body_manager.add_dynamic_rigid_body(rigid_body);
+
     let mut components =
-        ArchetypeComponentStorage::try_from_view((&reference_frame, &velocity, &rigid_body))
+        ArchetypeComponentStorage::try_from_view((&reference_frame, &motion, &rigid_body_id))
             .unwrap();
 
     add_additional_parent_components_for_disconnected_object(
@@ -438,9 +446,9 @@ fn add_additional_parent_components_for_disconnected_object(
 }
 
 fn update_physics_components_after_disconnection(
-    reference_frame: &mut ReferenceFrameComp,
-    velocity: &mut VelocityComp,
-    rigid_body: &mut RigidBodyComp,
+    reference_frame: &mut ReferenceFrame,
+    motion: &mut Motion,
+    rigid_body: &mut DynamicRigidBody,
     new_inertial_properties: InertialProperties,
     local_center_of_mass_displacement: &Vector3<fph>,
 ) {
@@ -465,8 +473,8 @@ fn update_physics_components_after_disconnection(
         .transform_vector(local_center_of_mass_displacement);
 
     // Compute the linear velocity of the new center of mass compared to the old one
-    let linear_velocity_change = velocity
-        .angular
+    let linear_velocity_change = motion
+        .angular_velocity
         .as_vector()
         .cross(&world_center_of_mass_displacement);
 
@@ -476,29 +484,30 @@ fn update_physics_components_after_disconnection(
     );
 
     // Transform velocity to new center of mass
-    velocity.linear += linear_velocity_change;
+    motion.linear_velocity += linear_velocity_change;
 
-    rigid_body
-        .0
-        .update_inertial_properties(new_inertial_properties);
+    rigid_body.set_inertial_properties(
+        new_inertial_properties.mass(),
+        *new_inertial_properties.inertia_tensor(),
+    );
+
+    // The position of the rigid body (the world space position of its center of
+    // mass) changed when we assigned it a new center of mass
+    rigid_body.set_position(reference_frame.position);
 
     // The momentum of the rigid body must be updated to be consistent with the new
     // mass and linear velocity
-    rigid_body.0.synchronize_momentum(&velocity.linear);
+    rigid_body.synchronize_momentum(&motion.linear_velocity);
 
     // The angular momentum of the rigid body must be updated to be consistent with
     // the new inertia tensor (the angular velocity is the same for the disconnected
     // object as for the original one)
-    rigid_body.0.synchronize_angular_momentum(
-        &reference_frame.orientation,
-        reference_frame.scaling,
-        &velocity.angular,
-    );
+    rigid_body.synchronize_angular_momentum(&motion.angular_velocity);
 }
 
 fn update_physics_components_after_voxel_removal_without_disconnection(
-    reference_frame: &mut ReferenceFrameComp,
-    rigid_body: &mut RigidBodyComp,
+    reference_frame: &mut ReferenceFrame,
+    rigid_body: &mut DynamicRigidBody,
     new_inertial_properties: InertialProperties,
 ) {
     // We don't modify the velocity here, since there was no disconnected object to
@@ -508,7 +517,10 @@ fn update_physics_components_after_voxel_removal_without_disconnection(
         new_inertial_properties.center_of_mass().coords,
     );
 
-    rigid_body
-        .0
-        .update_inertial_properties(new_inertial_properties);
+    rigid_body.set_position(reference_frame.position);
+
+    rigid_body.set_inertial_properties(
+        new_inertial_properties.mass(),
+        *new_inertial_properties.inertia_tensor(),
+    );
 }

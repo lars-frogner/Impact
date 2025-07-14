@@ -1,9 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to orientation
 //! control.
 
-use crate::physics::motion::AngularVelocity;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+use impact_physics::quantities::AngularVelocity;
 use roc_integration::roc;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose

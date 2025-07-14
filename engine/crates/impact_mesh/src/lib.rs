@@ -16,7 +16,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{HashMap, HashSet};
 use impact_geometry::Point;
-use impact_math::{Float, hash64, stringhash64_newtype};
+use impact_math::{Float, StringHash64, hash64, stringhash64_newtype};
 use line_segment::LineSegmentMesh;
 use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
@@ -198,12 +198,24 @@ impl TriangleMeshID {
     }
 }
 
+impl From<TriangleMeshID> for StringHash64 {
+    fn from(id: TriangleMeshID) -> Self {
+        id.0
+    }
+}
+
 #[roc(dependencies = [impact_math::Hash64])]
 impl LineSegmentMeshID {
     #[roc(body = "Hashing.hash_str_64(name)")]
     /// Creates a line segment mesh ID hashed from the given name.
     pub fn from_name(name: &str) -> Self {
         Self(hash64!(name))
+    }
+}
+
+impl From<LineSegmentMeshID> for StringHash64 {
+    fn from(id: LineSegmentMeshID) -> Self {
+        id.0
     }
 }
 

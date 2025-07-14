@@ -12,7 +12,7 @@ import pf.Entity
 import pf.Skybox
 import pf.Light.AmbientEmission
 import pf.Setup.BoxMesh
-import pf.Comp.ConstantRotation
+import pf.Setup.ConstantRotation
 import pf.Setup.CylinderMesh
 import pf.Comp.MotionControl
 import pf.Setup.NormalMap
@@ -32,7 +32,7 @@ import pf.Setup.UniformEmissiveLuminance
 import pf.Setup.UniformMetalness
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Velocity
+import pf.Comp.Motion
 import pf.Mesh.TriangleMeshID as TriangleMeshID
 import pf.Physics.AngularVelocity
 import pf.Rendering.TextureID as TextureID
@@ -85,7 +85,7 @@ player =
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
-    |> Comp.Velocity.add_stationary
+    |> Comp.Motion.add_stationary
     |> Comp.MotionControl.add_new
     |> Comp.OrientationControl.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
@@ -117,8 +117,9 @@ pole =
 abstract_object =
     Entity.new
     |> TriangleMeshID.add_from_name("abstract_object")
-    |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((7.0, 9.7, 5.0), 0.02)
-    |> Comp.ConstantRotation.add_new(
+    |> Comp.ReferenceFrame.add_unoriented_scaled((7.0, 9.7, 5.0), 0.02)
+    |> Comp.Motion.add_stationary
+    |> Setup.ConstantRotation.add_new(
         0,
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, 0),
         Physics.AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(50)),
@@ -131,8 +132,9 @@ abstract_object =
 abstract_pyramid =
     Entity.new
     |> TriangleMeshID.add_from_name("abstract_pyramid")
-    |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((-1.0, 11.0, 9.0), 0.035)
-    |> Comp.ConstantRotation.add_new(
+    |> Comp.ReferenceFrame.add_unoriented_scaled((-1.0, 11.0, 9.0), 0.035)
+    |> Comp.Motion.add_stationary
+    |> Setup.ConstantRotation.add_new(
         0,
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, 0.4),
         Physics.AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(-60)),
@@ -165,8 +167,9 @@ sphere =
 abstract_cube =
     Entity.new
     |> TriangleMeshID.add_from_name("abstract_cube")
-    |> Comp.ReferenceFrame.add_for_scaled_driven_rotation((-9.0, 7.8, 5.0), 0.016)
-    |> Comp.ConstantRotation.add_new(
+    |> Comp.ReferenceFrame.add_unoriented_scaled((-9.0, 7.8, 5.0), 0.016)
+    |> Comp.Motion.add_stationary
+    |> Setup.ConstantRotation.add_new(
         0.0,
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, 0.7),
         Physics.AngularVelocity.new(UnitVector3.x_axis, Radians.from_degrees(30)),

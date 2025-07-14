@@ -1,8 +1,8 @@
 # Hash: fecd3c57e43846884b88609417c75362dd8ad6fb31bd3ed487a6e810fa3e7dda
-# Generated: 2025-07-07T19:02:48+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: impact_scene::setup::SceneGraphGroup
 # Type category: Component
-# Commit: 503a2ec (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     SceneGraphGroup,
     add,

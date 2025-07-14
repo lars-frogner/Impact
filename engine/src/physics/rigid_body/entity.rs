@@ -1,210 +1,180 @@
 //! Management of rigid bodies for entities.
 
-use crate::physics::{
-    fph,
-    inertia::InertialProperties,
-    motion::components::{ReferenceFrameComp, VelocityComp},
-    rigid_body::{
-        RigidBody,
-        components::{RigidBodyComp, UniformRigidBodyComp},
-    },
-};
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_geometry::ReferenceFrame;
 use impact_mesh::{
     MeshRepository, TriangleMeshID,
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
-use impact_scene::SceneEntityFlags;
+use impact_physics::{
+    fph,
+    quantities::Motion,
+    rigid_body::{
+        self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager,
+        setup::DynamicRigidBodySubstance,
+    },
+};
 use std::sync::RwLock;
 
-/// Checks if the entity-to-be with the given components has a component
-/// representing a rigid body, and if so, creates the corresponding rigid body
-/// and adds a [`RigidBodyComp`] to the entity.
+/// Checks if the entity-to-be with the given components has the components
+/// representing a dynamic or kinematic rigid body, and if so, creates the
+/// corresponding rigid body and adds a [`DynamicRigidBodyID`] or
+/// [`KinematicRigidBodyID`] to the entity.
 pub fn setup_rigid_body_for_new_entity(
+    rigid_body_manager: &RwLock<RigidBodyManager>,
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
-    fn execute_setup(
-        mut inertial_properties: InertialProperties,
-        frame: Option<&ReferenceFrameComp>,
-        velocity: Option<&VelocityComp>,
-        flags: Option<&SceneEntityFlags>,
-    ) -> (
-        RigidBodyComp,
-        ReferenceFrameComp,
-        VelocityComp,
-        SceneEntityFlags,
-    ) {
-        let mut frame = frame.cloned().unwrap_or_default();
-
-        // Scale the mass to be consistent with the initial scale factor. If
-        // the scale factor changes later on, we will conserve the mass and
-        // only let the scale change the extent of the body.
-        inertial_properties.multiply_mass(frame.scaling.powi(3));
-
-        let velocity = velocity.cloned().unwrap_or_default();
-
-        // Use center of mass as new origin, since all free rotation is
-        // about the center of mass
-        frame.origin_offset = inertial_properties.center_of_mass().coords;
-
-        let rigid_body = RigidBody::new(
-            inertial_properties,
-            frame.orientation,
-            frame.scaling,
-            &velocity.linear,
-            &velocity.angular,
-        );
-
-        (
-            RigidBodyComp(rigid_body),
-            frame,
-            velocity,
-            flags.copied().unwrap_or_default(),
-        )
-    }
-
     setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+        },
         components,
         |box_mesh: &BoxMesh,
-         uniform_rigid_body: &UniformRigidBodyComp,
-         frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlags>|
-         -> (
-            RigidBodyComp,
-            ReferenceFrameComp,
-            VelocityComp,
-            SceneEntityFlags
-        ) {
-            let inertial_properties = InertialProperties::of_uniform_box(
+         substance: &DynamicRigidBodySubstance,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
+            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_box(
+                &mut rigid_body_manager,
                 fph::from(box_mesh.extent_x),
                 fph::from(box_mesh.extent_y),
                 fph::from(box_mesh.extent_z),
-                uniform_rigid_body.mass_density,
-            );
-            execute_setup(inertial_properties, frame, velocity, flags)
+                substance,
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
         },
-        ![RigidBodyComp]
+        ![DynamicRigidBodyID]
     );
 
     setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+        },
         components,
         |cylinder_mesh: &CylinderMesh,
-         uniform_rigid_body: &UniformRigidBodyComp,
-         frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlags>|
-         -> (
-            RigidBodyComp,
-            ReferenceFrameComp,
-            VelocityComp,
-            SceneEntityFlags
-        ) {
-            let inertial_properties = InertialProperties::of_uniform_cylinder(
+         substance: &DynamicRigidBodySubstance,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
+            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_cylinder(
+                &mut rigid_body_manager,
                 fph::from(cylinder_mesh.length),
                 fph::from(cylinder_mesh.diameter),
-                uniform_rigid_body.mass_density,
-            );
-            execute_setup(inertial_properties, frame, velocity, flags)
+                substance,
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
         },
-        ![RigidBodyComp]
+        ![DynamicRigidBodyID]
     );
 
     setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+        },
         components,
         |cone_mesh: &ConeMesh,
-         uniform_rigid_body: &UniformRigidBodyComp,
-         frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlags>|
-         -> (
-            RigidBodyComp,
-            ReferenceFrameComp,
-            VelocityComp,
-            SceneEntityFlags
-        ) {
-            let inertial_properties = InertialProperties::of_uniform_cone(
+         substance: &DynamicRigidBodySubstance,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
+            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_cone(
+                &mut rigid_body_manager,
                 fph::from(cone_mesh.length),
                 fph::from(cone_mesh.max_diameter),
-                uniform_rigid_body.mass_density,
-            );
-            execute_setup(inertial_properties, frame, velocity, flags)
+                substance,
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
         },
-        ![RigidBodyComp]
+        ![DynamicRigidBodyID]
     );
 
     setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+        },
         components,
-        |uniform_rigid_body: &UniformRigidBodyComp,
-         frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlags>|
-         -> (
-            RigidBodyComp,
-            ReferenceFrameComp,
-            VelocityComp,
-            SceneEntityFlags
-        ) {
-            let inertial_properties =
-                InertialProperties::of_uniform_sphere(uniform_rigid_body.mass_density);
-            execute_setup(inertial_properties, frame, velocity, flags)
+        |substance: &DynamicRigidBodySubstance,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
+            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_sphere(
+                &mut rigid_body_manager,
+                substance,
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
         },
         [SphereMesh],
-        ![RigidBodyComp]
+        ![DynamicRigidBodyID]
     );
 
     setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+        },
         components,
-        |uniform_rigid_body: &UniformRigidBodyComp,
-         frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlags>|
-         -> (
-            RigidBodyComp,
-            ReferenceFrameComp,
-            VelocityComp,
-            SceneEntityFlags
-        ) {
-            let inertial_properties =
-                InertialProperties::of_uniform_hemisphere(uniform_rigid_body.mass_density);
-            execute_setup(inertial_properties, frame, velocity, flags)
+        |substance: &DynamicRigidBodySubstance,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
+            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_hemisphere(
+                &mut rigid_body_manager,
+                substance,
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
         },
         [HemisphereMesh],
-        ![RigidBodyComp]
+        ![DynamicRigidBodyID]
     );
 
     setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mesh_repository = mesh_repository.read().unwrap();
+        },
         components,
         |mesh_id: &TriangleMeshID,
-         uniform_rigid_body: &UniformRigidBodyComp,
-         frame: Option<&ReferenceFrameComp>,
-         velocity: Option<&VelocityComp>,
-         flags: Option<&SceneEntityFlags>|
-         -> Result<(
-            RigidBodyComp,
-            ReferenceFrameComp,
-            VelocityComp,
-            SceneEntityFlags
-        )> {
-            let mesh_repository_readonly = mesh_repository.read().unwrap();
-            let triangle_mesh = mesh_repository_readonly
-                .get_triangle_mesh(*mesh_id)
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Tried to create rigid body for missing mesh (mesh ID {})",
-                        mesh_id
-                    )
-                })?;
-            let inertial_properties = InertialProperties::of_uniform_triangle_mesh(
-                triangle_mesh,
-                uniform_rigid_body.mass_density,
-            );
-            Ok(execute_setup(inertial_properties, frame, velocity, flags))
+         substance: &DynamicRigidBodySubstance,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> Result<(DynamicRigidBodyID, ReferenceFrame, Motion)> {
+            let triangle_mesh = mesh_repository.get_triangle_mesh(*mesh_id).ok_or_else(|| {
+                anyhow!(
+                    "Tried to create rigid body for missing mesh (mesh ID {})",
+                    mesh_id
+                )
+            })?;
+            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_triangle_mesh(
+                &mut rigid_body_manager,
+                triangle_mesh.triangle_vertex_positions(),
+                substance,
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
         },
-        ![RigidBodyComp]
+        ![DynamicRigidBodyID]
     )?;
+
+    setup!(
+        {
+            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+        },
+        components,
+        |frame: Option<&ReferenceFrame>, motion: &Motion| -> KinematicRigidBodyID {
+            rigid_body::setup::setup_kinematic_rigid_body(
+                &mut rigid_body_manager,
+                frame.copied().unwrap_or_default(),
+                *motion,
+            )
+        },
+        ![DynamicRigidBodyID, KinematicRigidBodyID]
+    );
 
     Ok(())
 }

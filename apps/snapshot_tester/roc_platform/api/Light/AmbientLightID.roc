@@ -1,8 +1,8 @@
 # Hash: b8e36e484b3bf5611cb6964f32bcf046ca8b9b6ab2d7dd0f0ecec4b125584463
-# Generated: 2025-07-07T19:02:48+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: impact_light::AmbientLightID
 # Type category: Component
-# Commit: 503a2ec (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     AmbientLightID,
     add,

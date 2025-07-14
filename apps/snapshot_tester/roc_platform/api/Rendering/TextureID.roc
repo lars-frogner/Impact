@@ -1,8 +1,8 @@
 # Hash: 31e717876e794ea4d67e44a75a0a40bb37ede53bb6f1b5bc44cffc12be8befa9
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T20:18:37+00:00
 # Rust type: impact_gpu::texture::TextureID
 # Type category: POD
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     TextureID,
     from_name,

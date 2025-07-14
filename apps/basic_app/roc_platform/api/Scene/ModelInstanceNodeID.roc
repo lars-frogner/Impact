@@ -1,8 +1,8 @@
 # Hash: edda419730672a6cfe46906b94ae4b48018486a767ca5662a2b2a35120748801
-# Generated: 2025-07-06T18:04:01+00:00
+# Generated: 2025-07-13T19:49:53+00:00
 # Rust type: impact_scene::graph::ModelInstanceNodeID
 # Type category: POD
-# Commit: ce2d27b (dirty)
+# Commit: b1b4dfd8 (dirty)
 module [
     ModelInstanceNodeID,
     write_bytes,

@@ -1,18 +1,16 @@
 //! Inertial properties of voxel objects.
 
 use super::chunk_voxels;
-use crate::{
-    physics::{
-        fph,
-        inertia::{InertiaTensor, InertialProperties},
-    },
-    voxel::{
-        Voxel,
-        chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
-    },
+use crate::voxel::{
+    Voxel,
+    chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::Float;
+use impact_physics::{
+    fph,
+    inertia::{InertiaTensor, InertialProperties},
+};
 use nalgebra::{Matrix3, Point3, Vector3, vector};
 use std::ops::Range;
 
