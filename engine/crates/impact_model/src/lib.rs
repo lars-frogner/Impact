@@ -11,7 +11,7 @@ pub use transform::register_model_feature_types;
 use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{
-    AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper,
+    AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap,
 };
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_math::{self, Hash64};
@@ -61,7 +61,7 @@ pub trait InstanceFeature: Pod {
 /// before they are cleared in preparation for the next frame.
 #[derive(Debug, Default)]
 pub struct InstanceFeatureManager<MID> {
-    feature_storages: HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
+    feature_storages: NoHashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
     instance_buffers: HashMap<MID, ModelInstanceBuffer>,
 }
 
@@ -76,7 +76,7 @@ pub struct InstanceFeatureManagerState<MID> {
 #[derive(Debug, Default)]
 pub struct ModelInstanceBuffer {
     feature_buffers: Vec<DynamicInstanceFeatureBuffer>,
-    buffer_index_map: KeyIndexMapper<InstanceFeatureTypeID>,
+    buffer_index_map: NoHashKeyIndexMapper<InstanceFeatureTypeID>,
     instance_count: usize,
 }
 
@@ -157,7 +157,7 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
     /// Creates a new empty instance feature manager.
     pub fn new() -> Self {
         Self {
-            feature_storages: HashMap::default(),
+            feature_storages: NoHashMap::default(),
             instance_buffers: HashMap::default(),
         }
     }
@@ -509,7 +509,7 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
 
 impl ModelInstanceBuffer {
     fn new<'a>(feature_storages: impl IntoIterator<Item = &'a InstanceFeatureStorage>) -> Self {
-        let mut buffer_index_map = KeyIndexMapper::new();
+        let mut buffer_index_map = NoHashKeyIndexMapper::default();
         let mut feature_buffers = Vec::new();
 
         for storage in feature_storages {
@@ -620,7 +620,7 @@ impl ModelInstanceBuffer {
     /// - If any of the feature types are missing a storage.
     fn buffer_instance_features_from_storage(
         &mut self,
-        feature_storages: &HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
+        feature_storages: &NoHashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
         feature_ids: &[InstanceFeatureID],
     ) {
         for &feature_id in feature_ids {
@@ -645,7 +645,7 @@ impl ModelInstanceBuffer {
     /// - If none of the storages are for features of the given type.
     fn buffer_instance_feature_from_storage(
         &mut self,
-        feature_storages: &HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
+        feature_storages: &NoHashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
         feature_id: InstanceFeatureID,
     ) {
         self.get_feature_buffer_mut(feature_id.feature_type_id())
