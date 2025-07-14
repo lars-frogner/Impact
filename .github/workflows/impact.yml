@@ -49,7 +49,7 @@ jobs:
             ${{ matrix.workspace }}
 
       - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
+        with: { toolchain: stable }
 
       - name: Debug build (no default features)
         working-directory: ${{ matrix.workspace }}
@@ -105,7 +105,7 @@ jobs:
             ${{ matrix.workspace }}
 
       - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
+        with: { toolchain: stable }
 
       - uses: taiki-e/install-action@v2
         with:
@@ -139,7 +139,7 @@ jobs:
             ${{ matrix.workspace }}
 
       - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
+        with: { toolchain: stable }
 
       - id: roc
         uses: hasnep/setup-roc@v0.5.0
@@ -180,7 +180,7 @@ jobs:
             ${{ matrix.workspace }}
 
       - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
+        with: { toolchain: stable }
 
       - name: cargo test --all-features
         working-directory: ${{ matrix.workspace }}
@@ -257,8 +257,14 @@ jobs:
         with:
           workspaces: |
             ${{ matrix.workspace }}
-          extra-dirs: |
-            ${{ env.MIRI_SYSROOT }}
+
+      - name: Cache MIRI sysroot
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MIRI_SYSROOT }}
+          key: miri-sysroot-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            miri-sysroot-${{ runner.os }}-
 
       - uses: dtolnay/rust-toolchain@v1
         with:
@@ -309,7 +315,7 @@ jobs:
           key: ${{ runner.os }}-${{ env.WORKSPACE }}-assets-${{ hashFiles('engine/crates/impact_rendering/src/brdf.rs') }}
 
       - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
+        with: { toolchain: stable }
 
       - id: roc
         uses: hasnep/setup-roc@v0.5.0
@@ -454,7 +460,7 @@ jobs:
             ${{ matrix.workspace }}
 
       - uses: dtolnay/rust-toolchain@v1
-        with: { toolchain: stable, profile: minimal, override: true }
+        with: { toolchain: stable }
 
       - name: cargo doc
         working-directory: ${{ matrix.workspace }}
