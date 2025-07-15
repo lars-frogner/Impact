@@ -130,12 +130,11 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense sphere with
-    /// diameter 1.0, centered at the origin.
+    /// the given diameter, centered at the origin.
     ///
-    /// The sphere corresponds to the one created by calling
-    /// `impact_mesh::TriangleMesh::create_sphere`.
-    pub fn of_uniform_sphere(mass_density: fph) -> Self {
-        let radius = 0.5;
+    /// With `radius = 0.5`, the sphere corresponds to the one created by
+    /// calling `impact_mesh::TriangleMesh::create_sphere`.
+    pub fn of_uniform_sphere(radius: fph, mass_density: fph) -> Self {
         let mass = compute_sphere_volume(radius) * mass_density;
 
         let center_of_mass = Position::origin();
@@ -150,13 +149,13 @@ impl InertialProperties {
         Self::new(mass, center_of_mass, inertia_tensor)
     }
 
-    /// Computes the inertial properties of the uniform hemisphere with diameter
-    /// 1.0, with the disk lying in the xz-plane and centered at the origin.
+    /// Computes the inertial properties of the uniform hemisphere with the
+    /// given radius, with the disk lying in the xz-plane and centered at the
+    /// origin.
     ///
-    /// The hemisphere corresponds to the one created by calling
-    /// `impact_mesh::TriangleMesh::create_hemisphere`.
-    pub fn of_uniform_hemisphere(mass_density: fph) -> Self {
-        let radius = 0.5;
+    /// With `radius = 0.5`, the hemisphere corresponds to the one created by
+    /// calling `impact_mesh::TriangleMesh::create_hemisphere`.
+    pub fn of_uniform_hemisphere(radius: fph, mass_density: fph) -> Self {
         let mass = compute_hemisphere_volume(radius) * mass_density;
 
         // The center of mass is (3/8) of the way up from the center of the disk
@@ -206,6 +205,21 @@ impl InertialProperties {
             .with_multiplied_mass(mass_scaling)
             .with_multiplied_extent(transform.scaling())
             .rotated(&transform.isometry.rotation);
+    }
+
+    /// Applies the given distance scaling factor to the inertial properties of
+    /// the body.
+    pub fn scale(&mut self, scale: fph) {
+        let mass_scaling = scale.powi(3);
+
+        self.mass *= mass_scaling;
+
+        self.center_of_mass = self.center_of_mass.coords.scale(scale).into();
+
+        self.inertia_tensor = self
+            .inertia_tensor
+            .with_multiplied_mass(mass_scaling)
+            .with_multiplied_extent(scale);
     }
 
     /// Modifies the inertial properties according to a change in mass by the
@@ -901,7 +915,7 @@ mod tests {
             transform in similarity_transform_strategy(1e4, 1e-4..1e4),
         ) {
             let mut sphere_mesh = TriangleMesh::create_sphere(20);
-            let mut sphere_properties = InertialProperties::of_uniform_sphere(mass_density);
+            let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
             sphere_mesh.transform(&transform);
             sphere_properties.transform(&transform);
@@ -977,7 +991,7 @@ mod tests {
             transform in similarity_transform_strategy(1e4, 1e-4..1e4),
         ) {
             let mut hemisphere_mesh = TriangleMesh::create_hemisphere(20);
-            let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(mass_density);
+            let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
 
             hemisphere_mesh.transform(&transform);
             hemisphere_properties.transform(&transform);
@@ -1002,7 +1016,7 @@ mod tests {
             transform in similarity_transform_strategy(1e4, 1e-4..1e4),
         ) {
             let mut sphere_mesh = TriangleMesh::create_sphere(30);
-            let mut sphere_properties = InertialProperties::of_uniform_sphere(mass_density);
+            let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
             sphere_mesh.transform(&transform);
             sphere_properties.transform(&transform);
@@ -1028,7 +1042,7 @@ mod tests {
             transform in similarity_transform_strategy(1e4, 1e-4..1e4),
         ) {
             let mut hemisphere_mesh = TriangleMesh::create_hemisphere(15);
-            let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(mass_density);
+            let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
 
             hemisphere_mesh.transform(&transform);
             hemisphere_properties.transform(&transform);

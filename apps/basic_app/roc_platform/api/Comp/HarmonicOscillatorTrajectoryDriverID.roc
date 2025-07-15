@@ -1,8 +1,8 @@
 # Hash: 6149d9feb83c72f2fb5ac7deec031ed7dfea9b5bb046c5c2f6f6d582c3414f23
-# Generated: 2025-07-13T19:49:53+00:00
+# Generated: 2025-07-15T10:43:03+00:00
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectoryDriverID
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     HarmonicOscillatorTrajectoryDriverID,
     add,

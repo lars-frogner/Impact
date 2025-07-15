@@ -48,7 +48,7 @@ create_entities! = |position|
 
     cone_with_drag =
         cone_base
-        |> Comp.ReferenceFrame.add_unscaled(
+        |> Comp.ReferenceFrame.add_new(
             position,
             UnitQuaternion.from_axis_angle(UnitVector3.z_axis, 3.0),
         )
@@ -57,7 +57,7 @@ create_entities! = |position|
 
     cone_without_drag =
         cone_base
-        |> Comp.ReferenceFrame.add_unscaled(
+        |> Comp.ReferenceFrame.add_new(
             Point3.displace(position, (-5, 0, 0)),
             UnitQuaternion.from_axis_angle(UnitVector3.z_axis, 3.0),
         )

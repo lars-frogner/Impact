@@ -1,8 +1,8 @@
 # Hash: eda6a40b2d4dcfdcb99d83431fac9fc45315547a44f13f0572331f9d288bac3b
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact::voxel::components::VoxelSphereComp
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     VoxelSphere,
     new,

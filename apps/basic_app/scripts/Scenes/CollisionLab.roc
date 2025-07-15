@@ -24,6 +24,7 @@ import pf.Setup.PlanarTextureProjection
 import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
+import pf.Comp.ModelTransform
 import pf.Comp.SameVoxelType
 import pf.Setup.SceneGraphGroup
 import pf.Light.ShadowableUnidirectionalEmission
@@ -60,19 +61,19 @@ setup! = |_|
 
     sphere_radius = 0.5
     n_y = 4
-    room_extent = 8.0
+    room_extent = 16.0
     n_spheres_y = 2 * n_y + 1
 
     create_spheres!(
         sphere_radius,
-        (3, n_y, 3),
-        (0, n_spheres_y * sphere_radius - room_extent + 2, 0),
+        (4, n_y, 4),
+        (0, (n_spheres_y - 1) * sphere_radius, 0),
         create_texture_ids("plastic"),
     )?
 
     create_room!(
         room_extent,
-        0 * 20,
+        20,
         create_texture_ids("concrete"),
     )?
 
@@ -86,8 +87,8 @@ skybox = Skybox.new(TextureID.from_name("space_skybox"), 1e5)
 
 player =
     Entity.new
-    |> Comp.ReferenceFrame.add_unscaled(
-        (0, 0, -5),
+    |> Comp.ReferenceFrame.add_new(
+        (0, 0, -16),
         UnitQuaternion.from_axis_angle(y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
@@ -122,18 +123,18 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
     ys = ListUtil.linspace(center.1 - half_extent_y, center.1 + half_extent_y, 2 * ny + 1)
     zs = ListUtil.linspace(center.2 - half_extent_z, center.2 + half_extent_z, 2 * nz + 1)
 
-    scaled_positions =
-        ListUtil.cartprod3(xs, ys, zs)
-        |> List.map(|(x, y, z)| (x * radius, y * radius, z * radius))
+    positions = ListUtil.cartprod3(xs, ys, zs)
 
     _ =
-        Entity.new_multi(List.len(scaled_positions))
+        Entity.new_multi(List.len(positions))
         |> Setup.SphereMesh.add_multiple_new(
             Same(100),
         )?
-        |> Comp.ReferenceFrame.add_multiple_unoriented_scaled(
-            All(scaled_positions),
-            Same(radius),
+        |> Comp.ModelTransform.add_multiple_with_scale(
+            Same(Num.to_f32(2 * radius)),
+        )?
+        |> Comp.ReferenceFrame.add_multiple_unoriented(
+            All(positions),
         )?
         |> Comp.Motion.add_multiple_stationary
         |> Setup.DynamicRigidBodySubstance.add_multiple(
@@ -141,7 +142,7 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
         )?
         |> Setup.SphericalCollidable.add_multiple_new(
             Same(Dynamic),
-            Same(Sphere.new(Point3.origin, radius * radius)),
+            Same(Sphere.new(Point3.origin, radius)),
             Same(Physics.ContactResponseParameters.new(0.7, 0.5, 0.3)),
         )?
         |> Setup.ConstantAcceleration.add_multiple_earth
@@ -168,6 +169,11 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
     Ok({})
 
 create_room! = |extent, angular_speed, texture_ids|
+    offset = 0.5
+
+    half_extent = extent / 2
+    plane_y = (-offset) * extent
+
     angular_velocity =
         AngularVelocity.new(z_axis, Radians.from_degrees(angular_speed))
 
@@ -185,23 +191,25 @@ create_room! = |extent, angular_speed, texture_ids|
     wall_ids =
         Entity.new_multi(List.len(wall_orientations))
         |> Setup.RectangleMesh.add_multiple_unit_square
-        |> Comp.ReferenceFrame.add_multiple_scaled_with_offset_origin(
-            Same((0, 0.5, 0)),
+        |> Comp.ModelTransform.add_multiple_with_offset_and_scale(
+            Same((0, offset, 0)),
+            Same(Num.to_f32(extent)),
+        )?
+        |> Comp.ReferenceFrame.add_multiple_new(
             Same(Point3.origin),
             All(wall_orientations),
-            Same(extent),
+        )?
+        |> Comp.Motion.add_multiple_angular(
+            Same(angular_velocity),
         )?
         |> Setup.ConstantRotation.add_multiple_new(
             Same(0),
             All(wall_orientations),
             Same(angular_velocity),
         )?
-        |> Comp.Motion.add_multiple_angular(
-            Same(angular_velocity),
-        )?
         |> Setup.PlanarCollidable.add_multiple_new(
             Same(Static),
-            Same(Plane.new(y_axis, -0.5 * extent)),
+            Same(Plane.new(y_axis, plane_y)),
             Same(Physics.ContactResponseParameters.new(0.2, 0.7, 0.5)),
         )?
         |> Setup.TexturedColor.add_multiple(
@@ -230,8 +238,17 @@ create_room! = |extent, angular_speed, texture_ids|
         |> List.join
 
     light_positions =
-        ListUtil.cartprod2([-0.4, 0.4], [-0.4, 0.4])
-        |> List.map(|(x, z)| (x, 0.1, z))
+        ListUtil.cartprod2(
+            [
+                (-half_extent) + 0.1,
+                half_extent - 0.1,
+            ],
+            [
+                (-half_extent) + 0.1,
+                half_extent - 0.1,
+            ],
+        )
+        |> List.map(|(x, z)| (x, plane_y + 0.1, z))
         |> List.map(|coords| List.repeat(coords, List.len(wall_orientations)))
         |> List.join
 
@@ -240,12 +257,14 @@ create_room! = |extent, angular_speed, texture_ids|
         |> Setup.Parent.add_multiple_new(
             All(wall_ids_for_lights),
         )?
-        |> Comp.ReferenceFrame.add_multiple_unoriented_scaled(
+        |> Comp.ModelTransform.add_multiple_with_scale(
+            Same(Num.to_f32(0.2 / extent)),
+        )?
+        |> Comp.ReferenceFrame.add_multiple_unoriented(
             All(light_positions),
-            Same(0.2 / extent),
         )?
         |> Light.OmnidirectionalEmission.add_multiple_new(
-            Same(Vector3.same(1e7)),
+            Same(Vector3.same(5e7)),
             Same(0.7),
         )?
         |> Entity.create_multiple!?

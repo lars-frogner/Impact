@@ -22,6 +22,7 @@ import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
+import pf.Comp.ModelTransform
 import pf.Light.ShadowableOmnidirectionalEmission
 import pf.Light.ShadowableUnidirectionalEmission
 import pf.Setup.SphereMesh
@@ -81,7 +82,7 @@ skybox = Skybox.new(TextureID.from_name("ocean_skybox"), 1e5)
 
 player =
     Entity.new
-    |> Comp.ReferenceFrame.add_unscaled(
+    |> Comp.ReferenceFrame.add_new(
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
@@ -93,10 +94,10 @@ player =
 dragon =
     Entity.new
     |> TriangleMeshID.add_from_name("dragon")
+    |> Comp.ModelTransform.add_with_scale(0.06)
     |> Comp.ReferenceFrame.add_new(
         (0.0, 3.5, 11.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
-        0.06,
     )
     |> Setup.UniformColor.add((0.1, 0.2, 0.6))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
@@ -117,7 +118,8 @@ pole =
 abstract_object =
     Entity.new
     |> TriangleMeshID.add_from_name("abstract_object")
-    |> Comp.ReferenceFrame.add_unoriented_scaled((7.0, 9.7, 5.0), 0.02)
+    |> Comp.ModelTransform.add_with_scale(0.02)
+    |> Comp.ReferenceFrame.add_unoriented((7.0, 9.7, 5.0))
     |> Comp.Motion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0,
@@ -132,7 +134,8 @@ abstract_object =
 abstract_pyramid =
     Entity.new
     |> TriangleMeshID.add_from_name("abstract_pyramid")
-    |> Comp.ReferenceFrame.add_unoriented_scaled((-1.0, 11.0, 9.0), 0.035)
+    |> Comp.ModelTransform.add_with_scale(0.035)
+    |> Comp.ReferenceFrame.add_unoriented((-1.0, 11.0, 9.0))
     |> Comp.Motion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0,
@@ -145,7 +148,8 @@ abstract_pyramid =
 box =
     Entity.new
     |> Setup.BoxMesh.add_unit_cube
-    |> Comp.ReferenceFrame.add_unoriented_scaled((-9.0, 1.0, 5.0), 2.0)
+    |> Comp.ModelTransform.add_with_scale(2.0)
+    |> Comp.ReferenceFrame.add_unoriented((-9.0, 1.0, 5.0))
     |> Setup.UniformColor.add((0.1, 0.7, 0.3))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
         Setup.UniformSpecularReflectance.plastic,
@@ -156,7 +160,8 @@ box =
 sphere =
     Entity.new
     |> Setup.SphereMesh.add_new(100)
-    |> Comp.ReferenceFrame.add_unoriented_scaled((-9.0, 4.0, 5.0), 4.0)
+    |> Comp.ModelTransform.add_with_scale(4.0)
+    |> Comp.ReferenceFrame.add_unoriented((-9.0, 4.0, 5.0))
     |> Setup.UniformColor.add((0.3, 0.2, 0.7))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
         Setup.UniformSpecularReflectance.stone,
@@ -167,7 +172,8 @@ sphere =
 abstract_cube =
     Entity.new
     |> TriangleMeshID.add_from_name("abstract_cube")
-    |> Comp.ReferenceFrame.add_unoriented_scaled((-9.0, 7.8, 5.0), 0.016)
+    |> Comp.ModelTransform.add_with_scale(0.016)
+    |> Comp.ReferenceFrame.add_unoriented((-9.0, 7.8, 5.0))
     |> Comp.Motion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0.0,
@@ -183,7 +189,8 @@ floor =
     Entity.new
     |> Setup.RectangleMesh.add_unit_square
     |> Setup.PlanarTextureProjection.add_for_rectangle(Setup.RectangleMesh.unit_square, 2, 2)
-    |> Comp.ReferenceFrame.add_unoriented_scaled((0, 0, 0), 50)
+    |> Comp.ModelTransform.add_with_scale(50)
+    |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
     |> Setup.TexturedColor.add(TextureID.from_name("wood_floor_color_texture"))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
         Setup.UniformSpecularReflectance.living_tissue,
@@ -203,34 +210,35 @@ wall_base =
 
 upper_x_wall =
     wall_base
+    |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_new(
         (25, 5, 0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, Num.pi / 2)
         |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.z_axis, Num.pi / 2)),
-        50,
     )
 
 lower_x_wall =
     wall_base
+    |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_new(
         (-25, 5, 0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, Num.pi / 2)
         |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.z_axis, (-Num.pi) / 2)),
-        50,
     )
 
 upper_z_wall =
     wall_base
+    |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_new(
         (0, 5, 25),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
-        50,
     )
 
 bulb_light =
     Entity.new
     |> Setup.SphereMesh.add_new(25)
-    |> Comp.ReferenceFrame.add_unoriented_scaled((0.0, 17.0, 2.0), 0.7)
+    |> Comp.ModelTransform.add_with_scale(0.7)
+    |> Comp.ReferenceFrame.add_unoriented((0.0, 17.0, 2.0))
     |> Setup.UniformColor.add((1.0, 1.0, 1.0))
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Light.ShadowableOmnidirectionalEmission.add_new(

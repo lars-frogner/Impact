@@ -10,7 +10,7 @@ use impact_light::{
     UnidirectionalLightID, setup,
 };
 use impact_scene::{SceneEntityFlags, camera::SceneCamera};
-use nalgebra::Similarity3;
+use nalgebra::Isometry3;
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the right
@@ -82,7 +82,7 @@ fn setup_omnidirectional_light_for_new_entity(
                 .read()
                 .unwrap()
                 .as_ref()
-                .map_or_else(Similarity3::identity, |scene_camera| {
+                .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
@@ -115,7 +115,7 @@ fn setup_omnidirectional_light_for_new_entity(
                 .read()
                 .unwrap()
                 .as_ref()
-                .map_or_else(Similarity3::identity, |scene_camera| {
+                .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
@@ -161,7 +161,7 @@ fn setup_unidirectional_light_for_new_entity(
                 .read()
                 .unwrap()
                 .as_ref()
-                .map_or_else(Similarity3::identity, |scene_camera| {
+                .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
@@ -192,7 +192,7 @@ fn setup_unidirectional_light_for_new_entity(
                 .read()
                 .unwrap()
                 .as_ref()
-                .map_or_else(Similarity3::identity, |scene_camera| {
+                .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 

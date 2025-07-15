@@ -26,7 +26,7 @@ use impact_ecs::{
     setup,
     world::EntityEntry,
 };
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_material::MaterialHandle;
 use impact_math::hash64;
 use impact_mesh::TriangleMeshID;
@@ -67,11 +67,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_box: &VoxelBoxComp,
          voxel_type: &SameVoxelTypeComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator = BoxSDFGenerator::new(voxel_box.extents_in_voxels());
             let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
 
@@ -89,12 +96,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -105,6 +114,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -120,11 +130,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_sphere: &VoxelSphereComp,
          voxel_type: &SameVoxelTypeComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator = SphereSDFGenerator::new(voxel_sphere.radius_in_voxels());
             let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
 
@@ -142,12 +159,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -158,6 +177,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -173,11 +193,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_sphere_union: &VoxelSphereUnionComp,
          voxel_type: &SameVoxelTypeComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator_1 = SphereSDFGenerator::new(voxel_sphere_union.radius_1_in_voxels());
             let sdf_generator_2 = SphereSDFGenerator::new(voxel_sphere_union.radius_2_in_voxels());
             let sdf_generator = SDFUnion::new(
@@ -202,12 +229,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -218,6 +247,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -233,11 +263,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePatternComp,
          voxel_type: &SameVoxelTypeComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator = GradientNoiseSDFGenerator::new(
                 voxel_noise_pattern.extents_in_voxels(),
                 voxel_noise_pattern.noise_frequency,
@@ -262,12 +299,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -278,6 +317,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -293,11 +333,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_box: &VoxelBoxComp,
          voxel_types: &GradientNoiseVoxelTypesComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator = BoxSDFGenerator::new(voxel_box.extents_in_voxels());
             let voxel_type_generator = GradientNoiseVoxelTypeGenerator::from_component(
                 &voxel_manager.type_registry,
@@ -318,12 +365,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -334,6 +383,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -349,11 +399,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_sphere: &VoxelSphereComp,
          voxel_types: &GradientNoiseVoxelTypesComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator = SphereSDFGenerator::new(voxel_sphere.radius_in_voxels());
             let voxel_type_generator = GradientNoiseVoxelTypeGenerator::from_component(
                 &voxel_manager.type_registry,
@@ -374,12 +431,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -390,6 +449,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -405,11 +465,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_sphere_union: &VoxelSphereUnionComp,
          voxel_types: &GradientNoiseVoxelTypesComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator_1 = SphereSDFGenerator::new(voxel_sphere_union.radius_1_in_voxels());
             let sdf_generator_2 = SphereSDFGenerator::new(voxel_sphere_union.radius_2_in_voxels());
             let sdf_generator = SDFUnion::new(
@@ -437,12 +504,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -453,6 +522,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -468,11 +538,18 @@ pub fn setup_voxel_object_for_new_entity(
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePatternComp,
          voxel_types: &GradientNoiseVoxelTypesComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereModificationComp>,
          multifractal_noise_modification: Option<&MultifractalNoiseModificationComp>|
-         -> Result<(VoxelObjectComp, DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(
+            VoxelObjectComp,
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion
+        )> {
             let sdf_generator = GradientNoiseSDFGenerator::new(
                 voxel_noise_pattern.extents_in_voxels(),
                 voxel_noise_pattern.noise_frequency,
@@ -500,12 +577,14 @@ pub fn setup_voxel_object_for_new_entity(
                 voxel_manager.type_registry.mass_densities(),
             );
 
-            let (rigid_body, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-                &mut rigid_body_manager,
-                inertial_property_manager.derive_inertial_properties(),
-                frame,
-                motion,
-            )?;
+            let (rigid_body, model_transform, frame, velocity) =
+                setup_rigid_body_for_new_voxel_object(
+                    &mut rigid_body_manager,
+                    inertial_property_manager.derive_inertial_properties(),
+                    model_transform,
+                    frame,
+                    motion,
+                )?;
 
             let voxel_object_id = mesh_and_store_voxel_object(
                 &mut voxel_manager.object_manager,
@@ -516,6 +595,7 @@ pub fn setup_voxel_object_for_new_entity(
             Ok((
                 VoxelObjectComp { voxel_object_id },
                 rigid_body,
+                model_transform,
                 frame,
                 velocity,
             ))
@@ -599,23 +679,30 @@ fn generate_voxel_object(
 fn setup_rigid_body_for_new_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
     inertial_properties: InertialProperties,
+    model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
-) -> Result<(DynamicRigidBodyID, ReferenceFrame, Motion)> {
-    let frame = frame.cloned().unwrap_or_default();
+) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+    let mut model_transform = model_transform.copied().unwrap_or_default();
+    let frame = frame.copied().unwrap_or_default();
+    let motion = motion.copied().unwrap_or_default();
 
-    if frame.scaling != 1.0 {
+    if model_transform.scale != 1.0 {
         bail!("Scaling is not supported for voxel objects");
     }
 
-    let motion = motion.cloned().unwrap_or_default();
+    // Offset the voxel object model to put the center of mass at the origin of
+    // this entity's space
+    model_transform.set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
 
-    Ok(rigid_body::setup::setup_dynamic_rigid_body(
+    let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
         rigid_body_manager,
         inertial_properties,
         frame,
         motion,
-    ))
+    );
+
+    Ok((rigid_body_id, model_transform, frame, motion))
 }
 
 fn mesh_and_store_voxel_object(
@@ -647,10 +734,17 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
         },
         components,
         |voxel_object: &VoxelObjectComp,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          parent: Option<&SceneGraphParentNodeHandle>,
          flags: Option<&SceneEntityFlags>|
-         -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
+         -> Result<(
+            SceneGraphModelInstanceNodeHandle,
+            ModelTransform,
+            SceneEntityFlags
+        )> {
+            let model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
             let flags = flags.copied().unwrap_or_default();
 
             let voxel_object_id = voxel_object.voxel_object_id;
@@ -672,10 +766,8 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                 ],
             );
 
-            let model_to_parent_transform = frame
-                .cloned()
-                .unwrap_or_default()
-                .create_transform_to_parent_space();
+            let model_to_parent_transform = frame.create_transform_to_parent_space()
+                * model_transform.crate_transform_to_entity_space();
 
             // Add entries for the model-to-camera and model-to-light transforms
             // for the scene graph to access and modify using the returned IDs
@@ -714,6 +806,7 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
                     vec![model_light_transform_feature_id, voxel_object_id_feature_id],
                     flags.into(),
                 )),
+                model_transform,
                 flags,
             ))
         },

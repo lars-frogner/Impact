@@ -2,13 +2,14 @@
 
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_mesh::{
     MeshRepository, TriangleMeshID,
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_physics::{
     fph,
+    inertia::InertialProperties,
     quantities::Motion,
     rigid_body::{
         self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager,
@@ -31,20 +32,36 @@ pub fn setup_rigid_body_for_new_entity(
             let mut rigid_body_manager = rigid_body_manager.write().unwrap();
         },
         components,
-        |box_mesh: &BoxMesh,
+        |mesh: &BoxMesh,
          substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
-            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_box(
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let inertial_properties = InertialProperties::of_uniform_box(
+                fph::from(mesh.extent_x * model_transform.scale),
+                fph::from(mesh.extent_y * model_transform.scale),
+                fph::from(mesh.extent_z * model_transform.scale),
+                substance.mass_density,
+            );
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
-                fph::from(box_mesh.extent_x),
-                fph::from(box_mesh.extent_y),
-                fph::from(box_mesh.extent_z),
-                substance,
-                frame.copied().unwrap_or_default(),
-                motion.copied().unwrap_or_default(),
-            )
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
         },
         ![DynamicRigidBodyID]
     );
@@ -54,19 +71,35 @@ pub fn setup_rigid_body_for_new_entity(
             let mut rigid_body_manager = rigid_body_manager.write().unwrap();
         },
         components,
-        |cylinder_mesh: &CylinderMesh,
+        |mesh: &CylinderMesh,
          substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
-            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_cylinder(
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let inertial_properties = InertialProperties::of_uniform_cylinder(
+                fph::from(mesh.length * model_transform.scale),
+                fph::from(mesh.diameter * model_transform.scale),
+                substance.mass_density,
+            );
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
-                fph::from(cylinder_mesh.length),
-                fph::from(cylinder_mesh.diameter),
-                substance,
-                frame.copied().unwrap_or_default(),
-                motion.copied().unwrap_or_default(),
-            )
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
         },
         ![DynamicRigidBodyID]
     );
@@ -76,19 +109,35 @@ pub fn setup_rigid_body_for_new_entity(
             let mut rigid_body_manager = rigid_body_manager.write().unwrap();
         },
         components,
-        |cone_mesh: &ConeMesh,
+        |mesh: &ConeMesh,
          substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
-            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_cone(
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let inertial_properties = InertialProperties::of_uniform_cone(
+                fph::from(mesh.length * model_transform.scale),
+                fph::from(mesh.max_diameter * model_transform.scale),
+                substance.mass_density,
+            );
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
-                fph::from(cone_mesh.length),
-                fph::from(cone_mesh.max_diameter),
-                substance,
-                frame.copied().unwrap_or_default(),
-                motion.copied().unwrap_or_default(),
-            )
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
         },
         ![DynamicRigidBodyID]
     );
@@ -99,15 +148,34 @@ pub fn setup_rigid_body_for_new_entity(
         },
         components,
         |substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
-            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_sphere(
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let radius = 0.5; // The sphere mesh has a diameter of 1.0
+
+            let inertial_properties = InertialProperties::of_uniform_sphere(
+                fph::from(radius * model_transform.scale),
+                substance.mass_density,
+            );
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
-                substance,
-                frame.copied().unwrap_or_default(),
-                motion.copied().unwrap_or_default(),
-            )
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
         },
         [SphereMesh],
         ![DynamicRigidBodyID]
@@ -119,15 +187,34 @@ pub fn setup_rigid_body_for_new_entity(
         },
         components,
         |substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ReferenceFrame, Motion) {
-            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_hemisphere(
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let radius = 0.5; // The hemisphere mesh has a diameter of 1.0
+
+            let inertial_properties = InertialProperties::of_uniform_hemisphere(
+                fph::from(radius * model_transform.scale),
+                substance.mass_density,
+            );
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
-                substance,
-                frame.copied().unwrap_or_default(),
-                motion.copied().unwrap_or_default(),
-            )
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
         },
         [HemisphereMesh],
         ![DynamicRigidBodyID]
@@ -141,22 +228,40 @@ pub fn setup_rigid_body_for_new_entity(
         components,
         |mesh_id: &TriangleMeshID,
          substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
-         -> Result<(DynamicRigidBodyID, ReferenceFrame, Motion)> {
+         -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
             let triangle_mesh = mesh_repository.get_triangle_mesh(*mesh_id).ok_or_else(|| {
                 anyhow!(
                     "Tried to create rigid body for missing mesh (mesh ID {})",
                     mesh_id
                 )
             })?;
-            rigid_body::setup::setup_dynamic_rigid_body_for_uniform_triangle_mesh(
-                &mut rigid_body_manager,
+
+            let mut inertial_properties = InertialProperties::of_uniform_triangle_mesh(
                 triangle_mesh.triangle_vertex_positions(),
-                substance,
-                frame.copied().unwrap_or_default(),
-                motion.copied().unwrap_or_default(),
-            )
+                substance.mass_density,
+            );
+            inertial_properties.scale(fph::from(model_transform.scale));
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+                &mut rigid_body_manager,
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            Ok((rigid_body_id, model_transform, frame, motion))
         },
         ![DynamicRigidBodyID]
     )?;

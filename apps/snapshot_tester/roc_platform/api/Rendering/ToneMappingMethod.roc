@@ -1,8 +1,8 @@
 # Hash: 79278d5135c02d81901d3f26b554f7f0f933a56378fe5f6b35f1b3891d296208
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod
 # Type category: Inline
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     ToneMappingMethod,
     write_bytes,

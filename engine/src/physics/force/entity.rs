@@ -2,7 +2,7 @@
 
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_geometry::ReferenceFrame;
+use impact_geometry::ModelTransform;
 use impact_mesh::{MeshRepository, TriangleMeshID};
 use impact_physics::{
     force::{
@@ -88,7 +88,7 @@ pub fn setup_forces_for_new_entity(
         components,
         |drag_properties: &DetailedDragProperties,
          rigid_body_id: &DynamicRigidBodyID,
-         frame: &ReferenceFrame,
+         model_transform: &ModelTransform,
          mesh_id: &TriangleMeshID|
          -> Result<DetailedDragForceGeneratorID> {
             let triangle_mesh = mesh_repository.get_triangle_mesh(*mesh_id).ok_or_else(|| {
@@ -102,7 +102,7 @@ pub fn setup_forces_for_new_entity(
                 &mut force_generator_manager,
                 *drag_properties,
                 *rigid_body_id,
-                *frame,
+                model_transform,
                 (*mesh_id).into(),
                 triangle_mesh.triangle_vertex_positions(),
             )

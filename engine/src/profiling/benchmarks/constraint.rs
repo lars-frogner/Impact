@@ -9,9 +9,10 @@ use impact_physics::{
     },
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     fph,
+    inertia::InertialProperties,
     material::ContactResponseParameters,
     quantities::{Motion, Position, Velocity},
-    rigid_body::{self, DynamicRigidBodyID, RigidBodyManager, setup::DynamicRigidBodySubstance},
+    rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_profiling::Profiler;
 use nalgebra::point;
@@ -126,13 +127,14 @@ fn setup_sphere_bodies(
                 let frame = ReferenceFrame::unoriented(*sphere.center());
                 let motion = Motion::linear(velocity);
 
-                let (rigid_body_id, _frame, _motion) =
-                    rigid_body::setup::setup_dynamic_rigid_body_for_uniform_sphere(
-                        rigid_body_manager,
-                        &DynamicRigidBodySubstance { mass_density },
-                        frame,
-                        motion,
-                    );
+                let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
+
+                let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+                    rigid_body_manager,
+                    inertial_properties,
+                    frame,
+                    motion,
+                );
 
                 let collidable = SphericalCollidable::new(
                     CollidableKind::Dynamic,

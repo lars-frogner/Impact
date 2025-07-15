@@ -1,8 +1,8 @@
 # Hash: a227c5ccdf3fd1085516781413c68c7df07056dee0a1a3b74c78b95263425f29
-# Generated: 2025-07-13T19:49:53+00:00
+# Generated: 2025-07-15T10:43:03+00:00
 # Rust type: impact_camera::setup::PerspectiveCamera
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     PerspectiveCamera,
     new,

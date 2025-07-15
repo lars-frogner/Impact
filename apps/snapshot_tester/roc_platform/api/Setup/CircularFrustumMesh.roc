@@ -1,8 +1,8 @@
 # Hash: 57519c3bfe84ec3feaa682832e0deb14808632891ff7b3f29481aa956b12bd35
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_mesh::setup::CircularFrustumMesh
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     CircularFrustumMesh,
     new,

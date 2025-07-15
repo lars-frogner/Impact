@@ -15,7 +15,7 @@ use impact_ecs::{
     query,
     world::{EntityID, World as ECSWorld},
 };
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
     fph,
     inertia::InertialProperties,
@@ -23,7 +23,7 @@ use impact_physics::{
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_scene::{SceneEntityFlags, SceneGraphParentNodeHandle, graph::SceneGraph};
-use nalgebra::{Similarity3, Vector3};
+use nalgebra::{Isometry3, Similarity3, Vector3};
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
@@ -36,6 +36,7 @@ pub fn apply_absorption(
 ) {
     query!(ecs_world, |entity_id: EntityID,
                        voxel_object: &VoxelObjectComp,
+                       model_transform: &mut ModelTransform,
                        reference_frame: &mut ReferenceFrame,
                        velocity: &mut Motion,
                        rigid_body_id: &DynamicRigidBodyID,
@@ -55,9 +56,12 @@ pub fn apply_absorption(
         let inertial_property_manager = inertial_property_manager
             .expect("Missing inertial property manager for entity with VoxelObjectComp");
 
-        let world_to_voxel_object_transform = reference_frame
-            .create_transform_to_parent_space::<f64>()
-            .inverse();
+        // TODO: Optimize by leveraging that this is always an isometry
+        let voxel_object_to_world_transform = reference_frame.create_transform_to_parent_space()
+            * model_transform.crate_transform_to_entity_space();
+
+        let world_to_voxel_object_transform =
+            voxel_object_to_world_transform.cast::<f64>().inverse();
 
         let mut inertial_property_updater = inertial_property_manager.begin_update(
             object.voxel_extent(),
@@ -171,6 +175,7 @@ pub fn apply_absorption(
                 ecs_world,
                 entity_id,
                 voxel_object,
+                model_transform,
                 reference_frame,
                 velocity,
                 *rigid_body_id,
@@ -185,11 +190,11 @@ fn apply_sphere_absorption(
     voxel_object: &mut ChunkedVoxelObject,
     world_to_voxel_object_transform: &Similarity3<f64>,
     absorbing_sphere: &VoxelAbsorbingSphereComp,
-    sphere_to_world_transform: &Similarity3<f64>,
+    sphere_to_world_transform: &Isometry3<f64>,
 ) {
     let sphere_in_voxel_object_space = absorbing_sphere
         .sphere()
-        .transformed(sphere_to_world_transform)
+        .translated_and_rotated(sphere_to_world_transform)
         .transformed(world_to_voxel_object_transform);
 
     let inverse_radius_squared = sphere_in_voxel_object_space.radius_squared().recip();
@@ -219,11 +224,11 @@ fn apply_capsule_absorption(
     voxel_object: &mut ChunkedVoxelObject,
     world_to_voxel_object_transform: &Similarity3<f64>,
     absorbing_capsule: &VoxelAbsorbingCapsuleComp,
-    capsule_to_world_transform: &Similarity3<f64>,
+    capsule_to_world_transform: &Isometry3<f64>,
 ) {
     let capsule_in_voxel_object_space = absorbing_capsule
         .capsule()
-        .transformed(capsule_to_world_transform)
+        .translated_and_rotated(capsule_to_world_transform)
         .transformed(world_to_voxel_object_transform);
 
     let inverse_radius_squared = capsule_in_voxel_object_space.radius().powi(2).recip();
@@ -253,6 +258,7 @@ fn handle_voxel_object_after_removing_voxels(
     ecs_world: &ECSWorld,
     entity_id: EntityID,
     voxel_object: &VoxelObjectComp,
+    model_transform: &mut ModelTransform,
     reference_frame: &mut ReferenceFrame,
     motion: &mut Motion,
     rigid_body_id: DynamicRigidBodyID,
@@ -304,6 +310,7 @@ fn handle_voxel_object_after_removing_voxels(
             &mut inertial_property_transferrer,
         )
     {
+        let original_model_transform = *model_transform;
         let original_reference_frame = *reference_frame;
         let original_motion = *motion;
         let original_rigid_body = *rigid_body;
@@ -323,9 +330,10 @@ fn handle_voxel_object_after_removing_voxels(
             // update its linear velocity. Here we compute the change in the local frame of
             // the object.
             let local_center_of_mass_displacement = new_inertial_properties.center_of_mass().coords
-                - original_reference_frame.origin_offset;
+                - original_model_transform.offset.cast();
 
             update_physics_components_after_disconnection(
+                model_transform,
                 reference_frame,
                 motion,
                 rigid_body,
@@ -340,9 +348,10 @@ fn handle_voxel_object_after_removing_voxels(
             &mut voxel_manager.object_manager,
             ecs_world,
             entity_id,
+            original_model_transform,
             original_reference_frame,
             original_motion,
-            original_rigid_body,
+            &original_rigid_body,
             disconnected_voxel_object,
             disconnected_object_inertial_property_manager,
         );
@@ -352,6 +361,7 @@ fn handle_voxel_object_after_removing_voxels(
         // happened, we update the physics components to reflect the (small) change in
         // inertial properties.
         update_physics_components_after_voxel_removal_without_disconnection(
+            model_transform,
             reference_frame,
             rigid_body,
             inertial_property_manager.derive_inertial_properties(),
@@ -359,27 +369,28 @@ fn handle_voxel_object_after_removing_voxels(
     }
 }
 
-#[allow(clippy::large_types_passed_by_value)]
 fn handle_disconnected_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
     voxel_object_manager: &mut VoxelObjectManager,
     ecs_world: &ECSWorld,
     parent_entity_id: EntityID,
+    original_model_transform: ModelTransform,
     original_reference_frame: ReferenceFrame,
     original_motion: Motion,
-    original_rigid_body: DynamicRigidBody,
+    original_rigid_body: &DynamicRigidBody,
     object: DisconnectedVoxelObject,
     mut inertial_property_manager: VoxelObjectInertialPropertyManager,
 ) {
+    let mut model_transform = original_model_transform;
     let mut reference_frame = original_reference_frame;
     let mut motion = original_motion;
-    let mut rigid_body = original_rigid_body;
+    let mut rigid_body = *original_rigid_body;
 
     // We must compute the center of mass displacement *before* offsetting the
     // origin for `inertial_property_manager`, because after that the new center of
     // mass will not be in the same reference frame as the original one
     let local_center_of_mass_displacement =
-        inertial_property_manager.derive_center_of_mass() - original_reference_frame.origin_offset;
+        inertial_property_manager.derive_center_of_mass() - original_model_transform.offset.cast();
 
     let DisconnectedVoxelObject {
         object,
@@ -401,6 +412,7 @@ fn handle_disconnected_voxel_object(
         .transform_vector(&origin_offset_in_voxel_object_space);
 
     update_physics_components_after_disconnection(
+        &mut model_transform,
         &mut reference_frame,
         &mut motion,
         &mut rigid_body,
@@ -410,9 +422,13 @@ fn handle_disconnected_voxel_object(
 
     let rigid_body_id = rigid_body_manager.add_dynamic_rigid_body(rigid_body);
 
-    let mut components =
-        ArchetypeComponentStorage::try_from_view((&reference_frame, &motion, &rigid_body_id))
-            .unwrap();
+    let mut components = ArchetypeComponentStorage::try_from_view((
+        &reference_frame,
+        &model_transform,
+        &motion,
+        &rigid_body_id,
+    ))
+    .unwrap();
 
     add_additional_parent_components_for_disconnected_object(
         ecs_world,
@@ -446,6 +462,7 @@ fn add_additional_parent_components_for_disconnected_object(
 }
 
 fn update_physics_components_after_disconnection(
+    model_transform: &mut ModelTransform,
     reference_frame: &mut ReferenceFrame,
     motion: &mut Motion,
     rigid_body: &mut DynamicRigidBody,
@@ -479,8 +496,9 @@ fn update_physics_components_after_disconnection(
         .cross(&world_center_of_mass_displacement);
 
     // Assign new center of mass
-    reference_frame.update_origin_offset_while_preserving_position(
-        new_inertial_properties.center_of_mass().coords,
+    model_transform.update_offset_while_preserving_entity_position(
+        reference_frame,
+        new_inertial_properties.center_of_mass().coords.cast(),
     );
 
     // Transform velocity to new center of mass
@@ -506,6 +524,7 @@ fn update_physics_components_after_disconnection(
 }
 
 fn update_physics_components_after_voxel_removal_without_disconnection(
+    model_transform: &mut ModelTransform,
     reference_frame: &mut ReferenceFrame,
     rigid_body: &mut DynamicRigidBody,
     new_inertial_properties: InertialProperties,
@@ -513,8 +532,9 @@ fn update_physics_components_after_voxel_removal_without_disconnection(
     // We don't modify the velocity here, since there was no disconnected object to
     // carry away momentum
 
-    reference_frame.update_origin_offset_while_preserving_position(
-        new_inertial_properties.center_of_mass().coords,
+    model_transform.update_offset_while_preserving_entity_position(
+        reference_frame,
+        new_inertial_properties.center_of_mass().coords.cast(),
     );
 
     rigid_body.set_position(reference_frame.position);

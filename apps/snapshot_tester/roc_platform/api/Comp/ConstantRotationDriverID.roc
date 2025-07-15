@@ -1,8 +1,8 @@
 # Hash: fbbb202c239c8ec0f48f2d7b017ac52fb90a0cb4cf4d1ef27ac86157349ec365
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotationDriverID
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     ConstantRotationDriverID,
     add,

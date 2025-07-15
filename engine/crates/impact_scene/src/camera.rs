@@ -2,13 +2,13 @@
 
 use crate::graph::CameraNodeID;
 use impact_camera::{Camera, buffer::BufferableCamera};
-use nalgebra::{Point3, Similarity3};
+use nalgebra::{Isometry3, Point3};
 
 /// Represents a [`Camera`] that has a camera node in a [`SceneGraph`](crate::graph::SceneGraph).
 #[derive(Debug)]
 pub struct SceneCamera {
     camera: Box<dyn Camera<f32>>,
-    view_transform: Similarity3<f32>,
+    view_transform: Isometry3<f32>,
     scene_graph_node_id: CameraNodeID,
     jitter_enabled: bool,
 }
@@ -23,7 +23,7 @@ impl SceneCamera {
     ) -> Self {
         Self {
             camera: Box::new(camera),
-            view_transform: Similarity3::identity(),
+            view_transform: Isometry3::identity(),
             scene_graph_node_id,
             jitter_enabled,
         }
@@ -39,11 +39,11 @@ impl SceneCamera {
     /// view transform.
     pub fn compute_world_space_position(&self) -> Point3<f32> {
         let camera_to_world = self.view_transform.inverse();
-        camera_to_world.isometry.translation.vector.into()
+        camera_to_world.translation.vector.into()
     }
 
     /// Sets the transform from world space to camera space.
-    pub fn set_view_transform(&mut self, view_transform: Similarity3<f32>) {
+    pub fn set_view_transform(&mut self, view_transform: Isometry3<f32>) {
         self.view_transform = view_transform;
     }
 
@@ -66,7 +66,7 @@ impl BufferableCamera for SceneCamera {
         self.camera.as_ref()
     }
 
-    fn view_transform(&self) -> &Similarity3<f32> {
+    fn view_transform(&self) -> &Isometry3<f32> {
         &self.view_transform
     }
 

@@ -16,6 +16,8 @@
 
 ## Physics
 
+- Support disabling rigid bodies.
+
 - Implement sphere-based voxel collision detection.
 
 - Add more constraints.

@@ -1,8 +1,8 @@
 # Hash: 116e6321fdc4fc111dfc2908f1deec75fd5da1383416dcf2095fb50dd63d454a
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBodyID
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     KinematicRigidBodyID,
     add,

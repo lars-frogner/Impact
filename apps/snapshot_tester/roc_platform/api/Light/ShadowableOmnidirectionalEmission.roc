@@ -1,8 +1,8 @@
 # Hash: bfbee28cea6da98ccb283270f45c5e267373b02112ac80e4c6de6a2d5e48145b
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalEmission
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     ShadowableOmnidirectionalEmission,
     new,
