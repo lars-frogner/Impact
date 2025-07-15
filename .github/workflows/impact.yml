@@ -215,7 +215,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: nightly
-          profile: minimal
           targets: ${{ matrix.target }}
           components: rust-src
 
@@ -269,7 +268,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: nightly
-          profile: minimal
           components: miri
 
       - name: cargo miri setup
@@ -376,7 +374,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-          profile: minimal
           components: clippy
 
       - name: Clippy (no default features)
@@ -423,7 +420,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-          profile: minimal
           components: rustfmt
 
       - name: Rustfmt
