@@ -22,7 +22,6 @@ use impact_containers::HashMap;
 use impact_math::{Angle, Float, Radians, stringhash64_newtype};
 use nalgebra::Point3;
 use roc_integration::roc;
-use serde::{Deserialize, Serialize};
 use simba::scalar::SubsetOf;
 use std::collections::hash_map::Entry;
 
@@ -89,7 +88,8 @@ pub struct DragLoadMapRepository<F: Float> {
 }
 
 /// Configuration parameters for the generation of drag load maps.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct DragLoadMapConfig {
     /// The number of uniformly distributed directions the aggregate drag load
     /// on the body should be computed for. More directions gives a more

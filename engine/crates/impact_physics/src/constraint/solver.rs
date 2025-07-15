@@ -16,7 +16,6 @@ use crate::{
 use bitflags::bitflags;
 use impact_containers::KeyIndexMapper;
 use num_traits::Zero;
-use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     hash::Hash,
@@ -34,7 +33,8 @@ pub struct ConstraintSolver {
 }
 
 /// Configuration parameters for the [`ConstraintSolver`].
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct ConstraintSolverConfig {
     /// Whether constraints will be solved.
     pub enabled: bool,

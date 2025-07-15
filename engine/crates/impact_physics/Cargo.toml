@@ -6,15 +6,10 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-arbitrary = ["dep:arbitrary", "impact_ecs/arbitrary", "impact_math/arbitrary"]
+arbitrary = ["dep:arbitrary"]
 bincode = ["dep:bincode", "serde"]
-ecs = ["dep:impact_ecs", "impact_geometry/ecs"]
-roc_codegen = [
-    "impact_containers/roc_codegen",
-    "impact_ecs/roc_codegen",
-    "impact_geometry/roc_codegen",
-    "roc_integration/roc_codegen",
-]
+ecs = ["dep:inventory", "dep:impact_ecs"]
+roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde", "nalgebra/serde-serialize"]
 
 [dependencies]
@@ -30,7 +25,7 @@ impact_geometry = { path = "../impact_geometry" }
 impact_io = { path = "../impact_io" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
-inventory = { workspace = true }
+inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
 paste = { workspace = true }
