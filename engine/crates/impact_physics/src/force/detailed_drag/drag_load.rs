@@ -4,10 +4,8 @@ use crate::{
     fph,
     quantities::{Direction, Force, Orientation, Position, Torque},
 };
-use anyhow::Result;
 use impact_math::{Angle, Float, Radians};
 use nalgebra::{Point3, UnitVector3, Vector3, vector};
-use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned, ser::Serializer};
 use simba::scalar::SubsetOf;
 use std::ops::{Add, AddAssign, Div, Mul};
 
@@ -108,10 +106,11 @@ impl<F: Float> Div<F> for &DragLoad<F> {
     }
 }
 
-impl<F: Float + Serialize + DeserializeOwned> Serialize for DragLoad<F> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+#[cfg(feature = "serde")]
+impl<F: Float + serde::Serialize + serde::de::DeserializeOwned> serde::Serialize for DragLoad<F> {
+    fn serialize<S>(&self, serializer: S) -> anyhow::Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
         (
             &(self.force.x, self.force.y, self.force.z),
@@ -121,10 +120,11 @@ impl<F: Float + Serialize + DeserializeOwned> Serialize for DragLoad<F> {
     }
 }
 
-impl<'de, F: Float + Deserialize<'de>> Deserialize<'de> for DragLoad<F> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+#[cfg(feature = "serde")]
+impl<'de, F: Float + serde::Deserialize<'de>> serde::Deserialize<'de> for DragLoad<F> {
+    fn deserialize<D>(deserializer: D) -> anyhow::Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::Deserializer<'de>,
     {
         let ((force_x, force_y, force_z), (torque_x, torque_y, torque_z)) =
             <((F, F, F), (F, F, F))>::deserialize(deserializer)?;

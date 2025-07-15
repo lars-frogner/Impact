@@ -22,7 +22,6 @@ use force::{ForceGenerationConfig, ForceGeneratorManager};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
 use rigid_body::RigidBodyManager;
-use serde::{Deserialize, Serialize};
 use std::{sync::RwLock, time::Duration};
 
 /// Floating point type used for physics simulation.
@@ -45,8 +44,12 @@ pub struct PhysicsSimulator<C: Collidable = collision::collidable::basic::Collid
 }
 
 /// Configuration parameters for physics.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
 pub struct PhysicsConfig {
     /// Configuration parameters for the physics simulation.
     pub simulator: SimulatorConfig,
@@ -59,7 +62,8 @@ pub struct PhysicsConfig {
 }
 
 /// Configuration parameters for the physics simulation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct SimulatorConfig {
     /// Whether physics simulation is enabled. Disabling the simulation will not
     /// prevent controlled entities from moving.

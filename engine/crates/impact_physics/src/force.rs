@@ -12,7 +12,6 @@ use constant_acceleration::ConstantAccelerationRegistry;
 use detailed_drag::{DetailedDragForceRegistry, DragLoadMapConfig};
 use impact_containers::IndexMap;
 use local_force::LocalForceRegistry;
-use serde::{Deserialize, Serialize};
 use spring_force::{DynamicDynamicSpringForceRegistry, DynamicKinematicSpringForceRegistry};
 use std::hash::Hash;
 
@@ -27,8 +26,12 @@ pub struct ForceGeneratorManager {
 }
 
 /// Configuration parameters for rigid body force generation.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
 pub struct ForceGenerationConfig {
     /// Configuration parameters for the generation of drag load maps.
     pub drag_load_map_config: DragLoadMapConfig,
