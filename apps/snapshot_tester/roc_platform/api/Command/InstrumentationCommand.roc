@@ -1,8 +1,8 @@
 # Hash: 45aae28fa4a1ab9166a2da5bedfceb6eac44a8e578e5ac265f2feba90d2ee7fe
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact::instrumentation::command::InstrumentationCommand
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     InstrumentationCommand,
     write_bytes,

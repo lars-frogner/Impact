@@ -1,8 +1,8 @@
 # Hash: 324672bef4540033796d404df5fa910c160854b2fba9371fb5dc69af38ab69ea
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_containers::generational_reusing_vec::GenerationalIdx
 # Type category: POD
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     GenerationalIdx,
     write_bytes,

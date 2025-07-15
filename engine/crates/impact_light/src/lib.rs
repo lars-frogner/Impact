@@ -36,7 +36,7 @@ pub type Luminance = Vector3<f32>;
 
 define_component_type! {
     /// A spatially uniform and isotropic (ambient) light field.
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct AmbientEmission {
@@ -53,7 +53,7 @@ define_component_type! {
     /// Uniform emission of light in all directions. The light can not be
     /// shadowed (use [`ShadowableOmnidirectionalEmission`] for light with
     /// shadows).
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct OmnidirectionalEmission {
@@ -74,7 +74,7 @@ define_component_type! {
 define_component_type! {
     /// Uniform emission of light in all directions. The light can be shadowed
     /// (use [`OmnidirectionalEmission`] for light without shadows).
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct ShadowableOmnidirectionalEmission {
@@ -95,7 +95,7 @@ define_component_type! {
 define_component_type! {
     /// Emission of light in a single direction. The light can not be shadowed
     /// (use [`ShadowableUnidirectionalEmission`] for light with shadows).
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct UnidirectionalEmission {
@@ -116,7 +116,7 @@ define_component_type! {
 define_component_type! {
     /// Emission of light in a single direction. The light can be shadowed (use
     /// [`UnidirectionalEmission`] for light without shadows).
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct ShadowableUnidirectionalEmission {
@@ -136,7 +136,7 @@ define_component_type! {
 
 define_component_type! {
     /// The ID of an [`AmbientLight`] in the [`LightStorage`].
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct AmbientLightID(u32);
@@ -144,7 +144,7 @@ define_component_type! {
 
 define_component_type! {
     /// The ID of an [`OmnidirectionalLight`] in the [`LightStorage`].
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct OmnidirectionalLightID(u32);
@@ -152,7 +152,7 @@ define_component_type! {
 
 define_component_type! {
     /// The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightStorage`].
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct ShadowableOmnidirectionalLightID(u32);
@@ -160,7 +160,7 @@ define_component_type! {
 
 define_component_type! {
     /// The ID of a [`UnidirectionalLight`] in the [`LightStorage`].
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct UnidirectionalLightID(u32);
@@ -168,7 +168,7 @@ define_component_type! {
 
 define_component_type! {
     /// The ID of a [`ShadowableUnidirectionalLight`] in the [`LightStorage`].
-    #[roc(parents = "Light")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct ShadowableUnidirectionalLightID(u32);

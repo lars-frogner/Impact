@@ -1,8 +1,8 @@
 # Hash: 563298acd65b3eb2d0687614a209edddc959ae9ed30ba4d848a33001f28ef28a
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact::window::input::key::KeyState
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     KeyState,
     write_bytes,

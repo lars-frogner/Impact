@@ -1,8 +1,8 @@
 # Hash: e1173b74240dc05e0d659655e1e6ade7767c89cfa362ceabd23636f3be681512
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact::voxel::components::MultifractalNoiseModificationComp
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     MultifractalNoiseModification,
     new,

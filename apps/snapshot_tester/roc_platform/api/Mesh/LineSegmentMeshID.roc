@@ -1,8 +1,8 @@
 # Hash: 041b5b200414a6b13ce0641b64d65cccbcb9ca2b350efd4c02e0dc26c8b11097
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact_mesh::LineSegmentMeshID
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     LineSegmentMeshID,
     from_name,

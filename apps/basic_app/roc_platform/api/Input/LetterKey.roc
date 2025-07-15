@@ -1,8 +1,8 @@
 # Hash: e6d17d51b70dc96a8dfbeead30c52230ce9e8105e20d2381b88838063ab99bdb
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact::window::input::key::LetterKey
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     LetterKey,
     write_bytes,

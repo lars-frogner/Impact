@@ -1,8 +1,8 @@
 # Hash: 178e91282ba4b6560b488e07e7c0c133559f26b11808f478903d608dd73fa4af
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact::control::motion::components::MotionControlComp
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     MotionControl,
     new,

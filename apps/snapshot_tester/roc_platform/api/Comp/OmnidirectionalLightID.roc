@@ -1,10 +1,10 @@
-# Hash: b8e36e484b3bf5611cb6964f32bcf046ca8b9b6ab2d7dd0f0ecec4b125584463
-# Generated: 2025-07-15T10:43:03+00:00
-# Rust type: impact_light::AmbientLightID
+# Hash: ebfa9e53e7b668d0664b29f3902f6072c2566fd2f2c00542f1ef1d4a8d0c93c2
+# Generated: 2025-07-15T17:32:43+00:00
+# Rust type: impact_light::OmnidirectionalLightID
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
-    AmbientLightID,
+    OmnidirectionalLightID,
     add,
     add_multiple,
     write_bytes,
@@ -15,33 +15,33 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The ID of an [`AmbientLight`] in the [`LightStorage`].
-AmbientLightID : U32
+## The ID of an [`OmnidirectionalLight`] in the [`LightStorage`].
+OmnidirectionalLightID : U32
 
-## Adds a value of the [AmbientLightID] component to an entity's data.
+## Adds a value of the [OmnidirectionalLightID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, AmbientLightID -> Entity.Data
+add : Entity.Data, OmnidirectionalLightID -> Entity.Data
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [AmbientLightID] component to the data of
+## Adds multiple values of the [OmnidirectionalLightID] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (AmbientLightID) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (OmnidirectionalLightID) -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in AmbientLightID.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in OmnidirectionalLightID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, AmbientLightID -> List U8
+write_packet : List U8, OmnidirectionalLightID -> List U8
 write_packet = |bytes, val|
-    type_id = 11467547545941186241
+    type_id = 696420340011659856
     size = 4
     alignment = 4
     bytes
@@ -51,9 +51,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List AmbientLightID -> List U8
+write_multi_packet : List U8, List OmnidirectionalLightID -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 11467547545941186241
+    type_id = 696420340011659856
     size = 4
     alignment = 4
     count = List.len(vals)
@@ -70,17 +70,17 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [AmbientLightID] into the binary representation
+## Serializes a value of [OmnidirectionalLightID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, AmbientLightID -> List U8
+write_bytes : List U8, OmnidirectionalLightID -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(4)
     |> Builtin.write_bytes_u32(value)
 
-## Deserializes a value of [AmbientLightID] from its bytes in the
+## Deserializes a value of [OmnidirectionalLightID] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result AmbientLightID _
+from_bytes : List U8 -> Result OmnidirectionalLightID _
 from_bytes = |bytes|
     Ok(
         (

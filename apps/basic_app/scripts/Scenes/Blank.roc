@@ -11,7 +11,7 @@ import core.Vector3
 import pf.Command
 import pf.Entity
 import pf.Skybox
-import pf.Light.AmbientEmission
+import pf.Comp.AmbientEmission
 import pf.Comp.MotionControl
 import pf.Comp.OrientationControl
 import pf.Setup.PerspectiveCamera
@@ -19,7 +19,7 @@ import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Light.ShadowableUnidirectionalEmission
+import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.UniformColor
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
@@ -73,11 +73,11 @@ ground =
 
 ambient_light =
     Entity.new
-    |> Light.AmbientEmission.add_new(Vector3.same(2000000))
+    |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
 
 unidirectional_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(200000),
         UnitVector3.from((0.0, -1.0, 0.0)),
         2.0,

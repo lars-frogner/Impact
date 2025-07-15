@@ -1,10 +1,10 @@
-# Hash: 60ae48f68495b6e98995ad7e8e62a2caf4f1f1e8bb7d91500321044036810549
-# Generated: 2025-07-15T11:05:49+00:00
-# Rust type: impact_scene::SceneGraphParentNodeHandle
+# Hash: 1c3757b733ef956d92af89ceeb89ba3e170e8444a29015c80a7d40df184041c2
+# Generated: 2025-07-15T17:32:43+00:00
+# Rust type: impact_scene::SceneGraphCameraNodeHandle
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
-    SceneGraphParentNodeHandle,
+    SceneGraphCameraNodeHandle,
     new,
     add_new,
     add_multiple_new,
@@ -16,68 +16,68 @@ module [
 
 import Entity
 import Entity.Arg
-import Scene.GroupNodeID
+import Scene.CameraNodeID
 import core.Builtin
 
-## Handle to a parent group node in a scene graph.
-SceneGraphParentNodeHandle : {
-    ## The ID of the parent node in the
+## Handle to a camera node in a scene graph.
+SceneGraphCameraNodeHandle : {
+    ## The ID of the camera node in the
     ## [`SceneGraph`](crate::graph::SceneGraph).
-    id : Scene.GroupNodeID.GroupNodeID,
+    id : Scene.CameraNodeID.CameraNodeID,
 }
 
-## Creates a new handle to the parent
-## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
-new : Scene.GroupNodeID.GroupNodeID -> SceneGraphParentNodeHandle
-new = |parent_node_id|
-    { id: parent_node_id }
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
+## camera node with the given ID.
+new : Scene.CameraNodeID.CameraNodeID -> SceneGraphCameraNodeHandle
+new = |node_id|
+    { id: node_id }
 
-## Creates a new handle to the parent
-## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
+## camera node with the given ID.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Scene.GroupNodeID.GroupNodeID -> Entity.Data
-add_new = |entity_data, parent_node_id|
-    add(entity_data, new(parent_node_id))
+add_new : Entity.Data, Scene.CameraNodeID.CameraNodeID -> Entity.Data
+add_new = |entity_data, node_id|
+    add(entity_data, new(node_id))
 
-## Creates a new handle to the parent
-## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
+## Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
+## camera node with the given ID.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Scene.GroupNodeID.GroupNodeID) -> Result Entity.MultiData Str
-add_multiple_new = |entity_data, parent_node_id|
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Scene.CameraNodeID.CameraNodeID) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, node_id|
     add_multiple(
         entity_data,
         All(Entity.Arg.broadcasted_map1(
-            parent_node_id,
+            node_id,
             Entity.multi_count(entity_data),
             new
         ))
     )
 
-## Adds a value of the [SceneGraphParentNodeHandle] component to an entity's data.
+## Adds a value of the [SceneGraphCameraNodeHandle] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, SceneGraphParentNodeHandle -> Entity.Data
+add : Entity.Data, SceneGraphCameraNodeHandle -> Entity.Data
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [SceneGraphParentNodeHandle] component to the data of
+## Adds multiple values of the [SceneGraphCameraNodeHandle] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (SceneGraphParentNodeHandle) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (SceneGraphCameraNodeHandle) -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in SceneGraphParentNodeHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in SceneGraphCameraNodeHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, SceneGraphParentNodeHandle -> List U8
+write_packet : List U8, SceneGraphCameraNodeHandle -> List U8
 write_packet = |bytes, val|
-    type_id = 17542722866500004650
+    type_id = 309634192042192233
     size = 16
     alignment = 8
     bytes
@@ -87,9 +87,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List SceneGraphParentNodeHandle -> List U8
+write_multi_packet : List U8, List SceneGraphCameraNodeHandle -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 17542722866500004650
+    type_id = 309634192042192233
     size = 16
     alignment = 8
     count = List.len(vals)
@@ -106,21 +106,21 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [SceneGraphParentNodeHandle] into the binary representation
+## Serializes a value of [SceneGraphCameraNodeHandle] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, SceneGraphParentNodeHandle -> List U8
+write_bytes : List U8, SceneGraphCameraNodeHandle -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(16)
-    |> Scene.GroupNodeID.write_bytes(value.id)
+    |> Scene.CameraNodeID.write_bytes(value.id)
 
-## Deserializes a value of [SceneGraphParentNodeHandle] from its bytes in the
+## Deserializes a value of [SceneGraphCameraNodeHandle] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result SceneGraphParentNodeHandle _
+from_bytes : List U8 -> Result SceneGraphCameraNodeHandle _
 from_bytes = |bytes|
     Ok(
         {
-            id: bytes |> List.sublist({ start: 0, len: 16 }) |> Scene.GroupNodeID.from_bytes?,
+            id: bytes |> List.sublist({ start: 0, len: 16 }) |> Scene.CameraNodeID.from_bytes?,
         },
     )
 

@@ -1,8 +1,8 @@
 # Hash: f4f8e4ec51b085f1884aedba55fd61f2eea4a2b1b61ecfede8052f7394567f7b
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_physics::inertia::InertialProperties
 # Type category: POD
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     InertialProperties,
     write_bytes,

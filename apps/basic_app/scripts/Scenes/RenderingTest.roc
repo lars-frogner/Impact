@@ -10,7 +10,7 @@ import core.Vector3
 import pf.Command
 import pf.Entity
 import pf.Skybox
-import pf.Light.AmbientEmission
+import pf.Comp.AmbientEmission
 import pf.Setup.BoxMesh
 import pf.Setup.ConstantRotation
 import pf.Setup.CylinderMesh
@@ -23,8 +23,8 @@ import pf.Setup.PlanarTextureProjection
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Light.ShadowableOmnidirectionalEmission
-import pf.Light.ShadowableUnidirectionalEmission
+import pf.Comp.ShadowableOmnidirectionalEmission
+import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.SphereMesh
 import pf.Setup.TexturedColor
 import pf.Setup.TexturedRoughness
@@ -241,14 +241,14 @@ bulb_light =
     |> Comp.ReferenceFrame.add_unoriented((0.0, 17.0, 2.0))
     |> Setup.UniformColor.add((1.0, 1.0, 1.0))
     |> Setup.UniformEmissiveLuminance.add(1e6)
-    |> Light.ShadowableOmnidirectionalEmission.add_new(
+    |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(2e7),
         0.7,
     )
 
 sun_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(10000),
         UnitVector3.from((0.6, -0.3, 1.0)),
         2.0,
@@ -256,4 +256,4 @@ sun_light =
 
 ambient_light =
     Entity.new
-    |> Light.AmbientEmission.add_new(Vector3.same(1000.0))
+    |> Comp.AmbientEmission.add_new(Vector3.same(1000.0))

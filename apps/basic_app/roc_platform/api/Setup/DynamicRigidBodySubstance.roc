@@ -1,8 +1,8 @@
 # Hash: cface5ca626f692fe0ec9558e9fcb1537040a30d3df6ddce236b49dd497b40e3
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_physics::rigid_body::setup::DynamicRigidBodySubstance
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     DynamicRigidBodySubstance,
     add,

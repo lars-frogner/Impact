@@ -48,11 +48,11 @@ import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Light.AmbientEmission
-import pf.Light.OmnidirectionalEmission
-import pf.Light.ShadowableOmnidirectionalEmission
-import pf.Light.ShadowableUnidirectionalEmission
-import pf.Light.UnidirectionalEmission
+import pf.Comp.AmbientEmission
+import pf.Comp.OmnidirectionalEmission
+import pf.Comp.ShadowableOmnidirectionalEmission
+import pf.Comp.ShadowableUnidirectionalEmission
+import pf.Comp.UnidirectionalEmission
 
 # **** Camera ****
 
@@ -79,19 +79,19 @@ tilted_camera =
 
 ambient_light =
     Entity.new
-    |> Light.AmbientEmission.add_new(Vector3.same(3e3))
+    |> Comp.AmbientEmission.add_new(Vector3.same(3e3))
 
 omnidirectional_light =
     Entity.new
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
-    |> Light.OmnidirectionalEmission.add_new(
+    |> Comp.OmnidirectionalEmission.add_new(
         Vector3.same(1e4),
         0.4,
     )
 
 unidirectional_light =
     Entity.new
-    |> Light.UnidirectionalEmission.add_new(
+    |> Comp.UnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, 0.0, 1.0)),
         10.0,
@@ -100,14 +100,14 @@ unidirectional_light =
 shadowable_omnidirectional_light =
     Entity.new
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
-    |> Light.ShadowableOmnidirectionalEmission.add_new(
+    |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(1e4),
         0.4,
     )
 
 shadowable_unidirectional_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, 0.0, 1.0)),
         10.0,
@@ -251,7 +251,7 @@ scm_box_scale = 0.6
 shadow_cube_mapping_light =
     Entity.new
     |> Comp.ReferenceFrame.add_unoriented((0, scm_ground_height + 1.8, scm_dist))
-    |> Light.ShadowableOmnidirectionalEmission.add_new(
+    |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(1e4),
         0.0,
     )
@@ -259,7 +259,7 @@ shadow_cube_mapping_light =
 shadow_cube_mapping_soft_light =
     Entity.new
     |> Comp.ReferenceFrame.add_unoriented((0, scm_ground_height + 1.8, scm_dist))
-    |> Light.ShadowableOmnidirectionalEmission.add_new(
+    |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(1e4),
         0.2,
     )
@@ -303,7 +303,7 @@ csm_box_scale = 0.8
 
 cascaded_shadow_mapping_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, -0.08, 1.0)),
         0.0,
@@ -311,7 +311,7 @@ cascaded_shadow_mapping_light =
 
 cascaded_shadow_mapping_soft_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, -0.08, 1.0)),
         1.5,

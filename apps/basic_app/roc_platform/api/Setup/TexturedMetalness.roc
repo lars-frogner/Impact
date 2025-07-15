@@ -1,8 +1,8 @@
 # Hash: ef1ca5326d32598b53b131bda32eac50fd354fae8780b52566a48594a8e3794c
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_material::setup::physical::TexturedMetalness
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     TexturedMetalness,
     unscaled,
