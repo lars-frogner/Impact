@@ -1,8 +1,8 @@
 # Hash: ac181db5ed0d317074634a7dd0fb13f51888f60f7d511bf2baa1e2a2f5cb8adb
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact_scene::skybox::Skybox
 # Type category: POD
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     Skybox,
     new,

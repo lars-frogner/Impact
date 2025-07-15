@@ -1,8 +1,8 @@
 # Hash: b53450f2eb91195034c7a47159398524dcc1de3290dfb5d6cc99754776629e2f
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact::voxel::components::VoxelAbsorbingCapsuleComp
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,

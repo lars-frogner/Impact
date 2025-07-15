@@ -1,8 +1,8 @@
 # Hash: 06bcafb60dbc37492bc0fc252157b2a624c49fb09df13cb31703f6830878e18b
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact::gpu::rendering::postprocessing::command::ToToneMappingMethod
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     ToToneMappingMethod,
     write_bytes,

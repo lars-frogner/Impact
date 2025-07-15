@@ -1,8 +1,8 @@
 # Hash: 7c0fdec79dc5595cfbe6dce642e8909904bdb332f4a6310450f9aa60a2c1d580
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_rendering::postprocessing::capturing::SensorSensitivity
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     SensorSensitivity,
     write_bytes,

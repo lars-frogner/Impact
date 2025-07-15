@@ -11,7 +11,7 @@ import core.Vector3
 import pf.Command
 import pf.Entity
 import pf.Skybox
-import pf.Light.AmbientEmission
+import pf.Comp.AmbientEmission
 import pf.Setup.CylinderMesh
 import pf.Comp.GradientNoiseVoxelTypes
 import pf.Comp.MotionControl
@@ -24,8 +24,8 @@ import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
 import pf.Setup.SceneGraphGroup
 import pf.Setup.SphereMesh
-import pf.Light.ShadowableOmnidirectionalEmission
-import pf.Light.ShadowableUnidirectionalEmission
+import pf.Comp.ShadowableOmnidirectionalEmission
+import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.UniformColor
 import pf.Setup.UniformEmissiveLuminance
 import pf.Setup.UniformRoughness
@@ -129,7 +129,7 @@ absorbing_sphere =
     |> Setup.SphereMesh.add_new(64)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(1e6)
-    |> Light.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
+    |> Comp.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
     |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 10, 15)
     |> Scene.SceneEntityFlags.add(Scene.SceneEntityFlags.is_disabled)
 
@@ -152,7 +152,7 @@ asteroid =
 
 ambient_light =
     Entity.new
-    |> Light.AmbientEmission.add_new(Vector3.same(1000))
+    |> Comp.AmbientEmission.add_new(Vector3.same(1000))
 
 omnidirectional_light =
     Entity.new
@@ -161,14 +161,14 @@ omnidirectional_light =
     |> Comp.ReferenceFrame.add_unoriented((0, 15, 2))
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformEmissiveLuminance.add(1e6)
-    |> Light.ShadowableOmnidirectionalEmission.add_new(
+    |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(2e7),
         0.7,
     )
 
 unidirectional_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(20000),
         UnitVector3.from((0.0, -1.0, 0.0)),
         2.0,

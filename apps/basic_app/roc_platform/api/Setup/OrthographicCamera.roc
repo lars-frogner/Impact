@@ -1,8 +1,8 @@
 # Hash: 0ba96cbe19a2eeeedf893731ade22f2c55c2139e9f2a388e4e2ddbf72fcecae5
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_camera::setup::OrthographicCamera
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     OrthographicCamera,
     new,

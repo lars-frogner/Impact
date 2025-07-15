@@ -1,8 +1,8 @@
 # Hash: 8dfac041a23995970472776331a21e388896f8c6bcc5ec7003d8d8e415e467de
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact_scene::graph::CameraNodeID
 # Type category: POD
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     CameraNodeID,
     write_bytes,

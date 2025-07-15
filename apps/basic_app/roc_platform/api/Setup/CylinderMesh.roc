@@ -1,8 +1,8 @@
 # Hash: fcbeaaebcc6d9f6da99f56796dc91f8d7b0bb58147438b4c7fd799ef4ff4f27b
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_mesh::setup::CylinderMesh
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     CylinderMesh,
     new,

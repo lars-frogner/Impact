@@ -1,10 +1,10 @@
-# Hash: 0de1b5e414316d17a5f6bf448d32b018bf8265633383b505d9418eb10b96cf5a
-# Generated: 2025-07-15T11:05:49+00:00
-# Rust type: impact_light::UnidirectionalEmission
+# Hash: 6bfa345628848594243bb363a3fa4af69efe9894babc7adb28e3e135f88fb05a
+# Generated: 2025-07-15T17:32:43+00:00
+# Rust type: impact_light::ShadowableUnidirectionalEmission
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
-    UnidirectionalEmission,
+    ShadowableUnidirectionalEmission,
     new,
     add_new,
     add_multiple_new,
@@ -21,9 +21,9 @@ import core.Degrees
 import core.UnitVector3
 import core.Vector3
 
-## Emission of light in a single direction. The light can not be shadowed
-## (use [`ShadowableUnidirectionalEmission`] for light with shadows).
-UnidirectionalEmission : {
+## Emission of light in a single direction. The light can be shadowed (use
+## [`UnidirectionalEmission`] for light without shadows).
+ShadowableUnidirectionalEmission : {
     ## The illuminance (incident flux per area) of an illuminated surface
     ## perpendicular to the light direction.
     ##
@@ -33,27 +33,27 @@ UnidirectionalEmission : {
     ## The direction of the emitted light.
     direction : UnitVector3.UnitVector3 Binary32,
     ## The angular extent of the light source, which determines the extent of
-    ## specular highlights.
+    ## specular highlights and the softness of shadows.
     angular_source_extent : Degrees.Degrees Binary32,
 }
 
-## Creates a new unidirectional emission component with the given
-## perpendicular illuminance (in lux), direction, and angular
+## Creates a new shadowable unidirectional emission component with the
+## given perpendicular illuminance (in lux), direction, and angular
 ## source extent.
-new : Vector3.Vector3 Binary32, UnitVector3.UnitVector3 Binary32, Degrees.Degrees Binary32 -> UnidirectionalEmission
+new : Vector3.Vector3 Binary32, UnitVector3.UnitVector3 Binary32, Degrees.Degrees Binary32 -> ShadowableUnidirectionalEmission
 new = |perpendicular_illuminance, direction, angular_source_extent|
     { perpendicular_illuminance, direction, angular_source_extent }
 
-## Creates a new unidirectional emission component with the given
-## perpendicular illuminance (in lux), direction, and angular
+## Creates a new shadowable unidirectional emission component with the
+## given perpendicular illuminance (in lux), direction, and angular
 ## source extent.
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Vector3.Vector3 Binary32, UnitVector3.UnitVector3 Binary32, Degrees.Degrees Binary32 -> Entity.Data
 add_new = |entity_data, perpendicular_illuminance, direction, angular_source_extent|
     add(entity_data, new(perpendicular_illuminance, direction, angular_source_extent))
 
-## Creates a new unidirectional emission component with the given
-## perpendicular illuminance (in lux), direction, and angular
+## Creates a new shadowable unidirectional emission component with the
+## given perpendicular illuminance (in lux), direction, and angular
 ## source extent.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
@@ -68,30 +68,30 @@ add_multiple_new = |entity_data, perpendicular_illuminance, direction, angular_s
         ))
     )
 
-## Adds a value of the [UnidirectionalEmission] component to an entity's data.
+## Adds a value of the [ShadowableUnidirectionalEmission] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, UnidirectionalEmission -> Entity.Data
+add : Entity.Data, ShadowableUnidirectionalEmission -> Entity.Data
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [UnidirectionalEmission] component to the data of
+## Adds multiple values of the [ShadowableUnidirectionalEmission] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UnidirectionalEmission) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ShadowableUnidirectionalEmission) -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in UnidirectionalEmission.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in ShadowableUnidirectionalEmission.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, UnidirectionalEmission -> List U8
+write_packet : List U8, ShadowableUnidirectionalEmission -> List U8
 write_packet = |bytes, val|
-    type_id = 4263202137654376205
+    type_id = 10910451892218742153
     size = 28
     alignment = 4
     bytes
@@ -101,9 +101,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List UnidirectionalEmission -> List U8
+write_multi_packet : List U8, List ShadowableUnidirectionalEmission -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 4263202137654376205
+    type_id = 10910451892218742153
     size = 28
     alignment = 4
     count = List.len(vals)
@@ -120,9 +120,9 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [UnidirectionalEmission] into the binary representation
+## Serializes a value of [ShadowableUnidirectionalEmission] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, UnidirectionalEmission -> List U8
+write_bytes : List U8, ShadowableUnidirectionalEmission -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(28)
@@ -130,9 +130,9 @@ write_bytes = |bytes, value|
     |> UnitVector3.write_bytes_32(value.direction)
     |> Degrees.write_bytes_32(value.angular_source_extent)
 
-## Deserializes a value of [UnidirectionalEmission] from its bytes in the
+## Deserializes a value of [ShadowableUnidirectionalEmission] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result UnidirectionalEmission _
+from_bytes : List U8 -> Result ShadowableUnidirectionalEmission _
 from_bytes = |bytes|
     Ok(
         {

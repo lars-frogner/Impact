@@ -1,8 +1,8 @@
 # Hash: af437ed9cf19b46f8a42f5bbe25a363db3918b28b4af232058ee9cec13ea86b5
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBody
 # Type category: POD
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     KinematicRigidBody,
     write_bytes,

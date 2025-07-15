@@ -57,7 +57,7 @@ stringhash64_newtype!(
 define_component_type! {
     /// A handle for a material, containing the IDs for the pieces of data holding
     /// information about the material.
-    #[roc(parents = "Material")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct MaterialHandle {

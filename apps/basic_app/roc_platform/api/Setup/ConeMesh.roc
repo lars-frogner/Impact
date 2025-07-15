@@ -1,8 +1,8 @@
 # Hash: 15e1141d476a1a99e20bc0d4b45484ecf2216f4f9f3d801078c8223b1a4c47a3
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_mesh::setup::ConeMesh
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     ConeMesh,
     new,

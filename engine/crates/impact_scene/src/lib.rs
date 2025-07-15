@@ -41,7 +41,7 @@ bitflags! {
 
 define_component_type! {
     /// Handle to a parent group node in a scene graph.
-    #[roc(parents = "Scene")]
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphParentNodeHandle {
@@ -53,7 +53,7 @@ define_component_type! {
 
 define_component_type! {
     /// Handle to a group node in a scene graph.
-    #[roc(parents = "Scene")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphGroupNodeHandle {
@@ -65,7 +65,7 @@ define_component_type! {
 
 define_component_type! {
     /// Handle to a camera node in a scene graph.
-    #[roc(parents = "Scene")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphCameraNodeHandle {
@@ -77,7 +77,7 @@ define_component_type! {
 
 define_component_type! {
     /// Handle to a model instance node in a scene graph.
-    #[roc(parents = "Scene")]
+    #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SceneGraphModelInstanceNodeHandle {

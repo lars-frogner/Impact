@@ -12,11 +12,11 @@ import core.UnitQuaternion
 import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
 import core.Vector3
 import pf.Command
-import pf.Light.AmbientEmission
+import pf.Comp.AmbientEmission
 import pf.Setup.ConstantRotation
 import pf.Comp.MotionControl
 import pf.Setup.NormalMap
-import pf.Light.OmnidirectionalEmission
+import pf.Comp.OmnidirectionalEmission
 import pf.Comp.OrientationControl
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
@@ -27,7 +27,7 @@ import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
 import pf.Comp.SameVoxelType
 import pf.Setup.SceneGraphGroup
-import pf.Light.ShadowableUnidirectionalEmission
+import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.SphericalCollidable
 import pf.Setup.SphereMesh
 import pf.Setup.TexturedColor
@@ -98,7 +98,7 @@ player =
 
 sun_light =
     Entity.new
-    |> Light.ShadowableUnidirectionalEmission.add_new(
+    |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(200000),
         UnitVector3.from((0, -1, 0)),
         2.0,
@@ -106,7 +106,7 @@ sun_light =
 
 ambient_light =
     Entity.new
-    |> Light.AmbientEmission.add_new(Vector3.same(2000000))
+    |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
 
 create_texture_ids = |texture_name| {
     color: TextureID.from_name("${texture_name}_color_texture"),
@@ -263,7 +263,7 @@ create_room! = |extent, angular_speed, texture_ids|
         |> Comp.ReferenceFrame.add_multiple_unoriented(
             All(light_positions),
         )?
-        |> Light.OmnidirectionalEmission.add_multiple_new(
+        |> Comp.OmnidirectionalEmission.add_multiple_new(
             Same(Vector3.same(5e7)),
             Same(0.7),
         )?

@@ -1,8 +1,8 @@
 # Hash: 8d030dbc4e374b4225793153a41b1ae5f818e6ca6c5cdf0edc8348bd8872a4af
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact_mesh::FrontFaceSide
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     FrontFaceSide,
     write_bytes,

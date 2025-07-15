@@ -1,8 +1,8 @@
 # Hash: 9cfbdbf06a8e5fe19d84e5b11957c5b57dbac75ff6bfdd6d2c6d8a0ff67c1103
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact_physics::force::detailed_drag::setup::DetailedDragProperties
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     DetailedDragProperties,
     new,

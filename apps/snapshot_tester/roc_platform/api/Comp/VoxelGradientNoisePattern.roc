@@ -1,8 +1,8 @@
 # Hash: 331e27d3c0aee29cc9ab3e002558a398d3a099975296c0e2e7b2c126823d2e19
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact::voxel::components::VoxelGradientNoisePatternComp
 # Type category: Component
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     VoxelGradientNoisePattern,
     new,

@@ -1,8 +1,8 @@
 # Hash: 4f6be3bb6946955a83076a5367d0a00bb97a313a075913dc526dca27bb88fa6c
-# Generated: 2025-07-15T11:05:49+00:00
+# Generated: 2025-07-15T17:32:43+00:00
 # Rust type: impact_model::InstanceFeatureID
 # Type category: POD
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     InstanceFeatureID,
     write_bytes,

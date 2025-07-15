@@ -1,8 +1,8 @@
 # Hash: fe8a844097cfd1402a0db9fd302883e493072beba9a4afe6cf3ff5531d715c7a
-# Generated: 2025-07-15T10:43:03+00:00
+# Generated: 2025-07-15T17:32:17+00:00
 # Rust type: impact::gpu::rendering::postprocessing::command::PostprocessingCommand
 # Type category: Inline
-# Commit: 189570ab (dirty)
+# Commit: 1fbb6f6b (dirty)
 module [
     PostprocessingCommand,
     write_bytes,
