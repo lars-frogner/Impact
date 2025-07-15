@@ -5,15 +5,15 @@ app [callbacks] {
 
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.Keyboard as KeyboardInput
-import Scenes.CollisionLab
+import Scenes.Asteroid
 
 callbacks = {
-    setup_scene!: Scenes.CollisionLab.setup!,
+    setup_scene!: Scenes.Asteroid.setup!,
     handle_keyboard_event!: KeyboardInput.handle_event!,
     handle_mouse_button_event!,
 }
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
 handle_mouse_button_event! = |event|
-    # Scenes.Asteroid.handle_mouse_button_event!(event)
-    Ok({})
+    Scenes.Asteroid.handle_mouse_button_event!(event)
+# Ok({})

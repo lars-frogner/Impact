@@ -13,9 +13,9 @@ import pf.Entity
 import pf.Skybox
 import pf.Comp.AmbientEmission
 import pf.Setup.CylinderMesh
-import pf.Comp.GradientNoiseVoxelTypes
+import pf.Setup.GradientNoiseVoxelTypes
 import pf.Comp.MotionControl
-import pf.Comp.MultifractalNoiseModification
+import pf.Setup.MultifractalNoiseSDFModification
 import pf.Comp.OrientationControl
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
@@ -33,7 +33,7 @@ import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
-import pf.Comp.VoxelSphereUnion
+import pf.Setup.VoxelSphereUnion
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.MouseButton as MouseButtonInput
 import pf.Physics.AngularVelocity as AngularVelocity
@@ -130,7 +130,7 @@ absorbing_sphere =
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
-    |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 10, 15)
+    |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 1, 15)
     |> Scene.SceneEntityFlags.add(Scene.SceneEntityFlags.is_disabled)
 
 ground =
@@ -145,9 +145,9 @@ ground =
 asteroid =
     Entity.new
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 30))
-    |> Comp.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
-    |> Comp.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
-    |> Comp.MultifractalNoiseModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
+    |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
+    |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
+    |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
     |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
 
 ambient_light =

@@ -1,24 +1,16 @@
 //! ECS systems for gizmo management.
 
-use crate::{
-    gizmo::{
-        GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
-        components::GizmosComp,
-        model::{
-            COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
-            COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
-            SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
-            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
-            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
-            VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
-            VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
-        },
-    },
-    physics::collision::collidable::voxel::{Collidable, CollisionWorld},
-    voxel::{
-        VoxelManager, VoxelObjectID, VoxelObjectManager,
-        chunks::{CHUNK_SIZE, VoxelChunk},
-        components::VoxelObjectComp,
+use crate::gizmo::{
+    GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
+    components::GizmosComp,
+    model::{
+        COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
+        COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
+        SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+        VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+        VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
+        VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+        VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
     },
 };
 use approx::abs_diff_ne;
@@ -41,6 +33,11 @@ use impact_scene::{
     camera::SceneCamera,
     graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
     model::InstanceFeatureManager,
+};
+use impact_voxel::{
+    VoxelManager, VoxelObjectID, VoxelObjectManager,
+    chunks::{CHUNK_SIZE, VoxelChunk},
+    collidable::{Collidable, CollisionWorld},
 };
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::iter;
@@ -241,7 +238,7 @@ pub fn buffer_transforms_for_gizmos(
     query!(
         ecs_world,
         |gizmos: &GizmosComp,
-         voxel_object: &VoxelObjectComp,
+         voxel_object_id: &VoxelObjectID,
          model_instance_node: &SceneGraphModelInstanceNodeHandle,
          flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::VOXEL_CHUNKS) || flags.is_disabled() {
@@ -254,7 +251,7 @@ pub fn buffer_transforms_for_gizmos(
                 gizmo_manager.parameters(),
                 current_frame_count,
                 model_instance_node.id,
-                voxel_object.voxel_object_id,
+                *voxel_object_id,
             );
         }
     );

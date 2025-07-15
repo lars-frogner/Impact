@@ -1,8 +1,8 @@
-# Hash: 3bd089b9225deabe85db6e90d70f7bf08338036ce4aec5ec735f09cae911af08
-# Generated: 2025-07-15T17:32:17+00:00
-# Rust type: impact::physics::collision::setup::VoxelCollidable
+# Hash: 1398c2a53b105215378f29a0b2456d0bb0495562a133c1adec6acdc3aed8e841
+# Generated: 2025-07-15T22:31:15+00:00
+# Rust type: impact_voxel::collidable::setup::VoxelCollidable
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 07de5ae9 (dirty)
 module [
     VoxelCollidable,
     new,
@@ -21,10 +21,6 @@ import Physics.ContactResponseParameters
 import core.Builtin
 
 ## A voxel object-based collidable.
-##
-## This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
-## purpose is to aid in constructing a `CollidableID` component for an entity.
-## It is therefore not kept after entity creation.
 VoxelCollidable : {
     kind : U64,
     response_params : Physics.ContactResponseParameters.ContactResponseParameters,
@@ -79,7 +75,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, VoxelCollidable -> List U8
 write_packet = |bytes, val|
-    type_id = 11983096598995050472
+    type_id = 1220584796427340799
     size = 32
     alignment = 8
     bytes
@@ -91,7 +87,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List VoxelCollidable -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 11983096598995050472
+    type_id = 1220584796427340799
     size = 32
     alignment = 8
     count = List.len(vals)

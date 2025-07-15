@@ -135,7 +135,7 @@ impl Scene {
             desynchronized,
         );
 
-        voxel::entity::cleanup_voxel_object_for_removed_entity(
+        impact_voxel::setup::cleanup_voxel_object_for_removed_entity(
             self.voxel_manager(),
             entity,
             desynchronized,

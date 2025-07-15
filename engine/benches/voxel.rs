@@ -1,14 +1,12 @@
-use impact::{
-    profiling::benchmarks::chunked_voxel_object,
-    voxel::{
-        chunks::{ChunkedVoxelObject, sdf::VoxelChunkSignedDistanceField},
-        generation::{SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
-        voxel_types::VoxelType,
-    },
-};
+use impact::profiling::benchmarks::chunked_voxel_object;
 use impact_profiling::{
     criterion::{self, Criterion},
     define_criterion_target,
+};
+use impact_voxel::{
+    chunks::{ChunkedVoxelObject, sdf::VoxelChunkSignedDistanceField},
+    generation::{SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
+    voxel_types::VoxelType,
 };
 use std::hint::black_box;
 

@@ -1,8 +1,8 @@
-# Hash: 41b72ef5c05047f0dba1d1bec59964c6028662d928239d2fb3b1d091108b6c8e
-# Generated: 2025-07-15T17:32:43+00:00
-# Rust type: impact::voxel::components::VoxelAbsorbingSphereComp
+# Hash: beb49f22c38d0d78f3dfdce07ed1558576e5dbc7f48f163c113f8da86027e18c
+# Generated: 2025-07-15T22:50:47+00:00
+# Rust type: impact_voxel::absorption::VoxelAbsorbingSphere
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 07de5ae9 (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -19,10 +19,9 @@ import Entity.Arg
 import core.Builtin
 import core.Vector3
 
-## [`Component`](impact_ecs::component::Component) for entities that have a
-## sphere that absorbs voxels it comes in contact with. The rate of absorption
-## is highest at the center of the sphere and decreases quadratically to zero
-## at the full radius.
+## A sphere that absorbs voxels it comes in contact with. The rate of
+## absorption is highest at the center of the sphere and decreases
+## quadratically to zero at the full radius.
 ##
 ## Does nothing if the entity does not have a
 ## [`impact_geometry::ReferenceFrame`].
@@ -35,9 +34,9 @@ VoxelAbsorbingSphere : {
     rate : F64,
 }
 
-## Creates a new [`VoxelAbsorbingSphereComp`] with the given offset and
-## radius in the reference frame of the entity and the given maximum
-## absorption rate (at the center of the sphere).
+## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
+## in the reference frame of the entity and the given maximum absorption
+## rate (at the center of the sphere).
 new : Vector3.Vector3 Binary64, F64, F64 -> VoxelAbsorbingSphere
 new = |offset, radius, rate|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
@@ -49,17 +48,17 @@ new = |offset, radius, rate|
         rate,
     }
 
-## Creates a new [`VoxelAbsorbingSphereComp`] with the given offset and
-## radius in the reference frame of the entity and the given maximum
-## absorption rate (at the center of the sphere).
+## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
+## in the reference frame of the entity and the given maximum absorption
+## rate (at the center of the sphere).
 ## Adds the component to the given entity's data.
 add_new : Entity.Data, Vector3.Vector3 Binary64, F64, F64 -> Entity.Data
 add_new = |entity_data, offset, radius, rate|
     add(entity_data, new(offset, radius, rate))
 
-## Creates a new [`VoxelAbsorbingSphereComp`] with the given offset and
-## radius in the reference frame of the entity and the given maximum
-## absorption rate (at the center of the sphere).
+## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
+## in the reference frame of the entity and the given maximum absorption
+## rate (at the center of the sphere).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
@@ -96,7 +95,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, VoxelAbsorbingSphere -> List U8
 write_packet = |bytes, val|
-    type_id = 13339386110717950888
+    type_id = 1182945193017012499
     size = 40
     alignment = 8
     bytes
@@ -108,7 +107,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List VoxelAbsorbingSphere -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 13339386110717950888
+    type_id = 1182945193017012499
     size = 40
     alignment = 8
     count = List.len(vals)

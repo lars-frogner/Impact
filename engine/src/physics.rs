@@ -9,5 +9,4 @@ pub mod rigid_body;
 pub mod systems;
 pub mod tasks;
 
-pub type PhysicsSimulator =
-    impact_physics::PhysicsSimulator<collision::collidable::voxel::Collidable>;
+pub type PhysicsSimulator = impact_physics::PhysicsSimulator<impact_voxel::collidable::Collidable>;

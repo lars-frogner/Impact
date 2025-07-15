@@ -1,8 +1,8 @@
-# Hash: e0a1c6e7db2ada729c8664cc59d691bc73e19ce703b9fd6e292efc92e97692e1
-# Generated: 2025-07-15T17:32:43+00:00
-# Rust type: impact_geometry::reference_frame::ModelTransform
+# Hash: af372ad4432bb835878f8b590bd8575a025bf24134d51907440c1cf789297fbe
+# Generated: 2025-07-15T22:50:47+00:00
+# Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 07de5ae9 (dirty)
 module [
     ModelTransform,
     identity,
@@ -173,7 +173,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, ModelTransform -> List U8
 write_packet = |bytes, val|
-    type_id = 1943320543466053004
+    type_id = 6181645024584197525
     size = 16
     alignment = 4
     bytes
@@ -185,7 +185,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List ModelTransform -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 1943320543466053004
+    type_id = 6181645024584197525
     size = 16
     alignment = 4
     count = List.len(vals)
