@@ -2,7 +2,7 @@
 
 use crate::{AxisAlignedBox, Sphere};
 use impact_math::Float;
-use nalgebra::{Point3, Similarity3, Vector3};
+use nalgebra::{Isometry3, Point3, Similarity3, Vector3};
 
 /// A capsule represented by the starting point and displacement vector of the
 /// segment making up the central axis of the cylinder between the caps, as well
@@ -70,6 +70,16 @@ impl<F: Float> Capsule<F> {
             transform.transform_point(self.segment_start()),
             transform.transform_vector(self.segment_vector()),
             transform.scaling() * self.radius(),
+        )
+    }
+
+    /// Computes the capsule resulting from transforming this capsule with the
+    /// given isometry transform.
+    pub fn translated_and_rotated(&self, transform: &Isometry3<F>) -> Self {
+        Self::new(
+            transform.transform_point(self.segment_start()),
+            transform.transform_vector(self.segment_vector()),
+            self.radius(),
         )
     }
 

@@ -1,8 +1,8 @@
-# Hash: f007df5406cfb7f0f1dfa0c0307fba43f2246fd774a32714f5fa3d00640d1215
-# Generated: 2025-07-13T19:49:53+00:00
+# Hash: 41b72ef5c05047f0dba1d1bec59964c6028662d928239d2fb3b1d091108b6c8e
+# Generated: 2025-07-15T10:43:03+00:00
 # Rust type: impact::voxel::components::VoxelAbsorbingSphereComp
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -62,19 +62,15 @@ add_new = |entity_data, offset, radius, rate|
 ## absorption rate (at the center of the sphere).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted F64, Entity.Arg.Broadcasted F64 -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
 add_multiple_new = |entity_data, offset, radius, rate|
     add_multiple(
         entity_data,
-        All(
-            Entity.Arg.broadcasted_map3(
-                offset,
-                radius,
-                rate,
-                Entity.multi_count(entity_data),
-                new,
-            ),
-        ),
+        All(Entity.Arg.broadcasted_map3(
+            offset, radius, rate,
+            Entity.multi_count(entity_data),
+            new
+        ))
     )
 
 ## Adds a value of the [VoxelAbsorbingSphere] component to an entity's data.
@@ -89,7 +85,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted VoxelAbsorbingSphere -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelAbsorbingSphere) -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

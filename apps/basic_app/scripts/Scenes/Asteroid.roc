@@ -21,6 +21,7 @@ import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
+import pf.Comp.ModelTransform
 import pf.Setup.SceneGraphGroup
 import pf.Setup.SphereMesh
 import pf.Light.ShadowableOmnidirectionalEmission
@@ -88,7 +89,7 @@ skybox = Rendering.TextureID.from_name("space_skybox")
 
 player =
     Entity.new
-    |> Comp.ReferenceFrame.add_unscaled(
+    |> Comp.ReferenceFrame.add_new(
         (0.0, 0.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
@@ -105,7 +106,7 @@ camera =
 laser =
     Entity.new
     |> Setup.Parent.add_new(entity_ids.player)
-    |> Comp.ReferenceFrame.add_unscaled(
+    |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
     )
@@ -123,7 +124,8 @@ laser =
 absorbing_sphere =
     Entity.new
     |> Setup.Parent.add_new(entity_ids.player)
-    |> Comp.ReferenceFrame.add_unoriented_scaled((0, 0, -3), 0.1)
+    |> Comp.ModelTransform.add_with_scale(0.1)
+    |> Comp.ReferenceFrame.add_unoriented((0, 0, -3))
     |> Setup.SphereMesh.add_new(64)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(1e6)
@@ -134,7 +136,8 @@ absorbing_sphere =
 ground =
     Entity.new
     |> Setup.RectangleMesh.add_unit_square
-    |> Comp.ReferenceFrame.add_unoriented_scaled((0, -20, 0), 500)
+    |> Comp.ModelTransform.add_with_scale(500)
+    |> Comp.ReferenceFrame.add_unoriented((0, -20, 0))
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformSpecularReflectance.add(0.01)
     |> Setup.UniformRoughness.add(0.5)
@@ -154,7 +157,8 @@ ambient_light =
 omnidirectional_light =
     Entity.new
     |> Setup.SphereMesh.add_new(25)
-    |> Comp.ReferenceFrame.add_unoriented_scaled((0, 15, 2), 0.7)
+    |> Comp.ModelTransform.add_with_scale(0.7)
+    |> Comp.ReferenceFrame.add_unoriented((0, 15, 2))
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Light.ShadowableOmnidirectionalEmission.add_new(

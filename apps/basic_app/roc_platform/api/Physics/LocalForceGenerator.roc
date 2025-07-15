@@ -1,8 +1,8 @@
 # Hash: 3a9acba8d84023c90db75596a6963f6c5b3f8be377c6af9a17fdf94adcad5766
-# Generated: 2025-07-13T19:49:53+00:00
+# Generated: 2025-07-15T10:43:03+00:00
 # Rust type: impact_physics::force::local_force::LocalForceGenerator
 # Type category: POD
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     LocalForceGenerator,
     write_bytes,

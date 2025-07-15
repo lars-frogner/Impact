@@ -4,7 +4,6 @@ module [
 ]
 
 import core.Plane
-import core.Point3
 import core.Radians
 import core.UnitQuaternion
 import core.UnitVector3
@@ -19,6 +18,7 @@ import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
+import pf.Comp.ModelTransform
 import pf.Light.ShadowableUnidirectionalEmission
 import pf.Setup.UniformColor
 import pf.Setup.UniformRoughness
@@ -49,7 +49,7 @@ skybox = Rendering.TextureID.from_name("space_skybox")
 
 player =
     Entity.new
-    |> Comp.ReferenceFrame.add_unscaled(
+    |> Comp.ReferenceFrame.add_new(
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
@@ -61,7 +61,7 @@ player =
 ground =
     Entity.new
     |> Setup.RectangleMesh.add_unit_square
-    |> Comp.ReferenceFrame.add_unoriented_scaled(Point3.origin, 1000)
+    |> Comp.ModelTransform.add_with_scale(1000)
     |> Setup.PlanarCollidable.add_new(
         Static,
         Plane.new(UnitVector3.y_axis, 0.0),

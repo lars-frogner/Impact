@@ -12,7 +12,7 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{ConstStringHash64, HaltonSequence};
-use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
+use nalgebra::{Isometry3, Projective3, UnitQuaternion, Vector4};
 use std::{borrow::Cow, sync::LazyLock};
 
 /// Represents a camera that can buffered in a GPU buffer.
@@ -21,7 +21,7 @@ pub trait BufferableCamera {
     fn camera(&self) -> &dyn Camera<f32>;
 
     /// Returns a reference to the camera's view transform.
-    fn view_transform(&self) -> &Similarity3<f32>;
+    fn view_transform(&self) -> &Isometry3<f32>;
 
     /// Returns whether jittering is enabled for the camera.
     fn jitter_enabled(&self) -> bool;
@@ -37,7 +37,7 @@ const JITTER_BASES: (u64, u64) = (2, 3);
 /// Owner and manager of a GPU resources for a camera.
 #[derive(Debug)]
 pub struct CameraGPUBufferManager {
-    view_transform: Similarity3<f32>,
+    view_transform: Isometry3<f32>,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
     jitter_enabled: bool,
@@ -150,7 +150,7 @@ impl CameraGPUBufferManager {
 
     /// Returns the camera rotation quaternion push constant.
     pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternion<f32> {
-        self.view_transform.isometry.rotation
+        self.view_transform.rotation
     }
 
     /// Creates the bind group layout entry for the camera projection uniform,

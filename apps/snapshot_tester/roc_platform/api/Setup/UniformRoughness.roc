@@ -1,8 +1,8 @@
 # Hash: c00f6db2f9c8c63cf96883e12d6d29d39af73c752f2e39b5ce731e09ee2c2069
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_material::setup::physical::UniformRoughness
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     UniformRoughness,
     add,

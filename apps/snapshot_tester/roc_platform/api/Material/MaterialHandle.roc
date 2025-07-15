@@ -1,8 +1,8 @@
 # Hash: 03a03d9f738addb5c2b7b9bbeb31d68a0be90012ac38a5ef796d3afe94571b9d
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_material::MaterialHandle
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     MaterialHandle,
     add,

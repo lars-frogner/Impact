@@ -1,8 +1,8 @@
 # Hash: c24a81af5cc546effc95c179f983d0fe85ee8ee00c0ff69b479a6f5beda5636c
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_material::setup::physical::TexturedRoughness
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     TexturedRoughness,
     unscaled,

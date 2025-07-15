@@ -1,8 +1,8 @@
 # Hash: 0de1b5e414316d17a5f6bf448d32b018bf8265633383b505d9418eb10b96cf5a
-# Generated: 2025-07-13T19:49:53+00:00
+# Generated: 2025-07-15T10:43:03+00:00
 # Rust type: impact_light::UnidirectionalEmission
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     UnidirectionalEmission,
     new,

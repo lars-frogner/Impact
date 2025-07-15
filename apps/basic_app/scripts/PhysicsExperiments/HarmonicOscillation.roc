@@ -5,12 +5,12 @@ module [
 ]
 
 import core.Point3
-import core.UnitQuaternion
 import core.UnitVector3
 import pf.Entity
 import pf.Setup.BoxMesh
 import pf.Setup.HarmonicOscillatorTrajectory
 import pf.Comp.ReferenceFrame
+import pf.Comp.ModelTransform
 import pf.Setup.SphereMesh
 import pf.Setup.UniformColor
 import pf.Setup.DynamicDynamicSpringForceGenerator
@@ -44,7 +44,8 @@ create_entities! = |position, mass, spring_constant, amplitude|
     attachment_point =
         Entity.new
         |> Setup.SphereMesh.add_new(15)
-        |> Comp.ReferenceFrame.add_unoriented_scaled(attachment_position, 0.2)
+        |> Comp.ModelTransform.add_with_scale(0.2)
+        |> Comp.ReferenceFrame.add_unoriented(attachment_position)
         |> Setup.UniformColor.add((0.8, 0.1, 0.1))
 
     dynamic_body =
@@ -75,7 +76,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
     kinematic_body =
         Entity.new
         |> Setup.BoxMesh.add_unit_cube
-        |> Comp.ReferenceFrame.add_unlocated(UnitQuaternion.identity)
+        |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.Motion.add_stationary
         |> Setup.HarmonicOscillatorTrajectory.add_new(
             0.25 * period,

@@ -16,7 +16,7 @@ use crate::{
 use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::ReferenceFrame;
+use impact_geometry::ModelTransform;
 use impact_math::StringHash64;
 use nalgebra::Point3;
 use roc_integration::roc;
@@ -46,7 +46,7 @@ pub fn setup_detailed_drag_force<'a>(
     force_generator_manager: &mut ForceGeneratorManager,
     drag_properties: DetailedDragProperties,
     rigid_body_id: DynamicRigidBodyID,
-    frame: ReferenceFrame,
+    model_transform: &ModelTransform,
     drag_load_map_id: StringHash64,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
 ) -> Result<DetailedDragForceGeneratorID> {
@@ -72,7 +72,7 @@ pub fn setup_detailed_drag_force<'a>(
                 )
             })?
         } else {
-            let center_of_mass = Point3::from(frame.origin_offset);
+            let center_of_mass = Point3::from(model_transform.offset.cast());
             let map = generate_map(
                 config,
                 &center_of_mass,
@@ -107,7 +107,7 @@ pub fn setup_detailed_drag_force<'a>(
             force: DetailedDragForce {
                 drag_coefficient: drag_properties.drag_coefficient,
                 drag_load_map: drag_load_map_id,
-                scaling: frame.scaling,
+                scaling: fph::from(model_transform.scale),
             },
         });
 

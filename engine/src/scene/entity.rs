@@ -12,7 +12,7 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, World as ECSWorld},
 };
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_gpu::device::GraphicsDevice;
 use impact_material::{MaterialHandle, MaterialTextureProvider};
 use impact_mesh::TriangleMeshID;
@@ -171,14 +171,11 @@ impl Scene {
             |frame: Option<&ReferenceFrame>,
              parent: Option<&SceneGraphParentNodeHandle>|
              -> SceneGraphGroupNodeHandle {
-                let group_to_parent_transform = frame
-                    .cloned()
-                    .unwrap_or_default()
-                    .create_transform_to_parent_space();
+                let frame = frame.copied().unwrap_or_default();
 
                 impact_scene::setup::setup_group_node(
                     &mut scene_graph,
-                    group_to_parent_transform,
+                    frame.create_transform_to_parent_space(),
                     parent,
                 )
             },
@@ -199,31 +196,39 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |mesh: &TriangleMeshID,
+            |mesh_id: &TriangleMeshID,
              material: &MaterialHandle,
+             model_transform: Option<&ModelTransform>,
              frame: Option<&ReferenceFrame>,
              parent: Option<&SceneGraphParentNodeHandle>,
              flags: Option<&SceneEntityFlags>|
-             -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
-                let model_to_parent_transform = frame
-                    .cloned()
-                    .unwrap_or_default()
-                    .create_transform_to_parent_space();
+             -> Result<(
+                SceneGraphModelInstanceNodeHandle,
+                ModelTransform,
+                SceneEntityFlags
+            )> {
+                let model_transform = model_transform.copied().unwrap_or_default();
+                let frame = frame.copied().unwrap_or_default();
+
+                let model_to_parent_transform = frame.create_transform_to_parent_space()
+                    * model_transform.crate_transform_to_entity_space();
 
                 let uncullable = components.has_component_type::<Uncullable>();
 
-                impact_scene::setup::setup_model_instance_node(
+                let (node_handle, flags) = impact_scene::setup::setup_model_instance_node(
                     &mesh_repository,
                     &material_library,
                     &mut instance_feature_manager,
                     &mut scene_graph,
                     model_to_parent_transform,
-                    mesh,
+                    mesh_id,
                     material,
                     parent,
                     flags,
                     uncullable,
-                )
+                )?;
+
+                Ok((node_handle, model_transform, flags))
             },
             ![SceneGraphModelInstanceNodeHandle]
         )

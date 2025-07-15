@@ -1,8 +1,8 @@
 # Hash: d59ddb272fc516ec7a5b8c22955eb3115cc301126837a85e2d738f9bc90d4b9d
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_physics::quantities::Motion
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     Motion,
     new,

@@ -11,12 +11,10 @@ use impact_physics::{
     },
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     fph,
+    inertia::InertialProperties,
     material::ContactResponseParameters,
     quantities::{Motion, Orientation, Position, Velocity},
-    rigid_body::{
-        self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager,
-        setup::DynamicRigidBodySubstance,
-    },
+    rigid_body::{self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 use nalgebra::{point, vector};
 
@@ -82,13 +80,14 @@ fn setup_sphere_bodies(
                 let frame = ReferenceFrame::unoriented(*sphere.center());
                 let motion = Motion::linear(velocity);
 
-                let (rigid_body_id, _frame, _motion) =
-                    rigid_body::setup::setup_dynamic_rigid_body_for_uniform_sphere(
-                        rigid_body_manager,
-                        &DynamicRigidBodySubstance { mass_density },
-                        frame,
-                        motion,
-                    );
+                let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
+
+                let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+                    rigid_body_manager,
+                    inertial_properties,
+                    frame,
+                    motion,
+                );
 
                 let collidable = SphericalCollidable::new(
                     CollidableKind::Dynamic,
@@ -125,7 +124,7 @@ fn setup_plane_bodies(
                  orientation,
                  restitution_coef,
              }| {
-                let frame = ReferenceFrame::unscaled(origin, orientation);
+                let frame = ReferenceFrame::new(origin, orientation);
                 let motion = Motion::stationary();
 
                 let rigid_body_id = rigid_body::setup::setup_kinematic_rigid_body(

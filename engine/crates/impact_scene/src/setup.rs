@@ -3,7 +3,7 @@
 use crate::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
-    graph::{NodeTransform, SceneGraph},
+    graph::SceneGraph,
     model::{InstanceFeatureManager, ModelID},
 };
 use anyhow::{Result, anyhow};
@@ -13,6 +13,7 @@ use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
+use nalgebra::{Isometry3, Similarity3};
 use std::sync::RwLock;
 
 /// A parent entity.
@@ -80,7 +81,7 @@ pub fn setup_parent_group_node(
 
 pub fn setup_group_node(
     scene_graph: &mut SceneGraph,
-    group_to_parent_transform: NodeTransform,
+    group_to_parent_transform: Isometry3<f32>,
     parent: Option<&SceneGraphParentNodeHandle>,
 ) -> SceneGraphGroupNodeHandle {
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
@@ -95,7 +96,7 @@ pub fn setup_model_instance_node(
     material_library: &MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     scene_graph: &mut SceneGraph,
-    model_to_parent_transform: NodeTransform,
+    model_to_parent_transform: Similarity3<f32>,
     mesh_id: &TriangleMeshID,
     material: &MaterialHandle,
     parent: Option<&SceneGraphParentNodeHandle>,

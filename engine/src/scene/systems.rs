@@ -2,7 +2,7 @@
 
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_light::{
     AmbientEmission, AmbientLightID, LightStorage, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
@@ -14,7 +14,7 @@ use impact_scene::{
     SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera,
     graph::SceneGraph,
 };
-use nalgebra::Similarity3;
+use nalgebra::Isometry3;
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
 /// entity that also has the
@@ -28,15 +28,21 @@ pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph:
         scene_graph
             .set_group_to_parent_transform(node.id, frame.create_transform_to_parent_space());
     });
+
     query!(ecs_world, |node: &SceneGraphModelInstanceNodeHandle,
+                       model_transform: &ModelTransform,
                        frame: &ReferenceFrame,
                        flags: &SceneEntityFlags| {
+        let model_to_parent_transform = frame.create_transform_to_parent_space()
+            * model_transform.crate_transform_to_entity_space();
+
         scene_graph.set_model_to_parent_transform_and_flags(
             node.id,
-            frame.create_transform_to_parent_space(),
+            model_to_parent_transform,
             (*flags).into(),
         );
     });
+
     query!(ecs_world, |node: &SceneGraphCameraNodeHandle,
                        frame: &ReferenceFrame| {
         scene_graph
@@ -52,7 +58,7 @@ pub fn sync_lights_in_storage(
     scene_camera: Option<&SceneCamera>,
     light_storage: &mut LightStorage,
 ) {
-    let view_transform = scene_camera.map_or_else(Similarity3::identity, |scene_camera| {
+    let view_transform = scene_camera.map_or_else(Isometry3::identity, |scene_camera| {
         *scene_camera.view_transform()
     });
 

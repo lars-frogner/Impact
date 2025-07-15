@@ -1,8 +1,8 @@
 # Hash: 45539e807ec78fb331c5249a627a3ddc10b97f37b6b3bf7ce83b405106b22b29
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_material::setup::physical::TexturedEmissiveLuminance
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     TexturedEmissiveLuminance,
     unscaled,

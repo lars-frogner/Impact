@@ -1,8 +1,8 @@
 # Hash: 9c91002c32179ff701c9a4d316bd9fd3a498c005dd25a3bc2ee171c1ddc7e905
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectoryDriver
 # Type category: POD
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     HarmonicOscillatorTrajectoryDriver,
     write_bytes,

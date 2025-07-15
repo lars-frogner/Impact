@@ -1,8 +1,8 @@
 # Hash: 30efbca7e2f75cad2269224e6e9d84b3e2c35f935546fdb430dd794710be5488
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact_physics::force::constant_acceleration::ConstantAccelerationGenerator
 # Type category: POD
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     ConstantAccelerationGenerator,
     write_bytes,

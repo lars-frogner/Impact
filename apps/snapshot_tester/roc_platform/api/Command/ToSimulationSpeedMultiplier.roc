@@ -1,8 +1,8 @@
 # Hash: 0632ec9f3370723e84f84d34cd8db06c123c5fce1ab4539cebe3653129a9adb5
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact::physics::command::ToSimulationSpeedMultiplier
 # Type category: Inline
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     ToSimulationSpeedMultiplier,
     write_bytes,

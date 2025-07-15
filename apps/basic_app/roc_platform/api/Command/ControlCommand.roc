@@ -1,8 +1,8 @@
 # Hash: 9a59e09f4a6e275b54a89005945c7909f35de2ff15c03874b50c1e388716c0a7
-# Generated: 2025-07-13T19:49:53+00:00
+# Generated: 2025-07-15T10:43:03+00:00
 # Rust type: impact::control::command::ControlCommand
 # Type category: Inline
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     ControlCommand,
     write_bytes,

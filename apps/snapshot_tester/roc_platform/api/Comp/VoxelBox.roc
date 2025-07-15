@@ -1,8 +1,8 @@
 # Hash: 6bcca1482bfc5b9e1a79b628e068d56575812d472af0293528e0041c5dd56924
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact::voxel::components::VoxelBoxComp
 # Type category: Component
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     VoxelBox,
     new,

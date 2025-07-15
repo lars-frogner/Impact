@@ -18,7 +18,7 @@ pub use frustum::Frustum;
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
-pub use reference_frame::ReferenceFrame;
+pub use reference_frame::{ModelTransform, ReferenceFrame};
 pub use sphere::Sphere;
 
 use impact_math::Float;

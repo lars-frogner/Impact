@@ -727,12 +727,9 @@ fn buffer_transforms_for_collider_gizmos(
             let transform_from_object_to_camera_space =
                 scene_camera.view_transform().cast() * transform_from_object_to_world_space;
 
-            let rotation_from_object_to_camera_space = transform_from_object_to_camera_space
-                .isometry
-                .rotation
-                .cast();
-            let scaling_from_object_to_camera_space =
-                (transform_from_object_to_camera_space.scaling() * voxel_radius) as f32;
+            let rotation_from_object_to_camera_space =
+                transform_from_object_to_camera_space.rotation.cast();
+            let scaling_from_object_to_camera_space = voxel_radius as f32;
 
             let mut transforms = Vec::with_capacity(voxel_object.surface_voxel_count_heuristic());
 

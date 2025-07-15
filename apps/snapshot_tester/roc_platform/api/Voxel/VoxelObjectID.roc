@@ -1,8 +1,8 @@
 # Hash: 36dfa5d37287875ee7369d49c0de834ae97cd218ac6b214c184f343ebf2e86db
-# Generated: 2025-07-13T20:18:37+00:00
+# Generated: 2025-07-15T11:05:49+00:00
 # Rust type: impact::voxel::VoxelObjectID
 # Type category: POD
-# Commit: b1b4dfd8 (dirty)
+# Commit: 189570ab (dirty)
 module [
     VoxelObjectID,
     write_bytes,
