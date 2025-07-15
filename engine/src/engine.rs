@@ -23,7 +23,6 @@ use crate::{
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
     physics::PhysicsSimulator,
     scene::Scene,
-    voxel::{self, VoxelConfig, VoxelManager},
 };
 use anyhow::{Result, anyhow};
 use impact_assets::{AssetConfig, Assets, lookup_tables};
@@ -36,6 +35,7 @@ use impact_material::MaterialLibrary;
 use impact_mesh::MeshRepository;
 use impact_physics::PhysicsConfig;
 use impact_scene::model::InstanceFeatureManager;
+use impact_voxel::{VoxelConfig, VoxelManager};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
@@ -132,7 +132,7 @@ impl Engine {
         let mut instance_feature_manager = InstanceFeatureManager::new();
         impact_model::register_model_feature_types(&mut instance_feature_manager);
         impact_material::register_material_feature_types(&mut instance_feature_manager);
-        voxel::register_voxel_feature_types(&mut instance_feature_manager);
+        impact_voxel::register_voxel_feature_types(&mut instance_feature_manager);
         gizmo::initialize_buffers_for_gizmo_models(&mut instance_feature_manager);
 
         let voxel_manager = VoxelManager::from_config(config.voxel)?;

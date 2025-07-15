@@ -2,19 +2,12 @@
 
 pub mod tasks;
 
-use crate::{
-    gpu::{GraphicsDevice, rendering::ShadowMappingConfig},
-    voxel::{
-        VoxelManager, VoxelObjectID,
-        resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
-    },
-};
 use anyhow::Result;
 use impact_assets::Assets;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
-use impact_gpu::bind_group_layout::BindGroupLayoutRegistry;
-use impact_light::{LightStorage, buffer::LightGPUBufferManager};
+use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
+use impact_light::{LightStorage, buffer::LightGPUBufferManager, shadow_map::ShadowMappingConfig};
 use impact_mesh::{
     LineSegmentMeshID, TriangleMeshID, buffer::MeshGPUBufferManager, line_segment::LineSegmentMesh,
     triangle::TriangleMesh,
@@ -26,30 +19,18 @@ use impact_scene::{
     model::{InstanceFeatureManager, ModelID},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
 };
+use impact_voxel::{
+    VoxelManager, VoxelObjectID,
+    resource::{
+        VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager, VoxelRenderResources,
+    },
+};
 use std::{
     borrow::Cow,
     collections::hash_map::Entry,
     hash::Hash,
     sync::{Mutex, RwLock},
 };
-
-pub trait VoxelRenderResources {
-    /// Returns the GPU resource manager for voxel materials, or [`None`] if it
-    /// has not been initialized.
-    fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager>;
-
-    /// Returns a reference to the map of voxel object GPU buffer managers.
-    fn voxel_object_buffer_managers(&self) -> &VoxelObjectGPUBufferManagerMap;
-
-    /// Returns the GPU buffer manager for the given voxel object identifier if
-    /// the voxel object exists, otherwise returns [`None`].
-    fn get_voxel_object_buffer_manager(
-        &self,
-        voxel_object_id: VoxelObjectID,
-    ) -> Option<&VoxelObjectGPUBufferManager> {
-        self.voxel_object_buffer_managers().get(&voxel_object_id)
-    }
-}
 
 /// Manager and owner of render resources representing world data.
 ///

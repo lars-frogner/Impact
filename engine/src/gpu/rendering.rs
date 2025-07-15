@@ -5,7 +5,6 @@ pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
-pub mod shader_templates;
 pub mod tasks;
 
 use crate::{scene::Scene, ui::UserInterface};

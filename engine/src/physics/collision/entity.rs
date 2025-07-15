@@ -1,12 +1,5 @@
 //! Management of collidables for entities.
 
-use crate::{
-    physics::collision::{
-        collidable::voxel::{CollisionWorld, LocalCollidable},
-        setup::VoxelCollidable,
-    },
-    voxel::components::VoxelObjectComp,
-};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_physics::{
     collision::{
@@ -14,6 +7,10 @@ use impact_physics::{
         setup::{PlanarCollidable, SphericalCollidable},
     },
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
+};
+use impact_voxel::{
+    VoxelObjectID,
+    collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
 };
 use std::sync::RwLock;
 
@@ -98,12 +95,12 @@ pub fn setup_collidable_for_new_entity(
         },
         components,
         |voxel_collidable: &VoxelCollidable,
-         object: &VoxelObjectComp,
+         voxel_object_id: &VoxelObjectID,
          rigid_body_id: &DynamicRigidBodyID|
          -> CollidableID {
-            super::setup::setup_voxel_collidable(
+            impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
-                object.voxel_object_id,
+                *voxel_object_id,
                 (*rigid_body_id).into(),
                 voxel_collidable,
             )
@@ -116,12 +113,12 @@ pub fn setup_collidable_for_new_entity(
         },
         components,
         |voxel_collidable: &VoxelCollidable,
-         object: &VoxelObjectComp,
+         voxel_object_id: &VoxelObjectID,
          rigid_body_id: &KinematicRigidBodyID|
          -> CollidableID {
-            super::setup::setup_voxel_collidable(
+            impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
-                object.voxel_object_id,
+                *voxel_object_id,
                 (*rigid_body_id).into(),
                 voxel_collidable,
             )

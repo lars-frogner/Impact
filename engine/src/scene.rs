@@ -5,7 +5,6 @@ pub mod entity;
 pub mod systems;
 pub mod tasks;
 
-use crate::voxel::VoxelManager;
 use impact_light::LightStorage;
 use impact_material::{MaterialLibrary, MaterialLibraryState};
 use impact_mesh::{MeshRepository, MeshRepositoryState};
@@ -15,6 +14,7 @@ use impact_scene::{
     model::{InstanceFeatureManager, InstanceFeatureManagerState},
     skybox::Skybox,
 };
+use impact_voxel::VoxelManager;
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.

@@ -4,7 +4,7 @@ use crate::{
     gpu::rendering::{render_command::tasks::SyncRenderCommands, tasks::RenderingTag},
     physics::tasks::{AdvanceSimulation, PhysicsTag},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
-    scene::{RenderResourcesDesynchronized, tasks::UpdateSceneGroupToWorldTransforms},
+    scene::tasks::UpdateSceneGroupToWorldTransforms,
     voxel,
 };
 use anyhow::Result;
@@ -25,7 +25,7 @@ define_task!(
             let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
-            voxel::systems::apply_absorption(
+            impact_voxel::absorption::apply_absorption(
                 &ecs_world,
                 &mut rigid_body_manager,
                 &mut voxel_manager,
@@ -49,13 +49,13 @@ define_task!(
             let scene = engine.scene().read().unwrap();
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
 
-            let mut desynchronized = RenderResourcesDesynchronized::No;
+            let mut desynchronized = false;
 
             for voxel_object in voxel_manager.object_manager.voxel_objects_mut().values_mut() {
                 voxel_object.sync_mesh_with_object(&mut desynchronized);
             }
 
-            if desynchronized.is_yes() {
+            if desynchronized {
                 engine
                     .renderer()
                     .read()

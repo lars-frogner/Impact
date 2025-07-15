@@ -3,10 +3,6 @@
 pub mod gizmo_passes;
 pub mod tasks;
 
-use crate::{
-    gpu::rendering::{BasicRenderingConfig, ShadowMappingConfig, resource::VoxelRenderResources},
-    voxel::render_commands::VoxelRenderCommands,
-};
 use anyhow::Result;
 use gizmo_passes::GizmoPasses;
 use impact_gpu::{
@@ -14,9 +10,10 @@ use impact_gpu::{
     query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
     storage::StorageGPUBufferManager, wgpu,
 };
-use impact_light::LightStorage;
+use impact_light::{LightStorage, shadow_map::ShadowMappingConfig};
 use impact_material::MaterialLibrary;
 use impact_rendering::{
+    BasicRenderingConfig,
     attachment::{RenderAttachmentQuantitySet, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
     render_command::{
@@ -35,6 +32,7 @@ use impact_rendering::{
     surface::RenderingSurface,
 };
 use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
+use impact_voxel::{render_commands::VoxelRenderCommands, resource::VoxelRenderResources};
 
 /// Manager of commands for rendering the scene. Postprocessing commands are
 /// managed by the [`Postprocessor`], but evoked by this manager.

@@ -1,8 +1,8 @@
-# Hash: b53450f2eb91195034c7a47159398524dcc1de3290dfb5d6cc99754776629e2f
-# Generated: 2025-07-15T17:32:43+00:00
-# Rust type: impact::voxel::components::VoxelAbsorbingCapsuleComp
+# Hash: 6763357a6bafccfc33ab4318713db28d60f1daaedce6665cce8502e05bcbcdcb
+# Generated: 2025-07-15T22:50:47+00:00
+# Rust type: impact_voxel::absorption::VoxelAbsorbingCapsule
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 07de5ae9 (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,
@@ -19,10 +19,9 @@ import Entity.Arg
 import core.Builtin
 import core.Vector3
 
-## [`Component`](impact_ecs::component::Component) for entities that have a
-## capsule that absorbs voxels it comes in contact with. The rate of absorption
-## is highest at the central line segment of the capsule and decreases
-## quadratically to zero at the capsule boundary.
+## A capsule that absorbs voxels it comes in contact with. The rate of
+## absorption is highest at the central line segment of the capsule and
+## decreases quadratically to zero at the capsule boundary.
 ##
 ## Does nothing if the entity does not have a
 ## [`impact_geometry::ReferenceFrame`].
@@ -40,7 +39,7 @@ VoxelAbsorbingCapsule : {
     rate : F64,
 }
 
-## Creates a new [`VoxelAbsorbingCapsuleComp`] with the given offset to the
+## Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
 ## start of the capsule's central line segment, displacement from the start
 ## to the end of the line segment and radius, all in the reference frame of
 ## the entity, as well as the given maximum absorption rate (at the central
@@ -57,7 +56,7 @@ new = |offset_to_segment_start, segment_vector, radius, rate|
         rate,
     }
 
-## Creates a new [`VoxelAbsorbingCapsuleComp`] with the given offset to the
+## Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
 ## start of the capsule's central line segment, displacement from the start
 ## to the end of the line segment and radius, all in the reference frame of
 ## the entity, as well as the given maximum absorption rate (at the central
@@ -67,7 +66,7 @@ add_new : Entity.Data, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64, F64, 
 add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
     add(entity_data, new(offset_to_segment_start, segment_vector, radius, rate))
 
-## Creates a new [`VoxelAbsorbingCapsuleComp`] with the given offset to the
+## Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
 ## start of the capsule's central line segment, displacement from the start
 ## to the end of the line segment and radius, all in the reference frame of
 ## the entity, as well as the given maximum absorption rate (at the central
@@ -108,7 +107,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, VoxelAbsorbingCapsule -> List U8
 write_packet = |bytes, val|
-    type_id = 7356672927394480030
+    type_id = 16500728122890829809
     size = 64
     alignment = 8
     bytes
@@ -120,7 +119,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List VoxelAbsorbingCapsule -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 7356672927394480030
+    type_id = 16500728122890829809
     size = 64
     alignment = 8
     count = List.len(vals)

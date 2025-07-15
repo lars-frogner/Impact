@@ -1,19 +1,15 @@
 //! Benchmarks for chunked voxel object functionality.
 
-use crate::{
-    scene::RenderResourcesDesynchronized,
-    voxel::{
-        chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
-        generation::{
-            BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator,
-            SphereSDFGenerator,
-        },
-        mesh::ChunkedVoxelObjectMesh,
-        voxel_types::VoxelType,
-    },
-};
 use impact_geometry::Sphere;
 use impact_profiling::Profiler;
+use impact_voxel::{
+    chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
+    generation::{
+        BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
+    },
+    mesh::ChunkedVoxelObjectMesh,
+    voxel_types::VoxelType,
+};
 use nalgebra::{UnitVector3, vector};
 use std::hint::black_box;
 
@@ -216,7 +212,7 @@ pub fn update_mesh(profiler: impl Profiler) {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
             black_box((indices, position, voxel));
         });
-        let mut desynchronized = RenderResourcesDesynchronized::No;
+        let mut desynchronized = false;
         mesh.sync_with_voxel_object(&mut object, &mut desynchronized);
         black_box((&object, &mesh));
     });
