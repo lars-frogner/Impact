@@ -1,6 +1,6 @@
 #![no_main]
 
-use impact::voxel::{
+use impact_voxel::{
     chunks::disconnection::fuzzing::fuzz_test_voxel_object_split_off_disconnected_region,
     generation::fuzzing::ArbitrarySDFVoxelGenerator,
 };
