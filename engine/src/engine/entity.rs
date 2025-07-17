@@ -10,7 +10,7 @@ use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
     component::{ComponentArray, ComponentCategory, ComponentID, SingleInstance},
-    world::EntityID,
+    world::{EntityID, EntityToCreate, EntityToCreateWithID},
 };
 use impact_scene::SceneEntityFlags;
 
@@ -89,6 +89,76 @@ impl Engine {
         }
 
         ecs_world.remove_entity(entity_id)
+    }
+
+    pub fn stage_entity_for_creation_with_id<A, E>(
+        &self,
+        entity_id: EntityID,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        self.entity_stager
+            .lock()
+            .unwrap()
+            .stage_entity_for_creation_with_id(entity_id, components)
+    }
+
+    pub fn stage_entity_for_creation<A, E>(
+        &self,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        self.entity_stager
+            .lock()
+            .unwrap()
+            .stage_entity_for_creation(components)
+    }
+
+    pub fn stage_entity_for_removal(&self, entity_id: EntityID) {
+        self.entity_stager
+            .lock()
+            .unwrap()
+            .stage_entity_for_removal(entity_id);
+    }
+
+    pub fn create_staged_entities(&self) -> Result<()> {
+        let (entities_to_create, entities_to_create_with_id) =
+            self.entity_stager.lock().unwrap().take_entities_to_create();
+
+        for EntityToCreate { components } in entities_to_create {
+            self.create_entity(components)?;
+        }
+
+        for EntityToCreateWithID {
+            entity_id,
+            components,
+        } in entities_to_create_with_id
+        {
+            self.create_entity_with_id(entity_id, components)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_staged_entities(&self) -> Result<()> {
+        let entities_to_remove = self.entity_stager.lock().unwrap().take_entities_to_remove();
+
+        for entity_id in entities_to_remove {
+            self.remove_entity(entity_id)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn handle_staged_entities(&self) -> Result<()> {
+        self.remove_staged_entities()?;
+        self.create_staged_entities()
     }
 
     /// Unsets the [`SceneEntityFlags::IS_DISABLED`] flag for the specified

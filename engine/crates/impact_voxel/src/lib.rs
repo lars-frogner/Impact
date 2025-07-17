@@ -3,10 +3,10 @@
 #[macro_use]
 mod macros;
 
-pub mod absorption;
 pub mod chunks;
 pub mod collidable;
 pub mod generation;
+pub mod interaction;
 pub mod mesh;
 pub mod render_commands;
 pub mod resource;
@@ -17,10 +17,10 @@ pub mod voxel_types;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager};
+use chunks::inertia::VoxelObjectInertialPropertyManager;
 use impact_containers::HashMap;
-use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityID};
 use impact_model::{InstanceFeatureManager, impl_InstanceFeature};
+use impact_physics::rigid_body::DynamicRigidBodyID;
 use mesh::MeshedChunkedVoxelObject;
 use roc_integration::roc;
 use std::{
@@ -107,20 +107,17 @@ pub struct VoxelManager {
 /// Manager of all [`ChunkedVoxelObject`]s in a scene.
 #[derive(Debug)]
 pub struct VoxelObjectManager {
-    objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
-    inertial_property_managers: HashMap<VoxelObjectID, VoxelObjectInertialPropertyManager>,
-    staged_objects: Vec<StagedVoxelObject>,
-    emptied_object_entities: Vec<EntityID>,
+    voxel_objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
+    physics_contexts: HashMap<VoxelObjectID, VoxelObjectPhysicsContext>,
     id_counter: u32,
 }
 
-/// A voxel object with associated data that is staged for begin added in a
-/// scene as an entity.
+/// Physics context for voxel objects that participate in dynamic rigid body
+/// simulation.
 #[derive(Debug)]
-pub struct StagedVoxelObject {
-    pub object: ChunkedVoxelObject,
-    pub inertial_property_manager: Option<VoxelObjectInertialPropertyManager>,
-    pub components: ArchetypeComponentStorage,
+pub struct VoxelObjectPhysicsContext {
+    pub inertial_property_manager: VoxelObjectInertialPropertyManager,
+    pub rigid_body_id: DynamicRigidBodyID,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -397,12 +394,15 @@ impl VoxelObjectManager {
     /// Creates a new voxel object manager with no objects.
     pub fn new() -> Self {
         Self {
-            objects: HashMap::default(),
-            inertial_property_managers: HashMap::default(),
-            emptied_object_entities: Vec::new(),
-            staged_objects: Vec::new(),
+            voxel_objects: HashMap::default(),
+            physics_contexts: HashMap::default(),
             id_counter: 1,
         }
+    }
+
+    /// Returns the number of voxel objects in the manager.
+    pub fn voxel_object_count(&self) -> usize {
+        self.voxel_objects.len()
     }
 
     /// Returns a reference to the [`MeshedChunkedVoxelObject`] with the given
@@ -411,7 +411,7 @@ impl VoxelObjectManager {
         &self,
         voxel_object_id: VoxelObjectID,
     ) -> Option<&MeshedChunkedVoxelObject> {
-        self.objects.get(&voxel_object_id)
+        self.voxel_objects.get(&voxel_object_id)
     }
 
     /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
@@ -420,38 +420,47 @@ impl VoxelObjectManager {
         &mut self,
         voxel_object_id: VoxelObjectID,
     ) -> Option<&mut MeshedChunkedVoxelObject> {
-        self.objects.get_mut(&voxel_object_id)
+        self.voxel_objects.get_mut(&voxel_object_id)
     }
 
-    /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
-    /// given ID if it exists, along with the associated
-    /// [`VoxelObjectInertialPropertyManager`] if it exists.
-    pub fn get_voxel_object_with_inertial_property_manager_mut(
+    /// Returns a reference to the [`VoxelObjectPhysicsContext`] for the voxel
+    /// object with the given ID, or [`None`] if the object or physics context
+    /// is not present.
+    pub fn get_physics_context(
+        &self,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<&VoxelObjectPhysicsContext> {
+        self.physics_contexts.get(&voxel_object_id)
+    }
+
+    /// Returns mutable references to the [`MeshedChunkedVoxelObject`] with the
+    /// given ID and its [`VoxelObjectPhysicsContext`] if both exist.
+    pub fn get_voxel_object_with_physics_context_mut(
         &mut self,
         voxel_object_id: VoxelObjectID,
-    ) -> (
-        Option<&mut MeshedChunkedVoxelObject>,
-        Option<&mut VoxelObjectInertialPropertyManager>,
-    ) {
-        let voxel_object = self.objects.get_mut(&voxel_object_id);
-        let inertial_property_manager = self.inertial_property_managers.get_mut(&voxel_object_id);
-        (voxel_object, inertial_property_manager)
+    ) -> Option<(
+        &mut MeshedChunkedVoxelObject,
+        &mut VoxelObjectPhysicsContext,
+    )> {
+        let voxel_object = self.voxel_objects.get_mut(&voxel_object_id)?;
+        let physics_context = self.physics_contexts.get_mut(&voxel_object_id)?;
+        Some((voxel_object, physics_context))
     }
 
     /// Whether a voxel object with the given ID exists in the manager.
     pub fn has_voxel_object(&self, voxel_object_id: VoxelObjectID) -> bool {
-        self.objects.contains_key(&voxel_object_id)
+        self.voxel_objects.contains_key(&voxel_object_id)
     }
 
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
     pub fn voxel_objects(&self) -> &HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
-        &self.objects
+        &self.voxel_objects
     }
 
     /// Returns a mutable reference to the [`HashMap`] storing all voxel
     /// objects.
     pub fn voxel_objects_mut(&mut self) -> &mut HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
-        &mut self.objects
+        &mut self.voxel_objects
     }
 
     /// Adds the given [`MeshedChunkedVoxelObject`] to the manager.
@@ -460,54 +469,31 @@ impl VoxelObjectManager {
     /// A new [`VoxelObjectID`] representing the added voxel object.
     pub fn add_voxel_object(&mut self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
         let voxel_object_id = self.create_new_voxel_object_id();
-        self.objects.insert(voxel_object_id, voxel_object);
+        self.voxel_objects.insert(voxel_object_id, voxel_object);
         voxel_object_id
     }
 
-    /// Adds the given [`VoxelObjectInertialPropertyManager`] for the voxel
-    /// object with the given ID to the manager.
-    pub fn add_inertial_property_manager_for_voxel_object(
+    /// Adds the given [`VoxelObjectPhysicsContext`] for the voxel object with
+    /// the given ID.
+    pub fn add_physics_context_for_voxel_object(
         &mut self,
         voxel_object_id: VoxelObjectID,
-        inertial_property_manager: VoxelObjectInertialPropertyManager,
+        physics_context: VoxelObjectPhysicsContext,
     ) {
-        self.inertial_property_managers
-            .insert(voxel_object_id, inertial_property_manager);
-    }
-
-    /// Pushes the given [`StagedVoxelObject`] onto a buffer, awaiting meshing
-    /// and entity creation.
-    pub fn stage_new_voxel_object(&mut self, staged_object: StagedVoxelObject) {
-        self.staged_objects.push(staged_object);
-    }
-
-    /// Pushes the specified entity representing a voxel object that has been
-    /// emptied onto a buffer, awaiting removal of the entity and associated
-    /// resources.
-    pub fn mark_voxel_object_as_empty_for_entity(&mut self, object_entity_id: EntityID) {
-        self.emptied_object_entities.push(object_entity_id);
-    }
-
-    /// Pops the last [`StagedVoxelObject`] off the staging buffer.
-    pub fn pop_staged_voxel_object(&mut self) -> Option<StagedVoxelObject> {
-        self.staged_objects.pop()
-    }
-
-    /// Pops the last entity for an emptied voxel object off the buffer.
-    pub fn pop_empty_voxel_object_entity(&mut self) -> Option<EntityID> {
-        self.emptied_object_entities.pop()
+        self.physics_contexts
+            .insert(voxel_object_id, physics_context);
     }
 
     /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.
     /// Also removes any associated [`VoxelObjectInertialPropertyManager`].
     pub fn remove_voxel_object(&mut self, voxel_object_id: VoxelObjectID) {
-        self.objects.remove(&voxel_object_id);
-        self.inertial_property_managers.remove(&voxel_object_id);
+        self.voxel_objects.remove(&voxel_object_id);
+        self.physics_contexts.remove(&voxel_object_id);
     }
 
     /// Removes all voxel objects in the manager.
     pub fn remove_all_voxel_objects(&mut self) {
-        self.objects.clear();
+        self.voxel_objects.clear();
     }
 
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {

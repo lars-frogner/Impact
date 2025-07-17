@@ -72,6 +72,8 @@ impl GameLoop {
             .app()
             .on_game_loop_iteration_completed(engine, self.iteration)?;
 
+        engine.handle_staged_entities()?;
+
         let iter_end_time = self.wait_for_target_frame_duration();
 
         let iter_duration = iter_end_time - self.previous_iter_end_time;

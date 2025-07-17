@@ -27,6 +27,19 @@ pub fn setup_rigid_body_for_new_entity(
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
+    // Make sure entities with a manually created dynamic rigid body get the
+    // [`ReferenceFrame`] and [`Motion`] components.
+    setup!(
+        components,
+        |frame: Option<&ReferenceFrame>, motion: Option<&Motion>| -> (ReferenceFrame, Motion) {
+            (
+                frame.copied().unwrap_or_default(),
+                motion.copied().unwrap_or_default(),
+            )
+        },
+        [DynamicRigidBodyID]
+    );
+
     setup!(
         {
             let mut rigid_body_manager = rigid_body_manager.write().unwrap();

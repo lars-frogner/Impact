@@ -6,13 +6,14 @@ use crate::{
     fph,
     inertia::InertiaTensor,
     quantities::{
-        self, AngularMomentum, AngularVelocity, Force, Momentum, Orientation, Position, Torque,
-        Velocity,
+        self, AngularMomentum, AngularVelocity, Force, Momentum, Motion, Orientation, Position,
+        Torque, Velocity,
     },
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
+use impact_geometry::ReferenceFrame;
 use impact_math::Angle;
 use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3};
 use roc_integration::roc;
@@ -457,6 +458,22 @@ impl DynamicRigidBody {
             &self.compute_angular_velocity(),
             point,
         )
+    }
+
+    /// Returns the body's [`ReferenceFrame`].
+    pub fn reference_frame(&self) -> ReferenceFrame {
+        ReferenceFrame {
+            position: self.position,
+            orientation: self.orientation,
+        }
+    }
+
+    /// Computes the body's [`Motion`].
+    pub fn compute_motion(&self) -> Motion {
+        Motion {
+            linear_velocity: self.compute_velocity(),
+            angular_velocity: self.compute_angular_velocity(),
+        }
     }
 
     /// Applies the given force at the body's center of mass.

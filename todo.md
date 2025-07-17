@@ -4,6 +4,10 @@
 
 - Put `voxel` and possibly `gizmo` modules in separate crates.
 
+- Combine all `tasks` modules.
+- Combine all `entity` modules.
+- Combine all `command` modules.
+
 - Look for a nicer and more granular way of reporting desynchronization of render resources.
 
 - Centralize assignment of binding locations?

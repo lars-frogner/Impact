@@ -28,7 +28,7 @@ use anyhow::{Result, anyhow};
 use impact_assets::{AssetConfig, Assets, lookup_tables};
 use impact_ecs::{
     component::Component,
-    world::{EntityID, World as ECSWorld},
+    world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
 use impact_material::MaterialLibrary;
@@ -55,6 +55,7 @@ pub struct Engine {
     graphics_device: Arc<GraphicsDevice>,
     component_registry: RwLock<ComponentRegistry>,
     ecs_world: RwLock<ECSWorld>,
+    entity_stager: Mutex<EntityStager>,
     renderer: RwLock<RenderingSystem>,
     assets: RwLock<Assets>,
     scene: RwLock<Scene>,
@@ -156,6 +157,7 @@ impl Engine {
             graphics_device,
             component_registry: RwLock::new(component_registry),
             ecs_world: RwLock::new(ecs_world),
+            entity_stager: Mutex::new(EntityStager::new()),
             renderer: RwLock::new(renderer),
             assets: RwLock::new(assets),
             scene: RwLock::new(scene),
@@ -193,6 +195,11 @@ impl Engine {
     /// guarded by a [`RwLock`].
     pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
         &self.ecs_world
+    }
+
+    /// Returns a reference to the [`EntityStager`], guarded by a [`Mutex`].
+    pub fn entity_stager(&self) -> &Mutex<EntityStager> {
+        &self.entity_stager
     }
 
     /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
