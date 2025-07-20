@@ -1,8 +1,8 @@
-# Hash: 6763357a6bafccfc33ab4318713db28d60f1daaedce6665cce8502e05bcbcdcb
-# Generated: 2025-07-15T22:50:47+00:00
-# Rust type: impact_voxel::absorption::VoxelAbsorbingCapsule
+# Hash: 1aaa3f7cb5e75838e5eca7009d2b6c0243adf1fd306482105295042593b9c9fa
+# Generated: 2025-07-17T16:56:53+00:00
+# Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingCapsule
 # Type category: Component
-# Commit: 07de5ae9 (dirty)
+# Commit: 40b03028 (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,
@@ -107,7 +107,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, VoxelAbsorbingCapsule -> List U8
 write_packet = |bytes, val|
-    type_id = 16500728122890829809
+    type_id = 3676247617419631421
     size = 64
     alignment = 8
     bytes
@@ -119,7 +119,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List VoxelAbsorbingCapsule -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 16500728122890829809
+    type_id = 3676247617419631421
     size = 64
     alignment = 8
     count = List.len(vals)

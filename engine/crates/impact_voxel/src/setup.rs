@@ -3,7 +3,7 @@
 use std::sync::RwLock;
 
 use crate::{
-    VoxelManager, VoxelObjectID, VoxelObjectManager,
+    VoxelManager, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
         BoxSDFGenerator, GradientNoiseSDFGenerator, GradientNoiseVoxelTypeGenerator,
@@ -522,7 +522,7 @@ pub fn setup_voxel_box_with_same_voxel_type(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -530,15 +530,20 @@ pub fn setup_voxel_box_with_same_voxel_type(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -579,7 +584,7 @@ pub fn setup_voxel_sphere_with_same_voxel_type(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -587,15 +592,20 @@ pub fn setup_voxel_sphere_with_same_voxel_type(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -643,7 +653,7 @@ pub fn setup_voxel_sphere_union_with_same_voxel_type(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -651,15 +661,20 @@ pub fn setup_voxel_sphere_union_with_same_voxel_type(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -705,7 +720,7 @@ pub fn setup_voxel_gradient_noise_pattern_with_same_voxel_type(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -713,15 +728,20 @@ pub fn setup_voxel_gradient_noise_pattern_with_same_voxel_type(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -765,7 +785,7 @@ pub fn setup_voxel_box_with_gradient_noise_voxel_types(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -773,15 +793,20 @@ pub fn setup_voxel_box_with_gradient_noise_voxel_types(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -825,7 +850,7 @@ pub fn setup_voxel_sphere_with_gradient_noise_voxel_types(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -833,15 +858,20 @@ pub fn setup_voxel_sphere_with_gradient_noise_voxel_types(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -892,7 +922,7 @@ pub fn setup_voxel_sphere_union_with_gradient_noise_voxel_types(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -900,15 +930,20 @@ pub fn setup_voxel_sphere_union_with_gradient_noise_voxel_types(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -957,7 +992,7 @@ pub fn setup_voxel_gradient_noise_pattern_with_gradient_noise_voxel_types(
         voxel_manager.type_registry.mass_densities(),
     );
 
-    let (rigid_body, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
@@ -965,15 +1000,20 @@ pub fn setup_voxel_gradient_noise_pattern_with_gradient_noise_voxel_types(
         motion,
     )?;
 
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager,
+        rigid_body_id,
+    };
+
     let voxel_object_id = mesh_and_store_voxel_object(
         &mut voxel_manager.object_manager,
         voxel_object,
-        inertial_property_manager,
+        physics_context,
     );
 
     Ok((
         voxel_object_id,
-        rigid_body,
+        rigid_body_id,
         model_transform,
         frame,
         velocity,
@@ -1191,14 +1231,13 @@ fn setup_rigid_body_for_new_voxel_object(
 fn mesh_and_store_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_object: ChunkedVoxelObject,
-    inertial_property_manager: VoxelObjectInertialPropertyManager,
+    physics_context: VoxelObjectPhysicsContext,
 ) -> VoxelObjectID {
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
 
     let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
 
-    voxel_object_manager
-        .add_inertial_property_manager_for_voxel_object(voxel_object_id, inertial_property_manager);
+    voxel_object_manager.add_physics_context_for_voxel_object(voxel_object_id, physics_context);
 
     voxel_object_id
 }
