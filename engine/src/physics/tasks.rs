@@ -4,6 +4,7 @@ use crate::{
     physics::systems::synchronize_rigid_body_components,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransformsAndFlags},
+    voxel::tasks::ApplyVoxelAbsorption,
 };
 use anyhow::Result;
 use impact_scheduling::{define_execution_tag, define_task};
@@ -72,7 +73,7 @@ define_task!(
     /// [`KinematicRigidBodyID`](impact_physics::rigid_body::KinematicRigidBodyID)
     /// component to match the current state of the rigid body.
     [pub] SyncRigidBodyComponents,
-    depends_on = [AdvanceSimulation],
+    depends_on = [AdvanceSimulation, ApplyVoxelAbsorption],
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();

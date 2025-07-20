@@ -1,12 +1,7 @@
 //! Management of voxels for entities.
 
-use crate::engine::Engine;
 use anyhow::Result;
-use impact_ecs::{
-    archetype::ArchetypeComponentStorage,
-    component::{ComponentArray, SingleInstance},
-    setup,
-};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
     quantities::Motion,
@@ -17,8 +12,7 @@ use impact_scene::{
     graph::SceneGraph, model::InstanceFeatureManager, setup::Uncullable,
 };
 use impact_voxel::{
-    StagedVoxelObject, VoxelManager, VoxelObjectID,
-    mesh::MeshedChunkedVoxelObject,
+    VoxelManager, VoxelObjectID,
     setup::{
         self, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
         MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelGradientNoisePattern,
@@ -32,6 +26,32 @@ pub fn setup_voxel_object_for_new_entity(
     voxel_manager: &RwLock<VoxelManager>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
+    // Make sure entities that have manually created voxel object and physics
+    // context get a model transform component with the center of mass offset
+    setup!(
+        {
+            let voxel_manager = voxel_manager.read().unwrap();
+        },
+        components,
+        |voxel_object_id: &VoxelObjectID,
+         model_transform: Option<&ModelTransform>|
+         -> ModelTransform {
+            if let Some(physics_context) = voxel_manager
+                .object_manager
+                .get_physics_context(*voxel_object_id)
+            {
+                ModelTransform::with_offset(
+                    physics_context
+                        .inertial_property_manager
+                        .derive_center_of_mass()
+                        .cast(),
+                )
+            } else {
+                model_transform.copied().unwrap_or_default()
+            }
+        }
+    );
+
     setup!(
         {
             let mut rigid_body_manager = rigid_body_manager.write().unwrap();
@@ -352,65 +372,4 @@ pub fn add_model_instance_node_component_for_new_voxel_object_entity(
         },
         ![SceneGraphModelInstanceNodeHandle]
     )
-}
-
-pub fn handle_staged_voxel_objects(engine: &Engine) -> Result<()> {
-    loop {
-        let scene = engine.scene().read().unwrap();
-        let mut voxel_manager = scene.voxel_manager().write().unwrap();
-
-        if let Some(StagedVoxelObject {
-            object,
-            inertial_property_manager,
-            mut components,
-        }) = voxel_manager.object_manager.pop_staged_voxel_object()
-        {
-            let meshed_voxel_object = MeshedChunkedVoxelObject::create(object);
-
-            let voxel_object_id = voxel_manager
-                .object_manager
-                .add_voxel_object(meshed_voxel_object);
-
-            if let Some(inertial_property_manager) = inertial_property_manager.clone() {
-                voxel_manager
-                    .object_manager
-                    .add_inertial_property_manager_for_voxel_object(
-                        voxel_object_id,
-                        inertial_property_manager,
-                    );
-            }
-
-            components.add_new_component_type(voxel_object_id.into_storage())?;
-
-            // We must release these locks before attempting to create the entity, or we
-            // will deadlock
-            drop(voxel_manager);
-            drop(scene);
-
-            engine.create_entity(SingleInstance::new(components))?;
-        } else {
-            break;
-        }
-    }
-    Ok(())
-}
-
-pub fn handle_emptied_voxel_objects(engine: &Engine) -> Result<()> {
-    loop {
-        let scene = engine.scene().read().unwrap();
-        let mut voxel_manager = scene.voxel_manager().write().unwrap();
-
-        if let Some(entity_id) = voxel_manager.object_manager.pop_empty_voxel_object_entity() {
-            // We must release these locks before attempting to remove the entity, or we
-            // will deadlock
-            drop(voxel_manager);
-            drop(scene);
-
-            impact_log::debug!("Removing entity for emptied voxel object");
-            engine.remove_entity(entity_id)?;
-        } else {
-            break;
-        }
-    }
-    Ok(())
 }

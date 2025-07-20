@@ -33,7 +33,7 @@ pub trait PropertyTransferrer {
 #[derive(Clone, Debug)]
 pub struct DisconnectedVoxelObject {
     /// The disconnected object.
-    pub object: ChunkedVoxelObject,
+    pub voxel_object: ChunkedVoxelObject,
     /// The offset in whole voxels from the origin of the parent object to the
     /// origin of the disconnected object, in the reference frame of the
     /// parent object (the disconnected object has the same orientation as the
@@ -860,7 +860,7 @@ impl ChunkedVoxelObject {
         let origin_offset_in_root =
             array::from_fn(|dim| parent_origin_offset_in_root[dim] + origin_offset_in_parent[dim]);
 
-        let mut object = Self {
+        let mut voxel_object = Self {
             voxel_extent,
             chunk_counts,
             chunk_idx_strides,
@@ -876,10 +876,10 @@ impl ChunkedVoxelObject {
         // We have already computed the internal adjacencies and local region
         // connectivity in the disconnected object, but all derived state between chunks
         // must be computed from scratch
-        object.compute_all_chunk_external_derived_state();
+        voxel_object.compute_all_chunk_external_derived_state();
 
         DisconnectedVoxelObject {
-            object,
+            voxel_object,
             origin_offset_in_parent,
         }
     }
@@ -2756,7 +2756,7 @@ pub mod fuzzing {
                 )
             {
                 let DisconnectedVoxelObject {
-                    object: disconnected_object,
+                    voxel_object: disconnected_object,
                     origin_offset_in_parent: origin_offset,
                 } = disconnected_object;
 
