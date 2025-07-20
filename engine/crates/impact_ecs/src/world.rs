@@ -14,6 +14,7 @@ use std::{
     collections::hash_map::Entry,
     fmt,
     hash::{self, Hash},
+    mem,
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -57,6 +58,27 @@ pub struct World {
 pub struct EntityEntry<'a> {
     entity_id: EntityID,
     table: RwLockReadGuard<'a, ArchetypeTable>,
+}
+
+/// Helper for staging entities for later creation or removal.
+#[derive(Debug)]
+pub struct EntityStager {
+    to_create: Vec<EntityToCreate>,
+    to_create_with_id: Vec<EntityToCreateWithID>,
+    to_remove: Vec<EntityID>,
+}
+
+/// The components of an entity that has yet to be created.
+#[derive(Debug)]
+pub struct EntityToCreate {
+    pub components: SingleInstance<ArchetypeComponentStorage>,
+}
+
+/// The components of an entity that has yet to be created under a specific ID.
+#[derive(Debug)]
+pub struct EntityToCreateWithID {
+    pub entity_id: EntityID,
+    pub components: SingleInstance<ArchetypeComponentStorage>,
 }
 
 impl EntityID {
@@ -425,6 +447,15 @@ impl World {
         })
     }
 
+    /// Generates a new [`EntityID`].
+    pub fn create_entity_id(&mut self) -> EntityID {
+        let mut id = self.rng.u64(..);
+        while self.entity_archetypes.contains_key(&EntityID(id)) {
+            id = self.rng.u64(..);
+        }
+        EntityID(id)
+    }
+
     fn get_entity_archetype(&self, entity_id: EntityID) -> Result<ArchetypeID> {
         self.entity_archetypes
             .get(&entity_id)
@@ -570,14 +601,6 @@ impl World {
         self.add_entities_to_table([entity_id], components);
         Ok(())
     }
-
-    fn create_entity_id(&mut self) -> EntityID {
-        let mut id = self.rng.u64(..);
-        while self.entity_archetypes.contains_key(&EntityID(id)) {
-            id = self.rng.u64(..);
-        }
-        EntityID(id)
-    }
 }
 
 impl Default for World {
@@ -668,6 +691,93 @@ impl<'a> EntityEntry<'a> {
     pub fn component_mut<C: Component>(&self) -> ComponentStorageEntryMut<'_, C> {
         self.get_component_mut::<C>()
             .expect("Requested invalid component")
+    }
+}
+
+impl EntityStager {
+    /// Creates a new stager with no staged entities.
+    pub fn new() -> Self {
+        Self {
+            to_create: Vec::new(),
+            to_create_with_id: Vec::new(),
+            to_remove: Vec::new(),
+        }
+    }
+
+    /// Stages the entity defined by the given components for later creation.
+    pub fn stage_entity_for_creation<A, E>(
+        &mut self,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components
+            .try_into()
+            .map_err(E::into)?
+            .into_inner()
+            .into_storage();
+
+        self.to_create.push(EntityToCreate {
+            components: SingleInstance::new(components),
+        });
+
+        Ok(())
+    }
+
+    /// Stages the entity defined by the given components for later creation
+    /// under the given ID.
+    pub fn stage_entity_for_creation_with_id<A, E>(
+        &mut self,
+        entity_id: EntityID,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components
+            .try_into()
+            .map_err(E::into)?
+            .into_inner()
+            .into_storage();
+
+        self.to_create_with_id.push(EntityToCreateWithID {
+            entity_id,
+            components: SingleInstance::new(components),
+        });
+
+        Ok(())
+    }
+
+    /// Stages the entity with the given ID for later removal.
+    pub fn stage_entity_for_removal(&mut self, entity_id: EntityID) {
+        self.to_remove.push(entity_id);
+    }
+
+    /// Returns the lists of entities staged for creation since the last time
+    /// this method was called.
+    pub fn take_entities_to_create(&mut self) -> (Vec<EntityToCreate>, Vec<EntityToCreateWithID>) {
+        let mut entities = Vec::with_capacity(self.to_create.len());
+        let mut entities_with_id = Vec::with_capacity(self.to_create.len());
+        mem::swap(&mut self.to_create, &mut entities);
+        mem::swap(&mut self.to_create_with_id, &mut entities_with_id);
+        (entities, entities_with_id)
+    }
+
+    /// Returns the list of entities staged for removal since the last time this
+    /// method was called.
+    pub fn take_entities_to_remove(&mut self) -> Vec<EntityID> {
+        let mut entities = Vec::with_capacity(self.to_remove.len());
+        mem::swap(&mut self.to_remove, &mut entities);
+        entities
+    }
+}
+
+impl Default for EntityStager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
