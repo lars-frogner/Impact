@@ -7,6 +7,7 @@ use crate::{
         command::ControlCommand,
         motion::{MotionDirection, MotionState},
     },
+    game_loop::{GameLoopState, command::GameLoopCommand},
     gpu::rendering::{
         command::RenderingCommand,
         postprocessing::command::{
@@ -41,6 +42,7 @@ pub enum EngineCommand {
     Control(ControlCommand),
     Capture(CaptureCommand),
     Instrumentation(InstrumentationCommand),
+    GameLoop(GameLoopCommand),
     Shutdown,
 }
 
@@ -55,6 +57,7 @@ impl Engine {
             EngineCommand::Instrumentation(command) => {
                 self.execute_instrumentation_command(command)
             }
+            EngineCommand::GameLoop(command) => self.execute_game_loop_command(command),
             EngineCommand::Shutdown => {
                 self.request_shutdown();
                 Ok(())
@@ -175,6 +178,29 @@ impl Engine {
         match command {
             InstrumentationCommand::SetTaskTimings(to) => {
                 self.set_task_timings(to);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn execute_game_loop_command(&self, command: GameLoopCommand) -> Result<()> {
+        let mut game_loop_controller = self.game_loop_controller.lock().unwrap();
+        match command {
+            GameLoopCommand::SetGameLoop(to) => match (to, game_loop_controller.state()) {
+                (ToActiveState::Enabled, _)
+                | (
+                    ToActiveState::Opposite,
+                    GameLoopState::Paused | GameLoopState::PauseAfterSingleIteration,
+                ) => {
+                    game_loop_controller.set_state(GameLoopState::Running);
+                }
+                (ToActiveState::Disabled, _)
+                | (ToActiveState::Opposite, GameLoopState::Running) => {
+                    game_loop_controller.set_state(GameLoopState::Paused);
+                }
+            },
+            GameLoopCommand::PauseAfterSingleIteration => {
+                game_loop_controller.set_state(GameLoopState::PauseAfterSingleIteration);
             }
         }
         Ok(())

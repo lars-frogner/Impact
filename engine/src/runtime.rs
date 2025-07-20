@@ -8,7 +8,6 @@ pub mod window;
 
 use crate::{
     engine::Engine,
-    game_loop::{GameLoop, GameLoopConfig},
     runtime::tasks::RuntimeTaskScheduler,
     ui::{NoUserInterface, UserInterface},
 };
@@ -26,14 +25,13 @@ pub struct Runtime<UI> {
     engine: Arc<Engine>,
     user_interface: Arc<UI>,
     task_scheduler: RuntimeTaskScheduler,
-    game_loop: GameLoop,
 }
 
 /// Configuration parameters for the engine runtime.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RuntimeConfig {
     n_worker_threads: NonZeroUsize,
-    game_loop: GameLoopConfig,
 }
 
 impl<UI> Runtime<UI>
@@ -48,13 +46,10 @@ where
 
         let task_scheduler = tasks::create_task_scheduler(ctx, config.n_worker_threads)?;
 
-        let game_loop = GameLoop::new(config.game_loop);
-
         Ok(Self {
             engine,
             user_interface,
             task_scheduler,
-            game_loop,
         })
     }
 }
@@ -78,13 +73,9 @@ impl<UI> Runtime<UI> {
         self.user_interface.as_ref()
     }
 
-    pub fn game_loop(&self) -> &GameLoop {
-        &self.game_loop
-    }
-
-    pub fn perform_game_loop_iteration(&mut self) -> Result<()> {
-        self.game_loop
-            .perform_iteration(&self.engine, &self.task_scheduler)
+    pub fn perform_game_loop_iteration(&self) -> Result<()> {
+        self.engine
+            .perform_game_loop_iteration(&self.task_scheduler)
     }
 
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
@@ -104,7 +95,6 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
             n_worker_threads: NonZeroUsize::new(1).unwrap(),
-            game_loop: GameLoopConfig::default(),
         }
     }
 }

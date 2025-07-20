@@ -96,6 +96,9 @@
             sensitivity: 1.0,
         )),
     ),
+    game_loop: (
+        max_fps: None,
+    ),
     user_interface: (
         initially_interactive: true,
     ),

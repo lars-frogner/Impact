@@ -1,8 +1,8 @@
-# Hash: 95da96a60783dbb11912cfb10b22a901a5d156485f90e2152ada8910fb912c54
-# Generated: 2025-07-15T17:32:17+00:00
+# Hash: c79353a27203a66bdd92ce68ce9ed6bdeb582afd8f4b339a9cfea2ffef3eadaf
+# Generated: 2025-07-20T18:05:49+00:00
 # Rust type: impact::engine::command::EngineCommand
 # Type category: Inline
-# Commit: 1fbb6f6b (dirty)
+# Commit: 40b03028 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -11,6 +11,7 @@ module [
 
 import Command.CaptureCommand
 import Command.ControlCommand
+import Command.GameLoopCommand
 import Command.InstrumentationCommand
 import Command.PhysicsCommand
 import Command.RenderingCommand
@@ -23,6 +24,7 @@ EngineCommand : [
     Control Command.ControlCommand.ControlCommand,
     Capture Command.CaptureCommand.CaptureCommand,
     Instrumentation Command.InstrumentationCommand.InstrumentationCommand,
+    GameLoop Command.GameLoopCommand.GameLoopCommand,
     Shutdown,
 ]
 
@@ -72,10 +74,17 @@ write_bytes = |bytes, value|
             |> Command.InstrumentationCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 31))
 
-        Shutdown ->
+        GameLoop(val) ->
             bytes
             |> List.reserve(34)
             |> List.append(6)
+            |> Command.GameLoopCommand.write_bytes(val)
+            |> List.concat(List.repeat(0, 31))
+
+        Shutdown ->
+            bytes
+            |> List.reserve(34)
+            |> List.append(7)
             |> List.concat(List.repeat(0, 33))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
@@ -128,6 +137,13 @@ from_bytes = |bytes|
                     ),
                 )
 
-            [6, ..] -> Ok(Shutdown)
+            [6, .. as data_bytes] ->
+                Ok(
+                    GameLoop(
+                        data_bytes |> List.sublist({ start: 0, len: 2 }) |> Command.GameLoopCommand.from_bytes?,
+                    ),
+                )
+
+            [7, ..] -> Ok(Shutdown)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))
