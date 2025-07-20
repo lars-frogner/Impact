@@ -26,66 +26,66 @@
             ),
             sampler_config: Some(()),
         ),
-        Texture(
-            name: "concrete_color_texture",
-            image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg",
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        Texture(
-            name: "concrete_roughness_texture",
-            image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg",
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        Texture(
-            name: "concrete_normal_texture",
-            image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg",
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        Texture(
-            name: "plastic_color_texture",
-            image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg",
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        Texture(
-            name: "plastic_roughness_texture",
-            image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg",
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        Texture(
-            name: "plastic_normal_texture",
-            image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg",
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
+        // Texture(
+        //     name: "concrete_color_texture",
+        //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg",
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // Texture(
+        //     name: "concrete_roughness_texture",
+        //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg",
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // Texture(
+        //     name: "concrete_normal_texture",
+        //     image_path: "../assets/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg",
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // Texture(
+        //     name: "plastic_color_texture",
+        //     image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg",
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // Texture(
+        //     name: "plastic_roughness_texture",
+        //     image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg",
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // Texture(
+        //     name: "plastic_normal_texture",
+        //     image_path: "../assets/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg",
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
         Texture(
             name: "bricks_color_texture",
             image_path: "../assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",

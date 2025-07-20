@@ -32,7 +32,9 @@ use utils::{Dimension, Side};
 use voxel_types::{VoxelType, VoxelTypeRegistry};
 
 define_component_type! {
-    /// Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
+    /// Identifier for a
+    /// [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject) in a
+    /// [`VoxelManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -104,7 +106,8 @@ pub struct VoxelManager {
     pub object_manager: VoxelObjectManager,
 }
 
-/// Manager of all [`ChunkedVoxelObject`]s in a scene.
+/// Manager of all [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject)s in
+/// a scene.
 #[derive(Debug)]
 pub struct VoxelObjectManager {
     voxel_objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,

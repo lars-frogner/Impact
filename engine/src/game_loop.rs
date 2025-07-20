@@ -10,7 +10,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// A loop driving simulation and rendering in an [`Engine`].
+/// A loop driving simulation and rendering in an
+/// [`Engine`](crate::engine::Engine).
 #[derive(Debug)]
 pub struct GameLoopController {
     iteration: u64,
