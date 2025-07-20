@@ -29,7 +29,7 @@ impl Default for HeadlessConfig {
 
 /// Performs iterations of the game loop in the given runtime until shutdown is
 /// requested.
-pub fn run_headless(mut runtime: HeadlessRuntime) -> Result<()> {
+pub fn run_headless(runtime: HeadlessRuntime) -> Result<()> {
     loop {
         runtime.perform_game_loop_iteration()?;
 

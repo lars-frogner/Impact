@@ -15,26 +15,12 @@ handle_event! = |{ key, state }|
                     KeyD -> set_motion(state, Right)
                     KeyQ -> set_motion(state, Up)
                     KeyE -> set_motion(state, Down)
-                    KeyO -> on_released(state, Engine(Rendering(Postprocessing(SetAmbientOcclusion(Opposite)))))
-                    KeyY -> on_released(state, Engine(Rendering(Postprocessing(SetTemporalAntiAliasing(Opposite)))))
-                    KeyU -> on_released(state, Engine(Rendering(Postprocessing(SetBloom(Opposite)))))
-                    KeyT -> on_released(state, Engine(Rendering(Postprocessing(SetToneMappingMethod(Next)))))
-                    KeyX -> on_released(state, Engine(Rendering(Postprocessing(SetExposure(DifferentByStops(0.1))))))
-                    KeyZ -> on_released(state, Engine(Rendering(Postprocessing(SetExposure(DifferentByStops(-0.1))))))
-                    KeyV -> on_released(state, Engine(Rendering(Postprocessing(SetRenderAttachmentVisualization(Opposite)))))
-                    KeyB -> on_released(state, Engine(Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Next)))))
-                    KeyC -> on_released(state, Engine(Rendering(Postprocessing(SetVisualizedRenderAttachmentQuantity(Previous)))))
-                    KeyI -> on_released(state, Engine(Rendering(SetShadowMapping(Opposite))))
-                    KeyF -> on_released(state, Engine(Rendering(SetWireframeMode(Opposite))))
-                    KeyP -> on_released(state, Engine(Physics(SetSimulation(Opposite))))
-                    KeyM -> on_released(state, Engine(Physics(SetSimulationSubstepCount(HigherBy(1)))))
-                    KeyN -> on_released(state, Engine(Physics(SetSimulationSubstepCount(LowerBy(1)))))
+                    KeyP -> on_released(state, Engine(GameLoop(SetGameLoop(Opposite))))
                     _ -> None
 
             Symbol(symbol_key) ->
                 when symbol_key is
-                    Period -> on_released(state, Engine(Physics(SetSimulationSpeed(Higher))))
-                    Comma -> on_released(state, Engine(Physics(SetSimulationSpeed(Lower))))
+                    Period -> on_released(state, Engine(GameLoop(PauseAfterSingleIteration)))
                     _ -> None
 
             Function(function_key) ->

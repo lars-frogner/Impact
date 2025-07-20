@@ -3,6 +3,7 @@
 pub mod command;
 pub mod components;
 pub mod entity;
+pub mod game_loop;
 pub mod tasks;
 
 #[cfg(any(feature = "obj", feature = "ply"))]
@@ -15,6 +16,7 @@ use crate::{
     application::Application,
     component::ComponentRegistry,
     control::{self, ControllerConfig, MotionController, OrientationController},
+    game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::{
         GraphicsContext,
@@ -66,6 +68,7 @@ pub struct Engine {
     screen_capturer: ScreenCapturer,
     task_timer: TaskTimer,
     metrics: RwLock<EngineMetrics>,
+    game_loop_controller: Mutex<GameLoopController>,
     controls_enabled: AtomicBool,
     shutdown_requested: AtomicBool,
 }
@@ -81,6 +84,7 @@ pub struct EngineConfig {
     pub ecs: ECSConfig,
     pub gizmo: GizmoConfig,
     pub instrumentation: InstrumentationConfig,
+    pub game_loop: GameLoopConfig,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -152,6 +156,8 @@ impl Engine {
         let (motion_controller, orientation_controller) =
             control::create_controllers(config.controller);
 
+        let game_loop_controller = GameLoopController::new(config.game_loop);
+
         let engine = Self {
             app,
             graphics_device,
@@ -168,6 +174,7 @@ impl Engine {
             screen_capturer: ScreenCapturer::new(),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
             metrics: RwLock::new(EngineMetrics::default()),
+            game_loop_controller: Mutex::new(game_loop_controller),
             controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
         };
