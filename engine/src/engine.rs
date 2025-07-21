@@ -1,6 +1,5 @@
 //! Manager for all systems and data in the engine.
 
-pub mod command;
 pub mod components;
 pub mod entity;
 pub mod game_loop;
@@ -13,6 +12,7 @@ pub mod window;
 
 use crate::{
     application::Application,
+    command::{self, EngineCommand},
     component::ComponentRegistry,
     control::{self, ControllerConfig, MotionController, OrientationController},
     game_loop::{GameLoopConfig, GameLoopController},
@@ -235,6 +235,12 @@ impl Engine {
         &self.gizmo_manager
     }
 
+    /// Returns a reference to the [`MotionController`], guarded by a [`Mutex`],
+    /// or [`None`] if there is no motion controller.
+    pub fn motion_controller(&self) -> Option<&Mutex<Box<dyn MotionController>>> {
+        self.motion_controller.as_ref()
+    }
+
     /// Returns a reference to the [`ScreenCapturer`].
     pub fn screen_capturer(&self) -> &ScreenCapturer {
         &self.screen_capturer
@@ -248,6 +254,12 @@ impl Engine {
     /// Returns the current [`EngineMetrics`], wrapped in a read guard.
     pub fn metrics(&self) -> RwLockReadGuard<'_, EngineMetrics> {
         self.metrics.read().unwrap()
+    }
+
+    /// Returns a reference to the [`GameLoopController`], guarded by a
+    /// [`Mutex`].
+    pub fn game_loop_controller(&self) -> &Mutex<GameLoopController> {
+        &self.game_loop_controller
     }
 
     /// Captures and saves a screenshot to the specified path, or, if not
@@ -425,6 +437,10 @@ impl Engine {
 
     pub fn request_shutdown(&self) {
         self.shutdown_requested.store(true, Ordering::Relaxed);
+    }
+
+    pub fn execute_command(&self, command: EngineCommand) -> Result<()> {
+        command::execute_engine_command(self, command)
     }
 
     /// Identifies errors that need special handling in the given set of task

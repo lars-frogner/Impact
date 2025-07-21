@@ -4,7 +4,6 @@ use super::{
 };
 use crate::UserInterfaceConfig;
 use impact::{
-    command::ToActiveState,
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
     gpu::rendering::RenderingSystem,
@@ -601,7 +600,7 @@ fn dynamic_range_compression_options(ui: &mut Ui, renderer: &mut RenderingSystem
 fn wireframe_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     let mut enabled = renderer.basic_config().wireframe_mode_on;
     if option_checkbox(ui, &mut enabled, wireframe::docs::ENABLED).changed() {
-        renderer.set_wireframe_mode(ToActiveState::from_enabled(enabled));
+        renderer.set_wireframe_mode_enabled(enabled);
     }
 }
 

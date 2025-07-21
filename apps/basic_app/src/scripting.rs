@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, anyhow};
 use ffi_utils::define_ffi;
 use impact::{
-    engine::command::EngineCommand,
+    command::EngineCommand,
     roc_integration::Roc,
     window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
 };

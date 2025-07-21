@@ -1,6 +1,5 @@
 use crate::UserInterfaceConfig;
 use impact::{
-    command::ToActiveState,
     egui::{Context, DragValue, Frame, TopBottomPanel},
     engine::Engine,
 };
@@ -33,18 +32,18 @@ impl Toolbar {
                         .toggle_value(&mut config.show_task_timings, "Task timings")
                         .changed()
                     {
-                        engine.set_task_timings(ToActiveState::from_enabled(
-                            config.show_task_timings,
-                        ));
+                        engine.task_timer().set_enabled(config.show_task_timings);
                     }
 
                     if ui
                         .toggle_value(&mut config.show_render_pass_timings, "Render pass timings")
                         .changed()
                     {
-                        engine.set_render_pass_timings(ToActiveState::from_enabled(
-                            config.show_render_pass_timings,
-                        ));
+                        engine
+                            .renderer()
+                            .write()
+                            .unwrap()
+                            .set_render_pass_timings_enabled(config.show_render_pass_timings);
                     }
 
                     ui.toggle_value(&mut config.show_time_overlay, "Time overlay");

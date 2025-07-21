@@ -1,7 +1,6 @@
 //! Simulation of physics.
 
 pub mod collision;
-pub mod command;
 pub mod driven_motion;
 pub mod entity;
 pub mod force;

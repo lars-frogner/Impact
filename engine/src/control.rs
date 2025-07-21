@@ -1,6 +1,5 @@
 //! Controllers for user interaction.
 
-pub mod command;
 pub mod motion;
 pub mod orientation;
 

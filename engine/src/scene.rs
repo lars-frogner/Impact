@@ -1,6 +1,5 @@
 //! Scene containing data to render.
 
-pub mod command;
 pub mod entity;
 pub mod systems;
 
@@ -107,6 +106,10 @@ impl Scene {
     /// been set, guarded by a [`RwLock`].
     pub fn skybox(&self) -> &RwLock<Option<Skybox>> {
         &self.skybox
+    }
+
+    pub fn set_skybox(&self, skybox: Option<Skybox>) {
+        *self.skybox.write().unwrap() = skybox;
     }
 
     pub fn handle_aspect_ratio_changed(
