@@ -499,6 +499,13 @@ impl VoxelObjectManager {
         self.voxel_objects.clear();
     }
 
+    /// Recomputes the meshes for any voxel objects with invalidated chunks.
+    pub fn sync_voxel_object_meshes(&mut self, desynchronized: &mut bool) {
+        for voxel_object in self.voxel_objects.values_mut() {
+            voxel_object.sync_mesh_with_object(desynchronized);
+        }
+    }
+
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {
         let voxel_object_id = VoxelObjectID(self.id_counter);
         self.id_counter = self.id_counter.checked_add(1).unwrap();

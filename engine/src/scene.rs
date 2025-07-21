@@ -3,7 +3,6 @@
 pub mod command;
 pub mod entity;
 pub mod systems;
-pub mod tasks;
 
 use impact_light::LightStorage;
 use impact_material::{MaterialLibrary, MaterialLibraryState};

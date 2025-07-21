@@ -40,9 +40,30 @@ use impact_voxel::{
     collidable::{Collidable, CollisionWorld},
 };
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
-use std::iter;
+use std::{iter, sync::RwLock};
 
-pub fn update_visibility_flags_for_gizmo(
+/// Updates the appropriate gizmo visibility flags for all applicable
+/// entities based on which gizmos have been newly configured to be
+/// globally visible or hidden.
+pub fn update_visibility_flags_for_gizmos(
+    gizmo_manager: &mut GizmoManager,
+    ecs_world: &RwLock<ECSWorld>,
+) {
+    if !gizmo_manager.global_visibility_changed_for_any_of_gizmos(GizmoSet::all()) {
+        return;
+    }
+
+    let ecs_world = ecs_world.read().unwrap();
+
+    for gizmo in GizmoType::all() {
+        if gizmo_manager.global_visibility_changed_for_any_of_gizmos(gizmo.as_set()) {
+            update_visibility_flags_for_gizmo(&ecs_world, gizmo_manager, gizmo);
+        }
+    }
+    gizmo_manager.declare_visibilities_synchronized();
+}
+
+fn update_visibility_flags_for_gizmo(
     ecs_world: &ECSWorld,
     gizmo_manager: &GizmoManager,
     gizmo: GizmoType,

@@ -5,9 +5,8 @@ pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
-pub mod tasks;
 
-use crate::{scene::Scene, ui::UserInterface};
+use crate::{scene::Scene, tasks::Render, ui::UserInterface};
 use anyhow::Result;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
@@ -24,6 +23,8 @@ use impact_rendering::{
     },
     surface::RenderingSurface,
 };
+use impact_scheduling::Task;
+use impact_thread::ThreadPoolTaskErrors;
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
 use serde::{Deserialize, Serialize};
@@ -363,5 +364,16 @@ impl RenderingSystem {
             .write()
             .unwrap()
             .recreate_textures(&self.graphics_device, &self.rendering_surface);
+    }
+
+    /// Identifies rendering-related errors that need special handling in the
+    /// given set of task errors and handles them.
+    pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
+        if let Some(render_error) = task_errors.get_error_of(Render.id()) {
+            if let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref() {
+                self.handle_surface_lost();
+                task_errors.clear_error_of(Render.id());
+            }
+        }
     }
 }

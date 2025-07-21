@@ -1,9 +1,6 @@
 //! Top-level management of tasks.
 
-use crate::{
-    engine::{self, Engine},
-    ui::{self, UserInterface},
-};
+use crate::{engine::Engine, tasks, ui::UserInterface};
 use anyhow::Result;
 use impact_scheduling::TaskScheduler;
 use std::{num::NonZeroUsize, sync::Arc};
@@ -49,13 +46,7 @@ pub fn create_task_scheduler(
     n_workers: NonZeroUsize,
 ) -> Result<RuntimeTaskScheduler> {
     let mut task_scheduler = RuntimeTaskScheduler::new(n_workers, ctx);
-    register_all_tasks(&mut task_scheduler)?;
+    tasks::register_all_tasks(&mut task_scheduler)?;
+    task_scheduler.complete_task_registration()?;
     Ok(task_scheduler)
-}
-
-/// Registers all tasks in the given task scheduler.
-pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
-    engine::tasks::register_engine_tasks(task_scheduler)?;
-    ui::tasks::register_user_interface_tasks(task_scheduler)?;
-    task_scheduler.complete_task_registration()
 }

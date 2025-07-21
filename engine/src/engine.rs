@@ -4,7 +4,6 @@ pub mod command;
 pub mod components;
 pub mod entity;
 pub mod game_loop;
-pub mod tasks;
 
 #[cfg(any(feature = "obj", feature = "ply"))]
 pub mod io;
@@ -37,6 +36,7 @@ use impact_material::MaterialLibrary;
 use impact_mesh::MeshRepository;
 use impact_physics::PhysicsConfig;
 use impact_scene::model::InstanceFeatureManager;
+use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::{VoxelConfig, VoxelManager};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -425,6 +425,15 @@ impl Engine {
 
     pub fn request_shutdown(&self) {
         self.shutdown_requested.store(true, Ordering::Relaxed);
+    }
+
+    /// Identifies errors that need special handling in the given set of task
+    /// errors and handles them.
+    pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
+        self.renderer
+            .read()
+            .unwrap()
+            .handle_task_errors(task_errors);
     }
 
     fn with_component_mut<C: Component, R>(
