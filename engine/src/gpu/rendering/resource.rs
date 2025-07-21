@@ -1,7 +1,5 @@
 //! Synchronization of GPU buffers with geometrical data.
 
-pub mod tasks;
-
 use anyhow::Result;
 use impact_assets::Assets;
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -72,19 +70,19 @@ pub struct SynchronizedRenderResources {
 /// with the source data. The resources are protected by locks,
 /// enabling concurrent re-synchronization of the resources.
 #[derive(Debug)]
-struct DesynchronizedRenderResources {
-    camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
-    skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
-    triangle_mesh_buffer_managers: Mutex<Box<TriangleMeshGPUBufferManagerMap>>,
-    line_segment_mesh_buffer_managers: Mutex<Box<LineSegmentMeshGPUBufferManagerMap>>,
-    voxel_resource_managers: Mutex<
+pub struct DesynchronizedRenderResources {
+    pub camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
+    pub skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
+    pub triangle_mesh_buffer_managers: Mutex<Box<TriangleMeshGPUBufferManagerMap>>,
+    pub line_segment_mesh_buffer_managers: Mutex<Box<LineSegmentMeshGPUBufferManagerMap>>,
+    pub voxel_resource_managers: Mutex<
         Box<(
             Option<VoxelMaterialGPUResourceManager>,
             VoxelObjectGPUBufferManagerMap,
         )>,
     >,
-    light_buffer_manager: Mutex<Box<Option<LightGPUBufferManager>>>,
-    instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
+    pub light_buffer_manager: Mutex<Box<Option<LightGPUBufferManager>>>,
+    pub instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
 
 type TriangleMeshGPUBufferManagerMap = HashMap<TriangleMeshID, MeshGPUBufferManager>;
@@ -140,7 +138,7 @@ impl RenderResourceManager {
     /// If the render resources are not assumed to be desynchronized
     /// (as a result of calling
     /// [`declare_synchronized`](Self::declare_synchronized)).
-    fn desynchronized(&self) -> &DesynchronizedRenderResources {
+    pub fn desynchronized(&self) -> &DesynchronizedRenderResources {
         self.desynchronized_resources
             .as_ref()
             .expect("Attempted to access desynchronized render resources when in sync")
@@ -148,7 +146,7 @@ impl RenderResourceManager {
 
     /// Marks all the render resources as being in sync with the
     /// source data.
-    fn declare_synchronized(&mut self) {
+    pub fn declare_synchronized(&mut self) {
         if self.synchronized_resources.is_none() {
             self.synchronized_resources = Some(
                 self.desynchronized_resources
@@ -269,7 +267,7 @@ impl DesynchronizedRenderResources {
 
     /// Performs any required updates for keeping the camera data in the given
     /// GPU buffer manager in sync with the given scene camera.
-    fn sync_camera_buffer_with_scene_camera(
+    pub fn sync_camera_buffer_with_scene_camera(
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         camera_buffer_manager: &mut Option<CameraGPUBufferManager>,
@@ -294,7 +292,7 @@ impl DesynchronizedRenderResources {
 
     /// Performs any required updates for keeping the skybox data in the given
     /// GPU resource manager in sync with the given scene skybox.
-    fn sync_skybox_resources_with_scene_skybox(
+    pub fn sync_skybox_resources_with_scene_skybox(
         graphics_device: &GraphicsDevice,
         assets: &Assets,
         skybox_resource_manager: &mut Option<SkyboxGPUResourceManager>,
@@ -323,7 +321,7 @@ impl DesynchronizedRenderResources {
     ///
     /// GPU buffers whose source data no longer exists will be removed, and
     /// missing GPU buffers for new source data will be created.
-    fn sync_triangle_mesh_buffers_with_triangle_meshes(
+    pub fn sync_triangle_mesh_buffers_with_triangle_meshes(
         graphics_device: &GraphicsDevice,
         triangle_mesh_gpu_buffers: &mut TriangleMeshGPUBufferManagerMap,
         triangle_meshes: &HashMap<TriangleMeshID, TriangleMesh<f32>>,
@@ -346,7 +344,7 @@ impl DesynchronizedRenderResources {
     ///
     /// GPU buffers whose source data no longer exists will be removed, and
     /// missing GPU buffers for new source data will be created.
-    fn sync_line_segment_mesh_buffers_with_line_segment_meshes(
+    pub fn sync_line_segment_mesh_buffers_with_line_segment_meshes(
         graphics_device: &GraphicsDevice,
         line_segment_mesh_gpu_buffers: &mut LineSegmentMeshGPUBufferManagerMap,
         line_segment_meshes: &HashMap<LineSegmentMeshID, LineSegmentMesh<f32>>,
@@ -369,7 +367,7 @@ impl DesynchronizedRenderResources {
     ///
     /// GPU buffers whose source data no longer exists will be removed, and
     /// missing GPU buffers for new source data will be created.
-    fn sync_voxel_resources_with_voxel_manager(
+    pub fn sync_voxel_resources_with_voxel_manager(
         graphics_device: &GraphicsDevice,
         assets: &RwLock<Assets>,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
@@ -422,7 +420,7 @@ impl DesynchronizedRenderResources {
 
     /// Performs any required updates for keeping the lights in the given render
     /// buffer manager in sync with the lights in the given light storage.
-    fn sync_light_buffers_with_light_storage(
+    pub fn sync_light_buffers_with_light_storage(
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_buffer_manager: &mut Option<LightGPUBufferManager>,
@@ -454,7 +452,7 @@ impl DesynchronizedRenderResources {
     /// GPU buffers whose source data no longer
     /// exists will be removed, and missing GPU buffers
     /// for new source data will be created.
-    fn sync_instance_feature_buffers_with_manager(
+    pub fn sync_instance_feature_buffers_with_manager(
         graphics_device: &GraphicsDevice,
         feature_gpu_buffer_managers: &mut InstanceFeatureGPUBufferManagerMap,
         instance_feature_manager: &mut InstanceFeatureManager,

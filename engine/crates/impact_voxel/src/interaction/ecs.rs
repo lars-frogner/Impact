@@ -1,11 +1,11 @@
 //! Interaction in an ECS context.
 
 use crate::{
-    VoxelObjectID, VoxelObjectManager,
+    VoxelManager, VoxelObjectID, VoxelObjectManager,
     interaction::{
         self, NewVoxelObjectEntity, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
         VoxelObjectEntity, VoxelObjectInteractionContext,
-        absorption::{VoxelAbsorbingCapsule, VoxelAbsorbingSphere},
+        absorption::{self, VoxelAbsorbingCapsule, VoxelAbsorbingSphere},
     },
 };
 use impact_ecs::{
@@ -13,6 +13,7 @@ use impact_ecs::{
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_physics::{fph, rigid_body::RigidBodyManager};
 use impact_scene::{SceneEntityFlags, SceneGraphParentNodeHandle, graph::SceneGraph};
 use tinyvec::TinyVec;
 
@@ -160,5 +161,29 @@ pub fn sync_voxel_object_model_transforms(
                 model_transform,
             );
         }
+    );
+}
+
+/// Applies each voxel-absorbing sphere and capsule to the affected voxel
+/// objects.
+pub fn apply_absorption(
+    entity_stager: &mut EntityStager,
+    ecs_world: &ECSWorld,
+    scene_graph: &SceneGraph,
+    voxel_manager: &mut VoxelManager,
+    rigid_body_manager: &mut RigidBodyManager,
+    time_step_duration: fph,
+) {
+    let mut interaction_context = ECSVoxelObjectInteractionContext {
+        entity_stager,
+        ecs_world,
+        scene_graph,
+    };
+
+    absorption::apply_absorption(
+        &mut interaction_context,
+        voxel_manager,
+        rigid_body_manager,
+        time_step_duration,
     );
 }

@@ -1,7 +1,6 @@
 //! Render commands.
 
 pub mod gizmo_passes;
-pub mod tasks;
 
 use anyhow::Result;
 use gizmo_passes::GizmoPasses;

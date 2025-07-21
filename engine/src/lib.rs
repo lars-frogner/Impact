@@ -21,6 +21,7 @@ pub mod physics;
 pub mod run;
 pub mod runtime;
 pub mod scene;
+pub mod tasks;
 pub mod ui;
 pub mod voxel;
 

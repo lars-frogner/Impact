@@ -2,8 +2,9 @@
 
 use super::Engine;
 use crate::{
-    gpu::rendering::tasks::RenderingTag, instrumentation, physics::tasks::PhysicsTag,
-    runtime::tasks::RuntimeTaskScheduler, ui::tasks::UserInterfaceTag,
+    instrumentation,
+    runtime::tasks::RuntimeTaskScheduler,
+    tasks::{PhysicsTag, RenderingTag, UserInterfaceTag},
 };
 use anyhow::Result;
 use impact_scheduling::define_execution_tag_set;
