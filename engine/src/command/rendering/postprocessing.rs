@@ -1,6 +1,6 @@
 //! Commands for controlling post-processing.
 
-use crate::command::{ModifiedActiveState, ToActiveState};
+use crate::command::uils::{ModifiedActiveState, ToActiveState};
 use anyhow::Result;
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,
@@ -10,19 +10,6 @@ use impact_rendering::{
     },
 };
 use roc_integration::roc;
-
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PostprocessingCommand {
-    SetAmbientOcclusion(ToActiveState),
-    SetTemporalAntiAliasing(ToActiveState),
-    SetBloom(ToActiveState),
-    SetToneMappingMethod(ToToneMappingMethod),
-    SetExposure(ToExposure),
-    SetRenderAttachmentVisualization(ToActiveState),
-    SetVisualizedRenderAttachmentQuantity(ToRenderAttachmentQuantity),
-}
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]

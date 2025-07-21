@@ -12,7 +12,6 @@ pub use command::{UICommand, UICommandQueue};
 
 use anyhow::Result;
 use impact::{
-    command::ToActiveState,
     egui::{Context, FullOutput, RawInput},
     engine::Engine,
     ui,
@@ -63,10 +62,16 @@ impl UserInterface {
 
     pub fn setup(&self, engine: &Engine) {
         engine.set_controls_enabled(!self.config.interactive);
-        engine.set_task_timings(ToActiveState::from_enabled(self.config.show_time_overlay));
-        engine.set_render_pass_timings(ToActiveState::from_enabled(
-            self.config.show_render_pass_timings,
-        ));
+
+        engine
+            .task_timer()
+            .set_enabled(self.config.show_time_overlay);
+
+        engine
+            .renderer()
+            .write()
+            .unwrap()
+            .set_render_pass_timings_enabled(self.config.show_render_pass_timings);
     }
 
     pub fn run(

@@ -1,7 +1,5 @@
 //! Screen capture.
 
-pub mod command;
-
 use crate::gpu::rendering::RenderingSystem;
 use anyhow::Result;
 use impact_geometry::CubemapFace;

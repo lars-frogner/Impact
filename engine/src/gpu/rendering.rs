@@ -1,7 +1,5 @@
 //! Graphics rendering.
 
-pub mod command;
-pub mod postprocessing;
 pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
@@ -348,6 +346,46 @@ impl RenderingSystem {
         Ok(surface_texture)
     }
 
+    pub fn set_wireframe_mode_enabled(&mut self, enabled: bool) {
+        if enabled
+            && !self
+                .graphics_device()
+                .supports_features(wgpu::Features::POLYGON_MODE_LINE)
+        {
+            impact_log::warn!(
+                "Not enabling wireframe mode due to missing graphics device features"
+            );
+            return;
+        }
+
+        let was_enabled = self.basic_config.wireframe_mode_on;
+
+        if enabled != was_enabled {
+            self.basic_config.wireframe_mode_on = enabled;
+            self.recreate_render_command_manager();
+        }
+    }
+
+    pub fn set_render_pass_timings_enabled(&mut self, enabled: bool) {
+        if enabled
+            && !self
+                .graphics_device()
+                .supports_features(wgpu::Features::TIMESTAMP_QUERY)
+        {
+            impact_log::warn!(
+                "Not enabling timestamp queries due to missing graphics device features"
+            );
+            return;
+        }
+
+        let was_enabled = self.basic_config.timings_enabled;
+
+        if enabled != was_enabled {
+            self.basic_config.timings_enabled = enabled;
+            self.timestamp_query_manager.set_enabled(enabled);
+        }
+    }
+
     fn handle_surface_lost(&self) {
         self.rendering_surface
             .reinitialize_lost_surface(self.graphics_device());
@@ -357,6 +395,17 @@ impl RenderingSystem {
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render encoder"),
         })
+    }
+
+    fn recreate_render_command_manager(&mut self) {
+        *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
+            &self.graphics_device,
+            &self.rendering_surface,
+            &mut self.shader_manager.write().unwrap(),
+            &mut self.render_attachment_texture_manager.write().unwrap(),
+            &self.bind_group_layout_registry,
+            &self.basic_config,
+        );
     }
 
     fn recreate_render_attachment_textures(&mut self) {

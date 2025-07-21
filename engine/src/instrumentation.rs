@@ -1,6 +1,5 @@
 //! Instrumentation for engine systems.
 
-pub mod command;
 pub mod timing;
 
 use serde::{Deserialize, Serialize};

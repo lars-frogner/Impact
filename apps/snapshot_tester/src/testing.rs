@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use impact::{
-    command::ToActiveState,
-    engine::Engine,
-    gpu::rendering::{
-        command::RenderingCommand,
-        postprocessing::command::{PostprocessingCommand, ToToneMappingMethod},
+    command::{
+        EngineCommand,
+        rendering::{RenderingCommand, postprocessing::ToToneMappingMethod},
+        uils::ToActiveState,
     },
+    engine::Engine,
     impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
     roc_integration::roc,
 };
@@ -74,25 +74,25 @@ impl TestScene {
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
-            | Self::SoftCascadedShadowMapping => engine.execute_rendering_command(
+            | Self::SoftCascadedShadowMapping => engine.execute_command(EngineCommand::Rendering(
                 RenderingCommand::SetShadowMapping(ToActiveState::Enabled),
-            ),
-            Self::AmbientOcclusion => engine.execute_rendering_postprocessing_command(
-                PostprocessingCommand::SetAmbientOcclusion(ToActiveState::Enabled),
-            ),
-            Self::Bloom => engine.execute_rendering_postprocessing_command(
-                PostprocessingCommand::SetBloom(ToActiveState::Enabled),
-            ),
-            Self::ACESToneMapping => engine.execute_rendering_postprocessing_command(
-                PostprocessingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
+            )),
+            Self::AmbientOcclusion => engine.execute_command(EngineCommand::Rendering(
+                RenderingCommand::SetAmbientOcclusion(ToActiveState::Enabled),
+            )),
+            Self::Bloom => engine.execute_command(EngineCommand::Rendering(
+                RenderingCommand::SetBloom(ToActiveState::Enabled),
+            )),
+            Self::ACESToneMapping => engine.execute_command(EngineCommand::Rendering(
+                RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                     ToneMappingMethod::ACES,
                 )),
-            ),
-            Self::KhronosPBRNeutralToneMapping => engine.execute_rendering_postprocessing_command(
-                PostprocessingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
+            )),
+            Self::KhronosPBRNeutralToneMapping => engine.execute_command(EngineCommand::Rendering(
+                RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                     ToneMappingMethod::KhronosPBRNeutral,
                 )),
-            ),
+            )),
         }
     }
 
@@ -106,21 +106,20 @@ impl TestScene {
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
-            | Self::SoftCascadedShadowMapping => engine.execute_rendering_command(
+            | Self::SoftCascadedShadowMapping => engine.execute_command(EngineCommand::Rendering(
                 RenderingCommand::SetShadowMapping(ToActiveState::Disabled),
+            )),
+            Self::AmbientOcclusion => engine.execute_command(EngineCommand::Rendering(
+                RenderingCommand::SetAmbientOcclusion(ToActiveState::Disabled),
+            )),
+            Self::Bloom => engine.execute_command(EngineCommand::Rendering(
+                RenderingCommand::SetBloom(ToActiveState::Disabled),
+            )),
+            Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine.execute_command(
+                EngineCommand::Rendering(RenderingCommand::SetToneMappingMethod(
+                    ToToneMappingMethod::Specific(ToneMappingMethod::None),
+                )),
             ),
-            Self::AmbientOcclusion => engine.execute_rendering_postprocessing_command(
-                PostprocessingCommand::SetAmbientOcclusion(ToActiveState::Disabled),
-            ),
-            Self::Bloom => engine.execute_rendering_postprocessing_command(
-                PostprocessingCommand::SetBloom(ToActiveState::Disabled),
-            ),
-            Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine
-                .execute_rendering_postprocessing_command(
-                    PostprocessingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
-                        ToneMappingMethod::None,
-                    )),
-                ),
         }
     }
 }

@@ -1,8 +1,8 @@
-# Hash: c79353a27203a66bdd92ce68ce9ed6bdeb582afd8f4b339a9cfea2ffef3eadaf
-# Generated: 2025-07-20T18:05:49+00:00
-# Rust type: impact::engine::command::EngineCommand
+# Hash: 8dfde8c0278240c1427a49898bc445cd1186112bdd6a83113befb0bd1578cb56
+# Generated: 2025-07-21T22:20:34+00:00
+# Rust type: impact::command::EngineCommand
 # Type category: Inline
-# Commit: 40b03028 (dirty)
+# Commit: 0364cbf8 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -38,7 +38,7 @@ write_bytes = |bytes, value|
             |> List.reserve(34)
             |> List.append(0)
             |> Command.RenderingCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 26))
+            |> List.concat(List.repeat(0, 27))
 
         Physics(val) ->
             bytes
@@ -98,7 +98,7 @@ from_bytes = |bytes|
             [0, .. as data_bytes] ->
                 Ok(
                     Rendering(
-                        data_bytes |> List.sublist({ start: 0, len: 7 }) |> Command.RenderingCommand.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 6 }) |> Command.RenderingCommand.from_bytes?,
                     ),
                 )
 

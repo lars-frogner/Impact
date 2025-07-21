@@ -12,10 +12,10 @@ pub use impact::component::gather_roc_type_ids_for_all_components;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
-    engine::{Engine, command::EngineCommand},
+    command::{EngineCommand, scene::SceneCommand},
+    engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
-    scene::command::SceneCommand,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -149,7 +149,7 @@ impl Application for SnapshotTester {
         engine.capture_screenshot(Some(&output_image_path))?;
 
         // Prepare for next scene
-        engine.execute_scene_command(SceneCommand::Clear)?;
+        engine.execute_command(EngineCommand::Scene(SceneCommand::Clear))?;
         rendered_scene.restore_settings(engine)?;
 
         if iteration + 1 == self.test_scenes.len() {

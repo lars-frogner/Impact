@@ -1,6 +1,10 @@
 //! Commands for operating the physics simulator.
 
-use crate::{command::ToActiveState, physics::PhysicsSimulator};
+use crate::{
+    command::uils::{ModifiedActiveState, ToActiveState},
+    engine::Engine,
+    physics::PhysicsSimulator,
+};
 use impact_physics::{fph, medium::UniformMedium};
 use roc_integration::roc;
 
@@ -32,7 +36,25 @@ pub enum ToSimulationSpeedMultiplier {
     Specific(fph),
 }
 
+impl PartialEq for ToSimulationSpeedMultiplier {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Higher, Self::Higher) | (Self::Lower, Self::Lower) => true,
+            (Self::Specific(a), Self::Specific(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ToSimulationSpeedMultiplier {}
+
+pub fn set_simulation(simulator: &mut PhysicsSimulator, to: ToActiveState) -> ModifiedActiveState {
+    impact_log::info!("Setting simulation to {to:?}");
+    to.set(simulator.enabled_mut())
+}
+
 pub fn set_simulation_substep_count(simulator: &mut PhysicsSimulator, to: ToSubstepCount) -> u32 {
+    impact_log::info!("Setting simulation substep count to {to:?}");
     let n_substeps = simulator.n_substeps_mut();
     match to {
         ToSubstepCount::HigherBy(incr) => {
@@ -52,6 +74,7 @@ pub fn set_simulation_speed(
     simulator: &mut PhysicsSimulator,
     to: ToSimulationSpeedMultiplier,
 ) -> fph {
+    impact_log::info!("Setting simulation speed to {to:?}");
     const INCREMENT_FACTOR: fph = 1.1;
     const MIN_ABS_MULTIPLIER: fph = 1e-9;
 
@@ -73,14 +96,29 @@ pub fn set_simulation_speed(
     new_multiplier
 }
 
-impl PartialEq for ToSimulationSpeedMultiplier {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Higher, Self::Higher) | (Self::Lower, Self::Lower) => true,
-            (Self::Specific(a), Self::Specific(b)) => a.to_bits() == b.to_bits(),
-            _ => false,
-        }
-    }
+pub fn set_medium(simulator: &mut PhysicsSimulator, to: UniformMedium) {
+    impact_log::info!("Setting medium to {to:?}");
+    simulator.set_medium(to);
 }
 
-impl Eq for ToSimulationSpeedMultiplier {}
+pub fn set_simulation_speed_and_compensate_controller_movement_speed(
+    engine: &Engine,
+    to: ToSimulationSpeedMultiplier,
+) -> f64 {
+    let mut simulator = engine.simulator().write().unwrap();
+    let old_multiplier = simulator.simulation_speed_multiplier();
+    let new_multiplier = set_simulation_speed(&mut simulator, to);
+    drop(simulator);
+
+    if new_multiplier != old_multiplier {
+        // Adjust movement speed to compensate for the change in simulation speed
+        if let Some(motion_controller) = engine.motion_controller() {
+            let mut motion_controller = motion_controller.lock().unwrap();
+            let new_movement_speed =
+                motion_controller.movement_speed() * (old_multiplier / new_multiplier);
+            motion_controller.set_movement_speed(new_movement_speed);
+        }
+    }
+
+    new_multiplier
+}

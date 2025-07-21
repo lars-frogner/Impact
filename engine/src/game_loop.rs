@@ -1,7 +1,5 @@
 //! Controller for the main loop driving simulation, rendering and UI.
 
-pub mod command;
-
 use crate::instrumentation::{self, FrameDurationTracker};
 use serde::{Deserialize, Serialize};
 use std::{

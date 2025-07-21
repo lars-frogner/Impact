@@ -2,7 +2,7 @@
 
 use super::UserInterface;
 use impact::{
-    command::{CommandQueue, ToActiveState},
+    command::{queue::CommandQueue, uils::ToActiveState},
     egui::FullOutput,
     engine::Engine,
     ui,
