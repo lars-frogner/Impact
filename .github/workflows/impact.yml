@@ -280,7 +280,7 @@ jobs:
           PROPTEST_CASES: 1
           MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-deterministic-floats"
         run: |
-          cargo miri test --all-features --workspace
+          cargo miri test --all-features --workspace -- --nocapture
 
   # ───────────────────────────────────────────────────────────────
   # Snapshot tests
