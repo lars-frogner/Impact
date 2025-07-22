@@ -14,10 +14,10 @@ import core.Vector3
 import pf.Command
 import pf.Comp.AmbientEmission
 import pf.Setup.ConstantRotation
-import pf.Comp.MotionControl
+import pf.Comp.ControlledVelocity
 import pf.Setup.NormalMap
 import pf.Comp.OmnidirectionalEmission
-import pf.Comp.OrientationControl
+import pf.Comp.ControlledAngularVelocity
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
@@ -25,7 +25,7 @@ import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Comp.SameVoxelType
+import pf.Setup.SameVoxelType
 import pf.Setup.SceneGraphGroup
 import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.SphericalCollidable
@@ -37,7 +37,7 @@ import pf.Setup.ConstantAcceleration
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Comp.VoxelBox
+import pf.Setup.VoxelBox
 import pf.Setup.VoxelCollidable
 import pf.Entity
 import pf.Physics.AngularVelocity as AngularVelocity
@@ -92,8 +92,8 @@ player =
         UnitQuaternion.from_axis_angle(y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.MotionControl.add_new
-    |> Comp.OrientationControl.add_new
+    |> Comp.ControlledVelocity.add_new
+    |> Comp.ControlledAngularVelocity.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 sun_light =
@@ -273,8 +273,8 @@ create_room! = |extent, angular_speed, texture_ids|
 
 voxel_box = |voxel_extent, box_size, room_extent|
     Entity.new
-    |> Comp.VoxelBox.add_new(voxel_extent, box_size, box_size, box_size)
-    |> Comp.SameVoxelType.add_new(1)
+    |> Setup.VoxelBox.add_new(voxel_extent, box_size, box_size, box_size)
+    |> Setup.SameVoxelType.add_new(1)
     |> Comp.ReferenceFrame.add_unoriented(
         (
             0.0,

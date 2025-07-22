@@ -14,9 +14,9 @@ import pf.Comp.AmbientEmission
 import pf.Setup.BoxMesh
 import pf.Setup.ConstantRotation
 import pf.Setup.CylinderMesh
-import pf.Comp.MotionControl
+import pf.Comp.ControlledVelocity
 import pf.Setup.NormalMap
-import pf.Comp.OrientationControl
+import pf.Comp.ControlledAngularVelocity
 import pf.Setup.ParallaxMap
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
@@ -87,8 +87,8 @@ player =
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.MotionControl.add_new
-    |> Comp.OrientationControl.add_new
+    |> Comp.ControlledVelocity.add_new
+    |> Comp.ControlledAngularVelocity.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 dragon =

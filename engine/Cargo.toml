@@ -3,6 +3,7 @@ members = [
     "crates/impact_assets",
     "crates/impact_camera",
     "crates/impact_containers",
+    "crates/impact_controller",
     "crates/impact_dev_ui",
     "crates/impact_ecs",
     "crates/impact_ecs/impact_ecs_macros",
@@ -154,6 +155,7 @@ license = { workspace = true }
 default = ["window"]
 arbitrary = [
     "dep:arbitrary",
+    "impact_controller/arbitrary",
     "impact_ecs/arbitrary",
     "impact_gpu/arbitrary",
     "impact_math/arbitrary",
@@ -163,6 +165,7 @@ arbitrary = [
 ]
 roc_codegen = [
     "impact_containers/roc_codegen",
+    "impact_controller/roc_codegen",
     "impact_camera/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_geometry/roc_codegen",
@@ -201,6 +204,10 @@ egui-winit = { version = "0.32", optional = true }
 impact_assets = { path = "crates/impact_assets", features = ["ron"] }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }
+impact_controller = { path = "crates/impact_controller", features = [
+    "ecs",
+    "serde",
+] }
 impact_ecs = { path = "crates/impact_ecs" }
 impact_geometry = { path = "crates/impact_geometry", features = ["ecs"] }
 impact_gpu = { path = "crates/impact_gpu", features = ["bincode", "serde"] }

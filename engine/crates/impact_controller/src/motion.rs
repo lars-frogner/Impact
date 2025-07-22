@@ -1,10 +1,8 @@
 //! Motion controller implementations.
 
-pub mod components;
-pub mod systems;
-
 use super::{MotionChanged, MotionController};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
+use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
 use impact_physics::{
     fph,
@@ -12,11 +10,17 @@ use impact_physics::{
 };
 use nalgebra::vector;
 use roc_integration::roc;
-use serde::{Deserialize, Serialize};
 
-/// Motion controller allowing for motion at constant
-/// speed along the axes of an entity's local coordinate
-/// system (`W-A-S-D` type motion).
+define_component_type! {
+    /// Velocity controller by a user.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ControlledVelocity(Velocity);
+}
+
+/// Motion controller allowing for motion at constant speed along the axes of an
+/// entity's local coordinate system (`W-A-S-D` type motion).
 #[derive(Clone, Debug)]
 pub struct SemiDirectionalMotionController {
     movement_speed: fph,
@@ -25,13 +29,15 @@ pub struct SemiDirectionalMotionController {
     local_velocity: Velocity,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub enum MotionControllerConfig {
     None,
     SemiDirectional(SemiDirectionalMotionControllerConfig),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct SemiDirectionalMotionControllerConfig {
     /// The speed at which the controlled entity can move.
     pub movement_speed: fph,
@@ -48,8 +54,7 @@ pub enum MotionState {
     Moving,
 }
 
-/// Possible directions of motion in the local coordinate
-/// system.
+/// Possible directions of motion in the local coordinate system.
 #[roc(parents = "Control")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,9 +78,35 @@ struct SemiDirectionalMotionState {
     down: MotionState,
 }
 
+#[roc]
+impl ControlledVelocity {
+    /// Creates a new controlled velocity.
+    #[roc(body = "(Vector3.zero,)")]
+    pub fn new() -> Self {
+        Self(Velocity::zeros())
+    }
+
+    /// Assigns a new controlled velocity and updates the given total velocity
+    /// to account for the change in controlled velocity.
+    pub fn apply_new_controlled_velocity(
+        &mut self,
+        new_controlled_velocity: Velocity,
+        total_velocity: &mut Velocity,
+    ) {
+        *total_velocity -= self.0;
+        *total_velocity += new_controlled_velocity;
+        self.0 = new_controlled_velocity;
+    }
+}
+
+impl Default for ControlledVelocity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SemiDirectionalMotionController {
-    /// Creates a new motion controller with the given configuration
-    /// parameters.
+    /// Creates a new motion controller with the given configuration parameters.
     pub fn new(config: SemiDirectionalMotionControllerConfig) -> Self {
         Self {
             movement_speed: config.movement_speed,
@@ -85,8 +116,8 @@ impl SemiDirectionalMotionController {
         }
     }
 
-    /// Computes the velocity of the controlled entity in its local
-    /// coordinate system.
+    /// Computes the velocity of the controlled entity in its local coordinate
+    /// system.
     fn compute_local_velocity(&self) -> Velocity {
         if self.state.motion_state() == MotionState::Still
             || abs_diff_eq!(self.movement_speed, fph::ZERO)
@@ -144,12 +175,12 @@ impl MotionController for SemiDirectionalMotionController {
         self.movement_speed
     }
 
-    fn compute_control_velocity(&self, orientation: &Orientation) -> Velocity {
-        let mut control_velocity = orientation.transform_vector(&self.local_velocity);
+    fn compute_controlled_velocity(&self, orientation: &Orientation) -> Velocity {
+        let mut controlled_velocity = orientation.transform_vector(&self.local_velocity);
         if !self.vertical_control {
-            control_velocity.y = 0.0;
+            controlled_velocity.y = 0.0;
         }
-        control_velocity
+        controlled_velocity
     }
 
     fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged {
@@ -228,8 +259,8 @@ impl SemiDirectionalMotionState {
     }
 
     fn motion_state(&self) -> MotionState {
-        // This takes into account that motion in oppsite
-        // directions will be cancelled out
+        // This takes into account that motion in oppsite directions will be
+        // cancelled out
         if self.forwards == self.backwards && self.right == self.left && self.up == self.down {
             MotionState::Still
         } else {

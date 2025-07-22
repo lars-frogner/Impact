@@ -14,9 +14,9 @@ import pf.Skybox
 import pf.Comp.AmbientEmission
 import pf.Setup.CylinderMesh
 import pf.Setup.GradientNoiseVoxelTypes
-import pf.Comp.MotionControl
+import pf.Comp.ControlledVelocity
 import pf.Setup.MultifractalNoiseSDFModification
-import pf.Comp.OrientationControl
+import pf.Comp.ControlledAngularVelocity
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.RectangleMesh
@@ -94,8 +94,8 @@ player =
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.MotionControl.add_new
-    |> Comp.OrientationControl.add_new
+    |> Comp.ControlledVelocity.add_new
+    |> Comp.ControlledAngularVelocity.add_new
     |> Setup.SceneGraphGroup.add
 
 camera =

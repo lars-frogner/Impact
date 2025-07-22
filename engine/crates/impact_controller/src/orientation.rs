@@ -1,34 +1,40 @@
 //! Orientation controller implementations.
 
-pub mod components;
-pub mod systems;
-
 use super::OrientationController;
+use bytemuck::{Pod, Zeroable};
 use impact_math::{Angle, Degrees, Radians};
-use impact_physics::{fph, quantities::Orientation};
+use impact_physics::{
+    fph,
+    quantities::{AngularVelocity, Orientation},
+};
 use nalgebra::{UnitQuaternion, Vector3};
-use serde::{Deserialize, Serialize};
+use roc_integration::roc;
 use std::num::NonZeroU32;
 
-/// Orientation controller that updates the orientation
-/// in the way a first-person camera should respond to
-/// mouse movement.
+define_component_type! {
+    /// Angular velocity controller by a user.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ControlledAngularVelocity(AngularVelocity);
+}
+
+/// Orientation controller that updates the orientation in the way a
+/// first-person camera should respond to mouse movement.
 ///
-/// Orienting the camera may introduce roll (viewed objects
-/// may not stay upright).
+/// Orienting the camera may introduce roll (viewed objects may not stay
+/// upright).
 #[derive(Clone, Debug)]
 pub struct CameraOrientationController {
     base: CameraOrientationControllerBase,
     orientation_change: Orientation,
 }
 
-/// Orientation controller that updates the orientation
-/// in the way a first-person camera should respond to
-/// mouse movement.
+/// Orientation controller that updates the orientation in the way a
+/// first-person camera should respond to mouse movement.
 ///
-/// Orienting the camera will not introduce any roll
-/// (viewed objects remain upright), but orientation
-/// only remains correct when the camera stays in the
+/// Orienting the camera will not introduce any roll (viewed objects remain
+/// upright), but orientation only remains correct when the camera stays in the
 /// world's horizontal plane.
 #[derive(Clone, Debug)]
 pub struct RollFreeCameraOrientationController {
@@ -37,14 +43,16 @@ pub struct RollFreeCameraOrientationController {
     pitch_change: Orientation,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub enum OrientationControllerConfig {
     None,
     Camera(CameraOrientationControllerConfig),
     RollFreeCamera(CameraOrientationControllerConfig),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct CameraOrientationControllerConfig {
     /// The vertical field of view of the controlled first-person camera.
     pub vertical_field_of_view: Degrees<f64>,
@@ -57,6 +65,34 @@ struct CameraOrientationControllerBase {
     vertical_field_of_view: Radians<f64>,
     sensitivity: f64,
     orientation_has_changed: bool,
+}
+
+#[roc]
+impl ControlledAngularVelocity {
+    /// Creates a new controlled angular velocity.
+    #[roc(body = "(Physics.AngularVelocity.zero({}),)")]
+    pub fn new() -> Self {
+        Self(AngularVelocity::zero())
+    }
+
+    /// Assigns a new controlled angular velocity and updates the given total
+    /// angular velocity to account for the change in controlled angular
+    /// velocity.
+    pub fn apply_new_controlled_angular_velocity(
+        &mut self,
+        new_control_angular_velocity: AngularVelocity,
+        total_angular_velocity: &mut AngularVelocity,
+    ) {
+        *total_angular_velocity -= self.0;
+        *total_angular_velocity += new_control_angular_velocity;
+        self.0 = new_control_angular_velocity;
+    }
+}
+
+impl Default for ControlledAngularVelocity {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CameraOrientationController {
