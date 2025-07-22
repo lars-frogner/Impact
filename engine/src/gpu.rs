@@ -1,5 +1,3 @@
-pub mod rendering;
-
 use anyhow::Result;
 use impact_gpu::{device::GraphicsDevice, vertex_attribute_ranges, wgpu};
 use impact_rendering::surface::RenderingSurface;

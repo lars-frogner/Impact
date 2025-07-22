@@ -2,7 +2,7 @@
 
 use crate::{
     gizmo,
-    gpu::rendering::resource::DesynchronizedRenderResources,
+    rendering::resource::DesynchronizedRenderResources,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;

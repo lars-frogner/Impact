@@ -1,6 +1,6 @@
 //! Commands for screen capture.
 
-use crate::gpu::rendering::screen_capture::ScreenCapturer;
+use crate::rendering::screen_capture::ScreenCapturer;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
