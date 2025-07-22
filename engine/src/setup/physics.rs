@@ -1,37 +1,42 @@
-//! Management of physics for entities.
+//! Setup and cleanup of physics for new and removed entities.
 
-use crate::physics::{PhysicsSimulator, collision, driven_motion, force, rigid_body};
+pub mod collision;
+pub mod driven_motion;
+pub mod force;
+pub mod rigid_body;
+
+use crate::physics::PhysicsSimulator;
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use impact_mesh::MeshRepository;
 use std::sync::RwLock;
 
-/// Performs any modifications to the physics simulator required to
-/// accommodate a new entity with the given components, and adds any
-/// additional components to the entity's components.
-pub fn setup_physics_for_new_entity(
+/// Performs any modifications to the physics simulator required to accommodate
+/// a new entities with the given components, and adds any additional components
+/// to the entities' components.
+pub fn setup_physics_for_new_entities(
     simulator: &PhysicsSimulator,
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
-    rigid_body::entity::setup_rigid_body_for_new_entity(
+    rigid_body::setup_rigid_bodies_for_new_entities(
         simulator.rigid_body_manager(),
         mesh_repository,
         components,
     )?;
 
-    force::entity::setup_forces_for_new_entity(
+    force::setup_forces_for_new_entities(
         simulator.force_generator_manager(),
         mesh_repository,
         components,
     )?;
 
-    driven_motion::entity::setup_driven_motion_for_new_entity(
+    driven_motion::setup_driven_motion_for_new_entities(
         simulator.motion_driver_manager(),
         components,
     );
 
-    collision::entity::setup_collidable_for_new_entity(simulator.collision_world(), components);
+    collision::setup_collidables_for_new_entities(simulator.collision_world(), components);
 
     Ok(())
 }

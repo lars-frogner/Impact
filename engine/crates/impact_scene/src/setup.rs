@@ -62,7 +62,7 @@ impl Parent {
 }
 
 #[cfg(feature = "ecs")]
-pub fn setup_parent_group_node(
+pub fn setup_scene_graph_parent_node(
     parent_entity: impact_ecs::world::EntityEntry<'_>,
 ) -> Result<SceneGraphParentNodeHandle> {
     let parent_group_node = parent_entity
@@ -79,7 +79,7 @@ pub fn setup_parent_group_node(
     ))
 }
 
-pub fn setup_group_node(
+pub fn setup_scene_graph_group_node(
     scene_graph: &mut SceneGraph,
     group_to_parent_transform: Isometry3<f32>,
     parent: Option<&SceneGraphParentNodeHandle>,
@@ -91,7 +91,7 @@ pub fn setup_group_node(
     )
 }
 
-pub fn setup_model_instance_node(
+pub fn setup_scene_graph_model_instance_node(
     mesh_repository: &MeshRepository,
     material_library: &MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
@@ -183,7 +183,7 @@ pub fn setup_model_instance_node(
     ))
 }
 
-pub fn remove_model_instance_node(
+pub fn remove_scene_graph_model_instance_node(
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     scene_graph: &RwLock<SceneGraph>,
     model_instance_node: &SceneGraphModelInstanceNodeHandle,
@@ -201,14 +201,14 @@ pub fn remove_model_instance_node(
 }
 
 #[cfg(feature = "ecs")]
-pub fn remove_model_instance_node_for_entity(
+pub fn remove_scene_graph_model_instance_node_for_entity(
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     scene_graph: &RwLock<SceneGraph>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
     if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeHandle>() {
-        remove_model_instance_node(
+        remove_scene_graph_model_instance_node(
             instance_feature_manager,
             scene_graph,
             node.access(),

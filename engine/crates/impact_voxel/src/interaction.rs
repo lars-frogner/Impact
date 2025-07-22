@@ -3,7 +3,7 @@
 pub mod absorption;
 
 #[cfg(feature = "ecs")]
-pub mod ecs;
+pub mod systems;
 
 use crate::{
     VoxelObjectID, VoxelObjectManager,

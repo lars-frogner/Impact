@@ -1,4 +1,4 @@
-//! Management of camera-related components for entities.
+//! Setup and cleanup of cameras for new and removed entities.
 
 use anyhow::{Result, bail};
 use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};

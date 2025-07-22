@@ -1,3 +1,0 @@
-//! Cameras.
-
-pub mod entity;

@@ -180,7 +180,7 @@ impl World {
         let components: ArchetypeComponents<A> =
             components.try_into().map_err(E::into)?.into_inner();
 
-        self.try_register_archetype_for_new_entity(entity_id, components.archetype().id())?;
+        self.try_register_archetype_for_new_entities(entity_id, components.archetype().id())?;
 
         self.add_entities_to_table([entity_id], components);
 
@@ -494,7 +494,7 @@ impl World {
         }
     }
 
-    fn try_register_archetype_for_new_entity(
+    fn try_register_archetype_for_new_entities(
         &mut self,
         entity_id: EntityID,
         archetype_id: ArchetypeID,

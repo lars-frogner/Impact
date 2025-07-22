@@ -1,4 +1,4 @@
-//! Management of meshes for entities.
+//! Setu of meshes for new entities.
 
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -13,11 +13,11 @@ use impact_mesh::{
 };
 use std::sync::RwLock;
 
-/// Checks if the entity-to-be with the given components has a component
-/// representing a mesh, and if so, generates the mesh and adds it to the
-/// mesh repository if not present, then adds the appropriate mesh component
-/// to the entity.
-pub fn setup_mesh_for_new_entity(
+/// Checks if the entites-to-be with the given components have a component
+/// representing a mesh, and if so, generates the meshes and adds them to the
+/// mesh repository if not present, then adds the appropriate mesh components to
+/// the entities.
+pub fn setup_meshes_for_new_entities(
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
@@ -207,11 +207,11 @@ pub fn setup_mesh_for_new_entity(
     Ok(())
 }
 
-/// Checks if the entity-to-be with the given components has a material
-/// component and a component for a mesh that misses vertex attributes
-/// required by the material, and if so, generates the missing vertex
-/// attributes if possible.
-pub fn generate_missing_vertex_properties_for_new_entity_mesh(
+/// Checks if the entities-to-be with the given components have a material
+/// component and a component for a mesh that misses vertex attributes required
+/// by the material, and if so, generates the missing vertex attributes if
+/// possible.
+pub fn generate_missing_vertex_properties_for_new_entity_meshes(
     mesh_repository: &RwLock<MeshRepository>,
     material_library: &MaterialLibrary,
     components: &ArchetypeComponentStorage,

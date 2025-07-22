@@ -1,4 +1,4 @@
-//! Management of collidables for entities.
+//! Setup of collidables for new entities.
 
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_physics::{
@@ -14,10 +14,10 @@ use impact_voxel::{
 };
 use std::sync::RwLock;
 
-/// Checks if the entity-to-be with the given components has a component
-/// representing a collidable, and if so, creates the corresponding collidable
-/// and adds a [`CollidableID`] to the entity.
-pub fn setup_collidable_for_new_entity(
+/// Checks if the entities-to-be with the given components have a component
+/// representing a collidable, and if so, creates the corresponding collidables
+/// and adds the [`CollidableID`]s to the entity.
+pub fn setup_collidables_for_new_entities(
     collision_world: &RwLock<CollisionWorld>,
     components: &mut ArchetypeComponentStorage,
 ) {

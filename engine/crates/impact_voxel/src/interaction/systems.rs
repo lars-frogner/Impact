@@ -1,4 +1,4 @@
-//! Interaction in an ECS context.
+//! ECS systems for driving voxel object interaction.
 
 use crate::{
     VoxelManager, VoxelObjectID, VoxelObjectManager,

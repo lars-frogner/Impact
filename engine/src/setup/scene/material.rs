@@ -1,4 +1,4 @@
-//! Management of materials for entities.
+//! Setup of materials for new entities.
 
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -18,13 +18,13 @@ use impact_material::{
 use impact_model::InstanceFeatureManager;
 use std::{hash::Hash, sync::RwLock};
 
-/// Checks if the entity-to-be with the given components has the components for
-/// a material, and if so, adds the material specification to the material
+/// Checks if the entites-to-be with the given components have the components
+/// for a material, and if so, adds the material specifications to the material
 /// library if not already present, adds the appropriate material property
-/// texture set to the material library if not already present, registers the
-/// material in the instance feature manager and adds the appropriate material
-/// component to the entity.
-pub fn setup_material_for_new_entity<MID: Clone + Eq + Hash>(
+/// texture sets to the material library if not already present, registers the
+/// materials in the instance feature manager and adds the appropriate material
+/// components to the entities.
+pub fn setup_materials_for_new_entities<MID: Clone + Eq + Hash>(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &RwLock<MaterialLibrary>,
@@ -32,21 +32,21 @@ pub fn setup_material_for_new_entity<MID: Clone + Eq + Hash>(
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
-    setup_fixed_color_material_for_new_entity(
+    setup_fixed_color_materials_for_new_entities(
         material_library,
         instance_feature_manager,
         components,
         desynchronized,
     );
 
-    setup_fixed_texture_material_for_new_entity(
+    setup_fixed_texture_materials_for_new_entities(
         graphics_device,
         texture_provider,
         material_library,
         components,
     )?;
 
-    setup_physical_material_for_new_entity(
+    setup_physical_materials_for_new_entities(
         graphics_device,
         texture_provider,
         material_library,
@@ -58,11 +58,7 @@ pub fn setup_material_for_new_entity<MID: Clone + Eq + Hash>(
     Ok(())
 }
 
-/// Checks if the entity-to-be with the given components has the component
-/// for this material, and if so, registers the material in the given
-/// instance feature manager and adds the appropriate material component
-/// to the entity.
-fn setup_fixed_color_material_for_new_entity<MID: Clone + Eq + Hash>(
+fn setup_fixed_color_materials_for_new_entities<MID: Clone + Eq + Hash>(
     material_library: &RwLock<MaterialLibrary>,
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     components: &mut ArchetypeComponentStorage,
@@ -86,11 +82,7 @@ fn setup_fixed_color_material_for_new_entity<MID: Clone + Eq + Hash>(
     );
 }
 
-/// Checks if the entity-to-be with the given components has the component
-/// for this material, and if so, adds the appropriate material property
-/// texture set to the material library if not present and adds the
-/// appropriate material component to the entity.
-fn setup_fixed_texture_material_for_new_entity(
+fn setup_fixed_texture_materials_for_new_entities(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &RwLock<MaterialLibrary>,
@@ -113,13 +105,7 @@ fn setup_fixed_texture_material_for_new_entity(
     )
 }
 
-/// Checks if the entity-to-be with the given components has the components for
-/// a physical material, and if so, adds the material specification to the
-/// material library if not already present, adds the appropriate material
-/// property texture set to the material library if not already present,
-/// registers the material in the instance feature manager and adds the
-/// appropriate material component to the entity.
-fn setup_physical_material_for_new_entity<MID: Clone + Eq + Hash>(
+fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
     material_library: &RwLock<MaterialLibrary>,

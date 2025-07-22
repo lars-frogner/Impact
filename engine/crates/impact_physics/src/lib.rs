@@ -14,6 +14,9 @@ pub mod quantities;
 pub mod rigid_body;
 pub mod setup;
 
+#[cfg(feature = "ecs")]
+pub mod systems;
+
 use anyhow::{Result, bail};
 use collision::{Collidable, CollisionWorld};
 use constraint::{ConstraintManager, solver::ConstraintSolverConfig};

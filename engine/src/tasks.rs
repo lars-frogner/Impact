@@ -3,9 +3,7 @@
 use crate::{
     gizmo,
     gpu::rendering::resource::DesynchronizedRenderResources,
-    physics,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
-    scene,
 };
 use anyhow::Result;
 use impact_scheduling::{define_execution_tag, define_task};
@@ -90,7 +88,7 @@ define_task!(
             let ecs_world = engine.ecs_world().read().unwrap();
             let scene = engine.scene().read().unwrap();
             let mut scene_graph = scene.scene_graph().write().unwrap();
-            scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
+            impact_scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
             Ok(())
         })
     }
@@ -185,7 +183,7 @@ define_task!(
             let scene = engine.scene().read().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
             let mut light_storage = scene.light_storage().write().unwrap();
-            scene::systems::sync_lights_in_storage(
+            impact_scene::systems::sync_lights_in_storage(
                 &ecs_world,
                 &scene_graph,
                 scene.scene_camera().read().unwrap().as_ref(),
@@ -297,7 +295,7 @@ define_task!(
             let ecs_world = engine.ecs_world().read().unwrap();
             let simulator = engine.simulator().read().unwrap();
             let rigid_body_manager = simulator.rigid_body_manager().read().unwrap();
-            physics::systems::synchronize_rigid_body_components(&ecs_world, &rigid_body_manager);
+            impact_physics::systems::synchronize_rigid_body_components(&ecs_world, &rigid_body_manager);
             Ok(())
         })
     }
@@ -354,7 +352,7 @@ define_task!(
             let mut voxel_manager = scene.voxel_manager().write().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
 
-            impact_voxel::interaction::ecs::apply_absorption(
+            impact_voxel::interaction::systems::apply_absorption(
                 &mut entity_stager,
                 &ecs_world,
                 &scene_graph,
@@ -381,7 +379,7 @@ define_task!(
             let scene = engine.scene().read().unwrap();
             let voxel_manager = scene.voxel_manager().read().unwrap();
 
-            impact_voxel::interaction::ecs::sync_voxel_object_model_transforms(
+            impact_voxel::interaction::systems::sync_voxel_object_model_transforms(
                 &mut ecs_world,
                 &voxel_manager.object_manager,
             );

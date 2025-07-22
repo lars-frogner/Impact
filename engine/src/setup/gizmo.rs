@@ -1,4 +1,4 @@
-//! Management of gizmo visibility for entities.
+//! Setup of gizmos for new entities.
 
 use crate::gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -8,10 +8,10 @@ use impact_light::{
 };
 use impact_physics::collision::CollidableID;
 
-/// Adds the [`GizmosComp`] component to the new entity if it has any of the
-/// relevant components. The component is initialized based on which gizmos are
-/// currently configured to be globally visible.
-pub fn setup_gizmos_for_new_entity(
+/// Adds the [`GizmosComp`] component to the new entities if they have any of
+/// the relevant components. The components are initialized based on which
+/// gizmos are currently configured to be globally visible.
+pub fn setup_gizmos_for_new_entities(
     gizmo_manager: &GizmoManager,
     components: &mut ArchetypeComponentStorage,
 ) {

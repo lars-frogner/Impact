@@ -1,3 +1,0 @@
-//! Voxels.
-
-pub mod entity;
