@@ -38,7 +38,7 @@ impact_scene = { path = "../impact_scene" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
-paste = { workspace = true }
+pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 

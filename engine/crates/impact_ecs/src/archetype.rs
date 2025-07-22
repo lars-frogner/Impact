@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap, NoHashSet};
 use impact_ecs_macros::archetype_of;
-use paste::paste;
+use pastey::paste;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},

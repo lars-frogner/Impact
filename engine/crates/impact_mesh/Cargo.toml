@@ -25,7 +25,7 @@ impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
-paste = { workspace = true }
+pastey = { workspace = true }
 ply-rs = { version = "0.1", optional = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
