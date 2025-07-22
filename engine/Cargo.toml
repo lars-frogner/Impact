@@ -183,8 +183,6 @@ roc_codegen = [
 ]
 cli = ["dep:clap"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
-flamegraph = ["profiling"]
-fuzzing = ["arbitrary", "impact_voxel/fuzzing"]
 ply = ["impact_mesh/ply"]
 profiling = ["impact_profiling"]
 obj = ["impact_mesh/obj"]
