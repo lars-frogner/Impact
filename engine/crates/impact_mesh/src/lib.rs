@@ -627,7 +627,7 @@ macro_rules! define_triangle_mesh_ids {
             fn $fn_name:ident() => $desc:expr;
         )+
     ) => {
-        paste::paste! {
+        pastey::paste! {
             $(
                 $(#[$meta])*
                 pub fn $fn_name() -> TriangleMeshID {

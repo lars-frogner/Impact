@@ -14,7 +14,7 @@ macro_rules! define_target_enum {
         }
     ),* $(,)?
 ) => {
-    ::paste::paste! {
+    ::pastey::paste! {
         #[allow(clippy::enum_variant_names)]
         #[cfg_attr(feature = "cli", derive(::clap::ValueEnum))]
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

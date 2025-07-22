@@ -8,7 +8,7 @@ macro_rules! define_ffi {
         lib_path_default = $lib_path_default:expr,
         $($symbol:ident => $func:ty,)+
     ) => {
-        ::paste::paste! {
+        ::pastey::paste! {
             $(
                 #[allow(non_camel_case_types)]
                 type $symbol = $func;
