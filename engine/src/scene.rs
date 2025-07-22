@@ -10,7 +10,7 @@ use impact_scene::{
     skybox::Skybox,
 };
 use impact_voxel::VoxelManager;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Container for data needed to render a scene.
 #[derive(Debug)]
@@ -106,7 +106,7 @@ impl Scene {
     }
 
     pub fn set_skybox(&self, skybox: Option<Skybox>) {
-        *self.skybox.write().unwrap() = skybox;
+        *self.skybox.write() = skybox;
     }
 
     pub fn handle_aspect_ratio_changed(
@@ -115,7 +115,7 @@ impl Scene {
     ) -> RenderResourcesDesynchronized {
         let mut desynchronized = RenderResourcesDesynchronized::No;
 
-        if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
+        if let Some(scene_camera) = self.scene_camera().write().as_mut() {
             scene_camera.set_aspect_ratio(new_aspect_ratio);
             desynchronized = RenderResourcesDesynchronized::Yes;
         }
@@ -127,32 +127,28 @@ impl Scene {
     pub fn clear(&self) {
         self.mesh_repository
             .write()
-            .unwrap()
             .reset_to_state(&self.initial_mesh_repository_state);
 
         self.material_library
             .write()
-            .unwrap()
             .reset_to_state(&self.initial_material_library_state);
 
-        self.light_storage.write().unwrap().remove_all_lights();
+        self.light_storage.write().remove_all_lights();
 
         self.instance_feature_manager
             .write()
-            .unwrap()
             .reset_to_state(&self.initial_instance_feature_manager_state);
 
         self.voxel_manager
             .write()
-            .unwrap()
             .object_manager
             .remove_all_voxel_objects();
 
-        self.scene_graph.write().unwrap().clear_nodes();
+        self.scene_graph.write().clear_nodes();
 
-        self.scene_camera.write().unwrap().take();
+        self.scene_camera.write().take();
 
-        self.skybox.write().unwrap().take();
+        self.skybox.write().take();
     }
 }
 

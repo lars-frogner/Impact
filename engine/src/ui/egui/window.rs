@@ -91,14 +91,10 @@ impl ResponsiveUserInterface for EguiUserInterface {
     fn handle_window_event(&self, event: &WindowEvent) -> UIEventHandlingResponse {
         self.window_integration
             .lock()
-            .unwrap()
             .handle_window_event(&self.window, event)
     }
 
     fn handle_device_event(&self, event: &DeviceEvent) {
-        self.window_integration
-            .lock()
-            .unwrap()
-            .handle_device_event(event);
+        self.window_integration.lock().handle_device_event(event);
     }
 }

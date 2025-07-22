@@ -14,7 +14,7 @@ use impact_model::{
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
 use nalgebra::{Isometry3, Similarity3};
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// A parent entity.
 ///
@@ -191,11 +191,9 @@ pub fn remove_scene_graph_model_instance_node(
 ) {
     let model_id = scene_graph
         .write()
-        .unwrap()
         .remove_model_instance_node(model_instance_node.id);
     instance_feature_manager
         .write()
-        .unwrap()
         .unregister_instance(&model_id);
     *desynchronized = true;
 }

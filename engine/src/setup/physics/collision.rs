@@ -12,7 +12,7 @@ use impact_voxel::{
     VoxelObjectID,
     collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Checks if the entities-to-be with the given components have a component
 /// representing a collidable, and if so, creates the corresponding collidables
@@ -23,7 +23,7 @@ pub fn setup_collidables_for_new_entities(
 ) {
     setup!(
         {
-            let mut collision_world = collision_world.write().unwrap();
+            let mut collision_world = collision_world.write();
         },
         components,
         |spherical_collidable: &SphericalCollidable,
@@ -40,7 +40,7 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write().unwrap();
+            let mut collision_world = collision_world.write();
         },
         components,
         |spherical_collidable: &SphericalCollidable,
@@ -57,7 +57,7 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write().unwrap();
+            let mut collision_world = collision_world.write();
         },
         components,
         |planar_collidable: &PlanarCollidable,
@@ -74,7 +74,7 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write().unwrap();
+            let mut collision_world = collision_world.write();
         },
         components,
         |planar_collidable: &PlanarCollidable,
@@ -91,7 +91,7 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write().unwrap();
+            let mut collision_world = collision_world.write();
         },
         components,
         |voxel_collidable: &VoxelCollidable,
@@ -109,7 +109,7 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write().unwrap();
+            let mut collision_world = collision_world.write();
         },
         components,
         |voxel_collidable: &VoxelCollidable,

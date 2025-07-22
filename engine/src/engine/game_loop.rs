@@ -14,7 +14,7 @@ define_execution_tag_set!(ALL_SYSTEMS, [PhysicsTag, RenderingTag, UserInterfaceT
 
 impl Engine {
     pub fn perform_game_loop_iteration(&self, task_scheduler: &RuntimeTaskScheduler) -> Result<()> {
-        let mut game_loop_controller = self.game_loop_controller.lock().unwrap();
+        let mut game_loop_controller = self.game_loop_controller.lock();
 
         if !game_loop_controller.should_perform_iteration() {
             return Ok(());
@@ -35,7 +35,7 @@ impl Engine {
             }
         }
 
-        self.renderer().write().unwrap().present();
+        self.renderer().write().present();
 
         self.app()
             .on_game_loop_iteration_completed(self, game_loop_controller.iteration())?;

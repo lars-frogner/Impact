@@ -20,7 +20,7 @@ use impact_physics::{
     },
     rigid_body::DynamicRigidBodyID,
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 pub fn setup_forces_for_new_entities(
     force_generator_manager: &RwLock<ForceGeneratorManager>,
@@ -29,7 +29,7 @@ pub fn setup_forces_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write().unwrap();
+            let mut force_generator_manager = force_generator_manager.write();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID,
@@ -45,7 +45,7 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write().unwrap();
+            let mut force_generator_manager = force_generator_manager.write();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID, local_force: &LocalForce| -> LocalForceGeneratorID {
@@ -55,7 +55,7 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write().unwrap();
+            let mut force_generator_manager = force_generator_manager.write();
         },
         components,
         |generator: &DynamicDynamicSpringForceGenerator| -> DynamicDynamicSpringForceGeneratorID {
@@ -68,7 +68,7 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write().unwrap();
+            let mut force_generator_manager = force_generator_manager.write();
         },
         components,
         |generator: &DynamicKinematicSpringForceGenerator|
@@ -82,8 +82,8 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write().unwrap();
-            let mesh_repository = mesh_repository.read().unwrap();
+            let mut force_generator_manager = force_generator_manager.write();
+            let mesh_repository = mesh_repository.read();
         },
         components,
         |drag_properties: &DetailedDragProperties,

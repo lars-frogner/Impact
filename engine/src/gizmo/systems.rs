@@ -40,7 +40,8 @@ use impact_voxel::{
     collidable::{Collidable, CollisionWorld},
 };
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
-use std::{iter, sync::RwLock};
+use parking_lot::RwLock;
+use std::iter;
 
 /// Updates the appropriate gizmo visibility flags for all applicable
 /// entities based on which gizmos have been newly configured to be
@@ -53,7 +54,7 @@ pub fn update_visibility_flags_for_gizmos(
         return;
     }
 
-    let ecs_world = ecs_world.read().unwrap();
+    let ecs_world = ecs_world.read();
 
     for gizmo in GizmoType::all() {
         if gizmo_manager.global_visibility_changed_for_any_of_gizmos(gizmo.as_set()) {

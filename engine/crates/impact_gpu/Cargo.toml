@@ -26,6 +26,7 @@ impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 naga = { version = "25.0", features = ["wgsl-out"] }
 ordered-float = "5.0"
+parking_lot = { workspace = true }
 regex = "1.11"
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }

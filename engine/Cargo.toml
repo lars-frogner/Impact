@@ -47,6 +47,7 @@ inventory = "0.3"
 nalgebra = "0.33"
 nohash-hasher = "0.2"
 num-traits = "0.2"
+parking_lot = "0.12"
 pastey = "0.1"
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
@@ -230,6 +231,7 @@ impact_voxel = { path = "crates/impact_voxel", features = ["ecs", "ron"] }
 inventory = { workspace = true }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }
+parking_lot = { workspace = true }
 pastey = { workspace = true }
 pollster = "0.4"
 regex = "1.11"

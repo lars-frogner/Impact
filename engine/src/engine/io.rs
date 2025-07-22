@@ -20,8 +20,8 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        let scene = self.scene.read();
+        let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::obj::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
     }
 
@@ -45,8 +45,8 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        let scene = self.scene.read();
+        let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::obj::load_mesh_from_obj_file_with_projection(
             &mut mesh_repository,
             obj_file_path,
@@ -68,8 +68,8 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        let scene = self.scene.read();
+        let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::ply::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
     }
 
@@ -92,8 +92,8 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read().unwrap();
-        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        let scene = self.scene.read();
+        let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::ply::load_mesh_from_ply_file_with_projection(
             &mut mesh_repository,
             ply_file_path,

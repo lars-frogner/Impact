@@ -99,7 +99,7 @@ pub struct GizmoOptionPanel;
 
 impl GizmoOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut gizmo_manager = engine.gizmo_manager().write().unwrap();
+        let mut gizmo_manager = engine.gizmo_manager().write();
 
         option_panel(ctx, config, "gizmo_option_panel", |ui| {
             option_group(ui, "gizmo_options", |ui| {

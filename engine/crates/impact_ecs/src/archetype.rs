@@ -11,13 +11,13 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap, NoHashSet};
 use impact_ecs_macros::archetype_of;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use pastey::paste;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     iter,
     marker::PhantomData,
-    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 /// Representation of an archetype.
@@ -1008,7 +1008,6 @@ impl ArchetypeTable {
             let storage_idx = self.component_index_map[&array.component_id()];
             self.component_storages[storage_idx]
                 .write()
-                .unwrap()
                 .push_array(&array);
         }
     }
@@ -1039,7 +1038,7 @@ impl ArchetypeTable {
         let removed_component_arrays = self
             .component_storages
             .iter()
-            .map(|storage| storage.write().unwrap().swap_remove(idx).into_inner())
+            .map(|storage| storage.write().swap_remove(idx).into_inner())
             .collect();
 
         Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
@@ -1053,7 +1052,7 @@ impl ArchetypeTable {
     pub(crate) fn remove_all_entities(&mut self) {
         self.entity_index_mapper.clear();
         for storage in &self.component_storages {
-            storage.write().unwrap().clear();
+            storage.write().clear();
         }
     }
 
@@ -1075,7 +1074,7 @@ impl ArchetypeTable {
         let component_idx = *self.component_index_map.get(&C::component_id())?;
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(ComponentStorageEntry::new(
-            self.component_storages[component_idx].read().unwrap(),
+            self.component_storages[component_idx].read(),
             entity_idx,
         ))
     }
@@ -1098,7 +1097,7 @@ impl ArchetypeTable {
         let component_idx = *self.component_index_map.get(&C::component_id())?;
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(ComponentStorageEntryMut::new(
-            self.component_storages[component_idx].write().unwrap(),
+            self.component_storages[component_idx].write(),
             entity_idx,
         ))
     }
@@ -1119,7 +1118,7 @@ impl ArchetypeTable {
             &self.component_index_map,
             self.component_storages
                 .iter()
-                .map(|storage| storage.read().unwrap())
+                .map(|storage| storage.read())
                 .collect(),
         ))
     }
@@ -1155,7 +1154,7 @@ impl ArchetypeTable {
             &self.component_index_map,
             self.component_storages
                 .iter()
-                .map(|storage| storage.write().unwrap())
+                .map(|storage| storage.write())
                 .collect(),
         ))
     }
@@ -2589,7 +2588,6 @@ mod tests {
             table
                 .component_storage(Byte::component_id())
                 .read()
-                .unwrap()
                 .component_count(),
             0
         );
@@ -2613,7 +2611,6 @@ mod tests {
             table
                 .component_storage(Rectangle::component_id())
                 .read()
-                .unwrap()
                 .component_count(),
             0
         );
@@ -2621,7 +2618,6 @@ mod tests {
             table
                 .component_storage(Position::component_id())
                 .read()
-                .unwrap()
                 .component_count(),
             0
         );

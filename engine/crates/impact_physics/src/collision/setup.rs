@@ -147,13 +147,12 @@ pub fn setup_planar_collidable<C: Collidable>(
 
 #[cfg(feature = "ecs")]
 pub fn remove_collidable_for_entity<C: Collidable>(
-    collision_world: &std::sync::RwLock<CollisionWorld<C>>,
+    collision_world: &parking_lot::RwLock<CollisionWorld<C>>,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
     if let Some(collidable_id) = entity.get_component::<CollidableID>() {
         collision_world
             .write()
-            .unwrap()
             .remove_collidable(*collidable_id.access());
     }
 }

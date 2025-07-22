@@ -2,7 +2,7 @@
 
 use impact_containers::HashMap;
 use impact_math::ConstStringHash64;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// A registry for bind group layouts that provides caching and proper cleanup.
 #[derive(Debug)]
@@ -33,14 +33,14 @@ impl BindGroupLayoutRegistry {
     {
         // First try to get with read lock
         {
-            let layouts = self.layouts.read().unwrap();
+            let layouts = self.layouts.read();
             if let Some(layout) = layouts.get(&id) {
                 return layout.clone();
             }
         }
 
         // If not found, get write lock and create
-        let mut layouts = self.layouts.write().unwrap();
+        let mut layouts = self.layouts.write();
 
         // Check again in case another thread created it while we waited for write lock
         if let Some(layout) = layouts.get(&id) {
@@ -55,7 +55,7 @@ impl BindGroupLayoutRegistry {
 
     /// Returns an existing bind group layout if it exists.
     pub fn get_layout(&self, id: ConstStringHash64) -> Option<wgpu::BindGroupLayout> {
-        let layouts = self.layouts.read().unwrap();
+        let layouts = self.layouts.read();
         layouts.get(&id).cloned()
     }
 }

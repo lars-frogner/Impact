@@ -16,7 +16,8 @@ use impact_material::{
     },
 };
 use impact_model::InstanceFeatureManager;
-use std::{hash::Hash, sync::RwLock};
+use parking_lot::RwLock;
+use std::hash::Hash;
 
 /// Checks if the entites-to-be with the given components have the components
 /// for a material, and if so, adds the material specifications to the material
@@ -66,8 +67,8 @@ fn setup_fixed_color_materials_for_new_entities<MID: Clone + Eq + Hash>(
 ) {
     setup!(
         {
-            let mut material_library = material_library.write().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+            let mut material_library = material_library.write();
+            let mut instance_feature_manager = instance_feature_manager.write();
         },
         components,
         |fixed_color: &FixedColor| -> MaterialHandle {
@@ -90,7 +91,7 @@ fn setup_fixed_texture_materials_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mut material_library = material_library.write().unwrap();
+            let mut material_library = material_library.write();
         },
         components,
         |fixed_texture: &FixedTexture| -> Result<MaterialHandle> {
@@ -115,8 +116,8 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
 ) -> Result<()> {
     setup!(
         {
-            let mut material_library = material_library.write().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+            let mut material_library = material_library.write();
+            let mut instance_feature_manager = instance_feature_manager.write();
         },
         components,
         |uniform_color: &UniformColor,
@@ -156,8 +157,8 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
 
     setup!(
         {
-            let mut material_library = material_library.write().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+            let mut material_library = material_library.write();
+            let mut instance_feature_manager = instance_feature_manager.write();
         },
         components,
         |textured_color: &TexturedColor,

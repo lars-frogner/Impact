@@ -36,13 +36,14 @@ use impact_physics::PhysicsConfig;
 use impact_scene::model::InstanceFeatureManager;
 use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::{VoxelConfig, VoxelManager};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
     num::NonZeroU32,
     path::Path,
     sync::{
-        Arc, Mutex, RwLock, RwLockReadGuard,
+        Arc,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -122,7 +123,7 @@ impl Engine {
 
         lookup_tables::initialize_default_lookup_tables(
             &mut assets,
-            &mut renderer.gpu_resource_group_manager().write().unwrap(),
+            &mut renderer.gpu_resource_group_manager().write(),
         )?;
 
         let material_library = MaterialLibrary::new();
@@ -251,7 +252,7 @@ impl Engine {
 
     /// Returns the current [`EngineMetrics`], wrapped in a read guard.
     pub fn metrics(&self) -> RwLockReadGuard<'_, EngineMetrics> {
-        self.metrics.read().unwrap()
+        self.metrics.read()
     }
 
     /// Returns a reference to the [`GameLoopController`], guarded by a
@@ -284,7 +285,7 @@ impl Engine {
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
-        let mut renderer = self.renderer().write().unwrap();
+        let mut renderer = self.renderer().write();
 
         renderer.resize_rendering_surface(new_width, new_height);
 
@@ -295,13 +296,11 @@ impl Engine {
         let render_resources_desynchronized = self
             .scene()
             .read()
-            .unwrap()
             .handle_aspect_ratio_changed(new_aspect_ratio);
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()
                 .read()
-                .unwrap()
                 .declare_render_resources_desynchronized();
         }
     }
@@ -309,7 +308,6 @@ impl Engine {
     pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
         self.renderer()
             .write()
-            .unwrap()
             .update_pixels_per_point(pixels_per_point);
     }
 
@@ -328,13 +326,11 @@ impl Engine {
             let (_, window_height) = self
                 .renderer
                 .read()
-                .unwrap()
                 .rendering_surface()
                 .surface_dimensions();
 
             orientation_controller
                 .lock()
-                .unwrap()
                 .update_orientation_change(window_height, mouse_displacement);
         }
     }
@@ -344,16 +340,16 @@ impl Engine {
         if !self.controls_enabled() {
             return;
         }
-        let ecs_world = self.ecs_world().read().unwrap();
-        let simulator = self.simulator.read().unwrap();
-        let mut rigid_body_manager = simulator.rigid_body_manager().write().unwrap();
+        let ecs_world = self.ecs_world().read();
+        let simulator = self.simulator.read();
+        let mut rigid_body_manager = simulator.rigid_body_manager().write();
         let time_step_duration = simulator.scaled_time_step_duration();
 
         if let Some(orientation_controller) = &self.orientation_controller {
             impact_controller::systems::update_controlled_entity_angular_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
-                orientation_controller.lock().unwrap().as_mut(),
+                orientation_controller.lock().as_mut(),
                 time_step_duration,
             );
         }
@@ -362,7 +358,7 @@ impl Engine {
             impact_controller::systems::update_controlled_entity_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
-                motion_controller.lock().unwrap().as_ref(),
+                motion_controller.lock().as_ref(),
             );
         }
     }
@@ -370,12 +366,11 @@ impl Engine {
     /// Resets the scene, ECS world and physics simulator to the initial empty
     /// state and sets the simulation time to zero.
     pub fn reset_world(&self) {
-        self.ecs_world.write().unwrap().remove_all_entities();
-        self.scene.read().unwrap().clear();
-        self.simulator.write().unwrap().reset();
+        self.ecs_world.write().remove_all_entities();
+        self.scene.read().clear();
+        self.simulator.write().reset();
         self.renderer
             .read()
-            .unwrap()
             .declare_render_resources_desynchronized();
     }
 
@@ -387,12 +382,12 @@ impl Engine {
         self.controls_enabled.store(enabled, Ordering::Relaxed);
 
         if !enabled {
-            let ecs_world = self.ecs_world.read().unwrap();
-            let simulator = self.simulator.read().unwrap();
-            let mut rigid_body_manager = simulator.rigid_body_manager().write().unwrap();
+            let ecs_world = self.ecs_world.read();
+            let simulator = self.simulator.read();
+            let mut rigid_body_manager = simulator.rigid_body_manager().write();
 
             if let Some(motion_controller) = &self.motion_controller {
-                let mut motion_controller = motion_controller.lock().unwrap();
+                let mut motion_controller = motion_controller.lock();
                 motion_controller.stop();
 
                 impact_controller::systems::update_controlled_entity_velocities(
@@ -403,7 +398,7 @@ impl Engine {
             }
 
             if let Some(orientation_controller) = &self.orientation_controller {
-                let mut orientation_controller = orientation_controller.lock().unwrap();
+                let mut orientation_controller = orientation_controller.lock();
                 orientation_controller.reset_orientation_change();
 
                 impact_controller::systems::update_controlled_entity_angular_velocities(
@@ -417,7 +412,7 @@ impl Engine {
     }
 
     pub fn gather_metrics_after_completed_frame(&self, smooth_frame_duration: Duration) {
-        let mut metrics = self.metrics.write().unwrap();
+        let mut metrics = self.metrics.write();
         metrics.current_smooth_frame_duration = smooth_frame_duration;
 
         self.task_timer
@@ -425,7 +420,6 @@ impl Engine {
 
         self.simulator()
             .write()
-            .unwrap()
             .update_time_step_duration(&smooth_frame_duration);
     }
 
@@ -444,10 +438,7 @@ impl Engine {
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
-        self.renderer
-            .read()
-            .unwrap()
-            .handle_task_errors(task_errors);
+        self.renderer.read().handle_task_errors(task_errors);
     }
 
     fn with_component_mut<C: Component, R>(
@@ -455,7 +446,7 @@ impl Engine {
         entity_id: EntityID,
         f: impl FnOnce(&mut C) -> Result<R>,
     ) -> Result<R> {
-        let ecs_world = self.ecs_world.read().unwrap();
+        let ecs_world = self.ecs_world.read();
 
         let entity_entry = ecs_world
             .get_entity(entity_id)

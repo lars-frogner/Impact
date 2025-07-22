@@ -63,7 +63,7 @@ pub fn create_entities(component_bytes: &[u8]) -> Result<impl Iterator<Item = u6
 }
 
 fn with_engine<T>(f: impl FnOnce(&Engine) -> Result<T>) -> Result<T> {
-    let engine = ENGINE.read().unwrap();
+    let engine = ENGINE.read();
     match engine.as_ref() {
         Some(engine) => f(engine),
         None => bail!("Tried to use engine before it was initialized"),

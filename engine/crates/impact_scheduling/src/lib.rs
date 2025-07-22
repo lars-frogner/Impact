@@ -698,7 +698,8 @@ impl<S> OrderedTask<S> {
 mod tests {
     use super::*;
     use impact_thread::WorkerID;
-    use std::{iter, sync::Mutex, thread, time::Duration};
+    use parking_lot::Mutex;
+    use std::{iter, thread, time::Duration};
 
     const EXEC_ALL: ExecutionTag = ExecutionTag::from_str("all");
 
@@ -717,7 +718,6 @@ mod tests {
         fn get_recorded_worker_ids(&self) -> Vec<WorkerID> {
             self.recorded_tasks
                 .lock()
-                .unwrap()
                 .iter()
                 .map(|&(worker_id, _)| worker_id)
                 .collect()
@@ -726,17 +726,13 @@ mod tests {
         fn get_recorded_task_ids(&self) -> Vec<TaskID> {
             self.recorded_tasks
                 .lock()
-                .unwrap()
                 .iter()
                 .map(|&(_, task_id)| task_id)
                 .collect()
         }
 
         fn record_task(&self, worker_id: WorkerID, task_id: TaskID) {
-            self.recorded_tasks
-                .lock()
-                .unwrap()
-                .push((worker_id, task_id));
+            self.recorded_tasks.lock().push((worker_id, task_id));
             thread::sleep(Duration::from_millis(1));
         }
     }

@@ -9,7 +9,7 @@ use crate::physics::PhysicsSimulator;
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use impact_mesh::MeshRepository;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Performs any modifications to the physics simulator required to accommodate
 /// a new entities with the given components, and adds any additional components

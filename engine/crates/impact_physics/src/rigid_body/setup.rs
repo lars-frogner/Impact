@@ -60,19 +60,17 @@ pub fn setup_dynamic_rigid_body(
 
 #[cfg(feature = "ecs")]
 pub fn remove_rigid_body_for_entity(
-    rigid_body_manager: &std::sync::RwLock<RigidBodyManager>,
+    rigid_body_manager: &parking_lot::RwLock<RigidBodyManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
     if let Some(rigid_body_id) = entity.get_component::<DynamicRigidBodyID>() {
         rigid_body_manager
             .write()
-            .unwrap()
             .remove_dynamic_rigid_body(*rigid_body_id.access());
     }
     if let Some(rigid_body_id) = entity.get_component::<KinematicRigidBodyID>() {
         rigid_body_manager
             .write()
-            .unwrap()
             .remove_kinematic_rigid_body(*rigid_body_id.access());
     }
 }

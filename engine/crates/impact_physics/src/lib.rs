@@ -24,8 +24,9 @@ use driven_motion::MotionDriverManager;
 use force::{ForceGenerationConfig, ForceGeneratorManager};
 use medium::UniformMedium;
 use num_traits::FromPrimitive;
+use parking_lot::RwLock;
 use rigid_body::RigidBodyManager;
-use std::{sync::RwLock, time::Duration};
+use std::time::Duration;
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
@@ -246,20 +247,20 @@ impl<C: Collidable> PhysicsSimulator<C> {
     /// Resets the simulator to the initial empty state and sets the simulation
     /// time to zero.
     pub fn reset(&mut self) {
-        self.rigid_body_manager.write().unwrap().clear();
-        self.force_generator_manager.write().unwrap().clear();
-        self.motion_driver_manager.write().unwrap().clear();
-        self.constraint_manager.write().unwrap().clear();
-        self.collision_world.write().unwrap().clear();
+        self.rigid_body_manager.write().clear();
+        self.force_generator_manager.write().clear();
+        self.motion_driver_manager.write().clear();
+        self.constraint_manager.write().clear();
+        self.collision_world.write().clear();
         self.simulation_time = 0.0;
     }
 
     fn do_advance_simulation(&mut self, collidable_context: &C::Context) {
-        let mut rigid_body_manager = self.rigid_body_manager.write().unwrap();
-        let force_generator_manager = self.force_generator_manager.read().unwrap();
-        let motion_driver_manager = self.motion_driver_manager.read().unwrap();
-        let mut constraint_manager = self.constraint_manager.write().unwrap();
-        let mut collision_world = self.collision_world.write().unwrap();
+        let mut rigid_body_manager = self.rigid_body_manager.write();
+        let force_generator_manager = self.force_generator_manager.read();
+        let motion_driver_manager = self.motion_driver_manager.read();
+        let mut constraint_manager = self.constraint_manager.write();
+        let mut collision_world = self.collision_world.write();
 
         let substep_duration = self.compute_substep_duration();
         for _ in 0..self.n_substeps() {

@@ -8,7 +8,7 @@ use impact_math::UpperExclusiveBounds;
 use impact_scene::{
     SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera, graph::SceneGraph,
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Rendering related state needed for camera initialization.
 #[derive(Clone, Debug)]
@@ -69,14 +69,14 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 ) -> Result<()> {
     setup!(
         {
-            let mut scene_camera = scene_camera.write().unwrap();
+            let mut scene_camera = scene_camera.write();
             if scene_camera.is_some() {
                 bail!("Tried to add camera for entity while another entity still has one")
             }
 
             *desynchronized = true;
 
-            let mut scene_graph = scene_graph.write().unwrap();
+            let mut scene_graph = scene_graph.write();
         },
         components,
         |frame: Option<&ReferenceFrame>,
@@ -136,14 +136,14 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 ) -> Result<()> {
     setup!(
         {
-            let mut scene_camera = scene_camera.write().unwrap();
+            let mut scene_camera = scene_camera.write();
             if scene_camera.is_some() {
                 bail!("Tried to add camera for entity while another entity still has one")
             }
 
             *desynchronized = true;
 
-            let mut scene_graph = scene_graph.write().unwrap();
+            let mut scene_graph = scene_graph.write();
         },
         components,
         |frame: Option<&ReferenceFrame>,
@@ -196,8 +196,8 @@ pub fn remove_camera_from_scene_for_removed_entity(
 ) {
     if let Some(node) = entity.get_component::<SceneGraphCameraNodeHandle>() {
         let node_id = node.access().id;
-        scene_graph.write().unwrap().remove_camera_node(node_id);
-        scene_camera.write().unwrap().take();
+        scene_graph.write().remove_camera_node(node_id);
+        scene_camera.write().take();
         *desynchronized = true;
     }
 }

@@ -23,13 +23,11 @@ use impact_rendering::{
 };
 use impact_scheduling::Task;
 use impact_thread::ThreadPoolTaskErrors;
+use parking_lot::RwLock;
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
 use serde::{Deserialize, Serialize};
-use std::{
-    num::NonZeroU32,
-    sync::{Arc, RwLock},
-};
+use std::{num::NonZeroU32, sync::Arc};
 
 /// Container for data and systems required for rendering.
 #[derive(Debug)]
@@ -269,7 +267,6 @@ impl RenderingSystem {
     pub fn declare_render_resources_desynchronized(&self) {
         self.render_resource_manager
             .write()
-            .unwrap()
             .declare_desynchronized();
     }
 
@@ -280,7 +277,6 @@ impl RenderingSystem {
     ) -> Result<Option<wgpu::SurfaceTexture>> {
         self.render_attachment_texture_manager
             .write()
-            .unwrap()
             .swap_previous_and_current_attachment_variants(&self.graphics_device);
 
         let (surface_texture_view, surface_texture) = self
@@ -294,23 +290,23 @@ impl RenderingSystem {
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
-        let light_storage = scene.light_storage().read().unwrap();
-        let material_library = scene.material_library().read().unwrap();
-        let instance_feature_manager = scene.instance_feature_manager().read().unwrap();
-        let scene_camera = scene.scene_camera().read().unwrap();
+        let light_storage = scene.light_storage().read();
+        let material_library = scene.material_library().read();
+        let instance_feature_manager = scene.instance_feature_manager().read();
+        let scene_camera = scene.scene_camera().read();
 
-        self.render_command_manager.read().unwrap().record(
+        self.render_command_manager.read().record(
             &self.rendering_surface,
             &surface_texture_view,
             &light_storage,
             &material_library,
             &instance_feature_manager,
             scene_camera.as_ref(),
-            self.render_resource_manager.read().unwrap().synchronized(),
-            &self.render_attachment_texture_manager.read().unwrap(),
-            &self.gpu_resource_group_manager.read().unwrap(),
-            &self.storage_gpu_buffer_manager.read().unwrap(),
-            &self.postprocessor.read().unwrap(),
+            self.render_resource_manager.read().synchronized(),
+            &self.render_attachment_texture_manager.read(),
+            &self.gpu_resource_group_manager.read(),
+            &self.storage_gpu_buffer_manager.read(),
+            &self.postprocessor.read(),
             &self.shadow_mapping_config,
             self.frame_counter,
             &mut timestamp_recorder,
@@ -336,11 +332,10 @@ impl RenderingSystem {
 
         self.postprocessor
             .write()
-            .unwrap()
             .capturing_camera_mut()
             .update_exposure(
                 &self.graphics_device,
-                &self.storage_gpu_buffer_manager.read().unwrap(),
+                &self.storage_gpu_buffer_manager.read(),
             )?;
 
         Ok(surface_texture)
@@ -398,11 +393,11 @@ impl RenderingSystem {
     }
 
     fn recreate_render_command_manager(&mut self) {
-        *self.render_command_manager.write().unwrap() = RenderCommandManager::new(
+        *self.render_command_manager.write() = RenderCommandManager::new(
             &self.graphics_device,
             &self.rendering_surface,
-            &mut self.shader_manager.write().unwrap(),
-            &mut self.render_attachment_texture_manager.write().unwrap(),
+            &mut self.shader_manager.write(),
+            &mut self.render_attachment_texture_manager.write(),
             &self.bind_group_layout_registry,
             &self.basic_config,
         );
@@ -411,7 +406,6 @@ impl RenderingSystem {
     fn recreate_render_attachment_textures(&mut self) {
         self.render_attachment_texture_manager
             .write()
-            .unwrap()
             .recreate_textures(&self.graphics_device, &self.rendering_surface);
     }
 

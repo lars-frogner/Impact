@@ -21,10 +21,11 @@ use impact::{
     },
 };
 use impact_dev_ui::{UserInterface, UserInterfaceConfig};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
@@ -53,11 +54,11 @@ impl BasicApp {
 
 impl Application for BasicApp {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
-        *ENGINE.write().unwrap() = Some(engine.clone());
+        *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
         impact_log::debug!("Setting up UI");
-        self.user_interface.read().unwrap().setup(&engine);
+        self.user_interface.read().setup(&engine);
 
         impact_log::debug!("Setting up scene");
         scripting::setup_scene()
@@ -81,7 +82,6 @@ impl Application for BasicApp {
     ) -> egui::FullOutput {
         self.user_interface
             .write()
-            .unwrap()
             .run(ctx, input, engine, &api::UI_COMMANDS)
     }
 }

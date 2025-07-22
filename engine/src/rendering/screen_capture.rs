@@ -6,12 +6,10 @@ use impact_geometry::CubemapFace;
 use impact_gpu::texture;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
 use impact_rendering::{resource::BasicRenderResources, surface::RenderingSurface};
+use parking_lot::RwLock;
 use std::{
     path::{Path, PathBuf},
-    sync::{
-        RwLock,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -73,7 +71,7 @@ impl ScreenCapturer {
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read().unwrap();
+            let renderer = renderer.read();
 
             let surface_texture = match renderer.rendering_surface() {
                 RenderingSurface::Headless(surface) => surface.surface_texture(),
@@ -124,9 +122,9 @@ impl ScreenCapturer {
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read().unwrap();
+            let renderer = renderer.read();
 
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+            let render_resource_manager = renderer.render_resource_manager().read();
 
             if let Some(light_buffer_manager) = render_resource_manager
                 .synchronized()
@@ -175,9 +173,9 @@ impl ScreenCapturer {
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read().unwrap();
+            let renderer = renderer.read();
 
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+            let render_resource_manager = renderer.render_resource_manager().read();
 
             if let Some(light_buffer_manager) = render_resource_manager
                 .synchronized()

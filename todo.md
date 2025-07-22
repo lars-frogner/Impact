@@ -72,6 +72,4 @@
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
-- Replace synchronization primitives from `std` with those from `parking_lot`.
-
 - Use `inventory` for gathering defined tasks.

@@ -237,7 +237,7 @@ pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
 /// assocated light from the given [`LightStorage`].
 #[cfg(feature = "ecs")]
 pub fn cleanup_light_for_removed_entity(
-    light_storage: &std::sync::RwLock<LightStorage>,
+    light_storage: &parking_lot::RwLock<LightStorage>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
@@ -250,16 +250,13 @@ pub fn cleanup_light_for_removed_entity(
 /// the assocated [`AmbientLight`] from the given [`LightStorage`].
 #[cfg(feature = "ecs")]
 fn cleanup_ambient_light_for_removed_entity(
-    light_storage: &std::sync::RwLock<LightStorage>,
+    light_storage: &parking_lot::RwLock<LightStorage>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
     if let Some(light_id) = entity.get_component::<AmbientLightID>() {
         let light_id = *light_id.access();
-        light_storage
-            .write()
-            .unwrap()
-            .remove_ambient_light(light_id);
+        light_storage.write().remove_ambient_light(light_id);
         *desynchronized = true;
     }
 }
@@ -270,16 +267,13 @@ fn cleanup_ambient_light_for_removed_entity(
 /// given [`LightStorage`].
 #[cfg(feature = "ecs")]
 fn cleanup_omnidirectional_light_for_removed_entity(
-    light_storage: &std::sync::RwLock<LightStorage>,
+    light_storage: &parking_lot::RwLock<LightStorage>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
     if let Some(light_id) = entity.get_component::<OmnidirectionalLightID>() {
         let light_id = *light_id.access();
-        light_storage
-            .write()
-            .unwrap()
-            .remove_omnidirectional_light(light_id);
+        light_storage.write().remove_omnidirectional_light(light_id);
         *desynchronized = true;
     }
 
@@ -287,7 +281,6 @@ fn cleanup_omnidirectional_light_for_removed_entity(
         let light_id = *light_id.access();
         light_storage
             .write()
-            .unwrap()
             .remove_shadowable_omnidirectional_light(light_id);
         *desynchronized = true;
     }
@@ -299,16 +292,13 @@ fn cleanup_omnidirectional_light_for_removed_entity(
 /// [`LightStorage`].
 #[cfg(feature = "ecs")]
 fn cleanup_unidirectional_light_for_removed_entity(
-    light_storage: &std::sync::RwLock<LightStorage>,
+    light_storage: &parking_lot::RwLock<LightStorage>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
     if let Some(light_id) = entity.get_component::<UnidirectionalLightID>() {
         let light_id = *light_id.access();
-        light_storage
-            .write()
-            .unwrap()
-            .remove_unidirectional_light(light_id);
+        light_storage.write().remove_unidirectional_light(light_id);
         *desynchronized = true;
     }
 
@@ -316,7 +306,6 @@ fn cleanup_unidirectional_light_for_removed_entity(
         let light_id = *light_id.access();
         light_storage
             .write()
-            .unwrap()
             .remove_shadowable_unidirectional_light(light_id);
         *desynchronized = true;
     }

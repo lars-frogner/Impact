@@ -17,11 +17,12 @@ use impact::{
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
 };
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 use testing::TestScene;
 
@@ -129,7 +130,7 @@ impl Application for SnapshotTester {
             return engine.execute_command(EngineCommand::Shutdown);
         }
 
-        *ENGINE.write().unwrap() = Some(engine.clone());
+        *ENGINE.write() = Some(engine.clone());
 
         let first_scene = self.test_scenes[0];
 

@@ -29,7 +29,7 @@ impl RenderPassTimingPanel {
             "render_pass_timing_panel",
             default_panel_width,
             |ui| {
-                let renderer = engine.renderer().read().unwrap();
+                let renderer = engine.renderer().read();
                 let timestamp_query_manager = renderer.timestamp_query_manager();
 
                 let header_height = ui.spacing().interact_size.y;

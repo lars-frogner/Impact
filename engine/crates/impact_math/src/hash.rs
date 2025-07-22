@@ -2,11 +2,12 @@
 
 use bytemuck::{Pod, Zeroable};
 use impact_containers::HashMap;
+use parking_lot::Mutex;
 use roc_integration::roc;
 use std::{
     cmp, fmt,
     hash::{Hash, Hasher},
-    sync::{LazyLock, Mutex},
+    sync::LazyLock,
 };
 
 /// A 32-bit hash.
@@ -135,7 +136,6 @@ impl StringHash32 {
     pub fn new_with_hash<S: ToString>(string: S, hash: Hash32) -> Self {
         STRING_HASH_32_REGISTRY
             .lock()
-            .unwrap()
             .entry(hash)
             .or_insert_with(|| string.to_string());
         Self(hash)
@@ -174,7 +174,6 @@ impl StringHash64 {
     pub fn new_with_hash<S: ToString>(string: S, hash: Hash64) -> Self {
         STRING_HASH_64_REGISTRY
             .lock()
-            .unwrap()
             .entry(hash)
             .or_insert_with(|| string.to_string());
         Self(hash)
@@ -255,7 +254,7 @@ impl fmt::Display for Hash64 {
 
 impl fmt::Display for StringHash32 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(string) = STRING_HASH_32_REGISTRY.lock().unwrap().get(&self.0) {
+        if let Some(string) = STRING_HASH_32_REGISTRY.lock().get(&self.0) {
             write!(f, "{string}")
         } else {
             write!(f, "{}", self.0)
@@ -265,7 +264,7 @@ impl fmt::Display for StringHash32 {
 
 impl fmt::Display for StringHash64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(string) = STRING_HASH_64_REGISTRY.lock().unwrap().get(&self.0) {
+        if let Some(string) = STRING_HASH_64_REGISTRY.lock().get(&self.0) {
             write!(f, "{string}")
         } else {
             write!(f, "{}", self.0)
