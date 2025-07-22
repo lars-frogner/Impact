@@ -1,7 +1,13 @@
 //! Controllers for user interaction.
 
+#[macro_use]
+mod macros;
+
 pub mod motion;
 pub mod orientation;
+
+#[cfg(feature = "ecs")]
+pub mod systems;
 
 use impact_physics::{
     fph,
@@ -13,7 +19,6 @@ use motion::{
 use orientation::{
     CameraOrientationController, OrientationControllerConfig, RollFreeCameraOrientationController,
 };
-use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
 
 /// Represents controllers that are used for controlling
@@ -24,7 +29,7 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 
     /// Computes the world space velocity that should be added to the controlled
     /// entity's velocity when in motion.
-    fn compute_control_velocity(&self, orientation: &Orientation) -> Velocity;
+    fn compute_controlled_velocity(&self, orientation: &Orientation) -> Velocity;
 
     /// Updates the overall motion state of the controlled entity based on the
     /// given [`MotionState`] specifying whether the entity should be moving
@@ -84,8 +89,12 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
     fn set_sensitivity(&mut self, sensitivity: f64);
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
 pub struct ControllerConfig {
     pub motion: MotionControllerConfig,
     pub orientation: OrientationControllerConfig,

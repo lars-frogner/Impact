@@ -12,8 +12,8 @@ import pf.Command
 import pf.Entity
 import pf.Skybox
 import pf.Comp.AmbientEmission
-import pf.Comp.MotionControl
-import pf.Comp.OrientationControl
+import pf.Comp.ControlledVelocity
+import pf.Comp.ControlledAngularVelocity
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
@@ -54,8 +54,8 @@ player =
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.MotionControl.add_new
-    |> Comp.OrientationControl.add_new
+    |> Comp.ControlledVelocity.add_new
+    |> Comp.ControlledAngularVelocity.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 ground =

@@ -1,8 +1,8 @@
-# Hash: 8dfde8c0278240c1427a49898bc445cd1186112bdd6a83113befb0bd1578cb56
-# Generated: 2025-07-21T22:20:34+00:00
+# Hash: 008e7f8634db141da34a0b60b0007e4e9a64fa40d56d5eec62619db26c565a84
+# Generated: 2025-07-22T11:50:31+00:00
 # Rust type: impact::command::EngineCommand
 # Type category: Inline
-# Commit: 0364cbf8 (dirty)
+# Commit: 0c4a6fe6 (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -10,7 +10,7 @@ module [
 ]
 
 import Command.CaptureCommand
-import Command.ControlCommand
+import Command.ControllerCommand
 import Command.GameLoopCommand
 import Command.InstrumentationCommand
 import Command.PhysicsCommand
@@ -21,7 +21,7 @@ EngineCommand : [
     Rendering Command.RenderingCommand.RenderingCommand,
     Physics Command.PhysicsCommand.PhysicsCommand,
     Scene Command.SceneCommand.SceneCommand,
-    Control Command.ControlCommand.ControlCommand,
+    Controller Command.ControllerCommand.ControllerCommand,
     Capture Command.CaptureCommand.CaptureCommand,
     Instrumentation Command.InstrumentationCommand.InstrumentationCommand,
     GameLoop Command.GameLoopCommand.GameLoopCommand,
@@ -53,11 +53,11 @@ write_bytes = |bytes, value|
             |> Command.SceneCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 23))
 
-        Control(val) ->
+        Controller(val) ->
             bytes
             |> List.reserve(34)
             |> List.append(3)
-            |> Command.ControlCommand.write_bytes(val)
+            |> Command.ControllerCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 24))
 
         Capture(val) ->
@@ -118,8 +118,8 @@ from_bytes = |bytes|
 
             [3, .. as data_bytes] ->
                 Ok(
-                    Control(
-                        data_bytes |> List.sublist({ start: 0, len: 9 }) |> Command.ControlCommand.from_bytes?,
+                    Controller(
+                        data_bytes |> List.sublist({ start: 0, len: 9 }) |> Command.ControllerCommand.from_bytes?,
                     ),
                 )
 

@@ -1,16 +1,15 @@
-# Hash: 48f4e5e77b58a4d584e232686f410f6d49415c58dff35f4710d05fbce0562136
-# Generated: 2025-07-15T17:32:17+00:00
-# Rust type: impact::control::motion::MotionDirection
+# Hash: 1ed19409e95ff5b95685b8f109bcfb7ef6d9022b8defa89289c67f3503f979ec
+# Generated: 2025-07-22T11:48:41+00:00
+# Rust type: impact_controller::motion::MotionDirection
 # Type category: Inline
-# Commit: 1fbb6f6b (dirty)
+# Commit: 0c4a6fe6 (dirty)
 module [
     MotionDirection,
     write_bytes,
     from_bytes,
 ]
 
-## Possible directions of motion in the local coordinate
-## system.
+## Possible directions of motion in the local coordinate system.
 MotionDirection : [
     Forwards,
     Backwards,

@@ -14,7 +14,6 @@ use crate::{
     application::Application,
     command::{self, EngineCommand},
     component::ComponentRegistry,
-    control::{self, ControllerConfig, MotionController, OrientationController},
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
@@ -25,6 +24,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_assets::{AssetConfig, Assets, lookup_tables};
+use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
     component::Component,
     world::{EntityID, EntityStager, World as ECSWorld},
@@ -152,7 +152,7 @@ impl Engine {
         let gizmo_manager = GizmoManager::new(config.gizmo);
 
         let (motion_controller, orientation_controller) =
-            control::create_controllers(config.controller);
+            impact_controller::create_controllers(config.controller);
 
         let game_loop_controller = GameLoopController::new(config.game_loop);
 
@@ -350,7 +350,7 @@ impl Engine {
         let time_step_duration = simulator.scaled_time_step_duration();
 
         if let Some(orientation_controller) = &self.orientation_controller {
-            control::orientation::systems::update_controlled_entity_angular_velocities(
+            impact_controller::systems::update_controlled_entity_angular_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
                 orientation_controller.lock().unwrap().as_mut(),
@@ -359,7 +359,7 @@ impl Engine {
         }
 
         if let Some(motion_controller) = &self.motion_controller {
-            control::motion::systems::update_controlled_entity_velocities(
+            impact_controller::systems::update_controlled_entity_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
                 motion_controller.lock().unwrap().as_ref(),
@@ -395,7 +395,7 @@ impl Engine {
                 let mut motion_controller = motion_controller.lock().unwrap();
                 motion_controller.stop();
 
-                control::motion::systems::update_controlled_entity_velocities(
+                impact_controller::systems::update_controlled_entity_velocities(
                     &ecs_world,
                     &mut rigid_body_manager,
                     motion_controller.as_ref(),
@@ -406,7 +406,7 @@ impl Engine {
                 let mut orientation_controller = orientation_controller.lock().unwrap();
                 orientation_controller.reset_orientation_change();
 
-                control::orientation::systems::update_controlled_entity_angular_velocities(
+                impact_controller::systems::update_controlled_entity_angular_velocities(
                     &ecs_world,
                     &mut rigid_body_manager,
                     orientation_controller.as_mut(),

@@ -1,7 +1,7 @@
 //! Engine commands.
 
 pub mod capture;
-pub mod control;
+pub mod controller;
 pub mod game_loop;
 pub mod instrumentation;
 pub mod physics;
@@ -13,7 +13,7 @@ pub mod uils;
 use crate::engine::Engine;
 use anyhow::Result;
 use capture::CaptureCommand;
-use control::ControlCommand;
+use controller::ControllerCommand;
 use game_loop::GameLoopCommand;
 use instrumentation::InstrumentationCommand;
 use physics::PhysicsCommand;
@@ -28,7 +28,7 @@ pub enum EngineCommand {
     Rendering(RenderingCommand),
     Physics(PhysicsCommand),
     Scene(SceneCommand),
-    Control(ControlCommand),
+    Controller(ControllerCommand),
     Capture(CaptureCommand),
     Instrumentation(InstrumentationCommand),
     GameLoop(GameLoopCommand),
@@ -40,7 +40,7 @@ pub fn execute_engine_command(engine: &Engine, command: EngineCommand) -> Result
         EngineCommand::Rendering(command) => execute_rendering_command(engine, command),
         EngineCommand::Physics(command) => execute_physics_command(engine, command),
         EngineCommand::Scene(command) => execute_scene_command(engine, command),
-        EngineCommand::Control(command) => execute_control_command(engine, command),
+        EngineCommand::Controller(command) => execute_control_command(engine, command),
         EngineCommand::Capture(command) => execute_capture_command(engine, command),
         EngineCommand::Instrumentation(command) => execute_instrumentation_command(engine, command),
         EngineCommand::GameLoop(command) => execute_game_loop_command(engine, command),
@@ -127,16 +127,16 @@ pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<(
     Ok(())
 }
 
-pub fn execute_control_command(engine: &Engine, command: ControlCommand) -> Result<()> {
+pub fn execute_control_command(engine: &Engine, command: ControllerCommand) -> Result<()> {
     match command {
-        ControlCommand::SetMotion { state, direction } => {
-            control::set_motion(engine, state, direction);
+        ControllerCommand::SetMotion { state, direction } => {
+            controller::set_motion(engine, state, direction);
         }
-        ControlCommand::StopMotion => {
-            control::stop_motion(engine);
+        ControllerCommand::StopMotion => {
+            controller::stop_motion(engine);
         }
-        ControlCommand::SetMovementSpeed(speed) => {
-            control::set_movement_speed(engine, speed);
+        ControllerCommand::SetMovementSpeed(speed) => {
+            controller::set_movement_speed(engine, speed);
         }
     }
     Ok(())

@@ -1,16 +1,14 @@
 //! Controller commands.
 
-use crate::{
-    control::motion::{MotionDirection, MotionState},
-    engine::Engine,
-};
+use crate::engine::Engine;
+use impact_controller::motion::{MotionDirection, MotionState};
 use impact_physics::fph;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
-pub enum ControlCommand {
+pub enum ControllerCommand {
     SetMotion {
         state: MotionState,
         direction: MotionDirection,
@@ -19,7 +17,7 @@ pub enum ControlCommand {
     SetMovementSpeed(fph),
 }
 
-impl PartialEq for ControlCommand {
+impl PartialEq for ControllerCommand {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
@@ -39,7 +37,7 @@ impl PartialEq for ControlCommand {
     }
 }
 
-impl Eq for ControlCommand {}
+impl Eq for ControllerCommand {}
 
 pub fn set_motion(engine: &Engine, state: MotionState, direction: MotionDirection) {
     if engine.controls_enabled() {

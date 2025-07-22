@@ -6,7 +6,6 @@ mod macros;
 pub mod application;
 pub mod command;
 pub mod component;
-pub mod control;
 pub mod engine;
 pub mod ffi;
 pub mod game_loop;
