@@ -11,7 +11,7 @@ const SPACING: f32 = 12.0;
 
 impl TimeOverlay {
     pub(super) fn run(&mut self, ctx: &Context, engine: &Engine) {
-        let simulation_time = engine.simulator().read().unwrap().current_simulation_time();
+        let simulation_time = engine.simulator().read().current_simulation_time();
         let fps = engine.metrics().current_smooth_fps();
 
         let font_id = TextStyle::Body.resolve(&ctx.style());

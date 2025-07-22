@@ -19,7 +19,7 @@ use impact_voxel::{
         VoxelSphere, VoxelSphereUnion,
     },
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 pub fn setup_voxel_objects_for_new_entities(
     rigid_body_manager: &RwLock<RigidBodyManager>,
@@ -30,7 +30,7 @@ pub fn setup_voxel_objects_for_new_entities(
     // context get a model transform component with the center of mass offset
     setup!(
         {
-            let voxel_manager = voxel_manager.read().unwrap();
+            let voxel_manager = voxel_manager.read();
         },
         components,
         |voxel_object_id: &VoxelObjectID,
@@ -54,8 +54,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_box: &VoxelBox,
@@ -89,8 +89,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_sphere: &VoxelSphere,
@@ -124,8 +124,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
@@ -159,8 +159,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePattern,
@@ -194,8 +194,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_box: &VoxelBox,
@@ -229,8 +229,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_sphere: &VoxelSphere,
@@ -264,8 +264,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
@@ -299,8 +299,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mut voxel_manager = voxel_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mut voxel_manager = voxel_manager.write();
         },
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePattern,
@@ -343,9 +343,9 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
 ) -> Result<()> {
     setup!(
         {
-            let voxel_manager = voxel_manager.read().unwrap();
-            let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-            let mut scene_graph = scene_graph.write().unwrap();
+            let voxel_manager = voxel_manager.read();
+            let mut instance_feature_manager = instance_feature_manager.write();
+            let mut scene_graph = scene_graph.write();
         },
         components,
         |voxel_object_id: &VoxelObjectID,

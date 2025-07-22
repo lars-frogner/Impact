@@ -16,7 +16,7 @@ use impact_physics::{
         setup::DynamicRigidBodySubstance,
     },
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Checks if the entities-to-be with the given components have the components
 /// representing a dynamic or kinematic rigid body, and if so, creates the
@@ -31,7 +31,7 @@ pub fn setup_rigid_bodies_for_new_entities(
     // correct [`ReferenceFrame`] and [`Motion`] components.
     setup!(
         {
-            let rigid_body_manager = rigid_body_manager.read().unwrap();
+            let rigid_body_manager = rigid_body_manager.read();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID,
@@ -51,7 +51,7 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
         },
         components,
         |mesh: &BoxMesh,
@@ -90,7 +90,7 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
         },
         components,
         |mesh: &CylinderMesh,
@@ -128,7 +128,7 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
         },
         components,
         |mesh: &ConeMesh,
@@ -166,7 +166,7 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
         },
         components,
         |substance: &DynamicRigidBodySubstance,
@@ -205,7 +205,7 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
         },
         components,
         |substance: &DynamicRigidBodySubstance,
@@ -244,8 +244,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
-            let mesh_repository = mesh_repository.read().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
+            let mesh_repository = mesh_repository.read();
         },
         components,
         |mesh_id: &TriangleMeshID,
@@ -290,7 +290,7 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write().unwrap();
+            let mut rigid_body_manager = rigid_body_manager.write();
         },
         components,
         |frame: Option<&ReferenceFrame>, motion: &Motion| -> KinematicRigidBodyID {

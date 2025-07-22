@@ -10,12 +10,12 @@ use super::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{NoHashKeyIndexMapper, NoHashMap};
+use parking_lot::{RwLock, RwLockReadGuard};
 use std::{
     collections::hash_map::Entry,
     fmt,
     hash::{self, Hash},
     mem,
-    sync::{RwLock, RwLockReadGuard},
 };
 
 /// Unique ID identifying an entity in the world.
@@ -315,7 +315,7 @@ impl World {
     pub fn remove_all_entities(&mut self) {
         self.entity_archetypes.clear();
         for table in &self.archetype_tables {
-            table.write().unwrap().remove_all_entities();
+            table.write().remove_all_entities();
         }
         self.archetype_tables.clear();
         self.archetype_table_indices_by_id.clear();
@@ -335,7 +335,7 @@ impl World {
     pub fn get_entity(&self, entity_id: EntityID) -> Option<EntityEntry<'_>> {
         let archetype_id = *self.entity_archetypes.get(&entity_id)?;
         let table_idx = self.archetype_table_indices_by_id.get(archetype_id)?;
-        let table = self.archetype_tables[table_idx].read().unwrap();
+        let table = self.archetype_tables[table_idx].read();
         Some(EntityEntry::new(entity_id, table))
     }
 
@@ -416,7 +416,7 @@ impl World {
         archetype: Archetype,
     ) -> impl Iterator<Item = RwLockReadGuard<'_, ArchetypeTable>> {
         self.archetype_tables.iter().filter_map(move |table| {
-            let table = table.read().unwrap();
+            let table = table.read();
             if table.archetype().contains(&archetype) {
                 Some(table)
             } else {
@@ -435,7 +435,7 @@ impl World {
         disallowed_component_ids: [ComponentID; N],
     ) -> impl Iterator<Item = RwLockReadGuard<'_, ArchetypeTable>> {
         self.archetype_tables.iter().filter_map(move |table| {
-            let table = table.read().unwrap();
+            let table = table.read();
             let table_archetype = table.archetype();
             if table_archetype.contains(&archetype)
                 && table_archetype.contains_none_of(&disallowed_component_ids)
@@ -521,7 +521,6 @@ impl World {
             // the entity to it
             self.archetype_tables[idx]
                 .write()
-                .unwrap()
                 .add_entities(entity_ids, components);
         } else {
             // If we don't have the table, initialize it with the entity
@@ -540,7 +539,7 @@ impl World {
     ) -> Result<SingleInstance<ArchetypeComponentStorage>> {
         let archetype_id = self.get_entity_archetype(entity_id)?;
         let idx = self.get_table_idx(archetype_id)?;
-        let mut table = self.archetype_tables[idx].write().unwrap();
+        let mut table = self.archetype_tables[idx].write();
 
         let removed_component_data = table.remove_entity(entity_id)?;
 

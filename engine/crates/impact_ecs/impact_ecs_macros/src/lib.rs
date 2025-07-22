@@ -340,14 +340,13 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// # Concurrency
 ///
 /// When `query` is invoked, it loops through each `ArchetypeTable` containing
-/// matching components and acquires its [`RwLock`](std::sync::RwLock) for
-/// shared access. This prevents concurrent changes to the table structure while
-/// the lock is held. Next, the `RwLock` guarding each of the table's
-/// `ComponentStorage`s matching the query is acquired for either shared or
-/// exclusive access depending on whether an immutable or mutable reference was
-/// used in front of the component type in the provided closure. The locks on
-/// the table and component storages are all released as soon as we move on to
-/// the next table.
+/// matching components and acquires its `RwLock` for shared access. This
+/// prevents concurrent changes to the table structure while the lock is held.
+/// Next, the `RwLock` guarding each of the table's `ComponentStorage`s matching
+/// the query is acquired for either shared or exclusive access depending on
+/// whether an immutable or mutable reference was used in front of the component
+/// type in the provided closure. The locks on the table and component storages
+/// are all released as soon as we move on to the next table.
 #[proc_macro]
 pub fn query(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as query::QueryInput);

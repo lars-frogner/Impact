@@ -2,12 +2,13 @@
 
 use crate::device::GraphicsDevice;
 use anyhow::Result;
+use parking_lot::Mutex;
 use std::{
     borrow::Cow,
     fmt::Display,
     mem,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -602,12 +603,12 @@ pub fn map_buffer_slice_to_cpu<'a>(
     let map_result_receiver = Arc::clone(&map_result_sender);
 
     buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-        *map_result_sender.lock().unwrap() = Some(result);
+        *map_result_sender.lock() = Some(result);
     });
 
     device.poll(wgpu::PollType::Wait)?;
 
-    map_result_receiver.lock().unwrap().take().unwrap()?;
+    map_result_receiver.lock().take().unwrap()?;
 
     Ok(buffer_slice.get_mapped_range())
 }

@@ -95,7 +95,7 @@ pub struct PhysicsOptionPanel;
 
 impl PhysicsOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut simulator = engine.simulator().write().unwrap();
+        let mut simulator = engine.simulator().write();
 
         option_panel(ctx, config, "physics_option_panel", |ui| {
             option_group(ui, "simulation_options", |ui| {
@@ -148,7 +148,7 @@ fn simulation_options(ui: &mut Ui, simulator: &mut PhysicsSimulator) {
 }
 
 fn constraint_solving_options(ui: &mut Ui, simulator: &PhysicsSimulator) {
-    let mut constraint_manager = simulator.constraint_manager().write().unwrap();
+    let mut constraint_manager = simulator.constraint_manager().write();
     let constraint_solver = constraint_manager.solver_mut();
     let config = constraint_solver.config_mut();
 

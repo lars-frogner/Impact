@@ -397,7 +397,7 @@ fn generate_mutable_storage_iter(
     quote! {
         let mut #storage_name = #table_name.component_storage(
             <#arg_type as #crate_root::component::Component>::component_id()
-        ).write().unwrap();
+        ).write();
         let #iter_name = #storage_name.slice_mut::<#arg_type>().iter_mut();
     }
 }
@@ -412,7 +412,7 @@ fn generate_immutable_storage_iter(
     quote! {
         let #storage_name = #table_name.component_storage(
             <#arg_type as #crate_root::component::Component>::component_id()
-        ).read().unwrap();
+        ).read();
         let #iter_name = #storage_name.slice::<#arg_type>().iter();
     }
 }

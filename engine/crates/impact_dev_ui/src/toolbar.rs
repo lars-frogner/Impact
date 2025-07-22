@@ -42,7 +42,6 @@ impl Toolbar {
                         engine
                             .renderer()
                             .write()
-                            .unwrap()
                             .set_render_pass_timings_enabled(config.show_render_pass_timings);
                     }
 

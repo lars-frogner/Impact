@@ -1,7 +1,8 @@
 //! Command queueing.
 
 use anyhow::Result;
-use std::{collections::VecDeque, sync::RwLock};
+use parking_lot::RwLock;
+use std::collections::VecDeque;
 
 /// A buffer for queueing incoming commands until they are ready for execution.
 #[derive(Debug)]
@@ -19,7 +20,7 @@ impl<C> CommandQueue<C> {
 
     /// Adds the given command to the back of the queue.
     pub fn enqueue_command(&self, command: C) {
-        self.commands.write().unwrap().push_back(command);
+        self.commands.write().push_back(command);
     }
 
     /// Uses the given closure to execute each command in the queue, in the
@@ -30,7 +31,7 @@ impl<C> CommandQueue<C> {
     /// If the closure causes [`Self::enqueue_command`] or
     /// [`Self::execute_commands`] to be called, it will deadlock.
     pub fn execute_commands(&self, mut execute: impl FnMut(C)) {
-        let mut commands = self.commands.write().unwrap();
+        let mut commands = self.commands.write();
         while let Some(command) = commands.pop_front() {
             execute(command);
         }
@@ -45,7 +46,7 @@ impl<C> CommandQueue<C> {
     /// If the closure causes [`Self::enqueue_command`] or
     /// [`Self::execute_commands`] to be called, it will deadlock.
     pub fn try_execute_commands(&self, mut execute: impl FnMut(C) -> Result<()>) -> Result<()> {
-        let mut commands = self.commands.write().unwrap();
+        let mut commands = self.commands.write();
         while let Some(command) = commands.pop_front() {
             execute(command)?;
         }

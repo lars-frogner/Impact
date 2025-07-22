@@ -1,12 +1,10 @@
 //! Measuring execution time.
 
 use impact_math::ConstStringHash64;
+use parking_lot::Mutex;
 use std::{
     mem,
-    sync::{
-        Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
 
@@ -52,10 +50,7 @@ impl TaskTimer {
 
         let elapsed = start.elapsed();
 
-        self.task_execution_times
-            .lock()
-            .unwrap()
-            .push((task_id, elapsed));
+        self.task_execution_times.lock().push((task_id, elapsed));
 
         result
     }
@@ -68,7 +63,7 @@ impl TaskTimer {
             return;
         }
         times.clear();
-        let mut task_execution_times = self.task_execution_times.lock().unwrap();
+        let mut task_execution_times = self.task_execution_times.lock();
         mem::swap(&mut *task_execution_times, times);
     }
 }

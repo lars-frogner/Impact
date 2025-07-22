@@ -3,11 +3,12 @@
 use anyhow::Error;
 use impact_containers::HashMap;
 use impact_math::Hash64;
+use parking_lot::{Condvar, Mutex};
 use std::{
     fmt,
     num::NonZeroUsize,
     sync::{
-        Arc, Condvar, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, Receiver, Sender},
     },
@@ -23,7 +24,8 @@ use std::{
 /// # Examples
 /// ```no_run
 /// # use impact_thread::{ThreadPool, TaskClosureReturnValue};
-/// # use std::{iter, num::NonZeroUsize, sync::{Arc, Mutex}};
+/// # use std::{iter, num::NonZeroUsize, sync::Arc};
+/// # use parking_lot::Mutex;
 /// #
 /// let n_workers = 2;
 /// let n_tasks = 2;
@@ -33,7 +35,7 @@ use std::{
 ///     NonZeroUsize::new(n_workers).unwrap(),
 ///     // Define task closure that increments a shared count
 ///     &|_channel, (count, incr): (Arc<Mutex<usize>>, usize)| {
-///         *count.lock().unwrap() += incr;
+///         *count.lock() += incr;
 ///         // The closure must return a `TaskClosureReturnValue`
 ///         TaskClosureReturnValue::success()
 ///     }
@@ -51,7 +53,7 @@ use std::{
 /// // Execute the tasks and wait until all `n_tasks` are completed
 /// pool.execute_and_wait(messages, n_tasks).unwrap();
 ///
-/// assert_eq!(*count.lock().unwrap(), n_workers * incr);
+/// assert_eq!(*count.lock(), n_workers * incr);
 /// ```
 ///
 /// # Type parameters
@@ -395,7 +397,7 @@ impl<M> ThreadPoolChannel<M> {
     }
 
     fn wait_for_next_instruction(&self) -> WorkerInstruction<M> {
-        self.receiver.lock().unwrap().recv().unwrap()
+        self.receiver.lock().recv().unwrap()
     }
 
     /// Creates a new instance of the channel for use by the
@@ -511,9 +513,9 @@ impl ExecutionProgress {
     /// the count of pending tasks is zero.
     fn wait_for_no_pending_tasks(&self) {
         impact_log::with_trace_logging!("Waiting for no pending tasks"; {
-            let mut no_pending_tasks = self.no_pending_tasks_condvar.0.lock().unwrap();
+            let mut no_pending_tasks = self.no_pending_tasks_condvar.0.lock();
             while !*no_pending_tasks {
-                no_pending_tasks = self.no_pending_tasks_condvar.1.wait(no_pending_tasks).unwrap();
+                self.no_pending_tasks_condvar.1.wait(&mut no_pending_tasks);
             }
         });
     }
@@ -524,7 +526,7 @@ impl ExecutionProgress {
     }
 
     fn set_no_pending_tasks(&self, no_pending_tasks: bool) {
-        *self.no_pending_tasks_condvar.0.lock().unwrap() = no_pending_tasks;
+        *self.no_pending_tasks_condvar.0.lock() = no_pending_tasks;
     }
 
     fn notify_change_of_no_pending_tasks(&self) {
@@ -549,7 +551,7 @@ impl TaskStatus {
             Err(ThreadPoolTaskErrors::new(
                 // Move the `HashMap` of errors out of the mutex and
                 // replace with an empty one
-                std::mem::take(&mut *self.errors_of_failed_tasks.lock().unwrap()),
+                std::mem::take(&mut *self.errors_of_failed_tasks.lock()),
             ))
         } else {
             Ok(())
@@ -564,10 +566,7 @@ impl TaskStatus {
             &error
         );
         self.some_task_failed.store(true, Ordering::Relaxed);
-        self.errors_of_failed_tasks
-            .lock()
-            .unwrap()
-            .insert(task_id, error);
+        self.errors_of_failed_tasks.lock().insert(task_id, error);
     }
 }
 
@@ -690,7 +689,7 @@ mod tests {
             Arc<Mutex<usize>>,
             usize,
         )| {
-            *count.lock().unwrap() += incr;
+            *count.lock() += incr;
             TaskClosureReturnValue::success()
         });
         pool.execute_and_wait(
@@ -699,7 +698,7 @@ mod tests {
         )
         .unwrap();
         drop(pool);
-        assert_eq!(*count.lock().unwrap(), n_workers * 3);
+        assert_eq!(*count.lock(), n_workers * 3);
     }
 
     #[test]
@@ -714,7 +713,7 @@ mod tests {
             Arc<Mutex<usize>>,
             TaskID,
         )| {
-            let mut count = count.lock().unwrap();
+            let mut count = count.lock();
 
             // The second of the two tasks will cause underflow
             match count.checked_sub(1) {

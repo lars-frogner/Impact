@@ -11,7 +11,7 @@ use impact_light::{
 };
 use impact_scene::{SceneEntityFlags, camera::SceneCamera};
 use nalgebra::Isometry3;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Checks if the entities-to-be with the given components have the right
 /// components for a light source, and if so, adds the corresponding lights to
@@ -45,7 +45,7 @@ fn setup_ambient_lights_for_new_entities(
 ) {
     setup!(
         {
-            let mut light_storage = light_storage.write().unwrap();
+            let mut light_storage = light_storage.write();
         },
         components,
         |ambient_emission: &AmbientEmission,
@@ -70,13 +70,12 @@ fn setup_omnidirectional_lights_for_new_entities(
         {
             let view_transform = scene_camera
                 .read()
-                .unwrap()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write().unwrap();
+            let mut light_storage = light_storage.write();
         },
         components,
         |frame: &ReferenceFrame,
@@ -103,13 +102,12 @@ fn setup_omnidirectional_lights_for_new_entities(
         {
             let view_transform = scene_camera
                 .read()
-                .unwrap()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write().unwrap();
+            let mut light_storage = light_storage.write();
         },
         components,
         |frame: &ReferenceFrame,
@@ -143,13 +141,12 @@ fn setup_unidirectional_lights_for_new_entities(
         {
             let view_transform = scene_camera
                 .read()
-                .unwrap()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write().unwrap();
+            let mut light_storage = light_storage.write();
         },
         components,
         |unidirectional_emission: &UnidirectionalEmission,
@@ -174,13 +171,12 @@ fn setup_unidirectional_lights_for_new_entities(
         {
             let view_transform = scene_camera
                 .read()
-                .unwrap()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write().unwrap();
+            let mut light_storage = light_storage.write();
         },
         components,
         |unidirectional_emission: &ShadowableUnidirectionalEmission,

@@ -89,41 +89,36 @@ pub fn setup_orbital_trajectory(
 
 #[cfg(feature = "ecs")]
 pub fn remove_motion_drivers_for_entity(
-    motion_driver_manager: &std::sync::RwLock<MotionDriverManager>,
+    motion_driver_manager: &parking_lot::RwLock<MotionDriverManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
     if let Some(driver_id) = entity.get_component::<CircularTrajectoryDriverID>() {
         motion_driver_manager
             .write()
-            .unwrap()
             .circular_trajectories_mut()
             .remove_driver(*driver_id.access());
     }
     if let Some(driver_id) = entity.get_component::<ConstantAccelerationTrajectoryDriverID>() {
         motion_driver_manager
             .write()
-            .unwrap()
             .constant_acceleration_trajectories_mut()
             .remove_driver(*driver_id.access());
     }
     if let Some(driver_id) = entity.get_component::<ConstantRotationDriverID>() {
         motion_driver_manager
             .write()
-            .unwrap()
             .constant_rotations_mut()
             .remove_driver(*driver_id.access());
     }
     if let Some(driver_id) = entity.get_component::<HarmonicOscillatorTrajectoryDriverID>() {
         motion_driver_manager
             .write()
-            .unwrap()
             .harmonic_oscillator_trajectories_mut()
             .remove_driver(*driver_id.access());
     }
     if let Some(driver_id) = entity.get_component::<OrbitalTrajectoryDriverID>() {
         motion_driver_manager
             .write()
-            .unwrap()
             .orbital_trajectories_mut()
             .remove_driver(*driver_id.access());
     }

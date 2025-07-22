@@ -124,6 +124,7 @@ impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_log = { path = "../../engine/crates/impact_log" }
 inventory = "0.3"
 libloading = "0.8"
+parking_lot = "0.12"
 pastey = "0.1"
 rand = { version = "0.9", optional = true }
 roc_platform_core = { path = "../../roc_platform/core" }

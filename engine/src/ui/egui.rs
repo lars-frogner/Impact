@@ -7,9 +7,10 @@ use crate::{application::Application, engine::Engine, ui::UserInterface, window:
 use anyhow::Result;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, wgpu};
 use impact_rendering::surface::RenderingSurface;
+use parking_lot::Mutex;
 use rendering::{EguiRenderer, EguiRenderingInput};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use window::EguiWindowIntegration;
 
 /// Coordinator between an [`egui`] user interface implemented in the
@@ -41,7 +42,7 @@ impl EguiUserInterface {
 
         let window_integration = EguiWindowIntegration::new(egui_ctx.clone(), &window);
 
-        let rendering_system = engine.renderer().read().unwrap();
+        let rendering_system = engine.renderer().read();
         let renderer = EguiRenderer::new(
             rendering_system.graphics_device(),
             rendering_system.rendering_surface(),
@@ -76,21 +77,19 @@ impl UserInterface for EguiUserInterface {
         let input = self
             .window_integration
             .lock()
-            .unwrap()
             .take_raw_input(&self.egui_ctx, &self.window);
 
         let mut output = self.app.run_egui_ui(&self.egui_ctx, input, engine);
 
-        output = self.window_integration.lock().unwrap().handle_full_output(
-            &self.egui_ctx,
-            &self.window,
-            output,
-        );
+        output =
+            self.window_integration
+                .lock()
+                .handle_full_output(&self.egui_ctx, &self.window, output);
 
         // TODO: Output processing could be split into a separate task for
         // performance
         let rendering_input = Self::process_raw_output(&self.egui_ctx, output);
-        *self.rendering_input.lock().unwrap() = Some(rendering_input);
+        *self.rendering_input.lock() = Some(rendering_input);
 
         Ok(())
     }
@@ -103,13 +102,12 @@ impl UserInterface for EguiUserInterface {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let Some(rendering_input) = self.rendering_input.lock().unwrap().take() else {
+        let Some(rendering_input) = self.rendering_input.lock().take() else {
             return Ok(());
         };
 
         self.renderer
             .lock()
-            .unwrap()
             .update_resources_and_record_render_pass(
                 graphics_device,
                 rendering_surface,

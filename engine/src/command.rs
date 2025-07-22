@@ -54,41 +54,34 @@ pub fn execute_engine_command(engine: &Engine, command: EngineCommand) -> Result
 pub fn execute_rendering_command(engine: &Engine, command: RenderingCommand) -> Result<()> {
     match command {
         RenderingCommand::SetAmbientOcclusion(to) => {
-            rendering::set_ambient_occlusion(&engine.renderer().read().unwrap(), to);
+            rendering::set_ambient_occlusion(&engine.renderer().read(), to);
         }
         RenderingCommand::SetTemporalAntiAliasing(to) => {
-            rendering::set_temporal_anti_aliasing(
-                &engine.renderer().read().unwrap(),
-                engine.scene(),
-                to,
-            );
+            rendering::set_temporal_anti_aliasing(&engine.renderer().read(), engine.scene(), to);
         }
         RenderingCommand::SetBloom(to) => {
-            rendering::set_bloom(&engine.renderer().read().unwrap(), to);
+            rendering::set_bloom(&engine.renderer().read(), to);
         }
         RenderingCommand::SetToneMappingMethod(to) => {
-            rendering::set_tone_mapping_method(&engine.renderer().read().unwrap(), to);
+            rendering::set_tone_mapping_method(&engine.renderer().read(), to);
         }
         RenderingCommand::SetExposure(to) => {
-            rendering::set_exposure(&engine.renderer().read().unwrap(), to);
+            rendering::set_exposure(&engine.renderer().read(), to);
         }
         RenderingCommand::SetRenderAttachmentVisualization(to) => {
-            rendering::set_render_attachment_visualization(&engine.renderer().read().unwrap(), to);
+            rendering::set_render_attachment_visualization(&engine.renderer().read(), to);
         }
         RenderingCommand::SetVisualizedRenderAttachmentQuantity(to) => {
-            rendering::set_visualized_render_attachment_quantity(
-                &engine.renderer().read().unwrap(),
-                to,
-            )?;
+            rendering::set_visualized_render_attachment_quantity(&engine.renderer().read(), to)?;
         }
         RenderingCommand::SetShadowMapping(to) => {
-            rendering::set_shadow_mapping(&mut engine.renderer().write().unwrap(), to);
+            rendering::set_shadow_mapping(&mut engine.renderer().write(), to);
         }
         RenderingCommand::SetWireframeMode(to) => {
-            rendering::set_wireframe_mode(&mut engine.renderer().write().unwrap(), to);
+            rendering::set_wireframe_mode(&mut engine.renderer().write(), to);
         }
         RenderingCommand::SetRenderPassTimings(to) => {
-            rendering::set_render_pass_timings(&mut engine.renderer().write().unwrap(), to);
+            rendering::set_render_pass_timings(&mut engine.renderer().write(), to);
         }
     }
     Ok(())
@@ -97,16 +90,16 @@ pub fn execute_rendering_command(engine: &Engine, command: RenderingCommand) -> 
 pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Result<()> {
     match command {
         PhysicsCommand::SetSimulation(to) => {
-            physics::set_simulation(&mut engine.simulator().write().unwrap(), to);
+            physics::set_simulation(&mut engine.simulator().write(), to);
         }
         PhysicsCommand::SetSimulationSubstepCount(to) => {
-            physics::set_simulation_substep_count(&mut engine.simulator().write().unwrap(), to);
+            physics::set_simulation_substep_count(&mut engine.simulator().write(), to);
         }
         PhysicsCommand::SetSimulationSpeed(to) => {
             physics::set_simulation_speed_and_compensate_controller_movement_speed(engine, to);
         }
         PhysicsCommand::SetMedium(to) => {
-            physics::set_medium(&mut engine.simulator().write().unwrap(), to);
+            physics::set_medium(&mut engine.simulator().write(), to);
         }
     }
     Ok(())
@@ -167,7 +160,7 @@ pub fn execute_instrumentation_command(
 }
 
 pub fn execute_game_loop_command(engine: &Engine, command: GameLoopCommand) -> Result<()> {
-    let mut game_loop_controller = engine.game_loop_controller().lock().unwrap();
+    let mut game_loop_controller = engine.game_loop_controller().lock();
     match command {
         GameLoopCommand::SetGameLoop(to) => game_loop::set_game_loop(&mut game_loop_controller, to),
         GameLoopCommand::PauseAfterSingleIteration => {

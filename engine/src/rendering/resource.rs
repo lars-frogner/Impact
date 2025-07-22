@@ -23,12 +23,8 @@ use impact_voxel::{
         VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager, VoxelRenderResources,
     },
 };
-use std::{
-    borrow::Cow,
-    collections::hash_map::Entry,
-    hash::Hash,
-    sync::{Mutex, RwLock},
-};
+use parking_lot::{Mutex, RwLock};
+use std::{borrow::Cow, collections::hash_map::Entry, hash::Hash};
 
 /// Manager and owner of render resources representing world data.
 ///
@@ -251,17 +247,13 @@ impl DesynchronizedRenderResources {
             instance_feature_buffer_managers,
         } = self;
         SynchronizedRenderResources {
-            camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
-            skybox_resource_manager: skybox_resource_manager.into_inner().unwrap(),
-            triangle_mesh_buffer_managers: triangle_mesh_buffer_managers.into_inner().unwrap(),
-            line_segment_mesh_buffer_managers: line_segment_mesh_buffer_managers
-                .into_inner()
-                .unwrap(),
-            voxel_resource_managers: voxel_resource_managers.into_inner().unwrap(),
-            light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
-            instance_feature_buffer_managers: instance_feature_buffer_managers
-                .into_inner()
-                .unwrap(),
+            camera_buffer_manager: camera_buffer_manager.into_inner(),
+            skybox_resource_manager: skybox_resource_manager.into_inner(),
+            triangle_mesh_buffer_managers: triangle_mesh_buffer_managers.into_inner(),
+            line_segment_mesh_buffer_managers: line_segment_mesh_buffer_managers.into_inner(),
+            voxel_resource_managers: voxel_resource_managers.into_inner(),
+            light_buffer_manager: light_buffer_manager.into_inner(),
+            instance_feature_buffer_managers: instance_feature_buffer_managers.into_inner(),
         }
     }
 
@@ -385,7 +377,7 @@ impl DesynchronizedRenderResources {
             *voxel_material_resource_manager =
                 Some(VoxelMaterialGPUResourceManager::for_voxel_type_registry(
                     graphics_device,
-                    &mut assets.write().unwrap(),
+                    &mut assets.write(),
                     &voxel_manager.type_registry,
                     bind_group_layout_registry,
                 )?);

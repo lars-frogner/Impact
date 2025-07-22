@@ -11,7 +11,7 @@ use impact_mesh::{
     },
     texture_projection::PlanarTextureProjection,
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Checks if the entites-to-be with the given components have a component
 /// representing a mesh, and if so, generates the meshes and adds them to the
@@ -24,7 +24,7 @@ pub fn setup_meshes_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |rectangle_mesh: &RectangleMesh,
@@ -50,7 +50,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |box_mesh: &BoxMesh,
@@ -76,7 +76,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |cylinder_mesh: &CylinderMesh,
@@ -102,7 +102,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |cone_mesh: &ConeMesh,
@@ -128,7 +128,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |circular_frustum_mesh: &CircularFrustumMesh,
@@ -154,7 +154,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |sphere_mesh: &SphereMesh,
@@ -180,7 +180,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |hemisphere_mesh: &HemisphereMesh,
@@ -218,7 +218,7 @@ pub fn generate_missing_vertex_properties_for_new_entity_meshes(
 ) {
     setup!(
         {
-            let mut mesh_repository = mesh_repository.write().unwrap();
+            let mut mesh_repository = mesh_repository.write();
         },
         components,
         |mesh_id: &TriangleMeshID, material: &MaterialHandle| {

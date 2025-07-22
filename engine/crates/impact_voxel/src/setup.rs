@@ -1,6 +1,6 @@
 //! Setup of voxel objects.
 
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 use crate::{
     VoxelManager, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
@@ -1109,7 +1109,6 @@ pub fn cleanup_voxel_object(
 ) {
     voxel_manager
         .write()
-        .unwrap()
         .object_manager
         .remove_voxel_object(voxel_object_id);
 

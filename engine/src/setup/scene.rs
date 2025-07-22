@@ -24,7 +24,7 @@ use impact_scene::{
     SceneGraphParentNodeHandle,
     setup::{Parent, SceneGraphGroup, Uncullable},
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 /// Performs any modifications to the scene required to accommodate new
 /// entities with the given components, and adds any additional components to
@@ -64,7 +64,7 @@ pub fn setup_scene_data_for_new_entities(
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(
         scene.mesh_repository(),
-        &scene.material_library().read().unwrap(),
+        &scene.material_library().read(),
         components,
     );
 
@@ -145,7 +145,7 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let ecs_world = ecs_world.read().unwrap();
+            let ecs_world = ecs_world.read();
         },
         components,
         |parent: &Parent| -> Result<SceneGraphParentNodeHandle> {
@@ -165,7 +165,7 @@ fn setup_scene_graph_group_nodes_for_new_entities(
 ) {
     setup!(
         {
-            let mut scene_graph = scene.scene_graph().write().unwrap();
+            let mut scene_graph = scene.scene_graph().write();
         },
         components,
         |frame: Option<&ReferenceFrame>,
@@ -190,10 +190,10 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mesh_repository = scene.mesh_repository().read().unwrap();
-            let material_library = scene.material_library().read().unwrap();
-            let mut instance_feature_manager = scene.instance_feature_manager().write().unwrap();
-            let mut scene_graph = scene.scene_graph().write().unwrap();
+            let mesh_repository = scene.mesh_repository().read();
+            let material_library = scene.material_library().read();
+            let mut instance_feature_manager = scene.instance_feature_manager().write();
+            let mut scene_graph = scene.scene_graph().write();
         },
         components,
         |mesh_id: &TriangleMeshID,

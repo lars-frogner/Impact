@@ -145,7 +145,7 @@ pub use impact_ecs_macros::archetype_of;
 ///
 /// When `query` is invoked, it loops through each
 /// [`ArchetypeTable`](archetype::ArchetypeTable) containing
-/// matching components and acquires its [`RwLock`](std::sync::RwLock)
+/// matching components and acquires its [`RwLock`](parking_lot::RwLock)
 /// for shared access. This prevents concurrent changes to the table
 /// structure while the lock is held. Next, the `RwLock` guarding each
 /// of the table's [`ComponentStorage`](component::ComponentStorage)s

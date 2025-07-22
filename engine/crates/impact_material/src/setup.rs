@@ -5,7 +5,8 @@ pub mod physical;
 
 use crate::MaterialHandle;
 use impact_model::InstanceFeatureManager;
-use std::{hash::Hash, sync::RwLock};
+use parking_lot::RwLock;
+use std::hash::Hash;
 
 /// Removes the instance features assocated with the given [`MaterialHandle`]
 /// from the [`InstanceFeatureManager`].
@@ -17,7 +18,6 @@ pub fn cleanup_material<MID: Clone + Eq + Hash>(
     if let Some(feature_id) = material_handle.material_property_feature_id() {
         instance_feature_manager
             .write()
-            .unwrap()
             .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
             .expect("Missing storage for material feature")
             .remove_feature(feature_id);

@@ -16,7 +16,7 @@ use impact_physics::{
     },
     rigid_body::KinematicRigidBodyID,
 };
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 pub fn setup_driven_motion_for_new_entities(
     motion_driver_manager: &RwLock<MotionDriverManager>,
@@ -24,7 +24,7 @@ pub fn setup_driven_motion_for_new_entities(
 ) {
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write().unwrap();
+            let mut motion_driver_manager = motion_driver_manager.write();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -40,7 +40,7 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write().unwrap();
+            let mut motion_driver_manager = motion_driver_manager.write();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -56,7 +56,7 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write().unwrap();
+            let mut motion_driver_manager = motion_driver_manager.write();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -68,7 +68,7 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write().unwrap();
+            let mut motion_driver_manager = motion_driver_manager.write();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -84,7 +84,7 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write().unwrap();
+            let mut motion_driver_manager = motion_driver_manager.write();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,

@@ -70,7 +70,6 @@ impl UserInterface {
         engine
             .renderer()
             .write()
-            .unwrap()
             .set_render_pass_timings_enabled(self.config.show_render_pass_timings);
     }
 

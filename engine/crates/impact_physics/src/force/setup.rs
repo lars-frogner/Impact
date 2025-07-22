@@ -65,7 +65,7 @@ pub fn setup_dynamic_kinematic_spring_force_generator(
 
 #[cfg(feature = "ecs")]
 pub fn remove_force_generators_for_entity(
-    force_generator_manager: &std::sync::RwLock<ForceGeneratorManager>,
+    force_generator_manager: &parking_lot::RwLock<ForceGeneratorManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
     use crate::force::detailed_drag::DetailedDragForceGeneratorID;
@@ -73,35 +73,30 @@ pub fn remove_force_generators_for_entity(
     if let Some(generator_id) = entity.get_component::<ConstantAccelerationGeneratorID>() {
         force_generator_manager
             .write()
-            .unwrap()
             .constant_accelerations_mut()
             .remove_generator(*generator_id.access());
     }
     if let Some(generator_id) = entity.get_component::<LocalForceGeneratorID>() {
         force_generator_manager
             .write()
-            .unwrap()
             .local_forces_mut()
             .remove_generator(*generator_id.access());
     }
     if let Some(generator_id) = entity.get_component::<DynamicDynamicSpringForceGeneratorID>() {
         force_generator_manager
             .write()
-            .unwrap()
             .dynamic_dynamic_spring_forces_mut()
             .remove_generator(*generator_id.access());
     }
     if let Some(generator_id) = entity.get_component::<DynamicKinematicSpringForceGeneratorID>() {
         force_generator_manager
             .write()
-            .unwrap()
             .dynamic_kinematic_spring_forces_mut()
             .remove_generator(*generator_id.access());
     }
     if let Some(generator_id) = entity.get_component::<DetailedDragForceGeneratorID>() {
         force_generator_manager
             .write()
-            .unwrap()
             .detailed_drag_forces_mut()
             .generators_mut()
             .remove_generator(*generator_id.access());
