@@ -1,6 +1,6 @@
 //! Screen capture.
 
-use crate::gpu::rendering::RenderingSystem;
+use crate::rendering::RenderingSystem;
 use anyhow::Result;
 use impact_geometry::CubemapFace;
 use impact_gpu::texture;

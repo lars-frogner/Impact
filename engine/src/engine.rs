@@ -17,12 +17,10 @@ use crate::{
     control::{self, ControllerConfig, MotionController, OrientationController},
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
-    gpu::{
-        GraphicsContext,
-        rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
-    },
+    gpu::GraphicsContext,
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
     physics::PhysicsSimulator,
+    rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     scene::Scene,
 };
 use anyhow::{Result, anyhow};

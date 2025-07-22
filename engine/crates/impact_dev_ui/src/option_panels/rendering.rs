@@ -6,7 +6,7 @@ use crate::UserInterfaceConfig;
 use impact::{
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
-    gpu::rendering::RenderingSystem,
+    rendering::RenderingSystem,
 };
 use impact_math::{Bounds, UpperExclusiveBounds};
 use impact_rendering::postprocessing::{

@@ -4,7 +4,7 @@ pub mod postprocessing;
 
 use crate::{
     command::uils::{ModifiedActiveState, ToActiveState},
-    gpu::rendering::RenderingSystem,
+    rendering::RenderingSystem,
     scene::Scene,
 };
 use anyhow::Result;
