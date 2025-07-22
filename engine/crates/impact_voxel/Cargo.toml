@@ -61,7 +61,9 @@ pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 tinyvec = { workspace = true }
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
+twox-hash = { version = "2.1", default-features = false, features = [
+    "xxhash64",
+] }
 
 [lints]
 workspace = true

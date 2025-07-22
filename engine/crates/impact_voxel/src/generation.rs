@@ -5,7 +5,7 @@ use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3, point, vector};
 use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
 use std::array;
-use xxhash_rust::xxh3::xxh3_64_with_seed;
+use twox_hash::XxHash64;
 
 /// Represents a voxel generator that provides a voxel type given the voxel
 /// indices.
@@ -353,9 +353,9 @@ impl<SD> MultiscaleSphereSDFModifier<SD> {
     ) -> f64 {
         // The maximum radius is half the extent of a grid cell, i.e. 0.5
         const HASH_TO_RADIUS: f64 = 0.5 / u64::MAX as f64;
-        let hash = xxh3_64_with_seed(
-            bytemuck::bytes_of(&(grid_cell_indices + corner_offsets)),
+        let hash = XxHash64::oneshot(
             self.seed,
+            bytemuck::bytes_of(&(grid_cell_indices + corner_offsets)),
         );
         HASH_TO_RADIUS * hash as f64
     }
