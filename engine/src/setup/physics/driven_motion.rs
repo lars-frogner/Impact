@@ -1,4 +1,4 @@
-//! Management of driven motion for entities.
+//! Setup of driven motion for new entities.
 
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_physics::{
@@ -18,7 +18,7 @@ use impact_physics::{
 };
 use std::sync::RwLock;
 
-pub fn setup_driven_motion_for_new_entity(
+pub fn setup_driven_motion_for_new_entities(
     motion_driver_manager: &RwLock<MotionDriverManager>,
     components: &mut ArchetypeComponentStorage,
 ) {

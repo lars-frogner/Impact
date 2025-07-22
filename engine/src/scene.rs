@@ -1,8 +1,5 @@
 //! Scene containing data to render.
 
-pub mod entity;
-pub mod systems;
-
 use impact_light::LightStorage;
 use impact_material::{MaterialLibrary, MaterialLibraryState};
 use impact_mesh::{MeshRepository, MeshRepositoryState};

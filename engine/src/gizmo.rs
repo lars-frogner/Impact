@@ -2,7 +2,6 @@
 //! information.
 
 pub mod components;
-pub mod entity;
 pub mod mesh;
 pub mod model;
 pub mod systems;

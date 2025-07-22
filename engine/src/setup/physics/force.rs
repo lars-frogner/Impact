@@ -1,4 +1,4 @@
-//! Management of forces for entities.
+//! Setup of forces for new entities.
 
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -22,7 +22,7 @@ use impact_physics::{
 };
 use std::sync::RwLock;
 
-pub fn setup_forces_for_new_entity(
+pub fn setup_forces_for_new_entities(
     force_generator_manager: &RwLock<ForceGeneratorManager>,
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,

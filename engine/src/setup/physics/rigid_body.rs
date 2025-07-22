@@ -1,4 +1,4 @@
-//! Management of rigid bodies for entities.
+//! Setup of rigid bodies for new entities.
 
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -18,11 +18,11 @@ use impact_physics::{
 };
 use std::sync::RwLock;
 
-/// Checks if the entity-to-be with the given components has the components
+/// Checks if the entities-to-be with the given components have the components
 /// representing a dynamic or kinematic rigid body, and if so, creates the
-/// corresponding rigid body and adds a [`DynamicRigidBodyID`] or
-/// [`KinematicRigidBodyID`] to the entity.
-pub fn setup_rigid_body_for_new_entity(
+/// corresponding rigid bodies and adds the [`DynamicRigidBodyID`]s and/or
+/// [`KinematicRigidBodyID`]s to the entities.
+pub fn setup_rigid_bodies_for_new_entities(
     rigid_body_manager: &RwLock<RigidBodyManager>,
     mesh_repository: &RwLock<MeshRepository>,
     components: &mut ArchetypeComponentStorage,

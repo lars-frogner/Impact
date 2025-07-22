@@ -4,7 +4,6 @@
 mod macros;
 
 pub mod application;
-pub mod camera;
 pub mod command;
 pub mod component;
 pub mod control;
@@ -14,16 +13,13 @@ pub mod game_loop;
 pub mod gizmo;
 pub mod gpu;
 pub mod instrumentation;
-pub mod light;
-pub mod material;
-pub mod mesh;
 pub mod physics;
 pub mod run;
 pub mod runtime;
 pub mod scene;
+pub mod setup;
 pub mod tasks;
 pub mod ui;
-pub mod voxel;
 
 #[cfg(feature = "window")]
 pub mod window;

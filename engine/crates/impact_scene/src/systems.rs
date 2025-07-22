@@ -1,5 +1,10 @@
 //! ECS systems for scenes.
 
+use crate::{
+    SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
+    SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera,
+    graph::SceneGraph,
+};
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::{ModelTransform, ReferenceFrame};
@@ -8,11 +13,6 @@ use impact_light::{
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLightID,
-};
-use impact_scene::{
-    SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
-    SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera,
-    graph::SceneGraph,
 };
 use nalgebra::Isometry3;
 

@@ -1,4 +1,4 @@
-//! Management of lights for entities.
+//! Setup of lights for new entities.
 
 use impact_camera::buffer::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -13,24 +13,24 @@ use impact_scene::{SceneEntityFlags, camera::SceneCamera};
 use nalgebra::Isometry3;
 use std::sync::RwLock;
 
-/// Checks if the entity-to-be with the given components has the right
-/// components for a light source, and if so, adds the corresponding light to
-/// the light storage and adds a correspondong light component with the light's
-/// ID to the entity.
-pub fn setup_light_for_new_entity(
+/// Checks if the entities-to-be with the given components have the right
+/// components for a light source, and if so, adds the corresponding lights to
+/// the light storage and adds the correspondong light components with the
+/// lights' IDs to the entity.
+pub fn setup_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) {
-    setup_ambient_light_for_new_entity(light_storage, components, desynchronized);
-    setup_omnidirectional_light_for_new_entity(
+    setup_ambient_lights_for_new_entities(light_storage, components, desynchronized);
+    setup_omnidirectional_lights_for_new_entities(
         scene_camera,
         light_storage,
         components,
         desynchronized,
     );
-    setup_unidirectional_light_for_new_entity(
+    setup_unidirectional_lights_for_new_entities(
         scene_camera,
         light_storage,
         components,
@@ -38,11 +38,7 @@ pub fn setup_light_for_new_entity(
     );
 }
 
-/// Checks if the entity-to-be with the given components has the right
-/// components for this light source, and if so, adds the corresponding
-/// [`AmbientLight`](impact_light::AmbientLight) to the light storage and adds
-/// an [`AmbientLightID`] with the light's ID to the entity.
-fn setup_ambient_light_for_new_entity(
+fn setup_ambient_lights_for_new_entities(
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
@@ -64,13 +60,7 @@ fn setup_ambient_light_for_new_entity(
     );
 }
 
-/// Checks if the entity-to-be with the given components has the right
-/// components for this light source, and if so, adds the corresponding
-/// [`OmnidirectionalLight`](impact_light::OmnidirectionalLight) or
-/// [`ShadowableOmnidirectionalLight`](impact_light::ShadowableOmnidirectionalLight)
-/// to the light storage and adds a [`OmnidirectionalLightID`] or
-/// [`ShadowableOmnidirectionalLightID`] with the light's ID to the entity.
-fn setup_omnidirectional_light_for_new_entity(
+fn setup_omnidirectional_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -143,13 +133,7 @@ fn setup_omnidirectional_light_for_new_entity(
     );
 }
 
-/// Checks if the entity-to-be with the given components has the right
-/// components for this light source, and if so, adds the corresponding
-/// [`UnidirectionalLight`](impact_light::UnidirectionalLight) or
-/// [`ShadowableUnidirectionalLight`](impact_light::ShadowableUnidirectionalLight)
-/// to the light storage and adds a [`UnidirectionalLightID`] or
-/// [`ShadowableUnidirectionalLightID`] with the light's ID to the entity.
-fn setup_unidirectional_light_for_new_entity(
+fn setup_unidirectional_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,

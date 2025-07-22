@@ -1,11 +1,11 @@
 //! ECS systems for physics.
 
-use impact_ecs::{query, world::World as ECSWorld};
-use impact_geometry::ReferenceFrame;
-use impact_physics::{
+use crate::{
     quantities::Motion,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
+use impact_ecs::{query, world::World as ECSWorld};
+use impact_geometry::ReferenceFrame;
 
 /// Updates the [`ReferenceFrame`] and [`Motion`] components of entities with
 /// the [`DynamicRigidBodyID`] or [`KinematicRigidBodyID`] component to match

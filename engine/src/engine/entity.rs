@@ -1,11 +1,8 @@
 //! Management of entities in the engine.
 
+use crate::setup;
+
 use super::Engine;
-use crate::{
-    camera::entity::CameraRenderState,
-    gizmo,
-    physics::entity::{cleanup_physics_for_removed_entity, setup_physics_for_new_entity},
-};
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
@@ -30,7 +27,7 @@ impl Engine {
             .into_inner()
             .into_storage();
 
-        self.perform_setup_for_new_entities(&mut components)?;
+        setup::perform_setup_for_new_entities(self, &mut components)?;
 
         self.ecs_world
             .write()
@@ -61,33 +58,13 @@ impl Engine {
         E: Into<anyhow::Error>,
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
-        self.perform_setup_for_new_entities(&mut components)?;
+        setup::perform_setup_for_new_entities(self, &mut components)?;
         self.ecs_world.write().unwrap().create_entities(components)
     }
 
     pub fn remove_entity(&self, entity_id: EntityID) -> Result<()> {
         let mut ecs_world = self.ecs_world.write().unwrap();
-
-        let entry = ecs_world.entity(entity_id);
-
-        cleanup_physics_for_removed_entity(&self.simulator().read().unwrap(), &entry);
-
-        let mut render_resources_desynchronized = false;
-
-        self.scene()
-            .read()
-            .unwrap()
-            .perform_cleanup_for_removed_entity(&entry, &mut render_resources_desynchronized);
-
-        drop(entry);
-
-        if render_resources_desynchronized {
-            self.renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-        }
-
+        setup::perform_cleanup_for_removed_entity(self, &ecs_world.entity(entity_id))?;
         ecs_world.remove_entity(entity_id)
     }
 
@@ -187,69 +164,7 @@ impl Engine {
         })
     }
 
-    fn perform_setup_for_new_entities(
-        &self,
-        components: &mut ArchetypeComponentStorage,
-    ) -> Result<()> {
-        let mut render_resources_desynchronized = false;
-
-        self.scene().read().unwrap().perform_setup_for_new_entity(
-            self.graphics_device(),
-            &*self.assets().read().unwrap(),
-            self.simulator().read().unwrap().rigid_body_manager(),
-            components,
-            &mut render_resources_desynchronized,
-        )?;
-
-        setup_physics_for_new_entity(
-            &self.simulator().read().unwrap(),
-            self.scene().read().unwrap().mesh_repository(),
-            components,
-        )?;
-
-        self.scene().read().unwrap().add_new_entity_to_scene_graph(
-            &self.ecs_world,
-            &mut || {
-                let renderer = self.renderer.read().unwrap();
-                let postprocessor = renderer.postprocessor().read().unwrap();
-                CameraRenderState {
-                    aspect_ratio: renderer.rendering_surface().surface_aspect_ratio(),
-                    jittering_enabled: postprocessor.temporal_anti_aliasing_config().enabled,
-                }
-            },
-            components,
-            &mut render_resources_desynchronized,
-        )?;
-
-        gizmo::entity::setup_gizmos_for_new_entity(
-            &self.gizmo_manager().read().unwrap(),
-            components,
-        );
-
-        if render_resources_desynchronized {
-            self.renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-        }
-
-        let (setup_component_ids, setup_component_names, standard_component_names) =
-            self.extract_component_metadata(components);
-
-        impact_log::debug!(
-            "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
-            components.component_count(),
-            setup_component_names.join("\n    "),
-            standard_component_names.join("\n    "),
-        );
-
-        // Remove all setup components
-        components.remove_component_types_with_ids(setup_component_ids)?;
-
-        Ok(())
-    }
-
-    fn extract_component_metadata(
+    pub fn extract_component_metadata(
         &self,
         components: &ArchetypeComponentStorage,
     ) -> (Vec<ComponentID>, Vec<&'static str>, Vec<&'static str>) {

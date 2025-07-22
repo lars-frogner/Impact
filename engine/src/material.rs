@@ -1,3 +1,0 @@
-//! Materials.
-
-pub mod entity;

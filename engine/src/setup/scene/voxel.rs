@@ -21,7 +21,7 @@ use impact_voxel::{
 };
 use std::sync::RwLock;
 
-pub fn setup_voxel_object_for_new_entity(
+pub fn setup_voxel_objects_for_new_entities(
     rigid_body_manager: &RwLock<RigidBodyManager>,
     voxel_manager: &RwLock<VoxelManager>,
     components: &mut ArchetypeComponentStorage,
@@ -335,7 +335,7 @@ pub fn setup_voxel_object_for_new_entity(
     Ok(())
 }
 
-pub fn add_model_instance_node_component_for_new_voxel_object_entity(
+pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
     voxel_manager: &RwLock<VoxelManager>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     scene_graph: &RwLock<SceneGraph>,

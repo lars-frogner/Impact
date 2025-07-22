@@ -10,6 +10,9 @@ pub mod model;
 pub mod setup;
 pub mod skybox;
 
+#[cfg(feature = "ecs")]
+pub mod systems;
+
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use graph::{CameraNodeID, GroupNodeID, ModelInstanceNodeID};
