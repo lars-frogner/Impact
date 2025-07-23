@@ -3,6 +3,7 @@ name = "ffi_utils"
 description = "Foreign Function Interface utilities for cross-language integration"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 
 [lints.rust]
 future_incompatible = "warn"
