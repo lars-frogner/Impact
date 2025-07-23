@@ -3,6 +3,7 @@ name = "asset_fetcher"
 description = "Retrieval of assets for use in the Impact engine"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 
 [[bin]]
 name = "asset_fetcher"

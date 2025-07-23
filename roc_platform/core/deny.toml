@@ -1,1 +1,5 @@
-../../engine/deny.toml
+[licenses]
+allow = ["Apache-2.0", "MIT", "UPL-1.0"]
+
+[sources]
+allow-git = ["git+https://github.com/roc-lang/roc.git"]

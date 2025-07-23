@@ -1,1 +1,17 @@
-../../engine/deny.toml
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "some dependencies still use old paste crate" },
+]
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "BSD-3-Clause",
+    "ISC",
+    "CC0-1.0",
+    "Zlib",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+]

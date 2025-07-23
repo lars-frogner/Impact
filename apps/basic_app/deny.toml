@@ -1,1 +1,26 @@
-../../engine/deny.toml
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "some dependencies still use old paste crate" },
+]
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "CC0-1.0",
+    "Zlib",
+    "BSL-1.0",
+    "UPL-1.0",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+]
+
+[sources]
+allow-git = ["git+https://github.com/roc-lang/roc.git"]
+
+[bans]
+skip-tree = [{ name = "wgpu" }, { name = "winit" }, { name = "rand" }]
