@@ -463,6 +463,48 @@ jobs:
         run: cargo doc --workspace --no-deps --document-private-items
 
   # ───────────────────────────────────────────────────────────────
+  # cargo-udeps
+  # ───────────────────────────────────────────────────────────────
+  cargo-udeps:
+    name: cargo-udeps – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            tools/asset_fetcher,
+            apps/basic_app,
+            apps/snapshot_tester,
+          ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: r7kamura/rust-problem-matchers@v1
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-udeps
+
+      - name: cargo-udeps
+        working-directory: ${{ matrix.workspace }}
+        run: cargo +nightly udeps --workspace --all-features --all-targets
+
+  # ───────────────────────────────────────────────────────────────
   # cargo-deny
   # ───────────────────────────────────────────────────────────────
   cargo-deny:
