@@ -3,6 +3,7 @@
 use super::Engine;
 use crate::{
     instrumentation,
+    lock_order::{OrderedMutex, OrderedRwLock},
     runtime::tasks::RuntimeTaskScheduler,
     tasks::{PhysicsTag, RenderingTag, UserInterfaceTag},
 };
@@ -14,7 +15,7 @@ define_execution_tag_set!(ALL_SYSTEMS, [PhysicsTag, RenderingTag, UserInterfaceT
 
 impl Engine {
     pub fn perform_game_loop_iteration(&self, task_scheduler: &RuntimeTaskScheduler) -> Result<()> {
-        let mut game_loop_controller = self.game_loop_controller.lock();
+        let mut game_loop_controller = self.game_loop_controller.olock();
 
         if !game_loop_controller.should_perform_iteration() {
             return Ok(());
@@ -35,7 +36,7 @@ impl Engine {
             }
         }
 
-        self.renderer().write().present();
+        self.renderer().owrite().present();
 
         self.app()
             .on_game_loop_iteration_completed(self, game_loop_controller.iteration())?;

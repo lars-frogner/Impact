@@ -1,17 +1,20 @@
 //! ECS systems for gizmo management.
 
-use crate::gizmo::{
-    GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
-    components::GizmosComp,
-    model::{
-        COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
-        COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
-        SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
-        VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
-        VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
-        VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
-        VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
+use crate::{
+    gizmo::{
+        GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
+        components::GizmosComp,
+        model::{
+            COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
+            COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
+            SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
+        },
     },
+    lock_order::OrderedRwLock,
 };
 use approx::abs_diff_ne;
 use impact_camera::buffer::BufferableCamera;
@@ -54,7 +57,7 @@ pub fn update_visibility_flags_for_gizmos(
         return;
     }
 
-    let ecs_world = ecs_world.read();
+    let ecs_world = ecs_world.oread();
 
     for gizmo in GizmoType::all() {
         if gizmo_manager.global_visibility_changed_for_any_of_gizmos(gizmo.as_set()) {

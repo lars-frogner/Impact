@@ -3,6 +3,7 @@ use crate::UserInterfaceConfig;
 use impact::{
     egui::{Context, Slider, Ui},
     engine::Engine,
+    lock_order::OrderedRwLock,
     physics::PhysicsSimulator,
 };
 
@@ -95,7 +96,7 @@ pub struct PhysicsOptionPanel;
 
 impl PhysicsOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut simulator = engine.simulator().write();
+        let mut simulator = engine.simulator().owrite();
 
         option_panel(ctx, config, "physics_option_panel", |ui| {
             option_group(ui, "simulation_options", |ui| {

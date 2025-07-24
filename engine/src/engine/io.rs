@@ -1,6 +1,7 @@
 //! Conveniences for loading data into the engine.
 
 use super::Engine;
+use crate::lock_order::OrderedRwLock;
 use anyhow::Result;
 use impact_mesh::{TriangleMeshID, texture_projection::TextureProjection};
 use std::{fmt, path::Path};
@@ -20,7 +21,7 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read();
+        let scene = self.scene.oread();
         let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::obj::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
     }
@@ -45,7 +46,7 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read();
+        let scene = self.scene.oread();
         let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::obj::load_mesh_from_obj_file_with_projection(
             &mut mesh_repository,
@@ -68,7 +69,7 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read();
+        let scene = self.scene.oread();
         let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::ply::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
     }
@@ -92,7 +93,7 @@ impl Engine {
     where
         P: AsRef<Path> + fmt::Debug,
     {
-        let scene = self.scene.read();
+        let scene = self.scene.oread();
         let mut mesh_repository = scene.mesh_repository().write();
         impact_mesh::io::ply::load_mesh_from_ply_file_with_projection(
             &mut mesh_repository,

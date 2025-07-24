@@ -1,5 +1,6 @@
 //! Synchronization of GPU buffers with geometrical data.
 
+use crate::lock_order::OrderedRwLock;
 use anyhow::Result;
 use impact_assets::Assets;
 use impact_camera::buffer::CameraGPUBufferManager;
@@ -377,7 +378,7 @@ impl DesynchronizedRenderResources {
             *voxel_material_resource_manager =
                 Some(VoxelMaterialGPUResourceManager::for_voxel_type_registry(
                     graphics_device,
-                    &mut assets.write(),
+                    &mut assets.owrite(),
                     &voxel_manager.type_registry,
                     bind_group_layout_registry,
                 )?);

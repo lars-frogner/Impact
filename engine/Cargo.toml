@@ -164,6 +164,7 @@ arbitrary = [
     "impact_rendering/arbitrary",
     "impact_voxel/arbitrary",
 ]
+checked_lock_order = []
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_controller/roc_codegen",

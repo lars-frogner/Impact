@@ -1,6 +1,7 @@
 use impact::{
     egui::{Align2, Area, Context, Id, Pos2, TextStyle, vec2},
     engine::Engine,
+    lock_order::OrderedRwLock,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -11,7 +12,7 @@ const SPACING: f32 = 12.0;
 
 impl TimeOverlay {
     pub(super) fn run(&mut self, ctx: &Context, engine: &Engine) {
-        let simulation_time = engine.simulator().read().current_simulation_time();
+        let simulation_time = engine.simulator().oread().current_simulation_time();
         let fps = engine.metrics().current_smooth_fps();
 
         let font_id = TextStyle::Body.resolve(&ctx.style());

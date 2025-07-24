@@ -4,7 +4,7 @@ pub mod gizmo;
 pub mod physics;
 pub mod scene;
 
-use crate::{engine::Engine, setup::scene::camera::CameraRenderState};
+use crate::{engine::Engine, lock_order::OrderedRwLock, setup::scene::camera::CameraRenderState};
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 
@@ -15,25 +15,25 @@ pub fn perform_setup_for_new_entities(
     let mut render_resources_desynchronized = false;
 
     scene::setup_scene_data_for_new_entities(
-        &engine.scene().read(),
+        &engine.scene().oread(),
         engine.graphics_device(),
-        &*engine.assets().read(),
-        engine.simulator().read().rigid_body_manager(),
+        &**engine.assets().oread(),
+        engine.simulator().oread().rigid_body_manager(),
         components,
         &mut render_resources_desynchronized,
     )?;
 
     physics::setup_physics_for_new_entities(
-        &engine.simulator().read(),
-        engine.scene().read().mesh_repository(),
+        &engine.simulator().oread(),
+        engine.scene().oread().mesh_repository(),
         components,
     )?;
 
     scene::add_new_entities_to_scene_graph(
-        &engine.scene().read(),
+        &engine.scene().oread(),
         engine.ecs_world(),
         &mut || {
-            let renderer = engine.renderer().read();
+            let renderer = engine.renderer().oread();
             let postprocessor = renderer.postprocessor().read();
             CameraRenderState {
                 aspect_ratio: renderer.rendering_surface().surface_aspect_ratio(),
@@ -44,12 +44,12 @@ pub fn perform_setup_for_new_entities(
         &mut render_resources_desynchronized,
     )?;
 
-    gizmo::setup_gizmos_for_new_entities(&engine.gizmo_manager().read(), components);
+    gizmo::setup_gizmos_for_new_entities(&engine.gizmo_manager().oread(), components);
 
     if render_resources_desynchronized {
         engine
             .renderer()
-            .read()
+            .oread()
             .declare_render_resources_desynchronized();
     }
 
@@ -72,10 +72,10 @@ pub fn perform_setup_for_new_entities(
 pub fn perform_cleanup_for_removed_entity(engine: &Engine, entity: &EntityEntry<'_>) -> Result<()> {
     let mut render_resources_desynchronized = false;
 
-    physics::cleanup_physics_for_removed_entity(&engine.simulator().read(), entity);
+    physics::cleanup_physics_for_removed_entity(&engine.simulator().oread(), entity);
 
     scene::cleanup_scene_data_for_removed_entity(
-        &engine.scene().read(),
+        &engine.scene().oread(),
         entity,
         &mut render_resources_desynchronized,
     );
@@ -83,7 +83,7 @@ pub fn perform_cleanup_for_removed_entity(engine: &Engine, entity: &EntityEntry<
     if render_resources_desynchronized {
         engine
             .renderer()
-            .read()
+            .oread()
             .declare_render_resources_desynchronized();
     }
 

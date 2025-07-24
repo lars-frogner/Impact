@@ -6,7 +6,7 @@ pub mod material;
 pub mod mesh;
 pub mod voxel;
 
-use crate::scene::Scene;
+use crate::{lock_order::OrderedRwLock, scene::Scene};
 use anyhow::{Result, anyhow};
 use camera::CameraRenderState;
 use impact_ecs::{
@@ -145,7 +145,7 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let ecs_world = ecs_world.read();
+            let ecs_world = ecs_world.oread();
         },
         components,
         |parent: &Parent| -> Result<SceneGraphParentNodeHandle> {

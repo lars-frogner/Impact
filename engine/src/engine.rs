@@ -18,6 +18,7 @@ use crate::{
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
+    lock_order::OrderedRwLock,
     physics::PhysicsSimulator,
     rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     scene::Scene,
@@ -285,7 +286,7 @@ impl Engine {
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
-        let mut renderer = self.renderer().write();
+        let mut renderer = self.renderer().owrite();
 
         renderer.resize_rendering_surface(new_width, new_height);
 
@@ -295,19 +296,19 @@ impl Engine {
 
         let render_resources_desynchronized = self
             .scene()
-            .read()
+            .oread()
             .handle_aspect_ratio_changed(new_aspect_ratio);
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()
-                .read()
+                .oread()
                 .declare_render_resources_desynchronized();
         }
     }
 
     pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
         self.renderer()
-            .write()
+            .owrite()
             .update_pixels_per_point(pixels_per_point);
     }
 
@@ -325,7 +326,7 @@ impl Engine {
 
             let (_, window_height) = self
                 .renderer
-                .read()
+                .oread()
                 .rendering_surface()
                 .surface_dimensions();
 
@@ -340,8 +341,8 @@ impl Engine {
         if !self.controls_enabled() {
             return;
         }
-        let ecs_world = self.ecs_world().read();
-        let simulator = self.simulator.read();
+        let ecs_world = self.ecs_world().oread();
+        let simulator = self.simulator.oread();
         let mut rigid_body_manager = simulator.rigid_body_manager().write();
         let time_step_duration = simulator.scaled_time_step_duration();
 
@@ -366,11 +367,11 @@ impl Engine {
     /// Resets the scene, ECS world and physics simulator to the initial empty
     /// state and sets the simulation time to zero.
     pub fn reset_world(&self) {
-        self.ecs_world.write().remove_all_entities();
-        self.scene.read().clear();
-        self.simulator.write().reset();
+        self.ecs_world.owrite().remove_all_entities();
+        self.scene.oread().clear();
+        self.simulator.owrite().reset();
         self.renderer
-            .read()
+            .oread()
             .declare_render_resources_desynchronized();
     }
 
@@ -382,8 +383,8 @@ impl Engine {
         self.controls_enabled.store(enabled, Ordering::Relaxed);
 
         if !enabled {
-            let ecs_world = self.ecs_world.read();
-            let simulator = self.simulator.read();
+            let ecs_world = self.ecs_world.oread();
+            let simulator = self.simulator.oread();
             let mut rigid_body_manager = simulator.rigid_body_manager().write();
 
             if let Some(motion_controller) = &self.motion_controller {
@@ -412,14 +413,14 @@ impl Engine {
     }
 
     pub fn gather_metrics_after_completed_frame(&self, smooth_frame_duration: Duration) {
-        let mut metrics = self.metrics.write();
+        let mut metrics = self.metrics.owrite();
         metrics.current_smooth_frame_duration = smooth_frame_duration;
 
         self.task_timer
             .report_task_execution_times(&mut metrics.last_task_execution_times);
 
         self.simulator()
-            .write()
+            .owrite()
             .update_time_step_duration(&smooth_frame_duration);
     }
 
@@ -438,7 +439,7 @@ impl Engine {
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
-        self.renderer.read().handle_task_errors(task_errors);
+        self.renderer.oread().handle_task_errors(task_errors);
     }
 
     fn with_component_mut<C: Component, R>(
@@ -446,7 +447,7 @@ impl Engine {
         entity_id: EntityID,
         f: impl FnOnce(&mut C) -> Result<R>,
     ) -> Result<R> {
-        let ecs_world = self.ecs_world.read();
+        let ecs_world = self.ecs_world.oread();
 
         let entity_entry = ecs_world
             .get_entity(entity_id)

@@ -2,6 +2,7 @@
 
 use crate::{
     gizmo,
+    lock_order::{OrderedMutex, OrderedRwLock},
     rendering::resource::DesynchronizedRenderResources,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
@@ -61,7 +62,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Clearing model instance buffers", engine, {
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             scene.instance_feature_manager().write().clear_buffer_contents();
             Ok(())
         })
@@ -85,8 +86,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing scene graph node transforms and flags", engine, {
-            let ecs_world = engine.ecs_world().read();
-            let scene = engine.scene().read();
+            let ecs_world = engine.ecs_world().oread();
+            let scene = engine.scene().oread();
             let mut scene_graph = scene.scene_graph().write();
             impact_scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
             Ok(())
@@ -103,7 +104,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Updating scene object group-to-world transforms", engine, {
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             scene.scene_graph()
                 .write()
                 .update_all_group_to_root_transforms();
@@ -121,7 +122,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Updating scene object bounding spheres", engine, {
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             scene.scene_graph()
                 .write()
                 .update_all_bounding_spheres();
@@ -143,7 +144,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing scene camera view transform", engine, {
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             if let Some(scene_camera) = scene.scene_camera().write().as_mut() {
                 scene.scene_graph()
                     .read()
@@ -151,7 +152,7 @@ define_task!(
 
                 engine
                     .renderer()
-                    .read()
+                    .oread()
                     .declare_render_resources_desynchronized();
             }
             Ok(())
@@ -175,8 +176,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing lights in storage", engine, {
-            let ecs_world = engine.ecs_world().read();
-            let scene = engine.scene().read();
+            let ecs_world = engine.ecs_world().oread();
+            let scene = engine.scene().oread();
             let scene_graph = scene.scene_graph().read();
             let mut light_storage = scene.light_storage().write();
             impact_scene::systems::sync_lights_in_storage(
@@ -205,8 +206,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Buffering visible model instances", engine, {
-            let renderer = engine.renderer().read();
-            let scene = engine.scene().read();
+            let renderer = engine.renderer().oread();
+            let scene = engine.scene().oread();
             let scene_camera = scene.scene_camera().read();
             if let Some(scene_camera) = scene_camera.as_ref() {
                 scene.scene_graph()
@@ -259,10 +260,10 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Advancing simulation", engine, {
             engine.simulator()
-                .write()
+                .owrite()
                 .advance_simulation(
                     &engine.scene()
-                        .read()
+                        .oread()
                         .voxel_manager()
                         .read()
                         .object_manager
@@ -284,8 +285,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing rigid body components", engine, {
-            let ecs_world = engine.ecs_world().read();
-            let simulator = engine.simulator().read();
+            let ecs_world = engine.ecs_world().oread();
+            let simulator = engine.simulator().oread();
             let rigid_body_manager = simulator.rigid_body_manager().read();
             impact_physics::systems::synchronize_rigid_body_components(&ecs_world, &rigid_body_manager);
             Ok(())
@@ -305,7 +306,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object meshes", engine, {
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             let mut voxel_manager = scene.voxel_manager().write();
 
             let mut desynchronized = false;
@@ -315,7 +316,7 @@ define_task!(
             if desynchronized {
                 engine
                     .renderer()
-                    .read()
+                    .oread()
                     .declare_render_resources_desynchronized();
             }
             Ok(())
@@ -335,11 +336,11 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Applying voxel absorbers", engine, {
-            let mut entity_stager = engine.entity_stager().lock();
-            let ecs_world = engine.ecs_world().read();
-            let simulator = engine.simulator().read();
+            let mut entity_stager = engine.entity_stager().olock();
+            let ecs_world = engine.ecs_world().oread();
+            let simulator = engine.simulator().oread();
             let mut rigid_body_manager = simulator.rigid_body_manager().write();
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             let mut voxel_manager = scene.voxel_manager().write();
             let scene_graph = scene.scene_graph().read();
 
@@ -367,7 +368,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object model transforms", engine, {
             let mut ecs_world = engine.ecs_world().write();
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             let voxel_manager = scene.voxel_manager().read();
 
             impact_voxel::interaction::systems::sync_voxel_object_model_transforms(
@@ -394,7 +395,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Updating visibility flags for gizmos", engine, {
-            let mut gizmo_manager = engine.gizmo_manager().write();
+            let mut gizmo_manager = engine.gizmo_manager().owrite();
             gizmo::systems::update_visibility_flags_for_gizmos(&mut gizmo_manager, engine.ecs_world());
             Ok(())
         })
@@ -416,13 +417,13 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Buffering transforms for gizmos", engine, {
-            let ecs_world = engine.ecs_world().read();
-            let current_frame_count = engine.renderer().read().current_frame_count();
-            let gizmo_manager = engine.gizmo_manager().read();
-            let simulator = engine.simulator().read();
+            let ecs_world = engine.ecs_world().oread();
+            let current_frame_count = engine.renderer().oread().current_frame_count();
+            let gizmo_manager = engine.gizmo_manager().oread();
+            let simulator = engine.simulator().oread();
             let rigid_body_manager = simulator.rigid_body_manager().read();
             let collision_world = simulator.collision_world().read();
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             let mut instance_feature_manager = scene.instance_feature_manager().write();
             let voxel_manager = scene.voxel_manager().read();
             let scene_graph = scene.scene_graph().read();
@@ -468,8 +469,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
-            let shadow_mapping_enabled = engine.renderer().read().shadow_mapping_config().enabled;
-            let scene = engine.scene().read();
+            let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
+            let scene = engine.scene().oread();
             let scene_camera = scene.scene_camera().read();
             if let Some(scene_camera) = scene_camera.as_ref() {
                 scene.scene_graph()
@@ -483,7 +484,7 @@ define_task!(
 
                 engine
                     .renderer()
-                    .read()
+                    .oread()
                     .declare_render_resources_desynchronized();
             }
             Ok(())
@@ -509,8 +510,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
-            let shadow_mapping_enabled = engine.renderer().read().shadow_mapping_config().enabled;
-            let scene = engine.scene().read();
+            let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
+            let scene = engine.scene().oread();
             let scene_camera = scene.scene_camera().read();
             if let Some(scene_camera) = scene_camera.as_ref() {
                 scene.scene_graph()
@@ -524,7 +525,7 @@ define_task!(
 
                 engine
                     .renderer()
-                    .read()
+                    .oread()
                     .declare_render_resources_desynchronized();
             }
             Ok(())
@@ -544,7 +545,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing mesh GPU buffers", engine, {
-            let renderer = engine.renderer().read();
+            let renderer = engine.renderer().oread();
             let render_resource_manager = renderer.render_resource_manager().read();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_triangle_mesh_buffers_with_triangle_meshes(
@@ -556,7 +557,7 @@ define_task!(
                         .as_mut(),
                     engine
                         .scene()
-                        .read()
+                        .oread()
                         .mesh_repository()
                         .read()
                         .triangle_meshes(),
@@ -570,7 +571,7 @@ define_task!(
                         .as_mut(),
                     engine
                         .scene()
-                        .read()
+                        .oread()
                         .mesh_repository()
                         .read()
                         .line_segment_meshes(),
@@ -589,8 +590,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
-            let renderer = engine.renderer().read();
-            let scene = engine.scene().read();
+            let renderer = engine.renderer().oread();
+            let scene = engine.scene().oread();
             let render_resource_manager = renderer.render_resource_manager().read();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
@@ -605,7 +606,7 @@ define_task!(
                 );
                 DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
                     renderer.graphics_device(),
-                    &engine.assets().read(),
+                    &engine.assets().oread(),
                     render_resource_manager
                         .desynchronized()
                         .skybox_resource_manager
@@ -627,7 +628,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object GPU buffers", engine, {
-            let renderer = engine.renderer().read();
+            let renderer = engine.renderer().oread();
             let render_resource_manager = renderer.render_resource_manager().read();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_voxel_resources_with_voxel_manager(
@@ -641,7 +642,7 @@ define_task!(
                         .as_mut(),
                     &mut engine
                         .scene()
-                        .read()
+                        .oread()
                         .voxel_manager()
                         .write(),
                 )?;
@@ -663,10 +664,10 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing light GPU buffers", engine, {
-            let renderer = engine.renderer().read();
+            let renderer = engine.renderer().oread();
             let render_resource_manager = renderer.render_resource_manager().read();
             if render_resource_manager.is_desynchronized() {
-                let scene = engine.scene().read();
+                let scene = engine.scene().oread();
                 let light_storage = scene.light_storage().read();
                 DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
                     renderer.graphics_device(),
@@ -701,7 +702,7 @@ define_task!(
             "Synchronizing model instance feature GPU buffers",
             engine,
             {
-                let renderer = engine.renderer().read();
+                let renderer = engine.renderer().oread();
                 let render_resource_manager = renderer.render_resource_manager().read();
                 if render_resource_manager.is_desynchronized() {
                     DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
@@ -713,7 +714,7 @@ define_task!(
                             .as_mut(),
                         &mut engine
                             .scene()
-                            .read()
+                            .oread()
                             .instance_feature_manager()
                             .write(),
                     );
@@ -742,7 +743,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Completing synchronization of render resources", engine, {
-            let renderer = engine.renderer().read();
+            let renderer = engine.renderer().oread();
             let mut render_resource_manager = renderer.render_resource_manager().write();
             render_resource_manager.declare_synchronized();
             Ok(())
@@ -763,11 +764,11 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing render commands", engine, {
-            let renderer = engine.renderer().read();
+            let renderer = engine.renderer().oread();
             let mut shader_manager = renderer.shader_manager().write();
             let render_resource_manager = renderer.render_resource_manager().read();
             let mut render_command_manager = renderer.render_command_manager().write();
-            let scene = engine.scene().read();
+            let scene = engine.scene().oread();
             let material_library = scene.material_library().read();
 
             render_command_manager.sync_with_render_resources(
@@ -789,8 +790,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Rendering", engine, {
-            let scene = engine.scene().read();
-            engine.renderer().write().render_to_surface(
+            let scene = engine.scene().oread();
+            engine.renderer().owrite().render_to_surface(
                 &scene,
                 ctx.user_interface(),
             )?;

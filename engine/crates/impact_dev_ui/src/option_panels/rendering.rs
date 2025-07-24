@@ -6,6 +6,7 @@ use crate::UserInterfaceConfig;
 use impact::{
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
+    lock_order::OrderedRwLock,
     rendering::RenderingSystem,
 };
 use impact_math::{Bounds, UpperExclusiveBounds};
@@ -251,7 +252,7 @@ enum ExposureMode {
 
 impl RenderingOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut renderer = engine.renderer().write();
+        let mut renderer = engine.renderer().owrite();
 
         option_panel(ctx, config, "rendering_option_panel", |ui| {
             option_group(ui, "shadow_mapping_options", |ui| {

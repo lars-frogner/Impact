@@ -12,6 +12,8 @@ pub mod game_loop;
 pub mod gizmo;
 pub mod gpu;
 pub mod instrumentation;
+pub mod lock_order;
+pub mod lockable_resources;
 pub mod physics;
 pub mod rendering;
 pub mod run;

@@ -1,6 +1,6 @@
 //! Screen capture.
 
-use crate::rendering::RenderingSystem;
+use crate::{lock_order::OrderedRwLock, rendering::RenderingSystem};
 use anyhow::Result;
 use impact_geometry::CubemapFace;
 use impact_gpu::texture;
@@ -71,7 +71,7 @@ impl ScreenCapturer {
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read();
+            let renderer = renderer.oread();
 
             let surface_texture = match renderer.rendering_surface() {
                 RenderingSurface::Headless(surface) => surface.surface_texture(),
@@ -122,7 +122,7 @@ impl ScreenCapturer {
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read();
+            let renderer = renderer.oread();
 
             let render_resource_manager = renderer.render_resource_manager().read();
 
@@ -173,7 +173,7 @@ impl ScreenCapturer {
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read();
+            let renderer = renderer.oread();
 
             let render_resource_manager = renderer.render_resource_manager().read();
 

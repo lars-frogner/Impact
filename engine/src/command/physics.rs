@@ -3,6 +3,7 @@
 use crate::{
     command::uils::{ModifiedActiveState, ToActiveState},
     engine::Engine,
+    lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
 use impact_physics::{fph, medium::UniformMedium};
@@ -105,7 +106,7 @@ pub fn set_simulation_speed_and_compensate_controller_movement_speed(
     engine: &Engine,
     to: ToSimulationSpeedMultiplier,
 ) -> f64 {
-    let mut simulator = engine.simulator().write();
+    let mut simulator = engine.simulator().owrite();
     let old_multiplier = simulator.simulation_speed_multiplier();
     let new_multiplier = set_simulation_speed(&mut simulator, to);
     drop(simulator);
@@ -113,7 +114,7 @@ pub fn set_simulation_speed_and_compensate_controller_movement_speed(
     if new_multiplier != old_multiplier {
         // Adjust movement speed to compensate for the change in simulation speed
         if let Some(motion_controller) = engine.motion_controller() {
-            let mut motion_controller = motion_controller.lock();
+            let mut motion_controller = motion_controller.olock();
             let new_movement_speed =
                 motion_controller.movement_speed() * (old_multiplier / new_multiplier);
             motion_controller.set_movement_speed(new_movement_speed);
