@@ -8,7 +8,7 @@ use crate::{
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_camera::buffer::BufferableCamera;
-use impact_containers::{GenerationalIdx, GenerationalReusingVec, HashMap, HashSet};
+use impact_containers::{HashMap, HashSet, SlotKey, SlotMap};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
     LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
@@ -49,7 +49,7 @@ pub struct SceneGraph {
 /// type.
 #[derive(Clone, Debug, Default)]
 pub struct NodeStorage<N> {
-    nodes: GenerationalReusingVec<N>,
+    nodes: SlotMap<N>,
 }
 
 #[derive(Debug)]
@@ -64,37 +64,38 @@ pub trait SceneGraphNode {
 }
 
 /// Represents the ID of a type of node in a [`SceneGraph`].
-pub trait SceneGraphNodeID: NodeIDToIdx + IdxToNodeID + Pod {}
+pub trait SceneGraphNodeID: NodeIDToSlotKey + SlotKeyToNodeID + Pod {}
 
 /// Identifier for a group node in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct GroupNodeID(GenerationalIdx);
+pub struct GroupNodeID(SlotKey);
 
 /// Identifier for a [`ModelInstanceNode`] in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct ModelInstanceNodeID(GenerationalIdx);
+pub struct ModelInstanceNodeID(SlotKey);
 
 /// Identifier for a [`CameraNode`] in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct CameraNodeID(GenerationalIdx);
+pub struct CameraNodeID(SlotKey);
 
-/// Represents a type of node identifier that may provide an associated index.
-pub trait NodeIDToIdx {
-    /// Returns the index corresponding to the node ID.
-    fn idx(&self) -> GenerationalIdx;
+/// Represents a type of node identifier that may provide an associated
+/// [`SlotKey`].
+pub trait NodeIDToSlotKey {
+    /// Returns the [`SlotKey`] corresponding to the node ID.
+    fn key(&self) -> SlotKey;
 }
 
 /// Represents a type of node identifier that may be created from an associated
-/// index.
-pub trait IdxToNodeID {
-    /// Creates the node ID corresponding to the given index.
-    fn from_idx(idx: GenerationalIdx) -> Self;
+/// [`SlotKey`].
+pub trait SlotKeyToNodeID {
+    /// Creates the node ID corresponding to the given [`SlotKey`].
+    fn from_key(key: SlotKey) -> Self;
 }
 
 /// A [`SceneGraph`] node that has a group of other nodes as children. The
@@ -1162,39 +1163,39 @@ impl Default for SceneGraph {
 impl<N: SceneGraphNode> NodeStorage<N> {
     fn new() -> Self {
         Self {
-            nodes: GenerationalReusingVec::new(),
+            nodes: SlotMap::new(),
         }
     }
 
     /// Returns the number of nodes in the storage.
     pub fn n_nodes(&self) -> usize {
-        self.nodes.n_elements()
+        self.nodes.len()
     }
 
     /// Whether a node with the given ID exists in the storage.
     pub fn has_node(&self, node_id: N::ID) -> bool {
-        self.nodes.get_element(node_id.idx()).is_some()
+        self.nodes.get_value(node_id.key()).is_some()
     }
 
     /// Returns a reference to the node with the given ID.
     pub fn node(&self, node_id: N::ID) -> &N {
-        self.nodes.element(node_id.idx())
+        self.nodes.value(node_id.key())
     }
 
     fn node_mut(&mut self, node_id: N::ID) -> &mut N {
-        self.nodes.element_mut(node_id.idx())
+        self.nodes.value_mut(node_id.key())
     }
 
     fn add_node(&mut self, node: N) -> N::ID {
-        N::ID::from_idx(self.nodes.add_element(node))
+        N::ID::from_key(self.nodes.insert(node))
     }
 
     fn remove_node(&mut self, node_id: N::ID) {
-        self.nodes.free_element_at_idx(node_id.idx());
+        self.nodes.remove(node_id.key());
     }
 
     fn remove_all_nodes(&mut self) {
-        self.nodes.free_all_elements();
+        self.nodes.clear();
     }
 }
 
@@ -1498,24 +1499,24 @@ impl SceneGraphNode for CameraNode {
     type ID = CameraNodeID;
 }
 
-macro_rules! impl_node_id_idx_traits {
+macro_rules! impl_node_id_key_traits {
     ($node_id_type:ty) => {
-        impl IdxToNodeID for $node_id_type {
-            fn from_idx(idx: GenerationalIdx) -> Self {
-                Self(idx)
+        impl SlotKeyToNodeID for $node_id_type {
+            fn from_key(key: SlotKey) -> Self {
+                Self(key)
             }
         }
-        impl NodeIDToIdx for $node_id_type {
-            fn idx(&self) -> GenerationalIdx {
+        impl NodeIDToSlotKey for $node_id_type {
+            fn key(&self) -> SlotKey {
                 self.0
             }
         }
     };
 }
 
-impl_node_id_idx_traits!(GroupNodeID);
-impl_node_id_idx_traits!(ModelInstanceNodeID);
-impl_node_id_idx_traits!(CameraNodeID);
+impl_node_id_key_traits!(GroupNodeID);
+impl_node_id_key_traits!(ModelInstanceNodeID);
+impl_node_id_key_traits!(CameraNodeID);
 
 impl From<SceneEntityFlags> for ModelInstanceFlags {
     fn from(scene_entity_flags: SceneEntityFlags) -> Self {
