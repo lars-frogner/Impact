@@ -109,7 +109,6 @@ license = { workspace = true }
 crate-type = ["rlib"]
 
 [dependencies]
-anyhow = "1.0"
 libc = "=0.2.155"
 roc_io_error = { path = "roc_io_error" }
 roc_std = { workspace = true }
