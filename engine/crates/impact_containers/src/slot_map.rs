@@ -213,22 +213,25 @@ impl<V> SlotMap<V> {
     }
 
     /// Removes the value for the given key. The underlying [`Vec`] is not
-    /// modified, instead the slot is registered as free. Does nothing if the
-    /// value for the given key has already been removed.
+    /// modified, instead the slot is registered as free.
+    ///
+    /// # Returns
+    /// `true` if the value existed.
     ///
     /// # Panics
     /// If the key's generation represents a free slot (in which case it is
     /// illegal as a key) or its index is out of bounds (in which case it
     /// belongs to a different map).
-    pub fn remove(&mut self, key: SlotKey) {
+    pub fn remove(&mut self, key: SlotKey) -> bool {
         assert!(key.is_legal(), "Tried to use illegal slot key");
         let slot = &mut self.slots[key.idx_usize()];
         if key.generation() != slot.generation() {
             // Already removed
-            return;
+            return false;
         }
         self.free_slot_keys.push(key);
         slot.declare_free();
+        true
     }
 
     /// Remove all values by marking every occupied slot as free.
@@ -430,7 +433,7 @@ mod tests {
     fn removing_only_value_in_map_works() {
         let mut map = SlotMap::<f32>::new();
         let key = map.insert(1.0);
-        map.remove(key);
+        assert!(map.remove(key));
 
         assert_eq!(map.len(), 0);
         assert_eq!(map.get_value(key), None);
@@ -459,7 +462,7 @@ mod tests {
     fn requesting_removed_value_gives_none() {
         let mut map = SlotMap::<f32>::new();
         let key = map.insert(1.0);
-        map.remove(key);
+        assert!(map.remove(key));
         assert!(map.get_value(key).is_none());
     }
 
@@ -467,7 +470,7 @@ mod tests {
     fn requesting_removed_mutable_value_gives_none() {
         let mut map = SlotMap::<f32>::new();
         let key = map.insert(1.0);
-        map.remove(key);
+        assert!(map.remove(key));
         assert!(map.get_value_mut(key).is_none());
     }
 
@@ -475,8 +478,8 @@ mod tests {
     fn removing_removed_value_does_nothing() {
         let mut map = SlotMap::<f32>::new();
         let key = map.insert(1.0);
-        map.remove(key);
-        map.remove(key);
+        assert!(map.remove(key));
+        assert!(!map.remove(key));
     }
 
     #[test]
