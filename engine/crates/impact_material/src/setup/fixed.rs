@@ -7,10 +7,11 @@ use crate::{
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_gpu::{device::GraphicsDevice, texture::TextureID};
+use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, InstanceFeatureManager};
+use impact_texture::TextureID;
 use roc_integration::roc;
 use std::{collections::hash_map::Entry, hash::Hash, sync::LazyLock};
 

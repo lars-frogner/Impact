@@ -1,10 +1,11 @@
 //! Setup of rigid bodies for new entities.
 
+use crate::resource::ResourceManager;
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_mesh::{
-    MeshRepository, TriangleMeshID,
+    TriangleMeshHandle,
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_physics::{
@@ -24,7 +25,7 @@ use parking_lot::RwLock;
 /// [`KinematicRigidBodyID`]s to the entities.
 pub fn setup_rigid_bodies_for_new_entities(
     rigid_body_manager: &RwLock<RigidBodyManager>,
-    mesh_repository: &RwLock<MeshRepository>,
+    resource_manager: &RwLock<ResourceManager>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     // Make sure entities with a manually created dynamic rigid body get the
@@ -245,10 +246,10 @@ pub fn setup_rigid_bodies_for_new_entities(
     setup!(
         {
             let mut rigid_body_manager = rigid_body_manager.write();
-            let mesh_repository = mesh_repository.read();
+            let resource_manager = resource_manager.read();
         },
         components,
-        |mesh_id: &TriangleMeshID,
+        |mesh_handle: &TriangleMeshHandle,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
@@ -258,12 +259,13 @@ pub fn setup_rigid_bodies_for_new_entities(
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
-            let triangle_mesh = mesh_repository.get_triangle_mesh(*mesh_id).ok_or_else(|| {
-                anyhow!(
-                    "Tried to create rigid body for missing mesh (mesh ID {})",
-                    mesh_id
-                )
-            })?;
+            let triangle_mesh = resource_manager
+                .triangle_meshes
+                .registry
+                .get(*mesh_handle)
+                .ok_or_else(|| {
+                    anyhow!("Tried to create rigid body for missing mesh {mesh_handle}")
+                })?;
 
             let mut inertial_properties = InertialProperties::of_uniform_triangle_mesh(
                 triangle_mesh.triangle_vertex_positions(),

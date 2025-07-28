@@ -21,7 +21,7 @@ use nalgebra::Isometry3;
 /// [`impact_geometry::ReferenceFrame`] component so that
 /// the translational, rotational and scaling parts match the origin offset,
 /// position, orientation and scaling. Also updates any flags for the node to
-/// match the entity's [`impact_scene::SceneEntityFlags`].
+/// match the entity's [`SceneEntityFlags`].
 pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph) {
     query!(ecs_world, |node: &SceneGraphGroupNodeHandle,
                        frame: &ReferenceFrame| {

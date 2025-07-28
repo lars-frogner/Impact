@@ -15,12 +15,13 @@ use impact_containers::{HashMap, HashSet};
 use impact_gpu::{
     device::GraphicsDevice,
     resource_group::GPUResourceGroup,
-    texture::{Sampler, SamplerID, Texture, TextureID},
+    texture::{Sampler, SamplerID, Texture},
     wgpu,
 };
 use impact_math::{Hash64, StringHash64, hash64, stringhash64_newtype};
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeatureID, InstanceFeatureTypeID};
+use impact_texture::TextureID;
 use nalgebra::Vector3;
 use roc_integration::roc;
 use setup::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};

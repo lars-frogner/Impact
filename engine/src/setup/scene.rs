@@ -6,7 +6,7 @@ pub mod material;
 pub mod mesh;
 pub mod voxel;
 
-use crate::scene::Scene;
+use crate::{resource::ResourceManager, scene::Scene};
 use anyhow::{Result, anyhow};
 use camera::CameraRenderState;
 use impact_ecs::{
@@ -17,7 +17,7 @@ use impact_ecs::{
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_gpu::device::GraphicsDevice;
 use impact_material::{MaterialHandle, MaterialTextureProvider};
-use impact_mesh::TriangleMeshID;
+use impact_mesh::TriangleMeshHandle;
 use impact_physics::rigid_body::RigidBodyManager;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
@@ -31,6 +31,7 @@ use parking_lot::RwLock;
 /// the entities' components (except scene graph components, which are added
 /// by calling [`add_new_entities_to_scene_graph`].
 pub fn setup_scene_data_for_new_entities(
+    resource_manager: &RwLock<ResourceManager>,
     scene: &Scene,
     graphics_device: &GraphicsDevice,
     texture_provider: &impl MaterialTextureProvider,
@@ -38,7 +39,7 @@ pub fn setup_scene_data_for_new_entities(
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
-    mesh::setup_meshes_for_new_entities(scene.mesh_repository(), components, desynchronized)?;
+    mesh::setup_meshes_for_new_entities(resource_manager, components)?;
 
     light::setup_lights_for_new_entities(
         scene.scene_camera(),
@@ -63,7 +64,7 @@ pub fn setup_scene_data_for_new_entities(
     )?;
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(
-        scene.mesh_repository(),
+        resource_manager,
         &scene.material_library().read(),
         components,
     );
@@ -75,6 +76,7 @@ pub fn setup_scene_data_for_new_entities(
 /// required, and adds the corresponding scene graph components to the entities'
 /// components.
 pub fn add_new_entities_to_scene_graph(
+    resource_manager: &RwLock<ResourceManager>,
     scene: &Scene,
     ecs_world: &RwLock<ECSWorld>,
     get_render_state: &mut impl FnMut() -> CameraRenderState,
@@ -92,7 +94,7 @@ pub fn add_new_entities_to_scene_graph(
         desynchronized,
     )?;
 
-    setup_scene_graph_model_instance_nodes_for_new_entities(scene, components)?;
+    setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, components)?;
 
     voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
         scene.voxel_manager(),
@@ -185,18 +187,19 @@ fn setup_scene_graph_group_nodes_for_new_entities(
 }
 
 fn setup_scene_graph_model_instance_nodes_for_new_entities(
+    resource_manager: &RwLock<ResourceManager>,
     scene: &Scene,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
         {
-            let mesh_repository = scene.mesh_repository().read();
+            let resource_manager = resource_manager.read();
             let material_library = scene.material_library().read();
             let mut instance_feature_manager = scene.instance_feature_manager().write();
             let mut scene_graph = scene.scene_graph().write();
         },
         components,
-        |mesh_id: &TriangleMeshID,
+        |mesh_handle: &TriangleMeshHandle,
          material: &MaterialHandle,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
@@ -216,12 +219,12 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             let uncullable = components.has_component_type::<Uncullable>();
 
             let (node_handle, flags) = impact_scene::setup::setup_scene_graph_model_instance_node(
-                &mesh_repository,
+                &resource_manager.triangle_meshes,
                 &material_library,
                 &mut instance_feature_manager,
                 &mut scene_graph,
                 model_to_parent_transform,
-                mesh_id,
+                *mesh_handle,
                 material,
                 parent,
                 flags,

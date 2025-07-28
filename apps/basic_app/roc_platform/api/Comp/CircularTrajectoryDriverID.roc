@@ -1,8 +1,8 @@
 # Hash: 68274a68b6796e2324f468718a1b683b2c6d79e3aeeb3673cd9ad2646f29dd34
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectoryDriverID
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     CircularTrajectoryDriverID,
     add,

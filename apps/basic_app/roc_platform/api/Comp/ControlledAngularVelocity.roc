@@ -1,8 +1,8 @@
 # Hash: a672ed410d0b7ca74b062e1936b68e944e891bc30673d05a82ffcf1a92738fbe
-# Generated: 2025-07-22T11:48:41+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_controller::orientation::ControlledAngularVelocity
 # Type category: Component
-# Commit: 0c4a6fe6 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ControlledAngularVelocity,
     new,

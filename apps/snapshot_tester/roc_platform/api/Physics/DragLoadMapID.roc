@@ -1,8 +1,8 @@
 # Hash: 054526910b3565649f4d5f5ebeca2ae1ba7ddc008f79af2064e201539721949f
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_physics::force::detailed_drag::DragLoadMapID
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     DragLoadMapID,
     write_bytes,

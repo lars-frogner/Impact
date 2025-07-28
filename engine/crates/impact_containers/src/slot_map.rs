@@ -3,7 +3,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use roc_integration::roc;
-use std::cmp;
+use std::{cmp, fmt};
 
 /// A [`Vec`] that maintains a list of each index where the element has been
 /// removed and reuses these locations when adding new items.
@@ -294,6 +294,16 @@ impl Ord for SlotKey {
 impl PartialOrd for SlotKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl fmt::Display for SlotKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_legal() {
+            write!(f, "SlotKey(illegal)")
+        } else {
+            write!(f, "SlotKey(g{} @ {})", self.generation.0, self.idx)
+        }
     }
 }
 

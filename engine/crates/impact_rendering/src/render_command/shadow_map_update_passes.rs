@@ -3,7 +3,7 @@
 use crate::{
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::BasicGPUResources,
     shader_templates::{
         omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
         unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
@@ -22,7 +22,7 @@ use impact_light::{
     shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
 };
 use impact_material::{MaterialLibrary, MaterialShaderInput};
-use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, buffer::InstanceFeatureGPUBufferManager,
     transform::InstanceModelLightTransform,
@@ -116,16 +116,16 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        self.sync_models_with_render_resources(material_library, render_resources);
-        self.sync_shader_with_render_resources(graphics_device, shader_manager, render_resources)
+        self.sync_models_with_render_resources(material_library, gpu_resources);
+        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
     }
 
     fn sync_models_with_render_resources(
         &mut self,
         material_library: &MaterialLibrary,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
@@ -137,7 +137,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 .is_some_and(|buffer| buffer.n_features() > 0)
         }
 
-        let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
+        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
 
         self.models.retain(|model_id| {
             instance_feature_buffer_managers
@@ -166,9 +166,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -240,7 +240,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     pub fn record<R>(
         &self,
         light_storage: &LightStorage,
-        render_resources: &R,
+        gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -256,9 +256,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         ) -> Result<()>,
     ) -> Result<()>
     where
-        R: BasicRenderResources,
+        R: BasicGPUResources,
     {
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -345,7 +345,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 );
 
                 for model_id in &self.models {
-                    let transform_buffer_manager = render_resources
+                    let transform_buffer_manager = gpu_resources
                         .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(model_id)
                         .ok_or_else(|| {
                             anyhow!(
@@ -367,13 +367,14 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                             .valid_buffer_slice(),
                     );
 
-                    let mesh_id = model_id.triangle_mesh_id();
+                    let mesh_handle = model_id.triangle_mesh_handle();
 
-                    let mesh_buffer_manager = render_resources
-                        .get_triangle_mesh_buffer_manager(mesh_id)
-                        .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+                    let mesh_gpu_resources = gpu_resources
+                        .triangle_mesh()
+                        .get(mesh_handle)
+                        .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
 
-                    let position_buffer = mesh_buffer_manager
+                    let position_buffer = mesh_gpu_resources
                         .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                         .next()
                         .unwrap();
@@ -381,14 +382,14 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                     render_pass.set_vertex_buffer(1, position_buffer.valid_buffer_slice());
 
                     render_pass.set_index_buffer(
-                        mesh_buffer_manager
+                        mesh_gpu_resources
                             .triangle_mesh_index_gpu_buffer()
                             .valid_buffer_slice(),
-                        mesh_buffer_manager.triangle_mesh_index_format(),
+                        mesh_gpu_resources.triangle_mesh_index_format(),
                     );
 
                     render_pass.draw_indexed(
-                        0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                        0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
                         0,
                         transform_range,
                     );
@@ -476,16 +477,16 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        self.sync_models_with_render_resources(material_library, render_resources);
-        self.sync_shader_with_render_resources(graphics_device, shader_manager, render_resources)
+        self.sync_models_with_render_resources(material_library, gpu_resources);
+        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
     }
 
     fn sync_models_with_render_resources(
         &mut self,
         material_library: &MaterialLibrary,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
@@ -497,7 +498,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 .is_some_and(|buffer| buffer.n_features() > 0)
         }
 
-        let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
+        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
 
         self.models.retain(|model_id| {
             instance_feature_buffer_managers
@@ -526,9 +527,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -612,7 +613,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     pub fn record<R>(
         &self,
         light_storage: &LightStorage,
-        render_resources: &R,
+        gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -628,9 +629,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         ) -> Result<()>,
     ) -> Result<()>
     where
-        R: BasicRenderResources,
+        R: BasicGPUResources,
     {
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -718,7 +719,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 );
 
                 for model_id in &self.models {
-                    let transform_buffer_manager = render_resources
+                    let transform_buffer_manager = gpu_resources
                         .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(model_id)
                         .ok_or_else(|| {
                             anyhow!(
@@ -740,13 +741,14 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                             .valid_buffer_slice(),
                     );
 
-                    let mesh_id = model_id.triangle_mesh_id();
+                    let mesh_handle = model_id.triangle_mesh_handle();
 
-                    let mesh_buffer_manager = render_resources
-                        .get_triangle_mesh_buffer_manager(mesh_id)
-                        .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+                    let mesh_gpu_resources = gpu_resources
+                        .triangle_mesh()
+                        .get(mesh_handle)
+                        .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
 
-                    let position_buffer = mesh_buffer_manager
+                    let position_buffer = mesh_gpu_resources
                         .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                         .next()
                         .unwrap();
@@ -754,14 +756,14 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                     render_pass.set_vertex_buffer(1, position_buffer.valid_buffer_slice());
 
                     render_pass.set_index_buffer(
-                        mesh_buffer_manager
+                        mesh_gpu_resources
                             .triangle_mesh_index_gpu_buffer()
                             .valid_buffer_slice(),
-                        mesh_buffer_manager.triangle_mesh_index_format(),
+                        mesh_gpu_resources.triangle_mesh_index_format(),
                     );
 
                     render_pass.draw_indexed(
-                        0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                        0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
                         0,
                         transform_range,
                     );

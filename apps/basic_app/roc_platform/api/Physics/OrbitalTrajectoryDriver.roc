@@ -1,8 +1,8 @@
 # Hash: 5e4151a3d461babb97e05796effeaebc3d3da96345598e9b3bc43b754eeb1415
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_physics::driven_motion::orbit::OrbitalTrajectoryDriver
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     OrbitalTrajectoryDriver,
     write_bytes,

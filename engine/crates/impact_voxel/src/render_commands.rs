@@ -4,8 +4,8 @@ use crate::{
     VoxelObjectID,
     mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
     resource::{
-        VOXEL_MODEL_ID, VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager,
-        VoxelPushConstantGroup, VoxelPushConstantVariant, VoxelRenderResources,
+        VOXEL_MODEL_ID, VoxelGPUResources, VoxelMaterialGPUResourceManager,
+        VoxelObjectGPUBufferManager, VoxelPushConstantGroup, VoxelPushConstantVariant,
     },
     shader_templates::{
         voxel_chunk_culling::VoxelChunkCullingShaderTemplate,
@@ -19,7 +19,7 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
-use impact_mesh::buffer::VertexBufferable;
+use impact_mesh::gpu_resource::VertexBufferable;
 use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
     transform::{
@@ -32,7 +32,7 @@ use impact_rendering::{
     postprocessing::Postprocessor,
     push_constant::BasicPushConstantVariant,
     render_command::{self, STANDARD_FRONT_FACE, geometry_pass::GeometryPass},
-    resource::BasicRenderResources,
+    resource::BasicGPUResources,
     surface::RenderingSurface,
 };
 use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
@@ -100,7 +100,7 @@ impl VoxelRenderCommands {
         render_resources: &R,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.geometry_pipeline.sync_with_render_resources(
             graphics_device,
@@ -118,7 +118,7 @@ impl VoxelRenderCommands {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.chunk_culling_pass.record_for_geometry_pass(
             scene_camera,
@@ -139,7 +139,7 @@ impl VoxelRenderCommands {
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.geometry_pipeline.record(
             rendering_surface,
@@ -161,7 +161,7 @@ impl VoxelRenderCommands {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.chunk_culling_pass
             .record_for_shadow_mapping_with_frustum(
@@ -184,7 +184,7 @@ impl VoxelRenderCommands {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.chunk_culling_pass
             .record_for_shadow_mapping_with_orthographic_frustum(
@@ -200,13 +200,13 @@ impl VoxelRenderCommands {
     pub fn record_shadow_map_update<R>(
         instance_range_id: u32,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &R,
+        gpu_resources: &R,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
-        let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
+        let voxel_object_buffer_managers = gpu_resources.voxel_object_buffer_managers();
 
         // Return early if there are no voxel objects
         if voxel_object_buffer_managers.is_empty() {
@@ -231,7 +231,7 @@ impl VoxelRenderCommands {
             return Ok(());
         }
 
-        let transform_gpu_buffer_manager = render_resources
+        let transform_gpu_buffer_manager = gpu_resources
             .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(
                 &VOXEL_MODEL_ID,
             )
@@ -373,7 +373,7 @@ impl VoxelChunkCullingPass {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         let Some(scene_camera) = scene_camera else {
             return Ok(());
@@ -408,7 +408,7 @@ impl VoxelChunkCullingPass {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.record::<R, InstanceModelLightTransform>(
             instance_feature_manager,
@@ -435,7 +435,7 @@ impl VoxelChunkCullingPass {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         self.record::<R, InstanceModelLightTransform>(
             instance_feature_manager,
@@ -468,7 +468,7 @@ impl VoxelChunkCullingPass {
         tag: Cow<'static, str>,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
         F: InstanceFeature + AsInstanceModelViewTransform,
     {
         let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
@@ -644,7 +644,7 @@ impl VoxelGeometryPipeline {
         render_resources: &R,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
         let Some(voxel_material_resource_manager) =
             render_resources.get_voxel_material_resource_manager()
@@ -728,15 +728,15 @@ impl VoxelGeometryPipeline {
         &self,
         rendering_surface: &RenderingSurface,
         instance_feature_manager: &InstanceFeatureManager,
-        render_resources: &R,
+        gpu_resources: &R,
         postprocessor: &Postprocessor,
         frame_counter: u32,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
     where
-        R: BasicRenderResources + VoxelRenderResources,
+        R: BasicGPUResources + VoxelGPUResources,
     {
-        let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
+        let voxel_object_buffer_managers = gpu_resources.voxel_object_buffer_managers();
 
         // Return early if there are no voxel objects
         if voxel_object_buffer_managers.is_empty() {
@@ -761,13 +761,13 @@ impl VoxelGeometryPipeline {
             return Ok(());
         }
 
-        let transform_gpu_buffer_manager = render_resources
+        let transform_gpu_buffer_manager = gpu_resources
             .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransformWithPrevious>(
                 &VOXEL_MODEL_ID,
             )
             .ok_or_else(|| anyhow!("Missing model-view transform GPU buffer for voxel objects"))?;
 
-        let material_gpu_resource_manager = render_resources
+        let material_gpu_resource_manager = gpu_resources
             .get_voxel_material_resource_manager()
             .ok_or_else(|| anyhow!("Missing voxel material GPU resource manager"))?;
 

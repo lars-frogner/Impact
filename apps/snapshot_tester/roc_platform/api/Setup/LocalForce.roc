@@ -1,8 +1,8 @@
 # Hash: 396e5ad76f7b55899ea8eac105318476ee41700123bbda27290faa6f22e5a122
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_physics::force::local_force::LocalForce
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     LocalForce,
     add,

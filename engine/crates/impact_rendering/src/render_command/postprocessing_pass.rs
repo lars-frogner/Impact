@@ -8,19 +8,20 @@ use crate::{
     postprocessing::{PostprocessingShaderTemplate, Postprocessor},
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
+    bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{Shader, ShaderManager},
     wgpu,
 };
-use impact_mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_mesh::{self, VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use std::borrow::Cow;
 
 /// Generic pass for postprocessing effects.
@@ -48,7 +49,7 @@ impl PostprocessingRenderPass {
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
-        bind_group_layout_registry: &impact_gpu::bind_group_layout::BindGroupLayoutRegistry,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
         shader_template: &impl PostprocessingShaderTemplate,
         label: Cow<'static, str>,
     ) -> Result<Self> {
@@ -299,7 +300,8 @@ impl PostprocessingRenderPass {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
@@ -337,7 +339,7 @@ impl PostprocessingRenderPass {
         let mut bind_group_index = 0;
 
         if self.uses_camera {
-            let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+            let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
                 return Ok(());
             };
 
@@ -366,13 +368,14 @@ impl PostprocessingRenderPass {
             bind_group_index += 1;
         }
 
-        let mesh_id = impact_mesh::screen_filling_quad_mesh_id();
+        let mesh_id = impact_mesh::builtin::screen_filling_quad_mesh_id();
 
-        let mesh_buffer_manager = render_resources
-            .get_triangle_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+        let mesh_gpu_resources = gpu_resources
+            .triangle_mesh()
+            .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+            .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-        let position_buffer = mesh_buffer_manager
+        let position_buffer = mesh_gpu_resources
             .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
             .next()
             .unwrap();
@@ -380,14 +383,14 @@ impl PostprocessingRenderPass {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager
+            mesh_gpu_resources
                 .triangle_mesh_index_gpu_buffer()
                 .valid_buffer_slice(),
-            mesh_buffer_manager.triangle_mesh_index_format(),
+            mesh_gpu_resources.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(
-            0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+            0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
             0,
             0..1,
         );

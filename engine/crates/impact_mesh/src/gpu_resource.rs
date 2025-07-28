@@ -1,19 +1,20 @@
-//! Buffering of mesh data for rendering.
+//! GPU resources for meshes.
 
 use crate::{
-    LineSegmentMeshID, N_VERTEX_ATTRIBUTES, TriangleMesh, TriangleMeshID, VERTEX_ATTRIBUTE_FLAGS,
-    VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
-    VertexTangentSpaceQuaternion, VertexTextureCoords, line_segment::LineSegmentMesh,
+    LineSegmentMesh, LineSegmentMeshDirtyMask, N_VERTEX_ATTRIBUTES, TriangleMesh,
+    TriangleMeshDirtyMask, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute, VertexAttributeSet,
+    VertexColor, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
+    VertexTextureCoords,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::Pod;
-use impact_containers::CollectionChange;
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
     vertex_attribute_ranges::MESH_START,
     wgpu,
 };
+use impact_resource::gpu::{GPUResource, GPUResourceMap};
 use std::{borrow::Cow, mem};
 
 /// Represents types that can be written to a vertex buffer.
@@ -36,9 +37,15 @@ impl IndexBufferable for u32 {
     const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
 }
 
-/// Owner and manager of GPU buffers for triangle or line segment meshes.
+/// GPU resources for triangle meshes.
+pub type TriangleMeshGPUResourceMap = GPUResourceMap<TriangleMesh<f32>, MeshGPUResource>;
+
+/// GPU resources for line segment meshes.
+pub type LineSegmentMeshGPUResourceMap = GPUResourceMap<LineSegmentMesh<f32>, MeshGPUResource>;
+
+/// GPU buffers for a triangle or line segment mesh.
 #[derive(Debug)]
-pub struct MeshGPUBufferManager {
+pub struct MeshGPUResource {
     available_attributes: VertexAttributeSet,
     vertex_buffers: [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
     vertex_buffer_layouts: [Option<wgpu::VertexBufferLayout<'static>>; N_VERTEX_ATTRIBUTES],
@@ -60,13 +67,12 @@ pub enum MeshVertexAttributeLocation {
     Color = MESH_START + 4,
 }
 
-impl MeshGPUBufferManager {
-    /// Creates a new manager with GPU buffers initialized from the given
-    /// triangle mesh.
+impl MeshGPUResource {
+    /// Creates GPU buffers for the given triangle mesh.
     pub fn for_triangle_mesh(
         graphics_device: &GraphicsDevice,
-        mesh_id: TriangleMeshID,
         mesh: &TriangleMesh<f32>,
+        label: String,
     ) -> Self {
         assert!(
             mesh.has_indices(),
@@ -76,8 +82,6 @@ impl MeshGPUBufferManager {
         let mut available_attributes = VertexAttributeSet::empty();
         let mut vertex_buffers = [None, None, None, None, None];
         let mut vertex_buffer_layouts = [None, None, None, None, None];
-
-        let label = mesh_id.to_string();
 
         let indices = mesh.indices();
         let (index_format, index_buffer) =
@@ -135,22 +139,19 @@ impl MeshGPUBufferManager {
             index_format: Some(index_format),
             n_vertices,
             n_indices,
-            label: mesh_id.to_string(),
+            label,
         }
     }
 
-    /// Creates a new manager with GPU buffers initialized from the given
-    /// line segment mesh.
+    /// Creates GPU buffers for the given line segment mesh.
     pub fn for_line_segment_mesh(
         graphics_device: &GraphicsDevice,
-        mesh_id: LineSegmentMeshID,
         mesh: &LineSegmentMesh<f32>,
+        label: String,
     ) -> Self {
         let mut available_attributes = VertexAttributeSet::empty();
         let mut vertex_buffers = [None, None, None, None, None];
         let mut vertex_buffer_layouts = [None, None, None, None, None];
-
-        let label = mesh_id.to_string();
 
         Self::add_vertex_attribute_if_available(
             graphics_device,
@@ -186,28 +187,27 @@ impl MeshGPUBufferManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         mesh: &TriangleMesh<f32>,
+        dirty_mask: TriangleMeshDirtyMask,
     ) {
-        self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
-        self.sync_vertex_buffer(
-            graphics_device,
-            mesh.normal_vectors(),
-            mesh.normal_vector_change(),
-        );
-        self.sync_vertex_buffer(
-            graphics_device,
-            mesh.texture_coords(),
-            mesh.texture_coord_change(),
-        );
-        self.sync_vertex_buffer(
-            graphics_device,
-            mesh.tangent_space_quaternions(),
-            mesh.tangent_space_quaternion_change(),
-        );
-        self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
+        if dirty_mask.contains(TriangleMeshDirtyMask::POSITIONS) {
+            self.sync_vertex_buffer(graphics_device, mesh.positions());
+        }
+        if dirty_mask.contains(TriangleMeshDirtyMask::NORMAL_VECTORS) {
+            self.sync_vertex_buffer(graphics_device, mesh.normal_vectors());
+        }
+        if dirty_mask.contains(TriangleMeshDirtyMask::TEXTURE_COORDS) {
+            self.sync_vertex_buffer(graphics_device, mesh.texture_coords());
+        }
+        if dirty_mask.contains(TriangleMeshDirtyMask::TANGENT_SPACE_QUATERNIONS) {
+            self.sync_vertex_buffer(graphics_device, mesh.tangent_space_quaternions());
+        }
+        if dirty_mask.contains(TriangleMeshDirtyMask::COLORS) {
+            self.sync_vertex_buffer(graphics_device, mesh.colors());
+        }
 
-        self.sync_index_buffer(graphics_device, mesh.indices(), mesh.index_change());
-
-        mesh.reset_change_tracking();
+        if dirty_mask.contains(TriangleMeshDirtyMask::INDICES) {
+            self.sync_index_buffer(graphics_device, mesh.indices());
+        }
     }
 
     /// Ensures that the GPU buffers are in sync with the given line segment
@@ -216,10 +216,14 @@ impl MeshGPUBufferManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         mesh: &LineSegmentMesh<f32>,
+        dirty_mask: LineSegmentMeshDirtyMask,
     ) {
-        self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
-        self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
-        mesh.reset_change_tracking();
+        if dirty_mask.contains(LineSegmentMeshDirtyMask::POSITIONS) {
+            self.sync_vertex_buffer(graphics_device, mesh.positions());
+        }
+        if dirty_mask.contains(LineSegmentMeshDirtyMask::COLORS) {
+            self.sync_vertex_buffer(graphics_device, mesh.colors());
+        }
     }
 
     /// Returns an iterator over the layouts of the GPU buffers for the
@@ -387,85 +391,111 @@ impl MeshGPUBufferManager {
         )
     }
 
-    fn sync_vertex_buffer<V>(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        data: &[V],
-        attribute_change: CollectionChange,
-    ) where
+    fn sync_vertex_buffer<V>(&mut self, graphics_device: &GraphicsDevice, data: &[V])
+    where
         V: VertexAttribute + VertexBufferable,
     {
-        if attribute_change != CollectionChange::None {
-            let vertex_buffer = self.vertex_buffers[V::GLOBAL_INDEX].as_mut();
+        let vertex_buffer = self.vertex_buffers[V::GLOBAL_INDEX].as_mut();
 
-            if let Some(vertex_buffer) = vertex_buffer {
-                if data.is_empty() {
-                    self.remove_vertex_attribute::<V>();
-                } else {
-                    let vertex_bytes = bytemuck::cast_slice(data);
-
-                    if vertex_bytes.len() > vertex_buffer.buffer_size() {
-                        // If the new number of vertices exceeds the size of the existing buffer,
-                        // we create a new one that is large enough
-                        *vertex_buffer = new_full_vertex_gpu_buffer(
-                            graphics_device,
-                            data,
-                            vertex_buffer.label().clone(),
-                        );
-                    } else {
-                        vertex_buffer.update_valid_bytes(graphics_device, vertex_bytes);
-                    }
-                }
+        if let Some(vertex_buffer) = vertex_buffer {
+            if data.is_empty() {
+                self.remove_vertex_attribute::<V>();
             } else {
-                Self::add_vertex_attribute_if_available(
-                    graphics_device,
-                    &mut self.available_attributes,
-                    &mut self.vertex_buffers,
-                    &mut self.vertex_buffer_layouts,
-                    data,
-                    &self.label,
-                );
-            }
+                let vertex_bytes = bytemuck::cast_slice(data);
 
-            self.n_vertices = data.len();
-        }
-    }
-
-    fn sync_index_buffer<I>(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        indices: &[I],
-        index_change: CollectionChange,
-    ) where
-        I: IndexBufferable,
-    {
-        if index_change != CollectionChange::None {
-            if indices.is_empty() {
-                self.index_buffer = None;
-                self.index_format = None;
-            } else if let Some(index_buffer) = &mut self.index_buffer {
-                let index_bytes = bytemuck::cast_slice(indices);
-
-                if index_bytes.len() > index_buffer.buffer_size() {
-                    // If the new number of indices exceeds the size of the existing buffer,
+                if vertex_bytes.len() > vertex_buffer.buffer_size() {
+                    // If the new number of vertices exceeds the size of the existing buffer,
                     // we create a new one that is large enough
-                    *index_buffer = new_full_index_gpu_buffer(
+                    *vertex_buffer = new_full_vertex_gpu_buffer(
                         graphics_device,
-                        indices,
-                        index_buffer.label().clone(),
+                        data,
+                        vertex_buffer.label().clone(),
                     );
                 } else {
-                    index_buffer.update_valid_bytes(graphics_device, index_bytes);
+                    vertex_buffer.update_valid_bytes(graphics_device, vertex_bytes);
                 }
-            } else {
-                let (index_format, index_buffer) =
-                    Self::create_index_buffer(graphics_device, indices, &self.label);
-                self.index_buffer = Some(index_buffer);
-                self.index_format = Some(index_format);
             }
-
-            self.n_indices = indices.len();
+        } else {
+            Self::add_vertex_attribute_if_available(
+                graphics_device,
+                &mut self.available_attributes,
+                &mut self.vertex_buffers,
+                &mut self.vertex_buffer_layouts,
+                data,
+                &self.label,
+            );
         }
+
+        self.n_vertices = data.len();
+    }
+
+    fn sync_index_buffer<I>(&mut self, graphics_device: &GraphicsDevice, indices: &[I])
+    where
+        I: IndexBufferable,
+    {
+        if indices.is_empty() {
+            self.index_buffer = None;
+            self.index_format = None;
+        } else if let Some(index_buffer) = &mut self.index_buffer {
+            let index_bytes = bytemuck::cast_slice(indices);
+
+            if index_bytes.len() > index_buffer.buffer_size() {
+                // If the new number of indices exceeds the size of the existing buffer,
+                // we create a new one that is large enough
+                *index_buffer = new_full_index_gpu_buffer(
+                    graphics_device,
+                    indices,
+                    index_buffer.label().clone(),
+                );
+            } else {
+                index_buffer.update_valid_bytes(graphics_device, index_bytes);
+            }
+        } else {
+            let (index_format, index_buffer) =
+                Self::create_index_buffer(graphics_device, indices, &self.label);
+            self.index_buffer = Some(index_buffer);
+            self.index_format = Some(index_format);
+        }
+
+        self.n_indices = indices.len();
+    }
+}
+
+impl GPUResource<TriangleMesh<f32>> for MeshGPUResource {
+    type GraphicsDevice = GraphicsDevice;
+
+    fn create(graphics_device: &GraphicsDevice, mesh: &TriangleMesh<f32>, label: String) -> Self {
+        Self::for_triangle_mesh(graphics_device, mesh, label)
+    }
+
+    fn update(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        mesh: &TriangleMesh<f32>,
+        dirty_mask: TriangleMeshDirtyMask,
+    ) {
+        self.sync_with_triangle_mesh(graphics_device, mesh, dirty_mask);
+    }
+}
+
+impl GPUResource<LineSegmentMesh<f32>> for MeshGPUResource {
+    type GraphicsDevice = GraphicsDevice;
+
+    fn create(
+        graphics_device: &GraphicsDevice,
+        mesh: &LineSegmentMesh<f32>,
+        label: String,
+    ) -> Self {
+        Self::for_line_segment_mesh(graphics_device, mesh, label)
+    }
+
+    fn update(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        mesh: &LineSegmentMesh<f32>,
+        dirty_mask: LineSegmentMeshDirtyMask,
+    ) {
+        self.sync_with_line_segment_mesh(graphics_device, mesh, dirty_mask);
     }
 }
 

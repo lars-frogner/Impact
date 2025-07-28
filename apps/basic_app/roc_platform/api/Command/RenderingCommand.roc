@@ -1,8 +1,8 @@
 # Hash: d1c95adedd8709ede89563e9cea5dc9b5ff21c4b980b2cf5f942b35f1ff4a3cd
-# Generated: 2025-07-21T22:20:34+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact::command::rendering::RenderingCommand
 # Type category: Inline
-# Commit: 0364cbf8 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     RenderingCommand,
     write_bytes,

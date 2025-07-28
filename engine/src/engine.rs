@@ -4,9 +4,6 @@ pub mod components;
 pub mod entity;
 pub mod game_loop;
 
-#[cfg(any(feature = "obj", feature = "ply"))]
-pub mod io;
-
 #[cfg(feature = "window")]
 pub mod window;
 
@@ -20,6 +17,7 @@ use crate::{
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
     physics::PhysicsSimulator,
     rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
+    resource::{ResourceConfig, ResourceManager},
     scene::Scene,
 };
 use anyhow::{Result, anyhow};
@@ -31,7 +29,6 @@ use impact_ecs::{
 };
 use impact_gpu::device::GraphicsDevice;
 use impact_material::MaterialLibrary;
-use impact_mesh::MeshRepository;
 use impact_physics::PhysicsConfig;
 use impact_scene::model::InstanceFeatureManager;
 use impact_thread::ThreadPoolTaskErrors;
@@ -58,6 +55,7 @@ pub struct Engine {
     ecs_world: RwLock<ECSWorld>,
     entity_stager: Mutex<EntityStager>,
     renderer: RwLock<RenderingSystem>,
+    resource_manager: RwLock<ResourceManager>,
     assets: RwLock<Assets>,
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
@@ -75,6 +73,7 @@ pub struct Engine {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EngineConfig {
+    pub resources: ResourceConfig,
     pub assets: AssetConfig,
     pub rendering: RenderingConfig,
     pub physics: PhysicsConfig,
@@ -113,13 +112,20 @@ impl Engine {
             rendering_surface,
         )?;
 
+        let mut resource_manager = ResourceManager::new(config.resources);
+
+        resource_manager.load_builtin_resources()?;
+        resource_manager.load_resources_specified_in_config()?;
+
+        gizmo::mesh::generate_gizmo_meshes(&mut resource_manager);
+
         let mut assets = Assets::new(
             config.assets,
             Arc::clone(&graphics_device),
             Arc::clone(renderer.mipmapper_generator()),
         );
 
-        let asset_specs = assets.load_assets_specified_in_config()?;
+        assets.load_assets_specified_in_config()?;
 
         lookup_tables::initialize_default_lookup_tables(
             &mut assets,
@@ -127,11 +133,6 @@ impl Engine {
         )?;
 
         let material_library = MaterialLibrary::new();
-
-        let mut mesh_repository = MeshRepository::new();
-        mesh_repository.create_default_meshes();
-        mesh_repository.load_specified_meshes(&asset_specs.triangle_meshes)?;
-        gizmo::mesh::generate_gizmo_meshes(&mut mesh_repository)?;
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
         impact_model::register_model_feature_types(&mut instance_feature_manager);
@@ -141,12 +142,7 @@ impl Engine {
 
         let voxel_manager = VoxelManager::from_config(config.voxel)?;
 
-        let scene = Scene::new(
-            mesh_repository,
-            material_library,
-            instance_feature_manager,
-            voxel_manager,
-        );
+        let scene = Scene::new(material_library, instance_feature_manager, voxel_manager);
 
         let simulator = PhysicsSimulator::new(config.physics)?;
 
@@ -164,6 +160,7 @@ impl Engine {
             ecs_world: RwLock::new(ecs_world),
             entity_stager: Mutex::new(EntityStager::new()),
             renderer: RwLock::new(renderer),
+            resource_manager: RwLock::new(resource_manager),
             assets: RwLock::new(assets),
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
@@ -211,6 +208,11 @@ impl Engine {
     /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
     pub fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
+    }
+
+    /// Returns a reference to the [`ResourceManager`], guarded by a [`RwLock`].
+    pub fn resource_manager(&self) -> &RwLock<ResourceManager> {
+        &self.resource_manager
     }
 
     /// Returns a reference to the [`Assets`], guarded by a [`RwLock`].
@@ -481,6 +483,7 @@ impl EngineConfig {
     /// Resolves all paths in the configuration by prepending the given root
     /// path to all paths.
     fn resolve_paths(&mut self, root_path: &Path) {
+        self.resources.resolve_paths(root_path);
         self.assets.resolve_paths(root_path);
         self.voxel.resolve_paths(root_path);
     }

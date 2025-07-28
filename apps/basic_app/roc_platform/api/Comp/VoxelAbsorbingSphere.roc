@@ -1,8 +1,8 @@
 # Hash: b2f9f70a11e69e942ad4d6f5732bc0578c6c784ed7fbfd2a0c2f73e0d9059d45
-# Generated: 2025-07-17T16:56:33+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
-# Commit: 40b03028 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     VoxelAbsorbingSphere,
     new,

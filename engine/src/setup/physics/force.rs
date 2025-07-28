@@ -1,9 +1,11 @@
 //! Setup of forces for new entities.
 
+use crate::resource::ResourceManager;
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::ModelTransform;
-use impact_mesh::{MeshRepository, TriangleMeshID};
+use impact_math::hash64;
+use impact_mesh::TriangleMeshHandle;
 use impact_physics::{
     force::{
         ForceGeneratorManager,
@@ -24,7 +26,7 @@ use parking_lot::RwLock;
 
 pub fn setup_forces_for_new_entities(
     force_generator_manager: &RwLock<ForceGeneratorManager>,
-    mesh_repository: &RwLock<MeshRepository>,
+    resource_manager: &RwLock<ResourceManager>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
@@ -83,28 +85,43 @@ pub fn setup_forces_for_new_entities(
     setup!(
         {
             let mut force_generator_manager = force_generator_manager.write();
-            let mesh_repository = mesh_repository.read();
+            let resource_manager = resource_manager.read();
         },
         components,
         |drag_properties: &DetailedDragProperties,
          rigid_body_id: &DynamicRigidBodyID,
          model_transform: &ModelTransform,
-         mesh_id: &TriangleMeshID|
+         mesh_handle: &TriangleMeshHandle|
          -> Result<DetailedDragForceGeneratorID> {
-            let triangle_mesh = mesh_repository.get_triangle_mesh(*mesh_id).ok_or_else(|| {
-                anyhow!(
-                    "Tried to setup detailed drag for missing mesh (mesh ID {})",
-                    mesh_id
-                )
-            })?;
+            let triangle_mesh = resource_manager
+                .triangle_meshes
+                .registry
+                .get(*mesh_handle)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Tried to setup detailed drag for missing mesh {}",
+                        mesh_handle
+                    )
+                })?;
+
+            // Only allow saving the map if the mesh is persistent
+            let (drag_load_map_id, disable_saving) = resource_manager
+                .triangle_meshes
+                .index
+                .get_pid(*mesh_handle)
+                .map_or_else(
+                    || (hash64!(mesh_handle.to_string()), true),
+                    |mesh_id| (mesh_id.into(), false),
+                );
 
             setup::setup_detailed_drag_force(
                 &mut force_generator_manager,
                 *drag_properties,
                 *rigid_body_id,
                 model_transform,
-                (*mesh_id).into(),
+                drag_load_map_id,
                 triangle_mesh.triangle_vertex_positions(),
+                disable_saving,
             )
         }
     )?;

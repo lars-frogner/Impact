@@ -3,9 +3,8 @@
 use crate::rendering::RenderingSystem;
 use anyhow::Result;
 use impact_geometry::CubemapFace;
-use impact_gpu::texture;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
-use impact_rendering::{resource::BasicRenderResources, surface::RenderingSurface};
+use impact_rendering::{resource::BasicGPUResources, surface::RenderingSurface};
 use parking_lot::RwLock;
 use std::{
     path::{Path, PathBuf},
@@ -97,7 +96,7 @@ impl ScreenCapturer {
 
             let output_path = output_path.unwrap_or(timestamped_filename.as_path());
 
-            texture::save_texture_as_png_file(
+            impact_texture::io::save_texture_as_png_file(
                 renderer.graphics_device(),
                 surface_texture,
                 0,
@@ -126,10 +125,7 @@ impl ScreenCapturer {
 
             let render_resource_manager = renderer.render_resource_manager().read();
 
-            if let Some(light_buffer_manager) = render_resource_manager
-                .synchronized()
-                .get_light_buffer_manager()
-            {
+            if let Some(light_buffer_manager) = render_resource_manager.get_light_buffer_manager() {
                 for (light_idx, texture) in light_buffer_manager
                     .omnidirectional_light_shadow_map_manager()
                     .textures()
@@ -177,10 +173,7 @@ impl ScreenCapturer {
 
             let render_resource_manager = renderer.render_resource_manager().read();
 
-            if let Some(light_buffer_manager) = render_resource_manager
-                .synchronized()
-                .get_light_buffer_manager()
-            {
+            if let Some(light_buffer_manager) = render_resource_manager.get_light_buffer_manager() {
                 for (light_idx, texture) in light_buffer_manager
                     .unidirectional_light_shadow_map_manager()
                     .textures()

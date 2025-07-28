@@ -23,7 +23,7 @@ use impact_gpu::{
     },
     shader_template_replacements, wgpu,
 };
-use impact_mesh::buffer::MeshVertexAttributeLocation;
+use impact_mesh::gpu_resource::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for the ambient occlusion computation pass, which computes

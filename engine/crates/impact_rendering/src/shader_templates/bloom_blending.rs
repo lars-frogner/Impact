@@ -9,7 +9,7 @@ use impact_gpu::{
     },
     shader_template_replacements,
 };
-use impact_mesh::buffer::MeshVertexAttributeLocation;
+use impact_mesh::gpu_resource::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for the bloom blending pass, which blends the blurred

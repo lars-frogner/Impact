@@ -17,7 +17,7 @@ use impact_material::{
         PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindings,
     },
 };
-use impact_mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation};
+use impact_mesh::{VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation};
 use impact_model::transform::InstanceModelViewTransformWithPrevious;
 use std::sync::LazyLock;
 

@@ -14,6 +14,7 @@ pub mod gpu;
 pub mod instrumentation;
 pub mod physics;
 pub mod rendering;
+pub mod resource;
 pub mod run;
 pub mod runtime;
 pub mod scene;

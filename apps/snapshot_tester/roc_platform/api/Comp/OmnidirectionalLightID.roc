@@ -1,8 +1,8 @@
 # Hash: ebfa9e53e7b668d0664b29f3902f6072c2566fd2f2c00542f1ef1d4a8d0c93c2
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_light::OmnidirectionalLightID
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     OmnidirectionalLightID,
     add,

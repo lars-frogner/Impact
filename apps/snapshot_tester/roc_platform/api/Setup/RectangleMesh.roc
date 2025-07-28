@@ -1,8 +1,8 @@
 # Hash: 0b7d697aee56d4e3a304fa9ac32f6c52ff61abcbae136dd4b9cbb8da0897bd79
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_mesh::setup::RectangleMesh
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     RectangleMesh,
     unit_square,

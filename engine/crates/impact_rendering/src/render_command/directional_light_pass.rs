@@ -8,7 +8,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::{
         omnidirectional_light::OmnidirectionalLightShaderTemplate,
         shadowable_omnidirectional_light::ShadowableOmnidirectionalLightShaderTemplate,
@@ -30,7 +30,7 @@ use impact_light::{
         UnidirectionalLightShadowMapManager,
     },
 };
-use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to directional lights.
@@ -202,9 +202,9 @@ impl DirectionalLightPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -345,13 +345,14 @@ impl DirectionalLightPass {
         &self,
         rendering_surface: &RenderingSurface,
         light_storage: &LightStorage,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(());
         };
 
@@ -371,7 +372,7 @@ impl DirectionalLightPass {
             return Ok(());
         }
 
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -420,11 +421,12 @@ impl DirectionalLightPass {
 
             let mesh_id = OmnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
-            let mesh_buffer_manager = render_resources
-                .get_triangle_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .triangle_mesh()
+                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-            let position_buffer = mesh_buffer_manager
+            let position_buffer = mesh_gpu_resources
                 .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                 .next()
                 .unwrap();
@@ -432,13 +434,13 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
+                mesh_gpu_resources
                     .triangle_mesh_index_gpu_buffer()
                     .valid_buffer_slice(),
-                mesh_buffer_manager.triangle_mesh_index_format(),
+                mesh_gpu_resources.triangle_mesh_index_format(),
             );
 
-            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+            let n_indices = u32::try_from(mesh_gpu_resources.n_indices()).unwrap();
 
             for (light_idx, light) in light_storage.omnidirectional_lights().iter().enumerate() {
                 if light.flags().contains(LightFlags::IS_DISABLED) {
@@ -469,11 +471,12 @@ impl DirectionalLightPass {
 
             let mesh_id = ShadowableOmnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
-            let mesh_buffer_manager = render_resources
-                .get_triangle_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .triangle_mesh()
+                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-            let position_buffer = mesh_buffer_manager
+            let position_buffer = mesh_gpu_resources
                 .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                 .next()
                 .unwrap();
@@ -481,13 +484,13 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
+                mesh_gpu_resources
                     .triangle_mesh_index_gpu_buffer()
                     .valid_buffer_slice(),
-                mesh_buffer_manager.triangle_mesh_index_format(),
+                mesh_gpu_resources.triangle_mesh_index_format(),
             );
 
-            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+            let n_indices = u32::try_from(mesh_gpu_resources.n_indices()).unwrap();
 
             let omnidirectional_light_shadow_map_manager =
                 light_buffer_manager.omnidirectional_light_shadow_map_manager();
@@ -539,11 +542,12 @@ impl DirectionalLightPass {
 
             let mesh_id = UnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
-            let mesh_buffer_manager = render_resources
-                .get_triangle_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .triangle_mesh()
+                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-            let position_buffer = mesh_buffer_manager
+            let position_buffer = mesh_gpu_resources
                 .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                 .next()
                 .unwrap();
@@ -551,13 +555,13 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
+                mesh_gpu_resources
                     .triangle_mesh_index_gpu_buffer()
                     .valid_buffer_slice(),
-                mesh_buffer_manager.triangle_mesh_index_format(),
+                mesh_gpu_resources.triangle_mesh_index_format(),
             );
 
-            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+            let n_indices = u32::try_from(mesh_gpu_resources.n_indices()).unwrap();
 
             for (light_idx, light) in light_storage.unidirectional_lights().iter().enumerate() {
                 if light.flags().contains(LightFlags::IS_DISABLED) {
@@ -588,11 +592,12 @@ impl DirectionalLightPass {
 
             let mesh_id = ShadowableUnidirectionalLightShaderTemplate::light_volume_mesh_id();
 
-            let mesh_buffer_manager = render_resources
-                .get_triangle_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .triangle_mesh()
+                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-            let position_buffer = mesh_buffer_manager
+            let position_buffer = mesh_gpu_resources
                 .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                 .next()
                 .unwrap();
@@ -600,13 +605,13 @@ impl DirectionalLightPass {
             render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
+                mesh_gpu_resources
                     .triangle_mesh_index_gpu_buffer()
                     .valid_buffer_slice(),
-                mesh_buffer_manager.triangle_mesh_index_format(),
+                mesh_gpu_resources.triangle_mesh_index_format(),
             );
 
-            let n_indices = u32::try_from(mesh_buffer_manager.n_indices()).unwrap();
+            let n_indices = u32::try_from(mesh_gpu_resources.n_indices()).unwrap();
 
             let unidirectional_light_shadow_map_manager =
                 light_buffer_manager.unidirectional_light_shadow_map_manager();

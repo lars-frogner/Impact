@@ -1,8 +1,8 @@
 # Hash: b19b45c60307534762553d49b9db56444ecf839cc2d0f76db3b597613c83306d
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_physics::force::constant_acceleration::ConstantAcceleration
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ConstantAcceleration,
     earth_downward_acceleration,

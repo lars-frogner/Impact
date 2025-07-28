@@ -3,68 +3,44 @@
 #[macro_use]
 mod macros;
 
-pub mod buffer;
+pub mod builtin;
 pub mod generation;
+pub mod gpu_resource;
+pub mod import;
 pub mod io;
-pub mod line_segment;
+mod line_segment;
 pub mod setup;
 pub mod texture_projection;
-pub mod triangle;
+mod triangle;
 
-use anyhow::{Context, Result, anyhow, bail};
+pub use line_segment::*;
+pub use triangle::*;
+
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{HashMap, HashSet};
 use impact_geometry::Point;
-use impact_math::{Float, StringHash64, hash64, stringhash64_newtype};
-use line_segment::LineSegmentMesh;
+use impact_math::{Float, StringHash64, hash64};
 use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
 };
 use roc_integration::roc;
 use std::{
-    collections::hash_map::Entry,
     fmt::{self, Debug},
     ops::Neg,
-    path::{Path, PathBuf},
 };
-use texture_projection::{PlanarTextureProjection, TextureProjectionSpecification};
-use triangle::TriangleMesh;
 
-stringhash64_newtype!(
-    /// The ID of a [`TriangleMesh`] in the [`MeshRepository`].
-    #[roc(parents = "Mesh")]
-    #[cfg_attr(
-        feature = "ecs",
-        doc = concat!(
-            "\n\n\
-            This is an ECS [`Component`](impact_ecs::component::Component)."
-        )
-    )]
-    #[cfg_attr(feature = "ecs", derive(impact_ecs::Component))]
-    [pub] TriangleMeshID
-);
-
-stringhash64_newtype!(
-    /// The ID of a [`LineSegmentMesh`] in the [`MeshRepository`].
-    #[roc(parents = "Mesh")]
-    #[cfg_attr(
-        feature = "ecs",
-        doc = concat!(
-            "\n\n\
-            This is an ECS [`Component`](impact_ecs::component::Component)."
-        )
-    )]
-    #[cfg_attr(feature = "ecs", derive(impact_ecs::Component))]
-    [pub] LineSegmentMeshID
-);
-
-/// Identifier for a [`TriangleMesh`] or [`LineSegmentMesh`] in the
-/// [`MeshRepository`].
+/// The persistent ID of a [`TriangleMesh`] or [`LineSegmentMesh`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MeshID {
     Triangle(TriangleMeshID),
     LineSegment(LineSegmentMeshID),
+}
+
+/// Handle to a [`TriangleMesh`] or [`LineSegmentMesh`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MeshHandle {
+    Triangle(TriangleMeshHandle),
+    LineSegment(LineSegmentMeshHandle),
 }
 
 /// The geometric primitive used for a mesh.
@@ -72,35 +48,6 @@ pub enum MeshID {
 pub enum MeshPrimitive {
     Triangle,
     LineSegment,
-}
-
-/// Repository where [`TriangleMesh`]es and [`LineSegmentMesh`]es are stored
-/// under unique [`TriangleMeshID`]s and [`LineSegmentMeshID`]s.
-#[derive(Debug, Default)]
-pub struct MeshRepository {
-    triangle_meshes: HashMap<TriangleMeshID, TriangleMesh<f32>>,
-    line_segment_meshes: HashMap<LineSegmentMeshID, LineSegmentMesh<f32>>,
-}
-
-/// Record of the state of a [`MeshRepository`].
-#[derive(Clone, Debug)]
-pub struct MeshRepositoryState {
-    triangle_mesh_ids: HashSet<TriangleMeshID>,
-    line_segment_mesh_ids: HashSet<LineSegmentMeshID>,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug)]
-pub struct TriangleMeshSpecification {
-    pub name: String,
-    pub file_path: PathBuf,
-    pub texture_projection: Option<TextureProjectionSpecification>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TriangleMeshFileFormat {
-    Obj,
-    Ply,
 }
 
 /// Represents a type of attribute associated with a mesh vertex.
@@ -219,283 +166,11 @@ impl From<LineSegmentMeshID> for StringHash64 {
     }
 }
 
-impl fmt::Display for MeshID {
+impl fmt::Display for MeshHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Triangle(id) => write!(f, "{id}"),
             Self::LineSegment(id) => write!(f, "{id}"),
-        }
-    }
-}
-
-impl MeshRepository {
-    /// Creates a new empty mesh repository.
-    pub fn new() -> Self {
-        Self {
-            triangle_meshes: HashMap::default(),
-            line_segment_meshes: HashMap::default(),
-        }
-    }
-
-    /// Generates the meshes that should be available by default and inserts
-    /// them into the repository.
-    pub fn create_default_meshes(&mut self) {
-        self.triangle_meshes.insert(
-            screen_filling_quad_mesh_id(),
-            TriangleMesh::create_screen_filling_quad(),
-        );
-
-        self.triangle_meshes.insert(
-            spherical_light_volume_mesh_id(),
-            TriangleMesh::create_spherical_light_volume(16),
-        );
-
-        self.triangle_meshes.insert(
-            skybox_mesh_id(),
-            TriangleMesh::create_box(1.0, 1.0, 1.0, FrontFaceSide::Inside),
-        );
-    }
-
-    /// Loads all meshes in the given specifications and stores them in the
-    /// repository
-    ///
-    /// # Errors
-    /// See [`Self::load_specified_triangle_mesh`].
-    pub fn load_specified_meshes(
-        &mut self,
-        triangle_mesh_specifications: &[TriangleMeshSpecification],
-    ) -> Result<()> {
-        for specification in triangle_mesh_specifications {
-            self.load_specified_triangle_mesh(specification)?;
-        }
-        Ok(())
-    }
-
-    /// Loads the triangle mesh in the given specification and stores it in the
-    /// repository.
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - Another mesh with the same name is already loaded.
-    /// - The file format is not supported.
-    /// - The file can not be found or loaded as a mesh.
-    pub fn load_specified_triangle_mesh(
-        &mut self,
-        specification: &TriangleMeshSpecification,
-    ) -> Result<()> {
-        impact_log::debug!(
-            "Loading triangle mesh `{}` from {}",
-            specification.name,
-            specification.file_path.display()
-        );
-
-        let file_path = &specification.file_path;
-        let file_format = specification.resolve_file_format()?;
-
-        let mesh_id = TriangleMeshID(hash64!(&specification.name));
-        if self.has_triangle_mesh(mesh_id) {
-            bail!(
-                "Tried to load triangle mesh under already existing name: {}",
-                specification.name
-            );
-        }
-
-        let mut mesh: TriangleMesh<f32> = match file_format {
-            #[cfg(feature = "obj")]
-            TriangleMeshFileFormat::Obj => io::obj::read_mesh_from_obj_file(file_path),
-            #[cfg(not(feature = "obj"))]
-            TriangleMeshFileFormat::Obj => Err(anyhow!(
-                "Please enable the `obj` feature in order to read .obj files"
-            )),
-            #[cfg(feature = "ply")]
-            TriangleMeshFileFormat::Ply => io::ply::read_mesh_from_ply_file(file_path),
-            #[cfg(not(feature = "ply"))]
-            TriangleMeshFileFormat::Ply => Err(anyhow!(
-                "Please enable the `ply` feature in order to read .ply files"
-            )),
-        }
-        .with_context(|| format!("Failed to load triangle mesh from {}", file_path.display()))?;
-
-        match &specification.texture_projection {
-            None => {}
-            Some(TextureProjectionSpecification::Planar {
-                origin,
-                u_vector,
-                v_vector,
-            }) => {
-                let projection = PlanarTextureProjection::new(*origin, *u_vector, *v_vector)
-                    .with_context(|| {
-                        format!(
-                            "Invalid planar texture projection for triangle mesh `{}`",
-                            specification.name
-                        )
-                    })?;
-                mesh.generate_texture_coords(&projection);
-            }
-        }
-
-        self.add_triangle_mesh(mesh_id, mesh)?;
-
-        Ok(())
-    }
-
-    /// Records the current state of the repository and returns it as a
-    /// [`MeshRepositoryState`].
-    pub fn record_state(&self) -> MeshRepositoryState {
-        MeshRepositoryState {
-            triangle_mesh_ids: self.triangle_meshes.keys().cloned().collect(),
-            line_segment_mesh_ids: self.line_segment_meshes.keys().cloned().collect(),
-        }
-    }
-
-    /// Returns a reference to the [`TriangleMesh`] with the given ID, or
-    /// [`None`] if no triangle mesh with that ID is present.
-    pub fn get_triangle_mesh(&self, mesh_id: TriangleMeshID) -> Option<&TriangleMesh<f32>> {
-        self.triangle_meshes.get(&mesh_id)
-    }
-
-    /// Returns a reference to the [`LineSegmentMesh`] with the given ID, or
-    /// [`None`] if no line segment mesh with that ID is present.
-    pub fn get_line_segment_mesh(
-        &self,
-        mesh_id: LineSegmentMeshID,
-    ) -> Option<&LineSegmentMesh<f32>> {
-        self.line_segment_meshes.get(&mesh_id)
-    }
-
-    /// Returns a mutable reference to the [`TriangleMesh`] with the given ID,
-    /// or [`None`] if no triangle mesh with that ID is present.
-    pub fn get_triangle_mesh_mut(
-        &mut self,
-        mesh_id: TriangleMeshID,
-    ) -> Option<&mut TriangleMesh<f32>> {
-        self.triangle_meshes.get_mut(&mesh_id)
-    }
-
-    /// Returns a mutable reference to the [`LineSegmentMesh`] with the given
-    /// ID, or [`None`] if no line segment mesh with that ID is present.
-    pub fn get_line_segment_mesh_mut(
-        &mut self,
-        mesh_id: LineSegmentMeshID,
-    ) -> Option<&mut LineSegmentMesh<f32>> {
-        self.line_segment_meshes.get_mut(&mesh_id)
-    }
-
-    /// Whether a triangle mesh with the given ID exists in the repository.
-    pub fn has_triangle_mesh(&self, mesh_id: TriangleMeshID) -> bool {
-        self.triangle_meshes.contains_key(&mesh_id)
-    }
-
-    /// Whether a line segment mesh with the given ID exists in the repository.
-    pub fn has_line_segment_mesh(&self, mesh_id: LineSegmentMeshID) -> bool {
-        self.line_segment_meshes.contains_key(&mesh_id)
-    }
-
-    /// Returns a reference to the [`HashMap`] storing all triangle meshes.
-    pub fn triangle_meshes(&self) -> &HashMap<TriangleMeshID, TriangleMesh<f32>> {
-        &self.triangle_meshes
-    }
-
-    /// Returns a reference to the [`HashMap`] storing all line segment meshes.
-    pub fn line_segment_meshes(&self) -> &HashMap<LineSegmentMeshID, LineSegmentMesh<f32>> {
-        &self.line_segment_meshes
-    }
-
-    /// Includes the given triangle mesh in the repository under the given ID.
-    ///
-    /// # Errors
-    /// Returns an error if a triangle mesh with the given ID already
-    /// exists. The repository will remain unchanged.
-    pub fn add_triangle_mesh(
-        &mut self,
-        mesh_id: TriangleMeshID,
-        mesh: TriangleMesh<f32>,
-    ) -> Result<()> {
-        match self.triangle_meshes.entry(mesh_id) {
-            Entry::Vacant(entry) => {
-                entry.insert(mesh);
-                Ok(())
-            }
-            Entry::Occupied(_) => Err(anyhow!(
-                "Triangle mesh {} already present in repository",
-                mesh_id
-            )),
-        }
-    }
-
-    /// Includes the given line segment mesh in the repository under the given
-    /// ID.
-    ///
-    /// # Errors
-    /// Returns an error if a line segment mesh with the given ID already
-    /// exists. The repository will remain unchanged.
-    pub fn add_line_segment_mesh(
-        &mut self,
-        mesh_id: LineSegmentMeshID,
-        mesh: LineSegmentMesh<f32>,
-    ) -> Result<()> {
-        match self.line_segment_meshes.entry(mesh_id) {
-            Entry::Vacant(entry) => {
-                entry.insert(mesh);
-                Ok(())
-            }
-            Entry::Occupied(_) => Err(anyhow!(
-                "Line segment mesh {} already present in repository",
-                mesh_id
-            )),
-        }
-    }
-
-    /// Includes the given triangle mesh in the repository under the given ID,
-    /// unless a triangle mesh with the same ID is already present.
-    pub fn add_triangle_mesh_unless_present(
-        &mut self,
-        mesh_id: TriangleMeshID,
-        mesh: TriangleMesh<f32>,
-    ) {
-        let _ = self.add_triangle_mesh(mesh_id, mesh);
-    }
-
-    /// Includes the given line segment mesh in the repository under the given
-    /// ID, unless a line segment mesh with the same ID is already present.
-    pub fn add_line_segment_mesh_unless_present(
-        &mut self,
-        mesh_id: LineSegmentMeshID,
-        mesh: LineSegmentMesh<f32>,
-    ) {
-        let _ = self.add_line_segment_mesh(mesh_id, mesh);
-    }
-
-    /// Removes the meshes that are not part of the given repository state.
-    pub fn reset_to_state(&mut self, state: &MeshRepositoryState) {
-        self.triangle_meshes
-            .retain(|mesh_id, _| state.triangle_mesh_ids.contains(mesh_id));
-        self.line_segment_meshes
-            .retain(|mesh_id, _| state.line_segment_mesh_ids.contains(mesh_id));
-    }
-}
-
-impl TriangleMeshSpecification {
-    /// Resolves all paths in the specification by prepending the given root
-    /// path to all paths.
-    pub fn resolve_paths(&mut self, root_path: &Path) {
-        self.file_path = root_path.join(&self.file_path);
-    }
-
-    fn resolve_file_format(&self) -> Result<TriangleMeshFileFormat> {
-        let Some(extension) = self.file_path.extension() else {
-            bail!(
-                "Missing extension for triangle mesh file {}",
-                self.file_path.display()
-            );
-        };
-        match &*extension.to_string_lossy().to_lowercase() {
-            "obj" => Ok(TriangleMeshFileFormat::Obj),
-            "ply" => Ok(TriangleMeshFileFormat::Ply),
-            other => Err(anyhow!(
-                "Unsupported triangle mesh file format {other} for triangle mesh file {}",
-                self.file_path.display()
-            )),
         }
     }
 }
@@ -599,8 +274,8 @@ impl<F: Float> VertexAttribute for VertexColor<F> {
     const GLOBAL_INDEX: usize = 4;
 }
 
-impl std::fmt::Display for VertexAttributeSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for VertexAttributeSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{ ")?;
         for (&attribute, name) in VERTEX_ATTRIBUTE_FLAGS
             .iter()
@@ -618,40 +293,4 @@ impl<F: Float> Point<F> for VertexPosition<F> {
     fn point(&self) -> &Point3<F> {
         &self.0
     }
-}
-
-macro_rules! define_triangle_mesh_ids {
-    (
-        $(
-            $(#[$meta:meta])*
-            fn $fn_name:ident() => $desc:expr;
-        )+
-    ) => {
-        pastey::paste! {
-            $(
-                $(#[$meta])*
-                pub fn $fn_name() -> TriangleMeshID {
-                    *[<$fn_name:upper>]
-                }
-
-                static [<$fn_name:upper>]: std::sync::LazyLock<TriangleMeshID> =
-                    std::sync::LazyLock::new(|| TriangleMeshID(impact_math::hash64!($desc)));
-            )+
-        }
-    };
-}
-
-define_triangle_mesh_ids! {
-    /// The ID of a [`TriangleMesh`] in the [`MeshRepository`] generated by
-    /// [`TriangleMesh::create_screen_filling_quad`];
-    fn screen_filling_quad_mesh_id() => "Screen filling quad mesh";
-
-    /// The ID of a [`TriangleMesh`] in the [`MeshRepository`] generated by
-    /// [`TriangleMesh::create_spherical_light_volume`].
-    fn spherical_light_volume_mesh_id() => "Spherical light volume mesh";
-
-    /// The ID of a [`TriangleMesh`] in the [`MeshRepository`] generated by
-    /// [`TriangleMesh::create_box`] with unit extents and front faces on the
-    /// inside.
-    fn skybox_mesh_id() => "Skybox mesh";
 }

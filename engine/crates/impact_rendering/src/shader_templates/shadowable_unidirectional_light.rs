@@ -20,7 +20,9 @@ use impact_gpu::{
 use impact_light::{
     MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager, shadow_map::CascadedShadowMapTexture,
 };
-use impact_mesh::{self, TriangleMeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation};
+use impact_mesh::{
+    self, TriangleMeshID, VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation,
+};
 use std::sync::LazyLock;
 
 /// Shader template for the shadowable unidirectional light pass, which computes
@@ -91,7 +93,7 @@ impl ShadowableUnidirectionalLightShaderTemplate {
     /// Returns the ID of the light volume mesh used by the shader (a
     /// screen-filling quad).
     pub fn light_volume_mesh_id() -> TriangleMeshID {
-        impact_mesh::screen_filling_quad_mesh_id()
+        impact_mesh::builtin::screen_filling_quad_mesh_id()
     }
 }
 

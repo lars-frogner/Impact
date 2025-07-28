@@ -1,8 +1,8 @@
 # Hash: 50e4421aa27357cda5990e452457556a0b067ec0ee472139bf02f7d80d1816b5
-# Generated: 2025-07-22T11:48:41+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_controller::motion::ControlledVelocity
 # Type category: Component
-# Commit: 0c4a6fe6 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ControlledVelocity,
     new,

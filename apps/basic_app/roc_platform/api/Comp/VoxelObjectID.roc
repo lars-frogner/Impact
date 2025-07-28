@@ -1,8 +1,8 @@
 # Hash: 189bfe8e74a3c33f26b3e46c56fca37f21210ec3ebe14ac6a0101f42762253e7
-# Generated: 2025-07-21T22:20:34+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_voxel::VoxelObjectID
 # Type category: Component
-# Commit: 0364cbf8 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     VoxelObjectID,
     add,

@@ -1,8 +1,8 @@
 # Hash: 947d3e41f654c10aa7b926c35e6f3b893a5ea077e1bd39826c0e60927a78a374
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_material::setup::fixed::FixedColor
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     FixedColor,
     add,

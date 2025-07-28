@@ -26,6 +26,7 @@ impact_material = { path = "../impact_material" }
 impact_math = { path = "../impact_math" }
 impact_mesh = { path = "../impact_mesh" }
 impact_model = { path = "../impact_model" }
+impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 parking_lot = { workspace = true }

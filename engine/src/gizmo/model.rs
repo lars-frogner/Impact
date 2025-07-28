@@ -1,7 +1,6 @@
 //! Gizmo models.
 
 use crate::gizmo::{GizmoObscurability, GizmoType};
-use impact_material::MaterialHandle;
 use impact_math::hash64;
 use impact_mesh::{LineSegmentMeshID, MeshID, MeshPrimitive, TriangleMeshID};
 use impact_scene::model::ModelID;
@@ -11,10 +10,11 @@ use std::sync::LazyLock;
 /// gizmo.
 #[derive(Clone, Debug)]
 pub struct GizmoModel {
-    /// The model ID used by this gizmo model. It holds the ID of the mesh used
-    /// for the model. It is also the key under which the model-view transforms
-    /// to apply to the mesh during rendering are buffered in the instance
-    /// feature manager.
+    /// The ID of the mesh used for the model.
+    pub mesh_id: MeshID,
+    /// The model ID used by this gizmo model. It is the key under which the
+    /// model-view transforms to apply to the mesh during rendering are buffered
+    /// in the instance feature manager.
     pub model_id: ModelID,
     /// The geometric primitive used for this gizmo model's mesh.
     pub mesh_primitive: MeshPrimitive,
@@ -24,15 +24,29 @@ pub struct GizmoModel {
 
 impl GizmoModel {
     pub fn mesh_id(&self) -> MeshID {
-        self.model_id.mesh_id()
+        self.mesh_id
+    }
+
+    pub fn model_id(&self) -> &ModelID {
+        &self.model_id
     }
 
     pub fn triangle_mesh_id(&self) -> TriangleMeshID {
-        self.model_id.triangle_mesh_id()
+        match self.mesh_id {
+            MeshID::Triangle(id) => id,
+            MeshID::LineSegment(_) => {
+                panic!("Got line segment mesh when expecting triangle mesh in `GizmoModel`")
+            }
+        }
     }
 
     pub fn line_segment_mesh_id(&self) -> LineSegmentMeshID {
-        self.model_id.line_segment_mesh_id()
+        match self.mesh_id {
+            MeshID::LineSegment(id) => id,
+            MeshID::Triangle(_) => {
+                panic!("Got triangle mesh when expecting line segment mesh in `GizmoModel`")
+            }
+        }
     }
 }
 
@@ -41,18 +55,14 @@ pub fn gizmo_models() -> &'static [Vec<GizmoModel>; GizmoType::count()] {
     &GIZMO_MODELS
 }
 
-/// Returns the model ID used by each gizmo model whose mesh is of the given
-/// type and that has the given obscurability.
-pub fn gizmo_model_ids_for_mesh_primitive_and_obscurability(
+/// Returns each gizmo model whose mesh is of the given type and that has the
+/// given obscurability.
+pub fn gizmo_models_for_mesh_primitive_and_obscurability(
     primitive: MeshPrimitive,
     obscurability: GizmoObscurability,
-) -> impl IntoIterator<Item = &'static ModelID> {
-    gizmo_models().iter().flatten().filter_map(move |model| {
-        if model.mesh_primitive == primitive && model.obscurability == obscurability {
-            Some(&model.model_id)
-        } else {
-            None
-        }
+) -> impl IntoIterator<Item = &'static GizmoModel> {
+    gizmo_models().iter().flatten().filter(move |model| {
+        model.mesh_primitive == primitive && model.obscurability == obscurability
     })
 }
 
@@ -132,39 +142,47 @@ pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 2;
 pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 3;
 
 fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
+    let (mesh_id, model_id) = create_triangle_mesh_and_model_id(label);
     GizmoModel {
-        model_id: create_triangle_model_id(label),
+        mesh_id,
+        model_id,
         mesh_primitive: MeshPrimitive::Triangle,
         obscurability: GizmoObscurability::Obscurable,
     }
 }
 
 fn define_non_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
+    let (mesh_id, model_id) = create_triangle_mesh_and_model_id(label);
     GizmoModel {
-        model_id: create_triangle_model_id(label),
+        mesh_id,
+        model_id,
         mesh_primitive: MeshPrimitive::Triangle,
         obscurability: GizmoObscurability::NonObscurable,
     }
 }
 
 fn define_non_obscurable_line_segment_model(label: impl AsRef<str>) -> GizmoModel {
+    let (mesh_id, model_id) = create_line_segment_mesh_and_model_id(label);
     GizmoModel {
-        model_id: create_line_segment_model_id(label),
+        mesh_id,
+        model_id,
         mesh_primitive: MeshPrimitive::LineSegment,
         obscurability: GizmoObscurability::NonObscurable,
     }
 }
 
-fn create_triangle_model_id(label: impl AsRef<str>) -> ModelID {
-    ModelID::for_triangle_mesh_and_material(
-        TriangleMeshID(hash64!(label.as_ref())),
-        MaterialHandle::not_applicable(),
+fn create_triangle_mesh_and_model_id(label: impl AsRef<str>) -> (MeshID, ModelID) {
+    let hash = hash64!(label.as_ref());
+    (
+        MeshID::Triangle(TriangleMeshID(hash)),
+        ModelID::hash_only(hash.hash()),
     )
 }
 
-fn create_line_segment_model_id(label: impl AsRef<str>) -> ModelID {
-    ModelID::for_line_segment_mesh_and_material(
-        LineSegmentMeshID(hash64!(label.as_ref())),
-        MaterialHandle::not_applicable(),
+fn create_line_segment_mesh_and_model_id(label: impl AsRef<str>) -> (MeshID, ModelID) {
+    let hash = hash64!(label.as_ref());
+    (
+        MeshID::LineSegment(LineSegmentMeshID(hash)),
+        ModelID::hash_only(hash.hash()),
     )
 }

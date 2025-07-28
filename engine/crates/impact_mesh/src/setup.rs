@@ -1,14 +1,30 @@
 //! Mesh setup.
 
 use crate::{
-    FrontFaceSide, MeshRepository, TriangleMesh, TriangleMeshID, VertexAttributeSet,
-    texture_projection::TextureProjection,
+    FrontFaceSide, TriangleMesh, TriangleMeshDirtyMask, TriangleMeshHandle, TriangleMeshID,
+    TriangleMeshRegistry, VertexAttributeSet, texture_projection::TextureProjection,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
+use impact_resource::ResourceLabelProvider;
 use nalgebra::{Point3, Vector3, point, vector};
 use roc_integration::roc;
 use std::fmt;
+
+/// Template specifying how to generate a [`TriangleMesh`].
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum TriangleMeshTemplate {
+    Rectangle(RectangleMesh),
+    Box(BoxMesh),
+    Cylinder(CylinderMesh),
+    Cone(ConeMesh),
+    CircularFrustum(CircularFrustumMesh),
+    Sphere(SphereMesh),
+    Hemisphere(HemisphereMesh),
+    ScreenFillingQuad,
+    SphericalLightVolume(SphericalLightVolumeMesh),
+}
 
 define_setup_type! {
     target = TriangleMeshID;
@@ -16,6 +32,7 @@ define_setup_type! {
     /// the origin, whose front face is on the positive y side.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct RectangleMesh {
         /// The extent of the rectangle in the x-direction.
@@ -30,6 +47,7 @@ define_setup_type! {
     /// A mesh consisting of an axis-aligned box centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct BoxMesh {
         /// The extent of the box in the x-direction.
@@ -38,6 +56,7 @@ define_setup_type! {
         pub extent_y: f32,
         /// The extent of the box in the z-direction.
         pub extent_z: f32,
+        #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_u32_as_bool", deserialize_with = "deserialize_bool_as_u32"))]
         front_faces_on_outside: u32,
     }
 }
@@ -48,6 +67,7 @@ define_setup_type! {
     /// origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct CylinderMesh {
         /// The length of the cylinder.
@@ -66,6 +86,7 @@ define_setup_type! {
     /// the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct ConeMesh {
         /// The length of the cone.
@@ -84,6 +105,7 @@ define_setup_type! {
     /// centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct CircularFrustumMesh {
         /// The length of the frustum.
@@ -103,6 +125,7 @@ define_setup_type! {
     /// A mesh consisting of a unit diameter sphere centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SphereMesh {
         /// The number of horizontal circular cross-sections of vertices making up
@@ -118,6 +141,7 @@ define_setup_type! {
     /// xz-plane and is centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct HemisphereMesh {
         /// The number of horizontal circular cross-sections of vertices making up
@@ -130,10 +154,36 @@ define_setup_type! {
 
 define_setup_type! {
     target = TriangleMeshID;
+    /// A mesh consisting of two triangles that exactly fill the screen in clip space.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct ScreenFillingQuadMesh;
+}
+
+define_setup_type! {
+    target = TriangleMeshID;
+    /// A mesh consisting of a sphere with inward-facing triangles, suitable for light volumes.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct SphericalLightVolumeMesh {
+        /// The number of horizontal circular cross-sections of vertices making up
+        /// the sphere. The number of vertices comprising each ring is proportional
+        /// to `n_rings`, resulting in an approximately uniform resolution.
+        pub n_rings: u32,
+    }
+}
+
+define_setup_type! {
+    target = TriangleMeshID;
     /// The properties of a
     /// [`PlanarTextureProjection`](crate::texture_projection::PlanarTextureProjection).
     #[roc(parents = "Setup")]
     #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PlanarTextureProjection {
         /// The origin of the plane, where the texture coordinates will be zero.
@@ -144,6 +194,69 @@ define_setup_type! {
         /// The axis along which the V texture coordinate will increase. The texture
         /// coordinate will be unity at the tip of the vector.
         pub v_vector: Vector3<f32>,
+    }
+}
+
+impl TriangleMeshTemplate {
+    /// Generates the [`TriangleMesh`] corresponding to this template.
+    pub fn generate_mesh(&self) -> TriangleMesh<f32> {
+        match self {
+            Self::Rectangle(rectangle_mesh) => {
+                TriangleMesh::create_rectangle(rectangle_mesh.extent_x, rectangle_mesh.extent_z)
+            }
+            Self::Box(box_mesh) => TriangleMesh::create_box(
+                box_mesh.extent_x,
+                box_mesh.extent_y,
+                box_mesh.extent_z,
+                box_mesh.front_face_side(),
+            ),
+            Self::Cylinder(cylinder_mesh) => TriangleMesh::create_cylinder(
+                cylinder_mesh.length,
+                cylinder_mesh.diameter,
+                cylinder_mesh.n_circumference_vertices as usize,
+            ),
+            Self::Cone(cone_mesh) => TriangleMesh::create_cone(
+                cone_mesh.length,
+                cone_mesh.max_diameter,
+                cone_mesh.n_circumference_vertices as usize,
+            ),
+            Self::CircularFrustum(circular_frustum_mesh) => TriangleMesh::create_circular_frustum(
+                circular_frustum_mesh.length,
+                circular_frustum_mesh.bottom_diameter,
+                circular_frustum_mesh.top_diameter,
+                circular_frustum_mesh.n_circumference_vertices as usize,
+            ),
+            Self::Sphere(sphere_mesh) => TriangleMesh::create_sphere(sphere_mesh.n_rings as usize),
+            Self::Hemisphere(hemisphere_mesh) => {
+                TriangleMesh::create_hemisphere(hemisphere_mesh.n_rings as usize)
+            }
+            Self::ScreenFillingQuad => TriangleMesh::create_screen_filling_quad(),
+            Self::SphericalLightVolume(spherical_light_volume_mesh) => {
+                TriangleMesh::create_spherical_light_volume(
+                    spherical_light_volume_mesh.n_rings as usize,
+                )
+            }
+        }
+    }
+
+    /// Generates a [`TriangleMeshID`] for this template's mesh, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        match self {
+            Self::Rectangle(rectangle_mesh) => rectangle_mesh.generate_id(projection_label),
+            Self::Box(box_mesh) => box_mesh.generate_id(projection_label),
+            Self::Cylinder(cylinder_mesh) => cylinder_mesh.generate_id(projection_label),
+            Self::Cone(cone_mesh) => cone_mesh.generate_id(projection_label),
+            Self::CircularFrustum(circularfrustum_mesh) => {
+                circularfrustum_mesh.generate_id(projection_label)
+            }
+            Self::Sphere(sphere_mesh) => sphere_mesh.generate_id(projection_label),
+            Self::Hemisphere(hemisphere_mesh) => hemisphere_mesh.generate_id(projection_label),
+            Self::ScreenFillingQuad => ScreenFillingQuadMesh.generate_id(projection_label),
+            Self::SphericalLightVolume(spherical_light_volume_mesh) => {
+                spherical_light_volume_mesh.generate_id(projection_label)
+            }
+        }
     }
 }
 
@@ -362,6 +475,48 @@ impl HemisphereMesh {
     }
 }
 
+#[roc]
+impl ScreenFillingQuadMesh {
+    /// Creates a new screen-filling quad mesh.
+    #[roc(body = "{}")]
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
+    /// the texture projection.
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
+            "Screen filling quad mesh {{ projection = {} }}",
+            projection_label
+        )))
+    }
+}
+
+impl Default for ScreenFillingQuadMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[roc]
+impl SphericalLightVolumeMesh {
+    /// Defines a spherical light volume mesh with the given number of rings.
+    #[roc(body = "{ n_rings }")]
+    pub fn new(n_rings: u32) -> Self {
+        Self { n_rings }
+    }
+
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to
+    /// describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
+            "Spherical light volume mesh {{ n_rings = {}, projection = {} }}",
+            self.n_rings, projection_label
+        )))
+    }
+}
+
 #[roc(dependencies=[RectangleMesh])]
 impl PlanarTextureProjection {
     /// Creates the properties of a projection onto the plane defined by the
@@ -412,232 +567,96 @@ impl PlanarTextureProjection {
     }
 }
 
-pub fn setup_rectangle_mesh(
-    mesh_repository: &mut MeshRepository,
-    rectangle_mesh: &RectangleMesh,
+pub fn setup_triangle_mesh_from_template(
+    registry: &mut TriangleMeshRegistry,
+    template: &TriangleMeshTemplate,
+    mesh_id: Option<TriangleMeshID>,
     projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = rectangle_mesh.generate_id(create_projection_label(projection));
+) -> TriangleMeshHandle {
+    let mesh_id =
+        mesh_id.unwrap_or_else(|| template.generate_id(create_projection_label(projection)));
 
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh =
-            TriangleMesh::create_rectangle(rectangle_mesh.extent_x, rectangle_mesh.extent_z);
+    if let Some(handle) = registry.get_handle_to_resource_with_pid(mesh_id) {
+        handle
+    } else {
+        let mut mesh = template.generate_mesh();
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
+            mesh.generate_texture_coords(projection, &mut dirty_mask);
         }
 
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
+        registry.insert_resource_with_pid(mesh_id, mesh)
     }
-
-    mesh_id
-}
-
-pub fn setup_box_mesh(
-    mesh_repository: &mut MeshRepository,
-    box_mesh: &BoxMesh,
-    projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = box_mesh.generate_id(create_projection_label(projection));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = TriangleMesh::create_box(
-            box_mesh.extent_x,
-            box_mesh.extent_y,
-            box_mesh.extent_z,
-            box_mesh.front_face_side(),
-        );
-
-        if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
-        }
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
-    }
-
-    mesh_id
-}
-
-pub fn setup_cylinder_mesh(
-    mesh_repository: &mut MeshRepository,
-    cylinder_mesh: &CylinderMesh,
-    projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = cylinder_mesh.generate_id(create_projection_label(projection));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = TriangleMesh::create_cylinder(
-            cylinder_mesh.length,
-            cylinder_mesh.diameter,
-            cylinder_mesh.n_circumference_vertices as usize,
-        );
-
-        if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
-        }
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
-    }
-
-    mesh_id
-}
-
-pub fn setup_cone_mesh(
-    mesh_repository: &mut MeshRepository,
-    cone_mesh: &ConeMesh,
-    projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = cone_mesh.generate_id(create_projection_label(projection));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = TriangleMesh::create_cone(
-            cone_mesh.length,
-            cone_mesh.max_diameter,
-            cone_mesh.n_circumference_vertices as usize,
-        );
-
-        if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
-        }
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
-    }
-
-    mesh_id
-}
-
-pub fn setup_circular_frustum_mesh(
-    mesh_repository: &mut MeshRepository,
-    circular_frustum_mesh: &CircularFrustumMesh,
-    projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = circular_frustum_mesh.generate_id(create_projection_label(projection));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = TriangleMesh::create_circular_frustum(
-            circular_frustum_mesh.length,
-            circular_frustum_mesh.bottom_diameter,
-            circular_frustum_mesh.top_diameter,
-            circular_frustum_mesh.n_circumference_vertices as usize,
-        );
-
-        if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
-        }
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
-    }
-
-    mesh_id
-}
-
-pub fn setup_sphere_mesh(
-    mesh_repository: &mut MeshRepository,
-    sphere_mesh: &SphereMesh,
-    projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = sphere_mesh.generate_id(create_projection_label(projection));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = TriangleMesh::create_sphere(sphere_mesh.n_rings as usize);
-
-        if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
-        }
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
-    }
-
-    mesh_id
-}
-
-pub fn setup_hemisphere_mesh(
-    mesh_repository: &mut MeshRepository,
-    hemisphere_mesh: &HemisphereMesh,
-    projection: Option<&impl TextureProjection<f32>>,
-    desynchronized: &mut bool,
-) -> TriangleMeshID {
-    let mesh_id = hemisphere_mesh.generate_id(create_projection_label(projection));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = TriangleMesh::create_hemisphere(hemisphere_mesh.n_rings as usize);
-
-        if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection);
-        }
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-
-        *desynchronized = true;
-    }
-
-    mesh_id
 }
 
 /// Generates the vertex attributes missing from the giving requirements for the
 /// specified mesh, if possible.
 pub fn generate_missing_vertex_properties_for_mesh(
-    mesh_repository: &mut MeshRepository,
-    mesh_id: TriangleMeshID,
+    registry: &mut TriangleMeshRegistry,
+    handle: TriangleMeshHandle,
     vertex_attribute_requirements: VertexAttributeSet,
 ) {
-    if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
-        let Some(mesh) = mesh_repository.get_triangle_mesh(mesh_id) else {
-            impact_log::warn!(
-                "Tried to generate missing vertex properties for missing mesh {mesh_id}"
-            );
-            return;
-        };
-
-        if !mesh.has_normal_vectors() {
-            impact_log::info!("Generating normal vectors for mesh {mesh_id}");
-
-            mesh_repository
-                .get_triangle_mesh_mut(mesh_id)
-                .unwrap()
-                .generate_smooth_normal_vectors();
-        }
+    if !vertex_attribute_requirements.intersects(
+        VertexAttributeSet::NORMAL_VECTOR | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
+    ) {
+        return;
     }
 
-    if vertex_attribute_requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION) {
-        let Some(mesh) = mesh_repository.get_triangle_mesh(mesh_id) else {
-            impact_log::warn!(
-                "Tried to generate missing vertex properties for missing mesh {mesh_id}"
-            );
-            return;
-        };
+    let Some(mut mesh) = registry.registry.get_mut(handle) else {
+        impact_log::warn!(
+            "Tried to generate missing vertex properties for missing mesh {}",
+            registry.index.create_label(handle)
+        );
+        return;
+    };
 
-        if !mesh.has_tangent_space_quaternions() {
-            impact_log::info!("Generating tangent space quaternions for mesh {mesh_id}");
+    let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
-            mesh_repository
-                .get_triangle_mesh_mut(mesh_id)
-                .unwrap()
-                .generate_smooth_tangent_space_quaternions();
-        }
+    if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR)
+        && !mesh.has_normal_vectors()
+    {
+        impact_log::info!(
+            "Generating normal vectors for mesh {}",
+            registry.index.create_label(handle)
+        );
+        mesh.generate_smooth_normal_vectors(&mut dirty_mask);
     }
+
+    if vertex_attribute_requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
+        && !mesh.has_tangent_space_quaternions()
+    {
+        impact_log::info!(
+            "Generating tangent space quaternions for mesh {}",
+            registry.index.create_label(handle)
+        );
+        mesh.generate_smooth_tangent_space_quaternions(&mut dirty_mask);
+    }
+
+    mesh.set_dirty_mask(dirty_mask);
 }
 
 fn create_projection_label(projection: Option<&impl TextureProjection<f32>>) -> String {
     projection
         .as_ref()
         .map_or("None".to_string(), |projection| projection.identifier())
+}
+
+#[cfg(feature = "serde")]
+fn serialize_u32_as_bool<S>(value: &u32, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_bool(*value != 0)
+}
+
+#[cfg(feature = "serde")]
+fn deserialize_bool_as_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let value = bool::deserialize(deserializer)?;
+    Ok(if value { 1 } else { 0 })
 }

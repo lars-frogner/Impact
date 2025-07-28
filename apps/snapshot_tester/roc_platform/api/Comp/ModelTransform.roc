@@ -1,8 +1,8 @@
 # Hash: af372ad4432bb835878f8b590bd8575a025bf24134d51907440c1cf789297fbe
-# Generated: 2025-07-15T22:50:47+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
-# Commit: 07de5ae9 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ModelTransform,
     identity,

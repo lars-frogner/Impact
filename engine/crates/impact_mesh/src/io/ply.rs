@@ -1,12 +1,8 @@
 //! Input/output of mesh data in Polygon File Format.
 
-use crate::{
-    MeshRepository, TriangleMeshID, VertexNormalVector, VertexPosition, VertexTextureCoords,
-    texture_projection::TextureProjection, triangle::TriangleMesh,
-};
+use crate::{TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords};
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_math::hash64;
 use nalgebra::{UnitVector3, point, vector};
 use ply_rs::{
     parser::Parser,
@@ -66,72 +62,6 @@ pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
         vertex_list,
         triangle_vertex_indices_list,
     ))
-}
-
-/// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
-/// file at the given path and adds the contained mesh to the mesh repository if
-/// it does not already exist.
-///
-/// # Returns
-/// The [`TriangleMeshHandle`] to the mesh.
-///
-/// # Errors
-/// Returns an error if the file can not be found or loaded as a mesh.
-pub fn load_mesh_from_ply_file<P>(
-    mesh_repository: &mut MeshRepository,
-    ply_file_path: P,
-) -> Result<TriangleMeshID>
-where
-    P: AsRef<Path> + Debug,
-{
-    let ply_file_path = ply_file_path.as_ref();
-
-    let mesh_id = TriangleMeshID(hash64!(ply_file_path.to_string_lossy()));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mesh = read_mesh_from_ply_file(ply_file_path)?;
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-    }
-
-    Ok(mesh_id)
-}
-
-/// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
-/// file at the given path and adds the contained mesh to the mesh repository if
-/// it does not already exist, after generating texture coordinates for the mesh
-/// using the given projection.
-///
-/// # Returns
-/// The [`TriangleMeshHandle`] to the mesh.
-///
-/// # Errors
-/// Returns an error if the file can not be found or loaded as a mesh.
-pub fn load_mesh_from_ply_file_with_projection<P>(
-    mesh_repository: &mut MeshRepository,
-    ply_file_path: P,
-    projection: &impl TextureProjection<f32>,
-) -> Result<TriangleMeshID>
-where
-    P: AsRef<Path> + Debug,
-{
-    let ply_file_path = ply_file_path.as_ref();
-
-    let mesh_id = TriangleMeshID(hash64!(format!(
-        "{} (projection = {})",
-        ply_file_path.display(),
-        projection.identifier()
-    )));
-
-    if !mesh_repository.has_triangle_mesh(mesh_id) {
-        let mut mesh = read_mesh_from_ply_file(ply_file_path)?;
-
-        mesh.generate_texture_coords(projection);
-
-        mesh_repository.add_triangle_mesh_unless_present(mesh_id, mesh);
-    }
-
-    Ok(mesh_id)
 }
 
 fn convert_ply_vertices_and_faces_to_mesh(

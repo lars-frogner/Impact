@@ -9,7 +9,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::BasicGPUResources,
     shader_templates::model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
     surface::RenderingSurface,
 };
@@ -86,13 +86,13 @@ impl GeometryPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &R,
+        gpu_resources: &R,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<()>
     where
-        R: BasicRenderResources,
+        R: BasicGPUResources,
     {
-        let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
+        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
 
         for pipeline in self.model_pipelines.values_mut() {
             pipeline
@@ -129,7 +129,7 @@ impl GeometryPass {
             graphics_device,
             shader_manager,
             material_library,
-            render_resources,
+            gpu_resources,
             bind_group_layout_registry,
             &added_models,
         )
@@ -140,7 +140,7 @@ impl GeometryPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         material_library: &MaterialLibrary,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         models: impl IntoIterator<Item = &'a ModelID>,
     ) -> Result<()> {
@@ -198,7 +198,7 @@ impl GeometryPass {
                             );
 
                             let vertex_buffer_layouts = Self::create_vertex_buffer_layouts(
-                                render_resources,
+                                gpu_resources,
                                 model_id,
                                 vertex_attributes,
                             )?;
@@ -237,13 +237,13 @@ impl GeometryPass {
     }
 
     fn create_vertex_buffer_layouts(
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
         model_id: &ModelID,
         vertex_attributes: VertexAttributeSet,
     ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
         let mut layouts = Vec::with_capacity(8);
 
-        let instance_feature_buffer_managers = render_resources
+        let instance_feature_buffer_managers = gpu_resources
             .get_instance_feature_buffer_managers(model_id)
             .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
 
@@ -267,12 +267,14 @@ impl GeometryPass {
             );
         }
 
-        let mesh_id = model_id.triangle_mesh_id();
-        let mesh_buffer_manager = render_resources
-            .get_triangle_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+        let mesh_handle = model_id.triangle_mesh_handle();
 
-        layouts.extend(mesh_buffer_manager.request_vertex_buffer_layouts(vertex_attributes)?);
+        let mesh_gpu_resources = gpu_resources
+            .triangle_mesh()
+            .get(mesh_handle)
+            .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
+
+        layouts.extend(mesh_gpu_resources.request_vertex_buffer_layouts(vertex_attributes)?);
 
         Ok(layouts)
     }
@@ -381,7 +383,7 @@ impl GeometryPass {
         &self,
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
-        render_resources: &R,
+        gpu_resources: &R,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
@@ -389,9 +391,9 @@ impl GeometryPass {
         command_encoder: &'a mut wgpu::CommandEncoder,
     ) -> Result<Option<wgpu::RenderPass<'a>>>
     where
-        R: BasicRenderResources,
+        R: BasicGPUResources,
     {
-        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(None);
         };
 
@@ -423,7 +425,7 @@ impl GeometryPass {
             );
 
             for model_id in &pipeline.models {
-                let instance_feature_buffer_managers = render_resources
+                let instance_feature_buffer_managers = gpu_resources
                     .get_instance_feature_buffer_managers(model_id)
                     .ok_or_else(|| {
                         anyhow!("Missing instance GPU buffers for model {}", model_id)
@@ -493,14 +495,15 @@ impl GeometryPass {
                     vertex_buffer_slot += 1;
                 }
 
-                let mesh_id = model_id.triangle_mesh_id();
+                let mesh_handle = model_id.triangle_mesh_handle();
 
-                let mesh_buffer_manager = render_resources
-                    .get_triangle_mesh_buffer_manager(mesh_id)
-                    .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+                let mesh_gpu_resources = gpu_resources
+                    .triangle_mesh()
+                    .get(mesh_handle)
+                    .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
 
                 for vertex_buffer in
-                    mesh_buffer_manager.request_vertex_gpu_buffers(pipeline.vertex_attributes)?
+                    mesh_gpu_resources.request_vertex_gpu_buffers(pipeline.vertex_attributes)?
                 {
                     render_pass
                         .set_vertex_buffer(vertex_buffer_slot, vertex_buffer.valid_buffer_slice());
@@ -509,14 +512,14 @@ impl GeometryPass {
                 }
 
                 render_pass.set_index_buffer(
-                    mesh_buffer_manager
+                    mesh_gpu_resources
                         .triangle_mesh_index_gpu_buffer()
                         .valid_buffer_slice(),
-                    mesh_buffer_manager.triangle_mesh_index_format(),
+                    mesh_gpu_resources.triangle_mesh_index_format(),
                 );
 
                 render_pass.draw_indexed(
-                    0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                    0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
                     0,
                     instance_range,
                 );

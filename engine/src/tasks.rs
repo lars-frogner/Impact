@@ -2,7 +2,7 @@
 
 use crate::{
     gizmo,
-    rendering::resource::DesynchronizedRenderResources,
+    rendering::resource::legacy::DesynchronizedRenderResources,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
@@ -537,45 +537,29 @@ define_task!(
 // =============================================================================
 
 define_task!(
-    /// Synchronizes mesh GPU buffers with triangle and line segment meshes.
-    [pub] SyncMeshGPUBuffers,
+    /// Synchronizes mesh GPU resources for triangle and line segment meshes.
+    [pub] SyncMeshGPUResources,
     depends_on = [],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing mesh GPU buffers", engine, {
+        instrument_engine_task!("Synchronizing mesh GPU resources", engine, {
+            let resource_manager = engine.resource_manager().read();
             let renderer = engine.renderer().read();
-            let render_resource_manager = renderer.render_resource_manager().read();
-            if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_triangle_mesh_buffers_with_triangle_meshes(
-                    renderer.graphics_device(),
-                    render_resource_manager
-                        .desynchronized()
-                        .triangle_mesh_buffer_managers
-                        .lock()
-                        .as_mut(),
-                    engine
-                        .scene()
-                        .read()
-                        .mesh_repository()
-                        .read()
-                        .triangle_meshes(),
-                );
-                DesynchronizedRenderResources::sync_line_segment_mesh_buffers_with_line_segment_meshes(
-                    renderer.graphics_device(),
-                    render_resource_manager
-                        .desynchronized()
-                        .line_segment_mesh_buffer_managers
-                        .lock()
-                        .as_mut(),
-                    engine
-                        .scene()
-                        .read()
-                        .mesh_repository()
-                        .read()
-                        .line_segment_meshes(),
-                );
-            }
+            let mut render_resource_manager = renderer.render_resource_manager().write();
+
+            impact_resource::gpu::sync_indexed_gpu_resources(
+                engine.graphics_device(),
+                &resource_manager.triangle_meshes,
+                &mut render_resource_manager.triangle_meshes,
+            );
+
+            impact_resource::gpu::sync_indexed_gpu_resources(
+                engine.graphics_device(),
+                &resource_manager.line_segment_meshes,
+                &mut render_resource_manager.line_segment_meshes,
+            );
+
             Ok(())
         })
     }
@@ -591,7 +575,7 @@ define_task!(
         instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
             let renderer = engine.renderer().read();
             let scene = engine.scene().read();
-            let render_resource_manager = renderer.render_resource_manager().read();
+            let render_resource_manager = &renderer.render_resource_manager().read().legacy;
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
                     renderer.graphics_device(),
@@ -628,7 +612,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object GPU buffers", engine, {
             let renderer = engine.renderer().read();
-            let render_resource_manager = renderer.render_resource_manager().read();
+            let render_resource_manager = &renderer.render_resource_manager().read().legacy;
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_voxel_resources_with_voxel_manager(
                     renderer.graphics_device(),
@@ -664,7 +648,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing light GPU buffers", engine, {
             let renderer = engine.renderer().read();
-            let render_resource_manager = renderer.render_resource_manager().read();
+            let render_resource_manager = &renderer.render_resource_manager().read().legacy;
             if render_resource_manager.is_desynchronized() {
                 let scene = engine.scene().read();
                 let light_storage = scene.light_storage().read();
@@ -702,7 +686,7 @@ define_task!(
             engine,
             {
                 let renderer = engine.renderer().read();
-                let render_resource_manager = renderer.render_resource_manager().read();
+                let render_resource_manager = &renderer.render_resource_manager().read().legacy;
                 if render_resource_manager.is_desynchronized() {
                     DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
                         renderer.graphics_device(),
@@ -733,7 +717,7 @@ define_task!(
     [pub] SyncRenderResources,
     depends_on = [
         SyncMinorResources,
-        SyncMeshGPUBuffers,
+        SyncMeshGPUResources,
         SyncVoxelObjectGPUBuffers,
         SyncLightGPUBuffers,
         SyncInstanceFeatureBuffers
@@ -743,7 +727,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Completing synchronization of render resources", engine, {
             let renderer = engine.renderer().read();
-            let mut render_resource_manager = renderer.render_resource_manager().write();
+            let render_resource_manager = &mut renderer.render_resource_manager().write().legacy;
             render_resource_manager.declare_synchronized();
             Ok(())
         })
@@ -774,7 +758,7 @@ define_task!(
                 renderer.graphics_device(),
                 &mut shader_manager,
                 &material_library,
-                render_resource_manager.synchronized(),
+                &*render_resource_manager,
                 renderer.bind_group_layout_registry(),
             )
         })
@@ -789,8 +773,10 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Rendering", engine, {
+            let resource_manager = engine.resource_manager().read();
             let scene = engine.scene().read();
             engine.renderer().write().render_to_surface(
+                &resource_manager,
                 &scene,
                 ctx.user_interface(),
             )?;
@@ -843,7 +829,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)?;
 
     // GPU Resource Synchronization
-    task_scheduler.register_task(SyncMeshGPUBuffers)?;
+    task_scheduler.register_task(SyncMeshGPUResources)?;
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;
     task_scheduler.register_task(SyncLightGPUBuffers)?;

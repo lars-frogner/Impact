@@ -1,8 +1,8 @@
 # Hash: 9afdafefae598e5ad48df7ae9a6bd20b887cc38a84bfef9f39c08034e008a10b
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_physics::driven_motion::orbit::OrbitalTrajectory
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     OrbitalTrajectory,
     new,

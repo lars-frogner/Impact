@@ -1,0 +1,20 @@
+(
+    triangle_meshes: [
+        (
+            name: "dragon",
+            source: File("../assets/Dragon_1.obj"),
+        ),
+        (
+            name: "abstract_object",
+            source: File("../assets/abstract_object.obj"),
+        ),
+        (
+            name: "abstract_pyramid",
+            source: File("../assets/abstract_pyramid.obj"),
+        ),
+        (
+            name: "abstract_cube",
+            source: File("../assets/abstract_cube.obj"),
+        ),
+    ]
+)

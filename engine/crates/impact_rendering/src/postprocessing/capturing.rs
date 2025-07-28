@@ -5,8 +5,10 @@ pub mod bloom;
 pub mod dynamic_range_compression;
 
 use crate::{
-    attachment::RenderAttachmentTextureManager, postprocessing::Postprocessor,
-    resource::BasicRenderResources, surface::RenderingSurface,
+    attachment::RenderAttachmentTextureManager,
+    postprocessing::Postprocessor,
+    resource::{BasicGPUResources, BasicResourceRegistries},
+    surface::RenderingSurface,
 };
 use anyhow::Result;
 use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
@@ -261,7 +263,8 @@ impl CapturingCamera {
     pub fn record_commands_before_dynamic_range_compression(
         &self,
         rendering_surface: &RenderingSurface,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
@@ -280,7 +283,8 @@ impl CapturingCamera {
             command_encoder,
         )?;
         self.bloom_commands.record(
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             timestamp_recorder,
             command_encoder,
@@ -296,7 +300,8 @@ impl CapturingCamera {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
@@ -307,7 +312,8 @@ impl CapturingCamera {
         self.dynamic_range_compression_commands.record(
             rendering_surface,
             surface_texture_view,
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             postprocessor,

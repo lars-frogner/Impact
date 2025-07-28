@@ -23,6 +23,7 @@ impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
+impact_resource = { path = "../impact_resource" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 pastey = { workspace = true }

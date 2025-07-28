@@ -18,7 +18,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_mesh::buffer::MeshVertexAttributeLocation;
+use impact_mesh::gpu_resource::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for a Gaussian blur pass, which blurs an input render
