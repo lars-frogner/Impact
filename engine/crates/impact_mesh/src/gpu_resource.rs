@@ -14,7 +14,7 @@ use impact_gpu::{
     vertex_attribute_ranges::MESH_START,
     wgpu,
 };
-use impact_resource::gpu::{GPUResource, GPUResourceMap};
+use impact_resource::gpu::{GPUResource, GPUResourceMap, MutableGPUResource};
 use std::{borrow::Cow, mem};
 
 /// Represents types that can be written to a vertex buffer.
@@ -467,7 +467,9 @@ impl GPUResource<TriangleMesh<f32>> for MeshGPUResource {
     fn create(graphics_device: &GraphicsDevice, mesh: &TriangleMesh<f32>, label: String) -> Self {
         Self::for_triangle_mesh(graphics_device, mesh, label)
     }
+}
 
+impl MutableGPUResource<TriangleMesh<f32>> for MeshGPUResource {
     fn update(
         &mut self,
         graphics_device: &GraphicsDevice,
@@ -488,7 +490,9 @@ impl GPUResource<LineSegmentMesh<f32>> for MeshGPUResource {
     ) -> Self {
         Self::for_line_segment_mesh(graphics_device, mesh, label)
     }
+}
 
+impl MutableGPUResource<LineSegmentMesh<f32>> for MeshGPUResource {
     fn update(
         &mut self,
         graphics_device: &GraphicsDevice,

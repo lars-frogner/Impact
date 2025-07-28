@@ -11,8 +11,8 @@ use impact_containers::SlotKey;
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::{Float, Hash64, StringHash64};
 use impact_resource::{
-    Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
-    indexed_registry::IndexedResourceRegistry,
+    MutableResource, Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
+    indexed_registry::IndexedMutableResourceRegistry,
 };
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 use roc_integration::roc;
@@ -36,7 +36,7 @@ define_component_type! {
 }
 
 /// A registry of loaded [`TriangleMesh`]es.
-pub type TriangleMeshRegistry = IndexedResourceRegistry<TriangleMeshID, TriangleMesh<f32>>;
+pub type TriangleMeshRegistry = IndexedMutableResourceRegistry<TriangleMeshID, TriangleMesh<f32>>;
 
 /// A 3D mesh of triangles represented by vertices and indices.
 ///
@@ -627,6 +627,9 @@ impl<F: Float> TriangleMesh<F> {
 
 impl Resource for TriangleMesh<f32> {
     type Handle = TriangleMeshHandle;
+}
+
+impl MutableResource for TriangleMesh<f32> {
     type DirtyMask = TriangleMeshDirtyMask;
 }
 

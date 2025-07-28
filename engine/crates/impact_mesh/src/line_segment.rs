@@ -8,8 +8,8 @@ use bytemuck::{Pod, Zeroable};
 use impact_containers::SlotKey;
 use impact_math::{Float, Hash64, StringHash64};
 use impact_resource::{
-    Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
-    indexed_registry::IndexedResourceRegistry,
+    MutableResource, Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
+    indexed_registry::IndexedMutableResourceRegistry,
 };
 use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
 use roc_integration::roc;
@@ -32,7 +32,8 @@ define_component_type! {
 }
 
 /// A registry of loaded [`LineSegmentMesh`]es.
-pub type LineSegmentMeshRegistry = IndexedResourceRegistry<LineSegmentMeshID, LineSegmentMesh<f32>>;
+pub type LineSegmentMeshRegistry =
+    IndexedMutableResourceRegistry<LineSegmentMeshID, LineSegmentMesh<f32>>;
 
 /// A 3D mesh of line segments represented by pairs of vertices.
 ///
@@ -204,6 +205,9 @@ impl<F: Float> LineSegmentMesh<F> {
 
 impl Resource for LineSegmentMesh<f32> {
     type Handle = LineSegmentMeshHandle;
+}
+
+impl MutableResource for LineSegmentMesh<f32> {
     type DirtyMask = LineSegmentMeshDirtyMask;
 }
 

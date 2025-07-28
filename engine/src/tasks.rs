@@ -548,13 +548,13 @@ define_task!(
             let renderer = engine.renderer().read();
             let mut render_resource_manager = renderer.render_resource_manager().write();
 
-            impact_resource::gpu::sync_indexed_gpu_resources(
+            impact_resource::gpu::sync_indexed_mutable_gpu_resources(
                 engine.graphics_device(),
                 &resource_manager.triangle_meshes,
                 &mut render_resource_manager.triangle_meshes,
             );
 
-            impact_resource::gpu::sync_indexed_gpu_resources(
+            impact_resource::gpu::sync_indexed_mutable_gpu_resources(
                 engine.graphics_device(),
                 &resource_manager.line_segment_meshes,
                 &mut render_resource_manager.line_segment_meshes,
