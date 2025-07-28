@@ -2,21 +2,30 @@
 //! mapping.
 
 use crate::{
-    Resource, ResourceDirtyMask, ResourceLabelProvider, ResourcePID, index::ResourceIndex,
+    MutableResource, Resource, ResourceLabelProvider, ResourcePID, index::ResourceIndex,
     registry::ResourceRegistry,
 };
+
+/// An immutable resource registry combined with an index for mapping persistent
+/// IDs to handles.
+pub type IndexedImmutableResourceRegistry<PID, R> = IndexedResourceRegistry<PID, R, ()>;
+
+/// A mutable resource registry combined with an index for mapping persistent
+/// IDs to handles.
+pub type IndexedMutableResourceRegistry<PID, R> =
+    IndexedResourceRegistry<PID, R, <R as MutableResource>::DirtyMask>;
 
 /// A resource registry combined with an index for mapping persistent IDs to
 /// handles.
 #[derive(Debug)]
-pub struct IndexedResourceRegistry<PID, R: Resource> {
+pub struct IndexedResourceRegistry<PID, R: Resource, D> {
     /// The underlying resource registry.
-    pub registry: ResourceRegistry<R>,
+    pub registry: ResourceRegistry<R, D>,
     /// The index mapping persistent IDs to resource handles.
     pub index: ResourceIndex<PID, R::Handle>,
 }
 
-impl<PID, R> IndexedResourceRegistry<PID, R>
+impl<PID, R, D> IndexedResourceRegistry<PID, R, D>
 where
     PID: ResourcePID,
     R: Resource,
@@ -36,15 +45,15 @@ where
     ///
     /// # Returns
     /// The handle to the inserted resource.
-    pub fn insert_resource_with_pid(&mut self, pid: PID, resource: R) -> R::Handle {
+    pub fn insert_resource_with_pid(&mut self, pid: PID, mut resource: R) -> R::Handle {
         if let Some(handle) = self.index.get_handle(pid) {
-            if let Some(mut existing_resource) = self.registry.get_mut(handle) {
-                // Replace the existing resource so that we don't invalidate
-                // existing handles
-                existing_resource.set_dirty_mask(R::DirtyMask::full());
-                *existing_resource = resource;
+            // Replace the existing resource so that we don't invalidate
+            // existing handles
+            if self.registry.replace(handle, &mut resource) {
                 return handle;
             }
+            // <- If we get here, there was no existing resource to replace, so
+            // we proceed with insertion instead
         }
         let handle = self.registry.insert(resource);
         self.index.bind(pid, handle);
@@ -73,7 +82,7 @@ where
     }
 }
 
-impl<PID, R> Default for IndexedResourceRegistry<PID, R>
+impl<PID, R, D> Default for IndexedResourceRegistry<PID, R, D>
 where
     PID: ResourcePID,
     R: Resource,
@@ -85,8 +94,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::registry::ResourceChangeKind;
+
     use super::*;
-    use crate::BinaryDirtyMask;
     use impact_containers::SlotKey;
     use std::fmt;
 
@@ -117,7 +127,6 @@ mod tests {
 
     impl Resource for TestResource {
         type Handle = TestHandle;
-        type DirtyMask = BinaryDirtyMask;
     }
 
     // Helper functions
@@ -134,7 +143,7 @@ mod tests {
 
     #[test]
     fn inserting_resource_with_pid_stores_resource_and_returns_handle() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let resource = test_resource("test", 42);
         let pid = test_pid(1);
 
@@ -147,7 +156,7 @@ mod tests {
 
     #[test]
     fn inserting_multiple_resources_with_different_pids_stores_all() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let resource1 = test_resource("first", 1);
         let resource2 = test_resource("second", 2);
         let pid1 = test_pid(1);
@@ -166,7 +175,7 @@ mod tests {
 
     #[test]
     fn inserting_resource_with_existing_pid_replaces_resource_preserves_handle() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let original_resource = test_resource("original", 42);
         let replacement_resource = test_resource("replacement", 99);
         let pid = test_pid(1);
@@ -186,7 +195,7 @@ mod tests {
 
     #[test]
     fn getting_handle_to_resource_with_existing_pid_returns_handle() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let resource = test_resource("test", 42);
         let pid = test_pid(1);
 
@@ -198,8 +207,8 @@ mod tests {
 
     #[test]
     fn getting_handle_to_resource_with_nonexistent_pid_returns_none() {
-        let registry: IndexedResourceRegistry<TestPID, TestResource> =
-            IndexedResourceRegistry::new();
+        let registry: IndexedImmutableResourceRegistry<TestPID, TestResource> =
+            IndexedImmutableResourceRegistry::new();
 
         let handle = registry.get_handle_to_resource_with_pid(test_pid(999));
 
@@ -208,7 +217,7 @@ mod tests {
 
     #[test]
     fn contains_resource_with_existing_pid_returns_true() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let resource = test_resource("test", 42);
         let pid = test_pid(1);
 
@@ -219,15 +228,15 @@ mod tests {
 
     #[test]
     fn contains_resource_with_nonexistent_pid_returns_false() {
-        let registry: IndexedResourceRegistry<TestPID, TestResource> =
-            IndexedResourceRegistry::new();
+        let registry: IndexedImmutableResourceRegistry<TestPID, TestResource> =
+            IndexedImmutableResourceRegistry::new();
 
         assert!(!registry.contains_resource_with_pid(test_pid(999)));
     }
 
     #[test]
-    fn replacing_resource_sets_dirty_mask_to_full() {
-        let mut registry = IndexedResourceRegistry::new();
+    fn replacing_resource_creates_replaced_change() {
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let original_resource = test_resource("original", 42);
         let replacement_resource = test_resource("replacement", 99);
         let pid = test_pid(1);
@@ -235,25 +244,19 @@ mod tests {
         let handle = registry.insert_resource_with_pid(pid, original_resource);
         registry.insert_resource_with_pid(pid, replacement_resource);
 
-        // Check that the resource was marked as dirty by looking at changes
         let changes = registry.registry.changes_since(0);
-        let modification_changes: Vec<_> = changes
+        let replaced_changes: Vec<_> = changes
             .iter()
-            .filter(|change| {
-                matches!(
-                    change.kind(),
-                    crate::registry::ResourceChangeKind::Modified(_)
-                )
-            })
+            .filter(|change| matches!(change.kind(), ResourceChangeKind::Replaced))
             .collect();
 
-        assert_eq!(modification_changes.len(), 1);
-        assert_eq!(modification_changes[0].handle(), handle);
+        assert_eq!(replaced_changes.len(), 1);
+        assert_eq!(replaced_changes[0].handle(), handle);
     }
 
     #[test]
     fn inserting_resource_after_removing_from_registry_fails_gracefully() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let resource = test_resource("test", 42);
         let pid = test_pid(1);
 
@@ -272,7 +275,7 @@ mod tests {
 
     #[test]
     fn getting_handle_after_resource_removed_from_registry_returns_none() {
-        let mut registry = IndexedResourceRegistry::new();
+        let mut registry = IndexedImmutableResourceRegistry::new();
         let resource = test_resource("test", 42);
         let pid = test_pid(1);
 

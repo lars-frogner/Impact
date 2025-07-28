@@ -17,6 +17,10 @@ use std::{fmt, hash::Hash};
 /// [`ResourceRegistry`](registry::ResourceRegistry).
 pub trait Resource {
     type Handle: ResourceHandle;
+}
+
+/// A [`Resource`] that can be mutated.
+pub trait MutableResource: Resource {
     type DirtyMask: ResourceDirtyMask;
 }
 
