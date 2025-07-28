@@ -1,8 +1,8 @@
 # Hash: 79cdc619304a612c32beb8d6567c4908ce885276c1bf1dafeee44a72d64ba2b0
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_material::setup::physical::UniformColor
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     UniformColor,
     iron,

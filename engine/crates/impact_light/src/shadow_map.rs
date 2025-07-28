@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use impact_geometry::CubemapFace;
-use impact_gpu::{device::GraphicsDevice, texture, wgpu};
+use impact_gpu::{device::GraphicsDevice, wgpu};
 use std::path::Path;
 
 /// Configuration options for shadow mapping.
@@ -147,7 +147,7 @@ impl ShadowCubemapTexture {
         face: CubemapFace,
         output_path: impl AsRef<Path>,
     ) -> Result<()> {
-        texture::save_texture_as_png_file(
+        impact_texture::io::save_texture_as_png_file(
             graphics_device,
             &self.texture,
             0,
@@ -336,7 +336,7 @@ impl CascadedShadowMapTexture {
         cascade_idx: u32,
         output_path: impl AsRef<Path>,
     ) -> Result<()> {
-        texture::save_texture_as_png_file(
+        impact_texture::io::save_texture_as_png_file(
             graphics_device,
             &self.texture,
             0,

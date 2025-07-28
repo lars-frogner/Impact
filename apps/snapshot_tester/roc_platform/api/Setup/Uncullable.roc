@@ -1,8 +1,8 @@
 # Hash: f8966d71865a5b373d561f6f363e2d35125f516d2353aebbaf1ac5c416de04e8
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_scene::setup::Uncullable
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     Uncullable,
     add,

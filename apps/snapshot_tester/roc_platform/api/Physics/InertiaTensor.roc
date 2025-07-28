@@ -1,8 +1,8 @@
 # Hash: 0499dcbe5efcac61ff4441cac2d885d06caa937ef9fcb9a1f493af90c4c5718a
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_physics::inertia::InertiaTensor
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     InertiaTensor,
     write_bytes,

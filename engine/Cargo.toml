@@ -19,8 +19,10 @@ members = [
     "crates/impact_physics",
     "crates/impact_profiling",
     "crates/impact_rendering",
+    "crates/impact_resource",
     "crates/impact_scene",
     "crates/impact_scheduling",
+    "crates/impact_texture",
     "crates/impact_thread",
     "crates/impact_voxel",
 ]
@@ -162,6 +164,7 @@ arbitrary = [
     "impact_math/arbitrary",
     "impact_physics/arbitrary",
     "impact_rendering/arbitrary",
+    "impact_texture/arbitrary",
     "impact_voxel/arbitrary",
 ]
 roc_codegen = [
@@ -170,7 +173,6 @@ roc_codegen = [
     "impact_camera/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_geometry/roc_codegen",
-    "impact_gpu/roc_codegen",
     "impact_light/roc_codegen",
     "impact_material/roc_codegen",
     "impact_math/roc_codegen",
@@ -179,6 +181,7 @@ roc_codegen = [
     "impact_physics/roc_codegen",
     "impact_scene/roc_codegen",
     "impact_rendering/roc_codegen",
+    "impact_texture/roc_codegen",
     "impact_voxel/roc_codegen",
     "roc_integration/roc_codegen",
 ]
@@ -209,7 +212,7 @@ impact_controller = { path = "crates/impact_controller", features = [
 ] }
 impact_ecs = { path = "crates/impact_ecs" }
 impact_geometry = { path = "crates/impact_geometry", features = ["ecs"] }
-impact_gpu = { path = "crates/impact_gpu", features = ["bincode", "serde"] }
+impact_gpu = { path = "crates/impact_gpu", features = ["serde"] }
 impact_io = { path = "crates/impact_io", features = ["ron"] }
 impact_light = { path = "crates/impact_light", features = ["ecs", "serde"] }
 impact_log = { path = "crates/impact_log" }
@@ -224,8 +227,10 @@ impact_physics = { path = "crates/impact_physics", features = [
 ] }
 impact_profiling = { path = "crates/impact_profiling", optional = true }
 impact_rendering = { path = "crates/impact_rendering", features = ["serde"] }
+impact_resource = { path = "crates/impact_resource" }
 impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
 impact_scheduling = { path = "crates/impact_scheduling" }
+impact_texture = { path = "crates/impact_texture" }
 impact_thread = { path = "crates/impact_thread" }
 impact_voxel = { path = "crates/impact_voxel", features = ["ecs", "ron"] }
 inventory = { workspace = true }

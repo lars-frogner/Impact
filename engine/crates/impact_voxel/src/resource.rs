@@ -28,27 +28,19 @@ use impact_gpu::{
     uniform::{self, UniformBufferable},
     wgpu,
 };
-use impact_material::MaterialHandle;
-use impact_math::{ConstStringHash64, hash64};
-use impact_mesh::{
-    TriangleMeshID,
-    buffer::{
-        MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
-        new_vertex_gpu_buffer_with_spare_capacity,
-    },
+use impact_math::{ConstStringHash64, Hash64};
+use impact_mesh::gpu_resource::{
+    MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
+    new_vertex_gpu_buffer_with_spare_capacity,
 };
 use impact_rendering::push_constant::BasicPushConstantVariant;
 use impact_scene::model::ModelID;
 use std::{borrow::Cow, mem, ops::Range, sync::LazyLock};
 
-pub static VOXEL_MODEL_ID: LazyLock<ModelID> = LazyLock::new(|| {
-    ModelID::for_triangle_mesh_and_material(
-        TriangleMeshID(hash64!("Voxel mesh")),
-        MaterialHandle::not_applicable(),
-    )
-});
+pub static VOXEL_MODEL_ID: LazyLock<ModelID> =
+    LazyLock::new(|| ModelID::hash_only(Hash64::from_str("Voxel model")));
 
-pub trait VoxelRenderResources {
+pub trait VoxelGPUResources {
     /// Returns the GPU resource manager for voxel materials, or [`None`] if it
     /// has not been initialized.
     fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager>;

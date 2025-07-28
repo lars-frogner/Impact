@@ -13,7 +13,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_mesh::{VertexAttributeSet, buffer::MeshVertexAttributeLocation};
+use impact_mesh::{VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation};
 use impact_scene::skybox::resource::SkyboxGPUResourceManager;
 use std::sync::LazyLock;
 

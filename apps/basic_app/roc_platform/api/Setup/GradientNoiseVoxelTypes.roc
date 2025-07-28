@@ -1,8 +1,8 @@
 # Hash: 6661dc4de39360a25b92ac4ee9a76a52316dedb5e9ac6a1fe1ef5989c50847bd
-# Generated: 2025-07-15T22:31:15+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_voxel::setup::GradientNoiseVoxelTypes
 # Type category: Component
-# Commit: 07de5ae9 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     GradientNoiseVoxelTypes,
     voxel_type_array_size,

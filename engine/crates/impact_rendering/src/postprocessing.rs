@@ -13,7 +13,7 @@ use crate::{
     },
     push_constant::BasicPushConstantGroup,
     render_command::StencilValue,
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     surface::RenderingSurface,
 };
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
@@ -150,7 +150,8 @@ impl Postprocessor {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
@@ -161,7 +162,8 @@ impl Postprocessor {
         self.ambient_occlusion_commands.record(
             rendering_surface,
             surface_texture_view,
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             self,
@@ -172,7 +174,8 @@ impl Postprocessor {
         self.capturing_camera
             .record_commands_before_dynamic_range_compression(
                 rendering_surface,
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 storage_gpu_buffer_manager,
@@ -183,7 +186,8 @@ impl Postprocessor {
         self.temporal_anti_aliasing_commands.record(
             rendering_surface,
             surface_texture_view,
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             self,
@@ -195,7 +199,8 @@ impl Postprocessor {
             .record_dynamic_range_compression_render_commands(
                 rendering_surface,
                 surface_texture_view,
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 self,
@@ -206,7 +211,8 @@ impl Postprocessor {
         self.render_attachment_visualization_passes.record(
             rendering_surface,
             surface_texture_view,
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             self,

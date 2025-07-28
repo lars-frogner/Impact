@@ -1,0 +1,18 @@
+[package]
+name = "impact_resource"
+description = "Resource management for the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[features]
+
+[dependencies]
+anyhow = { workspace = true }
+bitflags = { workspace = true }
+bytemuck = { workspace = true }
+impact_containers = { path = "../impact_containers" }
+impact_log = { path = "../impact_log" }
+
+[lints]
+workspace = true

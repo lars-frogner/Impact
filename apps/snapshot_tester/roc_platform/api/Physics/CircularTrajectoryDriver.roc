@@ -1,8 +1,8 @@
 # Hash: 4942d9dfe218db8fa5bae82e988990443e455195af231e29d2e58861a9359e99
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectoryDriver
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     CircularTrajectoryDriver,
     write_bytes,

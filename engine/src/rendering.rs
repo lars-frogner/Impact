@@ -4,7 +4,7 @@ pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
 
-use crate::{scene::Scene, tasks::Render, ui::UserInterface};
+use crate::{resource::ResourceManager, scene::Scene, tasks::Render, ui::UserInterface};
 use anyhow::Result;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
@@ -240,11 +240,16 @@ impl RenderingSystem {
     /// - Recording a render pass fails.
     pub fn render_to_surface(
         &mut self,
+        resource_manager: &ResourceManager,
         scene: &Scene,
         user_interface: &dyn UserInterface,
     ) -> Result<()> {
         impact_log::with_timing_info_logging!("Rendering"; {
-            self.surface_texture_to_present = self.render_surface(scene, user_interface)?;
+            self.surface_texture_to_present = self.render_surface(
+                resource_manager,
+                scene,
+                user_interface,
+            )?;
         });
         Ok(())
     }
@@ -267,11 +272,13 @@ impl RenderingSystem {
     pub fn declare_render_resources_desynchronized(&self) {
         self.render_resource_manager
             .write()
+            .legacy
             .declare_desynchronized();
     }
 
     fn render_surface(
         &mut self,
+        resource_manager: &ResourceManager,
         scene: &Scene,
         user_interface: &dyn UserInterface,
     ) -> Result<Option<wgpu::SurfaceTexture>> {
@@ -302,7 +309,8 @@ impl RenderingSystem {
             &material_library,
             &instance_feature_manager,
             scene_camera.as_ref(),
-            self.render_resource_manager.read().synchronized(),
+            resource_manager,
+            &*self.render_resource_manager.read(),
             &self.render_attachment_texture_manager.read(),
             &self.gpu_resource_group_manager.read(),
             &self.storage_gpu_buffer_manager.read(),

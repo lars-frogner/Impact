@@ -1,8 +1,8 @@
 # Hash: bd5e01b05b2e8d446fe2f8a2dd0ba4d47b9c58b9bc8ac6a1cacce7a679a62420
-# Generated: 2025-07-20T18:19:49+00:00
-# Rust type: impact::game_loop::command::GameLoopCommand
+# Generated: 2025-07-27T14:52:58+00:00
+# Rust type: impact::command::game_loop::GameLoopCommand
 # Type category: Inline
-# Commit: 40b03028 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     GameLoopCommand,
     write_bytes,

@@ -1,8 +1,8 @@
 # Hash: 43dd4e28d823a1f17555809393255e56773ee81635571179917dfe9e494615cb
-# Generated: 2025-07-15T17:32:43+00:00
-# Rust type: impact::gpu::rendering::postprocessing::command::ToRenderAttachmentQuantity
+# Generated: 2025-07-27T14:53:54+00:00
+# Rust type: impact::command::rendering::postprocessing::ToRenderAttachmentQuantity
 # Type category: Inline
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ToRenderAttachmentQuantity,
     write_bytes,

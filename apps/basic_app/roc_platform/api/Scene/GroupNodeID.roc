@@ -1,26 +1,26 @@
-# Hash: f2d0c662faad6da92dc319b2772213017bc9706bb7efc780dd439a164208c18c
-# Generated: 2025-07-15T17:32:17+00:00
+# Hash: b6089f05393da09238ddfaf9f83414f2c3d6dd4b31f25e5d51fa023937fc9434
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_scene::graph::GroupNodeID
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     GroupNodeID,
     write_bytes,
     from_bytes,
 ]
 
-import Containers.GenerationalIdx
+import Containers.SlotKey
 
 ## Identifier for a group node in a [`SceneGraph`].
-GroupNodeID : Containers.GenerationalIdx.GenerationalIdx
+GroupNodeID : Containers.SlotKey.SlotKey
 
 ## Serializes a value of [GroupNodeID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
 write_bytes : List U8, GroupNodeID -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(16)
-    |> Containers.GenerationalIdx.write_bytes(value)
+    |> List.reserve(8)
+    |> Containers.SlotKey.write_bytes(value)
 
 ## Deserializes a value of [GroupNodeID] from its bytes in the
 ## representation used by the engine.
@@ -28,13 +28,13 @@ from_bytes : List U8 -> Result GroupNodeID _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 16 }) |> Containers.GenerationalIdx.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 8 }) |> Containers.SlotKey.from_bytes?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

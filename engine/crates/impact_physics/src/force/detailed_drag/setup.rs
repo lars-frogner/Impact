@@ -49,6 +49,7 @@ pub fn setup_detailed_drag_force<'a>(
     model_transform: &ModelTransform,
     drag_load_map_id: StringHash64,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    disable_saving: bool,
 ) -> Result<DetailedDragForceGeneratorID> {
     let drag_load_map_id = DragLoadMapID(drag_load_map_id);
 
@@ -80,7 +81,8 @@ pub fn setup_detailed_drag_force<'a>(
                 triangle_vertex_positions,
             )?;
 
-            if config.save_generated_maps
+            if !disable_saving
+                && config.save_generated_maps
                 && (config.overwrite_existing_map_files || !map_file_exists)
             {
                 #[cfg(not(feature = "bincode"))]

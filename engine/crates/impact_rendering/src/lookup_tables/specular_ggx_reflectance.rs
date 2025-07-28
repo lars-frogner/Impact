@@ -5,15 +5,16 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID},
+    texture::TextureLookupTable,
     texture::{
         self, SamplerConfig, SamplerID, TexelDescription, TextureAddressingConfig,
         TextureFilteringConfig,
     },
-    texture::{TextureID, TextureLookupTable},
     wgpu,
 };
 use impact_material::MaterialTextureProvider;
 use impact_math::{ConstStringHash64, hash32, hash64};
+use impact_texture::TextureID;
 use std::sync::LazyLock;
 
 const TEXTURE_NAME: &str = "specular_ggx_reflectance_lookup_table";

@@ -5,7 +5,7 @@ use crate::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::BasicGPUResources,
     shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
     surface::RenderingSurface,
 };
@@ -17,7 +17,7 @@ use impact_gpu::{
     query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_material::{MaterialLibrary, MaterialShaderInput};
-use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use impact_scene::model::ModelID;
 use std::borrow::Cow;
@@ -89,9 +89,9 @@ impl DepthPrepass {
     pub fn sync_with_render_resources_for_non_physical_models(
         &mut self,
         material_library: &MaterialLibrary,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) {
-        let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
+        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
 
         self.models
             .retain(|model_id| instance_feature_buffer_managers.contains_key(model_id));
@@ -152,7 +152,7 @@ impl DepthPrepass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -162,7 +162,7 @@ impl DepthPrepass {
             return Ok(());
         }
 
-        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(());
         };
 
@@ -186,7 +186,7 @@ impl DepthPrepass {
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
         for model_id in &self.models {
-            let transform_buffer_manager = render_resources
+            let transform_buffer_manager = gpu_resources
                 .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransformWithPrevious>(model_id)
                 .ok_or_else(|| {
                     anyhow!(
@@ -208,13 +208,14 @@ impl DepthPrepass {
                     .valid_buffer_slice(),
             );
 
-            let mesh_id = model_id.triangle_mesh_id();
+            let mesh_handle = model_id.triangle_mesh_handle();
 
-            let mesh_buffer_manager = render_resources
-                .get_triangle_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .triangle_mesh()
+                .get(mesh_handle)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
 
-            let position_buffer = mesh_buffer_manager
+            let position_buffer = mesh_gpu_resources
                 .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
                 .next()
                 .unwrap();
@@ -222,14 +223,14 @@ impl DepthPrepass {
             render_pass.set_vertex_buffer(1, position_buffer.valid_buffer_slice());
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
+                mesh_gpu_resources
                     .triangle_mesh_index_gpu_buffer()
                     .valid_buffer_slice(),
-                mesh_buffer_manager.triangle_mesh_index_format(),
+                mesh_gpu_resources.triangle_mesh_index_format(),
             );
 
             render_pass.draw_indexed(
-                0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
                 0,
                 transform_range,
             );

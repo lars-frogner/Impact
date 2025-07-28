@@ -9,26 +9,19 @@ build = "build.rs"
 
 [features]
 arbitrary = ["dep:arbitrary"]
-bincode = ["dep:bincode", "serde"]
-roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
-bincode = { workspace = true, optional = true }
 bytemuck = { workspace = true }
-half = { version = "2.6", features = ["bytemuck"] }
 impact_containers = { path = "../impact_containers" }
-impact_io = { path = "../impact_io", features = ["png", "jpeg"] }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
-inventory = { workspace = true, optional = true }
 naga = { version = "25.0", features = ["wgsl-out"] }
 ordered-float = "5.0"
 parking_lot = { workspace = true }
 regex = "1.11"
-roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 wgpu = { version = "25.0", default-features = false, features = [
     "dx12",

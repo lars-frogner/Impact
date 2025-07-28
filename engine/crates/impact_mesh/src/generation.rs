@@ -1,6 +1,9 @@
 //! Generation of meshes representing geometrical objects.
 
-use crate::{FrontFaceSide, LineSegmentMesh, TriangleMesh, VertexColor};
+use crate::{
+    FrontFaceSide, LineSegmentMesh, LineSegmentMeshDirtyMask, TriangleMesh, TriangleMeshDirtyMask,
+    VertexColor,
+};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::Float;
 use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3, vector};
@@ -685,15 +688,16 @@ impl<F: Float> TriangleMesh<F> {
     /// - If `n_rings` is zero.
     pub fn create_spherical_light_volume(n_rings: usize) -> TriangleMesh<F> {
         let mut mesh = Self::create_sphere(n_rings);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         // Normal vectors are not needed for light volumes
-        mesh.remove_normal_vectors();
+        mesh.remove_normal_vectors(&mut dirty_mask);
 
         // Scale to unit radius
-        mesh.scale(F::TWO);
+        mesh.scale(F::TWO, &mut dirty_mask);
 
         // Flip triangle winding order to make the front faces point inward
-        mesh.flip_triangle_winding_order();
+        mesh.flip_triangle_winding_order(&mut dirty_mask);
 
         mesh
     }
@@ -705,12 +709,15 @@ impl<F: Float> TriangleMesh<F> {
     /// The generated mesh will only contain positions and colors.
     pub fn create_vertical_square_with_color(extent: F, color: VertexColor<F>) -> Self {
         let mut square = Self::create_rectangle(extent, extent);
-        square.remove_normal_vectors();
-        square.rotate(&UnitQuaternion::from_axis_angle(
-            &Vector3::x_axis(),
-            <F as Float>::FRAC_PI_2,
-        ));
-        square.set_same_color(color);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        square.remove_normal_vectors(&mut dirty_mask);
+        square.rotate(
+            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::FRAC_PI_2),
+            &mut dirty_mask,
+        );
+        square.set_same_color(color, &mut dirty_mask);
+
         square
     }
 
@@ -722,13 +729,15 @@ impl<F: Float> TriangleMesh<F> {
     /// The generated mesh will only contain positions and colors.
     pub fn create_cube_with_face_colors(extent: F, face_colors: &[VertexColor<F>; 6]) -> Self {
         let mut cube = Self::create_box(extent, extent, extent, FrontFaceSide::Outside);
-        cube.remove_normal_vectors();
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        cube.remove_normal_vectors(&mut dirty_mask);
 
         let mut colors = Vec::with_capacity(cube.n_vertices());
         for face_color in face_colors {
             colors.extend_from_slice(&[*face_color; 4]);
         }
-        cube.set_colors(colors);
+        cube.set_colors(colors, &mut dirty_mask);
 
         cube
     }
@@ -745,9 +754,12 @@ impl<F: Float> TriangleMesh<F> {
     /// - If `n_rings` is zero.
     pub fn create_unit_sphere_with_color(n_rings: usize, color: VertexColor<F>) -> Self {
         let mut sphere = Self::create_sphere(n_rings);
-        sphere.remove_normal_vectors();
-        sphere.scale(F::TWO);
-        sphere.set_same_color(color);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        sphere.remove_normal_vectors(&mut dirty_mask);
+        sphere.scale(F::TWO, &mut dirty_mask);
+        sphere.set_same_color(color, &mut dirty_mask);
+
         sphere
     }
 
@@ -758,13 +770,19 @@ impl<F: Float> TriangleMesh<F> {
     /// The generated mesh will only contain positions and colors.
     pub fn create_voxel_chunk_cube_with_color(extent: F, color: VertexColor<F>) -> Self {
         let mut cube = Self::create_box(extent, extent, extent, FrontFaceSide::Outside);
-        cube.remove_normal_vectors();
-        cube.translate(&vector![
-            F::ONE_HALF * extent,
-            F::ONE_HALF * extent,
-            F::ONE_HALF * extent
-        ]);
-        cube.set_same_color(color);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        cube.remove_normal_vectors(&mut dirty_mask);
+        cube.translate(
+            &vector![
+                F::ONE_HALF * extent,
+                F::ONE_HALF * extent,
+                F::ONE_HALF * extent
+            ],
+            &mut dirty_mask,
+        );
+        cube.set_same_color(color, &mut dirty_mask);
+
         cube
     }
 }
@@ -822,21 +840,25 @@ impl<F: Float> LineSegmentMesh<F> {
     /// The generated mesh will only contain positions.
     pub fn create_unit_cubemap_frusta() -> Self {
         let mut down_diagonals = Self::create_baseless_unit_pyramid();
-        down_diagonals.translate(&vector![F::ZERO, -F::ONE, F::ZERO]);
+        let mut dirty_mask = LineSegmentMeshDirtyMask::empty();
+        down_diagonals.translate(&vector![F::ZERO, -F::ONE, F::ZERO], &mut dirty_mask);
 
         let mut up_diagonals = Self::create_baseless_unit_pyramid();
-        up_diagonals.transform(&Similarity3::from_parts(
-            vector![F::ZERO, F::ONE, F::ZERO].into(),
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::PI),
-            F::ONE,
-        ));
+        up_diagonals.transform(
+            &Similarity3::from_parts(
+                vector![F::ZERO, F::ONE, F::ZERO].into(),
+                UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::PI),
+                F::ONE,
+            ),
+            &mut LineSegmentMeshDirtyMask::empty(),
+        );
 
         let mut far_plane_edges = Self::create_unit_cube();
-        far_plane_edges.scale(F::TWO);
+        far_plane_edges.scale(F::TWO, &mut LineSegmentMeshDirtyMask::empty());
 
         let mut frusta = down_diagonals;
-        frusta.merge_with(&up_diagonals);
-        frusta.merge_with(&far_plane_edges);
+        frusta.merge_with(&up_diagonals, &mut dirty_mask);
+        frusta.merge_with(&far_plane_edges, &mut dirty_mask);
 
         frusta
     }
@@ -957,22 +979,23 @@ impl<F: Float> LineSegmentMesh<F> {
     /// The generated mesh will only contain positions.
     pub fn create_unit_sphere_great_circles(n_circumference_segments: usize) -> Self {
         let xz_circle = Self::create_horizontal_unit_circle(n_circumference_segments);
+        let mut dirty_mask = LineSegmentMeshDirtyMask::empty();
 
         let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
-        xy_circle.rotate(&UnitQuaternion::from_axis_angle(
-            &Vector3::x_axis(),
-            <F as Float>::FRAC_PI_2,
-        ));
+        xy_circle.rotate(
+            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::FRAC_PI_2),
+            &mut dirty_mask,
+        );
 
         let mut yz_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
-        yz_circle.rotate(&UnitQuaternion::from_axis_angle(
-            &Vector3::z_axis(),
-            <F as Float>::FRAC_PI_2,
-        ));
+        yz_circle.rotate(
+            &UnitQuaternion::from_axis_angle(&Vector3::z_axis(), <F as Float>::FRAC_PI_2),
+            &mut dirty_mask,
+        );
 
         let mut sphere = xz_circle;
-        sphere.merge_with(&xy_circle);
-        sphere.merge_with(&yz_circle);
+        sphere.merge_with(&xy_circle, &mut dirty_mask);
+        sphere.merge_with(&yz_circle, &mut dirty_mask);
 
         sphere
     }

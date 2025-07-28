@@ -2,7 +2,6 @@
 
 use impact_light::LightStorage;
 use impact_material::{MaterialLibrary, MaterialLibraryState};
-use impact_mesh::{MeshRepository, MeshRepositoryState};
 use impact_scene::{
     camera::SceneCamera,
     graph::SceneGraph,
@@ -15,8 +14,6 @@ use parking_lot::RwLock;
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
-    mesh_repository: RwLock<MeshRepository>,
-    initial_mesh_repository_state: MeshRepositoryState,
     material_library: RwLock<MaterialLibrary>,
     initial_material_library_state: MaterialLibraryState,
     light_storage: RwLock<LightStorage>,
@@ -39,17 +36,13 @@ pub enum RenderResourcesDesynchronized {
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(
-        mesh_repository: MeshRepository,
         material_library: MaterialLibrary,
         instance_feature_manager: InstanceFeatureManager,
         voxel_manager: VoxelManager,
     ) -> Self {
-        let initial_mesh_repository_state = mesh_repository.record_state();
         let initial_material_library_state = material_library.record_state();
         let initial_instance_feature_manager_state = instance_feature_manager.record_state();
         Self {
-            mesh_repository: RwLock::new(mesh_repository),
-            initial_mesh_repository_state,
             material_library: RwLock::new(material_library),
             initial_material_library_state,
             light_storage: RwLock::new(LightStorage::new()),
@@ -60,11 +53,6 @@ impl Scene {
             scene_camera: RwLock::new(None),
             skybox: RwLock::new(None),
         }
-    }
-
-    /// Returns a reference to the [`MeshRepository`], guarded by a [`RwLock`].
-    pub fn mesh_repository(&self) -> &RwLock<MeshRepository> {
-        &self.mesh_repository
     }
 
     /// Returns a reference to the [`MaterialLibrary`], guarded by a [`RwLock`].
@@ -125,10 +113,6 @@ impl Scene {
 
     /// Resets the scene to the initial empty state.
     pub fn clear(&self) {
-        self.mesh_repository
-            .write()
-            .reset_to_state(&self.initial_mesh_repository_state);
-
         self.material_library
             .write()
             .reset_to_state(&self.initial_material_library_state);

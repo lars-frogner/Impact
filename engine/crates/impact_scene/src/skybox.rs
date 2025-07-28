@@ -3,7 +3,7 @@
 pub mod resource;
 
 use bytemuck::{Pod, Zeroable};
-use impact_gpu::texture::TextureID;
+use impact_texture::TextureID;
 use roc_integration::roc;
 
 /// A skybox specified by a cubemap texture and a maximum luminance (the

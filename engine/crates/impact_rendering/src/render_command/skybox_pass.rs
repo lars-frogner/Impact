@@ -5,7 +5,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::skybox::SkyboxShaderTemplate,
 };
 use anyhow::{Result, anyhow};
@@ -14,7 +14,7 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
-use impact_mesh::{self, VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_mesh::{self, VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_scene::skybox::Skybox;
 use std::borrow::Cow;
 
@@ -60,11 +60,11 @@ impl SkyboxPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) {
         match (
             self.skybox.as_ref(),
-            render_resources.get_skybox_resource_manager(),
+            gpu_resources.get_skybox_resource_manager(),
         ) {
             (Some(&skybox), Some(skybox_resource_manager))
                 if skybox == skybox_resource_manager.skybox() => {}
@@ -177,7 +177,8 @@ impl SkyboxPass {
 
     pub fn record(
         &self,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -189,7 +190,7 @@ impl SkyboxPass {
             return Ok(());
         };
 
-        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(());
         };
 
@@ -214,19 +215,20 @@ impl SkyboxPass {
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        let skybox_resource_manager = render_resources
+        let skybox_resource_manager = gpu_resources
             .get_skybox_resource_manager()
             .ok_or_else(|| anyhow!("Missing GPU resources for skybox"))?;
 
         render_pass.set_bind_group(1, skybox_resource_manager.bind_group(), &[]);
 
-        let mesh_id = impact_mesh::skybox_mesh_id();
+        let mesh_id = impact_mesh::builtin::skybox_mesh_id();
 
-        let mesh_buffer_manager = render_resources
-            .get_triangle_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+        let mesh_gpu_resources = gpu_resources
+            .triangle_mesh()
+            .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+            .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-        let position_buffer = mesh_buffer_manager
+        let position_buffer = mesh_gpu_resources
             .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
             .next()
             .unwrap();
@@ -234,14 +236,14 @@ impl SkyboxPass {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager
+            mesh_gpu_resources
                 .triangle_mesh_index_gpu_buffer()
                 .valid_buffer_slice(),
-            mesh_buffer_manager.triangle_mesh_index_format(),
+            mesh_gpu_resources.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(
-            0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+            0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
             0,
             0..1,
         );

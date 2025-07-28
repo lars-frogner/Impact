@@ -9,7 +9,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::ambient_light::AmbientLightShaderTemplate,
     surface::RenderingSurface,
 };
@@ -21,7 +21,7 @@ use impact_gpu::{
     wgpu,
 };
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
-use impact_mesh::{VertexAttributeSet, VertexPosition, buffer::VertexBufferable};
+use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use std::borrow::Cow;
 
 /// Pass for computing reflected luminance due to ambient light.
@@ -120,9 +120,9 @@ impl AmbientLightPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        render_resources: &impl BasicRenderResources,
+        gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -243,18 +243,19 @@ impl AmbientLightPass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(());
         };
 
-        let light_buffer_manager = render_resources
+        let light_buffer_manager = gpu_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
@@ -308,11 +309,12 @@ impl AmbientLightPass {
 
         let mesh_id = AmbientLightShaderTemplate::light_volume_mesh_id();
 
-        let mesh_buffer_manager = render_resources
-            .get_triangle_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+        let mesh_gpu_resources = gpu_resources
+            .triangle_mesh()
+            .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+            .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-        let position_buffer = mesh_buffer_manager
+        let position_buffer = mesh_gpu_resources
             .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
             .next()
             .unwrap();
@@ -320,14 +322,14 @@ impl AmbientLightPass {
         render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
 
         render_pass.set_index_buffer(
-            mesh_buffer_manager
+            mesh_gpu_resources
                 .triangle_mesh_index_gpu_buffer()
                 .valid_buffer_slice(),
-            mesh_buffer_manager.triangle_mesh_index_format(),
+            mesh_gpu_resources.triangle_mesh_index_format(),
         );
 
         render_pass.draw_indexed(
-            0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+            0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
             0,
             0..1,
         );

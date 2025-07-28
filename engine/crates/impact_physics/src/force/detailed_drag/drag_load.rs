@@ -312,7 +312,7 @@ fn compute_golden_angle() -> Radians<fph> {
 mod tests {
     use super::*;
     use approx::abs_diff_eq;
-    use impact_mesh::triangle::TriangleMesh;
+    use impact_mesh::TriangleMesh;
     use proptest::prelude::*;
 
     prop_compose! {

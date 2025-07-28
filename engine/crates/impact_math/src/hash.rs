@@ -84,6 +84,11 @@ static STRING_HASH_64_REGISTRY: LazyLock<Mutex<HashMap<Hash64, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::default()));
 
 impl Hash32 {
+    /// Computes a 32-bit hash of the given bytes.
+    pub const fn from_bytes(bytes: &[u8]) -> Self {
+        Self(const_fnv1a_hash::fnv1a_hash_32(bytes, None))
+    }
+
     /// Computes a 32-bit hash of the given string literal.
     pub const fn from_str(string: &str) -> Self {
         Self(const_fnv1a_hash::fnv1a_hash_str_32(string))
@@ -97,6 +102,11 @@ impl From<Hash32> for u32 {
 }
 
 impl Hash64 {
+    /// Computes a 64-bit hash of the given bytes.
+    pub const fn from_bytes(bytes: &[u8]) -> Self {
+        Self(const_fnv1a_hash::fnv1a_hash_64(bytes, None))
+    }
+
     /// Computes a 64-bit hash of the given string literal.
     pub const fn from_str(string: &str) -> Self {
         Self(const_fnv1a_hash::fnv1a_hash_str_64(string))

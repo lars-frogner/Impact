@@ -4,7 +4,7 @@ use crate::{
     attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
     render_command::{StencilValue, postprocessing_pass::PostprocessingRenderPass},
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::{
         ambient_occlusion_application::AmbientOcclusionApplicationShaderTemplate,
         ambient_occlusion_computation::AmbientOcclusionComputationShaderTemplate,
@@ -168,7 +168,8 @@ impl AmbientOcclusionRenderCommands {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
@@ -180,7 +181,8 @@ impl AmbientOcclusionRenderCommands {
             self.computation_pass.record(
                 rendering_surface,
                 surface_texture_view,
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 postprocessor,
@@ -192,7 +194,8 @@ impl AmbientOcclusionRenderCommands {
             self.application_pass.record(
                 rendering_surface,
                 surface_texture_view,
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 postprocessor,
@@ -204,7 +207,8 @@ impl AmbientOcclusionRenderCommands {
             self.disabled_pass.record(
                 rendering_surface,
                 surface_texture_view,
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 postprocessor,

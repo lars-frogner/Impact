@@ -1,4 +1,7 @@
 (
+    resources: (
+        resource_file_path: Some("resources.ron"),
+    ),
     assets: (
         lookup_table_dir: "../assets/lookup_tables",
         asset_file_path: Some("assets.ron"),

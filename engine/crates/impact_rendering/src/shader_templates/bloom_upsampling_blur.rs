@@ -9,7 +9,7 @@ use impact_gpu::{
     },
     shader_template_replacements,
 };
-use impact_mesh::buffer::MeshVertexAttributeLocation;
+use impact_mesh::gpu_resource::MeshVertexAttributeLocation;
 use std::sync::LazyLock;
 
 /// Shader template for bloom upsampling and blurring passes, which successively

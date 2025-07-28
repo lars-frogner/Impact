@@ -1,8 +1,8 @@
 # Hash: 3d2372ffbea3ecfd229611b65a5a85eca0adadfa8bf66c6d33086ba1c796a490
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_physics::force::detailed_drag::DetailedDragForceGeneratorID
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     DetailedDragForceGeneratorID,
     add,

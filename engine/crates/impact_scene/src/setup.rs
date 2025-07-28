@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_material::{MaterialHandle, MaterialLibrary};
-use impact_mesh::{MeshRepository, TriangleMeshID};
+use impact_mesh::{TriangleMeshHandle, TriangleMeshRegistry};
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -92,12 +92,12 @@ pub fn setup_scene_graph_group_node(
 }
 
 pub fn setup_scene_graph_model_instance_node(
-    mesh_repository: &MeshRepository,
+    mesh_registry: &TriangleMeshRegistry,
     material_library: &MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     scene_graph: &mut SceneGraph,
     model_to_parent_transform: Similarity3<f32>,
-    mesh_id: &TriangleMeshID,
+    mesh_handle: TriangleMeshHandle,
     material: &MaterialHandle,
     parent: Option<&SceneGraphParentNodeHandle>,
     flags: Option<&SceneEntityFlags>,
@@ -105,26 +105,27 @@ pub fn setup_scene_graph_model_instance_node(
 ) -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
     let flags = flags.copied().unwrap_or_default();
 
-    let model_id = ModelID::for_triangle_mesh_and_material(*mesh_id, *material);
+    let model_id = ModelID::for_triangle_mesh_and_material(mesh_handle, *material);
 
     let bounding_sphere = if uncullable {
         // The scene graph will not cull models with no bounding sphere
         None
     } else {
         Some(
-            mesh_repository
-                .get_triangle_mesh(*mesh_id)
+            mesh_registry
+                .registry
+                .get(mesh_handle)
                 .ok_or_else(|| {
                     anyhow!(
-                        "Tried to create renderable entity with missing mesh (mesh ID {})",
-                        mesh_id
+                        "Tried to create renderable entity with missing mesh {}",
+                        mesh_registry.label(mesh_handle)
                     )
                 })?
                 .compute_bounding_sphere()
                 .ok_or_else(|| {
                     anyhow!(
-                        "Tried to create renderable entity with empty mesh (mesh ID {})",
-                        mesh_id
+                        "Tried to create renderable entity with empty mesh {}",
+                        mesh_registry.label(mesh_handle)
                     )
                 })?,
         )

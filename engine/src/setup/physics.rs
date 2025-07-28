@@ -5,10 +5,9 @@ pub mod driven_motion;
 pub mod force;
 pub mod rigid_body;
 
-use crate::physics::PhysicsSimulator;
+use crate::{physics::PhysicsSimulator, resource::ResourceManager};
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
-use impact_mesh::MeshRepository;
 use parking_lot::RwLock;
 
 /// Performs any modifications to the physics simulator required to accommodate
@@ -16,18 +15,18 @@ use parking_lot::RwLock;
 /// to the entities' components.
 pub fn setup_physics_for_new_entities(
     simulator: &PhysicsSimulator,
-    mesh_repository: &RwLock<MeshRepository>,
+    resource_manager: &RwLock<ResourceManager>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     rigid_body::setup_rigid_bodies_for_new_entities(
         simulator.rigid_body_manager(),
-        mesh_repository,
+        resource_manager,
         components,
     )?;
 
     force::setup_forces_for_new_entities(
         simulator.force_generator_manager(),
-        mesh_repository,
+        resource_manager,
         components,
     )?;
 

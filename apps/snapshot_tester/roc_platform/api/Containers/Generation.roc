@@ -1,30 +1,29 @@
-# Hash: 36dfa5d37287875ee7369d49c0de834ae97cd218ac6b214c184f343ebf2e86db
-# Generated: 2025-07-15T17:32:43+00:00
-# Rust type: impact::voxel::VoxelObjectID
+# Hash: eb8d8bcaa5043a2332035dd8dd43bd4eac9685cde054391ab35910308ce215b3
+# Generated: 2025-07-27T14:53:54+00:00
+# Rust type: impact_containers::slot_map::Generation
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
-    VoxelObjectID,
+    Generation,
     write_bytes,
     from_bytes,
 ]
 
 import core.Builtin
 
-## Identifier for a [`ChunkedVoxelObject`] in a [`VoxelManager`].
-VoxelObjectID : U32
+Generation : U32
 
-## Serializes a value of [VoxelObjectID] into the binary representation
+## Serializes a value of [Generation] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, VoxelObjectID -> List U8
+write_bytes : List U8, Generation -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(4)
     |> Builtin.write_bytes_u32(value)
 
-## Deserializes a value of [VoxelObjectID] from its bytes in the
+## Deserializes a value of [Generation] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result VoxelObjectID _
+from_bytes : List U8 -> Result Generation _
 from_bytes = |bytes|
     Ok(
         (

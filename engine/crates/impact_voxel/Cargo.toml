@@ -45,7 +45,6 @@ impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_io = { path = "../impact_io", optional = true }
 impact_log = { path = "../impact_log" }
-impact_material = { path = "../impact_material" }
 impact_math = { path = "../impact_math" }
 impact_mesh = { path = "../impact_mesh" }
 impact_model = { path = "../impact_model" }

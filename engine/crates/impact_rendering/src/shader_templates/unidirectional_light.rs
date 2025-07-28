@@ -18,7 +18,9 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_light::buffer::LightGPUBufferManager;
-use impact_mesh::{self, TriangleMeshID, VertexAttributeSet, buffer::MeshVertexAttributeLocation};
+use impact_mesh::{
+    self, TriangleMeshID, VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation,
+};
 use std::sync::LazyLock;
 
 /// Shader template for the unidirectional light pass, which computes the
@@ -86,7 +88,7 @@ impl UnidirectionalLightShaderTemplate {
     /// Returns the ID of the light volume mesh used by the shader (a
     /// screen-filling quad).
     pub fn light_volume_mesh_id() -> TriangleMeshID {
-        impact_mesh::screen_filling_quad_mesh_id()
+        impact_mesh::builtin::screen_filling_quad_mesh_id()
     }
 }
 

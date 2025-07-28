@@ -1,8 +1,8 @@
-# Hash: 4d5ddc8ea4b73736f543285ad8ad2a4dc828d850e31d4f7657fff8cac3615b31
-# Generated: 2025-07-15T17:32:43+00:00
+# Hash: 1c7adab97d14c2b37d2f5589b7cf7d5e85896ff4568da38d11f6278cce25c9bb
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_scene::SceneGraphGroupNodeHandle
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     SceneGraphGroupNodeHandle,
     new,
@@ -78,8 +78,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, SceneGraphGroupNodeHandle -> List U8
 write_packet = |bytes, val|
     type_id = 11994335057506468461
-    size = 16
-    alignment = 8
+    size = 8
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -90,8 +90,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List SceneGraphGroupNodeHandle -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 11994335057506468461
-    size = 16
-    alignment = 8
+    size = 8
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -111,7 +111,7 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, SceneGraphGroupNodeHandle -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(16)
+    |> List.reserve(8)
     |> Scene.GroupNodeID.write_bytes(value.id)
 
 ## Deserializes a value of [SceneGraphGroupNodeHandle] from its bytes in the
@@ -120,13 +120,13 @@ from_bytes : List U8 -> Result SceneGraphGroupNodeHandle _
 from_bytes = |bytes|
     Ok(
         {
-            id: bytes |> List.sublist({ start: 0, len: 16 }) |> Scene.GroupNodeID.from_bytes?,
+            id: bytes |> List.sublist({ start: 0, len: 8 }) |> Scene.GroupNodeID.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

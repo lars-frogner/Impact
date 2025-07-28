@@ -1,8 +1,8 @@
-# Hash: 5102726be6b9a633afec8bf210dc25943c8b49f857653cdfdd4f767cd4af1616
-# Generated: 2025-07-15T17:32:17+00:00
-# Rust type: impact_mesh::TriangleMeshID
+# Hash: e59c0c643ee747501400bb12d6f6537841fa2563672422011d9c2a90a5dc567c
+# Generated: 2025-07-27T16:52:44+00:00
+# Rust type: impact_mesh::triangle::TriangleMeshID
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     TriangleMeshID,
     from_name,
@@ -19,7 +19,7 @@ import Entity.Arg
 import core.Builtin
 import core.Hashing
 
-## The ID of a [`TriangleMesh`] in the [`MeshRepository`].
+## The persistent ID of a [`TriangleMesh`].
 TriangleMeshID : Hashing.StringHash64
 
 ## Creates a triangle mesh ID hashed from the given name.
@@ -70,7 +70,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, TriangleMeshID -> List U8
 write_packet = |bytes, val|
-    type_id = 5599383350702870633
+    type_id = 5275889660594493225
     size = 8
     alignment = 8
     bytes
@@ -82,7 +82,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List TriangleMeshID -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 5599383350702870633
+    type_id = 5275889660594493225
     size = 8
     alignment = 8
     count = List.len(vals)

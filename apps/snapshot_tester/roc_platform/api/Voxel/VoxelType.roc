@@ -1,8 +1,8 @@
 # Hash: a289e7331c31b7180d797f89b4cb8cbf84c3980e0e7214615e9c418c09905022
-# Generated: 2025-07-15T17:32:43+00:00
-# Rust type: impact::voxel::voxel_types::VoxelType
+# Generated: 2025-07-27T14:53:54+00:00
+# Rust type: impact_voxel::voxel_types::VoxelType
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     VoxelType,
     write_bytes,

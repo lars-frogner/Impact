@@ -2,7 +2,7 @@
 
 use impact_material::MaterialHandle;
 use impact_math::Hash64;
-use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
+use impact_mesh::{LineSegmentMeshHandle, MeshHandle, TriangleMeshHandle};
 use std::{
     cmp, fmt,
     hash::{Hash, Hasher},
@@ -14,7 +14,7 @@ use std::{
 /// associated prepass material, that will also be part of the model definition.
 #[derive(Copy, Clone, Debug)]
 pub struct ModelID {
-    mesh_id: MeshID,
+    mesh_handle: MeshHandle,
     material_handle: MaterialHandle,
     hash: Hash64,
 }
@@ -26,63 +26,74 @@ impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the given triangle
     /// mesh and material.
     pub fn for_triangle_mesh_and_material(
-        mesh_id: TriangleMeshID,
+        mesh_handle: TriangleMeshHandle,
         material_handle: MaterialHandle,
     ) -> Self {
         let hash = impact_math::compute_hash_64_of_two_hash_64(
-            mesh_id.0.hash(),
+            mesh_handle.compute_hash(),
             material_handle.compute_hash(),
         );
         Self {
-            mesh_id: MeshID::Triangle(mesh_id),
+            mesh_handle: MeshHandle::Triangle(mesh_handle),
             material_handle,
             hash,
         }
     }
 
-    /// Creates a new [`ModelID`] for the model comprised of the given line segment
-    /// mesh and material.
+    /// Creates a new [`ModelID`] for the model comprised of the given line
+    /// segment mesh and material.
     pub fn for_line_segment_mesh_and_material(
-        mesh_id: LineSegmentMeshID,
+        mesh_handle: LineSegmentMeshHandle,
         material_handle: MaterialHandle,
     ) -> Self {
         let hash = impact_math::compute_hash_64_of_two_hash_64(
-            mesh_id.0.hash(),
+            mesh_handle.compute_hash(),
             material_handle.compute_hash(),
         );
         Self {
-            mesh_id: MeshID::LineSegment(mesh_id),
+            mesh_handle: MeshHandle::LineSegment(mesh_handle),
             material_handle,
             hash,
         }
     }
 
-    /// The ID of the model's mesh.
-    pub fn mesh_id(&self) -> MeshID {
-        self.mesh_id
+    /// Creates a new [`ModelID`] with the given hash. The
+    /// [`ModelID::mesh_handle`] and [`ModelID::material_handle`] methods on
+    /// this `ModelID` will return invalid dummy values.
+    pub fn hash_only(hash: Hash64) -> Self {
+        Self {
+            mesh_handle: MeshHandle::Triangle(TriangleMeshHandle::dummy()),
+            material_handle: MaterialHandle::not_applicable(),
+            hash,
+        }
     }
 
-    /// The ID of the model's triangle mesh.
+    /// The handle to the model's mesh.
+    pub fn mesh_handle(&self) -> MeshHandle {
+        self.mesh_handle
+    }
+
+    /// The handle to the model's triangle mesh.
     ///
     /// # Panics
     /// If the mesh is not a triangle mesh.
-    pub fn triangle_mesh_id(&self) -> TriangleMeshID {
-        match self.mesh_id {
-            MeshID::Triangle(mesh_id) => mesh_id,
-            MeshID::LineSegment(_) => {
+    pub fn triangle_mesh_handle(&self) -> TriangleMeshHandle {
+        match self.mesh_handle {
+            MeshHandle::Triangle(handle) => handle,
+            MeshHandle::LineSegment(_) => {
                 panic!("Got line segment mesh when expecting triangle mesh in `ModelID`")
             }
         }
     }
 
-    /// The ID of the model's line segment mesh.
+    /// The handle to the model's line segment mesh.
     ///
     /// # Panics
     /// If the mesh is not a line segment mesh.
-    pub fn line_segment_mesh_id(&self) -> LineSegmentMeshID {
-        match self.mesh_id {
-            MeshID::LineSegment(mesh_id) => mesh_id,
-            MeshID::Triangle(_) => {
+    pub fn line_segment_mesh_handle(&self) -> LineSegmentMeshHandle {
+        match self.mesh_handle {
+            MeshHandle::LineSegment(handle) => handle,
+            MeshHandle::Triangle(_) => {
                 panic!("Got triangle mesh when expecting line segment mesh in `ModelID`")
             }
         }
@@ -99,7 +110,7 @@ impl fmt::Display for ModelID {
         write!(
             f,
             "{{mesh: {}, material: {}}}",
-            self.mesh_id, &self.material_handle,
+            self.mesh_handle, self.material_handle,
         )
     }
 }

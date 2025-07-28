@@ -1,9 +1,38 @@
 //! Line segment meshes.
 
+use std::fmt;
+
 use crate::{VertexColor, VertexPosition};
-use impact_containers::{CollectionChange, CollectionChangeTracker};
-use impact_math::Float;
+use bitflags::bitflags;
+use bytemuck::{Pod, Zeroable};
+use impact_containers::SlotKey;
+use impact_math::{Float, Hash64, StringHash64};
+use impact_resource::{
+    Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
+    indexed_registry::IndexedResourceRegistry,
+};
 use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
+use roc_integration::roc;
+
+define_setup_type! {
+    target = LineSegmentMeshHandle;
+    /// The persistent ID of a [`LineSegmentMesh`].
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct LineSegmentMeshID(pub StringHash64);
+}
+
+define_component_type! {
+    /// Handle to a [`LineSegmentMesh`].
+    #[roc(parents = "Comp")]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
+    pub struct LineSegmentMeshHandle(SlotKey);
+}
+
+/// A registry of loaded [`LineSegmentMesh`]es.
+pub type LineSegmentMeshRegistry = IndexedResourceRegistry<LineSegmentMeshID, LineSegmentMesh<f32>>;
 
 /// A 3D mesh of line segments represented by pairs of vertices.
 ///
@@ -11,13 +40,37 @@ use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
 /// consecutive pair of vertices represents the end points of a line segment
 /// making up an edge in the mesh. The mesh does not have a concept of faces or
 /// surfaces, only edges.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LineSegmentMesh<F: Float> {
     positions: Vec<VertexPosition<F>>,
     colors: Vec<VertexColor<F>>,
-    position_change_tracker: CollectionChangeTracker,
-    color_change_tracker: CollectionChangeTracker,
 }
+
+bitflags! {
+    /// The set of line segment mesh properties that have been modified.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct LineSegmentMeshDirtyMask: u8 {
+        const POSITIONS = 1 << 0;
+        const COLORS    = 1 << 1;
+    }
+}
+
+impl fmt::Display for LineSegmentMeshID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl ResourcePID for LineSegmentMeshID {}
+
+impl LineSegmentMeshHandle {
+    /// Computes a 64-bit hash from this handle.
+    pub fn compute_hash(&self) -> Hash64 {
+        Hash64::from_bytes(bytemuck::bytes_of(self))
+    }
+}
+
+impl_ResourceHandle_for_newtype!(LineSegmentMeshHandle);
 
 impl<F: Float> LineSegmentMesh<F> {
     /// Creates a new mesh described by the given vertex positions and colors.
@@ -33,12 +86,7 @@ impl<F: Float> LineSegmentMesh<F> {
             "Mismatching number of colors and positions in line segment mesh"
         );
 
-        Self {
-            positions,
-            colors,
-            position_change_tracker: CollectionChangeTracker::default(),
-            color_change_tracker: CollectionChangeTracker::default(),
-        }
+        Self { positions, colors }
     }
 
     /// Returns the number of vertices in the mesh.
@@ -71,18 +119,6 @@ impl<F: Float> LineSegmentMesh<F> {
         !self.colors.is_empty()
     }
 
-    /// Returns the kind of change that has been made to the vertex positions
-    /// since the last reset of change tracking.
-    pub fn position_change(&self) -> CollectionChange {
-        self.position_change_tracker.change()
-    }
-
-    /// Returns the kind of change that has been made to the vertex colors
-    /// since the last reset of change tracking.
-    pub fn color_change(&self) -> CollectionChange {
-        self.color_change_tracker.change()
-    }
-
     /// Returns an iterator over the mesh line segments, each item containing
     /// the two line segment vertex positions.
     pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3<F>; 2]> {
@@ -92,71 +128,91 @@ impl<F: Float> LineSegmentMesh<F> {
     }
 
     /// Applies the given scaling factor to the vertex positions of the mesh.
-    pub fn scale(&mut self, scaling: F) {
+    pub fn scale(&mut self, scaling: F, dirty_mask: &mut LineSegmentMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.scaled(scaling);
         }
+        *dirty_mask |= LineSegmentMeshDirtyMask::POSITIONS;
     }
 
     /// Applies the given rotation to the mesh, rotating the vertex positions.
-    pub fn rotate(&mut self, rotation: &UnitQuaternion<F>) {
+    pub fn rotate(
+        &mut self,
+        rotation: &UnitQuaternion<F>,
+        dirty_mask: &mut LineSegmentMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }
+        *dirty_mask |= LineSegmentMeshDirtyMask::POSITIONS;
     }
 
     /// Applies the given displacement vector to the mesh, translating the
     /// vertex positions.
-    pub fn translate(&mut self, translation: &Vector3<F>) {
+    pub fn translate(
+        &mut self,
+        translation: &Vector3<F>,
+        dirty_mask: &mut LineSegmentMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.translated(translation);
         }
+        *dirty_mask |= LineSegmentMeshDirtyMask::POSITIONS;
     }
 
     /// Applies the given similarity transform to the mesh, transforming the
     /// vertex positions.
-    pub fn transform(&mut self, transform: &Similarity3<F>) {
+    pub fn transform(
+        &mut self,
+        transform: &Similarity3<F>,
+        dirty_mask: &mut LineSegmentMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.transformed(transform);
         }
+        *dirty_mask |= LineSegmentMeshDirtyMask::POSITIONS;
     }
 
     /// Sets the color of every vertex to the given color.
-    pub fn set_same_color(&mut self, color: VertexColor<F>) {
+    pub fn set_same_color(
+        &mut self,
+        color: VertexColor<F>,
+        dirty_mask: &mut LineSegmentMeshDirtyMask,
+    ) {
         self.colors = vec![color; self.positions.len()];
+        *dirty_mask |= LineSegmentMeshDirtyMask::COLORS;
     }
 
     /// Merges the given mesh into this mesh.
     ///
     /// # Panics
     /// If the two meshes do not have the same set of vertex attributes.
-    pub fn merge_with(&mut self, other: &Self) {
+    pub fn merge_with(&mut self, other: &Self, dirty_mask: &mut LineSegmentMeshDirtyMask) {
         if self.has_positions() {
             assert!(other.has_positions());
             self.positions.extend_from_slice(&other.positions);
-            self.position_change_tracker.notify_count_change();
+            *dirty_mask |= LineSegmentMeshDirtyMask::POSITIONS;
         }
 
         if self.has_colors() {
             assert!(other.has_colors());
             self.colors.extend_from_slice(&other.colors);
-            self.color_change_tracker.notify_count_change();
+            *dirty_mask |= LineSegmentMeshDirtyMask::COLORS;
         }
     }
+}
 
-    /// Forgets any recorded changes to the vertex positions.
-    pub fn reset_position_change_tracking(&self) {
-        self.position_change_tracker.reset();
+impl Resource for LineSegmentMesh<f32> {
+    type Handle = LineSegmentMeshHandle;
+    type DirtyMask = LineSegmentMeshDirtyMask;
+}
+
+impl ResourceDirtyMask for LineSegmentMeshDirtyMask {
+    fn empty() -> Self {
+        Self::empty()
     }
 
-    /// Forgets any recorded changes to the vertex colors.
-    pub fn reset_color_change_tracking(&self) {
-        self.color_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the vertex attributes.
-    pub fn reset_change_tracking(&self) {
-        self.reset_position_change_tracking();
-        self.reset_color_change_tracking();
+    fn full() -> Self {
+        Self::all()
     }
 }

@@ -1,8 +1,8 @@
 # Hash: 97b65094bd37680d256056da2f5eccaed0332b1cc434056fe45f5815abb1722b
-# Generated: 2025-07-15T17:32:17+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_physics::material::ContactResponseParameters
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ContactResponseParameters,
     new,

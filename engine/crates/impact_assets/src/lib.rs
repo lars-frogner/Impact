@@ -7,13 +7,13 @@ use impact_containers::HashMap;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{
-        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureID,
-        TextureLookupTable, mipmap::MipmapperGenerator,
+        Sampler, SamplerConfig, SamplerID, TexelType, Texture, TextureConfig, TextureLookupTable,
+        mipmap::MipmapperGenerator,
     },
 };
 use impact_material::MaterialTextureProvider;
 use impact_math::hash32;
-use impact_mesh::TriangleMeshSpecification;
+use impact_texture::TextureID;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::hash_map::Entry,
@@ -46,7 +46,6 @@ pub struct AssetConfig {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AssetSpecifications {
     pub textures: Vec<TextureSpecification>,
-    pub triangle_meshes: Vec<TriangleMeshSpecification>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -108,13 +107,12 @@ impl Assets {
     /// Returns an error if the asset file does not exist or is invalid.
     /// See also [`Self::load_specified_assets`].
     #[cfg(feature = "ron")]
-    pub fn load_assets_specified_in_config(&mut self) -> Result<AssetSpecifications> {
+    pub fn load_assets_specified_in_config(&mut self) -> Result<()> {
         let Some(asset_file_path) = self.config.asset_file_path.as_ref() else {
-            return Ok(AssetSpecifications::default());
+            return Ok(());
         };
         let specifications = AssetSpecifications::from_ron_file(asset_file_path)?;
-        self.load_specified_assets(&specifications)?;
-        Ok(specifications)
+        self.load_specified_assets(&specifications)
     }
 
     /// Loads all assets in the given specifications.
@@ -190,7 +188,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::from_path`](impact_gpu::texture::Texture::from_path).
+    /// - See also [`create_texture_from_image_path`](impact_texture::io::create_texture_from_image_path).
     pub fn load_texture_from_path(
         &mut self,
         texture_name: impl ToString,
@@ -213,7 +211,7 @@ impl Assets {
             Entry::Vacant(entry) => {
                 let sampler_id = sampler_config.as_ref().map(Into::into);
 
-                let texture = entry.insert(Texture::from_path(
+                let texture = entry.insert(impact_texture::io::create_texture_from_image_path(
                     &self.graphics_device,
                     &self.mipmapper_generator,
                     image_path,
@@ -246,7 +244,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::from_cubemap_image_paths`](impact_gpu::texture::Texture::from_cubemap_image_paths).
+    /// - See also [`create_cubemap_texture_from_image_paths`](impact_texture::io::create_cubemap_texture_from_image_paths).
     pub fn load_cubemap_texture_from_paths<P: AsRef<Path>>(
         &mut self,
         texture_name: impl ToString,
@@ -269,17 +267,18 @@ impl Assets {
             Entry::Vacant(entry) => {
                 let sampler_id = sampler_config.as_ref().map(Into::into);
 
-                let texture = entry.insert(Texture::from_cubemap_image_paths(
-                    &self.graphics_device,
-                    right_image_path,
-                    left_image_path,
-                    top_image_path,
-                    bottom_image_path,
-                    front_image_path,
-                    back_image_path,
-                    texture_config,
-                    sampler_id,
-                )?);
+                let texture =
+                    entry.insert(impact_texture::io::create_cubemap_texture_from_image_paths(
+                        &self.graphics_device,
+                        right_image_path,
+                        left_image_path,
+                        top_image_path,
+                        bottom_image_path,
+                        front_image_path,
+                        back_image_path,
+                        texture_config,
+                        sampler_id,
+                    )?);
 
                 if let (Some(sampler_id), Some(sampler_config)) =
                     (texture.sampler_id(), sampler_config)
@@ -306,7 +305,7 @@ impl Assets {
     /// # Errors
     /// - Returns an error if a texture with the same name already has been
     ///   loaded.
-    /// - See also [`Texture::array_from_image_paths`](impact_gpu::texture::Texture::array_from_image_paths).
+    /// - See also [`create_texture_array_from_image_paths`](impact_texture::io::create_texture_array_from_image_paths).
     pub fn load_texture_array_from_paths<I, P>(
         &mut self,
         texture_name: impl AsRef<str>,
@@ -328,14 +327,15 @@ impl Assets {
             Entry::Vacant(entry) => {
                 let sampler_id = sampler_config.as_ref().map(Into::into);
 
-                let texture = entry.insert(Texture::array_from_image_paths(
-                    &self.graphics_device,
-                    &self.mipmapper_generator,
-                    image_paths,
-                    texture_config,
-                    sampler_id,
-                    texture_name,
-                )?);
+                let texture =
+                    entry.insert(impact_texture::io::create_texture_array_from_image_paths(
+                        &self.graphics_device,
+                        &self.mipmapper_generator,
+                        image_paths,
+                        texture_config,
+                        sampler_id,
+                        texture_name,
+                    )?);
 
                 if let (Some(sampler_id), Some(sampler_config)) =
                     (texture.sampler_id(), sampler_config)
@@ -426,9 +426,9 @@ impl Assets {
         self.load_texture_from_generated_lookup_table(
             texture_name,
             || {
-                impact_gpu::texture::read_lookup_table_from_file(table_file_path).or_else(|_| {
+                impact_texture::io::read_lookup_table_from_file(table_file_path).or_else(|_| {
                     let table = compute_table();
-                    impact_gpu::texture::save_lookup_table_to_file(&table, table_file_path)?;
+                    impact_texture::io::save_lookup_table_to_file(&table, table_file_path)?;
                     Ok(table)
                 })
             },
@@ -486,9 +486,6 @@ impl AssetSpecifications {
     #[cfg(feature = "ron")]
     fn resolve_paths(&mut self, root_path: &Path) {
         for specification in &mut self.textures {
-            specification.resolve_paths(root_path);
-        }
-        for specification in &mut self.triangle_meshes {
             specification.resolve_paths(root_path);
         }
     }

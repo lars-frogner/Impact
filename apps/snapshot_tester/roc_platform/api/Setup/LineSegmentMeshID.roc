@@ -1,8 +1,8 @@
-# Hash: 041b5b200414a6b13ce0641b64d65cccbcb9ca2b350efd4c02e0dc26c8b11097
-# Generated: 2025-07-15T17:32:17+00:00
-# Rust type: impact_mesh::LineSegmentMeshID
+# Hash: 1ddc4506717dad990264b745808c0207dce17f42dc847b6be8ba34308a45bb5a
+# Generated: 2025-07-27T16:52:44+00:00
+# Rust type: impact_mesh::line_segment::LineSegmentMeshID
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     LineSegmentMeshID,
     from_name,
@@ -19,7 +19,7 @@ import Entity.Arg
 import core.Builtin
 import core.Hashing
 
-## The ID of a [`LineSegmentMesh`] in the [`MeshRepository`].
+## The persistent ID of a [`LineSegmentMesh`].
 LineSegmentMeshID : Hashing.StringHash64
 
 ## Creates a line segment mesh ID hashed from the given name.
@@ -70,7 +70,7 @@ add_multiple = |entity_data, comp_values|
 
 write_packet : List U8, LineSegmentMeshID -> List U8
 write_packet = |bytes, val|
-    type_id = 11324198981518198464
+    type_id = 4013351534594806892
     size = 8
     alignment = 8
     bytes
@@ -82,7 +82,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List LineSegmentMeshID -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 11324198981518198464
+    type_id = 4013351534594806892
     size = 8
     alignment = 8
     count = List.len(vals)

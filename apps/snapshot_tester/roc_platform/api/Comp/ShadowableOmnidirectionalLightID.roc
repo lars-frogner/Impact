@@ -1,8 +1,8 @@
 # Hash: 117ae5dd229890566f19a5f4adbfe795809ed9db90b99a2c11e573db76d04a25
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalLightID
 # Type category: Component
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     ShadowableOmnidirectionalLightID,
     add,

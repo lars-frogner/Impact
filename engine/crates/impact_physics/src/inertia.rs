@@ -744,7 +744,7 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 mod tests {
     use super::*;
     use approx::abs_diff_eq;
-    use impact_mesh::{FrontFaceSide, triangle::TriangleMesh};
+    use impact_mesh::{FrontFaceSide, TriangleMesh, TriangleMeshDirtyMask};
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
     use proptest::prelude::*;
     use std::ops::Range;
@@ -866,7 +866,7 @@ mod tests {
             let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
-            box_mesh.transform(&transform);
+            box_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             box_properties.transform(&transform);
 
             let computed_mass = compute_uniform_triangle_mesh_mass(box_mesh.triangle_vertex_positions(), mass_density);
@@ -892,7 +892,7 @@ mod tests {
             let mut cylinder_mesh = TriangleMesh::create_cylinder(length, diameter, 30);
             let mut cylinder_properties = InertialProperties::of_uniform_cylinder(length, diameter, mass_density);
 
-            cylinder_mesh.transform(&transform);
+            cylinder_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             cylinder_properties.transform(&transform);
 
             let computed_mass = compute_uniform_triangle_mesh_mass(cylinder_mesh.triangle_vertex_positions(), mass_density);
@@ -917,7 +917,7 @@ mod tests {
             let mut sphere_mesh = TriangleMesh::create_sphere(20);
             let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
-            sphere_mesh.transform(&transform);
+            sphere_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             sphere_properties.transform(&transform);
 
             let computed_mass = compute_uniform_triangle_mesh_mass(sphere_mesh.triangle_vertex_positions(), mass_density);
@@ -943,7 +943,7 @@ mod tests {
             let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
-            box_mesh.transform(&transform);
+            box_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             box_properties.transform(&transform);
 
             let computed_center_of_mass = compute_uniform_triangle_mesh_center_of_mass(box_mesh.triangle_vertex_positions());
@@ -968,7 +968,7 @@ mod tests {
             let mut cone_mesh = TriangleMesh::create_cone(length, max_diameter, 30);
             let mut cone_properties = InertialProperties::of_uniform_cone(length, max_diameter, mass_density);
 
-            cone_mesh.transform(&transform);
+            cone_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             cone_properties.transform(&transform);
 
             let computed_center_of_mass = compute_uniform_triangle_mesh_center_of_mass(cone_mesh.triangle_vertex_positions());
@@ -993,7 +993,7 @@ mod tests {
             let mut hemisphere_mesh = TriangleMesh::create_hemisphere(20);
             let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
 
-            hemisphere_mesh.transform(&transform);
+            hemisphere_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             hemisphere_properties.transform(&transform);
 
             let computed_center_of_mass = compute_uniform_triangle_mesh_center_of_mass(hemisphere_mesh.triangle_vertex_positions());
@@ -1018,7 +1018,7 @@ mod tests {
             let mut sphere_mesh = TriangleMesh::create_sphere(30);
             let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
-            sphere_mesh.transform(&transform);
+            sphere_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             sphere_properties.transform(&transform);
 
             let computed_inertia_tensor =
@@ -1044,7 +1044,7 @@ mod tests {
             let mut hemisphere_mesh = TriangleMesh::create_hemisphere(15);
             let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
 
-            hemisphere_mesh.transform(&transform);
+            hemisphere_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             hemisphere_properties.transform(&transform);
 
             let computed_inertia_tensor =
@@ -1071,7 +1071,7 @@ mod tests {
             let mut cone_mesh = TriangleMesh::create_cone(length, max_diameter, 40);
             let mut cone_properties = InertialProperties::of_uniform_cone(length, max_diameter, mass_density);
 
-            cone_mesh.transform(&transform);
+            cone_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             cone_properties.transform(&transform);
 
             let computed_inertia_tensor =
@@ -1098,7 +1098,7 @@ mod tests {
             let mut cylinder_mesh = TriangleMesh::create_cylinder(length, diameter, 40);
             let mut cylinder_properties = InertialProperties::of_uniform_cylinder(length, diameter, mass_density);
 
-            cylinder_mesh.transform(&transform);
+            cylinder_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             cylinder_properties.transform(&transform);
 
             let computed_inertia_tensor =
@@ -1125,7 +1125,7 @@ mod tests {
             let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
-            box_mesh.transform(&transform);
+            box_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             box_properties.transform(&transform);
 
             let computed_inertia_tensor =
@@ -1151,7 +1151,7 @@ mod tests {
             let mut cone_mesh = TriangleMesh::create_cone(length, max_diameter, 40);
             let mut cone_properties = InertialProperties::of_uniform_cone(length, max_diameter, mass_density);
 
-            cone_mesh.transform(&transform);
+            cone_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             cone_properties.transform(&transform);
 
             let cone_properties_from_mesh = InertialProperties::of_uniform_triangle_mesh(cone_mesh.triangle_vertex_positions(), mass_density);

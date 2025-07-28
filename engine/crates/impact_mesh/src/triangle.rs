@@ -5,18 +5,45 @@ use crate::{
     VertexTextureCoords, texture_projection::TextureProjection,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
-use impact_containers::{CollectionChange, CollectionChangeTracker};
+use bitflags::bitflags;
+use bytemuck::{Pod, Zeroable};
+use impact_containers::SlotKey;
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::Float;
+use impact_math::{Float, Hash64, StringHash64};
+use impact_resource::{
+    Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
+    indexed_registry::IndexedResourceRegistry,
+};
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
-use std::fmt::Debug;
+use roc_integration::roc;
+use std::fmt;
+
+define_setup_type! {
+    target = TriangleMeshHandle;
+    /// The persistent ID of a [`TriangleMesh`].
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct TriangleMeshID(pub StringHash64);
+}
+
+define_component_type! {
+    /// Handle to a [`TriangleMesh`].
+    #[roc(parents = "Comp")]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
+    pub struct TriangleMeshHandle(SlotKey);
+}
+
+/// A registry of loaded [`TriangleMesh`]es.
+pub type TriangleMeshRegistry = IndexedResourceRegistry<TriangleMeshID, TriangleMesh<f32>>;
 
 /// A 3D mesh of triangles represented by vertices and indices.
 ///
 /// The vertices are typically unique, and they have associated positions and
 /// potentially other attributes. Each index refers to a vertex, and the
 /// sequence of indices describes the triangles making up the mesh faces.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TriangleMesh<F: Float> {
     positions: Vec<VertexPosition<F>>,
     normal_vectors: Vec<VertexNormalVector<F>>,
@@ -24,13 +51,43 @@ pub struct TriangleMesh<F: Float> {
     tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
     colors: Vec<VertexColor<F>>,
     indices: Vec<u32>,
-    position_change_tracker: CollectionChangeTracker,
-    normal_vector_change_tracker: CollectionChangeTracker,
-    texture_coord_change_tracker: CollectionChangeTracker,
-    tangent_space_quaternion_change_tracker: CollectionChangeTracker,
-    color_change_tracker: CollectionChangeTracker,
-    index_change_tracker: CollectionChangeTracker,
 }
+
+bitflags! {
+    /// The set of triangle mesh properties that have been modified.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct TriangleMeshDirtyMask: u8 {
+        const POSITIONS                 = 1 << 0;
+        const NORMAL_VECTORS            = 1 << 1;
+        const TEXTURE_COORDS            = 1 << 2;
+        const TANGENT_SPACE_QUATERNIONS = 1 << 3;
+        const COLORS                    = 1 << 4;
+        const INDICES                   = 1 << 5;
+    }
+}
+
+impl fmt::Display for TriangleMeshID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl ResourcePID for TriangleMeshID {}
+
+impl TriangleMeshHandle {
+    /// Creates a handle that will produce a panic if actually used in a
+    /// `TriangleMeshRegistry`.
+    pub fn dummy() -> Self {
+        Self(SlotKey::dummy())
+    }
+
+    /// Computes a 64-bit hash from this handle.
+    pub fn compute_hash(&self) -> Hash64 {
+        Hash64::from_bytes(bytemuck::bytes_of(self))
+    }
+}
+
+impl_ResourceHandle_for_newtype!(TriangleMeshHandle);
 
 impl<F: Float> TriangleMesh<F> {
     /// Creates a new mesh described by the given vertex attributes and indices.
@@ -73,12 +130,6 @@ impl<F: Float> TriangleMesh<F> {
             tangent_space_quaternions,
             colors,
             indices,
-            position_change_tracker: CollectionChangeTracker::default(),
-            normal_vector_change_tracker: CollectionChangeTracker::default(),
-            texture_coord_change_tracker: CollectionChangeTracker::default(),
-            tangent_space_quaternion_change_tracker: CollectionChangeTracker::default(),
-            color_change_tracker: CollectionChangeTracker::default(),
-            index_change_tracker: CollectionChangeTracker::default(),
         }
     }
 
@@ -158,42 +209,6 @@ impl<F: Float> TriangleMesh<F> {
         !self.colors.is_empty()
     }
 
-    /// Returns the kind of change that has been made to the vertex positions
-    /// since the last reset of change tracking.
-    pub fn position_change(&self) -> CollectionChange {
-        self.position_change_tracker.change()
-    }
-
-    /// Returns the kind of change that has been made to the vertex normal
-    /// vectors since the last reset of change tracking.
-    pub fn normal_vector_change(&self) -> CollectionChange {
-        self.normal_vector_change_tracker.change()
-    }
-
-    /// Returns the kind of change that has been made to the vertex texture
-    /// coordinates since the last reset of change tracking.
-    pub fn texture_coord_change(&self) -> CollectionChange {
-        self.texture_coord_change_tracker.change()
-    }
-
-    /// Returns the kind of change that has been made to the vertex tangent
-    /// space quaternions since the last reset of change tracking.
-    pub fn tangent_space_quaternion_change(&self) -> CollectionChange {
-        self.tangent_space_quaternion_change_tracker.change()
-    }
-
-    /// Returns the kind of change that has been made to the vertex colors
-    /// since the last reset of change tracking.
-    pub fn color_change(&self) -> CollectionChange {
-        self.color_change_tracker.change()
-    }
-
-    /// Returns the kind of change that has been made to the mesh
-    /// vertex indices since the last reset of change tracking.
-    pub fn index_change(&self) -> CollectionChange {
-        self.index_change_tracker.change()
-    }
-
     /// Returns an iterator over the mesh triangles, each item containing the
     /// three triangle indices.
     pub fn triangle_indices(&self) -> impl Iterator<Item = [usize; 3]> {
@@ -244,7 +259,7 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// If the mesh misses positions.
-    pub fn generate_smooth_normal_vectors(&mut self) {
+    pub fn generate_smooth_normal_vectors(&mut self, dirty_mask: &mut TriangleMeshDirtyMask) {
         assert!(self.has_positions());
 
         let mut summed_normal_vectors = vec![Vector3::zeros(); self.n_vertices()];
@@ -266,7 +281,7 @@ impl<F: Float> TriangleMesh<F> {
             .map(|vector| VertexNormalVector(UnitVector3::new_normalize(vector)))
             .collect();
 
-        self.normal_vector_change_tracker.notify_count_change();
+        *dirty_mask |= TriangleMeshDirtyMask::NORMAL_VECTORS;
     }
 
     /// Uses the given projection to compute new texture coordinates for the
@@ -274,7 +289,11 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// If the mesh misses positions.
-    pub fn generate_texture_coords(&mut self, projection: &impl TextureProjection<F>) {
+    pub fn generate_texture_coords(
+        &mut self,
+        projection: &impl TextureProjection<F>,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
         assert!(self.has_positions());
 
         self.texture_coords.clear();
@@ -285,6 +304,8 @@ impl<F: Float> TriangleMesh<F> {
                 projection.project_position(&position.0),
             ));
         }
+
+        *dirty_mask |= TriangleMeshDirtyMask::TEXTURE_COORDS;
     }
 
     /// Computes new tangent space quaternions for the mesh using the texture
@@ -299,12 +320,15 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// If the mesh misses positions or texture coordinates.
-    pub fn generate_smooth_tangent_space_quaternions(&mut self) {
+    pub fn generate_smooth_tangent_space_quaternions(
+        &mut self,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
         assert!(self.has_positions());
         assert!(self.has_texture_coords());
 
         if !self.has_normal_vectors() {
-            self.generate_smooth_normal_vectors();
+            self.generate_smooth_normal_vectors(dirty_mask);
         }
 
         let mut summed_tangent_and_bitangent_vectors = vec![Matrix3x2::zeros(); self.n_vertices()];
@@ -453,39 +477,42 @@ impl<F: Float> TriangleMesh<F> {
                 )));
         }
 
-        self.tangent_space_quaternion_change_tracker
-            .notify_count_change();
+        *dirty_mask |= TriangleMeshDirtyMask::TANGENT_SPACE_QUATERNIONS;
     }
 
     /// Removes all normal vectors from the mesh.
-    pub fn remove_normal_vectors(&mut self) {
+    pub fn remove_normal_vectors(&mut self, dirty_mask: &mut TriangleMeshDirtyMask) {
         self.normal_vectors.clear();
+        *dirty_mask |= TriangleMeshDirtyMask::NORMAL_VECTORS;
     }
 
     /// Flips the winding order of all triangles in the mesh.
-    pub fn flip_triangle_winding_order(&mut self) {
+    pub fn flip_triangle_winding_order(&mut self, dirty_mask: &mut TriangleMeshDirtyMask) {
         for triangle in self.indices.chunks_exact_mut(3) {
             triangle.swap(1, 2);
         }
+        *dirty_mask |= TriangleMeshDirtyMask::INDICES;
     }
 
     /// Applies the given scaling factor to the vertex positions of the mesh.
-    pub fn scale(&mut self, scaling: F) {
+    pub fn scale(&mut self, scaling: F, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.scaled(scaling);
         }
+        *dirty_mask |= TriangleMeshDirtyMask::POSITIONS;
     }
 
     /// Adds the given translation to the vertex positions of the mesh.
-    pub fn translate(&mut self, translation: &Vector3<F>) {
+    pub fn translate(&mut self, translation: &Vector3<F>, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.translated(translation);
         }
+        *dirty_mask |= TriangleMeshDirtyMask::POSITIONS;
     }
 
     /// Applies the given rotation quaternion to the mesh, rotating vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn rotate(&mut self, rotation: &UnitQuaternion<F>) {
+    pub fn rotate(&mut self, rotation: &UnitQuaternion<F>, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }
@@ -497,11 +524,19 @@ impl<F: Float> TriangleMesh<F> {
         for tangent_space_quaternion in &mut self.tangent_space_quaternions {
             *tangent_space_quaternion = tangent_space_quaternion.rotated(rotation);
         }
+
+        *dirty_mask |= TriangleMeshDirtyMask::POSITIONS
+            | TriangleMeshDirtyMask::NORMAL_VECTORS
+            | TriangleMeshDirtyMask::TANGENT_SPACE_QUATERNIONS;
     }
 
     /// Applies the given similarity transform to the mesh, transforming vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn transform(&mut self, transform: &Similarity3<F>) {
+    pub fn transform(
+        &mut self,
+        transform: &Similarity3<F>,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.transformed(transform);
         }
@@ -513,108 +548,94 @@ impl<F: Float> TriangleMesh<F> {
         for tangent_space_quaternion in &mut self.tangent_space_quaternions {
             *tangent_space_quaternion = tangent_space_quaternion.transformed(transform);
         }
+
+        *dirty_mask |= TriangleMeshDirtyMask::POSITIONS
+            | TriangleMeshDirtyMask::NORMAL_VECTORS
+            | TriangleMeshDirtyMask::TANGENT_SPACE_QUATERNIONS;
     }
 
     /// Assigns the given colors to the mesh vertices.
     ///
     /// # Panics
     /// If the number of colors differs from the number of vertices.
-    pub fn set_colors(&mut self, colors: Vec<VertexColor<F>>) {
+    pub fn set_colors(
+        &mut self,
+        colors: Vec<VertexColor<F>>,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
         self.colors = colors;
-        self.color_change_tracker.notify_count_change();
+        *dirty_mask |= TriangleMeshDirtyMask::COLORS;
     }
 
     /// Sets the color of every vertex to the given color.
-    pub fn set_same_color(&mut self, color: VertexColor<F>) {
-        self.set_colors(vec![color; self.positions.len()]);
+    pub fn set_same_color(
+        &mut self,
+        color: VertexColor<F>,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
+        self.set_colors(vec![color; self.positions.len()], dirty_mask);
     }
 
     /// Merges the given mesh into this mesh.
     ///
     /// # Panics
     /// If the two meshes do not have the same set of vertex attributes.
-    pub fn merge_with(&mut self, other: &Self) {
+    pub fn merge_with(&mut self, other: &Self, dirty_mask: &mut TriangleMeshDirtyMask) {
         let original_n_indices = self.n_indices();
         let original_n_vertices = self.n_vertices();
 
         if self.has_positions() {
             assert!(other.has_positions());
             self.positions.extend_from_slice(&other.positions);
-            self.position_change_tracker.notify_count_change();
-
-            self.indices.extend_from_slice(&other.indices);
-            self.index_change_tracker.notify_count_change();
+            *dirty_mask |= TriangleMeshDirtyMask::POSITIONS;
         }
 
         if self.has_normal_vectors() {
             assert!(other.has_normal_vectors());
             self.normal_vectors.extend_from_slice(&other.normal_vectors);
-            self.normal_vector_change_tracker.notify_count_change();
+            *dirty_mask |= TriangleMeshDirtyMask::NORMAL_VECTORS;
         }
 
         if self.has_texture_coords() {
             assert!(other.has_texture_coords());
             self.texture_coords.extend_from_slice(&other.texture_coords);
-            self.texture_coord_change_tracker.notify_count_change();
+            *dirty_mask |= TriangleMeshDirtyMask::TEXTURE_COORDS;
         }
 
         if self.has_tangent_space_quaternions() {
             assert!(other.has_tangent_space_quaternions());
             self.tangent_space_quaternions
                 .extend_from_slice(&other.tangent_space_quaternions);
-            self.tangent_space_quaternion_change_tracker
-                .notify_count_change();
+            *dirty_mask |= TriangleMeshDirtyMask::TANGENT_SPACE_QUATERNIONS;
         }
 
         if self.has_colors() {
             assert!(other.has_colors());
             self.colors.extend_from_slice(&other.colors);
-            self.color_change_tracker.notify_count_change();
+            *dirty_mask |= TriangleMeshDirtyMask::COLORS;
         }
+
+        self.indices.extend_from_slice(&other.indices);
 
         let offset = u32::try_from(original_n_vertices).unwrap();
         for idx in &mut self.indices[original_n_indices..] {
             *idx += offset;
         }
+        *dirty_mask |= TriangleMeshDirtyMask::INDICES;
+    }
+}
+
+impl Resource for TriangleMesh<f32> {
+    type Handle = TriangleMeshHandle;
+    type DirtyMask = TriangleMeshDirtyMask;
+}
+
+impl ResourceDirtyMask for TriangleMeshDirtyMask {
+    fn empty() -> Self {
+        Self::empty()
     }
 
-    /// Forgets any recorded changes to the vertex positions.
-    pub fn reset_position_change_tracking(&self) {
-        self.position_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the vertex normal vectors.
-    pub fn reset_normal_vector_change_tracking(&self) {
-        self.normal_vector_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the vertex texture coordinates.
-    pub fn reset_texture_coord_change_tracking(&self) {
-        self.texture_coord_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the vertex tangent space quaternions.
-    pub fn reset_tangent_space_quaternion_change_tracking(&self) {
-        self.tangent_space_quaternion_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the vertex colors.
-    pub fn reset_color_change_tracking(&self) {
-        self.color_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the indices.
-    pub fn reset_index_change_tracking(&self) {
-        self.index_change_tracker.reset();
-    }
-
-    /// Forgets any recorded changes to the vertex attributes and indices.
-    pub fn reset_change_tracking(&self) {
-        self.reset_position_change_tracking();
-        self.reset_normal_vector_change_tracking();
-        self.reset_texture_coord_change_tracking();
-        self.reset_tangent_space_quaternion_change_tracking();
-        self.reset_color_change_tracking();
-        self.reset_index_change_tracking();
+    fn full() -> Self {
+        Self::all()
     }
 }

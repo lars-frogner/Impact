@@ -7,7 +7,7 @@ use impact_gpu::{
     shader_template_replacements,
 };
 use impact_light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager};
-use impact_mesh::buffer::MeshVertexAttributeLocation;
+use impact_mesh::gpu_resource::MeshVertexAttributeLocation;
 use impact_model::transform::InstanceModelLightTransform;
 use std::sync::LazyLock;
 

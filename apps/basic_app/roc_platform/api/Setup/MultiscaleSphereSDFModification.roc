@@ -1,8 +1,8 @@
 # Hash: 8394c9081c4b6b1534ee935b53380bdda4274ac36f11bc007a0d66471f11a04c
-# Generated: 2025-07-15T22:31:15+00:00
+# Generated: 2025-07-27T14:52:58+00:00
 # Rust type: impact_voxel::setup::MultiscaleSphereSDFModification
 # Type category: Component
-# Commit: 07de5ae9 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     MultiscaleSphereSDFModification,
     new,

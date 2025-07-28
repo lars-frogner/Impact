@@ -15,6 +15,7 @@ pub fn perform_setup_for_new_entities(
     let mut render_resources_desynchronized = false;
 
     scene::setup_scene_data_for_new_entities(
+        engine.resource_manager(),
         &engine.scene().read(),
         engine.graphics_device(),
         &*engine.assets().read(),
@@ -25,11 +26,12 @@ pub fn perform_setup_for_new_entities(
 
     physics::setup_physics_for_new_entities(
         &engine.simulator().read(),
-        engine.scene().read().mesh_repository(),
+        engine.resource_manager(),
         components,
     )?;
 
     scene::add_new_entities_to_scene_graph(
+        engine.resource_manager(),
         &engine.scene().read(),
         engine.ecs_world(),
         &mut || {

@@ -1,8 +1,8 @@
 # Hash: e11ab88a2f6b28b5079edebd2bf134d1d387c6df75985a8521e220cfc17f03c4
-# Generated: 2025-07-15T17:32:43+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_material::MaterialID
 # Type category: POD
-# Commit: 1fbb6f6b (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     MaterialID,
     write_bytes,

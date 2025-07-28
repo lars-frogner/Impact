@@ -1,6 +1,6 @@
 //! Passes for rendering gizmos.
 
-use crate::gizmo::{self, GizmoObscurability};
+use crate::gizmo::{self, GizmoObscurability, model::GizmoModel};
 use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
@@ -11,17 +11,16 @@ use impact_gpu::{
     wgpu,
 };
 use impact_mesh::{
-    MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, buffer::VertexBufferable,
+    MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, gpu_resource::VertexBufferable,
 };
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use impact_rendering::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     render_command::{self, STANDARD_FRONT_FACE, begin_single_render_pass},
-    resource::BasicRenderResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::fixed_color::FixedColorShaderTemplate,
     surface::RenderingSurface,
 };
-use impact_scene::model::ModelID;
 use std::borrow::Cow;
 
 /// Passes for rendering gizmos.
@@ -117,14 +116,16 @@ impl GizmoPasses {
     pub fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.depth_tested_pass.record(
             surface_texture_view,
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             timestamp_recorder,
             command_encoder,
@@ -132,7 +133,8 @@ impl GizmoPasses {
 
         self.non_depth_tested_pass.record(
             surface_texture_view,
-            render_resources,
+            resource_registries,
+            gpu_resources,
             render_attachment_texture_manager,
             timestamp_recorder,
             command_encoder,
@@ -211,12 +213,13 @@ impl GizmoPass {
     fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() else {
+        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(());
         };
 
@@ -240,11 +243,19 @@ impl GizmoPass {
             Cow::Borrowed(label),
         );
 
-        self.triangle_pipeline
-            .record(render_resources, camera_buffer_manager, &mut render_pass)?;
+        self.triangle_pipeline.record(
+            resource_registries,
+            gpu_resources,
+            camera_buffer_manager,
+            &mut render_pass,
+        )?;
 
-        self.line_pipeline
-            .record(render_resources, camera_buffer_manager, &mut render_pass)?;
+        self.line_pipeline.record(
+            resource_registries,
+            gpu_resources,
+            camera_buffer_manager,
+            &mut render_pass,
+        )?;
 
         Ok(())
     }
@@ -304,53 +315,57 @@ impl GizmoPassPipeline {
 
     fn record(
         &self,
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()> {
-        let model_ids = gizmo::model::gizmo_model_ids_for_mesh_primitive_and_obscurability(
+        let models = gizmo::model::gizmo_models_for_mesh_primitive_and_obscurability(
             self.mesh_primitive,
             self.obscurability,
         );
 
         match self.mesh_primitive {
             MeshPrimitive::Triangle => Self::record_for_triangles(
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 camera_buffer_manager,
                 render_pass,
                 &self.pipeline,
-                model_ids,
+                models,
             ),
             MeshPrimitive::LineSegment => Self::record_for_lines(
-                render_resources,
+                resource_registries,
+                gpu_resources,
                 camera_buffer_manager,
                 render_pass,
                 &self.pipeline,
-                model_ids,
+                models,
             ),
         }
     }
 
     fn record_for_triangles<'a>(
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
         pipeline: &wgpu::RenderPipeline,
-        model_ids: impl IntoIterator<Item = &'a ModelID>,
+        models: impl IntoIterator<Item = &'a GizmoModel>,
     ) -> Result<()> {
         render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        for model_id in model_ids {
-            let transform_buffer_manager = render_resources
+        for model in models {
+            let transform_buffer_manager = gpu_resources
                 .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransform>(
-                    model_id,
+                    model.model_id(),
                 )
                 .ok_or_else(|| {
                     anyhow!(
-                        "Missing model-view transform GPU buffer for model {}",
-                        model_id
+                        "Missing model-view transform GPU buffer for gizmo mesh {}",
+                        model.triangle_mesh_id()
                     )
                 })?;
 
@@ -369,13 +384,14 @@ impl GizmoPassPipeline {
 
             let mut vertex_buffer_slot = 1;
 
-            let mesh_id = model_id.triangle_mesh_id();
+            let mesh_id = model.triangle_mesh_id();
 
-            let mesh_buffer_manager = render_resources
-                .get_triangle_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .triangle_mesh()
+                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-            for vertex_buffer in mesh_buffer_manager.request_vertex_gpu_buffers(
+            for vertex_buffer in mesh_gpu_resources.request_vertex_gpu_buffers(
                 VertexAttributeSet::POSITION | VertexAttributeSet::COLOR,
             )? {
                 render_pass
@@ -385,14 +401,14 @@ impl GizmoPassPipeline {
             }
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
+                mesh_gpu_resources
                     .triangle_mesh_index_gpu_buffer()
                     .valid_buffer_slice(),
-                mesh_buffer_manager.triangle_mesh_index_format(),
+                mesh_gpu_resources.triangle_mesh_index_format(),
             );
 
             render_pass.draw_indexed(
-                0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                0..u32::try_from(mesh_gpu_resources.n_indices()).unwrap(),
                 0,
                 instance_range,
             );
@@ -402,25 +418,26 @@ impl GizmoPassPipeline {
     }
 
     fn record_for_lines<'a>(
-        render_resources: &impl BasicRenderResources,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
         pipeline: &wgpu::RenderPipeline,
-        model_ids: impl IntoIterator<Item = &'a ModelID>,
+        models: impl IntoIterator<Item = &'a GizmoModel>,
     ) -> Result<()> {
         render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        for model_id in model_ids {
-            let transform_buffer_manager = render_resources
+        for model in models {
+            let transform_buffer_manager = gpu_resources
                 .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransform>(
-                    model_id,
+                    model.model_id(),
                 )
                 .ok_or_else(|| {
                     anyhow!(
-                        "Missing model-view transform GPU buffer for model {}",
-                        model_id
+                        "Missing model-view transform GPU buffer for gizmo mesh {}",
+                        model.line_segment_mesh_id()
                     )
                 })?;
 
@@ -439,13 +456,14 @@ impl GizmoPassPipeline {
 
             let mut vertex_buffer_slot = 1;
 
-            let mesh_id = model_id.line_segment_mesh_id();
+            let mesh_id = model.line_segment_mesh_id();
 
-            let mesh_buffer_manager = render_resources
-                .get_line_segment_mesh_buffer_manager(mesh_id)
-                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+            let mesh_gpu_resources = gpu_resources
+                .line_segment_mesh()
+                .get_by_pid(&resource_registries.line_segment_mesh().index, mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-            for vertex_buffer in mesh_buffer_manager.request_vertex_gpu_buffers(
+            for vertex_buffer in mesh_gpu_resources.request_vertex_gpu_buffers(
                 VertexAttributeSet::POSITION | VertexAttributeSet::COLOR,
             )? {
                 render_pass
@@ -455,7 +473,7 @@ impl GizmoPassPipeline {
             }
 
             render_pass.draw(
-                0..u32::try_from(mesh_buffer_manager.n_vertices()).unwrap(),
+                0..u32::try_from(mesh_gpu_resources.n_vertices()).unwrap(),
                 instance_range,
             );
         }

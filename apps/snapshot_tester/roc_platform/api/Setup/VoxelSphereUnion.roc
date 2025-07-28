@@ -1,8 +1,8 @@
 # Hash: 2a35171ecaae57ff919ca1effa4b94b84c15d2b041aae30e4088d6fd96fcb818
-# Generated: 2025-07-15T22:50:47+00:00
+# Generated: 2025-07-27T14:53:54+00:00
 # Rust type: impact_voxel::setup::VoxelSphereUnion
 # Type category: Component
-# Commit: 07de5ae9 (dirty)
+# Commit: 397d36d3 (dirty)
 module [
     VoxelSphereUnion,
     new,
