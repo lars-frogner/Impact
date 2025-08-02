@@ -29,7 +29,7 @@ pub struct PlanarTextureProjection<F: Float> {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub enum TextureProjectionSpecification {
+pub enum TextureProjectionDeclaration {
     Planar {
         origin: Point3<f32>,
         u_vector: Vector3<f32>,

@@ -15,9 +15,8 @@ use impact_ecs::{
     world::{EntityEntry, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_gpu::device::GraphicsDevice;
-use impact_material::{MaterialHandle, MaterialTextureProvider};
-use impact_mesh::TriangleMeshHandle;
+use impact_material::MaterialID;
+use impact_mesh::TriangleMeshID;
 use impact_physics::rigid_body::RigidBodyManager;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
@@ -33,8 +32,6 @@ use parking_lot::RwLock;
 pub fn setup_scene_data_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     scene: &Scene,
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
     rigid_body_manager: &RwLock<RigidBodyManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
@@ -49,25 +46,20 @@ pub fn setup_scene_data_for_new_entities(
     );
 
     material::setup_materials_for_new_entities(
-        graphics_device,
-        texture_provider,
-        scene.material_library(),
+        resource_manager,
         scene.instance_feature_manager(),
         components,
         desynchronized,
     )?;
 
     voxel::setup_voxel_objects_for_new_entities(
+        resource_manager,
         rigid_body_manager,
-        scene.voxel_manager(),
+        scene.voxel_object_manager(),
         components,
     )?;
 
-    mesh::generate_missing_vertex_properties_for_new_entity_meshes(
-        resource_manager,
-        &scene.material_library().read(),
-        components,
-    );
+    mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, components);
 
     Ok(())
 }
@@ -97,7 +89,7 @@ pub fn add_new_entities_to_scene_graph(
     setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, components)?;
 
     voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
-        scene.voxel_manager(),
+        scene.voxel_object_manager(),
         scene.instance_feature_manager(),
         scene.scene_graph(),
         components,
@@ -115,12 +107,6 @@ pub fn cleanup_scene_data_for_removed_entity(
 ) {
     remove_scene_graph_model_instance_node_for_entity(scene, entity, desynchronized);
 
-    impact_material::setup::cleanup_material_for_removed_entity(
-        scene.instance_feature_manager(),
-        entity,
-        desynchronized,
-    );
-
     impact_light::setup::cleanup_light_for_removed_entity(
         scene.light_storage(),
         entity,
@@ -135,7 +121,7 @@ pub fn cleanup_scene_data_for_removed_entity(
     );
 
     impact_voxel::setup::cleanup_voxel_object_for_removed_entity(
-        scene.voxel_manager(),
+        scene.voxel_object_manager(),
         entity,
         desynchronized,
     );
@@ -194,13 +180,12 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let material_library = scene.material_library().read();
             let mut instance_feature_manager = scene.instance_feature_manager().write();
             let mut scene_graph = scene.scene_graph().write();
         },
         components,
-        |mesh_handle: &TriangleMeshHandle,
-         material: &MaterialHandle,
+        |mesh_id: &TriangleMeshID,
+         material_id: &MaterialID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          parent: Option<&SceneGraphParentNodeHandle>,
@@ -220,12 +205,12 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
 
             let (node_handle, flags) = impact_scene::setup::setup_scene_graph_model_instance_node(
                 &resource_manager.triangle_meshes,
-                &material_library,
+                &resource_manager.materials,
                 &mut instance_feature_manager,
                 &mut scene_graph,
                 model_to_parent_transform,
-                *mesh_handle,
-                material,
+                *mesh_id,
+                *material_id,
                 parent,
                 flags,
                 uncullable,

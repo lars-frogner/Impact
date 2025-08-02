@@ -7,7 +7,7 @@ use crate::{
         postprocessing_pass::PostprocessingRenderPass,
         render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
     },
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate,
     surface::RenderingSurface,
 };
@@ -147,7 +147,6 @@ impl TemporalAntiAliasingRenderCommands {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
@@ -163,7 +162,6 @@ impl TemporalAntiAliasingRenderCommands {
             self.blending_pass.record(
                 rendering_surface,
                 surface_texture_view,
-                resource_registries,
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,

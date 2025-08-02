@@ -26,7 +26,7 @@ use medium::UniformMedium;
 use num_traits::FromPrimitive;
 use parking_lot::RwLock;
 use rigid_body::RigidBodyManager;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
@@ -327,6 +327,14 @@ impl<C: Collidable> PhysicsSimulator<C> {
         motion_driver_manager.apply_motion(rigid_body_manager, new_simulation_time);
 
         force_generator_manager.apply_forces_and_torques(medium, rigid_body_manager);
+    }
+}
+
+impl PhysicsConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        self.rigid_body_force.resolve_paths(root_path);
     }
 }
 

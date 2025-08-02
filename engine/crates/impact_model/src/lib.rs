@@ -16,7 +16,7 @@ use impact_containers::{
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_math::{self, Hash64};
 use roc_integration::roc;
-use std::{borrow::Cow, hash::Hash, mem, ops::Range};
+use std::{borrow::Cow, fmt, hash::Hash, mem, ops::Range};
 
 /// Represents a piece of data associated with a model instance.
 pub trait InstanceFeature: Pod {
@@ -81,12 +81,15 @@ pub struct ModelInstanceBuffer {
 }
 
 /// Identifier for a type of instance feature.
-pub type InstanceFeatureTypeID = Hash64;
+#[roc(parents = "Model")]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
+pub struct InstanceFeatureTypeID(Hash64);
 
 /// Identifier for an instance feature value.
 #[roc(parents = "Model")]
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct InstanceFeatureID {
     feature_type_id: InstanceFeatureTypeID,
     idx: u64,
@@ -459,14 +462,12 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
     }
 
     /// Removes the instance buffers that are not part of the given manager
-    /// state. Also removes all buffered features in the feature storages.
+    /// state.
     pub fn reset_to_state(&mut self, state: &InstanceFeatureManagerState<MID>) {
         self.instance_buffers
             .retain(|model_id, _| state.model_ids.contains(model_id));
 
-        for storage in self.feature_storages.values_mut() {
-            storage.remove_all_features();
-        }
+        // TODO: remove appropriate features from storages
     }
 
     /// Returns mutable references to the first and second instance feature
@@ -721,11 +722,36 @@ impl ModelInstanceBuffer {
     }
 }
 
+impl InstanceFeatureTypeID {
+    /// Creates an ID that does not represent a valid feature type.
+    pub fn not_applicable() -> Self {
+        Self(Hash64::zeroed())
+    }
+
+    /// Creates an instance feature ID wrapping the given hash.
+    pub const fn from_hash(hash: Hash64) -> Self {
+        Self(hash)
+    }
+
+    /// Returns `true` if this ID does not represent a valid feature type.
+    pub fn is_not_applicable(&self) -> bool {
+        *self == Self::not_applicable()
+    }
+}
+
+impl fmt::Display for InstanceFeatureTypeID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl nohash_hasher::IsEnabled for InstanceFeatureTypeID {}
+
 impl InstanceFeatureID {
     /// Creates an ID that does not represent a valid feature.
     pub fn not_applicable() -> Self {
         Self {
-            feature_type_id: Hash64::zeroed(),
+            feature_type_id: InstanceFeatureTypeID::not_applicable(),
             idx: u64::MAX,
         }
     }
@@ -741,7 +767,7 @@ impl InstanceFeatureID {
 
     /// Returns `true` if this ID does not represent a valid feature.
     pub fn is_not_applicable(&self) -> bool {
-        self.feature_type_id == Hash64::zeroed() && self.idx == u64::MAX
+        self.feature_type_id == InstanceFeatureTypeID::not_applicable() && self.idx == u64::MAX
     }
 }
 

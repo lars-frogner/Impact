@@ -15,7 +15,7 @@ use crate::{
         },
         render_attachment_texture_copy_command::RenderAttachmentTextureCopyCommand,
     },
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::{
         bloom_blending::BloomBlendingShaderTemplate,
         bloom_downsampling::BloomDownsamplingShaderTemplate,
@@ -293,7 +293,6 @@ impl BloomRenderCommands {
 
     pub(super) fn record(
         &self,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -369,7 +368,7 @@ impl BloomRenderCommands {
 
             let mesh_gpu_resources = gpu_resources
                 .triangle_mesh()
-                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .get(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_gpu_resources
@@ -447,7 +446,7 @@ impl BloomRenderCommands {
 
             let mesh_gpu_resources = gpu_resources
                 .triangle_mesh()
-                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .get(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_gpu_resources
@@ -512,7 +511,7 @@ impl BloomRenderCommands {
 
         let mesh_gpu_resources = gpu_resources
             .triangle_mesh()
-            .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+            .get(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_gpu_resources

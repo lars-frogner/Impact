@@ -1,8 +1,8 @@
-# Hash: 64837441505002103230f9214ec2d7a7329e4ddf0413cd13f1bf2a1fb2798f42
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 7c7c38c2a07be5a300c35723711923e517342671929d981223159989724b707d
+# Generated: 2025-08-01T06:54:20+00:00
 # Rust type: impact_material::setup::physical::TexturedColor
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6 (dirty)
 module [
     TexturedColor,
     add,
@@ -13,7 +13,7 @@ module [
 
 import Entity
 import Entity.Arg
-import Rendering.TextureID
+import Texture.TextureID
 import core.Builtin
 
 ## A textured base color.
@@ -25,7 +25,7 @@ import core.Builtin
 ## reflected by the material). For metallic materials, the base color affects
 ## the material's specular reflectance. For emissive materials, the base color
 ## affects the material's emissive luminance.
-TexturedColor : Rendering.TextureID.TextureID
+TexturedColor : Texture.TextureID.TextureID
 
 ## Adds a value of the [TexturedColor] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -51,8 +51,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, TexturedColor -> List U8
 write_packet = |bytes, val|
     type_id = 6029062986640164717
-    size = 4
-    alignment = 4
+    size = 8
+    alignment = 8
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -63,8 +63,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List TexturedColor -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 6029062986640164717
-    size = 4
-    alignment = 4
+    size = 8
+    alignment = 8
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -84,8 +84,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, TexturedColor -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(4)
-    |> Rendering.TextureID.write_bytes(value)
+    |> List.reserve(8)
+    |> Texture.TextureID.write_bytes(value)
 
 ## Deserializes a value of [TexturedColor] from its bytes in the
 ## representation used by the engine.
@@ -93,13 +93,13 @@ from_bytes : List U8 -> Result TexturedColor _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 4 }) |> Rendering.TextureID.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 8 }) |> Texture.TextureID.from_bytes?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

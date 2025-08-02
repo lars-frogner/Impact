@@ -5,10 +5,14 @@ pub mod legacy;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_light::buffer::LightGPUBufferManager;
+use impact_material::gpu_resource::{
+    MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap,
+};
 use impact_mesh::gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap};
 use impact_model::buffer::InstanceFeatureGPUBufferManager;
 use impact_rendering::resource::BasicGPUResources;
 use impact_scene::{model::ModelID, skybox::resource::SkyboxGPUResourceManager};
+use impact_texture::gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap};
 use impact_voxel::{
     VoxelObjectID,
     resource::{VoxelGPUResources, VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
@@ -18,6 +22,11 @@ use impact_voxel::{
 pub struct RenderResourceManager {
     pub triangle_meshes: TriangleMeshGPUResourceMap,
     pub line_segment_meshes: LineSegmentMeshGPUResourceMap,
+    pub textures: TextureMap,
+    pub samplers: SamplerMap,
+    pub lookup_table_bind_groups: LookupTableBindGroupMap,
+    pub material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap,
+    pub material_texture_bind_groups: MaterialTextureBindGroupMap,
     pub legacy: legacy::RenderResourceManager,
 }
 
@@ -26,6 +35,11 @@ impl RenderResourceManager {
         Self {
             triangle_meshes: TriangleMeshGPUResourceMap::new(),
             line_segment_meshes: LineSegmentMeshGPUResourceMap::new(),
+            textures: TextureMap::new(),
+            samplers: SamplerMap::new(),
+            lookup_table_bind_groups: LookupTableBindGroupMap::new(),
+            material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap::new(),
+            material_texture_bind_groups: MaterialTextureBindGroupMap::new(),
             legacy: legacy::RenderResourceManager::new(),
         }
     }
@@ -44,6 +58,26 @@ impl BasicGPUResources for RenderResourceManager {
 
     fn line_segment_mesh(&self) -> &LineSegmentMeshGPUResourceMap {
         &self.line_segment_meshes
+    }
+
+    fn texture(&self) -> &TextureMap {
+        &self.textures
+    }
+
+    fn sampler(&self) -> &SamplerMap {
+        &self.samplers
+    }
+
+    fn lookup_table_bind_group(&self) -> &LookupTableBindGroupMap {
+        &self.lookup_table_bind_groups
+    }
+
+    fn material_template_bind_group_layout(&self) -> &MaterialTemplateBindGroupLayoutMap {
+        &self.material_template_bind_group_layouts
+    }
+
+    fn material_texture_bind_group(&self) -> &MaterialTextureBindGroupMap {
+        &self.material_texture_bind_groups
     }
 
     fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager> {

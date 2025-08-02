@@ -2,5 +2,5 @@ build
 lib
 dist
 scripts/main
-assets
+resources
 snapshots/output

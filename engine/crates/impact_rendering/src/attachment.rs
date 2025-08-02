@@ -1132,12 +1132,7 @@ impl RenderAttachmentTexture {
             })
             .collect();
 
-        let texture = Texture::new(
-            texture,
-            base_texture_view,
-            wgpu::TextureViewDimension::D2,
-            None,
-        );
+        let texture = Texture::new(texture, base_texture_view, wgpu::TextureViewDimension::D2);
 
         Self {
             quantity,

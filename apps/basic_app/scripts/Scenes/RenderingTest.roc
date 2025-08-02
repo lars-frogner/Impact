@@ -34,9 +34,9 @@ import pf.Setup.UniformMetalness
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Setup.TriangleMeshID
+import pf.Comp.TriangleMeshID
 import pf.Physics.AngularVelocity
-import pf.Rendering.TextureID
+import pf.Texture.TextureID
 
 entity_ids = {
     player: Entity.id("player"),
@@ -78,7 +78,7 @@ setup! = |_|
 
     Ok({})
 
-skybox = Skybox.new(Rendering.TextureID.from_name("ocean_skybox"), 1e5)
+skybox = Skybox.new(Texture.TextureID.from_name("ocean_skybox"), 1e5)
 
 player =
     Entity.new
@@ -93,7 +93,7 @@ player =
 
 dragon =
     Entity.new
-    |> Setup.TriangleMeshID.add_from_name("dragon")
+    |> Comp.TriangleMeshID.add_from_name("dragon")
     |> Comp.ModelTransform.add_with_scale(0.06)
     |> Comp.ReferenceFrame.add_new(
         (0.0, 3.5, 11.0),
@@ -117,7 +117,7 @@ pole =
 
 abstract_object =
     Entity.new
-    |> Setup.TriangleMeshID.add_from_name("abstract_object")
+    |> Comp.TriangleMeshID.add_from_name("abstract_object")
     |> Comp.ModelTransform.add_with_scale(0.02)
     |> Comp.ReferenceFrame.add_unoriented((7.0, 9.7, 5.0))
     |> Comp.Motion.add_stationary
@@ -133,7 +133,7 @@ abstract_object =
 
 abstract_pyramid =
     Entity.new
-    |> Setup.TriangleMeshID.add_from_name("abstract_pyramid")
+    |> Comp.TriangleMeshID.add_from_name("abstract_pyramid")
     |> Comp.ModelTransform.add_with_scale(0.035)
     |> Comp.ReferenceFrame.add_unoriented((-1.0, 11.0, 9.0))
     |> Comp.Motion.add_stationary
@@ -171,7 +171,7 @@ sphere =
 
 abstract_cube =
     Entity.new
-    |> Setup.TriangleMeshID.add_from_name("abstract_cube")
+    |> Comp.TriangleMeshID.add_from_name("abstract_cube")
     |> Comp.ModelTransform.add_with_scale(0.016)
     |> Comp.ReferenceFrame.add_unoriented((-9.0, 7.8, 5.0))
     |> Comp.Motion.add_stationary
@@ -191,22 +191,22 @@ floor =
     |> Setup.PlanarTextureProjection.add_for_rectangle(Setup.RectangleMesh.unit_square, 2, 2)
     |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
-    |> Setup.TexturedColor.add(Rendering.TextureID.from_name("wood_floor_color_texture"))
+    |> Setup.TexturedColor.add(Texture.TextureID.from_name("wood_floor_color_texture"))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
         Setup.UniformSpecularReflectance.living_tissue,
         100.0,
     )
-    |> Setup.TexturedRoughness.add_unscaled(Rendering.TextureID.from_name("wood_floor_roughness_texture"))
-    |> Setup.NormalMap.add(Rendering.TextureID.from_name("wood_floor_normal_texture"))
+    |> Setup.TexturedRoughness.add_unscaled(Texture.TextureID.from_name("wood_floor_roughness_texture"))
+    |> Setup.NormalMap.add(Texture.TextureID.from_name("wood_floor_normal_texture"))
 
 wall_base =
     Entity.new
     |> Setup.RectangleMesh.add_unit_square
     |> Setup.PlanarTextureProjection.add_for_rectangle(Setup.RectangleMesh.unit_square, 2, 2)
-    |> Setup.TexturedColor.add(Rendering.TextureID.from_name("bricks_color_texture"))
+    |> Setup.TexturedColor.add(Texture.TextureID.from_name("bricks_color_texture"))
     |> Setup.UniformSpecularReflectance.add(0.02)
-    |> Setup.TexturedRoughness.add_unscaled(Rendering.TextureID.from_name("bricks_roughness_texture"))
-    |> Setup.ParallaxMap.add_new(Rendering.TextureID.from_name("bricks_height_texture"), 0.02, (1 / 25, 1 / 25))
+    |> Setup.TexturedRoughness.add_unscaled(Texture.TextureID.from_name("bricks_roughness_texture"))
+    |> Setup.ParallaxMap.add_new(Texture.TextureID.from_name("bricks_height_texture"), 0.02, (1 / 25, 1 / 25))
 
 upper_x_wall =
     wall_base

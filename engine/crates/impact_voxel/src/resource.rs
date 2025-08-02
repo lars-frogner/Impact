@@ -9,9 +9,8 @@ use crate::{
     },
     voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use bytemuck::Pod;
-use impact_assets::Assets;
 use impact_containers::HashMap;
 use impact_gpu::{
     assert_uniform_valid,
@@ -21,10 +20,7 @@ use impact_gpu::{
     indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
     push_constant::{PushConstant, PushConstantGroup, PushConstantVariant},
     storage,
-    texture::{
-        self, ColorSpace, Sampler, SamplerConfig, TexelDescription, Texture,
-        TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
-    },
+    texture::{self, ColorSpace, Sampler, TexelDescription, Texture},
     uniform::{self, UniformBufferable},
     wgpu,
 };
@@ -35,10 +31,15 @@ use impact_mesh::gpu_resource::{
 };
 use impact_rendering::push_constant::BasicPushConstantVariant;
 use impact_scene::model::ModelID;
+use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::{borrow::Cow, mem, ops::Range, sync::LazyLock};
 
 pub static VOXEL_MODEL_ID: LazyLock<ModelID> =
     LazyLock::new(|| ModelID::hash_only(Hash64::from_str("Voxel model")));
+
+pub trait VoxelResourceRegistries {
+    fn voxel_type(&self) -> &VoxelTypeRegistry;
+}
 
 pub trait VoxelGPUResources {
     /// Returns the GPU resource manager for voxel materials, or [`None`] if it
@@ -145,7 +146,8 @@ impl VoxelMaterialGPUResourceManager {
     /// registry.
     pub fn for_voxel_type_registry(
         graphics_device: &GraphicsDevice,
-        assets: &mut Assets,
+        textures: &TextureMap,
+        samplers: &SamplerMap,
         voxel_type_registry: &VoxelTypeRegistry,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<Self> {
@@ -155,54 +157,36 @@ impl VoxelMaterialGPUResourceManager {
             Cow::Borrowed("Fixed voxel material properties"),
         );
 
-        let color_texture_array_id = assets.load_texture_array_from_paths(
-            "voxel_color_texture_array",
-            voxel_type_registry.color_texture_paths(),
-            TextureConfig {
-                color_space: ColorSpace::Srgb,
-                max_mip_level_count: None,
-            },
-            Some(SamplerConfig {
-                addressing: TextureAddressingConfig::Repeating,
-                filtering: TextureFilteringConfig::Basic,
-            }),
-        )?;
+        let color_texture_array = textures
+            .get(voxel_type_registry.color_texture_array_id().unwrap())
+            .ok_or_else(|| anyhow!("Missing voxel material color texture array"))?;
 
-        let roughness_texture_array_id = assets.load_texture_array_from_paths(
-            "voxel_roughness_texture_array",
-            voxel_type_registry.roughness_texture_paths(),
-            TextureConfig {
-                color_space: ColorSpace::Linear,
-                max_mip_level_count: None,
-            },
-            None,
-        )?;
+        let roughness_texture_array = textures
+            .get(voxel_type_registry.roughness_texture_array_id().unwrap())
+            .ok_or_else(|| anyhow!("Missing voxel material roughness texture array"))?;
 
-        let normal_texture_array_id = assets.load_texture_array_from_paths(
-            "voxel_normal_texture_array",
-            voxel_type_registry.normal_texture_paths(),
-            TextureConfig {
-                color_space: ColorSpace::Linear,
-                max_mip_level_count: None,
-            },
-            None,
-        )?;
+        let normal_texture_array = textures
+            .get(voxel_type_registry.normal_texture_array_id().unwrap())
+            .ok_or_else(|| anyhow!("Missing voxel material normal texture array"))?;
 
-        let color_texture_array = &assets.textures[&color_texture_array_id];
-        let roughness_texture_array = &assets.textures[&roughness_texture_array_id];
-        let normal_texture_array = &assets.textures[&normal_texture_array_id];
-
-        let sampler = &assets.samplers[&color_texture_array.sampler_id().unwrap()];
+        let sampler = samplers
+            .get(
+                color_texture_array
+                    .sampler_id
+                    .ok_or_else(|| anyhow!("Voxel material color texture array has no sampler"))?,
+            )
+            .ok_or_else(|| anyhow!("Missing voxel material texture sampler"))?;
 
         let bind_group_layout =
             Self::get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry);
+
         let bind_group = Self::create_bind_group(
             graphics_device.device(),
             &bind_group_layout,
             &fixed_property_buffer,
-            color_texture_array,
-            roughness_texture_array,
-            normal_texture_array,
+            &color_texture_array.texture,
+            &roughness_texture_array.texture,
+            &normal_texture_array.texture,
             sampler,
         );
 
@@ -225,7 +209,7 @@ impl VoxelMaterialGPUResourceManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry
-            .get_or_create_layout(Self::MATERIAL_RESOURCES_BIND_GROUP_LAYOUT_ID, || {
+            .get_or_create_layout(Self::MATERIAL_RESOURCES_BIND_GROUP_LAYOUT_ID.hash(), || {
                 Self::create_bind_group_layout(graphics_device.device())
             })
     }
@@ -477,7 +461,7 @@ impl VoxelObjectGPUBufferManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            Self::POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT_ID,
+            Self::POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT_ID.hash(),
             || Self::create_position_and_normal_buffer_bind_group_layout(graphics_device.device()),
         )
     }
@@ -490,7 +474,7 @@ impl VoxelObjectGPUBufferManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            Self::CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT_ID,
+            Self::CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT_ID.hash(),
             || Self::create_submesh_and_argument_buffer_bind_group_layout(graphics_device.device()),
         )
     }

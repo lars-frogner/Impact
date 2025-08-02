@@ -10,8 +10,8 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_material::MaterialTextureProvider;
 use impact_math::ConstStringHash64;
+use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::borrow::Cow;
 
 /// Manager for GPU resources used for a skybox.
@@ -41,19 +41,22 @@ impl SkyboxGPUResourceManager {
     /// Returns an error if the skybox cubemap texture or sampler is missing.
     pub fn for_skybox(
         graphics_device: &GraphicsDevice,
-        texture_provider: &impl MaterialTextureProvider,
+        textures: &TextureMap,
+        samplers: &SamplerMap,
         skybox: Skybox,
     ) -> Result<Self> {
-        let cubemap_texture = texture_provider
-            .get_texture(&skybox.cubemap_texture_id)
+        let sampled_texture = textures
+            .get(skybox.cubemap_texture_id)
             .ok_or_else(|| anyhow!("Missing texture for skybox"))?;
 
-        let sampler = cubemap_texture
-            .sampler_id()
-            .and_then(|sampler_id| texture_provider.get_sampler(&sampler_id))
+        let cubemap_texture = &sampled_texture.texture;
+
+        let sampler = sampled_texture
+            .sampler_id
+            .and_then(|sampler_id| samplers.get(sampler_id))
             .ok_or_else(|| anyhow!("Missing sampler for skybox"))?;
 
-        let properties_uniform = SkyboxProperties::new(skybox.max_luminance);
+        let properties_uniform = SkyboxProperties::new(skybox.max_luminance as f32);
 
         let properties_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
             graphics_device,
@@ -100,11 +103,12 @@ impl SkyboxGPUResourceManager {
     pub fn sync_with_skybox(
         &mut self,
         graphics_device: &GraphicsDevice,
-        texture_provider: &impl MaterialTextureProvider,
+        textures: &TextureMap,
+        samplers: &SamplerMap,
         skybox: Skybox,
     ) -> Result<()> {
         if skybox != self.skybox {
-            *self = Self::for_skybox(graphics_device, texture_provider, skybox)?;
+            *self = Self::for_skybox(graphics_device, textures, samplers, skybox)?;
         }
         Ok(())
     }

@@ -1,8 +1,8 @@
-# Hash: e1e98944a8ab1ea1f846b176c45c5faadeea66232a4128a3daba526d484baf2a
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 7f7eee57d91b2a804b1eb39f7a9ab0ce80794d26b6a5e0e40db1fed634808fb8
+# Generated: 2025-08-01T06:51:20+00:00
 # Rust type: impact::command::scene::SceneCommand
 # Type category: Inline
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6
 module [
     SceneCommand,
     write_bytes,
@@ -29,36 +29,36 @@ write_bytes = |bytes, value|
     when value is
         SetSkybox(val) ->
             bytes
-            |> List.reserve(10)
+            |> List.reserve(17)
             |> List.append(0)
             |> Skybox.write_bytes(val)
-            |> List.concat(List.repeat(0, 1))
 
         SetSceneEntityActiveState { entity_id, state } ->
             bytes
-            |> List.reserve(10)
+            |> List.reserve(17)
             |> List.append(1)
             |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
+            |> List.concat(List.repeat(0, 7))
 
         Clear ->
             bytes
-            |> List.reserve(10)
+            |> List.reserve(17)
             |> List.append(2)
-            |> List.concat(List.repeat(0, 9))
+            |> List.concat(List.repeat(0, 16))
 
 ## Deserializes a value of [SceneCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result SceneCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 10 then
+    if List.len(bytes) != 17 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
             [0, .. as data_bytes] ->
                 Ok(
                     SetSkybox(
-                        data_bytes |> List.sublist({ start: 0, len: 8 }) |> Skybox.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 16 }) |> Skybox.from_bytes?,
                     ),
                 )
 

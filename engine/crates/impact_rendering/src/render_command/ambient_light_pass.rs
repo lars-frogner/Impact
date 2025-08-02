@@ -17,8 +17,7 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    wgpu,
+    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_light::{LightStorage, buffer::LightGPUBufferManager};
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
@@ -42,6 +41,7 @@ impl AmbientLightPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        resource_registries: &impl BasicResourceRegistries,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
         let push_constants = AmbientLightShaderTemplate::push_constants();
@@ -75,8 +75,15 @@ impl AmbientLightPass {
             ),
         );
 
-        bind_group_layouts
-            .push(lookup_tables::specular_ggx_reflectance::get_or_create_texture_and_sampler_bind_group_layout(graphics_device, bind_group_layout_registry));
+        let specular_ggx_reflectance_table = resource_registries
+            .lookup_table()
+            .get(lookup_tables::specular_ggx_reflectance::lookup_table_id())
+            .expect("Missing specular GGX reflectance lookup table");
+
+        bind_group_layouts.push(
+            specular_ggx_reflectance_table
+                .get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry),
+        );
 
         let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
             bind_group_layouts.iter().collect();
@@ -243,10 +250,8 @@ impl AmbientLightPass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
-        gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -295,15 +300,16 @@ impl AmbientLightPass {
         );
         bind_group_index += 1;
 
-        let specular_ggx_reflectance_lookup_table_resource_group = gpu_resource_group_manager
-            .get_resource_group(lookup_tables::specular_ggx_reflectance::resource_group_id())
+        let specular_ggx_reflectance_lookup_table_bind_group = gpu_resources
+            .lookup_table_bind_group()
+            .get(lookup_tables::specular_ggx_reflectance::lookup_table_id())
             .ok_or_else(|| {
                 anyhow!("Missing GPU resource group for specular GGX reflectance lookup table")
             })?;
 
         render_pass.set_bind_group(
             bind_group_index,
-            specular_ggx_reflectance_lookup_table_resource_group.bind_group(),
+            &specular_ggx_reflectance_lookup_table_bind_group.bind_group,
             &[],
         );
 
@@ -311,7 +317,7 @@ impl AmbientLightPass {
 
         let mesh_gpu_resources = gpu_resources
             .triangle_mesh()
-            .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+            .get(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_gpu_resources

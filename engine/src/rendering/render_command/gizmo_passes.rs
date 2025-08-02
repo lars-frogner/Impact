@@ -17,7 +17,7 @@ use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use impact_rendering::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     render_command::{self, STANDARD_FRONT_FACE, begin_single_render_pass},
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::fixed_color::FixedColorShaderTemplate,
     surface::RenderingSurface,
 };
@@ -116,7 +116,6 @@ impl GizmoPasses {
     pub fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -124,7 +123,6 @@ impl GizmoPasses {
     ) -> Result<()> {
         self.depth_tested_pass.record(
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             timestamp_recorder,
@@ -133,7 +131,6 @@ impl GizmoPasses {
 
         self.non_depth_tested_pass.record(
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             timestamp_recorder,
@@ -213,7 +210,6 @@ impl GizmoPass {
     fn record(
         &self,
         surface_texture_view: &wgpu::TextureView,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -243,19 +239,11 @@ impl GizmoPass {
             Cow::Borrowed(label),
         );
 
-        self.triangle_pipeline.record(
-            resource_registries,
-            gpu_resources,
-            camera_buffer_manager,
-            &mut render_pass,
-        )?;
+        self.triangle_pipeline
+            .record(gpu_resources, camera_buffer_manager, &mut render_pass)?;
 
-        self.line_pipeline.record(
-            resource_registries,
-            gpu_resources,
-            camera_buffer_manager,
-            &mut render_pass,
-        )?;
+        self.line_pipeline
+            .record(gpu_resources, camera_buffer_manager, &mut render_pass)?;
 
         Ok(())
     }
@@ -315,7 +303,6 @@ impl GizmoPassPipeline {
 
     fn record(
         &self,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
@@ -327,7 +314,6 @@ impl GizmoPassPipeline {
 
         match self.mesh_primitive {
             MeshPrimitive::Triangle => Self::record_for_triangles(
-                resource_registries,
                 gpu_resources,
                 camera_buffer_manager,
                 render_pass,
@@ -335,7 +321,6 @@ impl GizmoPassPipeline {
                 models,
             ),
             MeshPrimitive::LineSegment => Self::record_for_lines(
-                resource_registries,
                 gpu_resources,
                 camera_buffer_manager,
                 render_pass,
@@ -346,7 +331,6 @@ impl GizmoPassPipeline {
     }
 
     fn record_for_triangles<'a>(
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
@@ -388,7 +372,7 @@ impl GizmoPassPipeline {
 
             let mesh_gpu_resources = gpu_resources
                 .triangle_mesh()
-                .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+                .get(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
             for vertex_buffer in mesh_gpu_resources.request_vertex_gpu_buffers(
@@ -418,7 +402,6 @@ impl GizmoPassPipeline {
     }
 
     fn record_for_lines<'a>(
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         camera_buffer_manager: &CameraGPUBufferManager,
         render_pass: &mut wgpu::RenderPass<'_>,
@@ -460,7 +443,7 @@ impl GizmoPassPipeline {
 
             let mesh_gpu_resources = gpu_resources
                 .line_segment_mesh()
-                .get_by_pid(&resource_registries.line_segment_mesh().index, mesh_id)
+                .get(mesh_id)
                 .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
             for vertex_buffer in mesh_gpu_resources.request_vertex_gpu_buffers(

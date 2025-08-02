@@ -36,13 +36,6 @@ pub enum MeshID {
     LineSegment(LineSegmentMeshID),
 }
 
-/// Handle to a [`TriangleMesh`] or [`LineSegmentMesh`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum MeshHandle {
-    Triangle(TriangleMeshHandle),
-    LineSegment(LineSegmentMeshHandle),
-}
-
 /// The geometric primitive used for a mesh.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeshPrimitive {
@@ -166,7 +159,7 @@ impl From<LineSegmentMeshID> for StringHash64 {
     }
 }
 
-impl fmt::Display for MeshHandle {
+impl fmt::Display for MeshID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Triangle(id) => write!(f, "{id}"),

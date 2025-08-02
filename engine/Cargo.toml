@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "crates/impact_assets",
     "crates/impact_camera",
     "crates/impact_containers",
     "crates/impact_controller",
@@ -203,7 +202,6 @@ clap = { workspace = true, optional = true }
 egui = { version = "0.32", features = ["log"], optional = true }
 egui-wgpu = { version = "0.32", optional = true }
 egui-winit = { version = "0.32", optional = true }
-impact_assets = { path = "crates/impact_assets", features = ["ron"] }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }
 impact_controller = { path = "crates/impact_controller", features = [
@@ -230,7 +228,7 @@ impact_rendering = { path = "crates/impact_rendering", features = ["serde"] }
 impact_resource = { path = "crates/impact_resource" }
 impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
 impact_scheduling = { path = "crates/impact_scheduling" }
-impact_texture = { path = "crates/impact_texture" }
+impact_texture = { path = "crates/impact_texture", features = ["bincode", "serde"] }
 impact_thread = { path = "crates/impact_thread" }
 impact_voxel = { path = "crates/impact_voxel", features = ["ecs", "ron"] }
 inventory = { workspace = true }

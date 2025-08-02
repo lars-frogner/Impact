@@ -20,7 +20,7 @@ use impact_geometry::ModelTransform;
 use impact_math::StringHash64;
 use nalgebra::Point3;
 use roc_integration::roc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 define_setup_type! {
     target = DetailedDragForceGeneratorID;
@@ -49,7 +49,6 @@ pub fn setup_detailed_drag_force<'a>(
     model_transform: &ModelTransform,
     drag_load_map_id: StringHash64,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
-    disable_saving: bool,
 ) -> Result<DetailedDragForceGeneratorID> {
     let drag_load_map_id = DragLoadMapID(drag_load_map_id);
 
@@ -59,7 +58,7 @@ pub fn setup_detailed_drag_force<'a>(
     if !drag_load_map_repository.has_drag_load_map(drag_load_map_id) {
         let config = drag_load_map_repository.config();
 
-        let map_path = generate_map_path(drag_load_map_id);
+        let map_path = generate_map_path(&config.directory, drag_load_map_id);
         let map_file_exists = map_path.exists();
 
         let map = if config.use_saved_maps && map_file_exists {
@@ -81,8 +80,7 @@ pub fn setup_detailed_drag_force<'a>(
                 triangle_vertex_positions,
             )?;
 
-            if !disable_saving
-                && config.save_generated_maps
+            if config.save_generated_maps
                 && (config.overwrite_existing_map_files || !map_file_exists)
             {
                 #[cfg(not(feature = "bincode"))]
@@ -142,10 +140,10 @@ fn generate_map<'a>(
     Ok(map)
 }
 
-fn generate_map_path(drag_load_map_id: DragLoadMapID) -> PathBuf {
+fn generate_map_path(directory: &Path, drag_load_map_id: DragLoadMapID) -> PathBuf {
     // Ensure there are no path delimiters
     let sanitized_map_name = format!("{drag_load_map_id}")
         .replace('/', "_")
         .replace('\\', "_");
-    PathBuf::from(format!("assets/drag_load_maps/{sanitized_map_name}.bc"))
+    directory.join(format!("{sanitized_map_name}.bc"))
 }

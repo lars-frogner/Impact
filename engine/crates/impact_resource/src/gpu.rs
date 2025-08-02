@@ -1,31 +1,29 @@
 //! GPU resource management and synchronization.
 
 use crate::{
-    MutableResource, Resource, ResourceLabelProvider, ResourcePID,
-    index::ResourceIndex,
-    indexed_registry::{IndexedImmutableResourceRegistry, IndexedMutableResourceRegistry},
+    MutableResource, Resource,
     registry::{
         ImmutableResourceRegistry, MutableResourceRegistry, ResourceChange, ResourceChangeKind,
         ResourceRegistry,
     },
 };
-use impact_containers::HashMap;
+use anyhow::Result;
+use impact_containers::RandomState;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt,
+    hash::BuildHasher,
+};
 
 /// Manages GPU resources corresponding to CPU resources.
-pub trait GPUResources<R: Resource> {
-    type GraphicsDevice;
+pub trait GPUResources<'a, R: Resource> {
+    type GPUContext;
 
     /// Ensures a GPU resource exists for the given CPU resource.
-    fn ensure(
-        &mut self,
-        graphics_device: &Self::GraphicsDevice,
-        handle: R::Handle,
-        resource: &R,
-        label_provider: &impl ResourceLabelProvider<R::Handle>,
-    );
+    fn ensure(&mut self, gpu_context: &Self::GPUContext, id: R::ID, resource: &R) -> Result<()>;
 
-    /// Removes the GPU resource for the given handle.
-    fn evict(&mut self, handle: R::Handle);
+    /// Removes the GPU resource with the given ID.
+    fn evict(&mut self, gpu_context: &Self::GPUContext, id: R::ID) -> Result<()>;
 
     /// Returns the last registry revision that was synchronized.
     fn last_synced_revision(&self) -> u64;
@@ -35,45 +33,51 @@ pub trait GPUResources<R: Resource> {
 }
 
 /// Manages GPU resources corresponding to mutable CPU resources.
-pub trait MutableGPUResources<R: MutableResource>: GPUResources<R> {
+pub trait MutableGPUResources<'a, R: MutableResource>: GPUResources<'a, R> {
     /// Updates the GPU resource with changes from the CPU resource.
     fn update(
         &mut self,
-        graphics_device: &Self::GraphicsDevice,
-        handle: R::Handle,
+        gpu_context: &Self::GPUContext,
+        id: R::ID,
         resource: &R,
         dirty_mask: R::DirtyMask,
-        label_provider: &impl ResourceLabelProvider<R::Handle>,
-    );
+    ) -> Result<()>;
 }
 
 /// A GPU resource that corresponds to a CPU resource.
-pub trait GPUResource<R: Resource> {
-    type GraphicsDevice;
+pub trait GPUResource<'a, R: Resource>: Sized {
+    type GPUContext;
 
-    /// Creates a new GPU resource from the given CPU resource.
-    fn create(graphics_device: &Self::GraphicsDevice, resource: &R, label: String) -> Self;
+    /// Creates a new GPU resource from the given CPU resource. Returns [`None`]
+    /// if there is no GPU resource to create.
+    fn create(gpu_context: &Self::GPUContext, id: R::ID, resource: &R) -> Result<Option<Self>>;
+
+    /// Performs cleanup for the GPU resource.
+    fn cleanup(self, gpu_context: &Self::GPUContext, id: R::ID) -> Result<()>;
 }
 
 /// A GPU resource that corresponds to a mutable CPU resource.
-pub trait MutableGPUResource<R: MutableResource>: GPUResource<R> {
+pub trait MutableGPUResource<'a, R: MutableResource>: GPUResource<'a, R> {
     /// Updates this GPU resource with changes from the CPU resource.
     fn update(
         &mut self,
-        graphics_device: &Self::GraphicsDevice,
+        gpu_context: &Self::GPUContext,
         resource: &R,
         dirty_mask: R::DirtyMask,
-    );
+    ) -> Result<()>;
 }
 
-/// A map of GPU resources indexed by resource handles.
-#[derive(Debug)]
-pub struct GPUResourceMap<R: Resource, GR> {
-    gpu_resources: HashMap<R::Handle, GR>,
+/// A map of GPU resources indexed by resource IDs.
+pub struct GPUResourceMap<R: Resource, GR, S = RandomState> {
+    gpu_resources: HashMap<R::ID, GR, S>,
     last_synced_revision: u64,
 }
 
-impl<R: Resource, GR> GPUResourceMap<R, GR> {
+impl<R, GR, S> GPUResourceMap<R, GR, S>
+where
+    R: Resource,
+    S: Default,
+{
     /// Creates a new empty GPU resource map.
     pub fn new() -> Self {
         Self {
@@ -81,53 +85,64 @@ impl<R: Resource, GR> GPUResourceMap<R, GR> {
             last_synced_revision: 0,
         }
     }
+}
 
-    /// Returns the GPU resource for the given handle.
-    pub fn get(&self, handle: R::Handle) -> Option<&GR> {
-        self.gpu_resources.get(&handle)
-    }
-
-    /// Returns the GPU resource for the given persistent ID.
-    pub fn get_by_pid<PID: ResourcePID>(
-        &self,
-        index: &ResourceIndex<PID, R::Handle>,
-        pid: PID,
-    ) -> Option<&GR> {
-        index.get_handle(pid).and_then(|handle| self.get(handle))
+impl<R, GR, S> GPUResourceMap<R, GR, S>
+where
+    R: Resource,
+    S: BuildHasher,
+{
+    /// Returns the GPU resource with the given ID.
+    pub fn get(&self, id: R::ID) -> Option<&GR> {
+        self.gpu_resources.get(&id)
     }
 }
 
-impl<R: Resource, GR> Default for GPUResourceMap<R, GR> {
+impl<R: Resource, GR, S> fmt::Debug for GPUResourceMap<R, GR, S>
+where
+    R::ID: fmt::Debug,
+    GR: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GPUResourceMap")
+            .field("gpu_resources", &self.gpu_resources)
+            .field("last_synced_revision", &self.last_synced_revision)
+            .finish()
+    }
+}
+
+impl<R, GR, S> Default for GPUResourceMap<R, GR, S>
+where
+    R: Resource,
+    S: Default,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<R, GR> GPUResources<R> for GPUResourceMap<R, GR>
+impl<'a, R, GR, S> GPUResources<'a, R> for GPUResourceMap<R, GR, S>
 where
     R: Resource,
-    GR: GPUResource<R>,
+    GR: GPUResource<'a, R>,
+    S: BuildHasher,
 {
-    type GraphicsDevice = GR::GraphicsDevice;
+    type GPUContext = GR::GPUContext;
 
-    fn ensure(
-        &mut self,
-        graphics_device: &Self::GraphicsDevice,
-        handle: R::Handle,
-        resource: &R,
-        label_provider: &impl ResourceLabelProvider<R::Handle>,
-    ) {
-        self.gpu_resources.entry(handle).or_insert_with(|| {
-            GR::create(
-                graphics_device,
-                resource,
-                label_provider.create_label(handle),
-            )
-        });
+    fn ensure(&mut self, gpu_context: &Self::GPUContext, id: R::ID, resource: &R) -> Result<()> {
+        if let Entry::Vacant(entry) = self.gpu_resources.entry(id) {
+            if let Some(gpu_resource) = GR::create(gpu_context, id, resource)? {
+                entry.insert(gpu_resource);
+            }
+        }
+        Ok(())
     }
 
-    fn evict(&mut self, handle: R::Handle) {
-        self.gpu_resources.remove(&handle);
+    fn evict(&mut self, gpu_context: &Self::GPUContext, id: R::ID) -> Result<()> {
+        if let Some(gpu_resource) = self.gpu_resources.remove(&id) {
+            gpu_resource.cleanup(gpu_context, id)?;
+        }
+        Ok(())
     }
 
     fn last_synced_revision(&self) -> u64 {
@@ -139,935 +154,733 @@ where
     }
 }
 
-impl<R, GR> MutableGPUResources<R> for GPUResourceMap<R, GR>
+impl<'a, R, GR, S> MutableGPUResources<'a, R> for GPUResourceMap<R, GR, S>
 where
     R: MutableResource,
-    GR: MutableGPUResource<R>,
+    GR: MutableGPUResource<'a, R>,
+    S: BuildHasher,
 {
     fn update(
         &mut self,
-        graphics_device: &Self::GraphicsDevice,
-        handle: R::Handle,
+        gpu_context: &Self::GPUContext,
+        id: R::ID,
         resource: &R,
         dirty_mask: R::DirtyMask,
-        label_provider: &impl ResourceLabelProvider<R::Handle>,
-    ) {
-        self.gpu_resources
-            .entry(handle)
-            .and_modify(|gpu_resource| gpu_resource.update(graphics_device, resource, dirty_mask))
-            .or_insert_with(|| {
-                GR::create(
-                    graphics_device,
-                    resource,
-                    label_provider.create_label(handle),
-                )
-            });
+    ) -> Result<()> {
+        match self.gpu_resources.entry(id) {
+            Entry::Vacant(entry) => {
+                if let Some(gpu_resource) = GR::create(gpu_context, id, resource)? {
+                    entry.insert(gpu_resource);
+                }
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().update(gpu_context, resource, dirty_mask)?;
+            }
+        }
+        Ok(())
     }
-}
-
-/// Synchronizes immutable GPU resources with an indexed resource registry.
-pub fn sync_indexed_immutable_gpu_resources<PID, R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &IndexedImmutableResourceRegistry<PID, R>,
-    gpu_resources: &mut GR,
-) where
-    PID: ResourcePID,
-    R: Resource,
-    GR: GPUResources<R>,
-{
-    sync_immutable_gpu_resources(
-        graphics_device,
-        &registry.registry,
-        gpu_resources,
-        &registry.index,
-    );
-}
-
-/// Synchronizes mutable GPU resources with an indexed resource registry.
-pub fn sync_indexed_mutable_gpu_resources<PID, R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &IndexedMutableResourceRegistry<PID, R>,
-    gpu_resources: &mut GR,
-) where
-    PID: ResourcePID,
-    R: MutableResource,
-    GR: MutableGPUResources<R>,
-{
-    sync_mutable_gpu_resources(
-        graphics_device,
-        &registry.registry,
-        gpu_resources,
-        &registry.index,
-    );
 }
 
 /// Synchronizes immutable GPU resources with a resource registry.
 ///
 /// Applies all changes that occurred since the last synchronization.
-pub fn sync_immutable_gpu_resources<R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &ImmutableResourceRegistry<R>,
+pub fn sync_immutable_gpu_resources<'a, R, GR, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &ImmutableResourceRegistry<R, S>,
     gpu_resources: &mut GR,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
+) -> Result<()>
+where
     R: Resource,
-    GR: GPUResources<R>,
+    GR: GPUResources<'a, R>,
+    S: BuildHasher,
 {
     for change in registry.changes_since(gpu_resources.last_synced_revision()) {
-        sync_immutable_gpu_resource(
-            graphics_device,
-            registry,
-            gpu_resources,
-            change,
-            label_provider,
-        );
+        sync_immutable_gpu_resource(gpu_context, registry, gpu_resources, change)?;
     }
     gpu_resources.set_last_synced_revision(registry.revision());
+    Ok(())
 }
 
 /// Synchronizes mutable GPU resources with a resource registry.
 ///
 /// Applies all changes that occurred since the last synchronization.
-pub fn sync_mutable_gpu_resources<R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &MutableResourceRegistry<R>,
+pub fn sync_mutable_gpu_resources<'a, R, GR, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &MutableResourceRegistry<R, S>,
     gpu_resources: &mut GR,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
+) -> Result<()>
+where
     R: MutableResource,
-    GR: MutableGPUResources<R>,
+    GR: MutableGPUResources<'a, R>,
+    S: BuildHasher,
 {
     for change in registry.changes_since(gpu_resources.last_synced_revision()) {
-        sync_mutable_gpu_resource(
-            graphics_device,
-            registry,
-            gpu_resources,
-            change,
-            label_provider,
-        );
+        sync_mutable_gpu_resource(gpu_context, registry, gpu_resources, change)?;
     }
     gpu_resources.set_last_synced_revision(registry.revision());
+    Ok(())
 }
 
-fn sync_immutable_gpu_resource<R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &ImmutableResourceRegistry<R>,
+fn sync_immutable_gpu_resource<'a, R, GR, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &ImmutableResourceRegistry<R, S>,
     gpu_resources: &mut GR,
     change: &ResourceChange<R, ()>,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
+) -> Result<()>
+where
     R: Resource,
-    GR: GPUResources<R>,
+    GR: GPUResources<'a, R>,
+    S: BuildHasher,
 {
     match change.kind() {
         ResourceChangeKind::Inserted => {
-            ensure_resource(
-                graphics_device,
-                registry,
-                change.handle(),
-                gpu_resources,
-                label_provider,
-            );
+            ensure_resource(gpu_context, registry, change.id(), gpu_resources)?;
         }
         ResourceChangeKind::Removed => {
-            evict_resource(gpu_resources, change.handle());
+            evict_resource(gpu_context, gpu_resources, change.id())?;
         }
         ResourceChangeKind::Replaced => {
-            replace_resource(
-                graphics_device,
-                registry,
-                change.handle(),
-                gpu_resources,
-                label_provider,
-            );
+            replace_resource(gpu_context, registry, change.id(), gpu_resources)?;
         }
         ResourceChangeKind::Modified(_) => unreachable!(),
     }
+    Ok(())
 }
 
-fn sync_mutable_gpu_resource<R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &MutableResourceRegistry<R>,
+fn sync_mutable_gpu_resource<'a, R, GR, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &MutableResourceRegistry<R, S>,
     gpu_resources: &mut GR,
     change: &ResourceChange<R, R::DirtyMask>,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
+) -> Result<()>
+where
     R: MutableResource,
-    GR: MutableGPUResources<R>,
+    GR: MutableGPUResources<'a, R>,
+    S: BuildHasher,
 {
     match change.kind() {
         ResourceChangeKind::Inserted => {
-            ensure_resource(
-                graphics_device,
-                registry,
-                change.handle(),
-                gpu_resources,
-                label_provider,
-            );
+            ensure_resource(gpu_context, registry, change.id(), gpu_resources)?;
         }
         ResourceChangeKind::Removed => {
-            evict_resource(gpu_resources, change.handle());
+            evict_resource(gpu_context, gpu_resources, change.id())?;
         }
         ResourceChangeKind::Replaced => {
-            replace_resource(
-                graphics_device,
-                registry,
-                change.handle(),
-                gpu_resources,
-                label_provider,
-            );
+            replace_resource(gpu_context, registry, change.id(), gpu_resources)?;
         }
         ResourceChangeKind::Modified(dirty_mask) => {
             modify_resource(
-                graphics_device,
+                gpu_context,
                 registry,
-                change.handle(),
+                change.id(),
                 *dirty_mask,
                 gpu_resources,
-                label_provider,
-            );
+            )?;
         }
     }
+    Ok(())
 }
 
-fn ensure_resource<R, GR, D>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &ResourceRegistry<R, D>,
-    handle: R::Handle,
+fn ensure_resource<'a, R, GR, D, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &ResourceRegistry<R, D, S>,
+    id: R::ID,
     gpu_resources: &mut GR,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
-    R: Resource,
-    GR: GPUResources<R>,
-{
-    // Resource might have been removed after insertion, so only ensure if it still exists
-    if let Some(resource) = registry.get(handle) {
-        gpu_resources.ensure(graphics_device, handle, resource, label_provider);
-    }
-}
-
-fn evict_resource<R, GR>(gpu_resources: &mut GR, handle: R::Handle)
+) -> Result<()>
 where
     R: Resource,
-    GR: GPUResources<R>,
+    GR: GPUResources<'a, R>,
+    S: BuildHasher,
 {
-    gpu_resources.evict(handle);
+    // Resource might have been removed after insertion, so only ensure if it still exists
+    if let Some(resource) = registry.get(id) {
+        gpu_resources.ensure(gpu_context, id, resource)?;
+    }
+    Ok(())
 }
 
-fn replace_resource<R, GR, D>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &ResourceRegistry<R, D>,
-    handle: R::Handle,
+fn evict_resource<'a, R, GR>(
+    gpu_context: &GR::GPUContext,
     gpu_resources: &mut GR,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
+    id: R::ID,
+) -> Result<()>
+where
     R: Resource,
-    GR: GPUResources<R>,
+    GR: GPUResources<'a, R>,
 {
-    evict_resource(gpu_resources, handle);
-    ensure_resource(
-        graphics_device,
-        registry,
-        handle,
-        gpu_resources,
-        label_provider,
-    );
+    gpu_resources.evict(gpu_context, id)
 }
 
-fn modify_resource<R, GR>(
-    graphics_device: &GR::GraphicsDevice,
-    registry: &MutableResourceRegistry<R>,
-    handle: R::Handle,
+fn replace_resource<'a, R, GR, D, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &ResourceRegistry<R, D, S>,
+    id: R::ID,
+    gpu_resources: &mut GR,
+) -> Result<()>
+where
+    R: Resource,
+    GR: GPUResources<'a, R>,
+    S: BuildHasher,
+{
+    evict_resource(gpu_context, gpu_resources, id)?;
+    ensure_resource(gpu_context, registry, id, gpu_resources)
+}
+
+fn modify_resource<'a, R, GR, S>(
+    gpu_context: &GR::GPUContext,
+    registry: &MutableResourceRegistry<R, S>,
+    id: R::ID,
     dirty_mask: R::DirtyMask,
     gpu_resources: &mut GR,
-    label_provider: &impl ResourceLabelProvider<R::Handle>,
-) where
+) -> Result<()>
+where
     R: MutableResource,
-    GR: MutableGPUResources<R>,
+    GR: MutableGPUResources<'a, R>,
+    S: BuildHasher,
 {
     // Resource might have been removed after modification, so only update if it
     // still exists
-    if let Some(resource) = registry.get(handle) {
-        gpu_resources.update(
-            graphics_device,
-            handle,
-            resource,
-            dirty_mask,
-            label_provider,
-        );
+    if let Some(resource) = registry.get(id) {
+        gpu_resources.update(gpu_context, id, resource, dirty_mask)?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BinaryDirtyMask, HandleLabelProvider};
-    use impact_containers::SlotKey;
-    use std::fmt;
+    use crate::{BinaryDirtyMask, MutableResource, Resource, ResourceID};
+    use anyhow::Result;
 
-    // Test types
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    struct TestPID(u32);
+    // Test resource types
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    struct TestResourceID(u32);
 
-    impl fmt::Display for TestPID {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "TestPID({})", self.0)
-        }
-    }
-
-    impl ResourcePID for TestPID {}
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    struct TestHandle(SlotKey);
-
-    impl_ResourceHandle_for_newtype!(TestHandle);
+    impl ResourceID for TestResourceID {}
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct TestResource {
         data: String,
-        value: i32,
     }
 
     impl Resource for TestResource {
-        type Handle = TestHandle;
+        type ID = TestResourceID;
     }
 
-    impl MutableResource for TestResource {
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestMutableResource {
+        value: i32,
+        name: String,
+    }
+
+    impl Resource for TestMutableResource {
+        type ID = TestResourceID;
+    }
+
+    impl MutableResource for TestMutableResource {
         type DirtyMask = BinaryDirtyMask;
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    struct TestGPUResource {
-        data: String,
-        value: i32,
-        label: String,
+    // Test GPU context
+    #[derive(Debug, Default)]
+    struct TestGPUContext {
+        create_calls: std::cell::RefCell<Vec<TestResourceID>>,
+        update_calls: std::cell::RefCell<Vec<(TestResourceID, BinaryDirtyMask)>>,
+        cleanup_calls: std::cell::RefCell<Vec<TestResourceID>>,
     }
 
-    struct TestGraphicsDevice;
+    impl TestGPUContext {
+        fn reset(&self) {
+            self.create_calls.borrow_mut().clear();
+            self.update_calls.borrow_mut().clear();
+            self.cleanup_calls.borrow_mut().clear();
+        }
 
-    impl GPUResource<TestResource> for TestGPUResource {
-        type GraphicsDevice = TestGraphicsDevice;
+        fn create_calls(&self) -> Vec<TestResourceID> {
+            self.create_calls.borrow().clone()
+        }
+
+        fn update_calls(&self) -> Vec<(TestResourceID, BinaryDirtyMask)> {
+            self.update_calls.borrow().clone()
+        }
+
+        fn cleanup_calls(&self) -> Vec<TestResourceID> {
+            self.cleanup_calls.borrow().clone()
+        }
+    }
+
+    // Test GPU resource implementations
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestGPUResource {
+        id: TestResourceID,
+        gpu_data: String,
+    }
+
+    impl<'a> GPUResource<'a, TestResource> for TestGPUResource {
+        type GPUContext = TestGPUContext;
 
         fn create(
-            _graphics_device: &Self::GraphicsDevice,
+            gpu_context: &Self::GPUContext,
+            id: TestResourceID,
             resource: &TestResource,
-            label: String,
-        ) -> Self {
-            Self {
-                data: resource.data.clone(),
-                value: resource.value,
-                label,
-            }
+        ) -> Result<Option<Self>> {
+            gpu_context.create_calls.borrow_mut().push(id);
+            Ok(Some(Self {
+                id,
+                gpu_data: format!("GPU_{}", resource.data),
+            }))
+        }
+
+        fn cleanup(self, gpu_context: &Self::GPUContext, id: TestResourceID) -> Result<()> {
+            gpu_context.cleanup_calls.borrow_mut().push(id);
+            Ok(())
         }
     }
 
-    impl MutableGPUResource<TestResource> for TestGPUResource {
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestMutableGPUResource {
+        id: TestResourceID,
+        gpu_value: i32,
+        gpu_name: String,
+    }
+
+    impl<'a> GPUResource<'a, TestMutableResource> for TestMutableGPUResource {
+        type GPUContext = TestGPUContext;
+
+        fn create(
+            gpu_context: &Self::GPUContext,
+            id: TestResourceID,
+            resource: &TestMutableResource,
+        ) -> Result<Option<Self>> {
+            gpu_context.create_calls.borrow_mut().push(id);
+            Ok(Some(Self {
+                id,
+                gpu_value: resource.value,
+                gpu_name: resource.name.clone(),
+            }))
+        }
+
+        fn cleanup(self, gpu_context: &Self::GPUContext, id: TestResourceID) -> Result<()> {
+            gpu_context.cleanup_calls.borrow_mut().push(id);
+            Ok(())
+        }
+    }
+
+    impl<'a> MutableGPUResource<'a, TestMutableResource> for TestMutableGPUResource {
         fn update(
             &mut self,
-            _graphics_device: &Self::GraphicsDevice,
-            resource: &TestResource,
-            _dirty_mask: BinaryDirtyMask,
-        ) {
-            self.data = resource.data.clone();
-            self.value = resource.value;
+            gpu_context: &Self::GPUContext,
+            resource: &TestMutableResource,
+            dirty_mask: BinaryDirtyMask,
+        ) -> Result<()> {
+            gpu_context
+                .update_calls
+                .borrow_mut()
+                .push((self.id, dirty_mask));
+            if dirty_mask.contains(BinaryDirtyMask::ALL) {
+                self.gpu_value = resource.value;
+                self.gpu_name = resource.name.clone();
+            }
+            Ok(())
         }
     }
 
-    fn test_resource(data: &str, value: i32) -> TestResource {
-        TestResource {
-            data: data.to_string(),
-            value,
-        }
-    }
-
-    fn test_handle(id: u32) -> TestHandle {
-        use bytemuck::Zeroable;
-        let mut key = SlotKey::zeroed();
-        let bytes = bytemuck::bytes_of_mut(&mut key);
-        bytes[0] = id as u8;
-        TestHandle(key)
-    }
+    // Test constants
+    const ID_1: TestResourceID = TestResourceID(1);
+    const ID_2: TestResourceID = TestResourceID(2);
 
     #[test]
-    fn creating_new_gpu_resource_map_is_empty() {
-        let map = GPUResourceMap::<TestResource, TestGPUResource>::new();
+    fn creating_new_gpu_resource_map_gives_empty_map() {
+        let map: GPUResourceMap<TestResource, TestGPUResource> = GPUResourceMap::new();
 
-        assert!(map.get(test_handle(1)).is_none());
+        assert_eq!(map.get(ID_1), None);
         assert_eq!(map.last_synced_revision(), 0);
     }
 
     #[test]
-    fn ensuring_gpu_resource_creates_new_resource() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let handle = test_handle(1);
-        let resource = test_resource("test", 42);
-        let label_provider = HandleLabelProvider;
+    fn ensuring_resource_creates_gpu_resource_when_missing() {
+        let mut map: GPUResourceMap<TestResource, TestGPUResource> = GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
 
-        map.ensure(&graphics_device, handle, &resource, &label_provider);
+        let result = map.ensure(&gpu_context, ID_1, &resource);
 
-        let gpu_resource = map.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "test");
-        assert_eq!(gpu_resource.value, 42);
-        assert_eq!(gpu_resource.label, handle.to_string());
+        assert!(result.is_ok());
+        let gpu_resource = map.get(ID_1).unwrap();
+        assert_eq!(gpu_resource.id, ID_1);
+        assert_eq!(gpu_resource.gpu_data, "GPU_test");
+        assert_eq!(gpu_context.create_calls(), vec![ID_1]);
     }
 
     #[test]
-    fn ensuring_existing_gpu_resource_does_not_recreate() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let handle = test_handle(1);
-        let resource = test_resource("test", 42);
-        let label_provider = HandleLabelProvider;
+    fn ensuring_resource_does_not_recreate_existing_gpu_resource() {
+        let mut map: GPUResourceMap<TestResource, TestGPUResource> = GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
 
-        map.ensure(&graphics_device, handle, &resource, &label_provider);
-        let original_resource = map.get(handle).unwrap().clone();
+        // First ensure
+        map.ensure(&gpu_context, ID_1, &resource).unwrap();
+        gpu_context.reset();
 
-        let different_resource = test_resource("different", 99);
-        map.ensure(
-            &graphics_device,
-            handle,
-            &different_resource,
-            &label_provider,
-        );
+        // Second ensure
+        let result = map.ensure(&gpu_context, ID_1, &resource);
 
-        let gpu_resource = map.get(handle).unwrap();
-        assert_eq!(*gpu_resource, original_resource);
+        assert!(result.is_ok());
+        assert_eq!(gpu_context.create_calls(), Vec::<TestResourceID>::new());
     }
 
     #[test]
-    fn updating_gpu_resource_creates_if_not_exists() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let handle = test_handle(1);
-        let resource = test_resource("test", 42);
-        let label_provider = HandleLabelProvider;
+    fn evicting_resource_removes_gpu_resource() {
+        let mut map: GPUResourceMap<TestResource, TestGPUResource> = GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
 
-        map.update(
-            &graphics_device,
-            handle,
-            &resource,
-            BinaryDirtyMask::ALL,
-            &label_provider,
-        );
+        map.ensure(&gpu_context, ID_1, &resource).unwrap();
+        assert!(map.get(ID_1).is_some());
 
-        let gpu_resource = map.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "test");
-        assert_eq!(gpu_resource.value, 42);
+        map.evict(&gpu_context, ID_1).unwrap();
+
+        assert_eq!(map.get(ID_1), None);
     }
 
     #[test]
-    fn updating_existing_gpu_resource_modifies_it() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let handle = test_handle(1);
-        let resource = test_resource("original", 42);
-        let label_provider = HandleLabelProvider;
+    fn updating_mutable_resource_creates_gpu_resource_when_missing() {
+        let mut map: GPUResourceMap<TestMutableResource, TestMutableGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
 
-        map.ensure(&graphics_device, handle, &resource, &label_provider);
+        let result = map.update(&gpu_context, ID_1, &resource, BinaryDirtyMask::ALL);
 
-        let updated_resource = test_resource("updated", 99);
-        map.update(
-            &graphics_device,
-            handle,
-            &updated_resource,
-            BinaryDirtyMask::ALL,
-            &label_provider,
-        );
-
-        let gpu_resource = map.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "updated");
-        assert_eq!(gpu_resource.value, 99);
+        assert!(result.is_ok());
+        let gpu_resource = map.get(ID_1).unwrap();
+        assert_eq!(gpu_resource.id, ID_1);
+        assert_eq!(gpu_resource.gpu_value, 42);
+        assert_eq!(gpu_resource.gpu_name, "test");
+        assert_eq!(gpu_context.create_calls(), vec![ID_1]);
     }
 
     #[test]
-    fn evicting_gpu_resource_removes_it() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let handle = test_handle(1);
-        let resource = test_resource("test", 42);
-        let label_provider = HandleLabelProvider;
+    fn updating_mutable_resource_updates_existing_gpu_resource() {
+        let mut map: GPUResourceMap<TestMutableResource, TestMutableGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+        let initial_resource = TestMutableResource {
+            value: 42,
+            name: "initial".to_string(),
+        };
+        let updated_resource = TestMutableResource {
+            value: 100,
+            name: "updated".to_string(),
+        };
 
-        map.ensure(&graphics_device, handle, &resource, &label_provider);
-        assert!(map.get(handle).is_some());
+        // Create initial GPU resource
+        map.update(&gpu_context, ID_1, &initial_resource, BinaryDirtyMask::ALL)
+            .unwrap();
+        gpu_context.reset();
 
-        map.evict(handle);
-        assert!(map.get(handle).is_none());
-    }
+        // Update existing GPU resource
+        let result = map.update(&gpu_context, ID_1, &updated_resource, BinaryDirtyMask::ALL);
 
-    #[test]
-    fn evicting_nonexistent_gpu_resource_does_nothing() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let handle = test_handle(1);
-
-        map.evict(handle); // Should not panic
-        assert!(map.get(handle).is_none());
-    }
-
-    #[test]
-    fn get_by_pid_returns_correct_resource() {
-        let mut map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let mut index = ResourceIndex::new();
-        let graphics_device = TestGraphicsDevice;
-        let handle = test_handle(1);
-        let pid = TestPID(42);
-        let resource = test_resource("test", 42);
-        let label_provider = HandleLabelProvider;
-
-        map.ensure(&graphics_device, handle, &resource, &label_provider);
-        index.bind(pid, handle);
-
-        let gpu_resource = map.get_by_pid(&index, pid).unwrap();
-        assert_eq!(gpu_resource.data, "test");
-        assert_eq!(gpu_resource.value, 42);
-    }
-
-    #[test]
-    fn get_by_pid_returns_none_for_nonexistent_pid() {
-        let map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let index = ResourceIndex::new();
-        let pid = TestPID(99);
-
-        assert!(map.get_by_pid(&index, pid).is_none());
-    }
-
-    #[test]
-    fn get_by_pid_returns_none_for_unbound_pid() {
-        let map = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let mut index = ResourceIndex::new();
-        let pid = TestPID(42);
-        let handle = test_handle(1);
-
-        // Bind PID to handle but don't create GPU resource
-        index.bind(pid, handle);
-
-        assert!(map.get_by_pid(&index, pid).is_none());
-    }
-
-    #[test]
-    fn sync_gpu_resources_with_insertions_creates_resources() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-        let handle1 = registry.insert(resource1.clone());
-        let handle2 = registry.insert(resource2.clone());
-
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        let gpu_resource1 = gpu_resources.get(handle1).unwrap();
-        let gpu_resource2 = gpu_resources.get(handle2).unwrap();
-        assert_eq!(gpu_resource1.data, "first");
-        assert_eq!(gpu_resource1.value, 1);
-        assert_eq!(gpu_resource2.data, "second");
-        assert_eq!(gpu_resource2.value, 2);
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_gpu_resources_with_modifications_updates_resources() {
-        let mut registry = MutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        let resource = test_resource("original", 42);
-        let handle = registry.insert(resource);
-
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // Modify the resource
-        if let Some(mut resource_ref) = registry.get_mut(handle) {
-            resource_ref.data = "modified".to_string();
-            resource_ref.value = 99;
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-        }
-
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        let gpu_resource = gpu_resources.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "modified");
-        assert_eq!(gpu_resource.value, 99);
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_gpu_resources_with_removals_evicts_resources() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        let resource = test_resource("test", 42);
-        let handle = registry.insert(resource);
-
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-        assert!(gpu_resources.get(handle).is_some());
-
-        registry.remove(handle);
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        assert!(gpu_resources.get(handle).is_none());
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_gpu_resources_handles_mixed_operations() {
-        let mut registry = MutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        // Initial sync
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-        let handle1 = registry.insert(resource1);
-        let handle2 = registry.insert(resource2);
-
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // Mixed operations: modify, remove, insert
-        if let Some(mut resource_ref) = registry.get_mut(handle1) {
-            resource_ref.data = "modified".to_string();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-        }
-        registry.remove(handle2);
-        let resource3 = test_resource("third", 3);
-        let handle3 = registry.insert(resource3);
-
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        let gpu_resource1 = gpu_resources.get(handle1).unwrap();
-        assert_eq!(gpu_resource1.data, "modified");
-        assert!(gpu_resources.get(handle2).is_none());
-        let gpu_resource3 = gpu_resources.get(handle3).unwrap();
-        assert_eq!(gpu_resource3.data, "third");
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_gpu_resources_skips_resources_removed_after_insertion() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        // Insert and immediately remove a resource
-        let resource = test_resource("temporary", 42);
-        let handle = registry.insert(resource);
-        registry.remove(handle);
-
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // GPU resource should not be created since CPU resource was removed
-        assert!(gpu_resources.get(handle).is_none());
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_gpu_resources_skips_resources_removed_after_modification() {
-        let mut registry = MutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        // Insert resource and sync
-        let resource = test_resource("test", 42);
-        let handle = registry.insert(resource);
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // Modify and remove
-        if let Some(mut resource_ref) = registry.get_mut(handle) {
-            resource_ref.data = "modified".to_string();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-        }
-        registry.remove(handle);
-
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // GPU resource should be removed
-        assert!(gpu_resources.get(handle).is_none());
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_gpu_resources_only_processes_new_changes() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
-
-        // First batch of changes
-        let resource1 = test_resource("first", 1);
-        let handle1 = registry.insert(resource1);
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-        let first_revision = registry.revision();
-
-        // Second batch of changes
-        let resource2 = test_resource("second", 2);
-        let handle2 = registry.insert(resource2);
-
-        // Manually set last synced revision to ensure only new changes are processed
-        gpu_resources.set_last_synced_revision(first_revision);
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // Both resources should exist
-        assert!(gpu_resources.get(handle1).is_some());
-        assert!(gpu_resources.get(handle2).is_some());
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
-    }
-
-    #[test]
-    fn sync_indexed_gpu_resources_works_correctly() {
-        let mut indexed_registry = IndexedImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-
-        let resource = test_resource("test", 42);
-        let pid = TestPID(1);
-        let handle = indexed_registry.insert_resource_with_pid(pid, resource.clone());
-
-        sync_indexed_immutable_gpu_resources(
-            &graphics_device,
-            &indexed_registry,
-            &mut gpu_resources,
-        );
-
-        let gpu_resource = gpu_resources.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "test");
-        assert_eq!(gpu_resource.value, 42);
-        assert_eq!(gpu_resource.label, pid.to_string());
+        assert!(result.is_ok());
+        let gpu_resource = map.get(ID_1).unwrap();
+        assert_eq!(gpu_resource.gpu_value, 100);
+        assert_eq!(gpu_resource.gpu_name, "updated");
+        assert_eq!(gpu_context.create_calls(), Vec::<TestResourceID>::new());
         assert_eq!(
-            gpu_resources.last_synced_revision(),
-            indexed_registry.registry.revision()
+            gpu_context.update_calls(),
+            vec![(ID_1, BinaryDirtyMask::ALL)]
         );
     }
 
     #[test]
-    fn sync_gpu_resources_with_replacement_recreates_resource() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
+    fn sync_immutable_gpu_resources_processes_insertions() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
 
-        // Insert initial resource
-        let original_resource = test_resource("original", 42);
-        let handle = registry.insert(original_resource.clone());
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
+        registry.insert(ID_1, resource);
 
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
+        let result = sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
 
-        // Verify initial resource
-        let gpu_resource = gpu_resources.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "original");
-        assert_eq!(gpu_resource.value, 42);
+        assert!(result.is_ok());
+        assert!(gpu_resources.get(ID_1).is_some());
+        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+        assert_eq!(gpu_context.create_calls(), vec![ID_1]);
+    }
 
-        // Replace the resource
-        let mut replacement_resource = test_resource("replaced", 99);
-        registry.replace(handle, &mut replacement_resource);
+    #[test]
+    fn sync_immutable_gpu_resources_processes_removals() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
 
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
+        // Insert and sync
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
+        registry.insert(ID_1, resource);
+        sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources).unwrap();
+        assert!(gpu_resources.get(ID_1).is_some());
 
-        // Verify resource was recreated with new values
-        let gpu_resource = gpu_resources.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "replaced");
-        assert_eq!(gpu_resource.value, 99);
+        // Remove and sync
+        registry.remove(ID_1);
+        let result = sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
+
+        assert!(result.is_ok());
+        assert_eq!(gpu_resources.get(ID_1), None);
         assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
     }
 
     #[test]
-    fn sync_gpu_resources_with_multiple_replacements_handles_each() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
+    fn sync_immutable_gpu_resources_processes_replacements() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
 
-        // Insert initial resource
-        let original_resource = test_resource("original", 1);
-        let handle = registry.insert(original_resource.clone());
+        // Insert and sync
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        registry.insert(ID_1, resource1);
+        sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources).unwrap();
+        let first_gpu_data = gpu_resources.get(ID_1).unwrap().gpu_data.clone();
+        gpu_context.reset();
 
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
+        // Replace and sync
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
+        registry.insert(ID_1, resource2);
+        let result = sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
 
-        // First replacement
-        let mut first_replacement = test_resource("first_replacement", 2);
-        registry.replace(handle, &mut first_replacement);
-
-        // Second replacement
-        let mut second_replacement = test_resource("second_replacement", 3);
-        registry.replace(handle, &mut second_replacement);
-
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
-
-        // Verify final state reflects the last replacement
-        let gpu_resource = gpu_resources.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "second_replacement");
-        assert_eq!(gpu_resource.value, 3);
+        assert!(result.is_ok());
+        let gpu_resource = gpu_resources.get(ID_1).unwrap();
+        assert_ne!(gpu_resource.gpu_data, first_gpu_data);
+        assert_eq!(gpu_resource.gpu_data, "GPU_second");
         assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+        assert_eq!(gpu_context.create_calls(), vec![ID_1]);
+        assert_eq!(gpu_context.cleanup_calls(), vec![ID_1]);
     }
 
     #[test]
-    fn sync_gpu_resources_replacement_of_nonexistent_resource_creates_it() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
+    fn sync_immutable_gpu_resources_handles_removed_after_insertion() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
 
-        // Insert and immediately replace without syncing first
-        let original_resource = test_resource("original", 42);
-        let handle = registry.insert(original_resource.clone());
-        let mut replacement_resource = test_resource("replacement", 99);
-        registry.replace(handle, &mut replacement_resource);
+        // Insert then immediately remove before sync
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
+        registry.insert(ID_1, resource);
+        registry.remove(ID_1);
 
-        sync_immutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
+        let result = sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
 
-        // Should create the GPU resource with replacement values
-        let gpu_resource = gpu_resources.get(handle).unwrap();
-        assert_eq!(gpu_resource.data, "replacement");
-        assert_eq!(gpu_resource.value, 99);
+        assert!(result.is_ok());
+        assert_eq!(gpu_resources.get(ID_1), None);
         assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+        assert_eq!(gpu_context.create_calls(), Vec::<TestResourceID>::new());
     }
 
     #[test]
-    fn sync_gpu_resources_mixed_operations_with_replacement_works() {
-        let mut registry = MutableResourceRegistry::new();
-        let mut gpu_resources = GPUResourceMap::<TestResource, TestGPUResource>::new();
-        let graphics_device = TestGraphicsDevice;
-        let label_provider = HandleLabelProvider;
+    fn sync_mutable_gpu_resources_processes_insertions() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestMutableResource, TestMutableGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
 
-        // Insert initial resources
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-        let resource3 = test_resource("third", 3);
-        let handle1 = registry.insert(resource1);
-        let handle2 = registry.insert(resource2);
-        let handle3 = registry.insert(resource3);
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
+        registry.insert(ID_1, resource);
 
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
-        );
+        let result = sync_mutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
 
-        // Mixed operations: modify, replace, remove, insert
-        if let Some(mut resource_ref) = registry.get_mut(handle1) {
-            resource_ref.data = "modified_first".to_string();
+        assert!(result.is_ok());
+        assert!(gpu_resources.get(ID_1).is_some());
+        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+        assert_eq!(gpu_context.create_calls(), vec![ID_1]);
+        assert_eq!(gpu_context.cleanup_calls(), vec![]);
+    }
+
+    #[test]
+    fn sync_mutable_gpu_resources_processes_modifications() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestMutableResource, TestMutableGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+
+        // Insert and sync
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
+        registry.insert(ID_1, resource);
+        sync_mutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources).unwrap();
+        gpu_context.reset();
+
+        // Modify and sync
+        {
+            let mut resource_ref = registry.get_mut(ID_1).unwrap();
+            resource_ref.value = 100;
             resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
         }
-        let mut replacement = test_resource("replaced_second", 22);
-        registry.replace(handle2, &mut replacement);
-        registry.remove(handle3);
-        let new_resource = test_resource("fourth", 4);
-        let handle4 = registry.insert(new_resource);
+        let result = sync_mutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
 
-        sync_mutable_gpu_resources(
-            &graphics_device,
-            &registry,
-            &mut gpu_resources,
-            &label_provider,
+        assert!(result.is_ok());
+        let gpu_resource = gpu_resources.get(ID_1).unwrap();
+        assert_eq!(gpu_resource.gpu_value, 100);
+        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+        assert_eq!(gpu_context.create_calls(), Vec::<TestResourceID>::new());
+        assert_eq!(
+            gpu_context.update_calls(),
+            vec![(ID_1, BinaryDirtyMask::ALL)]
+        );
+    }
+
+    #[test]
+    fn sync_mutable_gpu_resources_handles_removed_after_modification() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestMutableResource, TestMutableGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+
+        // Insert, modify, then remove before sync
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
+        registry.insert(ID_1, resource);
+        {
+            let mut resource_ref = registry.get_mut(ID_1).unwrap();
+            resource_ref.value = 100;
+            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
+        }
+        registry.remove(ID_1);
+
+        let result = sync_mutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
+
+        assert!(result.is_ok());
+        assert_eq!(gpu_resources.get(ID_1), None);
+        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+        assert_eq!(gpu_context.create_calls(), Vec::<TestResourceID>::new());
+        assert_eq!(gpu_context.update_calls(), Vec::new());
+    }
+
+    #[test]
+    fn sync_immutable_gpu_resources_processes_multiple_changes() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+
+        // Add multiple resources
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
+        registry.insert(ID_1, resource1);
+        registry.insert(ID_2, resource2);
+        registry.remove(ID_1);
+
+        let result = sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
+
+        assert!(result.is_ok());
+        assert_eq!(gpu_resources.get(ID_1), None);
+        assert!(gpu_resources.get(ID_2).is_some());
+        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+    }
+
+    #[test]
+    fn sync_only_processes_changes_since_last_revision() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let gpu_context = TestGPUContext::default();
+
+        // First sync
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        registry.insert(ID_1, resource1);
+        sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources).unwrap();
+        gpu_context.reset();
+
+        // Second sync with additional changes
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
+        registry.insert(ID_2, resource2);
+        let result = sync_immutable_gpu_resources(&gpu_context, &registry, &mut gpu_resources);
+
+        assert!(result.is_ok());
+        assert!(gpu_resources.get(ID_1).is_some());
+        assert!(gpu_resources.get(ID_2).is_some());
+        // Only ID_2 should have been created in the second sync
+        assert_eq!(gpu_context.create_calls(), vec![ID_2]);
+        assert_eq!(gpu_context.cleanup_calls(), vec![]);
+    }
+
+    #[test]
+    fn evicting_resource_calls_cleanup() {
+        let gpu_context = TestGPUContext::default();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+
+        registry.insert(
+            ID_1,
+            TestResource {
+                data: "test".into(),
+            },
         );
 
-        // Verify all operations were applied correctly
-        let gpu_resource1 = gpu_resources.get(handle1).unwrap();
-        assert_eq!(gpu_resource1.data, "modified_first");
+        let resource = registry.get(ID_1).unwrap();
 
-        let gpu_resource2 = gpu_resources.get(handle2).unwrap();
-        assert_eq!(gpu_resource2.data, "replaced_second");
-        assert_eq!(gpu_resource2.value, 22);
+        // Create the GPU resource
+        gpu_resources.ensure(&gpu_context, ID_1, resource).unwrap();
+        assert_eq!(gpu_context.create_calls(), vec![ID_1]);
+        assert!(gpu_context.cleanup_calls().is_empty());
 
-        assert!(gpu_resources.get(handle3).is_none());
+        // Evict the resource
+        gpu_resources.evict(&gpu_context, ID_1).unwrap();
 
-        let gpu_resource4 = gpu_resources.get(handle4).unwrap();
-        assert_eq!(gpu_resource4.data, "fourth");
-        assert_eq!(gpu_resource4.value, 4);
+        // Verify cleanup was called
+        assert_eq!(gpu_context.cleanup_calls(), vec![ID_1]);
+        assert!(gpu_resources.get(ID_1).is_none());
+    }
 
-        assert_eq!(gpu_resources.last_synced_revision(), registry.revision());
+    #[test]
+    fn evicting_nonexistent_resource_does_not_call_cleanup() {
+        let gpu_context = TestGPUContext::default();
+        let mut gpu_resources: GPUResourceMap<TestResource, TestGPUResource> =
+            GPUResourceMap::new();
+
+        // Evict a resource that doesn't exist
+        gpu_resources.evict(&gpu_context, ID_1).unwrap();
+
+        // Verify cleanup was not called
+        assert!(gpu_context.cleanup_calls().is_empty());
     }
 }

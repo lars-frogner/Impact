@@ -9,14 +9,9 @@ use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
 use std::{
     borrow::Cow,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     num::NonZeroU32,
 };
-
-/// Identifier for specific texture samplers.
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SamplerID(u64);
 
 /// Represents a data type that can be copied directly to a [`Texture`].
 pub trait TexelType: Pod {
@@ -24,6 +19,7 @@ pub trait TexelType: Pod {
 }
 
 /// A description of the data type used for a texel.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TexelDescription {
     Rgba8(ColorSpace),
@@ -46,7 +42,6 @@ pub struct Texture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     view_dimension: wgpu::TextureViewDimension,
-    sampler_id: Option<SamplerID>,
 }
 
 /// A sampler for sampling [`Texture`]s.
@@ -68,7 +63,8 @@ pub struct TextureConfig {
     /// stored in.
     pub color_space: ColorSpace,
     /// The maximum number of mip levels that should be generated for the
-    /// texture. If [`None`], a full mipmap chain will be generated.
+    /// texture. Set to 1 to disable mipmapping. If [`None`], a full mipmap
+    /// chain will be generated.
     pub max_mip_level_count: Option<u32>,
 }
 
@@ -154,16 +150,6 @@ pub struct DetailedTextureFilteringConfig {
     pub anisotropy_clamp: u16,
 }
 
-/// Dimensions and data for a lookup table to be loaded into a texture.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug)]
-pub struct TextureLookupTable<T: TexelType> {
-    width: NonZeroU32,
-    height: NonZeroU32,
-    depth_or_array_layers: DepthOrArrayLayers,
-    data: Vec<T>,
-}
-
 /// A number that either represents the number of depths in a 3D texture or the
 /// number of layers in a 1D or 2D texture array.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -173,21 +159,19 @@ pub enum DepthOrArrayLayers {
     ArrayLayers(NonZeroU32),
 }
 
-impl From<&SamplerConfig> for SamplerID {
-    fn from(config: &SamplerConfig) -> Self {
-        let addressing: DetailedTextureAddressingConfig = config.addressing.clone().into();
-        let filtering: DetailedTextureFilteringConfig = config.filtering.clone().into();
+impl Hash for SamplerConfig {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let addressing: DetailedTextureAddressingConfig = self.addressing.clone().into();
+        let filtering: DetailedTextureFilteringConfig = self.filtering.clone().into();
 
-        let mut hasher = DefaultHasher::new();
-        addressing.hash(&mut hasher);
-        filtering.filtering_enabled.hash(&mut hasher);
-        filtering.mag_filter.hash(&mut hasher);
-        filtering.min_filter.hash(&mut hasher);
-        filtering.mipmap_filter.hash(&mut hasher);
-        OrderedFloat(filtering.lod_min_clamp).hash(&mut hasher);
-        OrderedFloat(filtering.lod_max_clamp).hash(&mut hasher);
-        filtering.anisotropy_clamp.hash(&mut hasher);
-        SamplerID(hasher.finish())
+        addressing.hash(state);
+        filtering.filtering_enabled.hash(state);
+        filtering.mag_filter.hash(state);
+        filtering.min_filter.hash(state);
+        filtering.mipmap_filter.hash(state);
+        OrderedFloat(filtering.lod_min_clamp).hash(state);
+        OrderedFloat(filtering.lod_max_clamp).hash(state);
+        filtering.anisotropy_clamp.hash(state);
     }
 }
 
@@ -220,42 +204,6 @@ impl TexelType for u8 {
 }
 
 impl Texture {
-    /// Creates a texture holding the given lookup table. The texture will be
-    /// sampled with (bi/tri)linear interpolation, and lookups outside [0, 1]
-    /// are clamped to the edge values.
-    ///
-    /// # Errors
-    /// Returns an error if the row size (width times data value size) is not a
-    /// multiple of 256 bytes (`wgpu` requires that rows are a multiple of 256
-    /// bytes for copying data between buffers and textures).
-    pub fn from_lookup_table<T: TexelType>(
-        graphics_device: &GraphicsDevice,
-        table: &TextureLookupTable<T>,
-        label: &str,
-        sampler_id: Option<SamplerID>,
-    ) -> Result<Self> {
-        let byte_buffer = bytemuck::cast_slice(&table.data);
-
-        let texture_config = TextureConfig {
-            color_space: ColorSpace::Linear,
-            ..Default::default()
-        };
-
-        Self::create(
-            graphics_device,
-            None,
-            byte_buffer,
-            table.width,
-            table.height,
-            table.depth_or_array_layers,
-            T::DESCRIPTION,
-            false,
-            texture_config,
-            sampler_id,
-            label,
-        )
-    }
-
     /// Creates a texture for the data contained in the given byte buffer, with
     /// the given dimensions and texel description, using the given
     /// configuration parameters. Mipmaps will be generated automatically if a
@@ -278,7 +226,6 @@ impl Texture {
         texel_description: TexelDescription,
         is_cubemap: bool,
         texture_config: TextureConfig,
-        sampler_id: Option<SamplerID>,
         label: &str,
     ) -> Result<Self> {
         let texture_size = wgpu::Extent3d {
@@ -310,26 +257,20 @@ impl Texture {
             )
         }
 
-        let (dimension, view_dimension) =
+        let dimension = Self::determine_texture_dimension(height, depth_or_array_layers);
+
+        let view_dimension = if is_cubemap {
             if let DepthOrArrayLayers::ArrayLayers(array_layers) = depth_or_array_layers {
-                let view_dimension = if is_cubemap {
-                    if array_layers.get() != 6 {
-                        bail!("Tried to create cubemap with {} array layers", array_layers);
-                    }
-                    wgpu::TextureViewDimension::Cube
-                } else {
-                    wgpu::TextureViewDimension::D2Array
-                };
-                (wgpu::TextureDimension::D2, view_dimension)
-            } else if texture_size.depth_or_array_layers == 1 {
-                if texture_size.height == 1 {
-                    (wgpu::TextureDimension::D1, wgpu::TextureViewDimension::D1)
-                } else {
-                    (wgpu::TextureDimension::D2, wgpu::TextureViewDimension::D2)
+                if array_layers.get() != 6 {
+                    bail!("Tried to create cubemap with {} array layers", array_layers);
                 }
             } else {
-                (wgpu::TextureDimension::D3, wgpu::TextureViewDimension::D3)
-            };
+                bail!("Tried to create cubemap with no array layers");
+            }
+            wgpu::TextureViewDimension::Cube
+        } else {
+            Self::determine_texture_view_dimension(height, depth_or_array_layers)
+        };
 
         let device = graphics_device.device();
         let queue = graphics_device.queue();
@@ -374,7 +315,7 @@ impl Texture {
 
         let view = Self::create_view(&texture, view_dimension);
 
-        Ok(Self::new(texture, view, view_dimension, sampler_id))
+        Ok(Self::new(texture, view, view_dimension))
     }
 
     /// Creates a new [`Texture`] comprised of the given `wgpu` texture and
@@ -383,13 +324,11 @@ impl Texture {
         texture: wgpu::Texture,
         view: wgpu::TextureView,
         view_dimension: wgpu::TextureViewDimension,
-        sampler_id: Option<SamplerID>,
     ) -> Self {
         Self {
             texture,
             view,
             view_dimension,
-            sampler_id,
         }
     }
 
@@ -401,12 +340,6 @@ impl Texture {
     /// Returns a view into the texture.
     pub fn view(&self) -> &wgpu::TextureView {
         &self.view
-    }
-
-    /// Returns the ID of the specific sampler to use for this texture, or
-    /// [`None`] if this texture has no specific sampler.
-    pub fn sampler_id(&self) -> Option<SamplerID> {
-        self.sampler_id
     }
 
     /// Creates the bind group layout entry for this texture, assigned to the
@@ -430,6 +363,46 @@ impl Texture {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::TextureView(self.view()),
+        }
+    }
+
+    /// Determines the [`wgpu::TextureDimension`] for a texture with the given
+    /// dimensions.
+    pub fn determine_texture_dimension(
+        height: NonZeroU32,
+        depth_or_array_layers: DepthOrArrayLayers,
+    ) -> wgpu::TextureDimension {
+        match depth_or_array_layers {
+            DepthOrArrayLayers::ArrayLayers(_) => wgpu::TextureDimension::D2,
+            DepthOrArrayLayers::Depth(depth) => {
+                if depth.get() > 1 {
+                    wgpu::TextureDimension::D3
+                } else if height.get() > 1 {
+                    wgpu::TextureDimension::D2
+                } else {
+                    wgpu::TextureDimension::D1
+                }
+            }
+        }
+    }
+
+    /// Determines the [`wgpu::TextureViewDimension`] for a texture with the
+    /// given dimensions, assuming it is not a cubemap.
+    pub fn determine_texture_view_dimension(
+        height: NonZeroU32,
+        depth_or_array_layers: DepthOrArrayLayers,
+    ) -> wgpu::TextureViewDimension {
+        match depth_or_array_layers {
+            DepthOrArrayLayers::ArrayLayers(_) => wgpu::TextureViewDimension::D2Array,
+            DepthOrArrayLayers::Depth(depth) => {
+                if depth.get() > 1 {
+                    wgpu::TextureViewDimension::D3
+                } else if height.get() > 1 {
+                    wgpu::TextureViewDimension::D2
+                } else {
+                    wgpu::TextureViewDimension::D1
+                }
+            }
         }
     }
 
@@ -579,6 +552,16 @@ impl From<TextureAddressingConfig> for DetailedTextureAddressingConfig {
     }
 }
 
+impl TextureFilteringConfig {
+    pub fn filtering_enabled(&self) -> bool {
+        match self {
+            Self::None => false,
+            Self::Detailed(detailed) => detailed.filtering_enabled,
+            _ => true,
+        }
+    }
+}
+
 impl DetailedTextureFilteringConfig {
     pub const BASIC: Self = Self {
         filtering_enabled: true,
@@ -646,50 +629,8 @@ impl From<TextureFilteringConfig> for DetailedTextureFilteringConfig {
     }
 }
 
-impl<T: TexelType> TextureLookupTable<T> {
-    /// Wraps the lookup table with the given dimensions and data. The table is
-    /// considered an array of 2D subtables if `depth_or_array_layers` is
-    /// `ArrayLayers`, otherwise it is considered 1D if `depth_or_array_layers`
-    /// and `height` are 1, 2D if only `depth_or_array_layers` is 1 and 3D
-    /// otherwise. The lookup values in the `data` vector are assumed to be laid
-    /// out in row-major order, with adjacent values varying in width first,
-    /// then height and finally depth.
-    ///
-    /// # Panics
-    /// - If the `data` vector is empty.
-    /// - If the table shape is inconsistent with the number of data values.
-    pub fn new(
-        width: usize,
-        height: usize,
-        depth_or_array_layers: DepthOrArrayLayers,
-        data: Vec<T>,
-    ) -> Self {
-        assert!(!data.is_empty(), "No data for lookup table");
-
-        assert_eq!(
-            width * height * (u32::from(depth_or_array_layers.unwrap()) as usize),
-            data.len(),
-            "Lookup table shape ({}, {}, {:?}) inconsistent with number of data values ({})",
-            width,
-            height,
-            depth_or_array_layers,
-            data.len()
-        );
-
-        let width = NonZeroU32::new(u32::try_from(width).unwrap()).unwrap();
-        let height = NonZeroU32::new(u32::try_from(height).unwrap()).unwrap();
-
-        Self {
-            width,
-            height,
-            depth_or_array_layers,
-            data,
-        }
-    }
-}
-
 impl DepthOrArrayLayers {
-    fn unwrap(&self) -> NonZeroU32 {
+    pub fn unwrap(&self) -> NonZeroU32 {
         match self {
             Self::Depth(depth) => *depth,
             Self::ArrayLayers(n_array_layers) => *n_array_layers,

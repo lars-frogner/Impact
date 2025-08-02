@@ -1,8 +1,8 @@
-# Hash: e59c0c643ee747501400bb12d6f6537841fa2563672422011d9c2a90a5dc567c
-# Generated: 2025-07-27T16:52:44+00:00
+# Hash: 3e28a3e3552d06f2c8dbc3b7bc8f77a87752b6c29ca8682ca5ade428dcf4d096
+# Generated: 2025-08-01T06:54:20+00:00
 # Rust type: impact_mesh::triangle::TriangleMeshID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6 (dirty)
 module [
     TriangleMeshID,
     from_name,
@@ -19,7 +19,7 @@ import Entity.Arg
 import core.Builtin
 import core.Hashing
 
-## The persistent ID of a [`TriangleMesh`].
+## The ID of a [`TriangleMesh`].
 TriangleMeshID : Hashing.StringHash64
 
 ## Creates a triangle mesh ID hashed from the given name.

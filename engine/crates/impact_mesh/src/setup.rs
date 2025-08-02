@@ -1,12 +1,11 @@
 //! Mesh setup.
 
 use crate::{
-    FrontFaceSide, TriangleMesh, TriangleMeshDirtyMask, TriangleMeshHandle, TriangleMeshID,
-    TriangleMeshRegistry, VertexAttributeSet, texture_projection::TextureProjection,
+    FrontFaceSide, TriangleMesh, TriangleMeshDirtyMask, TriangleMeshID, TriangleMeshRegistry,
+    VertexAttributeSet, texture_projection::TextureProjection,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
-use impact_resource::ResourceLabelProvider;
 use nalgebra::{Point3, Vector3, point, vector};
 use roc_integration::roc;
 use std::fmt;
@@ -572,29 +571,27 @@ pub fn setup_triangle_mesh_from_template(
     template: &TriangleMeshTemplate,
     mesh_id: Option<TriangleMeshID>,
     projection: Option<&impl TextureProjection<f32>>,
-) -> TriangleMeshHandle {
+) -> TriangleMeshID {
     let mesh_id =
         mesh_id.unwrap_or_else(|| template.generate_id(create_projection_label(projection)));
 
-    if let Some(handle) = registry.get_handle_to_resource_with_pid(mesh_id) {
-        handle
-    } else {
+    if !registry.contains(mesh_id) {
         let mut mesh = template.generate_mesh();
-        let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         if let Some(projection) = projection {
-            mesh.generate_texture_coords(projection, &mut dirty_mask);
+            mesh.generate_texture_coords(projection, &mut TriangleMeshDirtyMask::empty());
         }
 
-        registry.insert_resource_with_pid(mesh_id, mesh)
+        registry.insert(mesh_id, mesh);
     }
+    mesh_id
 }
 
 /// Generates the vertex attributes missing from the giving requirements for the
 /// specified mesh, if possible.
 pub fn generate_missing_vertex_properties_for_mesh(
     registry: &mut TriangleMeshRegistry,
-    handle: TriangleMeshHandle,
+    mesh_id: TriangleMeshID,
     vertex_attribute_requirements: VertexAttributeSet,
 ) {
     if !vertex_attribute_requirements.intersects(
@@ -603,10 +600,9 @@ pub fn generate_missing_vertex_properties_for_mesh(
         return;
     }
 
-    let Some(mut mesh) = registry.registry.get_mut(handle) else {
+    let Some(mut mesh) = registry.get_mut(mesh_id) else {
         impact_log::warn!(
-            "Tried to generate missing vertex properties for missing mesh {}",
-            registry.index.create_label(handle)
+            "Tried to generate missing vertex properties for missing mesh: {mesh_id}"
         );
         return;
     };
@@ -616,20 +612,14 @@ pub fn generate_missing_vertex_properties_for_mesh(
     if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR)
         && !mesh.has_normal_vectors()
     {
-        impact_log::info!(
-            "Generating normal vectors for mesh {}",
-            registry.index.create_label(handle)
-        );
+        impact_log::info!("Generating normal vectors for mesh: {mesh_id}");
         mesh.generate_smooth_normal_vectors(&mut dirty_mask);
     }
 
     if vertex_attribute_requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
         && !mesh.has_tangent_space_quaternions()
     {
-        impact_log::info!(
-            "Generating tangent space quaternions for mesh {}",
-            registry.index.create_label(handle)
-        );
+        impact_log::info!("Generating tangent space quaternions for mesh: {mesh_id}");
         mesh.generate_smooth_tangent_space_quaternions(&mut dirty_mask);
     }
 

@@ -24,7 +24,7 @@ import pf.Setup.UniformColor
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Rendering.TextureID
+import pf.Texture.TextureID
 import pf.Physics.ContactResponseParameters
 
 entity_ids = {
@@ -45,7 +45,7 @@ setup! = |_|
 
     Ok({})
 
-skybox = Rendering.TextureID.from_name("space_skybox")
+skybox = Texture.TextureID.from_name("space_skybox")
 
 player =
     Entity.new

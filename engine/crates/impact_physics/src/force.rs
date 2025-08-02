@@ -13,7 +13,7 @@ use detailed_drag::{DetailedDragForceRegistry, DragLoadMapConfig};
 use impact_containers::IndexMap;
 use local_force::LocalForceRegistry;
 use spring_force::{DynamicDynamicSpringForceRegistry, DynamicKinematicSpringForceRegistry};
-use std::hash::Hash;
+use std::{hash::Hash, path::Path};
 
 /// Manager of all generators of forces and torques on rigid bodies.
 #[derive(Debug)]
@@ -182,5 +182,13 @@ impl<Id: Copy + Eq + Hash + From<u64>, G> ForceGeneratorRegistry<Id, G> {
         let id = Id::from(self.id_counter);
         self.id_counter = self.id_counter.checked_add(1).unwrap();
         id
+    }
+}
+
+impl ForceGenerationConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        self.drag_load_map_config.resolve_paths(root_path);
     }
 }

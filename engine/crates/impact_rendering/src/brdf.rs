@@ -2,8 +2,9 @@
 
 #![allow(non_snake_case)]
 
-use impact_gpu::texture::{DepthOrArrayLayers, TextureLookupTable};
+use impact_gpu::texture::DepthOrArrayLayers;
 use impact_math::Float;
+use impact_texture::lookup_table::{LookupTable, LookupTableMetadata, LookupTableValueType};
 use std::num::NonZeroU32;
 
 /// Creates two tables of the specular GGX microfacet BRDF reflectance values
@@ -22,7 +23,7 @@ use std::num::NonZeroU32;
 pub fn create_specular_ggx_reflectance_lookup_tables(
     num_v_dot_n_samples: usize,
     num_roughness_samples: usize,
-) -> TextureLookupTable<f32> {
+) -> LookupTable<f32> {
     impact_log::info!("Computing lookup table for specular GGX reflectance");
 
     const MIN_ROUGHNESS: f32 = 0.05;
@@ -57,12 +58,14 @@ pub fn create_specular_ggx_reflectance_lookup_tables(
         }
     }
 
-    TextureLookupTable::new(
-        num_v_dot_n_samples,
-        num_roughness_samples,
-        DepthOrArrayLayers::ArrayLayers(NonZeroU32::new(2).unwrap()),
-        data,
-    )
+    let meta = LookupTableMetadata {
+        width: NonZeroU32::new(num_v_dot_n_samples.try_into().unwrap()).unwrap(),
+        height: NonZeroU32::new(num_roughness_samples.try_into().unwrap()).unwrap(),
+        depth_or_array_layers: DepthOrArrayLayers::ArrayLayers(NonZeroU32::new(2).unwrap()),
+        value_type: LookupTableValueType::Float32,
+    };
+
+    LookupTable::new(meta, data).unwrap()
 }
 
 /// Integrates the radiance reflected toward the view direction `v` from all

@@ -10,11 +10,11 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
+use impact_material::{MaterialTemplate, MaterialTextureBindingLocations};
 use impact_material::{
-    MaterialShaderInput, MaterialSpecification,
     features::{MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation},
     setup::physical::{
-        PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindings,
+        PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindingLocations,
     },
 };
 use impact_mesh::{VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation};
@@ -30,7 +30,7 @@ pub struct ModelGeometryShaderInput {
     pub material_instance_feature_flags: MaterialInstanceFeatureFlags,
     /// The texture bindings for the model's material (which should be
     /// physically based).
-    pub material_texture_bindings: PhysicalMaterialTextureBindings,
+    pub material_texture_bindings: PhysicalMaterialTextureBindingLocations,
 }
 
 /// Shader template for the model geometry pass, which extracts the relevant
@@ -47,15 +47,15 @@ static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
 
 impl ModelGeometryShaderInput {
     /// Returns the model geometry shader input corresponding to the given
-    /// material specification, or [`None`] if the material is not compatible
-    /// with the geometry shader (it is not physically based).
-    pub fn for_material(specification: &MaterialSpecification) -> Option<Self> {
-        if let MaterialShaderInput::Physical(material_texture_bindings) =
-            &specification.shader_input()
+    /// material template, or [`None`] if the material template is not
+    /// compatible with the geometry shader (it is not physically based).
+    pub fn for_material_template(template: &MaterialTemplate) -> Option<Self> {
+        if let MaterialTextureBindingLocations::Physical(material_texture_bindings) =
+            &template.texture_binding_locations
         {
             Some(Self {
-                vertex_attributes: specification.vertex_attribute_requirements(),
-                material_instance_feature_flags: specification.instance_feature_flags(),
+                vertex_attributes: template.vertex_attribute_requirements,
+                material_instance_feature_flags: template.instance_feature_flags,
                 material_texture_bindings: material_texture_bindings.clone(),
             })
         } else {
@@ -286,7 +286,7 @@ mod tests {
             ModelGeometryShaderInput {
                 vertex_attributes: VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
                 material_instance_feature_flags: MaterialInstanceFeatureFlags::HAS_COLOR,
-                material_texture_bindings: PhysicalMaterialTextureBindings {
+                material_texture_bindings: PhysicalMaterialTextureBindingLocations {
                     color_texture_and_sampler_bindings: None,
                     specular_reflectance_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
@@ -306,7 +306,7 @@ mod tests {
                     | VertexAttributeSet::TEXTURE_COORDS
                     | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
                 material_instance_feature_flags: MaterialInstanceFeatureFlags::empty(),
-                material_texture_bindings: PhysicalMaterialTextureBindings {
+                material_texture_bindings: PhysicalMaterialTextureBindingLocations {
                     color_texture_and_sampler_bindings: Some((0, 1)),
                     specular_reflectance_texture_and_sampler_bindings: Some((2, 3)),
                     roughness_texture_and_sampler_bindings: Some((4, 5)),
@@ -331,7 +331,7 @@ mod tests {
                     | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
                 material_instance_feature_flags:
                     MaterialInstanceFeatureFlags::USES_PARALLAX_MAPPING,
-                material_texture_bindings: PhysicalMaterialTextureBindings {
+                material_texture_bindings: PhysicalMaterialTextureBindingLocations {
                     color_texture_and_sampler_bindings: Some((0, 1)),
                     specular_reflectance_texture_and_sampler_bindings: Some((2, 3)),
                     roughness_texture_and_sampler_bindings: Some((4, 5)),

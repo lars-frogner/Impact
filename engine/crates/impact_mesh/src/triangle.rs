@@ -7,36 +7,25 @@ use crate::{
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::SlotKey;
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::{Float, Hash64, StringHash64};
+use impact_math::{Float, StringHash64};
 use impact_resource::{
-    MutableResource, Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
-    indexed_registry::IndexedMutableResourceRegistry,
+    MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::fmt;
 
-define_setup_type! {
-    target = TriangleMeshHandle;
-    /// The persistent ID of a [`TriangleMesh`].
-    #[roc(parents = "Setup")]
+define_component_type! {
+    /// The ID of a [`TriangleMesh`].
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct TriangleMeshID(pub StringHash64);
 }
 
-define_component_type! {
-    /// Handle to a [`TriangleMesh`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct TriangleMeshHandle(SlotKey);
-}
-
 /// A registry of loaded [`TriangleMesh`]es.
-pub type TriangleMeshRegistry = IndexedMutableResourceRegistry<TriangleMeshID, TriangleMesh<f32>>;
+pub type TriangleMeshRegistry = MutableResourceRegistry<TriangleMesh<f32>>;
 
 /// A 3D mesh of triangles represented by vertices and indices.
 ///
@@ -72,22 +61,7 @@ impl fmt::Display for TriangleMeshID {
     }
 }
 
-impl ResourcePID for TriangleMeshID {}
-
-impl TriangleMeshHandle {
-    /// Creates a handle that will produce a panic if actually used in a
-    /// `TriangleMeshRegistry`.
-    pub fn dummy() -> Self {
-        Self(SlotKey::dummy())
-    }
-
-    /// Computes a 64-bit hash from this handle.
-    pub fn compute_hash(&self) -> Hash64 {
-        Hash64::from_bytes(bytemuck::bytes_of(self))
-    }
-}
-
-impl_ResourceHandle_for_newtype!(TriangleMeshHandle);
+impl ResourceID for TriangleMeshID {}
 
 impl<F: Float> TriangleMesh<F> {
     /// Creates a new mesh described by the given vertex attributes and indices.
@@ -626,7 +600,7 @@ impl<F: Float> TriangleMesh<F> {
 }
 
 impl Resource for TriangleMesh<f32> {
-    type Handle = TriangleMeshHandle;
+    type ID = TriangleMeshID;
 }
 
 impl MutableResource for TriangleMesh<f32> {

@@ -1,7 +1,7 @@
 (
-    assets: (
-        lookup_table_dir: "../assets/lookup_tables",
-        asset_file_path: None,
+    resources: (
+        resource_file_path: None,
+        lookup_table_dir: "../resources/lookup_tables",
     ),
     rendering: (
         basic: (
@@ -69,6 +69,7 @@
                 save_generated_maps: true,
                 overwrite_existing_map_files: false,
                 use_saved_maps: true,
+                directory: "resources/drag_load_maps",
             ),
         ),
         constraint_solver: (

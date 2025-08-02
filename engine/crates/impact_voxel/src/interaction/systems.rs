@@ -1,12 +1,13 @@
 //! ECS systems for driving voxel object interaction.
 
 use crate::{
-    VoxelManager, VoxelObjectID, VoxelObjectManager,
+    VoxelObjectID, VoxelObjectManager,
     interaction::{
         self, NewVoxelObjectEntity, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
         VoxelObjectEntity, VoxelObjectInteractionContext,
         absorption::{self, VoxelAbsorbingCapsule, VoxelAbsorbingSphere},
     },
+    voxel_types::VoxelTypeRegistry,
 };
 use impact_ecs::{
     query,
@@ -170,7 +171,8 @@ pub fn apply_absorption(
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
     scene_graph: &SceneGraph,
-    voxel_manager: &mut VoxelManager,
+    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     time_step_duration: fph,
 ) {
@@ -182,7 +184,8 @@ pub fn apply_absorption(
 
     absorption::apply_absorption(
         &mut interaction_context,
-        voxel_manager,
+        voxel_object_manager,
+        voxel_type_registry,
         rigid_body_manager,
         time_step_duration,
     );

@@ -5,35 +5,23 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::SlotKey;
-use impact_math::{Float, Hash64, StringHash64};
+use impact_math::{Float, StringHash64};
 use impact_resource::{
-    MutableResource, Resource, ResourceDirtyMask, ResourcePID, impl_ResourceHandle_for_newtype,
-    indexed_registry::IndexedMutableResourceRegistry,
+    MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
 use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
 use roc_integration::roc;
 
-define_setup_type! {
-    target = LineSegmentMeshHandle;
-    /// The persistent ID of a [`LineSegmentMesh`].
-    #[roc(parents = "Setup")]
+define_component_type! {
+    /// The ID of a [`LineSegmentMesh`].
+    #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
     pub struct LineSegmentMeshID(pub StringHash64);
 }
 
-define_component_type! {
-    /// Handle to a [`LineSegmentMesh`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct LineSegmentMeshHandle(SlotKey);
-}
-
 /// A registry of loaded [`LineSegmentMesh`]es.
-pub type LineSegmentMeshRegistry =
-    IndexedMutableResourceRegistry<LineSegmentMeshID, LineSegmentMesh<f32>>;
+pub type LineSegmentMeshRegistry = MutableResourceRegistry<LineSegmentMesh<f32>>;
 
 /// A 3D mesh of line segments represented by pairs of vertices.
 ///
@@ -62,16 +50,7 @@ impl fmt::Display for LineSegmentMeshID {
     }
 }
 
-impl ResourcePID for LineSegmentMeshID {}
-
-impl LineSegmentMeshHandle {
-    /// Computes a 64-bit hash from this handle.
-    pub fn compute_hash(&self) -> Hash64 {
-        Hash64::from_bytes(bytemuck::bytes_of(self))
-    }
-}
-
-impl_ResourceHandle_for_newtype!(LineSegmentMeshHandle);
+impl ResourceID for LineSegmentMeshID {}
 
 impl<F: Float> LineSegmentMesh<F> {
     /// Creates a new mesh described by the given vertex positions and colors.
@@ -204,7 +183,7 @@ impl<F: Float> LineSegmentMesh<F> {
 }
 
 impl Resource for LineSegmentMesh<f32> {
-    type Handle = LineSegmentMeshHandle;
+    type ID = LineSegmentMeshID;
 }
 
 impl MutableResource for LineSegmentMesh<f32> {

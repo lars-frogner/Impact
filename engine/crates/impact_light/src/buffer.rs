@@ -466,9 +466,10 @@ impl LightGPUBufferManager {
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
-        bind_group_layout_registry.get_or_create_layout(Self::AMBIENT_LIGHT_LAYOUT_ID, || {
-            Self::create_ambient_light_bind_group_layout(graphics_device.device())
-        })
+        bind_group_layout_registry
+            .get_or_create_layout(Self::AMBIENT_LIGHT_LAYOUT_ID.hash(), || {
+                Self::create_ambient_light_bind_group_layout(graphics_device.device())
+            })
     }
 
     /// Returns the bind group layout for the omnidirectional light uniform
@@ -478,7 +479,7 @@ impl LightGPUBufferManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry
-            .get_or_create_layout(Self::OMNIDIRECTIONAL_LIGHT_LAYOUT_ID, || {
+            .get_or_create_layout(Self::OMNIDIRECTIONAL_LIGHT_LAYOUT_ID.hash(), || {
                 Self::create_omnidirectional_light_bind_group_layout(graphics_device.device())
             })
     }
@@ -490,7 +491,7 @@ impl LightGPUBufferManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            Self::SHADOWABLE_OMNIDIRECTIONAL_LIGHT_LAYOUT_ID,
+            Self::SHADOWABLE_OMNIDIRECTIONAL_LIGHT_LAYOUT_ID.hash(),
             || {
                 Self::create_shadowable_omnidirectional_light_bind_group_layout(
                     graphics_device.device(),
@@ -506,7 +507,7 @@ impl LightGPUBufferManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry
-            .get_or_create_layout(Self::UNIDIRECTIONAL_LIGHT_LAYOUT_ID, || {
+            .get_or_create_layout(Self::UNIDIRECTIONAL_LIGHT_LAYOUT_ID.hash(), || {
                 Self::create_unidirectional_light_bind_group_layout(graphics_device.device())
             })
     }
@@ -518,7 +519,7 @@ impl LightGPUBufferManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_LAYOUT_ID,
+            Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_LAYOUT_ID.hash(),
             || {
                 Self::create_shadowable_unidirectional_light_bind_group_layout(
                     graphics_device.device(),
@@ -637,7 +638,7 @@ impl OmnidirectionalLightShadowMapManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            LightGPUBufferManager::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID,
+            LightGPUBufferManager::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID.hash(),
             || ShadowCubemapTexture::create_bind_group_layout(graphics_device.device()),
         )
     }
@@ -700,7 +701,7 @@ impl UnidirectionalLightShadowMapManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            LightGPUBufferManager::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID,
+            LightGPUBufferManager::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID.hash(),
             || CascadedShadowMapTexture::create_bind_group_layout(graphics_device.device()),
         )
     }

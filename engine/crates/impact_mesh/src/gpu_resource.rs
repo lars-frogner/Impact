@@ -1,10 +1,10 @@
 //! GPU resources for meshes.
 
 use crate::{
-    LineSegmentMesh, LineSegmentMeshDirtyMask, N_VERTEX_ATTRIBUTES, TriangleMesh,
-    TriangleMeshDirtyMask, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute, VertexAttributeSet,
-    VertexColor, VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion,
-    VertexTextureCoords,
+    LineSegmentMesh, LineSegmentMeshDirtyMask, LineSegmentMeshID, N_VERTEX_ATTRIBUTES,
+    TriangleMesh, TriangleMeshDirtyMask, TriangleMeshID, VERTEX_ATTRIBUTE_FLAGS, VertexAttribute,
+    VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
+    VertexTangentSpaceQuaternion, VertexTextureCoords,
 };
 use anyhow::{Result, anyhow};
 use bytemuck::Pod;
@@ -461,45 +461,67 @@ impl MeshGPUResource {
     }
 }
 
-impl GPUResource<TriangleMesh<f32>> for MeshGPUResource {
-    type GraphicsDevice = GraphicsDevice;
+impl GPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
+    type GPUContext = GraphicsDevice;
 
-    fn create(graphics_device: &GraphicsDevice, mesh: &TriangleMesh<f32>, label: String) -> Self {
-        Self::for_triangle_mesh(graphics_device, mesh, label)
+    fn create(
+        graphics_device: &GraphicsDevice,
+        id: TriangleMeshID,
+        mesh: &TriangleMesh<f32>,
+    ) -> Result<Option<Self>> {
+        Ok(Some(Self::for_triangle_mesh(
+            graphics_device,
+            mesh,
+            id.to_string(),
+        )))
+    }
+
+    fn cleanup(self, _gpu_context: &Self::GPUContext, _id: TriangleMeshID) -> Result<()> {
+        Ok(())
     }
 }
 
-impl MutableGPUResource<TriangleMesh<f32>> for MeshGPUResource {
+impl MutableGPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
     fn update(
         &mut self,
         graphics_device: &GraphicsDevice,
         mesh: &TriangleMesh<f32>,
         dirty_mask: TriangleMeshDirtyMask,
-    ) {
+    ) -> Result<()> {
         self.sync_with_triangle_mesh(graphics_device, mesh, dirty_mask);
+        Ok(())
     }
 }
 
-impl GPUResource<LineSegmentMesh<f32>> for MeshGPUResource {
-    type GraphicsDevice = GraphicsDevice;
+impl GPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
+    type GPUContext = GraphicsDevice;
 
     fn create(
         graphics_device: &GraphicsDevice,
+        id: LineSegmentMeshID,
         mesh: &LineSegmentMesh<f32>,
-        label: String,
-    ) -> Self {
-        Self::for_line_segment_mesh(graphics_device, mesh, label)
+    ) -> Result<Option<Self>> {
+        Ok(Some(Self::for_line_segment_mesh(
+            graphics_device,
+            mesh,
+            id.to_string(),
+        )))
+    }
+
+    fn cleanup(self, _gpu_context: &Self::GPUContext, _id: LineSegmentMeshID) -> Result<()> {
+        Ok(())
     }
 }
 
-impl MutableGPUResource<LineSegmentMesh<f32>> for MeshGPUResource {
+impl MutableGPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
     fn update(
         &mut self,
         graphics_device: &GraphicsDevice,
         mesh: &LineSegmentMesh<f32>,
         dirty_mask: LineSegmentMeshDirtyMask,
-    ) {
+    ) -> Result<()> {
         self.sync_with_line_segment_mesh(graphics_device, mesh, dirty_mask);
+        Ok(())
     }
 }
 

@@ -1,13 +1,14 @@
 //! Voxel absorption.
 
 use crate::{
-    VoxelManager, VoxelObjectPhysicsContext,
+    VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{
         self, DynamicDisconnectedVoxelObject, NewVoxelObjectEntity, VoxelObjectEntity,
         VoxelObjectInteractionContext, VoxelRemovalOutcome,
     },
     mesh::MeshedChunkedVoxelObject,
+    voxel_types::VoxelTypeRegistry,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{Capsule, Sphere};
@@ -147,12 +148,12 @@ impl VoxelAbsorbingCapsule {
 /// objects.
 pub fn apply_absorption<C: VoxelObjectInteractionContext>(
     context: &mut C,
-    voxel_manager: &mut VoxelManager,
+    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     time_step_duration: fph,
 ) {
-    let mut voxel_object_entities =
-        Vec::with_capacity(voxel_manager.object_manager.voxel_object_count());
+    let mut voxel_object_entities = Vec::with_capacity(voxel_object_manager.voxel_object_count());
 
     context.gather_voxel_object_entities(&mut voxel_object_entities);
 
@@ -164,9 +165,8 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
         voxel_object_id,
     } in voxel_object_entities
     {
-        let Some((voxel_object, physics_context)) = voxel_manager
-            .object_manager
-            .get_voxel_object_with_physics_context_mut(voxel_object_id)
+        let Some((voxel_object, physics_context)) =
+            voxel_object_manager.get_voxel_object_with_physics_context_mut(voxel_object_id)
         else {
             continue;
         };
@@ -192,7 +192,7 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
 
         let mut inertial_property_updater = physics_context.inertial_property_manager.begin_update(
             voxel_object.voxel_extent(),
-            voxel_manager.type_registry.mass_densities(),
+            voxel_type_registry.mass_densities(),
         );
 
         for absorbing_sphere in &absorbing_spheres {
@@ -222,7 +222,7 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
                 original_object_empty,
                 disconnected_object,
             } = interaction::handle_voxel_object_after_removing_voxels(
-                &voxel_manager.type_registry,
+                voxel_type_registry,
                 voxel_object,
                 &mut physics_context.inertial_property_manager,
                 rigid_body,
@@ -240,9 +240,7 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
             {
                 let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
 
-                let voxel_object_id = voxel_manager
-                    .object_manager
-                    .add_voxel_object(meshed_voxel_object);
+                let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
 
                 let rigid_body_id = rigid_body_manager.add_dynamic_rigid_body(rigid_body);
 
@@ -251,8 +249,7 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
                     rigid_body_id,
                 };
 
-                voxel_manager
-                    .object_manager
+                voxel_object_manager
                     .add_physics_context_for_voxel_object(voxel_object_id, physics_context);
 
                 context.on_new_voxel_object_entity(NewVoxelObjectEntity {

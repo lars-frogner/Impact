@@ -367,7 +367,7 @@ fn validate_module(module: &naga::Module) {
         naga::valid::Capabilities::all(),
     );
     if let Err(err) = validator.validate(module) {
-        dbg!(module);
+        println!("{module:?}");
         eprintln!("{}", err.emit_to_string("test"));
         panic!("Shader validation failed");
     }
