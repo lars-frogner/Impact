@@ -1,6 +1,6 @@
 //! Scene containing data to render.
 
-use impact_light::LightStorage;
+use impact_light::LightManager;
 use impact_scene::{
     camera::SceneCamera,
     graph::SceneGraph,
@@ -13,7 +13,7 @@ use parking_lot::RwLock;
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
-    light_storage: RwLock<LightStorage>,
+    light_manager: RwLock<LightManager>,
     model_instance_manager: RwLock<ModelInstanceManager>,
     initial_model_instance_manager_state: ModelInstanceManagerState,
     voxel_object_manager: RwLock<VoxelObjectManager>,
@@ -35,7 +35,7 @@ impl Scene {
     pub fn new(model_instance_manager: ModelInstanceManager) -> Self {
         let initial_model_instance_manager_state = model_instance_manager.record_state();
         Self {
-            light_storage: RwLock::new(LightStorage::new()),
+            light_manager: RwLock::new(LightManager::new()),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
             voxel_object_manager: RwLock::new(VoxelObjectManager::new()),
@@ -45,9 +45,9 @@ impl Scene {
         }
     }
 
-    /// Returns a reference to the [`LightStorage`], guarded by a [`RwLock`].
-    pub fn light_storage(&self) -> &RwLock<LightStorage> {
-        &self.light_storage
+    /// Returns a reference to the [`LightManager`], guarded by a [`RwLock`].
+    pub fn light_manager(&self) -> &RwLock<LightManager> {
+        &self.light_manager
     }
 
     /// Returns a reference to the [`ModelInstanceManager`], guarded by a
@@ -99,7 +99,7 @@ impl Scene {
 
     /// Resets the scene to the initial empty state.
     pub fn clear(&self) {
-        self.light_storage.write().remove_all_lights();
+        self.light_manager.write().remove_all_lights();
 
         self.model_instance_manager
             .write()

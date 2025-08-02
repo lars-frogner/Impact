@@ -1,7 +1,7 @@
 //! Synchronization of GPU buffers with geometrical data.
 
-use impact_camera::buffer::CameraGPUBufferManager;
-use impact_light::buffer::LightGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
+use impact_light::gpu_resource::LightGPUResources;
 use impact_material::{
     MaterialRegistry, MaterialTemplateRegistry, MaterialTextureGroupRegistry,
     gpu_resource::{MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap},
@@ -10,7 +10,7 @@ use impact_mesh::{
     LineSegmentMeshRegistry, TriangleMeshRegistry,
     gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap},
 };
-use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::resource::SkyboxGPUResourceManager};
+use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::gpu_resource::SkyboxGPUResource};
 use impact_texture::{
     SamplerRegistry, TextureRegistry,
     gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap},
@@ -36,17 +36,17 @@ pub trait BasicResourceRegistries {
 }
 
 pub trait BasicGPUResources {
-    /// Returns the GPU buffer manager for camera data, or [`None`] if it has
-    /// not been created.
-    fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager>;
+    /// Returns the GPU resource for the camera, or [`None`] if it does not
+    /// exist.
+    fn camera(&self) -> Option<&CameraGPUResource>;
 
-    /// Returns the GPU buffer manager for light data, or [`None`] if it has
-    /// not been created.
-    fn get_light_buffer_manager(&self) -> Option<&LightGPUBufferManager>;
+    /// Returns the GPU resource for the skybox, or [`None`] if it does not
+    /// exist.
+    fn skybox(&self) -> Option<&SkyboxGPUResource>;
 
-    /// Returns the GPU resource manager for skybox data, or [`None`] if it has
-    /// not been created.
-    fn get_skybox_resource_manager(&self) -> Option<&SkyboxGPUResourceManager>;
+    /// Returns the GPU resources for light data, or [`None`] if it has not been
+    /// created.
+    fn light(&self) -> Option<&LightGPUResources>;
 
     /// Returns the GPU resource map for triangle mesh data.
     fn triangle_mesh(&self) -> &TriangleMeshGPUResourceMap;

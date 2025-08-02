@@ -165,7 +165,7 @@ define_task!(
 
 define_task!(
     /// Updates the properties (position, direction, emission, extent and flags)
-    /// of every light source in the [`LightStorage`](crate::light::LightStorage).
+    /// of every light source in the [`LightManager`](crate::light::LightManager).
     [pub] SyncLightsInStorage,
     depends_on = [
         UpdateSceneGroupToWorldTransforms,
@@ -178,12 +178,12 @@ define_task!(
             let ecs_world = engine.ecs_world().read();
             let scene = engine.scene().read();
             let scene_graph = scene.scene_graph().read();
-            let mut light_storage = scene.light_storage().write();
+            let mut light_manager = scene.light_manager().write();
             impact_scene::systems::sync_lights_in_storage(
                 &ecs_world,
                 &scene_graph,
                 scene.scene_camera().read().as_ref(),
-                &mut light_storage,
+                &mut light_manager,
             );
             Ok(())
         })
@@ -427,7 +427,7 @@ define_task!(
             let mut model_instance_manager = scene.model_instance_manager().write();
             let voxel_object_manager = scene.voxel_object_manager().read();
             let scene_graph = scene.scene_graph().read();
-            let light_storage = scene.light_storage().read();
+            let light_manager = scene.light_manager().read();
             let scene_camera = scene.scene_camera().read();
 
             gizmo::systems::buffer_transforms_for_gizmos(
@@ -438,7 +438,7 @@ define_task!(
                 &collision_world,
                 &voxel_object_manager,
                 &scene_graph,
-                &light_storage,
+                &light_manager,
                 scene_camera.as_ref(),
                 current_frame_count,
             );
@@ -476,7 +476,7 @@ define_task!(
                 scene.scene_graph()
                     .read()
                     .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
-                        &mut scene.light_storage().write(),
+                        &mut scene.light_manager().write(),
                         &mut scene.model_instance_manager().write(),
                         scene_camera,
                         shadow_mapping_enabled,
@@ -517,7 +517,7 @@ define_task!(
                 scene.scene_graph()
                     .read()
                     .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
-                        &mut scene.light_storage().write(),
+                        &mut scene.light_manager().write(),
                         &mut scene.model_instance_manager().write(),
                         scene_camera,
                         shadow_mapping_enabled,
@@ -655,28 +655,24 @@ define_task!(
         instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
             let renderer = engine.renderer().read();
             let scene = engine.scene().read();
-            let render_resource_manager = &renderer.render_resource_manager().read();
-            DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
+            let mut render_resource_manager = renderer.render_resource_manager().write();
+            let render_resource_manager = &mut *render_resource_manager;
+
+            impact_scene::camera::sync_gpu_resources_for_scene_camera(
+                scene.scene_camera().read().as_ref(),
                 renderer.graphics_device(),
                 renderer.bind_group_layout_registry(),
-                render_resource_manager.legacy
-                    .desynchronized()
-                    .camera_buffer_manager
-                    .lock()
-                    .as_mut(),
-                scene.scene_camera().read().as_ref(),
+                &mut render_resource_manager.camera,
             );
-            DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
+
+            impact_scene::skybox::sync_gpu_resources_for_skybox(
+                scene.skybox().read().as_ref(),
                 renderer.graphics_device(),
                 &render_resource_manager.textures,
                 &render_resource_manager.samplers,
-                render_resource_manager.legacy
-                    .desynchronized()
-                    .skybox_resource_manager
-                    .lock()
-                    .as_mut(),
-                scene.skybox().read().as_ref(),
+                &mut render_resource_manager.skybox,
             )?;
+
             Ok(())
         })
     }
@@ -718,8 +714,8 @@ define_task!(
 );
 
 define_task!(
-    /// Synchronizes light GPU buffers.
-    [pub] SyncLightGPUBuffers,
+    /// Synchronizes light GPU resources.
+    [pub] SyncLightGPUResources,
     depends_on = [
         SyncLightsInStorage,
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
@@ -728,22 +724,19 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing light GPU buffers", engine, {
+        instrument_engine_task!("Synchronizing light GPU resources", engine, {
             let renderer = engine.renderer().read();
-            let render_resource_manager = &renderer.render_resource_manager().read().legacy;
+            let mut render_resource_manager = renderer.render_resource_manager().write();
             let scene = engine.scene().read();
-            let light_storage = scene.light_storage().read();
-            DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
+            let light_manager = scene.light_manager().read();
+
+            light_manager.sync_gpu_resources(
                 renderer.graphics_device(),
                 renderer.bind_group_layout_registry(),
-                render_resource_manager
-                    .desynchronized()
-                    .light_buffer_manager
-                    .lock()
-                    .as_mut(),
-                &light_storage,
+                &mut render_resource_manager.lights,
                 renderer.shadow_mapping_config(),
             );
+
             Ok(())
         })
     }
@@ -794,7 +787,7 @@ define_task!(
         SyncTextureGPUResources,
         SyncMaterialGPUResources,
         SyncVoxelObjectGPUBuffers,
-        SyncLightGPUBuffers,
+        SyncLightGPUResources,
         SyncModelInstanceBuffers
     ],
     execute_on = [RenderingTag],
@@ -908,7 +901,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncMaterialGPUResources)?;
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;
-    task_scheduler.register_task(SyncLightGPUBuffers)?;
+    task_scheduler.register_task(SyncLightGPUResources)?;
     task_scheduler.register_task(SyncModelInstanceBuffers)?;
     task_scheduler.register_task(SyncRenderResources)?;
 

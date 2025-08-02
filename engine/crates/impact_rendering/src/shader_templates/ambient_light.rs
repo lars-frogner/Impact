@@ -12,13 +12,13 @@ use crate::{
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     rendering_template_source,
 };
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     push_constant::PushConstantGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_light::buffer::LightGPUBufferManager;
+use impact_light::gpu_resource::LightGPUResources;
 use impact_mesh::{
     self, TriangleMeshID, VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation,
 };
@@ -109,7 +109,7 @@ impl SpecificShaderTemplate for AmbientLightShaderTemplate {
                     "material_properties_texture_binding" => MaterialProperties.texture_binding(),
                     "material_properties_sampler_binding" => MaterialProperties.sampler_binding(),
                     "light_uniform_group" => 5,
-                    "light_uniform_binding" => LightGPUBufferManager::light_binding(),
+                    "light_uniform_binding" => LightGPUResources::light_binding(),
                     "specular_reflectance_lookup_texture_group" => 6,
                     "specular_reflectance_lookup_texture_binding" => 0,
                     "specular_reflectance_lookup_sampler_binding" => 1,

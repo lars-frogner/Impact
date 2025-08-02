@@ -6,7 +6,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_light::{MAX_SHADOW_MAP_CASCADES, buffer::LightGPUBufferManager};
+use impact_light::{MAX_SHADOW_MAP_CASCADES, gpu_resource::LightGPUResources};
 use impact_mesh::gpu_resource::MeshVertexAttributeLocation;
 use impact_model::transform::InstanceModelLightTransform;
 use std::sync::LazyLock;
@@ -54,7 +54,7 @@ impl SpecificShaderTemplate for UnidirectionalLightShadowMapShaderTemplate {
                     "model_light_transform_rotation_location" => InstanceModelLightTransform::rotation_location(),
                     "model_light_transform_translation_location" => InstanceModelLightTransform::translation_and_scaling_location(),
                     "light_uniform_group" => 0,
-                    "light_uniform_binding" => LightGPUBufferManager::light_binding(),
+                    "light_uniform_binding" => LightGPUResources::light_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,
                 )
             )

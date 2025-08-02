@@ -1,7 +1,7 @@
 //! Shader template for rendering geometry with fixed vertex colors.
 
 use crate::rendering_template_source;
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,

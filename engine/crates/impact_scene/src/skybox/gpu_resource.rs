@@ -1,4 +1,4 @@
-//! Management of GPU resources for skyboxes.
+//! GPU resources for skyboxes.
 
 use crate::skybox::Skybox;
 use anyhow::{Result, anyhow};
@@ -14,14 +14,14 @@ use impact_math::ConstStringHash64;
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::borrow::Cow;
 
-/// Manager for GPU resources used for a skybox.
+/// GPU resources for a skybox.
 #[derive(Debug)]
-pub struct SkyboxGPUResourceManager {
+pub struct SkyboxGPUResource {
     skybox: Skybox,
     gpu_resource_group: GPUResourceGroup,
 }
 
-impl SkyboxGPUResourceManager {
+impl SkyboxGPUResource {
     /// Returns the binding location of the uniform of skybox properties.
     pub const fn properties_uniform_binding() -> u32 {
         0

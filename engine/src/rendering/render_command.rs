@@ -9,7 +9,7 @@ use impact_gpu::{
     query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
     storage::StorageGPUBufferManager, wgpu,
 };
-use impact_light::{LightStorage, shadow_map::ShadowMappingConfig};
+use impact_light::{LightManager, shadow_map::ShadowMappingConfig};
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::{RenderAttachmentQuantitySet, RenderAttachmentTextureManager},
@@ -239,7 +239,7 @@ impl RenderCommandManager {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        light_storage: &LightStorage,
+        light_manager: &LightManager,
         model_instance_manager: &ModelInstanceManager,
         scene_camera: Option<&SceneCamera>,
         resource_registries: &R,
@@ -309,7 +309,7 @@ impl RenderCommandManager {
         drop(geometry_pass);
 
         self.omnidirectional_light_shadow_map_update_passes.record(
-            light_storage,
+            light_manager,
             gpu_resources,
             timestamp_recorder,
             shadow_mapping_config.enabled,
@@ -347,7 +347,7 @@ impl RenderCommandManager {
         )?;
 
         self.unidirectional_light_shadow_map_update_passes.record(
-            light_storage,
+            light_manager,
             gpu_resources,
             timestamp_recorder,
             shadow_mapping_config.enabled,
@@ -392,7 +392,7 @@ impl RenderCommandManager {
 
         self.directional_light_pass.record(
             rendering_surface,
-            light_storage,
+            light_manager,
             gpu_resources,
             render_attachment_texture_manager,
             postprocessor,

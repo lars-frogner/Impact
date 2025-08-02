@@ -14,7 +14,7 @@ use crate::{
     render_command::StencilValue,
     rendering_template_source,
 };
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     resource_group::GPUResourceGroupID,
     shader::{

@@ -125,8 +125,8 @@ impl ScreenCapturer {
 
             let render_resource_manager = renderer.render_resource_manager().read();
 
-            if let Some(light_buffer_manager) = render_resource_manager.get_light_buffer_manager() {
-                for (light_idx, texture) in light_buffer_manager
+            if let Some(light_gpu_resources) = render_resource_manager.light() {
+                for (light_idx, texture) in light_gpu_resources
                     .omnidirectional_light_shadow_map_manager()
                     .textures()
                     .iter()
@@ -173,8 +173,8 @@ impl ScreenCapturer {
 
             let render_resource_manager = renderer.render_resource_manager().read();
 
-            if let Some(light_buffer_manager) = render_resource_manager.get_light_buffer_manager() {
-                for (light_idx, texture) in light_buffer_manager
+            if let Some(light_gpu_resources) = render_resource_manager.light() {
+                for (light_idx, texture) in light_gpu_resources
                     .unidirectional_light_shadow_map_manager()
                     .textures()
                     .iter()

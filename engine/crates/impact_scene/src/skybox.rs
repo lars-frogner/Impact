@@ -1,9 +1,15 @@
 //! Skybox.
 
-pub mod resource;
+pub mod gpu_resource;
 
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_texture::TextureID;
+use gpu_resource::SkyboxGPUResource;
+use impact_gpu::device::GraphicsDevice;
+use impact_texture::{
+    TextureID,
+    gpu_resource::{SamplerMap, TextureMap},
+};
 use roc_integration::roc;
 
 /// A skybox specified by a cubemap texture and a maximum luminance (the
@@ -38,3 +44,32 @@ impl PartialEq for Skybox {
 }
 
 impl Eq for Skybox {}
+
+/// Performs any required updates for keeping the skybox GPU resources in sync
+/// with the given scene skybox.
+///
+/// # Errors
+/// Returns an error if the skybox cubemap texture or sampler is missing.
+pub fn sync_gpu_resources_for_skybox(
+    skybox: Option<&Skybox>,
+    graphics_device: &GraphicsDevice,
+    textures: &TextureMap,
+    samplers: &SamplerMap,
+    skybox_gpu_resources: &mut Option<SkyboxGPUResource>,
+) -> Result<()> {
+    if let Some(&skybox) = skybox {
+        if let Some(skybox_gpu_resources) = skybox_gpu_resources {
+            skybox_gpu_resources.sync_with_skybox(graphics_device, textures, samplers, skybox)?;
+        } else {
+            *skybox_gpu_resources = Some(SkyboxGPUResource::for_skybox(
+                graphics_device,
+                textures,
+                samplers,
+                skybox,
+            )?);
+        }
+    } else {
+        skybox_gpu_resources.take();
+    }
+    Ok(())
+}

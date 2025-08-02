@@ -14,12 +14,12 @@ use crate::{
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
-use impact_light::{LightStorage, buffer::LightGPUBufferManager};
+use impact_light::{LightManager, gpu_resource::LightGPUResources};
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use std::borrow::Cow;
 
@@ -48,13 +48,13 @@ impl AmbientLightPass {
         let input_render_attachments = AmbientLightShaderTemplate::input_render_attachments();
         let output_render_attachments = AmbientLightShaderTemplate::output_render_attachments();
 
-        let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
+        let max_light_count = LightManager::INITIAL_LIGHT_CAPACITY;
 
         let shader_template = AmbientLightShaderTemplate::new(max_light_count);
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        let mut bind_group_layouts = vec![CameraGPUBufferManager::get_or_create_bind_group_layout(
+        let mut bind_group_layouts = vec![CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
             bind_group_layout_registry,
         )];
@@ -69,7 +69,7 @@ impl AmbientLightPass {
         );
 
         bind_group_layouts.push(
-            LightGPUBufferManager::get_or_create_ambient_light_bind_group_layout(
+            LightGPUResources::get_or_create_ambient_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
@@ -129,11 +129,11 @@ impl AmbientLightPass {
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = gpu_resources
-            .get_light_buffer_manager()
+        let light_gpu_resources = gpu_resources
+            .light()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let max_light_count = light_buffer_manager.max_ambient_light_count();
+        let max_light_count = light_gpu_resources.max_ambient_light_count();
 
         if max_light_count != self.max_light_count {
             let shader_template = AmbientLightShaderTemplate::new(max_light_count);
@@ -256,12 +256,12 @@ impl AmbientLightPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
+        let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(());
         };
 
-        let light_buffer_manager = gpu_resources
-            .get_light_buffer_manager()
+        let light_gpu_resources = gpu_resources
+            .light()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
@@ -283,7 +283,7 @@ impl AmbientLightPass {
 
         self.set_push_constants(&mut render_pass, rendering_surface, postprocessor);
 
-        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+        render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         let mut bind_group_index = 1;
         for bind_group in render_attachment_texture_manager
@@ -295,7 +295,7 @@ impl AmbientLightPass {
 
         render_pass.set_bind_group(
             bind_group_index,
-            light_buffer_manager.ambient_light_bind_group(),
+            light_gpu_resources.ambient_light_bind_group(),
             &[],
         );
         bind_group_index += 1;

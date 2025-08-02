@@ -9,7 +9,7 @@ use crate::{
     shader_templates::skybox::SkyboxShaderTemplate,
 };
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
@@ -62,32 +62,28 @@ impl SkyboxPass {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         gpu_resources: &impl BasicGPUResources,
     ) {
-        match (
-            self.skybox.as_ref(),
-            gpu_resources.get_skybox_resource_manager(),
-        ) {
-            (Some(&skybox), Some(skybox_resource_manager))
-                if skybox == skybox_resource_manager.skybox() => {}
+        match (self.skybox.as_ref(), gpu_resources.skybox()) {
+            (Some(&skybox), Some(skybox_gpu_resources))
+                if skybox == skybox_gpu_resources.skybox() => {}
             (_, None) => {
                 self.pipeline = None;
                 self.skybox = None;
             }
-            (_, Some(skybox_resource_manager)) => {
+            (_, Some(skybox_gpu_resources)) => {
                 let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
                     graphics_device,
                     &SkyboxShaderTemplate,
                 );
 
-                let camera_bind_group_layout =
-                    CameraGPUBufferManager::get_or_create_bind_group_layout(
-                        graphics_device,
-                        bind_group_layout_registry,
-                    );
+                let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
+                    graphics_device,
+                    bind_group_layout_registry,
+                );
                 let pipeline_layout = render_command::create_render_pipeline_layout(
                     graphics_device.device(),
                     &[
                         &camera_bind_group_layout,
-                        skybox_resource_manager.bind_group_layout(),
+                        skybox_gpu_resources.bind_group_layout(),
                     ],
                     &self.push_constant_ranges,
                     "Skybox pass render pipeline layout",
@@ -105,7 +101,7 @@ impl SkyboxPass {
                     Some(self.depth_stencil_state.clone()),
                     "Skybox pass render pipeline",
                 ));
-                self.skybox = Some(skybox_resource_manager.skybox());
+                self.skybox = Some(skybox_gpu_resources.skybox());
             }
         }
     }
@@ -158,7 +154,7 @@ impl SkyboxPass {
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         postprocessor: &Postprocessor,
-        camera_buffer_manager: &CameraGPUBufferManager,
+        camera_gpu_resources: &CameraGPUResource,
     ) {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
@@ -171,7 +167,7 @@ impl SkyboxPass {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 BasicPushConstantVariant::CameraRotationQuaternion,
-                || camera_buffer_manager.camera_rotation_quaternion_push_constant(),
+                || camera_gpu_resources.camera_rotation_quaternion_push_constant(),
             );
     }
 
@@ -189,7 +185,7 @@ impl SkyboxPass {
             return Ok(());
         };
 
-        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
+        let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(());
         };
 
@@ -210,15 +206,15 @@ impl SkyboxPass {
 
         render_pass.set_stencil_reference(StencilValue::Background as u32);
 
-        self.set_push_constants(&mut render_pass, postprocessor, camera_buffer_manager);
+        self.set_push_constants(&mut render_pass, postprocessor, camera_gpu_resources);
 
-        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+        render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
-        let skybox_resource_manager = gpu_resources
-            .get_skybox_resource_manager()
+        let skybox_gpu_resources = gpu_resources
+            .skybox()
             .ok_or_else(|| anyhow!("Missing GPU resources for skybox"))?;
 
-        render_pass.set_bind_group(1, skybox_resource_manager.bind_group(), &[]);
+        render_pass.set_bind_group(1, skybox_gpu_resources.bind_group(), &[]);
 
         let mesh_id = impact_mesh::builtin::skybox_mesh_id();
 

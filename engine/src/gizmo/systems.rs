@@ -14,11 +14,11 @@ use crate::gizmo::{
     },
 };
 use approx::abs_diff_ne;
-use impact_camera::buffer::BufferableCamera;
+use impact_camera::gpu_resource::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_light::{
-    LightStorage, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
+    LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
 };
 use impact_math::Angle;
@@ -92,7 +92,7 @@ pub fn buffer_transforms_for_gizmos(
     collision_world: &CollisionWorld,
     voxel_object_manager: &VoxelObjectManager,
     scene_graph: &SceneGraph,
-    light_storage: &LightStorage,
+    light_manager: &LightManager,
     scene_camera: Option<&SceneCamera>,
     current_frame_count: u32,
 ) {
@@ -133,7 +133,7 @@ pub fn buffer_transforms_for_gizmos(
             }
             buffer_transform_for_light_sphere_gizmo(
                 model_instance_manager,
-                light_storage,
+                light_manager,
                 *omnidirectional_light_id,
             );
         }
@@ -150,7 +150,7 @@ pub fn buffer_transforms_for_gizmos(
             if gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) {
                 buffer_transform_for_shadowable_light_sphere_gizmo(
                     model_instance_manager,
-                    light_storage,
+                    light_manager,
                     *omnidirectional_light_id,
                 );
             }
@@ -160,7 +160,7 @@ pub fn buffer_transforms_for_gizmos(
             {
                 buffer_transforms_for_shadow_cubemap_faces_gizmo(
                     model_instance_manager,
-                    light_storage,
+                    light_manager,
                     *omnidirectional_light_id,
                 );
             }
@@ -181,7 +181,7 @@ pub fn buffer_transforms_for_gizmos(
             }
             buffer_transforms_for_shadow_map_cascades_gizmo(
                 model_instance_manager,
-                light_storage,
+                light_manager,
                 scene_camera,
                 *unidirectional_light_id,
             );
@@ -335,10 +335,10 @@ fn compute_transform_for_bounding_sphere_gizmo(
 
 fn buffer_transform_for_light_sphere_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
-    light_storage: &LightStorage,
+    light_manager: &LightManager,
     light_id: OmnidirectionalLightID,
 ) {
-    let Some(light) = light_storage.get_omnidirectional_light(light_id) else {
+    let Some(light) = light_manager.get_omnidirectional_light(light_id) else {
         return;
     };
 
@@ -356,10 +356,10 @@ fn buffer_transform_for_light_sphere_gizmo(
 
 fn buffer_transform_for_shadowable_light_sphere_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
-    light_storage: &LightStorage,
+    light_manager: &LightManager,
     light_id: ShadowableOmnidirectionalLightID,
 ) {
-    let Some(light) = light_storage.get_shadowable_omnidirectional_light(light_id) else {
+    let Some(light) = light_manager.get_shadowable_omnidirectional_light(light_id) else {
         return;
     };
 
@@ -377,10 +377,10 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
 
 fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
-    light_storage: &LightStorage,
+    light_manager: &LightManager,
     light_id: ShadowableOmnidirectionalLightID,
 ) {
-    let Some(light) = light_storage.get_shadowable_omnidirectional_light(light_id) else {
+    let Some(light) = light_manager.get_shadowable_omnidirectional_light(light_id) else {
         return;
     };
 
@@ -415,11 +415,11 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 
 fn buffer_transforms_for_shadow_map_cascades_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
-    light_storage: &LightStorage,
+    light_manager: &LightManager,
     scene_camera: &SceneCamera,
     light_id: ShadowableUnidirectionalLightID,
 ) {
-    let Some(light) = light_storage.get_shadowable_unidirectional_light(light_id) else {
+    let Some(light) = light_manager.get_shadowable_unidirectional_light(light_id) else {
         return;
     };
 

@@ -2,7 +2,7 @@
 
 use crate::gizmo::{self, GizmoObscurability, model::GizmoModel};
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -51,7 +51,7 @@ impl GizmoPasses {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
-        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+        let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
             bind_group_layout_registry,
         );
@@ -215,7 +215,7 @@ impl GizmoPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
+        let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(());
         };
 
@@ -240,10 +240,10 @@ impl GizmoPass {
         );
 
         self.triangle_pipeline
-            .record(gpu_resources, camera_buffer_manager, &mut render_pass)?;
+            .record(gpu_resources, camera_gpu_resources, &mut render_pass)?;
 
         self.line_pipeline
-            .record(gpu_resources, camera_buffer_manager, &mut render_pass)?;
+            .record(gpu_resources, camera_gpu_resources, &mut render_pass)?;
 
         Ok(())
     }
@@ -304,7 +304,7 @@ impl GizmoPassPipeline {
     fn record(
         &self,
         gpu_resources: &impl BasicGPUResources,
-        camera_buffer_manager: &CameraGPUBufferManager,
+        camera_gpu_resources: &CameraGPUResource,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()> {
         let models = gizmo::model::gizmo_models_for_mesh_primitive_and_obscurability(
@@ -315,14 +315,14 @@ impl GizmoPassPipeline {
         match self.mesh_primitive {
             MeshPrimitive::Triangle => Self::record_for_triangles(
                 gpu_resources,
-                camera_buffer_manager,
+                camera_gpu_resources,
                 render_pass,
                 &self.pipeline,
                 models,
             ),
             MeshPrimitive::LineSegment => Self::record_for_lines(
                 gpu_resources,
-                camera_buffer_manager,
+                camera_gpu_resources,
                 render_pass,
                 &self.pipeline,
                 models,
@@ -332,14 +332,14 @@ impl GizmoPassPipeline {
 
     fn record_for_triangles<'a>(
         gpu_resources: &impl BasicGPUResources,
-        camera_buffer_manager: &CameraGPUBufferManager,
+        camera_gpu_resources: &CameraGPUResource,
         render_pass: &mut wgpu::RenderPass<'_>,
         pipeline: &wgpu::RenderPipeline,
         models: impl IntoIterator<Item = &'a GizmoModel>,
     ) -> Result<()> {
         render_pass.set_pipeline(pipeline);
 
-        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+        render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         for model in models {
             let transform_buffer = gpu_resources
@@ -400,14 +400,14 @@ impl GizmoPassPipeline {
 
     fn record_for_lines<'a>(
         gpu_resources: &impl BasicGPUResources,
-        camera_buffer_manager: &CameraGPUBufferManager,
+        camera_gpu_resources: &CameraGPUResource,
         render_pass: &mut wgpu::RenderPass<'_>,
         pipeline: &wgpu::RenderPipeline,
         models: impl IntoIterator<Item = &'a GizmoModel>,
     ) -> Result<()> {
         render_pass.set_pipeline(pipeline);
 
-        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+        render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         for model in models {
             let transform_buffer = gpu_resources

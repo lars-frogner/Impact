@@ -5,7 +5,7 @@ use crate::{
     attachment::{RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantitySet},
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
 };
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,

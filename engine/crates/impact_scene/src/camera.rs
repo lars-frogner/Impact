@@ -1,7 +1,11 @@
 //! The active camera for a scene.
 
 use crate::graph::CameraNodeID;
-use impact_camera::{Camera, buffer::BufferableCamera};
+use impact_camera::{
+    Camera,
+    gpu_resource::{BufferableCamera, CameraGPUResource},
+};
+use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
 use nalgebra::{Isometry3, Point3};
 
 /// Represents a [`Camera`] that has a camera node in a [`SceneGraph`](crate::graph::SceneGraph).
@@ -72,5 +76,28 @@ impl BufferableCamera for SceneCamera {
 
     fn jitter_enabled(&self) -> bool {
         self.jitter_enabled
+    }
+}
+
+/// Performs any required updates for keeping the camera GPU resources in sync
+/// with the given scene camera.
+pub fn sync_gpu_resources_for_scene_camera(
+    scene_camera: Option<&SceneCamera>,
+    graphics_device: &GraphicsDevice,
+    bind_group_layout_registry: &BindGroupLayoutRegistry,
+    camera_gpu_resources: &mut Option<CameraGPUResource>,
+) {
+    if let Some(scene_camera) = scene_camera {
+        if let Some(camera_gpu_resources) = camera_gpu_resources {
+            camera_gpu_resources.sync_with_camera(graphics_device, scene_camera);
+        } else {
+            *camera_gpu_resources = Some(CameraGPUResource::for_camera(
+                graphics_device,
+                bind_group_layout_registry,
+                scene_camera,
+            ));
+        }
+    } else {
+        camera_gpu_resources.take();
     }
 }

@@ -3,22 +3,25 @@
 #[macro_use]
 mod macros;
 
-pub mod buffer;
+pub mod gpu_resource;
 pub mod setup;
 pub mod shadow_map;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use gpu_resource::LightGPUResources;
 use impact_geometry::{
     AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox, OrthographicTransform, Sphere,
 };
-use impact_gpu::uniform::UniformBuffer;
+use impact_gpu::{
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, uniform::UniformBuffer,
+};
 use impact_math::{Angle, Degrees, Float, UpperExclusiveBounds};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };
 use roc_integration::roc;
-use shadow_map::CascadeIdx;
+use shadow_map::{CascadeIdx, ShadowMappingConfig};
 use std::iter;
 
 /// The luminous intensity of a light source, which is the visible power
@@ -135,7 +138,7 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// The ID of an [`AmbientLight`] in the [`LightStorage`].
+    /// The ID of an [`AmbientLight`] in the [`LightManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -143,7 +146,7 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// The ID of an [`OmnidirectionalLight`] in the [`LightStorage`].
+    /// The ID of an [`OmnidirectionalLight`] in the [`LightManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -151,7 +154,7 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightStorage`].
+    /// The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -159,7 +162,7 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// The ID of a [`UnidirectionalLight`] in the [`LightStorage`].
+    /// The ID of a [`UnidirectionalLight`] in the [`LightManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -167,7 +170,7 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// The ID of a [`ShadowableUnidirectionalLight`] in the [`LightStorage`].
+    /// The ID of a [`ShadowableUnidirectionalLight`] in the [`LightManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -177,7 +180,7 @@ define_component_type! {
 /// A spatially uniform and isotropic light field, represented by an RGB
 /// incident luminance that applies to any surface affected by the light.
 ///
-/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
 /// size is a multiple of 16 bytes as required for uniforms.
 #[repr(C)]
@@ -192,7 +195,7 @@ pub struct AmbientLight {
 /// RGB luminous intensity and an extent. The struct also includes a max reach
 /// restricting the distance at which the light can illuminate objects.
 ///
-/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
 /// size is a multiple of 16 bytes as required for uniforms, and the fields that
 /// will be accessed on the GPU are aligned to 16-byte boundaries.
@@ -223,7 +226,7 @@ pub struct OmnidirectionalLight {
 /// restricting the distance range in which the light can illuminate objects and
 /// cast shadows.
 ///
-/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
 /// size is a multiple of 16 bytes as required for uniforms, and the fields that
 /// will be accessed on the GPU are aligned to 16-byte boundaries.
@@ -255,7 +258,7 @@ pub struct ShadowableOmnidirectionalLight {
 /// An unidirectional light source represented by a camera space direction, an
 /// RGB perpendicular illuminance and an angular extent.
 ///
-/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
 /// size is a multiple of 16 bytes as required for uniforms, and the fields that
 /// will be accessed on the GPU are aligned to 16-byte boundaries.
@@ -286,7 +289,7 @@ pub struct UnidirectionalLight {
 /// linear depths (not the non-linear clip space depths) representing the
 /// boundaries between the cascades.
 ///
-/// This struct is intended to be stored in a [`LightStorage`], and its data
+/// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
 /// size is a multiple of 16 bytes as required for uniforms, and the fields that
 /// will be accessed on the GPU are aligned to 16-byte boundaries.
@@ -354,9 +357,9 @@ type UnidirectionalLightUniformBuffer = UniformBuffer<UnidirectionalLightID, Uni
 type ShadowableUnidirectionalLightUniformBuffer =
     UniformBuffer<ShadowableUnidirectionalLightID, ShadowableUnidirectionalLight>;
 
-/// Container for all light sources in a scene.
+/// Manager of all light sources in a scene.
 #[derive(Debug)]
-pub struct LightStorage {
+pub struct LightManager {
     ambient_light_buffer: AmbientLightUniformBuffer,
     omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer,
     shadowable_omnidirectional_light_buffer: ShadowableOmnidirectionalLightUniformBuffer,
@@ -500,12 +503,12 @@ impl std::fmt::Display for ShadowableUnidirectionalLightID {
     }
 }
 
-impl LightStorage {
+impl LightManager {
     /// By creating light uniform buffers with a small initial capacity, we
     /// avoid excessive buffer reallocation when the first few lights are added.
     pub const INITIAL_LIGHT_CAPACITY: usize = 5;
 
-    /// Creates a new empty light storage.
+    /// Creates a new light manager with no lights.
     pub fn new() -> Self {
         Self {
             ambient_light_buffer: AmbientLightUniformBuffer::with_capacity(1),
@@ -930,6 +933,31 @@ impl LightStorage {
         self.total_ambient_luminance = Luminance::zeros();
     }
 
+    /// Performs any required updates for keeping the given GPU resources in
+    /// sync with the current light data.
+    pub fn sync_gpu_resources(
+        &self,
+        graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+        light_gpu_resources: &mut Option<LightGPUResources>,
+        shadow_mapping_config: &ShadowMappingConfig,
+    ) {
+        if let Some(light_gpu_resources) = light_gpu_resources {
+            light_gpu_resources.sync_with_light_manager(
+                graphics_device,
+                bind_group_layout_registry,
+                self,
+            );
+        } else {
+            *light_gpu_resources = Some(LightGPUResources::for_light_manager(
+                graphics_device,
+                bind_group_layout_registry,
+                self,
+                shadow_mapping_config,
+            ));
+        }
+    }
+
     /// Uses the total ambient luminance to compute the maximum reach for all
     /// omnidirectional lights, based on the heuristic that the maximum reach
     /// (where the light contribution should be insignificant) is where the
@@ -961,7 +989,7 @@ impl LightStorage {
     }
 }
 
-impl Default for LightStorage {
+impl Default for LightManager {
     fn default() -> Self {
         Self::new()
     }
