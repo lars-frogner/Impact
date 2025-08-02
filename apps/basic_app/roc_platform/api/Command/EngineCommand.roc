@@ -1,8 +1,8 @@
-# Hash: 008e7f8634db141da34a0b60b0007e4e9a64fa40d56d5eec62619db26c565a84
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 2ca838c31d86a5da5d7fd4458ddc8d948b268e284ebc4026f8f62468fc45bfc2
+# Generated: 2025-08-01T06:51:20+00:00
 # Rust type: impact::command::EngineCommand
 # Type category: Inline
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6
 module [
     EngineCommand,
     write_bytes,
@@ -51,7 +51,7 @@ write_bytes = |bytes, value|
             |> List.reserve(34)
             |> List.append(2)
             |> Command.SceneCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 23))
+            |> List.concat(List.repeat(0, 16))
 
         Controller(val) ->
             bytes
@@ -112,7 +112,7 @@ from_bytes = |bytes|
             [2, .. as data_bytes] ->
                 Ok(
                     Scene(
-                        data_bytes |> List.sublist({ start: 0, len: 10 }) |> Command.SceneCommand.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 17 }) |> Command.SceneCommand.from_bytes?,
                     ),
                 )
 

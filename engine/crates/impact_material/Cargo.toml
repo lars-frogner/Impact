@@ -8,6 +8,7 @@ license = { workspace = true }
 [features]
 ecs = ["dep:impact_ecs", "dep:inventory", "impact_mesh/ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
+serde = ["dep:serde"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -21,6 +22,7 @@ impact_gpu = { path = "../impact_gpu" }
 impact_math = { path = "../impact_math" }
 impact_mesh = { path = "../impact_mesh" }
 impact_model = { path = "../impact_model" }
+impact_resource = { path = "../impact_resource" }
 impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
@@ -28,6 +30,7 @@ num-traits = { workspace = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
+serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true

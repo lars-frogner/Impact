@@ -28,7 +28,6 @@ pub mod window;
 #[cfg(feature = "profiling")]
 pub mod profiling;
 
-pub use impact_assets;
 pub use impact_camera;
 pub use impact_containers;
 pub use impact_ecs;

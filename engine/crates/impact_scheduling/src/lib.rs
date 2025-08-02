@@ -4,7 +4,7 @@
 pub mod macros;
 
 use anyhow::{Result, anyhow, bail};
-use impact_containers::{DefaultHasher, HashMap, HashSet};
+use impact_containers::{HashMap, HashSet, RandomState};
 use impact_math::Hash64;
 use impact_thread::{
     TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
@@ -88,7 +88,7 @@ type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
 /// A graph describing the dependencies between separate tasks.
 #[derive(Debug)]
 struct TaskDependencyGraph<S> {
-    graph: GraphMap<TaskID, (), Directed, DefaultHasher>,
+    graph: GraphMap<TaskID, (), Directed, RandomState>,
     space: DfsSpace<TaskID, hashbrown::HashSet<TaskID>>,
     independent_tasks: HashSet<TaskID>,
     _phantom: PhantomData<S>,

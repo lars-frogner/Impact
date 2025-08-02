@@ -3,7 +3,7 @@
 use crate::{
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
-    resource::BasicGPUResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::{
         omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
         unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
@@ -21,7 +21,7 @@ use impact_light::{
     buffer::LightGPUBufferManager,
     shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
 };
-use impact_material::{MaterialLibrary, MaterialShaderInput};
+use impact_material::MaterialTextureBindingLocations;
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, buffer::InstanceFeatureGPUBufferManager,
@@ -115,16 +115,16 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        material_library: &MaterialLibrary,
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        self.sync_models_with_render_resources(material_library, gpu_resources);
+        self.sync_models_with_render_resources(resource_registries, gpu_resources);
         self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
     }
 
     fn sync_models_with_render_resources(
         &mut self,
-        material_library: &MaterialLibrary,
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
@@ -152,12 +152,19 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             if !has_features(instance_feature_buffer_manager) {
                 continue;
             }
-            if let Some(material_specification) = material_library
-                .get_material_specification(model_id.material_handle().material_id())
+            let Some(material) = resource_registries.material().get(model_id.material_id()) else {
+                continue;
+            };
+            let Some(material_template) = resource_registries
+                .material_template()
+                .get(material.template_id)
+            else {
+                continue;
+            };
+            if let MaterialTextureBindingLocations::Physical(_) =
+                material_template.texture_binding_locations
             {
-                if let MaterialShaderInput::Physical(_) = material_specification.shader_input() {
-                    self.models.insert(*model_id);
-                }
+                self.models.insert(*model_id);
             }
         }
     }
@@ -367,12 +374,12 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                             .valid_buffer_slice(),
                     );
 
-                    let mesh_handle = model_id.triangle_mesh_handle();
+                    let mesh_id = model_id.triangle_mesh_id();
 
                     let mesh_gpu_resources = gpu_resources
                         .triangle_mesh()
-                        .get(mesh_handle)
-                        .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
+                        .get(mesh_id)
+                        .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
                     let position_buffer = mesh_gpu_resources
                         .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
@@ -476,16 +483,16 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        material_library: &MaterialLibrary,
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        self.sync_models_with_render_resources(material_library, gpu_resources);
+        self.sync_models_with_render_resources(resource_registries, gpu_resources);
         self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
     }
 
     fn sync_models_with_render_resources(
         &mut self,
-        material_library: &MaterialLibrary,
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
@@ -513,12 +520,19 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             if !has_features(instance_feature_buffer_manager) {
                 continue;
             }
-            if let Some(material_specification) = material_library
-                .get_material_specification(model_id.material_handle().material_id())
+            let Some(material) = resource_registries.material().get(model_id.material_id()) else {
+                continue;
+            };
+            let Some(material_template) = resource_registries
+                .material_template()
+                .get(material.template_id)
+            else {
+                continue;
+            };
+            if let MaterialTextureBindingLocations::Physical(_) =
+                material_template.texture_binding_locations
             {
-                if let MaterialShaderInput::Physical(_) = material_specification.shader_input() {
-                    self.models.insert(*model_id);
-                }
+                self.models.insert(*model_id);
             }
         }
     }
@@ -741,12 +755,12 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                             .valid_buffer_slice(),
                     );
 
-                    let mesh_handle = model_id.triangle_mesh_handle();
+                    let mesh_id = model_id.triangle_mesh_id();
 
                     let mesh_gpu_resources = gpu_resources
                         .triangle_mesh()
-                        .get(mesh_handle)
-                        .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
+                        .get(mesh_id)
+                        .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
                     let position_buffer = mesh_gpu_resources
                         .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?

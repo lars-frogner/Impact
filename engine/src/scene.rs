@@ -1,25 +1,22 @@
 //! Scene containing data to render.
 
 use impact_light::LightStorage;
-use impact_material::{MaterialLibrary, MaterialLibraryState};
 use impact_scene::{
     camera::SceneCamera,
     graph::SceneGraph,
     model::{InstanceFeatureManager, InstanceFeatureManagerState},
     skybox::Skybox,
 };
-use impact_voxel::VoxelManager;
+use impact_voxel::VoxelObjectManager;
 use parking_lot::RwLock;
 
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
-    material_library: RwLock<MaterialLibrary>,
-    initial_material_library_state: MaterialLibraryState,
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
     initial_instance_feature_manager_state: InstanceFeatureManagerState,
-    voxel_manager: RwLock<VoxelManager>,
+    voxel_object_manager: RwLock<VoxelObjectManager>,
     scene_graph: RwLock<SceneGraph>,
     scene_camera: RwLock<Option<SceneCamera>>,
     skybox: RwLock<Option<Skybox>>,
@@ -35,29 +32,17 @@ pub enum RenderResourcesDesynchronized {
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new(
-        material_library: MaterialLibrary,
-        instance_feature_manager: InstanceFeatureManager,
-        voxel_manager: VoxelManager,
-    ) -> Self {
-        let initial_material_library_state = material_library.record_state();
+    pub fn new(instance_feature_manager: InstanceFeatureManager) -> Self {
         let initial_instance_feature_manager_state = instance_feature_manager.record_state();
         Self {
-            material_library: RwLock::new(material_library),
-            initial_material_library_state,
             light_storage: RwLock::new(LightStorage::new()),
             instance_feature_manager: RwLock::new(instance_feature_manager),
             initial_instance_feature_manager_state,
-            voxel_manager: RwLock::new(voxel_manager),
+            voxel_object_manager: RwLock::new(VoxelObjectManager::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
             skybox: RwLock::new(None),
         }
-    }
-
-    /// Returns a reference to the [`MaterialLibrary`], guarded by a [`RwLock`].
-    pub fn material_library(&self) -> &RwLock<MaterialLibrary> {
-        &self.material_library
     }
 
     /// Returns a reference to the [`LightStorage`], guarded by a [`RwLock`].
@@ -71,9 +56,10 @@ impl Scene {
         &self.instance_feature_manager
     }
 
-    /// Returns a reference to the [`VoxelManager`], guarded by a [`RwLock`].
-    pub fn voxel_manager(&self) -> &RwLock<VoxelManager> {
-        &self.voxel_manager
+    /// Returns a reference to the [`VoxelObjectManager`], guarded by a
+    /// [`RwLock`].
+    pub fn voxel_object_manager(&self) -> &RwLock<VoxelObjectManager> {
+        &self.voxel_object_manager
     }
 
     /// Returns a reference to the [`SceneGraph`], guarded by a [`RwLock`].
@@ -113,20 +99,13 @@ impl Scene {
 
     /// Resets the scene to the initial empty state.
     pub fn clear(&self) {
-        self.material_library
-            .write()
-            .reset_to_state(&self.initial_material_library_state);
-
         self.light_storage.write().remove_all_lights();
 
         self.instance_feature_manager
             .write()
             .reset_to_state(&self.initial_instance_feature_manager_state);
 
-        self.voxel_manager
-            .write()
-            .object_manager
-            .remove_all_voxel_objects();
+        self.voxel_object_manager.write().remove_all_voxel_objects();
 
         self.scene_graph.write().clear_nodes();
 

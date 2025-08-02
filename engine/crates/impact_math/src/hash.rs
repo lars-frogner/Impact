@@ -18,6 +18,7 @@ use std::{
     postfix = "_hash_32"
 )]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct Hash32(u32);
@@ -30,6 +31,7 @@ pub struct Hash32(u32);
     postfix = "_hash_64"
 )]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct Hash64(u64);
@@ -46,6 +48,7 @@ pub struct Hash64(u64);
     postfix = "_string_hash_32"
 )]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct StringHash32(Hash32);
@@ -62,6 +65,7 @@ pub struct StringHash32(Hash32);
     postfix = "_string_hash_64"
 )]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct StringHash64(Hash64);
@@ -211,6 +215,11 @@ impl ConstStringHash64 {
     /// Returns the string literal.
     pub const fn string(&self) -> &'static str {
         self.string
+    }
+
+    /// Returns the underlying [`Hash64`].
+    pub const fn hash(&self) -> Hash64 {
+        self.hash
     }
 
     /// Unwraps the string hash to obtain the underlying [`Hash64`].

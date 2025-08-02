@@ -263,9 +263,8 @@ define_task!(
                 .advance_simulation(
                     &engine.scene()
                         .read()
-                        .voxel_manager()
+                        .voxel_object_manager()
                         .read()
-                        .object_manager
                 );
             Ok(())
         })
@@ -306,11 +305,11 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object meshes", engine, {
             let scene = engine.scene().read();
-            let mut voxel_manager = scene.voxel_manager().write();
+            let mut voxel_object_manager = scene.voxel_object_manager().write();
 
             let mut desynchronized = false;
 
-            voxel_manager.object_manager.sync_voxel_object_meshes(&mut desynchronized);
+            voxel_object_manager.sync_voxel_object_meshes(&mut desynchronized);
 
             if desynchronized {
                 engine
@@ -337,17 +336,19 @@ define_task!(
         instrument_engine_task!("Applying voxel absorbers", engine, {
             let mut entity_stager = engine.entity_stager().lock();
             let ecs_world = engine.ecs_world().read();
+            let resource_manager = engine.resource_manager().read();
             let simulator = engine.simulator().read();
             let mut rigid_body_manager = simulator.rigid_body_manager().write();
             let scene = engine.scene().read();
-            let mut voxel_manager = scene.voxel_manager().write();
+            let mut voxel_object_manager = scene.voxel_object_manager().write();
             let scene_graph = scene.scene_graph().read();
 
             impact_voxel::interaction::systems::apply_absorption(
                 &mut entity_stager,
                 &ecs_world,
                 &scene_graph,
-                &mut voxel_manager,
+                &mut voxel_object_manager,
+                &resource_manager.voxel_types,
                 &mut rigid_body_manager,
                 simulator.time_step_duration(),
             );
@@ -368,11 +369,11 @@ define_task!(
         instrument_engine_task!("Synchronizing voxel object model transforms", engine, {
             let mut ecs_world = engine.ecs_world().write();
             let scene = engine.scene().read();
-            let voxel_manager = scene.voxel_manager().read();
+            let voxel_object_manager = scene.voxel_object_manager().read();
 
             impact_voxel::interaction::systems::sync_voxel_object_model_transforms(
                 &mut ecs_world,
-                &voxel_manager.object_manager,
+                &voxel_object_manager,
             );
 
             Ok(())
@@ -424,7 +425,7 @@ define_task!(
             let collision_world = simulator.collision_world().read();
             let scene = engine.scene().read();
             let mut instance_feature_manager = scene.instance_feature_manager().write();
-            let voxel_manager = scene.voxel_manager().read();
+            let voxel_object_manager = scene.voxel_object_manager().read();
             let scene_graph = scene.scene_graph().read();
             let light_storage = scene.light_storage().read();
             let scene_camera = scene.scene_camera().read();
@@ -435,7 +436,7 @@ define_task!(
                 &mut instance_feature_manager,
                 &gizmo_manager,
                 &collision_world,
-                &voxel_manager,
+                &voxel_object_manager,
                 &scene_graph,
                 &light_storage,
                 scene_camera.as_ref(),
@@ -548,17 +549,96 @@ define_task!(
             let renderer = engine.renderer().read();
             let mut render_resource_manager = renderer.render_resource_manager().write();
 
-            impact_resource::gpu::sync_indexed_mutable_gpu_resources(
+            impact_resource::gpu::sync_mutable_gpu_resources(
                 engine.graphics_device(),
                 &resource_manager.triangle_meshes,
                 &mut render_resource_manager.triangle_meshes,
-            );
+            )?;
 
-            impact_resource::gpu::sync_indexed_mutable_gpu_resources(
+            impact_resource::gpu::sync_mutable_gpu_resources(
                 engine.graphics_device(),
                 &resource_manager.line_segment_meshes,
                 &mut render_resource_manager.line_segment_meshes,
-            );
+            )?;
+
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// Synchronizes GPU resources for textures.
+    [pub] SyncTextureGPUResources,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Synchronizing texture GPU resources", engine, {
+            let resource_manager = engine.resource_manager().read();
+            let renderer = engine.renderer().read();
+            let mut render_resource_manager = renderer.render_resource_manager().write();
+            let render_resource_manager = &mut *render_resource_manager;
+
+            impact_resource::gpu::sync_immutable_gpu_resources(
+                &(
+                    engine.graphics_device(),
+                    renderer.mipmapper_generator().as_ref(),
+                ),
+                &resource_manager.textures,
+                &mut render_resource_manager.textures,
+            )?;
+
+            impact_resource::gpu::sync_immutable_gpu_resources(
+                engine.graphics_device(),
+                &resource_manager.samplers,
+                &mut render_resource_manager.samplers,
+            )?;
+
+            impact_resource::gpu::sync_immutable_gpu_resources(
+                &(
+                    engine.graphics_device(),
+                    renderer.bind_group_layout_registry(),
+                    &render_resource_manager.textures,
+                    &render_resource_manager.samplers,
+                ),
+                &resource_manager.lookup_tables,
+                &mut render_resource_manager.lookup_table_bind_groups,
+            )?;
+
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// Synchronizes GPU resources for materials.
+    [pub] SyncMaterialGPUResources,
+    depends_on = [SyncTextureGPUResources],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Synchronizing material GPU resources", engine, {
+            let resource_manager = engine.resource_manager().read();
+            let renderer = engine.renderer().read();
+            let mut render_resource_manager = renderer.render_resource_manager().write();
+            let render_resource_manager = &mut *render_resource_manager;
+
+            impact_resource::gpu::sync_immutable_gpu_resources(
+                engine.graphics_device(),
+                &resource_manager.material_templates,
+                &mut render_resource_manager.material_template_bind_group_layouts,
+            )?;
+
+            impact_resource::gpu::sync_immutable_gpu_resources(
+                &(
+                    engine.graphics_device(),
+                    &render_resource_manager.textures,
+                    &render_resource_manager.samplers,
+                    &render_resource_manager.material_template_bind_group_layouts,
+                ),
+                &resource_manager.material_texture_groups,
+                &mut render_resource_manager.material_texture_bind_groups,
+            )?;
 
             Ok(())
         })
@@ -575,12 +655,12 @@ define_task!(
         instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
             let renderer = engine.renderer().read();
             let scene = engine.scene().read();
-            let render_resource_manager = &renderer.render_resource_manager().read().legacy;
-            if render_resource_manager.is_desynchronized() {
+            let render_resource_manager = &renderer.render_resource_manager().read();
+            if render_resource_manager.legacy.is_desynchronized() {
                 DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
                     renderer.graphics_device(),
                     renderer.bind_group_layout_registry(),
-                    render_resource_manager
+                    render_resource_manager.legacy
                         .desynchronized()
                         .camera_buffer_manager
                         .lock()
@@ -589,8 +669,9 @@ define_task!(
                 );
                 DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
                     renderer.graphics_device(),
-                    &engine.assets().read(),
-                    render_resource_manager
+                    &render_resource_manager.textures,
+                    &render_resource_manager.samplers,
+                    render_resource_manager.legacy
                         .desynchronized()
                         .skybox_resource_manager
                         .lock()
@@ -611,14 +692,17 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object GPU buffers", engine, {
+            let resource_manager = engine.resource_manager().read();
             let renderer = engine.renderer().read();
-            let render_resource_manager = &renderer.render_resource_manager().read().legacy;
-            if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_voxel_resources_with_voxel_manager(
+            let render_resource_manager = &renderer.render_resource_manager().read();
+            if render_resource_manager.legacy.is_desynchronized() {
+                DesynchronizedRenderResources::sync_voxel_resources(
                     renderer.graphics_device(),
-                    engine.assets(),
+                    &render_resource_manager.textures,
+                    &render_resource_manager.samplers,
+                    &resource_manager.voxel_types,
                     renderer.bind_group_layout_registry(),
-                    render_resource_manager
+                    render_resource_manager.legacy
                         .desynchronized()
                         .voxel_resource_managers
                         .lock()
@@ -626,7 +710,7 @@ define_task!(
                     &mut engine
                         .scene()
                         .read()
-                        .voxel_manager()
+                        .voxel_object_manager()
                         .write(),
                 )?;
             }
@@ -718,6 +802,8 @@ define_task!(
     depends_on = [
         SyncMinorResources,
         SyncMeshGPUResources,
+        SyncTextureGPUResources,
+        SyncMaterialGPUResources,
         SyncVoxelObjectGPUBuffers,
         SyncLightGPUBuffers,
         SyncInstanceFeatureBuffers
@@ -747,17 +833,16 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing render commands", engine, {
+            let resource_manager = engine.resource_manager().read();
             let renderer = engine.renderer().read();
             let mut shader_manager = renderer.shader_manager().write();
             let render_resource_manager = renderer.render_resource_manager().read();
             let mut render_command_manager = renderer.render_command_manager().write();
-            let scene = engine.scene().read();
-            let material_library = scene.material_library().read();
 
             render_command_manager.sync_with_render_resources(
                 renderer.graphics_device(),
                 &mut shader_manager,
-                &material_library,
+                &*resource_manager,
                 &*render_resource_manager,
                 renderer.bind_group_layout_registry(),
             )
@@ -830,6 +915,8 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
 
     // GPU Resource Synchronization
     task_scheduler.register_task(SyncMeshGPUResources)?;
+    task_scheduler.register_task(SyncTextureGPUResources)?;
+    task_scheduler.register_task(SyncMaterialGPUResources)?;
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;
     task_scheduler.register_task(SyncLightGPUBuffers)?;

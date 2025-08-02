@@ -1,8 +1,8 @@
-# Hash: 7bfda792f48f4b25ffde15d2c3af589268c8787daba211856824d56a91b90769
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: d6b27f3ab7871143edd0804a879a6fdeefad5c2e2bf28549a72da602c8467342
+# Generated: 2025-08-01T06:51:20+00:00
 # Rust type: impact_material::setup::physical::ParallaxMap
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6
 module [
     ParallaxMap,
     new,
@@ -16,26 +16,26 @@ module [
 
 import Entity
 import Entity.Arg
-import Rendering.TextureID
+import Texture.TextureID
 import core.Builtin
 import core.Vector2
 
 ## A parallax map describing surface details.
 ParallaxMap : {
-    height_map_texture_id : Rendering.TextureID.TextureID,
-    displacement_scale : F32,
+    height_map_texture_id : Texture.TextureID.TextureID,
+    displacement_scale : F64,
     uv_per_distance : Vector2.Vector2 Binary32,
 }
 
-new : Rendering.TextureID.TextureID, F32, Vector2.Vector2 Binary32 -> ParallaxMap
+new : Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> ParallaxMap
 new = |height_map_texture_id, displacement_scale, uv_per_distance|
     { height_map_texture_id, displacement_scale, uv_per_distance }
 
-add_new : Entity.Data, Rendering.TextureID.TextureID, F32, Vector2.Vector2 Binary32 -> Entity.Data
+add_new : Entity.Data, Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> Entity.Data
 add_new = |entity_data, height_map_texture_id, displacement_scale, uv_per_distance|
     add(entity_data, new(height_map_texture_id, displacement_scale, uv_per_distance))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Rendering.TextureID.TextureID), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (Vector2.Vector2 Binary32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Vector2.Vector2 Binary32) -> Result Entity.MultiData Str
 add_multiple_new = |entity_data, height_map_texture_id, displacement_scale, uv_per_distance|
     add_multiple(
         entity_data,
@@ -70,8 +70,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, ParallaxMap -> List U8
 write_packet = |bytes, val|
     type_id = 13523383454192306898
-    size = 16
-    alignment = 4
+    size = 24
+    alignment = 8
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -82,8 +82,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List ParallaxMap -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 13523383454192306898
-    size = 16
-    alignment = 4
+    size = 24
+    alignment = 8
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -103,9 +103,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, ParallaxMap -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(16)
-    |> Rendering.TextureID.write_bytes(value.height_map_texture_id)
-    |> Builtin.write_bytes_f32(value.displacement_scale)
+    |> List.reserve(24)
+    |> Texture.TextureID.write_bytes(value.height_map_texture_id)
+    |> Builtin.write_bytes_f64(value.displacement_scale)
     |> Vector2.write_bytes_32(value.uv_per_distance)
 
 ## Deserializes a value of [ParallaxMap] from its bytes in the
@@ -114,15 +114,15 @@ from_bytes : List U8 -> Result ParallaxMap _
 from_bytes = |bytes|
     Ok(
         {
-            height_map_texture_id: bytes |> List.sublist({ start: 0, len: 4 }) |> Rendering.TextureID.from_bytes?,
-            displacement_scale: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
-            uv_per_distance: bytes |> List.sublist({ start: 8, len: 8 }) |> Vector2.from_bytes_32?,
+            height_map_texture_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Texture.TextureID.from_bytes?,
+            displacement_scale: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
+            uv_per_distance: bytes |> List.sublist({ start: 16, len: 8 }) |> Vector2.from_bytes_32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

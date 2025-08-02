@@ -6,6 +6,7 @@ use crate::{
     resource::{
         VOXEL_MODEL_ID, VoxelGPUResources, VoxelMaterialGPUResourceManager,
         VoxelObjectGPUBufferManager, VoxelPushConstantGroup, VoxelPushConstantVariant,
+        VoxelResourceRegistries,
     },
     shader_templates::{
         voxel_chunk_culling::VoxelChunkCullingShaderTemplate,
@@ -16,8 +17,11 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::{BufferableCamera, CameraGPUBufferManager};
 use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry,
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    shader::{ShaderManager, template::SpecificShaderTemplate},
+    wgpu,
 };
 use impact_mesh::gpu_resource::VertexBufferable;
 use impact_model::{
@@ -60,24 +64,31 @@ struct VoxelChunkCullingPass {
 /// [`GeometryPass`].
 #[derive(Debug)]
 pub struct VoxelGeometryPipeline {
+    shader_template: VoxelGeometryShaderTemplate,
     push_constants: VoxelPushConstantGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     depth_stencil_state: Option<wgpu::DepthStencilState>,
-    polygon_mode: wgpu::PolygonMode,
     pipeline_layout: wgpu::PipelineLayout,
-    pipeline: Option<wgpu::RenderPipeline>,
+    pipeline: wgpu::RenderPipeline,
 }
 
 impl VoxelRenderCommands {
     pub fn new(
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
+        resource_registries: &impl VoxelResourceRegistries,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         geometry_pass: &GeometryPass,
         config: &BasicRenderingConfig,
-    ) -> Self {
+    ) -> Option<Self> {
+        if resource_registries.voxel_type().n_voxel_types() == 0 {
+            return None;
+        }
+
         let geometry_pipeline = VoxelGeometryPipeline::new(
             graphics_device,
+            shader_manager,
+            resource_registries,
             bind_group_layout_registry,
             geometry_pass.color_target_states().to_vec(),
             Some(geometry_pass.depth_stencil_state().clone()),
@@ -87,26 +98,20 @@ impl VoxelRenderCommands {
         let chunk_culling_pass =
             VoxelChunkCullingPass::new(graphics_device, shader_manager, bind_group_layout_registry);
 
-        Self {
+        Some(Self {
             geometry_pipeline,
             chunk_culling_pass,
-        }
+        })
     }
 
-    pub fn sync_with_render_resources<R>(
+    pub fn sync_with_config(
         &mut self,
         graphics_device: &GraphicsDevice,
-        shader_manager: &mut ShaderManager,
-        render_resources: &R,
-    ) -> Result<()>
-    where
-        R: BasicGPUResources + VoxelGPUResources,
-    {
-        self.geometry_pipeline.sync_with_render_resources(
-            graphics_device,
-            shader_manager,
-            render_resources,
-        )
+        shader_manager: &ShaderManager,
+        config: &BasicRenderingConfig,
+    ) {
+        self.geometry_pipeline
+            .sync_with_config(graphics_device, shader_manager, config);
     }
 
     pub fn record_before_geometry_pass<R>(
@@ -586,11 +591,20 @@ impl VoxelChunkCullingPass {
 impl VoxelGeometryPipeline {
     pub fn new(
         graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        resource_registries: &impl VoxelResourceRegistries,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         color_target_states: Vec<Option<wgpu::ColorTargetState>>,
         depth_stencil_state: Option<wgpu::DepthStencilState>,
         config: &BasicRenderingConfig,
     ) -> Self {
+        let n_voxel_types = resource_registries.voxel_type().n_voxel_types();
+
+        let shader_template = VoxelGeometryShaderTemplate::new(n_voxel_types, 0.1);
+
+        shader_manager
+            .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
+
         let push_constants = VoxelGeometryShaderTemplate::push_constants();
 
         let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
@@ -621,42 +635,36 @@ impl VoxelGeometryPipeline {
             "Voxel geometry pass render pipeline layout",
         );
 
-        let polygon_mode = if config.wireframe_mode_on {
-            wgpu::PolygonMode::Line
-        } else {
-            wgpu::PolygonMode::Fill
-        };
+        let pipeline = Self::create_pipeline(
+            graphics_device,
+            shader_manager,
+            &shader_template,
+            &pipeline_layout,
+            &color_target_states,
+            depth_stencil_state.clone(),
+            config,
+        );
 
         Self {
+            shader_template,
             push_constants,
             color_target_states,
             depth_stencil_state,
-            polygon_mode,
             pipeline_layout,
-            pipeline: None,
+            pipeline,
         }
     }
 
-    pub fn sync_with_render_resources<R>(
-        &mut self,
+    fn create_pipeline(
         graphics_device: &GraphicsDevice,
-        shader_manager: &mut ShaderManager,
-        render_resources: &R,
-    ) -> Result<()>
-    where
-        R: BasicGPUResources + VoxelGPUResources,
-    {
-        let Some(voxel_material_resource_manager) =
-            render_resources.get_voxel_material_resource_manager()
-        else {
-            return Ok(());
-        };
-        let n_voxel_types = voxel_material_resource_manager.n_voxel_types();
-
-        let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
-            graphics_device,
-            &VoxelGeometryShaderTemplate::new(n_voxel_types, 0.1),
-        );
+        shader_manager: &ShaderManager,
+        shader_template: &VoxelGeometryShaderTemplate,
+        pipeline_layout: &wgpu::PipelineLayout,
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        depth_stencil_state: Option<wgpu::DepthStencilState>,
+        config: &BasicRenderingConfig,
+    ) -> wgpu::RenderPipeline {
+        let shader = &shader_manager.rendering_shaders[&shader_template.shader_id()];
 
         let vertex_buffer_layouts = &[
             InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap(),
@@ -664,20 +672,39 @@ impl VoxelGeometryPipeline {
             VoxelMeshIndexMaterials::BUFFER_LAYOUT,
         ];
 
-        self.pipeline = Some(render_command::create_render_pipeline(
+        render_command::create_render_pipeline(
             graphics_device.device(),
-            &self.pipeline_layout,
+            pipeline_layout,
             shader,
             vertex_buffer_layouts,
-            &self.color_target_states,
+            color_target_states,
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
-            self.polygon_mode,
-            self.depth_stencil_state.clone(),
+            if config.wireframe_mode_on {
+                wgpu::PolygonMode::Line
+            } else {
+                wgpu::PolygonMode::Fill
+            },
+            depth_stencil_state,
             "Voxel geometry pass render pipeline",
-        ));
+        )
+    }
 
-        Ok(())
+    pub fn sync_with_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &ShaderManager,
+        config: &BasicRenderingConfig,
+    ) {
+        self.pipeline = Self::create_pipeline(
+            graphics_device,
+            shader_manager,
+            &self.shader_template,
+            &self.pipeline_layout,
+            &self.color_target_states,
+            self.depth_stencil_state.clone(),
+            config,
+        );
     }
 
     fn set_constant_push_constants(
@@ -774,11 +801,7 @@ impl VoxelGeometryPipeline {
         // We don't assign the camera projection uniform bind group here, as it will
         // already have been assigned by the caller
 
-        render_pass.set_pipeline(
-            self.pipeline
-                .as_ref()
-                .expect("Missing voxel geometry pipeline"),
-        );
+        render_pass.set_pipeline(&self.pipeline);
 
         render_pass.set_bind_group(1, material_gpu_resource_manager.bind_group(), &[]);
 

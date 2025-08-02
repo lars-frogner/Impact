@@ -1,10 +1,10 @@
-//! Importing meshes based on mesh specifications.
+//! Importing meshes based on mesh declarations.
 
 use crate::{
-    TriangleMesh, TriangleMeshDirtyMask, TriangleMeshHandle, TriangleMeshID, TriangleMeshRegistry,
+    TriangleMesh, TriangleMeshDirtyMask, TriangleMeshID, TriangleMeshRegistry,
     io::TriangleMeshFileFormat,
     setup::{TriangleMeshTemplate, setup_triangle_mesh_from_template},
-    texture_projection::{PlanarTextureProjection, TextureProjectionSpecification},
+    texture_projection::{PlanarTextureProjection, TextureProjectionDeclaration},
 };
 use anyhow::{Context, Result, bail};
 use impact_math::hash64;
@@ -12,10 +12,10 @@ use std::path::{Path, PathBuf};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct TriangleMeshSpecification {
+pub struct TriangleMeshDeclaration {
     pub name: String,
     pub source: TriangleMeshSource,
-    pub texture_projection: Option<TextureProjectionSpecification>,
+    pub texture_projection: Option<TextureProjectionDeclaration>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -25,9 +25,9 @@ pub enum TriangleMeshSource {
     Template(TriangleMeshTemplate),
 }
 
-impl TriangleMeshSpecification {
-    /// Resolves all paths in the specification by prepending the given root
-    /// path to all paths.
+impl TriangleMeshDeclaration {
+    /// Resolves all paths in the declaration by prepending the given root path
+    /// to all paths.
     pub fn resolve_paths(&mut self, root_path: &Path) {
         if let TriangleMeshSource::File(file_path) = &mut self.source {
             *file_path = root_path.join(&*file_path);
@@ -35,22 +35,21 @@ impl TriangleMeshSpecification {
     }
 }
 
-/// Loads all meshes in the given specifications and stores them in the
-/// registry.
+/// Loads all meshes in the given declarations and stores them in the registry.
 ///
 /// # Errors
-/// See [`load_specified_triangle_mesh`].
-pub fn load_specified_meshes(
+/// See [`load_declared_triangle_mesh`].
+pub fn load_declared_meshes(
     registry: &mut TriangleMeshRegistry,
-    triangle_mesh_specifications: &[TriangleMeshSpecification],
+    triangle_mesh_declarations: &[TriangleMeshDeclaration],
 ) -> Result<()> {
-    for specification in triangle_mesh_specifications {
-        load_specified_triangle_mesh(registry, specification)?;
+    for declaration in triangle_mesh_declarations {
+        load_declared_triangle_mesh(registry, declaration)?;
     }
     Ok(())
 }
 
-/// Loads the triangle mesh in the given specification and stores it in the
+/// Loads the triangle mesh in the given declaration and stores it in the
 /// registry.
 ///
 /// # Errors
@@ -59,22 +58,22 @@ pub fn load_specified_meshes(
 /// - The texture projection is not valid.
 /// - The file format is not supported (if the source is a file).
 /// - The file can not be found or loaded as a mesh (if the source is a file).
-pub fn load_specified_triangle_mesh(
+pub fn load_declared_triangle_mesh(
     registry: &mut TriangleMeshRegistry,
-    specification: &TriangleMeshSpecification,
-) -> Result<TriangleMeshHandle> {
-    match &specification.source {
+    declaration: &TriangleMeshDeclaration,
+) -> Result<TriangleMeshID> {
+    match &declaration.source {
         TriangleMeshSource::File(file_path) => load_triangle_mesh_from_file(
             registry,
-            &specification.name,
+            &declaration.name,
             file_path,
-            specification.texture_projection.as_ref(),
+            declaration.texture_projection.as_ref(),
         ),
         TriangleMeshSource::Template(template) => load_triangle_mesh_from_template(
             registry,
-            &specification.name,
+            &declaration.name,
             template,
-            specification.texture_projection.as_ref(),
+            declaration.texture_projection.as_ref(),
         ),
     }
 }
@@ -83,8 +82,8 @@ fn load_triangle_mesh_from_file(
     registry: &mut TriangleMeshRegistry,
     name: &str,
     file_path: &Path,
-    texture_projection: Option<&TextureProjectionSpecification>,
-) -> Result<TriangleMeshHandle> {
+    texture_projection: Option<&TextureProjectionDeclaration>,
+) -> Result<TriangleMeshID> {
     impact_log::debug!(
         "Loading triangle mesh `{name}` from {}",
         file_path.display(),
@@ -94,7 +93,7 @@ fn load_triangle_mesh_from_file(
 
     let file_format = TriangleMeshFileFormat::from_path(file_path)?;
 
-    if registry.contains_resource_with_pid(mesh_id) {
+    if registry.contains(mesh_id) {
         bail!("Tried to load triangle mesh under already existing name: {name}");
     }
 
@@ -118,7 +117,7 @@ fn load_triangle_mesh_from_file(
 
     match texture_projection {
         None => {}
-        Some(TextureProjectionSpecification::Planar {
+        Some(TextureProjectionDeclaration::Planar {
             origin,
             u_vector,
             v_vector,
@@ -131,31 +130,35 @@ fn load_triangle_mesh_from_file(
         }
     }
 
-    Ok(registry.insert_resource_with_pid(mesh_id, mesh))
+    registry.insert(mesh_id, mesh);
+
+    Ok(mesh_id)
 }
 
 fn load_triangle_mesh_from_template(
     registry: &mut TriangleMeshRegistry,
     name: &str,
     template: &TriangleMeshTemplate,
-    texture_projection: Option<&TextureProjectionSpecification>,
-) -> Result<TriangleMeshHandle> {
+    texture_projection: Option<&TextureProjectionDeclaration>,
+) -> Result<TriangleMeshID> {
     impact_log::debug!("Loading triangle mesh `{name}` from template");
 
     let mesh_id = TriangleMeshID(hash64!(&name));
 
-    if registry.contains_resource_with_pid(mesh_id) {
+    if registry.contains(mesh_id) {
         bail!("Tried to load triangle mesh under already existing name: {name}");
     }
 
-    Ok(match texture_projection {
-        None => setup_triangle_mesh_from_template(
-            registry,
-            template,
-            Some(mesh_id),
-            Option::<&PlanarTextureProjection<f32>>::None,
-        ),
-        Some(TextureProjectionSpecification::Planar {
+    match texture_projection {
+        None => {
+            setup_triangle_mesh_from_template(
+                registry,
+                template,
+                Some(mesh_id),
+                Option::<&PlanarTextureProjection<f32>>::None,
+            );
+        }
+        Some(TextureProjectionDeclaration::Planar {
             origin,
             u_vector,
             v_vector,
@@ -165,7 +168,9 @@ fn load_triangle_mesh_from_template(
                     format!("Invalid planar texture projection for triangle mesh `{name}`")
                 })?;
 
-            setup_triangle_mesh_from_template(registry, template, Some(mesh_id), Some(&projection))
+            setup_triangle_mesh_from_template(registry, template, Some(mesh_id), Some(&projection));
         }
-    })
+    }
+
+    Ok(mesh_id)
 }

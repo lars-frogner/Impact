@@ -41,7 +41,7 @@ import pf.Setup.VoxelBox
 import pf.Setup.VoxelCollidable
 import pf.Entity
 import pf.Physics.AngularVelocity as AngularVelocity
-import pf.Rendering.TextureID as TextureID
+import pf.Texture.TextureID as TextureID
 import pf.Skybox
 
 entity_ids = {

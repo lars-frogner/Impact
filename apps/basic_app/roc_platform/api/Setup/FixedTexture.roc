@@ -1,8 +1,8 @@
-# Hash: b68868fa794c9492abcdc57c5785987ad8a3a883926828234df47730cddfaf55
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 5b4b89716482643600267e148b9d6bb06affdc65fbe0cda43c15fbd414940fa9
+# Generated: 2025-08-01T06:51:20+00:00
 # Rust type: impact_material::setup::fixed::FixedTexture
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6
 module [
     FixedTexture,
     add,
@@ -13,11 +13,11 @@ module [
 
 import Entity
 import Entity.Arg
-import Rendering.TextureID
+import Texture.TextureID
 import core.Builtin
 
 ## A fixed, textured color that is independent of lighting.
-FixedTexture : Rendering.TextureID.TextureID
+FixedTexture : Texture.TextureID.TextureID
 
 ## Adds a value of the [FixedTexture] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -43,8 +43,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, FixedTexture -> List U8
 write_packet = |bytes, val|
     type_id = 1701685739367250505
-    size = 4
-    alignment = 4
+    size = 8
+    alignment = 8
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -55,8 +55,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List FixedTexture -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 1701685739367250505
-    size = 4
-    alignment = 4
+    size = 8
+    alignment = 8
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -76,8 +76,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, FixedTexture -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(4)
-    |> Rendering.TextureID.write_bytes(value)
+    |> List.reserve(8)
+    |> Texture.TextureID.write_bytes(value)
 
 ## Deserializes a value of [FixedTexture] from its bytes in the
 ## representation used by the engine.
@@ -85,13 +85,13 @@ from_bytes : List U8 -> Result FixedTexture _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 4 }) |> Rendering.TextureID.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 8 }) |> Texture.TextureID.from_bytes?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

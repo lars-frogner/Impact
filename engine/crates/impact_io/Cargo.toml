@@ -12,7 +12,9 @@ jpeg = ["dep:zune-jpeg"]
 
 [dependencies]
 anyhow = { workspace = true }
+impact_log = { path = "../impact_log" }
 png = { version = "0.17", optional = true }
+memmap2 = "0.9"
 ron = { version = "0.10", optional = true }
 serde = { workspace = true, optional = true }
 zune-jpeg = { version = "0.4", optional = true }

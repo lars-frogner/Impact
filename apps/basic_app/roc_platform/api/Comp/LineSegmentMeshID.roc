@@ -1,8 +1,8 @@
-# Hash: 1ddc4506717dad990264b745808c0207dce17f42dc847b6be8ba34308a45bb5a
-# Generated: 2025-07-27T16:49:47+00:00
+# Hash: d0981a9d9cd7b13aa74cde565d7ce37cb592e7990608a431bcb3cf940f725e9d
+# Generated: 2025-08-01T06:51:20+00:00
 # Rust type: impact_mesh::line_segment::LineSegmentMeshID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6
 module [
     LineSegmentMeshID,
     from_name,
@@ -19,7 +19,7 @@ import Entity.Arg
 import core.Builtin
 import core.Hashing
 
-## The persistent ID of a [`LineSegmentMesh`].
+## The ID of a [`LineSegmentMesh`].
 LineSegmentMeshID : Hashing.StringHash64
 
 ## Creates a line segment mesh ID hashed from the given name.

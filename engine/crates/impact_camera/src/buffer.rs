@@ -119,7 +119,7 @@ impl CameraGPUBufferManager {
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
-        bind_group_layout_registry.get_or_create_layout(Self::LAYOUT_ID, || {
+        bind_group_layout_registry.get_or_create_layout(Self::LAYOUT_ID.hash(), || {
             Self::create_bind_group_layout(graphics_device.device())
         })
     }

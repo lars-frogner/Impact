@@ -1,9 +1,16 @@
 //! Voxel types and their properties.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::NoHashMap;
+use impact_gpu::texture::{
+    ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
+};
 use impact_math::Hash32;
+use impact_texture::{
+    ImageTextureSource, SamplerRegistry, TextureID, TextureRegistry,
+    import::ImageTextureDeclaration,
+};
 use nalgebra::{Vector4, vector};
 use roc_integration::roc;
 use std::{
@@ -42,9 +49,9 @@ pub struct VoxelTypeRegistry {
     names: Vec<Cow<'static, str>>,
     mass_densities: Vec<f32>,
     fixed_material_properties: Vec<FixedVoxelMaterialProperties>,
-    color_texture_paths: Vec<PathBuf>,
-    roughness_texture_paths: Vec<PathBuf>,
-    normal_texture_paths: Vec<PathBuf>,
+    color_texture_array_id: Option<TextureID>,
+    roughness_texture_array_id: Option<TextureID>,
+    normal_texture_array_id: Option<TextureID>,
 }
 
 /// Specific properties of a voxel material that do not change with position.
@@ -90,13 +97,37 @@ impl VoxelTypeRegistry {
         255
     }
 
+    /// Creates a new voxel type registry based on the given configuration
+    /// parameters.
+    #[cfg(feature = "ron")]
+    pub fn from_config(
+        texture_registry: &mut TextureRegistry,
+        sampler_registry: &mut SamplerRegistry,
+        voxel_config: crate::VoxelConfig,
+    ) -> anyhow::Result<Self> {
+        match voxel_config.voxel_types_path {
+            Some(file_path) => {
+                Self::from_voxel_type_ron_file(texture_registry, sampler_registry, file_path)
+            }
+            None => Self::create(
+                texture_registry,
+                sampler_registry,
+                VoxelTypeSpecifications::default(),
+            ),
+        }
+    }
+
     /// Reads the RON (Rusty Object Notation) file at the given path and
     /// deserializes it into a [`VoxelTypeSpecifications`] object that is used
     /// to create a new voxel type registry.
     #[cfg(feature = "ron")]
-    pub fn from_voxel_type_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
+    pub fn from_voxel_type_ron_file(
+        texture_registry: &mut TextureRegistry,
+        sampler_registry: &mut SamplerRegistry,
+        file_path: impl AsRef<Path>,
+    ) -> Result<Self> {
         let voxel_types = VoxelTypeSpecifications::from_ron_file(file_path)?;
-        Self::new(voxel_types)
+        Self::create(texture_registry, sampler_registry, voxel_types)
     }
 
     /// Creates a new voxel type registry for the specified voxel types.
@@ -106,7 +137,14 @@ impl VoxelTypeRegistry {
     /// - The number of voxel types is not smaller than
     ///   [`Self::max_n_voxel_types`].
     /// - There are duplicate names.
-    pub fn new(voxel_types: VoxelTypeSpecifications) -> Result<Self> {
+    ///
+    /// See also
+    /// [`load_declared_image_texture`](impact_texture::import::load_declared_image_texture).
+    pub fn create(
+        texture_registry: &mut TextureRegistry,
+        sampler_registry: &mut SamplerRegistry,
+        voxel_types: VoxelTypeSpecifications,
+    ) -> Result<Self> {
         voxel_types.validate()?;
 
         let (
@@ -128,14 +166,74 @@ impl VoxelTypeRegistry {
             bail!("Duplicate voxel type names in registry");
         }
 
+        if names.is_empty() {
+            return Ok(Self {
+                name_lookup_table,
+                names,
+                mass_densities,
+                fixed_material_properties,
+                color_texture_array_id: None,
+                roughness_texture_array_id: None,
+                normal_texture_array_id: None,
+            });
+        }
+
+        let color_texture_array_id = impact_texture::import::load_declared_image_texture(
+            texture_registry,
+            sampler_registry,
+            ImageTextureDeclaration {
+                name: String::from("voxel_color_texture_array"),
+                source: ImageTextureSource::ArrayImageFiles(color_texture_paths),
+                texture_config: TextureConfig {
+                    color_space: ColorSpace::Srgb,
+                    max_mip_level_count: None,
+                },
+                sampler_config: Some(SamplerConfig {
+                    addressing: TextureAddressingConfig::Repeating,
+                    filtering: TextureFilteringConfig::Basic,
+                }),
+            },
+        )
+        .context("Failed to load voxel color texture array")?;
+
+        let roughness_texture_array_id = impact_texture::import::load_declared_image_texture(
+            texture_registry,
+            sampler_registry,
+            ImageTextureDeclaration {
+                name: String::from("voxel_roughness_texture_array"),
+                source: ImageTextureSource::ArrayImageFiles(roughness_texture_paths),
+                texture_config: TextureConfig {
+                    color_space: ColorSpace::Linear,
+                    max_mip_level_count: None,
+                },
+                sampler_config: None,
+            },
+        )
+        .context("Failed to load voxel roughness texture array")?;
+
+        let normal_texture_array_id = impact_texture::import::load_declared_image_texture(
+            texture_registry,
+            sampler_registry,
+            ImageTextureDeclaration {
+                name: String::from("voxel_normal_texture_array"),
+                source: ImageTextureSource::ArrayImageFiles(normal_texture_paths),
+                texture_config: TextureConfig {
+                    color_space: ColorSpace::Linear,
+                    max_mip_level_count: None,
+                },
+                sampler_config: None,
+            },
+        )
+        .context("Failed to load voxel normal texture array")?;
+
         Ok(Self {
             name_lookup_table,
             names,
             mass_densities,
             fixed_material_properties,
-            color_texture_paths,
-            roughness_texture_paths,
-            normal_texture_paths,
+            color_texture_array_id: Some(color_texture_array_id),
+            roughness_texture_array_id: Some(roughness_texture_array_id),
+            normal_texture_array_id: Some(normal_texture_array_id),
         })
     }
 
@@ -182,21 +280,25 @@ impl VoxelTypeRegistry {
         &self.fixed_material_properties
     }
 
-    /// Returns the slice of color texture paths for all registered voxel types.
-    pub fn color_texture_paths(&self) -> &[PathBuf] {
-        &self.color_texture_paths
+    /// Returns the ID of the texture array with the color textures of all
+    /// registered voxel types, or [`None`] if there are no registered voxel
+    /// types.
+    pub fn color_texture_array_id(&self) -> Option<TextureID> {
+        self.color_texture_array_id
     }
 
-    /// Returns the slice of roughness texture paths for all registered voxel
+    /// Returns the ID of the texture array with the roughness textures of all
+    /// registered voxel types, or [`None`] if there are no registered voxel
     /// types.
-    pub fn roughness_texture_paths(&self) -> &[PathBuf] {
-        &self.roughness_texture_paths
+    pub fn roughness_texture_array_id(&self) -> Option<TextureID> {
+        self.roughness_texture_array_id
     }
 
-    /// Returns the slice of normal texture paths for all registered voxel
+    /// Returns the ID of the texture array with the normal textures of all
+    /// registered voxel types, or [`None`] if there are no registered voxel
     /// types.
-    pub fn normal_texture_paths(&self) -> &[PathBuf] {
-        &self.normal_texture_paths
+    pub fn normal_texture_array_id(&self) -> Option<TextureID> {
+        self.normal_texture_array_id
     }
 }
 

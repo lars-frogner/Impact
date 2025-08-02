@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_mesh::{
-    TriangleMeshHandle,
+    TriangleMeshID,
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_physics::{
@@ -249,7 +249,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             let resource_manager = resource_manager.read();
         },
         components,
-        |mesh_handle: &TriangleMeshHandle,
+        |mesh_id: &TriangleMeshID,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
@@ -261,11 +261,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
             let triangle_mesh = resource_manager
                 .triangle_meshes
-                .registry
-                .get(*mesh_handle)
-                .ok_or_else(|| {
-                    anyhow!("Tried to create rigid body for missing mesh {mesh_handle}")
-                })?;
+                .get(*mesh_id)
+                .ok_or_else(|| anyhow!("Tried to create rigid body for missing mesh {mesh_id}"))?;
 
             let mut inertial_properties = InertialProperties::of_uniform_triangle_mesh(
                 triangle_mesh.triangle_vertex_positions(),

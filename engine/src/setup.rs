@@ -17,8 +17,6 @@ pub fn perform_setup_for_new_entities(
     scene::setup_scene_data_for_new_entities(
         engine.resource_manager(),
         &engine.scene().read(),
-        engine.graphics_device(),
-        &*engine.assets().read(),
         engine.simulator().read().rigid_body_manager(),
         components,
         &mut render_resources_desynchronized,

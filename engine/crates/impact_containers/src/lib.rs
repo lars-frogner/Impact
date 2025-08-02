@@ -10,9 +10,10 @@ pub use key_index_mapper::KeyIndexMapper;
 pub use slot_map::{SlotKey, SlotMap};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 
-pub use rustc_hash::FxBuildHasher as DefaultHasher;
+pub use rustc_hash::FxBuildHasher as RandomState;
 pub use rustc_hash::FxHashMap as HashMap;
 pub use rustc_hash::FxHashSet as HashSet;
+pub use rustc_hash::FxHasher as DefaultHasher;
 
 pub type NoHashMap<K, V> = std::collections::HashMap<K, V, nohash_hasher::BuildNoHashHasher<K>>;
 pub type NoHashSet<K> = std::collections::HashSet<K, nohash_hasher::BuildNoHashHasher<K>>;

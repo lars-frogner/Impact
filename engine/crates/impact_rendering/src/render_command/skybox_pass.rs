@@ -5,7 +5,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::skybox::SkyboxShaderTemplate,
 };
 use anyhow::{Result, anyhow};
@@ -177,7 +177,6 @@ impl SkyboxPass {
 
     pub fn record(
         &self,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
@@ -225,7 +224,7 @@ impl SkyboxPass {
 
         let mesh_gpu_resources = gpu_resources
             .triangle_mesh()
-            .get_by_pid(&resource_registries.triangle_mesh().index, mesh_id)
+            .get(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
         let position_buffer = mesh_gpu_resources

@@ -1,20 +1,20 @@
 //! Centralized registry for bind group layouts.
 
-use impact_containers::HashMap;
-use impact_math::ConstStringHash64;
+use impact_containers::NoHashMap;
+use impact_math::Hash64;
 use parking_lot::RwLock;
 
 /// A registry for bind group layouts that provides caching and proper cleanup.
 #[derive(Debug)]
 pub struct BindGroupLayoutRegistry {
-    layouts: RwLock<HashMap<ConstStringHash64, wgpu::BindGroupLayout>>,
+    layouts: RwLock<NoHashMap<Hash64, wgpu::BindGroupLayout>>,
 }
 
 impl BindGroupLayoutRegistry {
     /// Creates a new bind group layout registry.
     pub fn new() -> Self {
         Self {
-            layouts: RwLock::new(HashMap::default()),
+            layouts: RwLock::new(NoHashMap::default()),
         }
     }
 
@@ -23,11 +23,7 @@ impl BindGroupLayoutRegistry {
     ///
     /// The creation function will only be called if the layout doesn't already
     /// exist.
-    pub fn get_or_create_layout<F>(
-        &self,
-        id: ConstStringHash64,
-        create_fn: F,
-    ) -> wgpu::BindGroupLayout
+    pub fn get_or_create_layout<F>(&self, id: Hash64, create_fn: F) -> wgpu::BindGroupLayout
     where
         F: FnOnce() -> wgpu::BindGroupLayout,
     {
@@ -53,10 +49,14 @@ impl BindGroupLayoutRegistry {
         layout
     }
 
-    /// Returns an existing bind group layout if it exists.
-    pub fn get_layout(&self, id: ConstStringHash64) -> Option<wgpu::BindGroupLayout> {
-        let layouts = self.layouts.read();
-        layouts.get(&id).cloned()
+    /// Returns the layout with the given ID if it exists.
+    pub fn get_layout(&self, id: Hash64) -> Option<wgpu::BindGroupLayout> {
+        self.layouts.read().get(&id).cloned()
+    }
+
+    /// Removes and retruns the layout with the given ID if it exists.
+    pub fn remove_layout(&self, id: Hash64) -> Option<wgpu::BindGroupLayout> {
+        self.layouts.write().remove(&id)
     }
 }
 

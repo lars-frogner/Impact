@@ -1,8 +1,8 @@
-# Hash: 15764f66b441c84eb7f153744c4101922eeeb88e82280d7a824f1b5fabef3305
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: df442850a801e813a8fb7f04ae42b77d49e5abd93564a9dd9471d5d7d1acfddc
+# Generated: 2025-08-01T06:51:20+00:00
 # Rust type: impact_material::setup::physical::NormalMap
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6
 module [
     NormalMap,
     add,
@@ -13,11 +13,11 @@ module [
 
 import Entity
 import Entity.Arg
-import Rendering.TextureID
+import Texture.TextureID
 import core.Builtin
 
 ## A normal map describing surface details.
-NormalMap : Rendering.TextureID.TextureID
+NormalMap : Texture.TextureID.TextureID
 
 ## Adds a value of the [NormalMap] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -43,8 +43,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, NormalMap -> List U8
 write_packet = |bytes, val|
     type_id = 14004007724991533434
-    size = 4
-    alignment = 4
+    size = 8
+    alignment = 8
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -55,8 +55,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List NormalMap -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 14004007724991533434
-    size = 4
-    alignment = 4
+    size = 8
+    alignment = 8
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -76,8 +76,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, NormalMap -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(4)
-    |> Rendering.TextureID.write_bytes(value)
+    |> List.reserve(8)
+    |> Texture.TextureID.write_bytes(value)
 
 ## Deserializes a value of [NormalMap] from its bytes in the
 ## representation used by the engine.
@@ -85,13 +85,13 @@ from_bytes : List U8 -> Result NormalMap _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 4 }) |> Rendering.TextureID.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 8 }) |> Texture.TextureID.from_bytes?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

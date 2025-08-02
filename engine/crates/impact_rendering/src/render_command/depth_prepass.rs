@@ -5,7 +5,7 @@ use crate::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicGPUResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
     surface::RenderingSurface,
 };
@@ -13,10 +13,13 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashSet;
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry,
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    shader::{ShaderManager, template::SpecificShaderTemplate},
+    wgpu,
 };
-use impact_material::{MaterialLibrary, MaterialShaderInput};
+use impact_material::MaterialTextureBindingLocations;
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use impact_scene::model::ModelID;
@@ -26,6 +29,7 @@ use std::borrow::Cow;
 #[derive(Debug)]
 pub struct DepthPrepass {
     push_constants: BasicPushConstantGroup,
+    pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     models: HashSet<ModelID>,
     write_stencil_value: StencilValue,
@@ -39,7 +43,7 @@ impl DepthPrepass {
         write_stencil_value: StencilValue,
         config: &BasicRenderingConfig,
     ) -> Self {
-        let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
+        shader_manager.get_or_create_rendering_shader_from_template(
             graphics_device,
             &ModelDepthPrepassShaderTemplate,
         );
@@ -58,9 +62,30 @@ impl DepthPrepass {
             "Depth prepass render pipeline layout",
         );
 
-        let pipeline = render_command::create_render_pipeline(
+        let pipeline =
+            Self::create_pipeline(graphics_device, shader_manager, &pipeline_layout, config);
+
+        Self {
+            push_constants,
+            pipeline_layout,
+            pipeline,
+            models: HashSet::default(),
+            write_stencil_value,
+        }
+    }
+
+    fn create_pipeline(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &ShaderManager,
+        pipeline_layout: &wgpu::PipelineLayout,
+        config: &BasicRenderingConfig,
+    ) -> wgpu::RenderPipeline {
+        let shader =
+            &shader_manager.rendering_shaders[&ModelDepthPrepassShaderTemplate.shader_id()];
+
+        render_command::create_render_pipeline(
             graphics_device.device(),
-            &pipeline_layout,
+            pipeline_layout,
             shader,
             &[
                 InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap(),
@@ -76,19 +101,26 @@ impl DepthPrepass {
             },
             Some(render_command::depth_stencil_state_for_depth_stencil_write()),
             "Depth prepass render pipeline",
-        );
+        )
+    }
 
-        Self {
-            push_constants,
-            pipeline,
-            models: HashSet::default(),
-            write_stencil_value,
-        }
+    pub fn sync_with_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &ShaderManager,
+        config: &BasicRenderingConfig,
+    ) {
+        self.pipeline = Self::create_pipeline(
+            graphics_device,
+            shader_manager,
+            &self.pipeline_layout,
+            config,
+        );
     }
 
     pub fn sync_with_render_resources_for_non_physical_models(
         &mut self,
-        material_library: &MaterialLibrary,
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) {
         let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
@@ -100,10 +132,18 @@ impl DepthPrepass {
             if self.models.contains(model_id) {
                 continue;
             }
-            if let Some(material_specification) = material_library
-                .get_material_specification(model_id.material_handle().material_id())
+            if let Some(material_template) = resource_registries
+                .material()
+                .get(model_id.material_id())
+                .and_then(|material| {
+                    resource_registries
+                        .material_template()
+                        .get(material.template_id)
+                })
             {
-                if let MaterialShaderInput::Fixed(_) = material_specification.shader_input() {
+                if let MaterialTextureBindingLocations::Fixed(_) =
+                    material_template.texture_binding_locations
+                {
                     self.models.insert(*model_id);
                 }
             }
@@ -208,12 +248,12 @@ impl DepthPrepass {
                     .valid_buffer_slice(),
             );
 
-            let mesh_handle = model_id.triangle_mesh_handle();
+            let mesh_id = model_id.triangle_mesh_id();
 
             let mesh_gpu_resources = gpu_resources
                 .triangle_mesh()
-                .get(mesh_handle)
-                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
+                .get(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
             let position_buffer = mesh_gpu_resources
                 .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?

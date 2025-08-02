@@ -1,50 +1,78 @@
-# Hash: bb81c5f937350ba107397a71d2454e802ee20fdabddf39a2a8e789e083f86ea3
-# Generated: 2025-07-27T14:52:58+00:00
-# Rust type: impact_mesh::triangle::TriangleMeshHandle
+# Hash: 42448d09a618d4fe30bf9b0f247861f8f504a0cbecc7ebb63acdc67232121134
+# Generated: 2025-08-01T06:54:20+00:00
+# Rust type: impact_material::MaterialID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 5cd592d6 (dirty)
 module [
-    TriangleMeshHandle,
+    MaterialID,
+    from_name,
+    add_from_name,
+    add_multiple_from_name,
     add,
     add_multiple,
     write_bytes,
     from_bytes,
 ]
 
-import Containers.SlotKey
 import Entity
 import Entity.Arg
 import core.Builtin
+import core.Hashing
 
-## Handle to a [`TriangleMesh`].
-TriangleMeshHandle : Containers.SlotKey.SlotKey
+## Identifier for a material.
+MaterialID : Hashing.StringHash64
 
-## Adds a value of the [TriangleMeshHandle] component to an entity's data.
+## Creates a material ID hashed from the given name.
+from_name : Str -> MaterialID
+from_name = |name|
+    Hashing.hash_str_64(name)
+
+## Creates a material ID hashed from the given name.
+## Adds the component to the given entity's data.
+add_from_name : Entity.Data, Str -> Entity.Data
+add_from_name = |entity_data, name|
+    add(entity_data, from_name(name))
+
+## Creates a material ID hashed from the given name.
+## Adds multiple values of the component to the data of
+## a set of entities of the same archetype's data.
+add_multiple_from_name : Entity.MultiData, Entity.Arg.Broadcasted (Str) -> Result Entity.MultiData Str
+add_multiple_from_name = |entity_data, name|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            name,
+            Entity.multi_count(entity_data),
+            from_name
+        ))
+    )
+
+## Adds a value of the [MaterialID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, TriangleMeshHandle -> Entity.Data
+add : Entity.Data, MaterialID -> Entity.Data
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [TriangleMeshHandle] component to the data of
+## Adds multiple values of the [MaterialID] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (TriangleMeshHandle) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (MaterialID) -> Result Entity.MultiData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in TriangleMeshHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in MaterialID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, TriangleMeshHandle -> List U8
+write_packet : List U8, MaterialID -> List U8
 write_packet = |bytes, val|
-    type_id = 4909266203641412234
+    type_id = 4484412674557634465
     size = 8
-    alignment = 4
+    alignment = 8
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -52,11 +80,11 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List TriangleMeshHandle -> List U8
+write_multi_packet : List U8, List MaterialID -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 4909266203641412234
+    type_id = 4484412674557634465
     size = 8
-    alignment = 4
+    alignment = 8
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -71,21 +99,21 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [TriangleMeshHandle] into the binary representation
+## Serializes a value of [MaterialID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, TriangleMeshHandle -> List U8
+write_bytes : List U8, MaterialID -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(8)
-    |> Containers.SlotKey.write_bytes(value)
+    |> Hashing.write_bytes_string_hash_64(value)
 
-## Deserializes a value of [TriangleMeshHandle] from its bytes in the
+## Deserializes a value of [MaterialID] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result TriangleMeshHandle _
+from_bytes : List U8 -> Result MaterialID _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 8 }) |> Containers.SlotKey.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 8 }) |> Hashing.from_bytes_string_hash_64?,
         ),
     )
 

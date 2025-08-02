@@ -14,7 +14,7 @@ use roc_integration::roc;
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct Skybox {
     cubemap_texture_id: TextureID,
-    max_luminance: f32,
+    max_luminance: f64,
 }
 
 #[roc]
@@ -22,7 +22,7 @@ impl Skybox {
     /// Creates a new skybox with the given cubemap texture and maximum
     /// luminance.
     #[roc(body = "{ cubemap_texture_id, max_luminance }")]
-    pub fn new(cubemap_texture_id: TextureID, max_luminance: f32) -> Self {
+    pub fn new(cubemap_texture_id: TextureID, max_luminance: f64) -> Self {
         Self {
             cubemap_texture_id,
             max_luminance,

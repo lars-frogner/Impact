@@ -1,7 +1,6 @@
 //! Synchronization of GPU buffers with geometrical data.
 
 use anyhow::Result;
-use impact_assets::Assets;
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
@@ -12,11 +11,13 @@ use impact_scene::{
     model::{InstanceFeatureManager, ModelID},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
 };
+use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use impact_voxel::{
-    VoxelManager, VoxelObjectID,
+    VoxelObjectID, VoxelObjectManager,
     resource::{VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
+    voxel_types::VoxelTypeRegistry,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use std::{borrow::Cow, collections::hash_map::Entry, hash::Hash};
 
 /// Manager and owner of render resources representing world data.
@@ -247,19 +248,26 @@ impl DesynchronizedRenderResources {
     /// GPU resource manager in sync with the given scene skybox.
     pub fn sync_skybox_resources_with_scene_skybox(
         graphics_device: &GraphicsDevice,
-        assets: &Assets,
+        textures: &TextureMap,
+        samplers: &SamplerMap,
         skybox_resource_manager: &mut Option<SkyboxGPUResourceManager>,
         skybox: Option<&Skybox>,
     ) -> Result<()> {
         if let Some(&skybox) = skybox {
             if let Some(skybox_resource_manager) = skybox_resource_manager {
-                skybox_resource_manager.sync_with_skybox(graphics_device, assets, skybox)?;
+                skybox_resource_manager.sync_with_skybox(
+                    graphics_device,
+                    textures,
+                    samplers,
+                    skybox,
+                )?;
             } else {
                 // We initialize the skybox resource manager the first time this
                 // method is called
                 *skybox_resource_manager = Some(SkyboxGPUResourceManager::for_skybox(
                     graphics_device,
-                    assets,
+                    textures,
+                    samplers,
                     skybox,
                 )?);
             }
@@ -270,30 +278,32 @@ impl DesynchronizedRenderResources {
     }
 
     /// Performs any required updates for keeping the given voxel GPU resources
-    /// in sync with the given voxel manager.
+    /// in sync with the given voxel type registry and voxel object manager.
     ///
     /// GPU buffers whose source data no longer exists will be removed, and
     /// missing GPU buffers for new source data will be created.
-    pub fn sync_voxel_resources_with_voxel_manager(
+    pub fn sync_voxel_resources(
         graphics_device: &GraphicsDevice,
-        assets: &RwLock<Assets>,
+        textures: &TextureMap,
+        samplers: &SamplerMap,
+        voxel_type_registry: &VoxelTypeRegistry,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         (voxel_material_resource_manager, voxel_object_buffer_managers): &mut (
             Option<VoxelMaterialGPUResourceManager>,
             VoxelObjectGPUBufferManagerMap,
         ),
-        voxel_manager: &mut VoxelManager,
+        voxel_object_manager: &mut VoxelObjectManager,
     ) -> Result<()> {
-        let voxel_object_manager = &mut voxel_manager.object_manager;
-
         if !voxel_object_manager.voxel_objects().is_empty()
+            && voxel_type_registry.n_voxel_types() > 0
             && voxel_material_resource_manager.is_none()
         {
             *voxel_material_resource_manager =
                 Some(VoxelMaterialGPUResourceManager::for_voxel_type_registry(
                     graphics_device,
-                    &mut assets.write(),
-                    &voxel_manager.type_registry,
+                    textures,
+                    samplers,
+                    voxel_type_registry,
                     bind_group_layout_registry,
                 )?);
         }

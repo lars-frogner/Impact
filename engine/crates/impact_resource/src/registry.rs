@@ -1,23 +1,25 @@
 //! Change tracking registries for storing resources.
 
 use crate::{MutableResource, Resource, ResourceDirtyMask};
-use impact_containers::SlotMap;
+use impact_containers::RandomState;
 use std::{
-    mem,
+    collections::{HashMap, hash_map::Entry},
+    fmt,
+    hash::BuildHasher,
     ops::{Deref, DerefMut},
     vec::Drain,
 };
 
 /// A change tracking registry for storing immutable resources.
-pub type ImmutableResourceRegistry<R> = ResourceRegistry<R, ()>;
+pub type ImmutableResourceRegistry<R, S = RandomState> = ResourceRegistry<R, (), S>;
 
 /// A change tracking registry for storing mutable resources.
-pub type MutableResourceRegistry<R> = ResourceRegistry<R, <R as MutableResource>::DirtyMask>;
+pub type MutableResourceRegistry<R, S = RandomState> =
+    ResourceRegistry<R, <R as MutableResource>::DirtyMask, S>;
 
 /// A change tracking registry for storing resources.
-#[derive(Debug)]
-pub struct ResourceRegistry<R: Resource, D> {
-    resources: SlotMap<R>,
+pub struct ResourceRegistry<R: Resource, D, S = RandomState> {
+    resources: HashMap<R::ID, R, S>,
     changelog: Vec<ResourceChange<R, D>>,
     /// How many times the registry has changed since it was created.
     revision: u64,
@@ -26,7 +28,7 @@ pub struct ResourceRegistry<R: Resource, D> {
 /// A change that occurred to a resource in a [`ResourceRegistry`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResourceChange<R: Resource, D> {
-    handle: R::Handle,
+    id: R::ID,
     kind: ResourceChangeKind<D>,
     /// The revision number of the registry when the change was made.
     revision: u64,
@@ -52,23 +54,33 @@ pub enum ResourceChangeKind<D> {
 /// mask.
 #[derive(Debug)]
 pub struct ResourceMutRef<'a, R: MutableResource> {
-    handle: R::Handle,
+    id: R::ID,
     resource: &'a mut R,
     dirty_mask: R::DirtyMask,
     changelog: &'a mut Vec<ResourceChange<R, R::DirtyMask>>,
     revision: &'a mut u64,
 }
 
-impl<R: Resource, D> ResourceRegistry<R, D> {
+impl<R, D, S> ResourceRegistry<R, D, S>
+where
+    R: Resource,
+    S: Default,
+{
     /// Creates a new empty resource registry.
     pub fn new() -> Self {
         Self {
-            resources: SlotMap::new(),
+            resources: HashMap::default(),
             changelog: Vec::new(),
             revision: 0,
         }
     }
+}
 
+impl<R, D, S> ResourceRegistry<R, D, S>
+where
+    R: Resource,
+    S: BuildHasher,
+{
     /// Returns the number of resources in the registry.
     pub fn len(&self) -> usize {
         self.resources.len()
@@ -79,81 +91,72 @@ impl<R: Resource, D> ResourceRegistry<R, D> {
         self.resources.is_empty()
     }
 
-    /// Returns a reference to the resource with the given handle.
-    pub fn get(&self, handle: R::Handle) -> Option<&R> {
-        self.resources.get_value(handle.into())
+    /// Returns a reference to the resource with the given ID.
+    pub fn get(&self, id: R::ID) -> Option<&R> {
+        self.resources.get(&id)
     }
 
-    /// Whether the registry contains a resource with the given handle.
-    pub fn contains(&self, handle: R::Handle) -> bool {
-        self.resources.contains(handle.into())
+    /// Whether the registry contains a resource with the given ID.
+    pub fn contains(&self, id: R::ID) -> bool {
+        self.resources.contains_key(&id)
     }
 
-    /// Returns an iterator over all resource handles and their resources.
-    pub fn iter(&self) -> impl Iterator<Item = (R::Handle, &R)> {
-        self.resources
-            .iter()
-            .map(|(key, resource)| (key.into(), resource))
+    /// Returns an iterator over all resource IDs and their resources.
+    pub fn iter(&self) -> impl Iterator<Item = (R::ID, &R)> {
+        self.resources.iter().map(|(id, resource)| (*id, resource))
     }
 
-    /// Inserts the given resource into the registry.
-    ///
-    /// # Returns
-    /// A new handle to the inserted resource.
-    pub fn insert(&mut self, resource: R) -> R::Handle {
-        let handle = self.resources.insert(resource).into();
+    /// Inserts the given resource into the registry under the given ID. If a
+    /// resource with the same ID already existed, it is replaced, and the
+    /// existing resource is returned. Otherwise, [`None`] is returned.
+    pub fn insert(&mut self, id: R::ID, resource: R) -> Option<R> {
+        let existing_resource = self.resources.insert(id, resource);
 
         self.changelog.push(ResourceChange {
-            handle,
-            kind: ResourceChangeKind::Inserted,
+            id,
+            kind: if existing_resource.is_some() {
+                ResourceChangeKind::Replaced
+            } else {
+                ResourceChangeKind::Inserted
+            },
             revision: self.revision,
         });
         self.revision += 1;
 
-        handle
+        existing_resource
     }
 
-    /// If a resource exists under the given handle, swaps it with the given
-    /// resource.
-    ///
-    /// # Returns
-    /// `true` if the swap was made.
-    pub fn replace(&mut self, handle: R::Handle, new_resource: &mut R) -> bool {
-        let Some(resource) = self.resources.get_value_mut(handle.into()) else {
-            return false;
-        };
+    /// If on resource exists under the given ID, creates a resource using the
+    /// given closure and inserts it under that ID.
+    pub fn insert_with_if_absent(&mut self, id: R::ID, get_resource: impl FnOnce() -> R) {
+        if let Entry::Vacant(entry) = self.resources.entry(id) {
+            entry.insert(get_resource());
 
-        mem::swap(resource, new_resource);
-
-        self.changelog.push(ResourceChange {
-            handle,
-            kind: ResourceChangeKind::Replaced,
-            revision: self.revision,
-        });
-        self.revision += 1;
-
-        true
+            self.changelog.push(ResourceChange {
+                id,
+                kind: ResourceChangeKind::Inserted,
+                revision: self.revision,
+            });
+            self.revision += 1;
+        }
     }
 
-    /// Removes the resource with the given handle from the registry.
-    ///
-    /// # Returns
-    /// `true` if the resource existed in the registry.
-    pub fn remove(&mut self, handle: R::Handle) -> bool {
-        let existed = self.resources.remove(handle.into());
+    /// Removes the resource with the given ID from the registry, returning the
+    /// removed resource if it existed. If the resource was not present,
+    /// [`None`] is returned.
+    pub fn remove(&mut self, id: R::ID) -> Option<R> {
+        let removed_resource = self.resources.remove(&id);
 
-        if !existed {
-            return false;
+        if removed_resource.is_some() {
+            self.changelog.push(ResourceChange {
+                id,
+                kind: ResourceChangeKind::Removed,
+                revision: self.revision,
+            });
+            self.revision += 1;
         }
 
-        self.changelog.push(ResourceChange {
-            handle,
-            kind: ResourceChangeKind::Removed,
-            revision: self.revision,
-        });
-        self.revision += 1;
-
-        true
+        removed_resource
     }
 
     /// Returns the current revision number.
@@ -195,36 +198,57 @@ impl<R: Resource, D> ResourceRegistry<R, D> {
     }
 }
 
-impl<R: Resource, D> Default for ResourceRegistry<R, D> {
+impl<R: Resource, D, S> fmt::Debug for ResourceRegistry<R, D, S>
+where
+    R: fmt::Debug,
+    R::ID: fmt::Debug,
+    D: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResourceRegistry")
+            .field("resources", &self.resources)
+            .field("changelog", &self.changelog)
+            .field("revision", &self.revision)
+            .finish()
+    }
+}
+
+impl<R, D, S> Default for ResourceRegistry<R, D, S>
+where
+    R: Resource,
+    S: Default,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<R: MutableResource> MutableResourceRegistry<R> {
-    /// Gets a mutable reference to the resource with the given handle.
+impl<R, S> MutableResourceRegistry<R, S>
+where
+    R: MutableResource,
+    S: BuildHasher,
+{
+    /// Gets a mutable reference to the resource with the given id.
     ///
     /// When the returned [`ResourceMutRef`] drops, it will add an entry to the
     /// changelog and increment the revision number if
     /// [`ResourceMutRef::set_dirty_mask`] has been called with a non-empty
     /// mask.
-    pub fn get_mut(&mut self, handle: R::Handle) -> Option<ResourceMutRef<'_, R>> {
-        self.resources
-            .get_value_mut(handle.into())
-            .map(|resource| ResourceMutRef {
-                handle,
-                resource,
-                dirty_mask: R::DirtyMask::empty(),
-                changelog: &mut self.changelog,
-                revision: &mut self.revision,
-            })
+    pub fn get_mut(&mut self, id: R::ID) -> Option<ResourceMutRef<'_, R>> {
+        self.resources.get_mut(&id).map(|resource| ResourceMutRef {
+            id,
+            resource,
+            dirty_mask: R::DirtyMask::empty(),
+            changelog: &mut self.changelog,
+            revision: &mut self.revision,
+        })
     }
 }
 
 impl<R: Resource, D> ResourceChange<R, D> {
-    /// Returns the handle of the changed resource.
-    pub fn handle(&self) -> R::Handle {
-        self.handle
+    /// Returns the id of the changed resource.
+    pub fn id(&self) -> R::ID {
+        self.id
     }
 
     /// Returns the type of change that occurred.
@@ -268,7 +292,7 @@ impl<'a, R: MutableResource> Drop for ResourceMutRef<'a, R> {
             return;
         }
         self.changelog.push(ResourceChange {
-            handle: self.handle,
+            id: self.id,
             kind: ResourceChangeKind::Modified(self.dirty_mask),
             revision: *self.revision,
         });
@@ -279,48 +303,45 @@ impl<'a, R: MutableResource> Drop for ResourceMutRef<'a, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BinaryDirtyMask;
-    use impact_containers::SlotKey;
+    use crate::{BinaryDirtyMask, ResourceID};
 
-    // Test resource type
+    // Test resource types
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    struct TestResourceID(u32);
+
+    impl ResourceID for TestResourceID {}
+
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct TestResource {
         data: String,
-        value: i32,
     }
-
-    // Test handle type
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    struct TestHandle(SlotKey);
-
-    impl_ResourceHandle_for_newtype!(TestHandle);
 
     impl Resource for TestResource {
-        type Handle = TestHandle;
+        type ID = TestResourceID;
     }
 
-    impl MutableResource for TestResource {
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestMutableResource {
+        value: i32,
+        name: String,
+    }
+
+    impl Resource for TestMutableResource {
+        type ID = TestResourceID;
+    }
+
+    impl MutableResource for TestMutableResource {
         type DirtyMask = BinaryDirtyMask;
     }
 
-    // Helper functions for creating TestResource instances
-    fn test_resource(data: &str, value: i32) -> TestResource {
-        TestResource {
-            data: data.to_string(),
-            value,
-        }
-    }
-
-    fn test_resource_default() -> TestResource {
-        TestResource {
-            data: "test".to_string(),
-            value: 42,
-        }
-    }
+    // Test constants
+    const ID_1: TestResourceID = TestResourceID(1);
+    const ID_2: TestResourceID = TestResourceID(2);
+    const ID_3: TestResourceID = TestResourceID(3);
 
     #[test]
     fn creating_new_registry_gives_empty_registry() {
-        let registry = ImmutableResourceRegistry::<TestResource>::new();
+        let registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
 
         assert_eq!(registry.len(), 0);
         assert!(registry.is_empty());
@@ -328,454 +349,377 @@ mod tests {
     }
 
     #[test]
-    fn inserting_resource_returns_valid_handle_and_increments_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
+    fn inserting_new_resource_adds_to_registry_and_tracks_change() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
 
-        let handle = registry.insert(resource.clone());
+        let result = registry.insert(ID_1, resource);
 
+        assert_eq!(result, None);
         assert_eq!(registry.len(), 1);
         assert!(!registry.is_empty());
+        assert!(registry.contains(ID_1));
         assert_eq!(registry.revision(), 1);
-        assert!(registry.contains(handle));
-        assert_eq!(registry.get(handle), Some(&resource));
-    }
-
-    #[test]
-    fn inserting_multiple_resources_gives_different_handles() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-
-        let handle1 = registry.insert(resource1.clone());
-        let handle2 = registry.insert(resource2.clone());
-
-        assert_ne!(handle1, handle2);
-        assert_eq!(registry.len(), 2);
-        assert_eq!(registry.revision(), 2);
-        assert_eq!(registry.get(handle1), Some(&resource1));
-        assert_eq!(registry.get(handle2), Some(&resource2));
-    }
-
-    #[test]
-    fn getting_nonexistent_resource_returns_none() {
-        let mut registry = ImmutableResourceRegistry::<TestResource>::new();
-        let resource = test_resource("temp", 0);
-        let handle = registry.insert(resource);
-        registry.remove(handle);
-
-        assert_eq!(registry.get(handle), None);
-        assert!(!registry.contains(handle));
-    }
-
-    #[test]
-    fn removing_existing_resource_returns_true_and_increments_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
-        let handle = registry.insert(resource);
-
-        let removed = registry.remove(handle);
-
-        assert!(removed);
-        assert_eq!(registry.len(), 0);
-        assert!(registry.is_empty());
-        assert_eq!(registry.revision(), 2); // Insert + remove
-        assert!(!registry.contains(handle));
-        assert_eq!(registry.get(handle), None);
-    }
-
-    #[test]
-    fn removing_nonexistent_resource_returns_false_and_does_not_increment_revision() {
-        let mut registry = ImmutableResourceRegistry::<TestResource>::new();
-        let resource = test_resource("temp", 0);
-        let handle = registry.insert(resource);
-        registry.remove(handle);
-        let initial_revision = registry.revision();
-
-        let removed = registry.remove(handle);
-
-        assert!(!removed);
-        assert_eq!(registry.revision(), initial_revision);
-    }
-
-    #[test]
-    fn getting_mutable_reference_allows_modification() {
-        let mut registry = MutableResourceRegistry::new();
-        let resource = test_resource("original", 10);
-        let handle = registry.insert(resource);
-
-        {
-            let mut resource_ref = registry.get_mut(handle).unwrap();
-            resource_ref.data = "modified".to_string();
-            resource_ref.value = 20;
-        }
-
-        let retrieved = registry.get(handle).unwrap();
-        assert_eq!(retrieved.data, "modified");
-        assert_eq!(retrieved.value, 20);
-    }
-
-    #[test]
-    fn getting_mutable_reference_for_nonexistent_resource_returns_none() {
-        let mut registry = MutableResourceRegistry::<TestResource>::new();
-        let resource = test_resource("temp", 0);
-        let handle = registry.insert(resource);
-        registry.remove(handle);
-
-        assert!(registry.get_mut(handle).is_none());
-    }
-
-    #[test]
-    fn setting_dirty_mask_on_mut_ref_records_modification_change() {
-        let mut registry = MutableResourceRegistry::new();
-        let resource = test_resource_default();
-        let handle = registry.insert(resource);
-        let initial_revision = registry.revision();
-
-        {
-            let mut resource_ref = registry.get_mut(handle).unwrap();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-            resource_ref.data = "modified".to_string();
-        }
-
-        assert_eq!(registry.revision(), initial_revision + 1);
-        let changes = registry.changes_since(initial_revision);
-        assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].handle(), handle);
-        assert_eq!(
-            changes[0].kind(),
-            &ResourceChangeKind::Modified(BinaryDirtyMask::ALL)
-        );
-        assert_eq!(changes[0].revision(), initial_revision);
-    }
-
-    #[test]
-    fn not_setting_dirty_mask_on_mut_ref_does_not_record_change() {
-        let mut registry = MutableResourceRegistry::new();
-        let resource = test_resource_default();
-        let handle = registry.insert(resource);
-        let initial_revision = registry.revision();
-
-        {
-            let mut resource_ref = registry.get_mut(handle).unwrap();
-            resource_ref.data = "modified".to_string();
-            // Not calling set_dirty_mask
-        }
-
-        assert_eq!(registry.revision(), initial_revision);
-        let changes = registry.changes_since(initial_revision);
-        assert_eq!(changes.len(), 0);
-    }
-
-    #[test]
-    fn setting_empty_dirty_mask_does_not_record_change() {
-        let mut registry = MutableResourceRegistry::new();
-        let resource = test_resource_default();
-        let handle = registry.insert(resource);
-        let initial_revision = registry.revision();
-
-        {
-            let mut resource_ref = registry.get_mut(handle).unwrap();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::empty());
-            resource_ref.data = "modified".to_string();
-        }
-
-        assert_eq!(registry.revision(), initial_revision);
-        let changes = registry.changes_since(initial_revision);
-        assert_eq!(changes.len(), 0);
-    }
-
-    #[test]
-    fn iter_returns_all_resources_with_handles() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-
-        let handle1 = registry.insert(resource1.clone());
-        let handle2 = registry.insert(resource2.clone());
-
-        let mut collected: Vec<_> = registry.iter().collect();
-        collected.sort_by_key(|(_, resource)| resource.value);
-
-        assert_eq!(collected.len(), 2);
-        assert_eq!(collected[0], (handle1, &resource1));
-        assert_eq!(collected[1], (handle2, &resource2));
-    }
-
-    #[test]
-    fn insert_records_inserted_change() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
-
-        let handle = registry.insert(resource);
 
         let changes = registry.changes_since(0);
         assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].handle(), handle);
+        assert_eq!(changes[0].id(), ID_1);
         assert_eq!(changes[0].kind(), &ResourceChangeKind::Inserted);
         assert_eq!(changes[0].revision(), 0);
     }
 
     #[test]
-    fn replacing_existing_resource_returns_true_and_increments_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource("original", 42);
-        let handle = registry.insert(resource);
-        let mut new_resource = test_resource("replaced", 99);
-        let initial_revision = registry.revision();
+    fn inserting_resource_with_existing_id_replaces_and_returns_old() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
 
-        let replaced = registry.replace(handle, &mut new_resource);
+        registry.insert(ID_1, resource1.clone());
+        let result = registry.insert(ID_1, resource2.clone());
 
-        assert!(replaced);
+        assert_eq!(result, Some(resource1));
         assert_eq!(registry.len(), 1);
-        assert_eq!(registry.revision(), initial_revision + 1);
-        assert!(registry.contains(handle));
+        assert_eq!(registry.get(ID_1), Some(&resource2));
+        assert_eq!(registry.revision(), 2);
 
-        let stored_resource = registry.get(handle).unwrap();
-        assert_eq!(stored_resource.data, "replaced");
-        assert_eq!(stored_resource.value, 99);
-
-        // Original resource should now be in new_resource
-        assert_eq!(new_resource.data, "original");
-        assert_eq!(new_resource.value, 42);
+        let changes = registry.changes_since(0);
+        assert_eq!(changes.len(), 2);
+        assert_eq!(changes[1].kind(), &ResourceChangeKind::Replaced);
     }
 
     #[test]
-    fn replacing_nonexistent_resource_returns_false_and_does_not_increment_revision() {
-        let mut registry = ImmutableResourceRegistry::<TestResource>::new();
-        let resource = test_resource("temp", 0);
-        let handle = registry.insert(resource);
-        registry.remove(handle);
-        let initial_revision = registry.revision();
-        let mut new_resource = test_resource("replacement", 123);
+    fn getting_existing_resource_works() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
 
-        let replaced = registry.replace(handle, &mut new_resource);
+        registry.insert(ID_1, resource.clone());
+        let retrieved = registry.get(ID_1);
 
-        assert!(!replaced);
-        assert_eq!(registry.revision(), initial_revision);
+        assert_eq!(retrieved, Some(&resource));
+    }
+
+    #[test]
+    fn getting_nonexistent_resource_returns_none() {
+        let registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+
+        let result = registry.get(ID_1);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn removing_existing_resource_returns_resource_and_tracks_change() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
+
+        registry.insert(ID_1, resource.clone());
+        let result = registry.remove(ID_1);
+
+        assert_eq!(result, Some(resource));
         assert_eq!(registry.len(), 0);
-
-        // new_resource should be unchanged
-        assert_eq!(new_resource.data, "replacement");
-        assert_eq!(new_resource.value, 123);
-    }
-
-    #[test]
-    fn replace_records_replaced_change() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource("original", 1);
-        let handle = registry.insert(resource);
-        let mut new_resource = test_resource("replacement", 2);
-
-        registry.replace(handle, &mut new_resource);
+        assert!(!registry.contains(ID_1));
+        assert_eq!(registry.revision(), 2);
 
         let changes = registry.changes_since(0);
         assert_eq!(changes.len(), 2);
-        assert_eq!(changes[0].kind(), &ResourceChangeKind::Inserted);
-        assert_eq!(changes[1].handle(), handle);
-        assert_eq!(changes[1].kind(), &ResourceChangeKind::Replaced);
-        assert_eq!(changes[1].revision(), 1);
-    }
-
-    #[test]
-    fn replacing_same_resource_multiple_times_creates_separate_changes() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource("original", 1);
-        let handle = registry.insert(resource);
-        let mut replacement1 = test_resource("first", 2);
-        let mut replacement2 = test_resource("second", 3);
-
-        registry.replace(handle, &mut replacement1);
-        registry.replace(handle, &mut replacement2);
-
-        let changes = registry.changes_since(0);
-        assert_eq!(changes.len(), 3);
-        assert_eq!(changes[0].kind(), &ResourceChangeKind::Inserted);
-        assert_eq!(changes[1].kind(), &ResourceChangeKind::Replaced);
-        assert_eq!(changes[1].revision(), 1);
-        assert_eq!(changes[2].kind(), &ResourceChangeKind::Replaced);
-        assert_eq!(changes[2].revision(), 2);
-
-        let final_resource = registry.get(handle).unwrap();
-        assert_eq!(final_resource.data, "second");
-        assert_eq!(final_resource.value, 3);
-    }
-
-    #[test]
-    fn remove_records_removed_change() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
-        let handle = registry.insert(resource);
-
-        registry.remove(handle);
-
-        let changes = registry.changes_since(0);
-        assert_eq!(changes.len(), 2);
-        assert_eq!(changes[0].kind(), &ResourceChangeKind::Inserted);
-        assert_eq!(changes[1].handle(), handle);
         assert_eq!(changes[1].kind(), &ResourceChangeKind::Removed);
-        assert_eq!(changes[1].revision(), 1);
+    }
+
+    #[test]
+    fn removing_nonexistent_resource_returns_none_and_no_change() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+
+        let result = registry.remove(ID_1);
+
+        assert_eq!(result, None);
+        assert_eq!(registry.revision(), 0);
+        assert_eq!(registry.changes_since(0).len(), 0);
+    }
+
+    #[test]
+    fn iterating_over_registry_yields_all_resources() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
+
+        registry.insert(ID_1, resource1.clone());
+        registry.insert(ID_2, resource2.clone());
+
+        let items: Vec<_> = registry.iter().collect();
+        assert_eq!(items.len(), 2);
+        assert!(items.contains(&(ID_1, &resource1)));
+        assert!(items.contains(&(ID_2, &resource2)));
     }
 
     #[test]
     fn changes_since_returns_changes_after_given_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
 
-        let _handle1 = registry.insert(resource1);
-        let revision_after_first = registry.revision();
-        let handle2 = registry.insert(resource2);
+        registry.insert(ID_1, resource1); // revision 0 -> 1
+        let checkpoint_revision = registry.revision();
+        registry.insert(ID_2, resource2); // revision 1 -> 2
+        registry.remove(ID_1); // revision 2 -> 3
 
-        let changes = registry.changes_since(revision_after_first);
-        assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].handle(), handle2);
+        let changes = registry.changes_since(checkpoint_revision);
+        assert_eq!(changes.len(), 2);
         assert_eq!(changes[0].kind(), &ResourceChangeKind::Inserted);
+        assert_eq!(changes[0].id(), ID_2);
+        assert_eq!(changes[1].kind(), &ResourceChangeKind::Removed);
+        assert_eq!(changes[1].id(), ID_1);
     }
 
     #[test]
-    fn changes_since_returns_empty_slice_for_current_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
+    fn changes_since_future_revision_returns_empty_slice() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
 
-        registry.insert(resource);
-        let current_revision = registry.revision();
+        registry.insert(ID_1, resource);
+        let changes = registry.changes_since(999);
 
-        let changes = registry.changes_since(current_revision);
         assert_eq!(changes.len(), 0);
     }
 
     #[test]
-    fn changes_since_returns_empty_slice_for_future_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
+    fn draining_changes_since_removes_and_returns_changes() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
 
-        registry.insert(resource);
+        registry.insert(ID_1, resource1); // revision 0 -> 1
+        let checkpoint_revision = registry.revision();
+        registry.insert(ID_2, resource2); // revision 1 -> 2
+        registry.remove(ID_1); // revision 2 -> 3
 
-        let changes = registry.changes_since(1000);
-        assert_eq!(changes.len(), 0);
-    }
+        assert_eq!(registry.drain_changes_since(checkpoint_revision).count(), 2);
 
-    #[test]
-    fn drain_changes_since_removes_and_returns_changes_after_given_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-
-        let handle1 = registry.insert(resource1);
-        let revision_after_first = registry.revision();
-        let handle2 = registry.insert(resource2);
-
-        let drained: Vec<_> = registry.drain_changes_since(revision_after_first).collect();
-
-        assert_eq!(drained.len(), 1);
-        assert_eq!(drained[0].handle(), handle2);
-        assert_eq!(drained[0].kind(), &ResourceChangeKind::Inserted);
-
-        // Changes should be removed from registry
+        // Verify changes were removed from registry
         let remaining_changes = registry.changes_since(0);
         assert_eq!(remaining_changes.len(), 1);
-        assert_eq!(remaining_changes[0].handle(), handle1);
+        assert_eq!(remaining_changes[0].id(), ID_1);
     }
 
     #[test]
-    fn drain_changes_since_returns_empty_for_current_revision() {
-        let mut registry = ImmutableResourceRegistry::new();
-        let resource = test_resource_default();
+    fn getting_mutable_reference_for_existing_resource_works() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
 
-        registry.insert(resource);
-        let current_revision = registry.revision();
+        registry.insert(ID_1, resource);
+        let mut_ref = registry.get_mut(ID_1);
 
-        assert_eq!(registry.drain_changes_since(current_revision).count(), 0);
+        assert!(mut_ref.is_some());
+        let resource_ref = mut_ref.unwrap();
+        assert_eq!(resource_ref.value, 42);
+        assert_eq!(resource_ref.name, "test");
     }
 
     #[test]
-    fn multiple_modifications_create_separate_change_entries() {
-        let mut registry = MutableResourceRegistry::new();
-        let resource = test_resource_default();
-        let handle = registry.insert(resource);
+    fn getting_mutable_reference_for_nonexistent_resource_returns_none() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+
+        let result = registry.get_mut(ID_1);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn modifying_resource_without_dirty_mask_creates_no_change() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
+
+        registry.insert(ID_1, resource);
         let initial_revision = registry.revision();
 
-        // First modification
         {
-            let mut resource_ref = registry.get_mut(handle).unwrap();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-            resource_ref.data = "modified1".to_string();
-        }
+            let mut resource_ref = registry.get_mut(ID_1).unwrap();
+            resource_ref.value = 100; // Modify but don't set dirty mask
+        } // ResourceMutRef drops here
 
-        // Second modification
+        assert_eq!(registry.revision(), initial_revision);
+        assert_eq!(registry.changes_since(initial_revision).len(), 0);
+    }
+
+    #[test]
+    fn modifying_resource_with_dirty_mask_creates_change() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
+
+        registry.insert(ID_1, resource);
+        let initial_revision = registry.revision();
+
         {
-            let mut resource_ref = registry.get_mut(handle).unwrap();
+            let mut resource_ref = registry.get_mut(ID_1).unwrap();
+            resource_ref.value = 100;
             resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-            resource_ref.data = "modified2".to_string();
-        }
+        } // ResourceMutRef drops here and records change
 
+        assert_eq!(registry.revision(), initial_revision + 1);
         let changes = registry.changes_since(initial_revision);
-        assert_eq!(changes.len(), 2);
+        assert_eq!(changes.len(), 1);
         assert_eq!(
             changes[0].kind(),
             &ResourceChangeKind::Modified(BinaryDirtyMask::ALL)
         );
-        assert_eq!(
-            changes[1].kind(),
-            &ResourceChangeKind::Modified(BinaryDirtyMask::ALL)
-        );
-        assert_eq!(registry.revision(), initial_revision + 2);
+        assert_eq!(changes[0].id(), ID_1);
     }
 
     #[test]
-    fn complex_scenario_with_mixed_operations_maintains_correct_state() {
-        let mut registry = MutableResourceRegistry::new();
+    fn setting_empty_dirty_mask_creates_no_change() {
+        let mut registry: MutableResourceRegistry<TestMutableResource> = ResourceRegistry::new();
+        let resource = TestMutableResource {
+            value: 42,
+            name: "test".to_string(),
+        };
 
-        // Insert resources
-        let resource1 = test_resource("first", 1);
-        let resource2 = test_resource("second", 2);
-        let resource3 = test_resource("third", 3);
+        registry.insert(ID_1, resource);
+        let initial_revision = registry.revision();
 
-        let handle1 = registry.insert(resource1);
-        let handle2 = registry.insert(resource2);
-        let handle3 = registry.insert(resource3);
-
-        // Modify resource1
         {
-            let mut resource_ref = registry.get_mut(handle1).unwrap();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-            resource_ref.data = "first_modified".to_string();
+            let mut resource_ref = registry.get_mut(ID_1).unwrap();
+            resource_ref.value = 100;
+            resource_ref.set_dirty_mask(BinaryDirtyMask::empty());
         }
 
-        // Remove resource2
-        registry.remove(handle2);
+        assert_eq!(registry.revision(), initial_revision);
+        assert_eq!(registry.changes_since(initial_revision).len(), 0);
+    }
 
-        // Modify resource3
-        {
-            let mut resource_ref = registry.get_mut(handle3).unwrap();
-            resource_ref.set_dirty_mask(BinaryDirtyMask::ALL);
-            resource_ref.value = 30;
-        }
+    #[test]
+    fn multiple_overlapping_changes_are_tracked_correctly() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource1 = TestResource {
+            data: "first".to_string(),
+        };
+        let resource2 = TestResource {
+            data: "second".to_string(),
+        };
+        let resource3 = TestResource {
+            data: "third".to_string(),
+        };
 
-        // Verify final state
-        assert_eq!(registry.len(), 2);
-        assert_eq!(registry.revision(), 6); // 3 inserts + 1 modify + 1 remove + 1 modify
-        assert!(registry.contains(handle1));
-        assert!(!registry.contains(handle2));
-        assert!(registry.contains(handle3));
+        registry.insert(ID_1, resource1); // rev 0->1
+        registry.insert(ID_2, resource2); // rev 1->2
+        registry.insert(ID_3, resource3); // rev 2->3
+        registry.remove(ID_2); // rev 3->4
 
-        // Verify changes
         let all_changes = registry.changes_since(0);
-        assert_eq!(all_changes.len(), 6);
+        assert_eq!(all_changes.len(), 4);
 
-        let change_kinds: Vec<_> = all_changes.iter().map(|c| c.kind()).collect();
-        assert_eq!(change_kinds[0], &ResourceChangeKind::Inserted); // resource1
-        assert_eq!(change_kinds[1], &ResourceChangeKind::Inserted); // resource2
-        assert_eq!(change_kinds[2], &ResourceChangeKind::Inserted); // resource3
-        assert_eq!(
-            change_kinds[3],
-            &ResourceChangeKind::Modified(BinaryDirtyMask::ALL)
-        ); // resource1
-        assert_eq!(change_kinds[4], &ResourceChangeKind::Removed); // resource2
-        assert_eq!(
-            change_kinds[5],
-            &ResourceChangeKind::Modified(BinaryDirtyMask::ALL)
-        ); // resource3
+        let changes_since_2 = registry.changes_since(2);
+        assert_eq!(changes_since_2.len(), 2);
+        assert_eq!(changes_since_2[0].id(), ID_3);
+        assert_eq!(changes_since_2[0].kind(), &ResourceChangeKind::Inserted);
+        assert_eq!(changes_since_2[1].id(), ID_2);
+        assert_eq!(changes_since_2[1].kind(), &ResourceChangeKind::Removed);
+    }
+
+    #[test]
+    fn inserting_with_if_absent_with_new_id_adds_resource_and_tracks_change() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let resource = TestResource {
+            data: "test".to_string(),
+        };
+
+        registry.insert_with_if_absent(ID_1, || resource.clone());
+
+        assert_eq!(registry.len(), 1);
+        assert!(registry.contains(ID_1));
+        assert_eq!(registry.get(ID_1), Some(&resource));
+        assert_eq!(registry.revision(), 1);
+
+        let changes = registry.changes_since(0);
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].id(), ID_1);
+        assert_eq!(changes[0].kind(), &ResourceChangeKind::Inserted);
+        assert_eq!(changes[0].revision(), 0);
+    }
+
+    #[test]
+    fn inserting_with_if_absent_with_existing_id_does_nothing() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let original_resource = TestResource {
+            data: "original".to_string(),
+        };
+
+        registry.insert(ID_1, original_resource.clone());
+        let initial_revision = registry.revision();
+
+        registry.insert_with_if_absent(ID_1, || TestResource {
+            data: "new".to_string(),
+        });
+
+        assert_eq!(registry.len(), 1);
+        assert_eq!(registry.get(ID_1), Some(&original_resource));
+        assert_eq!(registry.revision(), initial_revision);
+
+        let changes = registry.changes_since(initial_revision);
+        assert_eq!(changes.len(), 0);
+    }
+
+    #[test]
+    fn inserting_with_if_absent_only_calls_closure_when_inserting() {
+        let mut registry: ImmutableResourceRegistry<TestResource> = ResourceRegistry::new();
+        let original_resource = TestResource {
+            data: "original".to_string(),
+        };
+
+        registry.insert(ID_1, original_resource.clone());
+
+        let mut closure_called = false;
+        registry.insert_with_if_absent(ID_1, || {
+            closure_called = true;
+            TestResource {
+                data: "should not be created".to_string(),
+            }
+        });
+
+        assert!(!closure_called);
+        assert_eq!(registry.get(ID_1), Some(&original_resource));
+
+        // Test that closure is called for new ID
+        let mut closure_called_for_new = false;
+        registry.insert_with_if_absent(ID_2, || {
+            closure_called_for_new = true;
+            TestResource {
+                data: "new resource".to_string(),
+            }
+        });
+
+        assert!(closure_called_for_new);
+        assert!(registry.contains(ID_2));
     }
 }

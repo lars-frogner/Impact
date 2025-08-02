@@ -21,18 +21,17 @@ use crate::{
     scene::Scene,
 };
 use anyhow::{Result, anyhow};
-use impact_assets::{AssetConfig, Assets, lookup_tables};
 use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
     component::Component,
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
-use impact_material::MaterialLibrary;
 use impact_physics::PhysicsConfig;
 use impact_scene::model::InstanceFeatureManager;
+use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_thread::ThreadPoolTaskErrors;
-use impact_voxel::{VoxelConfig, VoxelManager};
+use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -56,7 +55,6 @@ pub struct Engine {
     entity_stager: Mutex<EntityStager>,
     renderer: RwLock<RenderingSystem>,
     resource_manager: RwLock<ResourceManager>,
-    assets: RwLock<Assets>,
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
     gizmo_manager: RwLock<GizmoManager>,
@@ -74,7 +72,6 @@ pub struct Engine {
 #[serde(default)]
 pub struct EngineConfig {
     pub resources: ResourceConfig,
-    pub assets: AssetConfig,
     pub rendering: RenderingConfig,
     pub physics: PhysicsConfig,
     pub voxel: VoxelConfig,
@@ -103,36 +100,26 @@ impl Engine {
 
         let ecs_world = ECSWorld::new(config.ecs.seed);
 
-        let graphics_device = Arc::new(graphics.device);
-        let rendering_surface = graphics.surface;
+        let mut texture_registry = TextureRegistry::new();
+        let mut sampler_registry = SamplerRegistry::new();
 
-        let renderer = RenderingSystem::new(
-            config.rendering,
-            Arc::clone(&graphics_device),
-            rendering_surface,
+        let voxel_type_registry = VoxelTypeRegistry::from_config(
+            &mut texture_registry,
+            &mut sampler_registry,
+            config.voxel,
         )?;
 
-        let mut resource_manager = ResourceManager::new(config.resources);
-
-        resource_manager.load_builtin_resources()?;
-        resource_manager.load_resources_specified_in_config()?;
-
-        gizmo::mesh::generate_gizmo_meshes(&mut resource_manager);
-
-        let mut assets = Assets::new(
-            config.assets,
-            Arc::clone(&graphics_device),
-            Arc::clone(renderer.mipmapper_generator()),
+        let mut resource_manager = ResourceManager::new(
+            config.resources,
+            texture_registry,
+            sampler_registry,
+            voxel_type_registry,
         );
 
-        assets.load_assets_specified_in_config()?;
+        resource_manager.load_builtin_resources()?;
+        resource_manager.load_resources_declared_in_config()?;
 
-        lookup_tables::initialize_default_lookup_tables(
-            &mut assets,
-            &mut renderer.gpu_resource_group_manager().write(),
-        )?;
-
-        let material_library = MaterialLibrary::new();
+        gizmo::mesh::generate_gizmo_meshes(&mut resource_manager);
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
         impact_model::register_model_feature_types(&mut instance_feature_manager);
@@ -140,9 +127,17 @@ impl Engine {
         impact_voxel::register_voxel_feature_types(&mut instance_feature_manager);
         gizmo::initialize_buffers_for_gizmo_models(&mut instance_feature_manager);
 
-        let voxel_manager = VoxelManager::from_config(config.voxel)?;
+        let scene = Scene::new(instance_feature_manager);
 
-        let scene = Scene::new(material_library, instance_feature_manager, voxel_manager);
+        let graphics_device = Arc::new(graphics.device);
+        let rendering_surface = graphics.surface;
+
+        let renderer = RenderingSystem::new(
+            config.rendering,
+            Arc::clone(&graphics_device),
+            rendering_surface,
+            &resource_manager,
+        )?;
 
         let simulator = PhysicsSimulator::new(config.physics)?;
 
@@ -161,7 +156,6 @@ impl Engine {
             entity_stager: Mutex::new(EntityStager::new()),
             renderer: RwLock::new(renderer),
             resource_manager: RwLock::new(resource_manager),
-            assets: RwLock::new(assets),
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
             gizmo_manager: RwLock::new(gizmo_manager),
@@ -213,11 +207,6 @@ impl Engine {
     /// Returns a reference to the [`ResourceManager`], guarded by a [`RwLock`].
     pub fn resource_manager(&self) -> &RwLock<ResourceManager> {
         &self.resource_manager
-    }
-
-    /// Returns a reference to the [`Assets`], guarded by a [`RwLock`].
-    pub fn assets(&self) -> &RwLock<Assets> {
-        &self.assets
     }
 
     /// Returns a reference to the [`Scene`], guarded by a [`RwLock`].
@@ -484,7 +473,7 @@ impl EngineConfig {
     /// path to all paths.
     fn resolve_paths(&mut self, root_path: &Path) {
         self.resources.resolve_paths(root_path);
-        self.assets.resolve_paths(root_path);
+        self.physics.resolve_paths(root_path);
         self.voxel.resolve_paths(root_path);
     }
 }

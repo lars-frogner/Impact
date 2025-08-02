@@ -1,13 +1,13 @@
 //! Setup of materials for new entities.
 
+use crate::resource::ResourceManager;
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_gpu::device::GraphicsDevice;
 use impact_material::{
-    MaterialHandle, MaterialLibrary, MaterialTextureProvider,
+    MaterialID,
     setup::{
         self,
-        fixed::{FixedColor, FixedTexture},
+        fixed::{Color, FixedColor, FixedMaterialProperties, FixedTexture},
         physical::{
             NormalMap, ParallaxMap, TexturedColor, TexturedEmissiveLuminance, TexturedMetalness,
             TexturedRoughness, TexturedSpecularReflectance, UniformColor, UniformEmissiveLuminance,
@@ -26,31 +26,20 @@ use std::hash::Hash;
 /// materials in the instance feature manager and adds the appropriate material
 /// components to the entities.
 pub fn setup_materials_for_new_entities<MID: Clone + Eq + Hash>(
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
-    material_library: &RwLock<MaterialLibrary>,
+    resource_manager: &RwLock<ResourceManager>,
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
-    setup_fixed_color_materials_for_new_entities(
-        material_library,
+    setup_fixed_materials_for_new_entities(
+        resource_manager,
         instance_feature_manager,
         components,
         desynchronized,
-    );
-
-    setup_fixed_texture_materials_for_new_entities(
-        graphics_device,
-        texture_provider,
-        material_library,
-        components,
     )?;
 
     setup_physical_materials_for_new_entities(
-        graphics_device,
-        texture_provider,
-        material_library,
+        resource_manager,
         instance_feature_manager,
         components,
         desynchronized,
@@ -59,64 +48,71 @@ pub fn setup_materials_for_new_entities<MID: Clone + Eq + Hash>(
     Ok(())
 }
 
-fn setup_fixed_color_materials_for_new_entities<MID: Clone + Eq + Hash>(
-    material_library: &RwLock<MaterialLibrary>,
+fn setup_fixed_materials_for_new_entities<MID: Clone + Eq + Hash>(
+    resource_manager: &RwLock<ResourceManager>,
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
-) {
-    setup!(
-        {
-            let mut material_library = material_library.write();
-            let mut instance_feature_manager = instance_feature_manager.write();
-        },
-        components,
-        |fixed_color: &FixedColor| -> MaterialHandle {
-            setup::fixed::setup_fixed_color_material(
-                &mut material_library,
-                &mut instance_feature_manager,
-                fixed_color,
-                desynchronized,
-            )
-        },
-        ![MaterialHandle]
-    );
-}
-
-fn setup_fixed_texture_materials_for_new_entities(
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
-    material_library: &RwLock<MaterialLibrary>,
-    components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
         {
-            let mut material_library = material_library.write();
+            let mut resource_manager = resource_manager.write();
+            let mut instance_feature_manager = instance_feature_manager.write();
         },
         components,
-        |fixed_texture: &FixedTexture| -> Result<MaterialHandle> {
-            setup::fixed::setup_fixed_texture_material(
-                graphics_device,
-                texture_provider,
-                &mut material_library,
-                fixed_texture,
+        |fixed_color: &FixedColor| -> Result<MaterialID> {
+            let resource_manager = &mut *resource_manager;
+            setup::fixed::setup_fixed_material(
+                &resource_manager.textures,
+                &resource_manager.samplers,
+                &mut resource_manager.materials,
+                &mut resource_manager.material_templates,
+                &mut resource_manager.material_texture_groups,
+                &mut instance_feature_manager,
+                FixedMaterialProperties {
+                    color: Color::Uniform(*fixed_color),
+                },
+                None,
+                desynchronized,
             )
         },
-        ![MaterialHandle]
+        ![MaterialID]
+    )?;
+    setup!(
+        {
+            let mut resource_manager = resource_manager.write();
+            let mut instance_feature_manager = instance_feature_manager.write();
+        },
+        components,
+        |fixed_texture: &FixedTexture| -> Result<MaterialID> {
+            let resource_manager = &mut *resource_manager;
+            setup::fixed::setup_fixed_material(
+                &resource_manager.textures,
+                &resource_manager.samplers,
+                &mut resource_manager.materials,
+                &mut resource_manager.material_templates,
+                &mut resource_manager.material_texture_groups,
+                &mut instance_feature_manager,
+                FixedMaterialProperties {
+                    color: Color::Textured(*fixed_texture),
+                },
+                None,
+                desynchronized,
+            )
+        },
+        ![MaterialID]
     )
 }
 
 fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
-    material_library: &RwLock<MaterialLibrary>,
+    resource_manager: &RwLock<ResourceManager>,
     instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
     setup!(
         {
-            let mut material_library = material_library.write();
+            let mut resource_manager = resource_manager.write();
             let mut instance_feature_manager = instance_feature_manager.write();
         },
         components,
@@ -131,11 +127,14 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
          textured_emissive_luminance: Option<&TexturedEmissiveLuminance>,
          normal_map: Option<&NormalMap>,
          parallax_map: Option<&ParallaxMap>|
-         -> Result<MaterialHandle> {
-            setup::physical::setup_physical_material(
-                graphics_device,
-                texture_provider,
-                &mut material_library,
+         -> Result<MaterialID> {
+            let resource_manager = &mut *resource_manager;
+            setup::physical::setup_physical_material_from_optional_parts(
+                &resource_manager.textures,
+                &resource_manager.samplers,
+                &mut resource_manager.materials,
+                &mut resource_manager.material_templates,
+                &mut resource_manager.material_texture_groups,
                 &mut instance_feature_manager,
                 Some(uniform_color),
                 None,
@@ -149,15 +148,16 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
                 textured_emissive_luminance,
                 normal_map,
                 parallax_map,
+                None,
                 desynchronized,
             )
         },
-        ![MaterialHandle, TexturedColor]
+        ![MaterialID, TexturedColor]
     )?;
 
     setup!(
         {
-            let mut material_library = material_library.write();
+            let mut resource_manager = resource_manager.write();
             let mut instance_feature_manager = instance_feature_manager.write();
         },
         components,
@@ -172,11 +172,14 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
          textured_emissive_luminance: Option<&TexturedEmissiveLuminance>,
          normal_map: Option<&NormalMap>,
          parallax_map: Option<&ParallaxMap>|
-         -> Result<MaterialHandle> {
-            setup::physical::setup_physical_material(
-                graphics_device,
-                texture_provider,
-                &mut material_library,
+         -> Result<MaterialID> {
+            let resource_manager = &mut *resource_manager;
+            setup::physical::setup_physical_material_from_optional_parts(
+                &resource_manager.textures,
+                &resource_manager.samplers,
+                &mut resource_manager.materials,
+                &mut resource_manager.material_templates,
+                &mut resource_manager.material_texture_groups,
                 &mut instance_feature_manager,
                 None,
                 Some(textured_color),
@@ -190,9 +193,10 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
                 textured_emissive_luminance,
                 normal_map,
                 parallax_map,
+                None,
                 desynchronized,
             )
         },
-        ![MaterialHandle, UniformColor]
+        ![MaterialID, UniformColor]
     )
 }

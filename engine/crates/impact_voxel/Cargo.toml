@@ -37,7 +37,6 @@ bitflags = { workspace = true }
 bytemuck = { workspace = true }
 cfg-if = { workspace = true }
 glam = "0.30"
-impact_assets = { path = "../impact_assets" }
 impact_camera = { path = "../impact_camera" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
@@ -51,6 +50,7 @@ impact_model = { path = "../impact_model" }
 impact_physics = { path = "../impact_physics" }
 impact_rendering = { path = "../impact_rendering" }
 impact_scene = { path = "../impact_scene" }
+impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 noise = "0.9"

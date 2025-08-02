@@ -1,23 +1,24 @@
 //! Materials using a microfacet reflection model.
 
 use crate::{
-    MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-    MaterialPropertyTextureGroupID, MaterialShaderInput, MaterialSpecification,
-    MaterialTextureProvider, RGBColor, features::create_physical_material_feature,
+    Material, MaterialBindGroupSlot, MaterialBindGroupTemplate, MaterialID, MaterialRegistry,
+    MaterialTemplate, MaterialTemplateID, MaterialTemplateRegistry,
+    MaterialTextureBindingLocations, MaterialTextureGroup, MaterialTextureGroupID,
+    MaterialTextureGroupRegistry, RGBColor, features::create_physical_material_feature,
 };
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
+use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use impact_gpu::device::GraphicsDevice;
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
 use impact_model::InstanceFeatureManager;
-use impact_texture::TextureID;
+use impact_texture::{SamplerRegistry, TextureID, TextureRegistry};
 use nalgebra::{Vector2, vector};
 use roc_integration::roc;
-use std::{collections::hash_map::Entry, hash::Hash};
+use std::hash::Hash;
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A uniform base color.
     ///
     /// The base color affects the color and amount of light reflected and emitted
@@ -30,11 +31,12 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct UniformColor(pub RGBColor);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A textured base color.
     ///
     /// The base color affects the color and amount of light reflected and emitted
@@ -47,59 +49,64 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct TexturedColor(pub TextureID);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A uniform scalar specular reflectance at normal incidence (the
     /// proportion of incident light specularly reflected by the material when
     /// the light direction is perpendicular to the surface).
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct UniformSpecularReflectance(pub f32);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A textured scalar specular reflectance at normal incidence (the
     /// proportion of incident light specularly reflected by the material when
     /// the light direction is perpendicular to the surface).
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct TexturedSpecularReflectance {
         pub texture_id: TextureID,
-        pub scale_factor: f32,
+        pub scale_factor: f64,
     }
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A uniform surface roughness. The roughness ranges from zero (perfectly
     /// smooth) to one (completely diffuse).
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct UniformRoughness(pub f32);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A textured surface roughness. The roughness ranges from zero (perfectly
     /// smooth) to one (completely diffuse).
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct TexturedRoughness {
         pub texture_id: TextureID,
-        pub scale_factor: f32,
+        pub scale_factor: f64,
     }
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A uniform metalness.
     ///
     /// The metalness describes the conductive properties of the material. A value
@@ -117,11 +124,12 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct UniformMetalness(pub f32);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A textured metalness.
     ///
     /// The metalness describes the conductive properties of the material. A value
@@ -139,14 +147,15 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct TexturedMetalness {
         pub texture_id: TextureID,
-        pub scale_factor: f32,
+        pub scale_factor: f64,
     }
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A uniform monochromatic emissive luminance.
     ///
     /// The RGB emissive luminance will be the material's base color multiplied by
@@ -154,11 +163,12 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct UniformEmissiveLuminance(pub f32);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A textured monochromatic emissive luminance.
     ///
     /// The RGB emissive luminance will be the material's base color multiplied by
@@ -166,37 +176,137 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct TexturedEmissiveLuminance {
         pub texture_id: TextureID,
-        pub scale_factor: f32,
+        pub scale_factor: f64,
     }
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A normal map describing surface details.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct NormalMap(pub TextureID);
 }
 
 define_setup_type! {
-    target = MaterialHandle;
+    target = MaterialID;
     /// A parallax map describing surface details.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct ParallaxMap {
         pub height_map_texture_id: TextureID,
-        pub displacement_scale: f32,
+        pub displacement_scale: f64,
         pub uv_per_distance: Vector2<f32>,
     }
 }
 
+/// A complete specification of the properties of a physical material.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct PhysicalMaterialProperties {
+    pub color: Color,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub specular_reflectance: SpecularReflectance,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub roughness: Roughness,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub metalness: Metalness,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub emissive_luminance: EmissiveLuminance,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub bump_map: Option<BumpMap>,
+}
+
+/// A uniform or textured base color.
+///
+/// The base color affects the color and amount of light reflected and emitted
+/// by the material in a way that depends on the material's conductive
+/// properties. For dielectric materials, the base color is equivalent to the
+/// material's the albedo (the proportion of incident light diffusely
+/// reflected by the material). For metallic materials, the base color affects
+/// the material's specular reflectance. For emissive materials, the base color
+/// affects the material's emissive luminance.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum Color {
+    Uniform(UniformColor),
+    Textured(TexturedColor),
+}
+
+/// A uniform of textured scalar specular reflectance at normal incidence (the
+/// proportion of incident light specularly reflected by the material when the
+/// light direction is perpendicular to the surface).
+///
+/// If `Auto`, a uniform specular reflectance of 1.0 will be used if the
+/// material is metallic, otherwise 0.0 will be used.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, Default)]
+pub enum SpecularReflectance {
+    #[default]
+    Auto,
+    Uniform(UniformSpecularReflectance),
+    Textured(TexturedSpecularReflectance),
+}
+
+/// A uniform or textured surface roughness. The roughness ranges from zero
+/// (perfectly smooth) to one (completely diffuse).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum Roughness {
+    Uniform(UniformRoughness),
+    Textured(TexturedRoughness),
+}
+
+/// A uniform or textured metalness.
+///
+/// The metalness describes the conductive properties of the material. A value
+/// of zero means that the material is dielectric, while a value of one means
+/// that the material is a metal.
+///
+/// A dielectric material will have an RGB diffuse reflectance corresponding
+/// to the material's base color, and a specular reflectance that is the
+/// same for each color component (and equal to the scalar specular
+/// reflectance).
+///
+/// A metallic material will have zero diffuse reflectance, and an RGB
+/// specular reflectance corresponding to the material's base color
+/// multiplied by the scalar specular reflectance.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum Metalness {
+    Uniform(UniformMetalness),
+    Textured(TexturedMetalness),
+}
+
+/// A uniform or textured monochromatic emissive luminance.
+///
+/// The RGB emissive luminance will be the material's base color multiplied by
+/// this scalar.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum EmissiveLuminance {
+    Uniform(UniformEmissiveLuminance),
+    Textured(TexturedEmissiveLuminance),
+}
+
+/// A normal map or parallax map describing surface details.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum BumpMap {
+    Normal(NormalMap),
+    Parallax(ParallaxMap),
+}
+
 /// Binding locations for textures used in a physical material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PhysicalMaterialTextureBindings {
+pub struct PhysicalMaterialTextureBindingLocations {
     pub color_texture_and_sampler_bindings: Option<(u32, u32)>,
     pub specular_reflectance_texture_and_sampler_bindings: Option<(u32, u32)>,
     pub roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
@@ -326,7 +436,7 @@ impl ParallaxMap {
     #[roc(body = "{ height_map_texture_id, displacement_scale, uv_per_distance }")]
     pub fn new(
         height_map_texture_id: TextureID,
-        displacement_scale: f32,
+        displacement_scale: f64,
         uv_per_distance: Vector2<f32>,
     ) -> Self {
         Self {
@@ -337,10 +447,137 @@ impl ParallaxMap {
     }
 }
 
-pub fn setup_physical_material<MID: Clone + Eq + Hash>(
-    graphics_device: &GraphicsDevice,
-    texture_provider: &impl MaterialTextureProvider,
-    material_library: &mut MaterialLibrary,
+impl PhysicalMaterialProperties {
+    fn from_optional_parts(
+        uniform_color: Option<&UniformColor>,
+        textured_color: Option<&TexturedColor>,
+        uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
+        textured_specular_reflectance: Option<&TexturedSpecularReflectance>,
+        uniform_roughness: Option<&UniformRoughness>,
+        textured_roughness: Option<&TexturedRoughness>,
+        uniform_metalness: Option<&UniformMetalness>,
+        textured_metalness: Option<&TexturedMetalness>,
+        uniform_emissive_luminance: Option<&UniformEmissiveLuminance>,
+        textured_emissive_luminance: Option<&TexturedEmissiveLuminance>,
+        normal_map: Option<&NormalMap>,
+        parallax_map: Option<&ParallaxMap>,
+    ) -> Result<Self> {
+        let color = match (uniform_color, textured_color) {
+            (Some(uniform_color), None) => Color::Uniform(*uniform_color),
+            (None, Some(textured_color)) => Color::Textured(*textured_color),
+            (None, None) => {
+                bail!("Tried to create physical material with no color");
+            }
+            (Some(_), Some(_)) => {
+                bail!("Tried to create physical material with both uniform and textured color");
+            }
+        };
+
+        let specular_reflectance = match (
+            uniform_specular_reflectance,
+            textured_specular_reflectance,
+        ) {
+            (Some(uniform_specular_reflectance), None) => {
+                SpecularReflectance::Uniform(*uniform_specular_reflectance)
+            }
+            (None, Some(textured_specular_reflectance)) => {
+                SpecularReflectance::Textured(*textured_specular_reflectance)
+            }
+            (None, None) => SpecularReflectance::default(),
+            (Some(_), Some(_)) => {
+                bail!(
+                    "Tried to create physical material with both uniform and textured specular reflectance"
+                );
+            }
+        };
+
+        let roughness = match (uniform_roughness, textured_roughness) {
+            (Some(uniform_roughness), None) => Roughness::Uniform(*uniform_roughness),
+            (None, Some(textured_roughness)) => Roughness::Textured(*textured_roughness),
+            (None, None) => Roughness::default(),
+            (Some(_), Some(_)) => {
+                bail!("Tried to create physical material with both uniform and textured roughness");
+            }
+        };
+
+        let metalness = match (uniform_metalness, textured_metalness) {
+            (Some(uniform_metalness), None) => Metalness::Uniform(*uniform_metalness),
+            (None, Some(textured_metalness)) => Metalness::Textured(*textured_metalness),
+            (None, None) => Metalness::default(),
+            (Some(_), Some(_)) => {
+                bail!("Tried to create physical material with both uniform and textured metalness");
+            }
+        };
+
+        let emissive_luminance = match (uniform_emissive_luminance, textured_emissive_luminance) {
+            (Some(uniform_emissive_luminance), None) => {
+                EmissiveLuminance::Uniform(*uniform_emissive_luminance)
+            }
+            (None, Some(textured_emissive_luminance)) => {
+                EmissiveLuminance::Textured(*textured_emissive_luminance)
+            }
+            (None, None) => EmissiveLuminance::default(),
+            (Some(_), Some(_)) => {
+                bail!(
+                    "Tried to create physical material with both uniform and textured emissive luminance"
+                );
+            }
+        };
+
+        let bump_map = match (normal_map, parallax_map) {
+            (Some(normal_map), None) => Some(BumpMap::Normal(*normal_map)),
+            (None, Some(parallax_map)) => Some(BumpMap::Parallax(*parallax_map)),
+            (None, None) => None,
+            (Some(_), Some(_)) => {
+                bail!("Tried to create physical material with normal mapping and parallax mapping");
+            }
+        };
+
+        Ok(Self {
+            color,
+            specular_reflectance,
+            roughness,
+            metalness,
+            emissive_luminance,
+            bump_map,
+        })
+    }
+}
+
+impl Default for Roughness {
+    fn default() -> Self {
+        Self::Uniform(UniformRoughness(1.0))
+    }
+}
+
+impl Metalness {
+    fn is_zero(&self) -> bool {
+        matches!(
+            self,
+            Self::Uniform(UniformMetalness(metalness))
+                if abs_diff_eq!(*metalness, 0.0)
+        )
+    }
+}
+
+impl Default for Metalness {
+    fn default() -> Self {
+        Self::Uniform(UniformMetalness(0.0))
+    }
+}
+
+impl Default for EmissiveLuminance {
+    fn default() -> Self {
+        Self::Uniform(UniformEmissiveLuminance(0.0))
+    }
+}
+
+pub fn setup_physical_material_from_optional_parts<MID: Clone + Eq + Hash>(
+    texture_registry: &TextureRegistry,
+    sampler_registry: &SamplerRegistry,
+    material_registry: &mut MaterialRegistry,
+    material_template_registry: &mut MaterialTemplateRegistry,
+    material_texture_group_registry: &mut MaterialTextureGroupRegistry,
     instance_feature_manager: &mut InstanceFeatureManager<MID>,
     uniform_color: Option<&UniformColor>,
     textured_color: Option<&TexturedColor>,
@@ -354,13 +591,57 @@ pub fn setup_physical_material<MID: Clone + Eq + Hash>(
     textured_emissive_luminance: Option<&TexturedEmissiveLuminance>,
     normal_map: Option<&NormalMap>,
     parallax_map: Option<&ParallaxMap>,
+    material_id: Option<MaterialID>,
     desynchronized: &mut bool,
-) -> Result<MaterialHandle> {
-    let mut material_name_parts = Vec::with_capacity(8);
+) -> Result<MaterialID> {
+    let properties = PhysicalMaterialProperties::from_optional_parts(
+        uniform_color,
+        textured_color,
+        uniform_specular_reflectance,
+        textured_specular_reflectance,
+        uniform_roughness,
+        textured_roughness,
+        uniform_metalness,
+        textured_metalness,
+        uniform_emissive_luminance,
+        textured_emissive_luminance,
+        normal_map,
+        parallax_map,
+    )?;
+    setup_physical_material(
+        texture_registry,
+        sampler_registry,
+        material_registry,
+        material_template_registry,
+        material_texture_group_registry,
+        instance_feature_manager,
+        properties,
+        material_id,
+        desynchronized,
+    )
+}
 
+pub fn setup_physical_material<MID: Clone + Eq + Hash>(
+    texture_registry: &TextureRegistry,
+    sampler_registry: &SamplerRegistry,
+    material_registry: &mut MaterialRegistry,
+    material_template_registry: &mut MaterialTemplateRegistry,
+    material_texture_group_registry: &mut MaterialTextureGroupRegistry,
+    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    properties: PhysicalMaterialProperties,
+    material_id: Option<MaterialID>,
+    desynchronized: &mut bool,
+) -> Result<MaterialID> {
+    let material_id = material_id.unwrap_or_else(|| MaterialID(hash64!(format!("{properties:?}"))));
+
+    if material_registry.contains(material_id) {
+        return Ok(material_id);
+    }
+
+    let mut bind_group_slots = Vec::with_capacity(4);
     let mut texture_ids = Vec::with_capacity(4);
 
-    let mut bindings = PhysicalMaterialTextureBindings {
+    let mut bindings = PhysicalMaterialTextureBindingLocations {
         color_texture_and_sampler_bindings: None,
         specular_reflectance_texture_and_sampler_bindings: None,
         roughness_texture_and_sampler_bindings: None,
@@ -369,142 +650,159 @@ pub fn setup_physical_material<MID: Clone + Eq + Hash>(
         bump_mapping: None,
     };
 
-    match (uniform_color, textured_color) {
-        (Some(_), None) => {
-            material_name_parts.push("UniformColor");
-        }
-        (None, Some(color)) => {
-            material_name_parts.push("TexturedColor");
+    let uniform_color = match properties.color {
+        Color::Uniform(uniform_color) => Some(uniform_color),
+        Color::Textured(TexturedColor(texture_id)) => {
             bindings.color_texture_and_sampler_bindings = Some(
-                MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()),
+                MaterialBindGroupTemplate::get_texture_and_sampler_bindings(bind_group_slots.len()),
             );
-            texture_ids.push(color.0);
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                texture_id,
+                "color",
+            )?);
+            texture_ids.push(texture_id);
+            None
         }
-        (None, None) => {
-            bail!("Tried to create physical material with no color");
-        }
-        (Some(_), Some(_)) => {
-            bail!("Tried to create physical material with both uniform and textured color");
-        }
-    }
+    };
 
-    let specular_reflectance_value =
-        match (uniform_specular_reflectance, textured_specular_reflectance) {
-            (Some(specular_reflectance), None) => {
-                material_name_parts.push("UniformSpecularReflectance");
-                specular_reflectance.0
+    let specular_reflectance_value = match properties.specular_reflectance {
+        SpecularReflectance::Auto => {
+            if properties.metalness.is_zero() {
+                0.0
+            } else {
+                1.0
             }
-            (None, Some(specular_reflectance)) => {
-                material_name_parts.push("TexturedSpecularReflectance");
-
-                bindings.specular_reflectance_texture_and_sampler_bindings = Some(
-                    MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(
-                        texture_ids.len(),
-                    ),
-                );
-                texture_ids.push(specular_reflectance.texture_id);
-
-                specular_reflectance.scale_factor
-            }
-            _ => {
-                if uniform_metalness.is_some() || textured_metalness.is_some() {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-        };
-
-    let roughness_value = match (uniform_roughness, textured_roughness) {
-        (Some(roughness), None) => {
-            material_name_parts.push("UniformRoughness");
-            roughness.0
         }
-        (None, Some(roughness)) => {
-            material_name_parts.push("TexturedRoughness");
+        SpecularReflectance::Uniform(UniformSpecularReflectance(specular_reflectance)) => {
+            specular_reflectance
+        }
+        SpecularReflectance::Textured(TexturedSpecularReflectance {
+            texture_id,
+            scale_factor,
+        }) => {
+            bindings.specular_reflectance_texture_and_sampler_bindings = Some(
+                MaterialBindGroupTemplate::get_texture_and_sampler_bindings(bind_group_slots.len()),
+            );
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                texture_id,
+                "specular reflectance",
+            )?);
+            texture_ids.push(texture_id);
 
+            scale_factor as f32
+        }
+    };
+
+    let roughness_value = match properties.roughness {
+        Roughness::Uniform(UniformRoughness(roughness)) => roughness,
+        Roughness::Textured(TexturedRoughness {
+            texture_id,
+            scale_factor,
+        }) => {
             bindings.roughness_texture_and_sampler_bindings = Some(
-                MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()),
+                MaterialBindGroupTemplate::get_texture_and_sampler_bindings(bind_group_slots.len()),
             );
-            texture_ids.push(roughness.texture_id);
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                texture_id,
+                "roughness",
+            )?);
+            texture_ids.push(texture_id);
 
-            roughness.scale_factor
+            scale_factor as f32
         }
-        _ => 1.0,
     };
 
-    let metalness_value = match (uniform_metalness, textured_metalness) {
-        (Some(metalness), None) => {
-            material_name_parts.push("UniformMetalness");
-            metalness.0
-        }
-        (None, Some(metalness)) => {
-            material_name_parts.push("TexturedMetalness");
-
+    let metalness_value = match properties.metalness {
+        Metalness::Uniform(UniformMetalness(metalness)) => metalness,
+        Metalness::Textured(TexturedMetalness {
+            texture_id,
+            scale_factor,
+        }) => {
             bindings.metalness_texture_and_sampler_bindings = Some(
-                MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()),
+                MaterialBindGroupTemplate::get_texture_and_sampler_bindings(bind_group_slots.len()),
             );
-            texture_ids.push(metalness.texture_id);
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                texture_id,
+                "metalness",
+            )?);
+            texture_ids.push(texture_id);
 
-            metalness.scale_factor
+            scale_factor as f32
         }
-        _ => 0.0,
     };
 
-    let emissive_luminance_value = match (uniform_emissive_luminance, textured_emissive_luminance) {
-        (Some(emissive_luminance), None) => {
-            material_name_parts.push("UniformEmissiveLuminance");
-            emissive_luminance.0
+    let emissive_luminance_value = match properties.emissive_luminance {
+        EmissiveLuminance::Uniform(UniformEmissiveLuminance(emissive_luminance)) => {
+            emissive_luminance
         }
-        (None, Some(emissive_luminance)) => {
-            material_name_parts.push("TexturedEmissiveLuminance");
-
+        EmissiveLuminance::Textured(TexturedEmissiveLuminance {
+            texture_id,
+            scale_factor,
+        }) => {
             bindings.emissive_luminance_texture_and_sampler_bindings = Some(
-                MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()),
+                MaterialBindGroupTemplate::get_texture_and_sampler_bindings(bind_group_slots.len()),
             );
-            texture_ids.push(emissive_luminance.texture_id);
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                texture_id,
+                "emissive luminance",
+            )?);
+            texture_ids.push(texture_id);
 
-            emissive_luminance.scale_factor
+            scale_factor as f32
         }
-        _ => 0.0,
     };
 
-    match (normal_map, parallax_map) {
-        (Some(_), Some(_)) => {
-            bail!("Tried to create physical material with normal mapping and parallax mapping");
-        }
-        (Some(normal_map), None) => {
-            material_name_parts.push("NormalMapping");
-
+    let parallax_map = match properties.bump_map {
+        None => None,
+        Some(BumpMap::Normal(NormalMap(texture_id))) => {
             bindings.bump_mapping =
                 Some(PhysicalMaterialBumpMappingTextureBindings::NormalMapping(
                     PhysicalMaterialNormalMappingTextureBindings {
                         normal_map_texture_and_sampler_bindings:
-                            MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(
-                                texture_ids.len(),
+                            MaterialBindGroupTemplate::get_texture_and_sampler_bindings(
+                                bind_group_slots.len(),
                             ),
                     },
                 ));
-
-            texture_ids.push(normal_map.0);
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                texture_id,
+                "normal map",
+            )?);
+            texture_ids.push(texture_id);
+            None
         }
-        (None, Some(parallax_map)) => {
-            material_name_parts.push("ParallaxMapping");
-
+        Some(BumpMap::Parallax(parallax_map)) => {
             bindings.bump_mapping =
                 Some(PhysicalMaterialBumpMappingTextureBindings::ParallaxMapping(
                     PhysicalMaterialParallaxMappingTextureBindings {
                         height_map_texture_and_sampler_bindings:
-                            MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(
-                                texture_ids.len(),
+                            MaterialBindGroupTemplate::get_texture_and_sampler_bindings(
+                                bind_group_slots.len(),
                             ),
                     },
                 ));
-
+            bind_group_slots.push(obtain_bind_group_slot(
+                texture_registry,
+                sampler_registry,
+                parallax_map.height_map_texture_id,
+                "height map",
+            )?);
             texture_ids.push(parallax_map.height_map_texture_id);
+            Some(parallax_map)
         }
-        (None, None) => {}
-    }
+    };
 
     let mut vertex_attribute_requirements = VertexAttributeSet::POSITION;
 
@@ -517,60 +815,73 @@ pub fn setup_physical_material<MID: Clone + Eq + Hash>(
         vertex_attribute_requirements |= VertexAttributeSet::NORMAL_VECTOR;
     }
 
-    let material_id = MaterialID(hash64!(format!(
-        "{}PhysicalMaterial",
-        material_name_parts.join(""),
-    )));
-
-    let (feature_type_id, feature_id, instance_feature_flags) = create_physical_material_feature(
+    let (instance_feature_id, instance_feature_flags) = create_physical_material_feature(
         instance_feature_manager,
-        uniform_color,
+        uniform_color.as_ref(),
         specular_reflectance_value,
         roughness_value,
         metalness_value,
         emissive_luminance_value,
-        parallax_map,
+        parallax_map.as_ref(),
     );
 
-    // Add material specification unless a specification for the same material
-    // exists
-    material_library
-        .material_specification_entry(material_id)
-        .or_insert_with(|| {
-            MaterialSpecification::new(
-                vertex_attribute_requirements,
-                vec![feature_type_id],
-                instance_feature_flags,
-                None,
-                MaterialShaderInput::Physical(bindings),
-            )
-        });
-
-    let texture_group_id = if !texture_ids.is_empty() {
-        let texture_group_id = MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
-
-        // Add a new texture set if none with the same textures already exist
-        if let Entry::Vacant(entry) =
-            material_library.material_property_texture_group_entry(texture_group_id)
-        {
-            entry.insert(MaterialPropertyTextureGroup::new(
-                graphics_device,
-                texture_provider,
-                texture_ids,
-                texture_group_id.to_string(),
-            )?);
-        }
-
-        Some(texture_group_id)
-    } else {
-        None
+    let template = MaterialTemplate {
+        vertex_attribute_requirements,
+        bind_group_template: MaterialBindGroupTemplate {
+            slots: bind_group_slots,
+        },
+        texture_binding_locations: MaterialTextureBindingLocations::Physical(bindings),
+        instance_feature_type_id: instance_feature_id.feature_type_id(),
+        instance_feature_flags,
     };
+
+    let template_id = MaterialTemplateID::for_template(&template);
+    let texture_group_id = MaterialTextureGroupID::from_texture_ids(&texture_ids);
+
+    let material = Material {
+        template_id,
+        texture_group_id,
+        instance_feature_id,
+    };
+
+    material_registry.insert(material_id, material);
+
+    material_template_registry.insert_with_if_absent(template_id, || template);
+
+    if !texture_ids.is_empty() {
+        material_texture_group_registry.insert_with_if_absent(texture_group_id, || {
+            MaterialTextureGroup {
+                template_id,
+                texture_ids,
+            }
+        });
+    }
 
     *desynchronized = true;
 
-    Ok(MaterialHandle::new(
-        material_id,
-        Some(feature_id),
-        texture_group_id,
-    ))
+    Ok(material_id)
+}
+
+fn obtain_bind_group_slot(
+    texture_registry: &TextureRegistry,
+    sampler_registry: &SamplerRegistry,
+    texture_id: TextureID,
+    texture_kind: &str,
+) -> Result<MaterialBindGroupSlot> {
+    let texture = texture_registry
+        .get(texture_id)
+        .ok_or_else(|| anyhow!("Missing {texture_kind} texture {texture_id} for material"))?;
+
+    let sampler = sampler_registry
+        .get(texture.sampler_id().ok_or_else(|| {
+            anyhow!("Material {texture_kind} texture {texture_id} has no associated sampler")
+        })?)
+        .ok_or_else(|| {
+            anyhow!("Missing sampler for material {texture_kind} texture {texture_id}")
+        })?;
+
+    Ok(MaterialBindGroupSlot {
+        texture: texture.bind_group_layout_entry_props(),
+        sampler: sampler.bind_group_layout_entry_props(),
+    })
 }

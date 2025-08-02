@@ -23,7 +23,10 @@ use impact_math::{Angle, Float, Radians, stringhash64_newtype};
 use nalgebra::Point3;
 use roc_integration::roc;
 use simba::scalar::SubsetOf;
-use std::collections::hash_map::Entry;
+use std::{
+    collections::hash_map::Entry,
+    path::{Path, PathBuf},
+};
 
 /// Manages all [`DetailedDragForceGenerator`]s.
 #[derive(Debug)]
@@ -88,7 +91,11 @@ pub struct DragLoadMapRepository<F: Float> {
 }
 
 /// Configuration parameters for the generation of drag load maps.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct DragLoadMapConfig {
     /// The number of uniformly distributed directions the aggregate drag load
@@ -117,6 +124,8 @@ pub struct DragLoadMapConfig {
     /// Whether to check whether a file with the required map is available
     /// before generating the map.
     pub use_saved_maps: bool,
+    /// The directory generated maps should be saved to and loaded from.
+    pub directory: PathBuf,
 }
 
 impl DetailedDragForceRegistry {
@@ -286,6 +295,12 @@ impl<F: Float> DragLoadMapRepository<F> {
 }
 
 impl DragLoadMapConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        self.directory = root_path.join(&self.directory);
+    }
+
     fn validate(&self) -> Result<()> {
         if self.n_direction_samples == 0 {
             bail!(
@@ -315,6 +330,7 @@ impl Default for DragLoadMapConfig {
             save_generated_maps: true,
             overwrite_existing_map_files: false,
             use_saved_maps: true,
+            directory: PathBuf::from("resources/drag_load_maps"),
         }
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::BasicGPUResources,
+    resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
     surface::RenderingSurface,
 };
@@ -17,10 +17,13 @@ use anyhow::{Result, anyhow};
 use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry,
+    device::GraphicsDevice,
+    query::TimestampQueryRegistry,
+    shader::{ShaderManager, template::SpecificShaderTemplate},
+    wgpu,
 };
-use impact_material::MaterialLibrary;
+use impact_material::Material;
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use impact_scene::model::ModelID;
@@ -40,6 +43,9 @@ pub struct GeometryPass {
 
 #[derive(Debug)]
 struct GeometryPassPipeline {
+    shader_template: ModelGeometryShaderTemplate,
+    vertex_buffer_layouts: Vec<wgpu::VertexBufferLayout<'static>>,
+    pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     vertex_attributes: VertexAttributeSet,
     models: HashSet<ModelID>,
@@ -81,17 +87,40 @@ impl GeometryPass {
         &self.depth_stencil_state
     }
 
-    pub fn sync_with_render_resources<R>(
+    pub fn sync_with_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &ShaderManager,
+        config: &BasicRenderingConfig,
+    ) {
+        self.polygon_mode = if config.wireframe_mode_on {
+            wgpu::PolygonMode::Line
+        } else {
+            wgpu::PolygonMode::Fill
+        };
+
+        for pipeline in self.model_pipelines.values_mut() {
+            pipeline.pipeline = Self::create_pipeline(
+                graphics_device,
+                shader_manager,
+                &pipeline.shader_template,
+                &pipeline.pipeline_layout,
+                &pipeline.vertex_buffer_layouts,
+                &self.color_target_states,
+                self.polygon_mode,
+                self.depth_stencil_state.clone(),
+            );
+        }
+    }
+
+    pub fn sync_with_render_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        material_library: &MaterialLibrary,
-        gpu_resources: &R,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-    ) -> Result<()>
-    where
-        R: BasicGPUResources,
-    {
+    ) -> Result<()> {
         let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
 
         for pipeline in self.model_pipelines.values_mut() {
@@ -128,7 +157,7 @@ impl GeometryPass {
         self.add_models(
             graphics_device,
             shader_manager,
-            material_library,
+            resource_registries,
             gpu_resources,
             bind_group_layout_registry,
             &added_models,
@@ -139,7 +168,7 @@ impl GeometryPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        material_library: &MaterialLibrary,
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         models: impl IntoIterator<Item = &'a ModelID>,
@@ -150,93 +179,116 @@ impl GeometryPass {
         );
 
         for model_id in models {
-            let material_handle = model_id.material_handle();
-            if let Some(material_specification) =
-                material_library.get_material_specification(material_handle.material_id())
-            {
-                if let Some(input) = ModelGeometryShaderInput::for_material(material_specification)
-                {
-                    match self.model_pipelines.entry(input.clone()) {
-                        Entry::Occupied(mut entry) => {
-                            entry.get_mut().models.insert(*model_id);
-                        }
-                        Entry::Vacant(entry) => {
-                            let shader_template = ModelGeometryShaderTemplate::new(input);
-                            let (_, shader) = shader_manager
-                                .get_or_create_rendering_shader_from_template(
-                                    graphics_device,
-                                    &shader_template,
-                                );
+            let Some(material) = resource_registries.material().get(model_id.material_id()) else {
+                continue;
+            };
+            let Some(material_template) = resource_registries
+                .material_template()
+                .get(material.template_id)
+            else {
+                continue;
+            };
+            let Some(input) = ModelGeometryShaderInput::for_material_template(material_template)
+            else {
+                continue;
+            };
 
-                            let vertex_attributes = shader_template.input().vertex_attributes;
+            match self.model_pipelines.entry(input.clone()) {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().models.insert(*model_id);
+                }
+                Entry::Vacant(entry) => {
+                    let shader_template = ModelGeometryShaderTemplate::new(input);
 
-                            let material_texture_bind_group_layout = material_handle
-                                .material_property_texture_group_id()
-                                .and_then(|texture_group_id| {
-                                    material_library
-                                        .get_material_property_texture_group(texture_group_id)
-                                })
-                                .map(|material_property_texture_group| {
-                                    material_property_texture_group.bind_group_layout()
-                                });
+                    shader_manager.get_or_create_rendering_shader_from_template(
+                        graphics_device,
+                        &shader_template,
+                    );
 
-                            let mut bind_group_layouts = vec![&camera_bind_group_layout];
-                            if let Some(material_texture_bind_group_layout) =
-                                material_texture_bind_group_layout
-                            {
-                                bind_group_layouts.push(material_texture_bind_group_layout);
-                            }
+                    let vertex_attributes = shader_template.input().vertex_attributes;
 
-                            let pipeline_layout = render_command::create_render_pipeline_layout(
-                                graphics_device.device(),
-                                &bind_group_layouts,
-                                &self.push_constant_ranges,
-                                &format!(
-                                    "Geometry pass render pipeline layout for shader: {:?}",
-                                    &shader_template
-                                ),
-                            );
+                    let mut bind_group_layouts = vec![&camera_bind_group_layout];
 
-                            let vertex_buffer_layouts = Self::create_vertex_buffer_layouts(
-                                gpu_resources,
-                                model_id,
-                                vertex_attributes,
-                            )?;
-
-                            let pipeline = render_command::create_render_pipeline(
-                                graphics_device.device(),
-                                &pipeline_layout,
-                                shader,
-                                &vertex_buffer_layouts,
-                                &self.color_target_states,
-                                STANDARD_FRONT_FACE,
-                                Some(wgpu::Face::Back),
-                                self.polygon_mode,
-                                Some(self.depth_stencil_state.clone()),
-                                &format!(
-                                    "Geometry pass render pipeline for shader: {:?}",
-                                    &shader_template
-                                ),
-                            );
-
-                            let mut models =
-                                HashSet::with_capacity_and_hasher(4, Default::default());
-                            models.insert(*model_id);
-
-                            entry.insert(GeometryPassPipeline {
-                                pipeline,
-                                vertex_attributes,
-                                models,
-                            });
-                        }
+                    if let Some(bind_group_layout) = gpu_resources
+                        .material_template_bind_group_layout()
+                        .get(material.template_id)
+                    {
+                        bind_group_layouts.push(&bind_group_layout.bind_group_layout);
                     }
+
+                    let pipeline_layout = render_command::create_render_pipeline_layout(
+                        graphics_device.device(),
+                        &bind_group_layouts,
+                        &self.push_constant_ranges,
+                        &format!(
+                            "Geometry pass render pipeline layout for shader: {:?}",
+                            &shader_template
+                        ),
+                    );
+
+                    let vertex_buffer_layouts = Self::create_vertex_buffer_layouts(
+                        resource_registries,
+                        gpu_resources,
+                        model_id,
+                        vertex_attributes,
+                    )?;
+
+                    let pipeline = Self::create_pipeline(
+                        graphics_device,
+                        shader_manager,
+                        &shader_template,
+                        &pipeline_layout,
+                        &vertex_buffer_layouts,
+                        &self.color_target_states,
+                        self.polygon_mode,
+                        self.depth_stencil_state.clone(),
+                    );
+
+                    let mut models = HashSet::with_capacity_and_hasher(4, Default::default());
+                    models.insert(*model_id);
+
+                    entry.insert(GeometryPassPipeline {
+                        shader_template,
+                        vertex_buffer_layouts,
+                        pipeline_layout,
+                        pipeline,
+                        vertex_attributes,
+                        models,
+                    });
                 }
             }
         }
         Ok(())
     }
 
+    fn create_pipeline(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &ShaderManager,
+        shader_template: &ModelGeometryShaderTemplate,
+        pipeline_layout: &wgpu::PipelineLayout,
+        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
+        color_target_states: &[Option<wgpu::ColorTargetState>],
+        polygon_mode: wgpu::PolygonMode,
+        depth_stencil_state: wgpu::DepthStencilState,
+    ) -> wgpu::RenderPipeline {
+        let shader = &shader_manager.rendering_shaders[&shader_template.shader_id()];
+
+        render_command::create_render_pipeline(
+            graphics_device.device(),
+            pipeline_layout,
+            shader,
+            vertex_buffer_layouts,
+            color_target_states,
+            STANDARD_FRONT_FACE,
+            Some(wgpu::Face::Back),
+            polygon_mode,
+            Some(depth_stencil_state),
+            &format!("Geometry pass render pipeline for shader: {shader_template:?}"),
+        )
+    }
+
     fn create_vertex_buffer_layouts(
+        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         model_id: &ModelID,
         vertex_attributes: VertexAttributeSet,
@@ -251,9 +303,10 @@ impl GeometryPass {
 
         // If the material has a buffer of per-instance features, it will be directly
         // after the transform buffers
-        if model_id
-            .material_handle()
-            .material_property_feature_id()
+        if resource_registries
+            .material()
+            .get(model_id.material_id())
+            .and_then(Material::instance_feature_id_if_applicable)
             .is_some()
         {
             let material_property_buffer_manager = instance_feature_buffer_managers
@@ -267,12 +320,12 @@ impl GeometryPass {
             );
         }
 
-        let mesh_handle = model_id.triangle_mesh_handle();
+        let mesh_id = model_id.triangle_mesh_id();
 
         let mesh_gpu_resources = gpu_resources
             .triangle_mesh()
-            .get(mesh_handle)
-            .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
+            .get(mesh_id)
+            .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
         layouts.extend(mesh_gpu_resources.request_vertex_buffer_layouts(vertex_attributes)?);
 
@@ -379,20 +432,17 @@ impl GeometryPass {
             );
     }
 
-    pub fn record<'a, R>(
+    pub fn record<'a>(
         &self,
         rendering_surface: &RenderingSurface,
-        material_library: &MaterialLibrary,
-        gpu_resources: &R,
+        resource_registries: &impl BasicResourceRegistries,
+        gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &'a mut wgpu::CommandEncoder,
-    ) -> Result<Option<wgpu::RenderPass<'a>>>
-    where
-        R: BasicGPUResources,
-    {
+    ) -> Result<Option<wgpu::RenderPass<'a>>> {
         let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
             return Ok(None);
         };
@@ -449,18 +499,17 @@ impl GeometryPass {
                     continue;
                 }
 
-                if let Some(material_property_texture_group) = model_id
-                    .material_handle()
-                    .material_property_texture_group_id()
+                let material = resource_registries.material().get(model_id.material_id());
+
+                if let Some(material_texture_bind_group) = material
+                    .and_then(Material::texture_group_id_if_non_empty)
                     .and_then(|texture_group_id| {
-                        material_library.get_material_property_texture_group(texture_group_id)
+                        gpu_resources
+                            .material_texture_bind_group()
+                            .get(texture_group_id)
                     })
                 {
-                    render_pass.set_bind_group(
-                        1,
-                        material_property_texture_group.bind_group(),
-                        &[],
-                    );
+                    render_pass.set_bind_group(1, &material_texture_bind_group.bind_group, &[]);
                 }
 
                 render_pass.set_vertex_buffer(
@@ -473,7 +522,7 @@ impl GeometryPass {
                 let mut vertex_buffer_slot = 1;
 
                 if let Some(material_property_feature_id) =
-                    model_id.material_handle().material_property_feature_id()
+                    material.and_then(Material::instance_feature_id_if_applicable)
                 {
                     let material_property_buffer_manager = instance_feature_buffer_managers
                         .iter()
@@ -495,12 +544,12 @@ impl GeometryPass {
                     vertex_buffer_slot += 1;
                 }
 
-                let mesh_handle = model_id.triangle_mesh_handle();
+                let mesh_id = model_id.triangle_mesh_id();
 
                 let mesh_gpu_resources = gpu_resources
                     .triangle_mesh()
-                    .get(mesh_handle)
-                    .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_handle))?;
+                    .get(mesh_id)
+                    .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
                 for vertex_buffer in
                     mesh_gpu_resources.request_vertex_gpu_buffers(pipeline.vertex_attributes)?

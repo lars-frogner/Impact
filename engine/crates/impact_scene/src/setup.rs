@@ -7,11 +7,10 @@ use crate::{
     model::{InstanceFeatureManager, ModelID},
 };
 use anyhow::{Result, anyhow};
-use impact_material::{MaterialHandle, MaterialLibrary};
-use impact_mesh::{TriangleMeshHandle, TriangleMeshRegistry};
-use impact_model::{
-    InstanceFeature,
-    transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+use impact_material::{MaterialID, MaterialRegistry};
+use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
+use impact_model::transform::{
+    InstanceModelLightTransform, InstanceModelViewTransformWithPrevious,
 };
 use nalgebra::{Isometry3, Similarity3};
 use parking_lot::RwLock;
@@ -93,19 +92,19 @@ pub fn setup_scene_graph_group_node(
 
 pub fn setup_scene_graph_model_instance_node(
     mesh_registry: &TriangleMeshRegistry,
-    material_library: &MaterialLibrary,
+    material_registry: &MaterialRegistry,
     instance_feature_manager: &mut InstanceFeatureManager,
     scene_graph: &mut SceneGraph,
     model_to_parent_transform: Similarity3<f32>,
-    mesh_handle: TriangleMeshHandle,
-    material: &MaterialHandle,
+    mesh_id: TriangleMeshID,
+    material_id: MaterialID,
     parent: Option<&SceneGraphParentNodeHandle>,
     flags: Option<&SceneEntityFlags>,
     uncullable: bool,
 ) -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
     let flags = flags.copied().unwrap_or_default();
 
-    let model_id = ModelID::for_triangle_mesh_and_material(mesh_handle, *material);
+    let model_id = ModelID::for_triangle_mesh_and_material(mesh_id, material_id);
 
     let bounding_sphere = if uncullable {
         // The scene graph will not cull models with no bounding sphere
@@ -113,39 +112,20 @@ pub fn setup_scene_graph_model_instance_node(
     } else {
         Some(
             mesh_registry
-                .registry
-                .get(mesh_handle)
+                .get(mesh_id)
                 .ok_or_else(|| {
-                    anyhow!(
-                        "Tried to create renderable entity with missing mesh {}",
-                        mesh_registry.label(mesh_handle)
-                    )
+                    anyhow!("Tried to create renderable entity with missing mesh: {mesh_id}")
                 })?
                 .compute_bounding_sphere()
                 .ok_or_else(|| {
-                    anyhow!(
-                        "Tried to create renderable entity with empty mesh {}",
-                        mesh_registry.label(mesh_handle)
-                    )
+                    anyhow!("Tried to create renderable entity with empty mesh: {mesh_id}")
                 })?,
         )
     };
 
-    let mut feature_type_ids = Vec::with_capacity(4);
-
-    feature_type_ids.push(InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID);
-    feature_type_ids.push(InstanceModelLightTransform::FEATURE_TYPE_ID);
-
-    feature_type_ids.extend_from_slice(
-        material_library
-            .get_material_specification(model_id.material_handle().material_id())
-            .expect("Missing material specification for model material")
-            .instance_feature_type_ids(),
-    );
-
-    instance_feature_manager.register_instance(model_id, &feature_type_ids);
-
-    let mut feature_ids_for_rendering = Vec::with_capacity(4);
+    let mut feature_type_ids = Vec::with_capacity(3);
+    let mut feature_ids_for_rendering = Vec::with_capacity(2);
+    let mut feature_ids_for_shadow_mapping = Vec::with_capacity(1);
 
     // Add entries for the model-to-camera and model-to-light transforms
     // for the scene graph to access and modify using the returned IDs
@@ -154,19 +134,28 @@ pub fn setup_scene_graph_model_instance_node(
         .expect("Missing storage for InstanceModelViewTransformWithPrevious feature")
         .add_feature(&InstanceModelViewTransformWithPrevious::default());
 
+    // The first feature is expected to be the model-view transform
+    feature_type_ids.push(model_view_transform_feature_id.feature_type_id());
+    feature_ids_for_rendering.push(model_view_transform_feature_id);
+
     let model_light_transform_feature_id = instance_feature_manager
         .get_storage_mut::<InstanceModelLightTransform>()
         .expect("Missing storage for InstanceModelLightTransform feature")
         .add_feature(&InstanceModelLightTransform::default());
 
-    // The first feature is expected to be the model-view transform
-    feature_ids_for_rendering.push(model_view_transform_feature_id);
+    feature_type_ids.push(model_light_transform_feature_id.feature_type_id());
+    feature_ids_for_shadow_mapping.push(model_light_transform_feature_id);
 
-    if let Some(feature_id) = material.material_property_feature_id() {
-        feature_ids_for_rendering.push(feature_id);
+    if let Some(material_feature_id) = material_registry
+        .get(model_id.material_id())
+        .ok_or_else(|| anyhow!("Missing material {} for model", model_id.material_id()))?
+        .instance_feature_id_if_applicable()
+    {
+        feature_type_ids.push(material_feature_id.feature_type_id());
+        feature_ids_for_rendering.push(material_feature_id);
     }
 
-    let feature_ids_for_shadow_mapping = vec![model_light_transform_feature_id];
+    instance_feature_manager.register_instance(model_id, &feature_type_ids);
 
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 

@@ -13,7 +13,7 @@ use crate::{
     },
     push_constant::BasicPushConstantGroup,
     render_command::StencilValue,
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     surface::RenderingSurface,
 };
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
@@ -150,7 +150,6 @@ impl Postprocessor {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
@@ -162,7 +161,6 @@ impl Postprocessor {
         self.ambient_occlusion_commands.record(
             rendering_surface,
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
@@ -174,7 +172,6 @@ impl Postprocessor {
         self.capturing_camera
             .record_commands_before_dynamic_range_compression(
                 rendering_surface,
-                resource_registries,
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
@@ -186,7 +183,6 @@ impl Postprocessor {
         self.temporal_anti_aliasing_commands.record(
             rendering_surface,
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
@@ -199,7 +195,6 @@ impl Postprocessor {
             .record_dynamic_range_compression_render_commands(
                 rendering_surface,
                 surface_texture_view,
-                resource_registries,
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
@@ -211,7 +206,6 @@ impl Postprocessor {
         self.render_attachment_visualization_passes.record(
             rendering_surface,
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,

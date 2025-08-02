@@ -35,7 +35,7 @@ use impact_scene::{
     model::InstanceFeatureManager,
 };
 use impact_voxel::{
-    VoxelManager, VoxelObjectID, VoxelObjectManager,
+    VoxelObjectID, VoxelObjectManager,
     chunks::{CHUNK_SIZE, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
 };
@@ -90,7 +90,7 @@ pub fn buffer_transforms_for_gizmos(
     instance_feature_manager: &mut InstanceFeatureManager,
     gizmo_manager: &GizmoManager,
     collision_world: &CollisionWorld,
-    voxel_manager: &VoxelManager,
+    voxel_object_manager: &VoxelObjectManager,
     scene_graph: &SceneGraph,
     light_storage: &LightStorage,
     scene_camera: Option<&SceneCamera>,
@@ -249,7 +249,7 @@ pub fn buffer_transforms_for_gizmos(
         buffer_transforms_for_collider_gizmos(
             instance_feature_manager,
             collision_world,
-            &voxel_manager.object_manager,
+            voxel_object_manager,
             scene_camera,
             &camera_position,
             *collidable,
@@ -268,7 +268,7 @@ pub fn buffer_transforms_for_gizmos(
             }
             buffer_transforms_for_voxel_chunks_gizmo(
                 instance_feature_manager,
-                &voxel_manager.object_manager,
+                voxel_object_manager,
                 scene_graph,
                 gizmo_manager.parameters(),
                 current_frame_count,

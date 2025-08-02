@@ -37,7 +37,7 @@ import pf.Setup.VoxelSphereUnion
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.MouseButton as MouseButtonInput
 import pf.Physics.AngularVelocity as AngularVelocity
-import pf.Rendering.TextureID
+import pf.Texture.TextureID
 import pf.Scene.SceneEntityFlags
 
 entity_ids = {
@@ -85,7 +85,7 @@ handle_mouse_button_event! = |{ button, state }|
 
         _ -> Ok({})
 
-skybox = Rendering.TextureID.from_name("space_skybox")
+skybox = Texture.TextureID.from_name("space_skybox")
 
 player =
     Entity.new

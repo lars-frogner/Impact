@@ -3,7 +3,7 @@
 use anyhow::{Result, anyhow, bail};
 use impact_gpu::{
     device::GraphicsDevice,
-    texture::{SamplerID, Texture, TextureConfig, mipmap::MipmapperGenerator},
+    texture::{Texture, TextureConfig, mipmap::MipmapperGenerator},
     wgpu,
 };
 use impact_io::image;
@@ -27,7 +27,7 @@ pub fn create_texture_from_image_path(
     mipmapper_generator: &MipmapperGenerator,
     image_path: impl AsRef<Path>,
     texture_config: TextureConfig,
-    sampler_id: Option<SamplerID>,
+    label: &str,
 ) -> Result<Texture> {
     let image_path = image_path.as_ref();
     let image = image::load_image_from_path(image_path)?;
@@ -36,8 +36,7 @@ pub fn create_texture_from_image_path(
         mipmapper_generator,
         image,
         texture_config,
-        sampler_id,
-        &image_path.to_string_lossy(),
+        label,
     )
 }
 
@@ -63,7 +62,7 @@ pub fn create_cubemap_texture_from_image_paths<P: AsRef<Path>>(
     front_image_path: P,
     back_image_path: P,
     texture_config: TextureConfig,
-    sampler_id: Option<SamplerID>,
+    label: &str,
 ) -> Result<Texture> {
     let right_image_path = right_image_path.as_ref();
     let left_image_path = left_image_path.as_ref();
@@ -79,16 +78,6 @@ pub fn create_cubemap_texture_from_image_paths<P: AsRef<Path>>(
     let front_image = image::load_image_from_path(front_image_path)?;
     let back_image = image::load_image_from_path(back_image_path)?;
 
-    let label = format!(
-        "Cubemap {{{}, {}, {}, {}, {}, {}}}",
-        right_image_path.display(),
-        left_image_path.display(),
-        top_image_path.display(),
-        bottom_image_path.display(),
-        front_image_path.display(),
-        back_image_path.display()
-    );
-
     crate::create_cubemap_texture_from_images(
         graphics_device,
         right_image,
@@ -98,8 +87,7 @@ pub fn create_cubemap_texture_from_image_paths<P: AsRef<Path>>(
         front_image,
         back_image,
         texture_config,
-        sampler_id,
-        &label,
+        label,
     )
 }
 
@@ -123,7 +111,6 @@ pub fn create_texture_array_from_image_paths<I, P>(
     mipmapper_generator: &MipmapperGenerator,
     image_paths: impl IntoIterator<IntoIter = I>,
     texture_config: TextureConfig,
-    sampler_id: Option<SamplerID>,
     label: &str,
 ) -> Result<Texture>
 where
@@ -139,7 +126,6 @@ where
         mipmapper_generator,
         images,
         texture_config,
-        sampler_id,
         label,
     )
 }
@@ -388,26 +374,48 @@ pub fn save_texture_as_png_file(
     Ok(())
 }
 
-/// Serializes a lookup table into the `Bincode` format and saves it at the
-/// given path.
+/// Loads and returns the `Bincode` serialized metadata header of the lookup
+/// table at the given path.
+///
+/// # Errors
+/// Returns an error if:
+/// - The file cannot be opened or read.
+/// - The file does not contain valid `Bincode` serialized metadata.
 #[cfg(feature = "bincode")]
-pub fn save_lookup_table_to_file<T>(
-    table: &impact_gpu::texture::TextureLookupTable<T>,
-    output_file_path: impl AsRef<Path>,
-) -> Result<()>
-where
-    T: impact_gpu::texture::TexelType + serde::Serialize,
-{
-    let byte_buffer = bincode::serde::encode_to_vec(table, bincode::config::standard())?;
-    impact_io::save_data_as_binary(output_file_path, &byte_buffer)?;
-    Ok(())
+pub fn read_lookup_table_metadata_from_file(
+    file_path: impl AsRef<Path>,
+) -> Result<crate::lookup_table::LookupTableMetadata> {
+    use anyhow::Context;
+    use std::{fs::File, io::BufReader};
+
+    let file_path = file_path.as_ref();
+
+    impact_log::debug!(
+        "Reading metadata for lookup table at {}",
+        file_path.display()
+    );
+
+    let file = File::open(file_path).with_context(|| {
+        format!(
+            "Failed to open texture lookup table at {}",
+            file_path.display()
+        )
+    })?;
+    let reader = BufReader::new(file);
+    let metadata = bincode::serde::decode_from_reader(reader, bincode::config::standard())?;
+    Ok(metadata)
 }
 
 /// Loads and returns the `Bincode` serialized lookup table at the given path.
+///
+/// # Errors
+/// Returns an error if:
+/// - The file cannot be opened or read.
+/// - The file does not contain valid `Bincode` serialized lookup table data.
 #[cfg(feature = "bincode")]
 pub fn read_lookup_table_from_file<T>(
     file_path: impl AsRef<Path>,
-) -> Result<impact_gpu::texture::TextureLookupTable<T>>
+) -> Result<crate::lookup_table::LookupTable<T>>
 where
     T: impact_gpu::texture::TexelType + serde::de::DeserializeOwned,
 {
@@ -418,17 +426,43 @@ where
     };
 
     let file_path = file_path.as_ref();
+
+    impact_log::debug!("Reading lookup table at {}", file_path.display());
+
     let file = File::open(file_path).with_context(|| {
         format!(
             "Failed to open texture lookup table at {}",
             file_path.display()
         )
     })?;
+
     let mut reader = BufReader::new(file);
     let mut buffer = Vec::new();
     reader.read_to_end(&mut buffer)?;
+
     let (table, _) = bincode::serde::decode_from_slice(&buffer, bincode::config::standard())?;
+
     Ok(table)
+}
+
+/// Serializes a lookup table into the `Bincode` format and saves it at the
+/// given path.
+///
+/// # Errors
+/// Returns an error if:
+/// - The lookup table cannot be serialized to `Bincode` format.
+/// - The serialized data cannot be written to the specified path.
+#[cfg(feature = "bincode")]
+pub fn save_lookup_table_to_file<T>(
+    table: &crate::lookup_table::LookupTable<T>,
+    output_file_path: impl AsRef<Path>,
+) -> Result<()>
+where
+    T: impact_gpu::texture::TexelType + serde::Serialize,
+{
+    let byte_buffer = bincode::serde::encode_to_vec(table, bincode::config::standard())?;
+    impact_io::save_data_as_binary(output_file_path, &byte_buffer)?;
+    Ok(())
 }
 
 fn convert_bgra8_to_rgba8(bgra_bytes: &mut [u8]) {

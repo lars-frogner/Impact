@@ -7,7 +7,9 @@ macro_rules! impl_InstanceFeature {
     ($ty:ty) => {
         impl $crate::InstanceFeature for $ty {
             const FEATURE_TYPE_ID: $crate::InstanceFeatureTypeID =
-                impact_math::ConstStringHash64::new(stringify!($ty)).into_hash();
+                $crate::InstanceFeatureTypeID::from_hash(
+                    impact_math::ConstStringHash64::new(stringify!($ty)).into_hash(),
+                );
 
             const BUFFER_LAYOUT: Option<::impact_gpu::wgpu::VertexBufferLayout<'static>> = None;
         }
@@ -23,7 +25,9 @@ macro_rules! impl_InstanceFeatureForGPU {
     ($ty:ty, $vertex_attr_array:expr) => {
         impl $crate::InstanceFeature for $ty {
             const FEATURE_TYPE_ID: $crate::InstanceFeatureTypeID =
-                impact_math::ConstStringHash64::new(stringify!($ty)).into_hash();
+                $crate::InstanceFeatureTypeID::from_hash(
+                    impact_math::ConstStringHash64::new(stringify!($ty)).into_hash(),
+                );
 
             const BUFFER_LAYOUT: Option<::impact_gpu::wgpu::VertexBufferLayout<'static>> =
                 Some(::impact_gpu::wgpu::VertexBufferLayout {

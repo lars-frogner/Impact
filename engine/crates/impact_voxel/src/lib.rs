@@ -29,12 +29,12 @@ use std::{
     path::{Path, PathBuf},
 };
 use utils::{Dimension, Side};
-use voxel_types::{VoxelType, VoxelTypeRegistry};
+use voxel_types::VoxelType;
 
 define_component_type! {
     /// Identifier for a
     /// [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject) in a
-    /// [`VoxelManager`].
+    /// [`VoxelObjectManager`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -97,13 +97,6 @@ pub enum VoxelSurfacePlacement {
     Face,
     Edge,
     Corner,
-}
-
-/// Manager of voxels in a scene.
-#[derive(Debug)]
-pub struct VoxelManager {
-    pub type_registry: VoxelTypeRegistry,
-    pub object_manager: VoxelObjectManager,
 }
 
 /// Manager of all [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject)s in
@@ -358,7 +351,7 @@ impl Voxel {
 #[cfg(test)]
 impl VoxelObjectID {
     /// Creates a dummy [`ChunkedVoxelObjectID`] that will never match an actual
-    /// ID returned from the [`VoxelManager`]. Used for testing purposes.
+    /// ID returned from the [`VoxelObjectManager`]. Used for testing purposes.
     pub fn dummy() -> Self {
         Self(0)
     }
@@ -371,27 +364,6 @@ impl std::fmt::Display for VoxelObjectID {
 }
 
 impl_InstanceFeature!(VoxelObjectID);
-
-impl VoxelManager {
-    /// Creates a new voxel manager with the given registry of voxel types.
-    pub fn new(voxel_type_registry: VoxelTypeRegistry) -> Self {
-        Self {
-            type_registry: voxel_type_registry,
-            object_manager: VoxelObjectManager::new(),
-        }
-    }
-
-    /// Creates a new voxel manager based on the given configuration
-    /// parameters.
-    #[cfg(feature = "ron")]
-    pub fn from_config(voxel_config: VoxelConfig) -> anyhow::Result<Self> {
-        let voxel_type_registry = match voxel_config.voxel_types_path {
-            Some(file_path) => VoxelTypeRegistry::from_voxel_type_ron_file(file_path)?,
-            None => VoxelTypeRegistry::new(voxel_types::VoxelTypeSpecifications::default())?,
-        };
-        Ok(Self::new(voxel_type_registry))
-    }
-}
 
 impl VoxelObjectManager {
     /// Creates a new voxel object manager with no objects.

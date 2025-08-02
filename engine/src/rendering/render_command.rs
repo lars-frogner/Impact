@@ -10,7 +10,6 @@ use impact_gpu::{
     storage::StorageGPUBufferManager, wgpu,
 };
 use impact_light::{LightStorage, shadow_map::ShadowMappingConfig};
-use impact_material::MaterialLibrary;
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::{RenderAttachmentQuantitySet, RenderAttachmentTextureManager},
@@ -31,7 +30,10 @@ use impact_rendering::{
     surface::RenderingSurface,
 };
 use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
-use impact_voxel::{render_commands::VoxelRenderCommands, resource::VoxelGPUResources};
+use impact_voxel::{
+    render_commands::VoxelRenderCommands,
+    resource::{VoxelGPUResources, VoxelResourceRegistries},
+};
 
 /// Manager of commands for rendering the scene. Postprocessing commands are
 /// managed by the [`Postprocessor`], but evoked by this manager.
@@ -45,21 +47,25 @@ pub struct RenderCommandManager {
     ambient_light_pass: AmbientLightPass,
     directional_light_pass: DirectionalLightPass,
     skybox_pass: SkyboxPass,
-    voxel_render_commands: VoxelRenderCommands,
+    voxel_render_commands: Option<VoxelRenderCommands>,
     gizmo_passes: GizmoPasses,
 }
 
 impl RenderCommandManager {
     /// Creates a new render command manager, initializing all
     /// non-postprocessing render commands.
-    pub fn new(
+    pub fn new<R>(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        resource_registries: &R,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         config: &BasicRenderingConfig,
-    ) -> Self {
+    ) -> Self
+    where
+        R: BasicResourceRegistries + VoxelResourceRegistries,
+    {
         let attachment_clearing_pass = AttachmentClearingPass::new(
             (RenderAttachmentQuantitySet::DEPTH_STENCIL
                 | RenderAttachmentQuantitySet::all().with_clear_color_only())
@@ -95,6 +101,7 @@ impl RenderCommandManager {
             graphics_device,
             shader_manager,
             render_attachment_texture_manager,
+            resource_registries,
             bind_group_layout_registry,
         );
 
@@ -110,6 +117,7 @@ impl RenderCommandManager {
         let voxel_render_commands = VoxelRenderCommands::new(
             graphics_device,
             shader_manager,
+            resource_registries,
             bind_group_layout_registry,
             &geometry_pass,
             config,
@@ -136,29 +144,50 @@ impl RenderCommandManager {
         }
     }
 
+    pub fn sync_with_config(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &ShaderManager,
+        config: &BasicRenderingConfig,
+    ) {
+        self.non_physical_model_depth_prepass.sync_with_config(
+            graphics_device,
+            shader_manager,
+            config,
+        );
+
+        self.geometry_pass
+            .sync_with_config(graphics_device, shader_manager, config);
+
+        if let Some(voxel_render_commands) = &mut self.voxel_render_commands {
+            voxel_render_commands.sync_with_config(graphics_device, shader_manager, config);
+        }
+    }
+
     /// Makes sure all the render commands are up to date with the given render
     /// resources.
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
-    pub fn sync_with_render_resources<GR>(
+    pub fn sync_with_render_resources<R, GR>(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        material_library: &MaterialLibrary,
+        resource_registries: &R,
         gpu_resources: &GR,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<()>
     where
+        R: BasicResourceRegistries,
         GR: BasicGPUResources + VoxelGPUResources,
     {
         self.non_physical_model_depth_prepass
-            .sync_with_render_resources_for_non_physical_models(material_library, gpu_resources);
+            .sync_with_render_resources_for_non_physical_models(resource_registries, gpu_resources);
 
         self.geometry_pass.sync_with_render_resources(
             graphics_device,
             shader_manager,
-            material_library,
+            resource_registries,
             gpu_resources,
             bind_group_layout_registry,
         )?;
@@ -167,7 +196,7 @@ impl RenderCommandManager {
             .sync_with_render_resources(
                 graphics_device,
                 shader_manager,
-                material_library,
+                resource_registries,
                 gpu_resources,
             )?;
 
@@ -175,7 +204,7 @@ impl RenderCommandManager {
             .sync_with_render_resources(
                 graphics_device,
                 shader_manager,
-                material_library,
+                resource_registries,
                 gpu_resources,
             )?;
 
@@ -198,12 +227,6 @@ impl RenderCommandManager {
             gpu_resources,
         );
 
-        self.voxel_render_commands.sync_with_render_resources(
-            graphics_device,
-            shader_manager,
-            gpu_resources,
-        )?;
-
         Ok(())
     }
 
@@ -217,7 +240,6 @@ impl RenderCommandManager {
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
         light_storage: &LightStorage,
-        material_library: &MaterialLibrary,
         instance_feature_manager: &InstanceFeatureManager,
         scene_camera: Option<&SceneCamera>,
         resource_registries: &R,
@@ -242,13 +264,15 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        self.voxel_render_commands.record_before_geometry_pass(
-            scene_camera,
-            instance_feature_manager,
-            gpu_resources,
-            timestamp_recorder,
-            command_encoder,
-        )?;
+        if let Some(voxel_render_commands) = &self.voxel_render_commands {
+            voxel_render_commands.record_before_geometry_pass(
+                scene_camera,
+                instance_feature_manager,
+                gpu_resources,
+                timestamp_recorder,
+                command_encoder,
+            )?;
+        }
 
         self.non_physical_model_depth_prepass.record(
             rendering_surface,
@@ -261,7 +285,7 @@ impl RenderCommandManager {
 
         let mut geometry_pass = self.geometry_pass.record(
             rendering_surface,
-            material_library,
+            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -271,14 +295,16 @@ impl RenderCommandManager {
         )?;
 
         if let Some(ref mut pass) = geometry_pass {
-            self.voxel_render_commands.record_to_geometry_pass(
-                rendering_surface,
-                instance_feature_manager,
-                gpu_resources,
-                postprocessor,
-                frame_counter,
-                pass,
-            )?;
+            if let Some(voxel_render_commands) = &self.voxel_render_commands {
+                voxel_render_commands.record_to_geometry_pass(
+                    rendering_surface,
+                    instance_feature_manager,
+                    gpu_resources,
+                    postprocessor,
+                    frame_counter,
+                    pass,
+                )?;
+            }
         }
         drop(geometry_pass);
 
@@ -292,23 +318,31 @@ impl RenderCommandManager {
                   instance_range_id,
                   timestamp_recorder,
                   command_encoder| {
-                self.voxel_render_commands
-                    .record_before_omnidirectional_light_shadow_cubemap_face_update(
-                        positive_z_cubemap_face_frustum,
+                if let Some(voxel_render_commands) = &self.voxel_render_commands {
+                    voxel_render_commands
+                        .record_before_omnidirectional_light_shadow_cubemap_face_update(
+                            positive_z_cubemap_face_frustum,
+                            instance_range_id,
+                            instance_feature_manager,
+                            gpu_resources,
+                            timestamp_recorder,
+                            command_encoder,
+                        )
+                } else {
+                    Ok(())
+                }
+            },
+            &mut |instance_range_id, render_pass| {
+                if self.voxel_render_commands.is_some() {
+                    VoxelRenderCommands::record_shadow_map_update(
                         instance_range_id,
                         instance_feature_manager,
                         gpu_resources,
-                        timestamp_recorder,
-                        command_encoder,
+                        render_pass,
                     )
-            },
-            &mut |instance_range_id, render_pass| {
-                VoxelRenderCommands::record_shadow_map_update(
-                    instance_range_id,
-                    instance_feature_manager,
-                    gpu_resources,
-                    render_pass,
-                )
+                } else {
+                    Ok(())
+                }
             },
         )?;
 
@@ -319,32 +353,38 @@ impl RenderCommandManager {
             shadow_mapping_config.enabled,
             command_encoder,
             &mut |cascade_frustum, instance_range_id, timestamp_recorder, command_encoder| {
-                self.voxel_render_commands
-                    .record_before_unidirectional_light_shadow_map_cascade_update(
-                        cascade_frustum,
+                if let Some(voxel_render_commands) = &self.voxel_render_commands {
+                    voxel_render_commands
+                        .record_before_unidirectional_light_shadow_map_cascade_update(
+                            cascade_frustum,
+                            instance_range_id,
+                            instance_feature_manager,
+                            gpu_resources,
+                            timestamp_recorder,
+                            command_encoder,
+                        )
+                } else {
+                    Ok(())
+                }
+            },
+            &mut |instance_range_id, render_pass| {
+                if self.voxel_render_commands.is_some() {
+                    VoxelRenderCommands::record_shadow_map_update(
                         instance_range_id,
                         instance_feature_manager,
                         gpu_resources,
-                        timestamp_recorder,
-                        command_encoder,
+                        render_pass,
                     )
-            },
-            &mut |instance_range_id, render_pass| {
-                VoxelRenderCommands::record_shadow_map_update(
-                    instance_range_id,
-                    instance_feature_manager,
-                    gpu_resources,
-                    render_pass,
-                )
+                } else {
+                    Ok(())
+                }
             },
         )?;
 
         self.ambient_light_pass.record(
             rendering_surface,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
-            gpu_resource_group_manager,
             postprocessor,
             timestamp_recorder,
             command_encoder,
@@ -353,7 +393,6 @@ impl RenderCommandManager {
         self.directional_light_pass.record(
             rendering_surface,
             light_storage,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -362,7 +401,6 @@ impl RenderCommandManager {
         )?;
 
         self.skybox_pass.record(
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -373,7 +411,6 @@ impl RenderCommandManager {
         postprocessor.record_commands(
             rendering_surface,
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
@@ -385,7 +422,6 @@ impl RenderCommandManager {
 
         self.gizmo_passes.record(
             surface_texture_view,
-            resource_registries,
             gpu_resources,
             render_attachment_texture_manager,
             timestamp_recorder,

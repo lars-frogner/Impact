@@ -72,6 +72,7 @@ impl RenderingSystem {
         mut config: RenderingConfig,
         graphics_device: Arc<GraphicsDevice>,
         rendering_surface: RenderingSurface,
+        resource_manager: &ResourceManager,
     ) -> Result<Self> {
         config.basic.make_compatible_with_device(&graphics_device);
 
@@ -92,6 +93,7 @@ impl RenderingSystem {
             &rendering_surface,
             &mut shader_manager,
             &mut render_attachment_texture_manager,
+            resource_manager,
             &bind_group_layout_registry,
             &config.basic,
         );
@@ -298,7 +300,6 @@ impl RenderingSystem {
             Self::create_render_command_encoder(self.graphics_device.device());
 
         let light_storage = scene.light_storage().read();
-        let material_library = scene.material_library().read();
         let instance_feature_manager = scene.instance_feature_manager().read();
         let scene_camera = scene.scene_camera().read();
 
@@ -306,7 +307,6 @@ impl RenderingSystem {
             &self.rendering_surface,
             &surface_texture_view,
             &light_storage,
-            &material_library,
             &instance_feature_manager,
             scene_camera.as_ref(),
             resource_manager,
@@ -365,7 +365,7 @@ impl RenderingSystem {
 
         if enabled != was_enabled {
             self.basic_config.wireframe_mode_on = enabled;
-            self.recreate_render_command_manager();
+            self.sync_render_command_manager_with_basic_config();
         }
     }
 
@@ -400,13 +400,10 @@ impl RenderingSystem {
         })
     }
 
-    fn recreate_render_command_manager(&mut self) {
-        *self.render_command_manager.write() = RenderCommandManager::new(
+    fn sync_render_command_manager_with_basic_config(&self) {
+        self.render_command_manager.write().sync_with_config(
             &self.graphics_device,
-            &self.rendering_surface,
-            &mut self.shader_manager.write(),
-            &mut self.render_attachment_texture_manager.write(),
-            &self.bind_group_layout_registry,
+            &self.shader_manager.read(),
             &self.basic_config,
         );
     }

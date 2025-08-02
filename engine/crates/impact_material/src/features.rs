@@ -9,9 +9,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::MATERIAL_START;
 use impact_gpu::wgpu;
 use impact_model::InstanceFeatureManager;
-use impact_model::{
-    InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, impl_InstanceFeatureForGPU,
-};
+use impact_model::{InstanceFeatureID, impl_InstanceFeatureForGPU};
 use nalgebra::Vector2;
 use std::hash::Hash;
 
@@ -42,7 +40,8 @@ bitflags! {
 /// that is independent of lighting.
 ///
 /// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
+/// GPU. It implements [`InstanceFeature`](impact_model::InstanceFeature), and
+/// can thus be stored in an
 /// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -59,7 +58,8 @@ pub struct FixedColorMaterialFeature {
 /// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
+/// GPU. It implements [`InstanceFeature`](impact_model::InstanceFeature), and
+/// can thus be stored in an
 /// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -80,7 +80,8 @@ pub struct UniformColorPhysicalMaterialFeature {
 /// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
+/// GPU. It implements [`InstanceFeature`](impact_model::InstanceFeature), and
+/// can thus be stored in an
 /// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -100,7 +101,8 @@ pub struct TexturedColorPhysicalMaterialFeature {
 /// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
+/// GPU. It implements [`InstanceFeature`](impact_model::InstanceFeature), and
+/// can thus be stored in an
 /// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -123,7 +125,8 @@ pub struct UniformColorParallaxMappedPhysicalMaterialFeature {
 /// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
+/// GPU. It implements [`InstanceFeature`](impact_model::InstanceFeature), and
+/// can thus be stored in an
 /// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -167,14 +170,9 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
     metalness: f32,
     emissive_luminance: f32,
     parallax_map: Option<&ParallaxMap>,
-) -> (
-    InstanceFeatureTypeID,
-    InstanceFeatureID,
-    MaterialInstanceFeatureFlags,
-) {
+) -> (InstanceFeatureID, MaterialInstanceFeatureFlags) {
     match (uniform_color, parallax_map) {
         (Some(color), None) => (
-            UniformColorPhysicalMaterialFeature::FEATURE_TYPE_ID,
             UniformColorPhysicalMaterialFeature::add_feature(
                 instance_feature_manager,
                 color,
@@ -186,7 +184,6 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
             MaterialInstanceFeatureFlags::HAS_COLOR,
         ),
         (None, None) => (
-            TexturedColorPhysicalMaterialFeature::FEATURE_TYPE_ID,
             TexturedColorPhysicalMaterialFeature::add_feature(
                 instance_feature_manager,
                 specular_reflectance,
@@ -197,7 +194,6 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
             MaterialInstanceFeatureFlags::empty(),
         ),
         (Some(color), Some(parallax_map)) => (
-            UniformColorParallaxMappedPhysicalMaterialFeature::FEATURE_TYPE_ID,
             UniformColorParallaxMappedPhysicalMaterialFeature::add_feature(
                 instance_feature_manager,
                 color,
@@ -211,7 +207,6 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
                 | MaterialInstanceFeatureFlags::USES_PARALLAX_MAPPING,
         ),
         (None, Some(parallax_map)) => (
-            TexturedColorParallaxMappedPhysicalMaterialFeature::FEATURE_TYPE_ID,
             TexturedColorParallaxMappedPhysicalMaterialFeature::add_feature(
                 instance_feature_manager,
                 specular_reflectance,
@@ -288,7 +283,7 @@ impl UniformColorParallaxMappedPhysicalMaterialFeature {
                 roughness,
                 metalness,
                 emissive_luminance,
-                parallax_displacement_scale: parallax_map.displacement_scale,
+                parallax_displacement_scale: parallax_map.displacement_scale as f32,
                 parallax_uv_per_distance: parallax_map.uv_per_distance,
             })
     }
@@ -313,7 +308,7 @@ impl TexturedColorParallaxMappedPhysicalMaterialFeature {
                 roughness,
                 metalness,
                 emissive_luminance,
-                parallax_displacement_scale: parallax_map.displacement_scale,
+                parallax_displacement_scale: parallax_map.displacement_scale as f32,
                 parallax_uv_per_distance: parallax_map.uv_per_distance,
             })
     }
