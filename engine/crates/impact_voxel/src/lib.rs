@@ -19,7 +19,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::inertia::VoxelObjectInertialPropertyManager;
 use impact_containers::HashMap;
-use impact_model::{InstanceFeatureManager, impl_InstanceFeature};
+use impact_model::{ModelInstanceManager, impl_InstanceFeature};
 use impact_physics::rigid_body::DynamicRigidBodyID;
 use mesh::MeshedChunkedVoxelObject;
 use roc_integration::roc;
@@ -501,8 +501,8 @@ impl VoxelConfig {
     }
 }
 
-pub fn register_voxel_feature_types<MID: Clone + Eq + Hash>(
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+pub fn register_voxel_feature_types<MID: Copy + Eq + Hash>(
+    model_instance_manager: &mut ModelInstanceManager<MID>,
 ) {
-    instance_feature_manager.register_feature_type::<VoxelObjectID>();
+    model_instance_manager.register_feature_type::<VoxelObjectID>();
 }

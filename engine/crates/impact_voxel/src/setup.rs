@@ -29,7 +29,7 @@ use impact_physics::{
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::SceneGraph, model::InstanceFeatureManager,
+    graph::SceneGraph, model::ModelInstanceManager,
 };
 use nalgebra::Vector3;
 use roc_integration::roc;
@@ -998,7 +998,7 @@ pub fn setup_voxel_gradient_noise_pattern_with_gradient_noise_voxel_types(
 
 pub fn create_model_instance_node_for_voxel_object(
     voxel_object_manager: &VoxelObjectManager,
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
     voxel_object_id: &VoxelObjectID,
     model_transform: Option<&ModelTransform>,
@@ -1022,7 +1022,7 @@ pub fn create_model_instance_node_for_voxel_object(
 
     let model_id = *VOXEL_MODEL_ID;
 
-    instance_feature_manager.register_instance(
+    model_instance_manager.register_instance(
         model_id,
         &[
             InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
@@ -1036,17 +1036,17 @@ pub fn create_model_instance_node_for_voxel_object(
 
     // Add entries for the model-to-camera and model-to-light transforms
     // for the scene graph to access and modify using the returned IDs
-    let model_view_transform_feature_id = instance_feature_manager
+    let model_view_transform_feature_id = model_instance_manager
         .get_storage_mut::<InstanceModelViewTransformWithPrevious>()
         .expect("Missing storage for InstanceModelViewTransform feature")
         .add_feature(&InstanceModelViewTransformWithPrevious::default());
 
-    let model_light_transform_feature_id = instance_feature_manager
+    let model_light_transform_feature_id = model_instance_manager
         .get_storage_mut::<InstanceModelLightTransform>()
         .expect("Missing storage for InstanceModelLightTransform feature")
         .add_feature(&InstanceModelLightTransform::default());
 
-    let voxel_object_id_feature_id = instance_feature_manager
+    let voxel_object_id_feature_id = model_instance_manager
         .get_storage_mut::<VoxelObjectID>()
         .expect("Missing storage for VoxelObjectID feature")
         .add_feature(voxel_object_id);

@@ -1,20 +1,28 @@
-//! Buffering of model instance data for rendering.
+//! GPU resources for model instance data.
 
 use crate::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeID,
     InstanceFeatureBufferRangeMap, InstanceFeatureTypeID,
 };
+use impact_containers::HashMap;
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
     wgpu,
 };
-use std::{borrow::Cow, ops::Range};
+use std::{borrow::Cow, hash::Hash, ops::Range};
 
-/// Owner and manager of a vertex GPU buffer for model instance
-/// features.
+/// Map of GPU buffers with per-instance data for each model.
 #[derive(Debug)]
-pub struct InstanceFeatureGPUBufferManager {
+pub struct ModelInstanceGPUBufferMap<MID> {
+    /// For each model ID, holds a set of GPU buffers with instance data, one
+    /// buffer for each type of instance data (feature).
+    pub(crate) buffers: HashMap<MID, Vec<InstanceFeatureGPUBuffer>>,
+}
+
+/// A vertex GPU buffer for model instance features.
+#[derive(Debug)]
+pub struct InstanceFeatureGPUBuffer {
     feature_gpu_buffer: GPUBuffer,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     feature_type_id: InstanceFeatureTypeID,
@@ -22,7 +30,60 @@ pub struct InstanceFeatureGPUBufferManager {
     range_map: InstanceFeatureBufferRangeMap,
 }
 
-impl InstanceFeatureGPUBufferManager {
+impl<MID: Eq + Hash> ModelInstanceGPUBufferMap<MID> {
+    pub fn new() -> Self {
+        Self {
+            buffers: HashMap::default(),
+        }
+    }
+
+    /// Whether GPU buffers exist for the given model.
+    pub fn contains(&self, model_id: &MID) -> bool {
+        self.buffers.contains_key(model_id)
+    }
+
+    /// Returns an iterator over all model IDs in the map.
+    pub fn model_ids(&self) -> impl Iterator<Item = &MID> {
+        self.buffers.keys()
+    }
+
+    /// Returns an iterator over all model IDs the map and their associated
+    /// buffers.
+    pub fn iter(&self) -> impl Iterator<Item = (&MID, &[InstanceFeatureGPUBuffer])> {
+        self.buffers
+            .iter()
+            .map(|(model_id, buffer)| (model_id, buffer.as_slice()))
+    }
+
+    /// Returns the GPU buffers for the given model identifier if the model
+    /// exists, otherwise returns [`None`].
+    pub fn get_model_buffers(&self, model_id: &MID) -> Option<&[InstanceFeatureGPUBuffer]> {
+        self.buffers
+            .get(model_id)
+            .map(|managers| managers.as_slice())
+    }
+
+    /// Returns the GPU buffer for features of type `Fe` for the given model if
+    /// it exists, otherwise returns [`None`].
+    pub fn get_model_buffer_for_feature_feature_type<Fe: InstanceFeature>(
+        &self,
+        model_id: &MID,
+    ) -> Option<&InstanceFeatureGPUBuffer> {
+        self.get_model_buffers(model_id).and_then(|buffers| {
+            buffers
+                .iter()
+                .find(|buffer| buffer.is_for_feature_type::<Fe>())
+        })
+    }
+}
+
+impl<MID: Eq + Hash> Default for ModelInstanceGPUBufferMap<MID> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InstanceFeatureGPUBuffer {
     /// Creates a new manager with a vertex GPU buffer initialized from the
     /// given model instance feature buffer. Returns [`None`] if the buffer's
     /// instance feature type does not require GPU buffers.

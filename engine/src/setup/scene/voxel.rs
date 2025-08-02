@@ -10,7 +10,7 @@ use impact_physics::{
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::SceneGraph, model::InstanceFeatureManager, setup::Uncullable,
+    graph::SceneGraph, model::ModelInstanceManager, setup::Uncullable,
 };
 use impact_voxel::{
     VoxelObjectID, VoxelObjectManager,
@@ -354,14 +354,14 @@ pub fn setup_voxel_objects_for_new_entities(
 
 pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
     voxel_object_manager: &RwLock<VoxelObjectManager>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager>,
+    model_instance_manager: &RwLock<ModelInstanceManager>,
     scene_graph: &RwLock<SceneGraph>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
         {
             let voxel_object_manager = voxel_object_manager.read();
-            let mut instance_feature_manager = instance_feature_manager.write();
+            let mut model_instance_manager = model_instance_manager.write();
             let mut scene_graph = scene_graph.write();
         },
         components,
@@ -377,7 +377,7 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
         )> {
             setup::create_model_instance_node_for_voxel_object(
                 &voxel_object_manager,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 &mut scene_graph,
                 voxel_object_id,
                 model_transform,

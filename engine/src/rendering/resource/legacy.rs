@@ -5,10 +5,8 @@ use impact_camera::buffer::CameraGPUBufferManager;
 use impact_containers::HashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
 use impact_light::{LightStorage, buffer::LightGPUBufferManager, shadow_map::ShadowMappingConfig};
-use impact_model::buffer::InstanceFeatureGPUBufferManager;
 use impact_scene::{
     camera::SceneCamera,
-    model::{InstanceFeatureManager, ModelID},
     skybox::{Skybox, resource::SkyboxGPUResourceManager},
 };
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
@@ -18,7 +16,7 @@ use impact_voxel::{
     voxel_types::VoxelTypeRegistry,
 };
 use parking_lot::Mutex;
-use std::{borrow::Cow, collections::hash_map::Entry, hash::Hash};
+use std::hash::Hash;
 
 /// Manager and owner of render resources representing world data.
 ///
@@ -51,7 +49,6 @@ pub struct SynchronizedRenderResources {
         VoxelObjectGPUBufferManagerMap,
     )>,
     light_buffer_manager: Box<Option<LightGPUBufferManager>>,
-    instance_feature_buffer_managers: Box<InstanceFeatureGPUBufferManagerMap>,
 }
 
 /// Wrapper for render resources that are assumed to be out of sync
@@ -68,11 +65,9 @@ pub struct DesynchronizedRenderResources {
         )>,
     >,
     pub light_buffer_manager: Mutex<Box<Option<LightGPUBufferManager>>>,
-    pub instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
 
 type VoxelObjectGPUBufferManagerMap = HashMap<VoxelObjectID, VoxelObjectGPUBufferManager>;
-type InstanceFeatureGPUBufferManagerMap = HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>>;
 
 impl RenderResourceManager {
     /// Creates a new render resource manager with resources that
@@ -161,10 +156,6 @@ impl SynchronizedRenderResources {
         self.skybox_resource_manager.as_ref().as_ref()
     }
 
-    pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureGPUBufferManagerMap {
-        self.instance_feature_buffer_managers.as_ref()
-    }
-
     pub fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager> {
         self.voxel_resource_managers.0.as_ref()
     }
@@ -181,7 +172,6 @@ impl DesynchronizedRenderResources {
             skybox_resource_manager: Mutex::new(Box::new(None)),
             voxel_resource_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
-            instance_feature_buffer_managers: Mutex::new(Box::default()),
         }
     }
 
@@ -191,14 +181,12 @@ impl DesynchronizedRenderResources {
             skybox_resource_manager,
             voxel_resource_managers,
             light_buffer_manager,
-            instance_feature_buffer_managers,
         } = render_resources;
         Self {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             skybox_resource_manager: Mutex::new(skybox_resource_manager),
             voxel_resource_managers: Mutex::new(voxel_resource_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
-            instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
         }
     }
 
@@ -208,14 +196,12 @@ impl DesynchronizedRenderResources {
             skybox_resource_manager,
             voxel_resource_managers,
             light_buffer_manager,
-            instance_feature_buffer_managers,
         } = self;
         SynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner(),
             skybox_resource_manager: skybox_resource_manager.into_inner(),
             voxel_resource_managers: voxel_resource_managers.into_inner(),
             light_buffer_manager: light_buffer_manager.into_inner(),
-            instance_feature_buffer_managers: instance_feature_buffer_managers.into_inner(),
         }
     }
 
@@ -360,45 +346,6 @@ impl DesynchronizedRenderResources {
                 shadow_mapping_config,
             ));
         }
-    }
-
-    /// Performs any required updates for keeping the given map of
-    /// model instance feature GPU buffers in sync with the data
-    /// of the given instance feature manager.
-    ///
-    /// GPU buffers whose source data no longer
-    /// exists will be removed, and missing GPU buffers
-    /// for new source data will be created.
-    pub fn sync_instance_feature_buffers_with_manager(
-        graphics_device: &GraphicsDevice,
-        feature_gpu_buffer_managers: &mut InstanceFeatureGPUBufferManagerMap,
-        instance_feature_manager: &mut InstanceFeatureManager,
-    ) {
-        for (model_id, model_instance_buffer) in
-            instance_feature_manager.model_ids_and_mutable_instance_buffers()
-        {
-            match feature_gpu_buffer_managers.entry(*model_id) {
-                Entry::Occupied(mut occupied_entry) => {
-                    let feature_gpu_buffer_managers = occupied_entry.get_mut();
-
-                    model_instance_buffer.copy_buffered_instance_features_to_gpu_buffers(
-                        graphics_device,
-                        feature_gpu_buffer_managers,
-                    );
-                }
-                Entry::Vacant(vacant_entry) => {
-                    let feature_gpu_buffer_managers = model_instance_buffer
-                        .copy_buffered_instance_features_to_new_gpu_buffers(
-                            graphics_device,
-                            Cow::Owned(model_id.to_string()),
-                        );
-
-                    vacant_entry.insert(feature_gpu_buffer_managers);
-                }
-            }
-        }
-        feature_gpu_buffer_managers
-            .retain(|model_id, _| instance_feature_manager.has_model_id(model_id));
     }
 
     /// Removes render resources whose source data is no longer present.

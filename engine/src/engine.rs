@@ -28,7 +28,7 @@ use impact_ecs::{
 };
 use impact_gpu::device::GraphicsDevice;
 use impact_physics::PhysicsConfig;
-use impact_scene::model::InstanceFeatureManager;
+use impact_scene::model::ModelInstanceManager;
 use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
@@ -121,13 +121,13 @@ impl Engine {
 
         gizmo::mesh::generate_gizmo_meshes(&mut resource_manager);
 
-        let mut instance_feature_manager = InstanceFeatureManager::new();
-        impact_model::register_model_feature_types(&mut instance_feature_manager);
-        impact_material::register_material_feature_types(&mut instance_feature_manager);
-        impact_voxel::register_voxel_feature_types(&mut instance_feature_manager);
-        gizmo::initialize_buffers_for_gizmo_models(&mut instance_feature_manager);
+        let mut model_instance_manager = ModelInstanceManager::new();
+        impact_model::register_model_feature_types(&mut model_instance_manager);
+        impact_material::register_material_feature_types(&mut model_instance_manager);
+        impact_voxel::register_voxel_feature_types(&mut model_instance_manager);
+        gizmo::initialize_buffers_for_gizmo_models(&mut model_instance_manager);
 
-        let scene = Scene::new(instance_feature_manager);
+        let scene = Scene::new(model_instance_manager);
 
         let graphics_device = Arc::new(graphics.device);
         let rendering_surface = graphics.surface;

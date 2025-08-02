@@ -29,7 +29,7 @@ use impact_rendering::{
     resource::{BasicGPUResources, BasicResourceRegistries},
     surface::RenderingSurface,
 };
-use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
+use impact_scene::{camera::SceneCamera, model::ModelInstanceManager};
 use impact_voxel::{
     render_commands::VoxelRenderCommands,
     resource::{VoxelGPUResources, VoxelResourceRegistries},
@@ -240,7 +240,7 @@ impl RenderCommandManager {
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
         light_storage: &LightStorage,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         scene_camera: Option<&SceneCamera>,
         resource_registries: &R,
         gpu_resources: &GR,
@@ -267,7 +267,7 @@ impl RenderCommandManager {
         if let Some(voxel_render_commands) = &self.voxel_render_commands {
             voxel_render_commands.record_before_geometry_pass(
                 scene_camera,
-                instance_feature_manager,
+                model_instance_manager,
                 gpu_resources,
                 timestamp_recorder,
                 command_encoder,
@@ -298,7 +298,7 @@ impl RenderCommandManager {
             if let Some(voxel_render_commands) = &self.voxel_render_commands {
                 voxel_render_commands.record_to_geometry_pass(
                     rendering_surface,
-                    instance_feature_manager,
+                    model_instance_manager,
                     gpu_resources,
                     postprocessor,
                     frame_counter,
@@ -323,7 +323,7 @@ impl RenderCommandManager {
                         .record_before_omnidirectional_light_shadow_cubemap_face_update(
                             positive_z_cubemap_face_frustum,
                             instance_range_id,
-                            instance_feature_manager,
+                            model_instance_manager,
                             gpu_resources,
                             timestamp_recorder,
                             command_encoder,
@@ -336,7 +336,7 @@ impl RenderCommandManager {
                 if self.voxel_render_commands.is_some() {
                     VoxelRenderCommands::record_shadow_map_update(
                         instance_range_id,
-                        instance_feature_manager,
+                        model_instance_manager,
                         gpu_resources,
                         render_pass,
                     )
@@ -358,7 +358,7 @@ impl RenderCommandManager {
                         .record_before_unidirectional_light_shadow_map_cascade_update(
                             cascade_frustum,
                             instance_range_id,
-                            instance_feature_manager,
+                            model_instance_manager,
                             gpu_resources,
                             timestamp_recorder,
                             command_encoder,
@@ -371,7 +371,7 @@ impl RenderCommandManager {
                 if self.voxel_render_commands.is_some() {
                     VoxelRenderCommands::record_shadow_map_update(
                         instance_range_id,
-                        instance_feature_manager,
+                        model_instance_manager,
                         gpu_resources,
                         render_pass,
                     )

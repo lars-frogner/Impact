@@ -39,7 +39,7 @@ use impact_rendering::{
     resource::BasicGPUResources,
     surface::RenderingSurface,
 };
-use impact_scene::{camera::SceneCamera, model::InstanceFeatureManager};
+use impact_scene::{camera::SceneCamera, model::ModelInstanceManager};
 use nalgebra::Similarity3;
 use std::borrow::Cow;
 
@@ -117,7 +117,7 @@ impl VoxelRenderCommands {
     pub fn record_before_geometry_pass<R>(
         &self,
         scene_camera: Option<&SceneCamera>,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -127,7 +127,7 @@ impl VoxelRenderCommands {
     {
         self.chunk_culling_pass.record_for_geometry_pass(
             scene_camera,
-            instance_feature_manager,
+            model_instance_manager,
             render_resources,
             timestamp_recorder,
             command_encoder,
@@ -137,7 +137,7 @@ impl VoxelRenderCommands {
     pub fn record_to_geometry_pass<R>(
         &self,
         rendering_surface: &RenderingSurface,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         postprocessor: &Postprocessor,
         frame_counter: u32,
@@ -148,7 +148,7 @@ impl VoxelRenderCommands {
     {
         self.geometry_pipeline.record(
             rendering_surface,
-            instance_feature_manager,
+            model_instance_manager,
             render_resources,
             postprocessor,
             frame_counter,
@@ -160,7 +160,7 @@ impl VoxelRenderCommands {
         &self,
         positive_z_cubemap_face_frustum: &Frustum<f32>,
         instance_range_id: u32,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -172,7 +172,7 @@ impl VoxelRenderCommands {
             .record_for_shadow_mapping_with_frustum(
                 positive_z_cubemap_face_frustum,
                 instance_range_id,
-                instance_feature_manager,
+                model_instance_manager,
                 render_resources,
                 timestamp_recorder,
                 command_encoder,
@@ -183,7 +183,7 @@ impl VoxelRenderCommands {
         &self,
         cascade_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -195,7 +195,7 @@ impl VoxelRenderCommands {
             .record_for_shadow_mapping_with_orthographic_frustum(
                 cascade_frustum,
                 instance_range_id,
-                instance_feature_manager,
+                model_instance_manager,
                 render_resources,
                 timestamp_recorder,
                 command_encoder,
@@ -204,7 +204,7 @@ impl VoxelRenderCommands {
 
     pub fn record_shadow_map_update<R>(
         instance_range_id: u32,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         gpu_resources: &R,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
@@ -218,7 +218,7 @@ impl VoxelRenderCommands {
             return Ok(());
         }
 
-        let voxel_object_instance_buffer = instance_feature_manager
+        let voxel_object_instance_buffer = model_instance_manager
             .get_model_instance_buffer(&VOXEL_MODEL_ID)
             .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
 
@@ -236,8 +236,9 @@ impl VoxelRenderCommands {
             return Ok(());
         }
 
-        let transform_gpu_buffer_manager = gpu_resources
-            .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(
+        let transform_gpu_buffer = gpu_resources
+            .model_instance_buffer()
+            .get_model_buffer_for_feature_feature_type::<InstanceModelLightTransform>(
                 &VOXEL_MODEL_ID,
             )
             .ok_or_else(|| anyhow!("Missing model-light transform GPU buffer for voxel objects"))?;
@@ -245,7 +246,7 @@ impl VoxelRenderCommands {
         // All draw calls share the same transform buffer
         render_pass.set_vertex_buffer(
             0,
-            transform_gpu_buffer_manager
+            transform_gpu_buffer
                 .vertex_gpu_buffer()
                 .valid_buffer_slice(),
         );
@@ -372,7 +373,7 @@ impl VoxelChunkCullingPass {
     fn record_for_geometry_pass<R>(
         &self,
         scene_camera: Option<&SceneCamera>,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -389,7 +390,7 @@ impl VoxelChunkCullingPass {
         let instance_range_id = InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
 
         self.record::<R, InstanceModelViewTransformWithPrevious>(
-            instance_feature_manager,
+            model_instance_manager,
             render_resources,
             timestamp_recorder,
             command_encoder,
@@ -407,7 +408,7 @@ impl VoxelChunkCullingPass {
         &self,
         frustum: &Frustum<f32>,
         instance_range_id: u32,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -416,7 +417,7 @@ impl VoxelChunkCullingPass {
         R: BasicGPUResources + VoxelGPUResources,
     {
         self.record::<R, InstanceModelLightTransform>(
-            instance_feature_manager,
+            model_instance_manager,
             render_resources,
             timestamp_recorder,
             command_encoder,
@@ -434,7 +435,7 @@ impl VoxelChunkCullingPass {
         &self,
         orthographic_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -443,7 +444,7 @@ impl VoxelChunkCullingPass {
         R: BasicGPUResources + VoxelGPUResources,
     {
         self.record::<R, InstanceModelLightTransform>(
-            instance_feature_manager,
+            model_instance_manager,
             render_resources,
             timestamp_recorder,
             command_encoder,
@@ -463,7 +464,7 @@ impl VoxelChunkCullingPass {
 
     fn record<R, F>(
         &self,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         render_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -483,7 +484,7 @@ impl VoxelChunkCullingPass {
             return Ok(());
         }
 
-        let voxel_object_instance_buffer = instance_feature_manager
+        let voxel_object_instance_buffer = model_instance_manager
             .get_model_instance_buffer(&VOXEL_MODEL_ID)
             .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
 
@@ -754,7 +755,7 @@ impl VoxelGeometryPipeline {
     pub fn record<R>(
         &self,
         rendering_surface: &RenderingSurface,
-        instance_feature_manager: &InstanceFeatureManager,
+        model_instance_manager: &ModelInstanceManager,
         gpu_resources: &R,
         postprocessor: &Postprocessor,
         frame_counter: u32,
@@ -770,7 +771,7 @@ impl VoxelGeometryPipeline {
             return Ok(());
         }
 
-        let voxel_object_instance_buffer = instance_feature_manager
+        let voxel_object_instance_buffer = model_instance_manager
             .get_model_instance_buffer(&VOXEL_MODEL_ID)
             .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
 
@@ -788,8 +789,9 @@ impl VoxelGeometryPipeline {
             return Ok(());
         }
 
-        let transform_gpu_buffer_manager = gpu_resources
-            .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransformWithPrevious>(
+        let transform_gpu_buffer = gpu_resources
+            .model_instance_buffer()
+            .get_model_buffer_for_feature_feature_type::<InstanceModelViewTransformWithPrevious>(
                 &VOXEL_MODEL_ID,
             )
             .ok_or_else(|| anyhow!("Missing model-view transform GPU buffer for voxel objects"))?;
@@ -815,7 +817,7 @@ impl VoxelGeometryPipeline {
         // All draw calls share the same transform buffer
         render_pass.set_vertex_buffer(
             0,
-            transform_gpu_buffer_manager
+            transform_gpu_buffer
                 .vertex_gpu_buffer()
                 .valid_buffer_slice(),
         );

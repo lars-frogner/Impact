@@ -14,7 +14,7 @@ pub struct GizmoModel {
     pub mesh_id: MeshID,
     /// The model ID used by this gizmo model. It is the key under which the
     /// model-view transforms to apply to the mesh during rendering are buffered
-    /// in the instance feature manager.
+    /// in the model instance manager.
     pub model_id: ModelID,
     /// The geometric primitive used for this gizmo model's mesh.
     pub mesh_primitive: MeshPrimitive,

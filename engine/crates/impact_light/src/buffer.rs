@@ -328,8 +328,8 @@ impl LightGPUBufferManager {
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data
-    /// in the given light storage. Will also recreate the bind group and update
-    /// the shader input if any of the GPU buffers had to be reallocated.
+    /// in the given light storage. Will also recreate the required bind groups
+    /// if any of the GPU buffers had to be reallocated.
     pub fn sync_with_light_storage(
         &mut self,
         graphics_device: &GraphicsDevice,

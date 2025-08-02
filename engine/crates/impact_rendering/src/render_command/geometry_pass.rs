@@ -121,17 +121,17 @@ impl GeometryPass {
         gpu_resources: &impl BasicGPUResources,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<()> {
-        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
+        let model_instance_buffers = gpu_resources.model_instance_buffer();
 
         for pipeline in self.model_pipelines.values_mut() {
             pipeline
                 .models
-                .retain(|model_id| instance_feature_buffer_managers.contains_key(model_id));
+                .retain(|model_id| model_instance_buffers.contains(model_id));
         }
 
-        let added_models: Vec<_> = instance_feature_buffer_managers
+        let added_models: Vec<_> = model_instance_buffers
             .iter()
-            .filter_map(|(model_id, instance_feature_buffer_manager)| {
+            .filter_map(|(model_id, instance_feature_buffers)| {
                 for pipeline in self.model_pipelines.values() {
                     if pipeline.models.contains(model_id) {
                         return None;
@@ -140,7 +140,7 @@ impl GeometryPass {
                 // We only add a pipeline for the model if it actually has
                 // buffered transforms, otherwise it will not be rendered
                 // anyway
-                if instance_feature_buffer_manager
+                if instance_feature_buffers
                     .iter()
                     .find(|buffer| {
                         buffer.is_for_feature_type::<InstanceModelViewTransformWithPrevious>()
@@ -295,8 +295,9 @@ impl GeometryPass {
     ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
         let mut layouts = Vec::with_capacity(8);
 
-        let instance_feature_buffer_managers = gpu_resources
-            .get_instance_feature_buffer_managers(model_id)
+        let instance_feature_buffers = gpu_resources
+            .model_instance_buffer()
+            .get_model_buffers(model_id)
             .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
 
         layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap());
@@ -309,15 +310,11 @@ impl GeometryPass {
             .and_then(Material::instance_feature_id_if_applicable)
             .is_some()
         {
-            let material_property_buffer_manager = instance_feature_buffer_managers
+            let material_property_buffer = instance_feature_buffers
                 .get(2)
                 .ok_or_else(|| anyhow!("Missing material GPU buffer for model {}", model_id))?;
 
-            layouts.push(
-                material_property_buffer_manager
-                    .vertex_buffer_layout()
-                    .clone(),
-            );
+            layouts.push(material_property_buffer.vertex_buffer_layout().clone());
         }
 
         let mesh_id = model_id.triangle_mesh_id();
@@ -475,13 +472,14 @@ impl GeometryPass {
             );
 
             for model_id in &pipeline.models {
-                let instance_feature_buffer_managers = gpu_resources
-                    .get_instance_feature_buffer_managers(model_id)
+                let instance_feature_buffers = gpu_resources
+                    .model_instance_buffer()
+                    .get_model_buffers(model_id)
                     .ok_or_else(|| {
                         anyhow!("Missing instance GPU buffers for model {}", model_id)
                     })?;
 
-                let transform_buffer_manager = instance_feature_buffer_managers
+                let transform_buffer = instance_feature_buffers
                     .iter()
                     .find(|buffer| {
                         buffer.is_for_feature_type::<InstanceModelViewTransformWithPrevious>()
@@ -493,7 +491,7 @@ impl GeometryPass {
                         )
                     })?;
 
-                let instance_range = transform_buffer_manager.initial_feature_range();
+                let instance_range = transform_buffer.initial_feature_range();
 
                 if instance_range.is_empty() {
                     continue;
@@ -514,9 +512,7 @@ impl GeometryPass {
 
                 render_pass.set_vertex_buffer(
                     0,
-                    transform_buffer_manager
-                        .vertex_gpu_buffer()
-                        .valid_buffer_slice(),
+                    transform_buffer.vertex_gpu_buffer().valid_buffer_slice(),
                 );
 
                 let mut vertex_buffer_slot = 1;
@@ -524,7 +520,7 @@ impl GeometryPass {
                 if let Some(material_property_feature_id) =
                     material.and_then(Material::instance_feature_id_if_applicable)
                 {
-                    let material_property_buffer_manager = instance_feature_buffer_managers
+                    let material_property_buffer = instance_feature_buffers
                         .iter()
                         .find(|buffer| {
                             buffer.is_for_feature_type_with_id(
@@ -537,7 +533,7 @@ impl GeometryPass {
 
                     render_pass.set_vertex_buffer(
                         vertex_buffer_slot,
-                        material_property_buffer_manager
+                        material_property_buffer
                             .vertex_gpu_buffer()
                             .valid_buffer_slice(),
                     );

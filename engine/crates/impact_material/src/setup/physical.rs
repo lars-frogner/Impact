@@ -11,7 +11,7 @@ use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
-use impact_model::InstanceFeatureManager;
+use impact_model::ModelInstanceManager;
 use impact_texture::{SamplerRegistry, TextureID, TextureRegistry};
 use nalgebra::{Vector2, vector};
 use roc_integration::roc;
@@ -572,13 +572,13 @@ impl Default for EmissiveLuminance {
     }
 }
 
-pub fn setup_physical_material_from_optional_parts<MID: Clone + Eq + Hash>(
+pub fn setup_physical_material_from_optional_parts<MID: Copy + Eq + Hash>(
     texture_registry: &TextureRegistry,
     sampler_registry: &SamplerRegistry,
     material_registry: &mut MaterialRegistry,
     material_template_registry: &mut MaterialTemplateRegistry,
     material_texture_group_registry: &mut MaterialTextureGroupRegistry,
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    model_instance_manager: &mut ModelInstanceManager<MID>,
     uniform_color: Option<&UniformColor>,
     textured_color: Option<&TexturedColor>,
     uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
@@ -614,20 +614,20 @@ pub fn setup_physical_material_from_optional_parts<MID: Clone + Eq + Hash>(
         material_registry,
         material_template_registry,
         material_texture_group_registry,
-        instance_feature_manager,
+        model_instance_manager,
         properties,
         material_id,
         desynchronized,
     )
 }
 
-pub fn setup_physical_material<MID: Clone + Eq + Hash>(
+pub fn setup_physical_material<MID: Copy + Eq + Hash>(
     texture_registry: &TextureRegistry,
     sampler_registry: &SamplerRegistry,
     material_registry: &mut MaterialRegistry,
     material_template_registry: &mut MaterialTemplateRegistry,
     material_texture_group_registry: &mut MaterialTextureGroupRegistry,
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    model_instance_manager: &mut ModelInstanceManager<MID>,
     properties: PhysicalMaterialProperties,
     material_id: Option<MaterialID>,
     desynchronized: &mut bool,
@@ -816,7 +816,7 @@ pub fn setup_physical_material<MID: Clone + Eq + Hash>(
     }
 
     let (instance_feature_id, instance_feature_flags) = create_physical_material_feature(
-        instance_feature_manager,
+        model_instance_manager,
         uniform_color.as_ref(),
         specular_reflectance_value,
         roughness_value,

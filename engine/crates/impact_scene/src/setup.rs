@@ -4,7 +4,7 @@ use crate::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
     graph::SceneGraph,
-    model::{InstanceFeatureManager, ModelID},
+    model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
 use impact_material::{MaterialID, MaterialRegistry};
@@ -93,7 +93,7 @@ pub fn setup_scene_graph_group_node(
 pub fn setup_scene_graph_model_instance_node(
     mesh_registry: &TriangleMeshRegistry,
     material_registry: &MaterialRegistry,
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
     model_to_parent_transform: Similarity3<f32>,
     mesh_id: TriangleMeshID,
@@ -129,7 +129,7 @@ pub fn setup_scene_graph_model_instance_node(
 
     // Add entries for the model-to-camera and model-to-light transforms
     // for the scene graph to access and modify using the returned IDs
-    let model_view_transform_feature_id = instance_feature_manager
+    let model_view_transform_feature_id = model_instance_manager
         .get_storage_mut::<InstanceModelViewTransformWithPrevious>()
         .expect("Missing storage for InstanceModelViewTransformWithPrevious feature")
         .add_feature(&InstanceModelViewTransformWithPrevious::default());
@@ -138,7 +138,7 @@ pub fn setup_scene_graph_model_instance_node(
     feature_type_ids.push(model_view_transform_feature_id.feature_type_id());
     feature_ids_for_rendering.push(model_view_transform_feature_id);
 
-    let model_light_transform_feature_id = instance_feature_manager
+    let model_light_transform_feature_id = model_instance_manager
         .get_storage_mut::<InstanceModelLightTransform>()
         .expect("Missing storage for InstanceModelLightTransform feature")
         .add_feature(&InstanceModelLightTransform::default());
@@ -155,7 +155,7 @@ pub fn setup_scene_graph_model_instance_node(
         feature_ids_for_rendering.push(material_feature_id);
     }
 
-    instance_feature_manager.register_instance(model_id, &feature_type_ids);
+    model_instance_manager.register_instance(model_id, &feature_type_ids);
 
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
@@ -174,7 +174,7 @@ pub fn setup_scene_graph_model_instance_node(
 }
 
 pub fn remove_scene_graph_model_instance_node(
-    instance_feature_manager: &RwLock<InstanceFeatureManager>,
+    model_instance_manager: &RwLock<ModelInstanceManager>,
     scene_graph: &RwLock<SceneGraph>,
     model_instance_node: &SceneGraphModelInstanceNodeHandle,
     desynchronized: &mut bool,
@@ -182,7 +182,7 @@ pub fn remove_scene_graph_model_instance_node(
     let model_id = scene_graph
         .write()
         .remove_model_instance_node(model_instance_node.id);
-    instance_feature_manager
+    model_instance_manager
         .write()
         .unregister_instance(&model_id);
     *desynchronized = true;
@@ -190,14 +190,14 @@ pub fn remove_scene_graph_model_instance_node(
 
 #[cfg(feature = "ecs")]
 pub fn remove_scene_graph_model_instance_node_for_entity(
-    instance_feature_manager: &RwLock<InstanceFeatureManager>,
+    model_instance_manager: &RwLock<ModelInstanceManager>,
     scene_graph: &RwLock<SceneGraph>,
     entity: &impact_ecs::world::EntityEntry<'_>,
     desynchronized: &mut bool,
 ) {
     if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeHandle>() {
         remove_scene_graph_model_instance_node(
-            instance_feature_manager,
+            model_instance_manager,
             scene_graph,
             node.access(),
             desynchronized,

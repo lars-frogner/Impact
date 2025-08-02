@@ -47,7 +47,7 @@ pub fn setup_scene_data_for_new_entities(
 
     material::setup_materials_for_new_entities(
         resource_manager,
-        scene.instance_feature_manager(),
+        scene.model_instance_manager(),
         components,
         desynchronized,
     )?;
@@ -90,7 +90,7 @@ pub fn add_new_entities_to_scene_graph(
 
     voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
         scene.voxel_object_manager(),
-        scene.instance_feature_manager(),
+        scene.model_instance_manager(),
         scene.scene_graph(),
         components,
     )?;
@@ -180,7 +180,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut instance_feature_manager = scene.instance_feature_manager().write();
+            let mut model_instance_manager = scene.model_instance_manager().write();
             let mut scene_graph = scene.scene_graph().write();
         },
         components,
@@ -206,7 +206,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             let (node_handle, flags) = impact_scene::setup::setup_scene_graph_model_instance_node(
                 &resource_manager.triangle_meshes,
                 &resource_manager.materials,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 &mut scene_graph,
                 model_to_parent_transform,
                 *mesh_id,
@@ -228,7 +228,7 @@ fn remove_scene_graph_model_instance_node_for_entity(
     desynchronized: &mut bool,
 ) {
     impact_scene::setup::remove_scene_graph_model_instance_node_for_entity(
-        scene.instance_feature_manager(),
+        scene.model_instance_manager(),
         scene.scene_graph(),
         entity,
         desynchronized,

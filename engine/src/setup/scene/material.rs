@@ -15,7 +15,7 @@ use impact_material::{
         },
     },
 };
-use impact_model::InstanceFeatureManager;
+use impact_model::ModelInstanceManager;
 use parking_lot::RwLock;
 use std::hash::Hash;
 
@@ -23,24 +23,24 @@ use std::hash::Hash;
 /// for a material, and if so, adds the material specifications to the material
 /// library if not already present, adds the appropriate material property
 /// texture sets to the material library if not already present, registers the
-/// materials in the instance feature manager and adds the appropriate material
+/// materials in the model instance manager and adds the appropriate material
 /// components to the entities.
-pub fn setup_materials_for_new_entities<MID: Clone + Eq + Hash>(
+pub fn setup_materials_for_new_entities<MID: Copy + Eq + Hash>(
     resource_manager: &RwLock<ResourceManager>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
+    model_instance_manager: &RwLock<ModelInstanceManager<MID>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
     setup_fixed_materials_for_new_entities(
         resource_manager,
-        instance_feature_manager,
+        model_instance_manager,
         components,
         desynchronized,
     )?;
 
     setup_physical_materials_for_new_entities(
         resource_manager,
-        instance_feature_manager,
+        model_instance_manager,
         components,
         desynchronized,
     )?;
@@ -48,16 +48,16 @@ pub fn setup_materials_for_new_entities<MID: Clone + Eq + Hash>(
     Ok(())
 }
 
-fn setup_fixed_materials_for_new_entities<MID: Clone + Eq + Hash>(
+fn setup_fixed_materials_for_new_entities<MID: Copy + Eq + Hash>(
     resource_manager: &RwLock<ResourceManager>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
+    model_instance_manager: &RwLock<ModelInstanceManager<MID>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
     setup!(
         {
             let mut resource_manager = resource_manager.write();
-            let mut instance_feature_manager = instance_feature_manager.write();
+            let mut model_instance_manager = model_instance_manager.write();
         },
         components,
         |fixed_color: &FixedColor| -> Result<MaterialID> {
@@ -68,7 +68,7 @@ fn setup_fixed_materials_for_new_entities<MID: Clone + Eq + Hash>(
                 &mut resource_manager.materials,
                 &mut resource_manager.material_templates,
                 &mut resource_manager.material_texture_groups,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 FixedMaterialProperties {
                     color: Color::Uniform(*fixed_color),
                 },
@@ -81,7 +81,7 @@ fn setup_fixed_materials_for_new_entities<MID: Clone + Eq + Hash>(
     setup!(
         {
             let mut resource_manager = resource_manager.write();
-            let mut instance_feature_manager = instance_feature_manager.write();
+            let mut model_instance_manager = model_instance_manager.write();
         },
         components,
         |fixed_texture: &FixedTexture| -> Result<MaterialID> {
@@ -92,7 +92,7 @@ fn setup_fixed_materials_for_new_entities<MID: Clone + Eq + Hash>(
                 &mut resource_manager.materials,
                 &mut resource_manager.material_templates,
                 &mut resource_manager.material_texture_groups,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 FixedMaterialProperties {
                     color: Color::Textured(*fixed_texture),
                 },
@@ -104,16 +104,16 @@ fn setup_fixed_materials_for_new_entities<MID: Clone + Eq + Hash>(
     )
 }
 
-fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
+fn setup_physical_materials_for_new_entities<MID: Copy + Eq + Hash>(
     resource_manager: &RwLock<ResourceManager>,
-    instance_feature_manager: &RwLock<InstanceFeatureManager<MID>>,
+    model_instance_manager: &RwLock<ModelInstanceManager<MID>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) -> Result<()> {
     setup!(
         {
             let mut resource_manager = resource_manager.write();
-            let mut instance_feature_manager = instance_feature_manager.write();
+            let mut model_instance_manager = model_instance_manager.write();
         },
         components,
         |uniform_color: &UniformColor,
@@ -135,7 +135,7 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
                 &mut resource_manager.materials,
                 &mut resource_manager.material_templates,
                 &mut resource_manager.material_texture_groups,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 Some(uniform_color),
                 None,
                 uniform_specular_reflectance,
@@ -158,7 +158,7 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
     setup!(
         {
             let mut resource_manager = resource_manager.write();
-            let mut instance_feature_manager = instance_feature_manager.write();
+            let mut model_instance_manager = model_instance_manager.write();
         },
         components,
         |textured_color: &TexturedColor,
@@ -180,7 +180,7 @@ fn setup_physical_materials_for_new_entities<MID: Clone + Eq + Hash>(
                 &mut resource_manager.materials,
                 &mut resource_manager.material_templates,
                 &mut resource_manager.material_texture_groups,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 None,
                 Some(textured_color),
                 uniform_specular_reflectance,

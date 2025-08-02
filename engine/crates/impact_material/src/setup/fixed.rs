@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
-use impact_model::{InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID};
+use impact_model::{InstanceFeatureID, InstanceFeatureTypeID, ModelInstanceManager};
 use impact_texture::{SamplerRegistry, TextureID, TextureRegistry};
 use roc_integration::roc;
 use std::hash::Hash;
@@ -58,13 +58,13 @@ pub struct FixedMaterialTextureBindingLocations {
     pub color_texture_and_sampler_bindings: Option<(u32, u32)>,
 }
 
-pub fn setup_fixed_material<MID: Clone + Eq + Hash>(
+pub fn setup_fixed_material<MID: Copy + Eq + Hash>(
     texture_registry: &TextureRegistry,
     sampler_registry: &SamplerRegistry,
     material_registry: &mut MaterialRegistry,
     material_template_registry: &mut MaterialTemplateRegistry,
     material_texture_group_registry: &mut MaterialTextureGroupRegistry,
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    model_instance_manager: &mut ModelInstanceManager<MID>,
     properties: FixedMaterialProperties,
     material_id: Option<MaterialID>,
     desynchronized: &mut bool,
@@ -77,7 +77,7 @@ pub fn setup_fixed_material<MID: Clone + Eq + Hash>(
 
     match properties.color {
         Color::Uniform(FixedColor(color)) => {
-            let instance_feature_id = instance_feature_manager
+            let instance_feature_id = model_instance_manager
                 .get_storage_mut::<FixedColorMaterialFeature>()
                 .expect("Missing storage for FixedColorMaterialFeature features")
                 .add_feature(&FixedColorMaterialFeature::new(color));

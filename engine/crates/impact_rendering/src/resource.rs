@@ -1,7 +1,6 @@
 //! Synchronization of GPU buffers with geometrical data.
 
 use impact_camera::buffer::CameraGPUBufferManager;
-use impact_containers::HashMap;
 use impact_light::buffer::LightGPUBufferManager;
 use impact_material::{
     MaterialRegistry, MaterialTemplateRegistry, MaterialTextureGroupRegistry,
@@ -11,8 +10,7 @@ use impact_mesh::{
     LineSegmentMeshRegistry, TriangleMeshRegistry,
     gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap},
 };
-use impact_model::{InstanceFeature, buffer::InstanceFeatureGPUBufferManager};
-use impact_scene::{model::ModelID, skybox::resource::SkyboxGPUResourceManager};
+use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::resource::SkyboxGPUResourceManager};
 use impact_texture::{
     SamplerRegistry, TextureRegistry,
     gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap},
@@ -71,33 +69,6 @@ pub trait BasicGPUResources {
     /// Returns the map of material texture bind groups.
     fn material_texture_bind_group(&self) -> &MaterialTextureBindGroupMap;
 
-    /// Returns a reference to the map of instance feature GPU buffer managers.
-    fn instance_feature_buffer_managers(
-        &self,
-    ) -> &HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>>;
-
-    /// Returns the instance feature GPU buffer managers for the given model
-    /// identifier if the model exists, otherwise returns [`None`].
-    fn get_instance_feature_buffer_managers(
-        &self,
-        model_id: &ModelID,
-    ) -> Option<&[InstanceFeatureGPUBufferManager]> {
-        self.instance_feature_buffer_managers()
-            .get(model_id)
-            .map(|managers| managers.as_slice())
-    }
-
-    /// Returns the instance feature GPU buffer manager for features of type
-    /// `Fe` for the given model if it exists, otherwise returns [`None`].
-    fn get_instance_feature_buffer_manager_for_feature_type<Fe: InstanceFeature>(
-        &self,
-        model_id: &ModelID,
-    ) -> Option<&InstanceFeatureGPUBufferManager> {
-        self.get_instance_feature_buffer_managers(model_id)
-            .and_then(|buffers| {
-                buffers
-                    .iter()
-                    .find(|buffer| buffer.is_for_feature_type::<Fe>())
-            })
-    }
+    /// Returns the map of model instance GPU buffers.
+    fn model_instance_buffer(&self) -> &ModelInstanceGPUBufferMap;
 }

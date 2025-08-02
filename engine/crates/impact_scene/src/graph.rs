@@ -3,7 +3,7 @@
 use crate::{
     SceneEntityFlags,
     camera::SceneCamera,
-    model::{InstanceFeatureManager, ModelID},
+    model::{ModelID, ModelInstanceManager},
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -449,7 +449,7 @@ impl SceneGraph {
 
     /// Computes the model-to-camera space transforms of all the model instances
     /// in the scene graph that are visible with the specified camera and adds
-    /// them to the given instance feature manager.
+    /// them to the given model instance manager.
     ///
     /// # Warning
     /// Make sure to [`Self::update_all_bounding_spheres`] and
@@ -457,7 +457,7 @@ impl SceneGraph {
     /// changed.
     pub fn buffer_model_instances_for_rendering(
         &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
         current_frame_count: u32,
     ) where
@@ -487,7 +487,7 @@ impl SceneGraph {
 
             if should_buffer {
                 self.buffer_model_instances_in_group_for_rendering(
-                    instance_feature_manager,
+                    model_instance_manager,
                     current_frame_count,
                     camera_space_view_frustum,
                     group_node,
@@ -524,7 +524,7 @@ impl SceneGraph {
 
             if should_buffer {
                 Self::buffer_model_instance_for_rendering(
-                    instance_feature_manager,
+                    model_instance_manager,
                     current_frame_count,
                     model_instance_node,
                     &model_view_transform,
@@ -633,13 +633,13 @@ impl SceneGraph {
     /// group-to-camera transform is prepended to the transforms of the
     /// children. For the children that are model instance nodes, their final
     /// model-to-camera transforms along with other relevant features needed for
-    /// rendering are added to the given instance feature manager.
+    /// rendering are added to the given model instance manager.
     ///
     /// # Panics
     /// If any of the child nodes of the group node does not exist.
     fn buffer_model_instances_in_group_for_rendering(
         &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         current_frame_count: u32,
         camera_space_view_frustum: &Frustum<f32>,
         group_node: &GroupNode,
@@ -667,7 +667,7 @@ impl SceneGraph {
 
             if should_buffer {
                 self.buffer_model_instances_in_group_for_rendering(
-                    instance_feature_manager,
+                    model_instance_manager,
                     current_frame_count,
                     camera_space_view_frustum,
                     child_group_node,
@@ -708,7 +708,7 @@ impl SceneGraph {
 
             if should_buffer {
                 Self::buffer_model_instance_for_rendering(
-                    instance_feature_manager,
+                    model_instance_manager,
                     current_frame_count,
                     child_model_instance_node,
                     &child_model_view_transform,
@@ -718,7 +718,7 @@ impl SceneGraph {
     }
 
     fn buffer_model_instance_for_rendering(
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         current_frame_count: u32,
         model_instance_node: &ModelInstanceNode,
         model_view_transform: &Similarity3<f32>,
@@ -728,13 +728,13 @@ impl SceneGraph {
         let instance_model_view_transform =
             InstanceModelViewTransform::from(model_view_transform.cast());
 
-        instance_feature_manager
+        model_instance_manager
             .feature_mut::<InstanceModelViewTransformWithPrevious>(
                 model_instance_node.model_view_transform_feature_id(),
             )
             .set_transform_for_new_frame(instance_model_view_transform);
 
-        instance_feature_manager.buffer_instance_features_from_storages(
+        model_instance_manager.buffer_instance_features_from_storages(
             model_instance_node.model_id(),
             model_instance_node.feature_ids_for_rendering(),
         );
@@ -759,7 +759,7 @@ impl SceneGraph {
     pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
         &self,
         light_storage: &mut LightStorage,
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
         shadow_mapping_enabled: bool,
     ) {
@@ -804,7 +804,7 @@ impl SceneGraph {
                     let range_id =
                         crate::light::light_id_to_instance_feature_buffer_range_id(light_id)
                             + face.as_idx_u32();
-                    instance_feature_manager.begin_range_in_feature_buffers(
+                    model_instance_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
                     );
@@ -817,7 +817,7 @@ impl SceneGraph {
                         // `InstanceModelLightTransform` feature, which is the
                         // first ID in the list
                         if feature_type_ids.len() > 1 {
-                            instance_feature_manager.begin_ranges_in_feature_buffers_for_model(
+                            model_instance_manager.begin_ranges_in_feature_buffers_for_model(
                                 model_id,
                                 &feature_type_ids[1..],
                                 range_id,
@@ -833,7 +833,7 @@ impl SceneGraph {
                         &camera_space_face_frustum,
                     ) {
                         self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
-                            instance_feature_manager,
+                            model_instance_manager,
                             omnidirectional_light,
                             face,
                             &camera_space_face_frustum,
@@ -848,7 +848,7 @@ impl SceneGraph {
 
     fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
         &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         omnidirectional_light: &ShadowableOmnidirectionalLight,
         face: CubemapFace,
         camera_space_face_frustum: &Frustum<f32>,
@@ -870,7 +870,7 @@ impl SceneGraph {
                     .could_contain_part_of_sphere(&child_camera_space_bounding_sphere)
                 {
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
-                            instance_feature_manager,
+                            model_instance_manager,
                             omnidirectional_light,
                             face,
                             camera_space_face_frustum,
@@ -915,7 +915,7 @@ impl SceneGraph {
                     );
 
                     Self::buffer_model_instance_for_shadow_mapping(
-                        instance_feature_manager,
+                        model_instance_manager,
                         model_instance_node,
                         &instance_model_light_transform,
                     );
@@ -940,7 +940,7 @@ impl SceneGraph {
     pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
         &self,
         light_storage: &mut LightStorage,
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
         shadow_mapping_enabled: bool,
     ) {
@@ -986,7 +986,7 @@ impl SceneGraph {
                     let range_id =
                         crate::light::light_id_to_instance_feature_buffer_range_id(light_id)
                             + cascade_idx;
-                    instance_feature_manager.begin_range_in_feature_buffers(
+                    model_instance_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
                     );
@@ -999,7 +999,7 @@ impl SceneGraph {
                         // `InstanceModelLightTransform` feature, which is the
                         // first ID in the list
                         if feature_type_ids.len() > 1 {
-                            instance_feature_manager.begin_ranges_in_feature_buffers_for_model(
+                            model_instance_manager.begin_ranges_in_feature_buffers_for_model(
                                 model_id,
                                 &feature_type_ids[1..],
                                 range_id,
@@ -1008,7 +1008,7 @@ impl SceneGraph {
                     }
 
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
-                        instance_feature_manager,
+                        model_instance_manager,
                         unidirectional_light,
                         cascade_idx,
                         root_node,
@@ -1021,7 +1021,7 @@ impl SceneGraph {
 
     fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
         &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         unidirectional_light: &ShadowableUnidirectionalLight,
         cascade_idx: CascadeIdx,
         group_node: &GroupNode,
@@ -1043,7 +1043,7 @@ impl SceneGraph {
                     &child_camera_space_bounding_sphere,
                 ) {
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
-                        instance_feature_manager,
+                        model_instance_manager,
                         unidirectional_light,
                         cascade_idx,
                         child_group_node,
@@ -1086,7 +1086,7 @@ impl SceneGraph {
                     );
 
                     Self::buffer_model_instance_for_shadow_mapping(
-                        instance_feature_manager,
+                        model_instance_manager,
                         model_instance_node,
                         &instance_model_light_transform,
                     );
@@ -1096,13 +1096,13 @@ impl SceneGraph {
     }
 
     fn buffer_model_instance_for_shadow_mapping(
-        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_manager: &mut ModelInstanceManager,
         model_instance_node: &ModelInstanceNode,
         instance_model_light_transform: &InstanceModelLightTransform,
     ) where
         InstanceModelLightTransform: InstanceFeature,
     {
-        instance_feature_manager.buffer_instance_feature(
+        model_instance_manager.buffer_instance_feature(
             model_instance_node.model_id(),
             instance_model_light_transform,
         );
@@ -1110,7 +1110,7 @@ impl SceneGraph {
         let feature_ids_for_shadow_mapping = model_instance_node.feature_ids_for_shadow_mapping();
 
         if feature_ids_for_shadow_mapping.len() > 1 {
-            instance_feature_manager.buffer_instance_features_from_storages(
+            model_instance_manager.buffer_instance_features_from_storages(
                 model_instance_node.model_id(),
                 &feature_ids_for_shadow_mapping[1..],
             );

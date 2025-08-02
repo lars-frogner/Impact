@@ -123,12 +123,12 @@ impl DepthPrepass {
         resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) {
-        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
+        let model_instance_buffers = gpu_resources.model_instance_buffer();
 
         self.models
-            .retain(|model_id| instance_feature_buffer_managers.contains_key(model_id));
+            .retain(|model_id| model_instance_buffers.contains(model_id));
 
-        for model_id in instance_feature_buffer_managers.keys() {
+        for model_id in model_instance_buffers.model_ids() {
             if self.models.contains(model_id) {
                 continue;
             }
@@ -226,8 +226,8 @@ impl DepthPrepass {
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
         for model_id in &self.models {
-            let transform_buffer_manager = gpu_resources
-                .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransformWithPrevious>(model_id)
+            let transform_buffer = gpu_resources.model_instance_buffer()
+                .get_model_buffer_for_feature_feature_type::<InstanceModelViewTransformWithPrevious>(model_id)
                 .ok_or_else(|| {
                     anyhow!(
                         "Missing model-view transform GPU buffer for model {}",
@@ -235,18 +235,14 @@ impl DepthPrepass {
                     )
                 })?;
 
-            let transform_range = transform_buffer_manager.initial_feature_range();
+            let transform_range = transform_buffer.initial_feature_range();
 
             if transform_range.is_empty() {
                 continue;
             }
 
-            render_pass.set_vertex_buffer(
-                0,
-                transform_buffer_manager
-                    .vertex_gpu_buffer()
-                    .valid_buffer_slice(),
-            );
+            render_pass
+                .set_vertex_buffer(0, transform_buffer.vertex_gpu_buffer().valid_buffer_slice());
 
             let mesh_id = model_id.triangle_mesh_id();
 

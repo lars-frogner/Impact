@@ -54,7 +54,7 @@ define_task!(
 
 define_task!(
     /// Clears any previously buffered instance features in the
-    /// [`InstanceFeatureManager`](crate::model::InstanceFeatureManager).
+    /// [`ModelInstanceManager`](crate::model::ModelInstanceManager).
     [pub] ClearModelInstanceBuffers,
     depends_on = [],
     execute_on = [RenderingTag],
@@ -62,7 +62,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Clearing model instance buffers", engine, {
             let scene = engine.scene().read();
-            scene.instance_feature_manager().write().clear_buffer_contents();
+            scene.model_instance_manager().write().clear_buffer_contents();
             Ok(())
         })
     }
@@ -212,7 +212,7 @@ define_task!(
                 scene.scene_graph()
                     .read()
                     .buffer_model_instances_for_rendering(
-                        &mut scene.instance_feature_manager().write(),
+                        &mut scene.model_instance_manager().write(),
                         scene_camera,
                         renderer.current_frame_count(),
                     );
@@ -424,7 +424,7 @@ define_task!(
             let rigid_body_manager = simulator.rigid_body_manager().read();
             let collision_world = simulator.collision_world().read();
             let scene = engine.scene().read();
-            let mut instance_feature_manager = scene.instance_feature_manager().write();
+            let mut model_instance_manager = scene.model_instance_manager().write();
             let voxel_object_manager = scene.voxel_object_manager().read();
             let scene_graph = scene.scene_graph().read();
             let light_storage = scene.light_storage().read();
@@ -433,7 +433,7 @@ define_task!(
             gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
                 &rigid_body_manager,
-                &mut instance_feature_manager,
+                &mut model_instance_manager,
                 &gizmo_manager,
                 &collision_world,
                 &voxel_object_manager,
@@ -477,7 +477,7 @@ define_task!(
                     .read()
                     .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut scene.light_storage().write(),
-                        &mut scene.instance_feature_manager().write(),
+                        &mut scene.model_instance_manager().write(),
                         scene_camera,
                         shadow_mapping_enabled,
                     );
@@ -518,7 +518,7 @@ define_task!(
                     .read()
                     .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut scene.light_storage().write(),
-                        &mut scene.instance_feature_manager().write(),
+                        &mut scene.model_instance_manager().write(),
                         scene_camera,
                         shadow_mapping_enabled,
                     );
@@ -656,29 +656,27 @@ define_task!(
             let renderer = engine.renderer().read();
             let scene = engine.scene().read();
             let render_resource_manager = &renderer.render_resource_manager().read();
-            if render_resource_manager.legacy.is_desynchronized() {
-                DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
-                    renderer.graphics_device(),
-                    renderer.bind_group_layout_registry(),
-                    render_resource_manager.legacy
-                        .desynchronized()
-                        .camera_buffer_manager
-                        .lock()
-                        .as_mut(),
-                    scene.scene_camera().read().as_ref(),
-                );
-                DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
-                    renderer.graphics_device(),
-                    &render_resource_manager.textures,
-                    &render_resource_manager.samplers,
-                    render_resource_manager.legacy
-                        .desynchronized()
-                        .skybox_resource_manager
-                        .lock()
-                        .as_mut(),
-                    scene.skybox().read().as_ref(),
-                )?;
-            }
+            DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
+                renderer.graphics_device(),
+                renderer.bind_group_layout_registry(),
+                render_resource_manager.legacy
+                    .desynchronized()
+                    .camera_buffer_manager
+                    .lock()
+                    .as_mut(),
+                scene.scene_camera().read().as_ref(),
+            );
+            DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
+                renderer.graphics_device(),
+                &render_resource_manager.textures,
+                &render_resource_manager.samplers,
+                render_resource_manager.legacy
+                    .desynchronized()
+                    .skybox_resource_manager
+                    .lock()
+                    .as_mut(),
+                scene.skybox().read().as_ref(),
+            )?;
             Ok(())
         })
     }
@@ -733,29 +731,27 @@ define_task!(
         instrument_engine_task!("Synchronizing light GPU buffers", engine, {
             let renderer = engine.renderer().read();
             let render_resource_manager = &renderer.render_resource_manager().read().legacy;
-            if render_resource_manager.is_desynchronized() {
-                let scene = engine.scene().read();
-                let light_storage = scene.light_storage().read();
-                DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
-                    renderer.graphics_device(),
-                    renderer.bind_group_layout_registry(),
-                    render_resource_manager
-                        .desynchronized()
-                        .light_buffer_manager
-                        .lock()
-                        .as_mut(),
-                    &light_storage,
-                    renderer.shadow_mapping_config(),
-                );
-            }
+            let scene = engine.scene().read();
+            let light_storage = scene.light_storage().read();
+            DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
+                renderer.graphics_device(),
+                renderer.bind_group_layout_registry(),
+                render_resource_manager
+                    .desynchronized()
+                    .light_buffer_manager
+                    .lock()
+                    .as_mut(),
+                &light_storage,
+                renderer.shadow_mapping_config(),
+            );
             Ok(())
         })
     }
 );
 
 define_task!(
-    /// Synchronizes model instance feature GPU buffers.
-    [pub] SyncInstanceFeatureBuffers,
+    /// Synchronizes model instance GPU buffers.
+    [pub] SyncModelInstanceBuffers,
     depends_on = [
         BufferModelInstancesForRendering,
         BufferTransformsForGizmos,
@@ -766,26 +762,19 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!(
-            "Synchronizing model instance feature GPU buffers",
+            "Synchronizing model instance GPU buffers",
             engine,
             {
                 let renderer = engine.renderer().read();
-                let render_resource_manager = &renderer.render_resource_manager().read().legacy;
-                if render_resource_manager.is_desynchronized() {
-                    DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
-                        renderer.graphics_device(),
-                        render_resource_manager
-                            .desynchronized()
-                            .instance_feature_buffer_managers
-                            .lock()
-                            .as_mut(),
-                        &mut engine
-                            .scene()
-                            .read()
-                            .instance_feature_manager()
-                            .write(),
-                    );
-                }
+                let mut render_resource_manager = renderer.render_resource_manager().write();
+                let scene = engine.scene().read();
+                let mut model_instance_manager = scene.model_instance_manager().write();
+
+                model_instance_manager.sync_gpu_buffers(
+                    renderer.graphics_device(),
+                    &mut render_resource_manager.model_instance_buffers,
+                );
+
                 Ok(())
             }
         )
@@ -806,7 +795,7 @@ define_task!(
         SyncMaterialGPUResources,
         SyncVoxelObjectGPUBuffers,
         SyncLightGPUBuffers,
-        SyncInstanceFeatureBuffers
+        SyncModelInstanceBuffers
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
@@ -920,7 +909,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;
     task_scheduler.register_task(SyncLightGPUBuffers)?;
-    task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
+    task_scheduler.register_task(SyncModelInstanceBuffers)?;
     task_scheduler.register_task(SyncRenderResources)?;
 
     // Render Pipeline Execution

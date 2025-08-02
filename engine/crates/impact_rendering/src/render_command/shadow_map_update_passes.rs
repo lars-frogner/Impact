@@ -24,7 +24,7 @@ use impact_light::{
 use impact_material::MaterialTextureBindingLocations;
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{
-    InstanceFeature, InstanceFeatureBufferRangeID, buffer::InstanceFeatureGPUBufferManager,
+    InstanceFeature, InstanceFeatureBufferRangeID, gpu_resource::InstanceFeatureGPUBuffer,
     transform::InstanceModelLightTransform,
 };
 use impact_scene::model::ModelID;
@@ -129,27 +129,26 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
-        #[allow(clippy::ptr_arg)]
-        fn has_features(buffer_managers: &Vec<InstanceFeatureGPUBufferManager>) -> bool {
-            buffer_managers
+        fn has_features(buffers: &[InstanceFeatureGPUBuffer]) -> bool {
+            buffers
                 .iter()
                 .find(|buffer| buffer.is_for_feature_type::<InstanceModelLightTransform>())
                 .is_some_and(|buffer| buffer.n_features() > 0)
         }
 
-        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
+        let model_instance_buffers = gpu_resources.model_instance_buffer();
 
         self.models.retain(|model_id| {
-            instance_feature_buffer_managers
-                .get(model_id)
+            model_instance_buffers
+                .get_model_buffers(model_id)
                 .is_some_and(has_features)
         });
 
-        for (model_id, instance_feature_buffer_manager) in instance_feature_buffer_managers {
+        for (model_id, instance_feature_buffers) in model_instance_buffers.iter() {
             if self.models.contains(model_id) {
                 continue;
             }
-            if !has_features(instance_feature_buffer_manager) {
+            if !has_features(instance_feature_buffers) {
                 continue;
             }
             let Some(material) = resource_registries.material().get(model_id.material_id()) else {
@@ -352,8 +351,11 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 );
 
                 for model_id in &self.models {
-                    let transform_buffer_manager = gpu_resources
-                        .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(model_id)
+                    let transform_buffer = gpu_resources
+                        .model_instance_buffer()
+                        .get_model_buffer_for_feature_feature_type::<InstanceModelLightTransform>(
+                            model_id,
+                        )
                         .ok_or_else(|| {
                             anyhow!(
                                 "Missing model-light transform GPU buffer for model {}",
@@ -361,7 +363,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                             )
                         })?;
 
-                    let transform_range = transform_buffer_manager.feature_range(instance_range_id);
+                    let transform_range = transform_buffer.feature_range(instance_range_id);
 
                     if transform_range.is_empty() {
                         continue;
@@ -369,9 +371,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                     render_pass.set_vertex_buffer(
                         0,
-                        transform_buffer_manager
-                            .vertex_gpu_buffer()
-                            .valid_buffer_slice(),
+                        transform_buffer.vertex_gpu_buffer().valid_buffer_slice(),
                     );
 
                     let mesh_id = model_id.triangle_mesh_id();
@@ -497,27 +497,26 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     ) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
-        #[allow(clippy::ptr_arg)]
-        fn has_features(buffer_managers: &Vec<InstanceFeatureGPUBufferManager>) -> bool {
-            buffer_managers
+        fn has_features(buffers: &[InstanceFeatureGPUBuffer]) -> bool {
+            buffers
                 .iter()
                 .find(|buffer| buffer.is_for_feature_type::<InstanceModelLightTransform>())
                 .is_some_and(|buffer| buffer.n_features() > 0)
         }
 
-        let instance_feature_buffer_managers = gpu_resources.instance_feature_buffer_managers();
+        let model_instance_buffers = gpu_resources.model_instance_buffer();
 
         self.models.retain(|model_id| {
-            instance_feature_buffer_managers
-                .get(model_id)
+            model_instance_buffers
+                .get_model_buffers(model_id)
                 .is_some_and(has_features)
         });
 
-        for (model_id, instance_feature_buffer_manager) in instance_feature_buffer_managers {
+        for (model_id, instance_feature_buffers) in model_instance_buffers.iter() {
             if self.models.contains(model_id) {
                 continue;
             }
-            if !has_features(instance_feature_buffer_manager) {
+            if !has_features(instance_feature_buffers) {
                 continue;
             }
             let Some(material) = resource_registries.material().get(model_id.material_id()) else {
@@ -733,8 +732,11 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 );
 
                 for model_id in &self.models {
-                    let transform_buffer_manager = gpu_resources
-                        .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelLightTransform>(model_id)
+                    let transform_buffer = gpu_resources
+                        .model_instance_buffer()
+                        .get_model_buffer_for_feature_feature_type::<InstanceModelLightTransform>(
+                            model_id,
+                        )
                         .ok_or_else(|| {
                             anyhow!(
                                 "Missing model-light transform GPU buffer for model {}",
@@ -742,7 +744,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                             )
                         })?;
 
-                    let transform_range = transform_buffer_manager.feature_range(instance_range_id);
+                    let transform_range = transform_buffer.feature_range(instance_range_id);
 
                     if transform_range.is_empty() {
                         continue;
@@ -750,9 +752,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                     render_pass.set_vertex_buffer(
                         0,
-                        transform_buffer_manager
-                            .vertex_gpu_buffer()
-                            .valid_buffer_slice(),
+                        transform_buffer.vertex_gpu_buffer().valid_buffer_slice(),
                     );
 
                     let mesh_id = model_id.triangle_mesh_id();

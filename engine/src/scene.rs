@@ -4,7 +4,7 @@ use impact_light::LightStorage;
 use impact_scene::{
     camera::SceneCamera,
     graph::SceneGraph,
-    model::{InstanceFeatureManager, InstanceFeatureManagerState},
+    model::{ModelInstanceManager, ModelInstanceManagerState},
     skybox::Skybox,
 };
 use impact_voxel::VoxelObjectManager;
@@ -14,8 +14,8 @@ use parking_lot::RwLock;
 #[derive(Debug)]
 pub struct Scene {
     light_storage: RwLock<LightStorage>,
-    instance_feature_manager: RwLock<InstanceFeatureManager>,
-    initial_instance_feature_manager_state: InstanceFeatureManagerState,
+    model_instance_manager: RwLock<ModelInstanceManager>,
+    initial_model_instance_manager_state: ModelInstanceManagerState,
     voxel_object_manager: RwLock<VoxelObjectManager>,
     scene_graph: RwLock<SceneGraph>,
     scene_camera: RwLock<Option<SceneCamera>>,
@@ -32,12 +32,12 @@ pub enum RenderResourcesDesynchronized {
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new(instance_feature_manager: InstanceFeatureManager) -> Self {
-        let initial_instance_feature_manager_state = instance_feature_manager.record_state();
+    pub fn new(model_instance_manager: ModelInstanceManager) -> Self {
+        let initial_model_instance_manager_state = model_instance_manager.record_state();
         Self {
             light_storage: RwLock::new(LightStorage::new()),
-            instance_feature_manager: RwLock::new(instance_feature_manager),
-            initial_instance_feature_manager_state,
+            model_instance_manager: RwLock::new(model_instance_manager),
+            initial_model_instance_manager_state,
             voxel_object_manager: RwLock::new(VoxelObjectManager::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
@@ -50,10 +50,10 @@ impl Scene {
         &self.light_storage
     }
 
-    /// Returns a reference to the [`InstanceFeatureManager`], guarded by a
+    /// Returns a reference to the [`ModelInstanceManager`], guarded by a
     /// [`RwLock`].
-    pub fn instance_feature_manager(&self) -> &RwLock<InstanceFeatureManager> {
-        &self.instance_feature_manager
+    pub fn model_instance_manager(&self) -> &RwLock<ModelInstanceManager> {
+        &self.model_instance_manager
     }
 
     /// Returns a reference to the [`VoxelObjectManager`], guarded by a
@@ -101,9 +101,9 @@ impl Scene {
     pub fn clear(&self) {
         self.light_storage.write().remove_all_lights();
 
-        self.instance_feature_manager
+        self.model_instance_manager
             .write()
-            .reset_to_state(&self.initial_instance_feature_manager_state);
+            .reset_to_state(&self.initial_model_instance_manager_state);
 
         self.voxel_object_manager.write().remove_all_voxel_objects();
 

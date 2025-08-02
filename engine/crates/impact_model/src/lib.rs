@@ -3,20 +3,20 @@
 #[macro_use]
 pub mod macros;
 
-pub mod buffer;
+pub mod gpu_resource;
 pub mod transform;
 
 pub use transform::register_model_feature_types;
 
-use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
+use gpu_resource::{InstanceFeatureGPUBuffer, ModelInstanceGPUBufferMap};
 use impact_containers::{
     AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap,
 };
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_math::{self, Hash64};
 use roc_integration::roc;
-use std::{borrow::Cow, fmt, hash::Hash, mem, ops::Range};
+use std::{borrow::Cow, collections::hash_map::Entry, fmt, hash::Hash, mem, ops::Range};
 
 /// Represents a piece of data associated with a model instance.
 pub trait InstanceFeature: Pod {
@@ -46,8 +46,9 @@ pub trait InstanceFeature: Pod {
     }
 }
 
-/// Container for features (distinct pieces of data) associated with instances
-/// of specific models.
+/// Manages storage and buffering of per-instance data for different models.
+/// A model can have multiple types of per-instance data (multiple "instance
+/// features") associated with it.
 ///
 /// Holds a set of [`InstanceFeatureStorage`]s, one storage for each feature
 /// type. These storages are presistent and can be accessed to add, remove or
@@ -60,14 +61,14 @@ pub trait InstanceFeature: Pod {
 /// contents can then be copied directly to the corresponding GPU buffers,
 /// before they are cleared in preparation for the next frame.
 #[derive(Debug, Default)]
-pub struct InstanceFeatureManager<MID> {
+pub struct ModelInstanceManager<MID> {
     feature_storages: NoHashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
     instance_buffers: HashMap<MID, ModelInstanceBuffer>,
 }
 
-/// Record of the state of an [`InstanceFeatureManager`].
+/// Record of the state of an [`ModelInstanceManager`].
 #[derive(Clone, Debug)]
-pub struct InstanceFeatureManagerState<MID> {
+pub struct ModelInstanceManagerState<MID> {
     model_ids: HashSet<MID>,
 }
 
@@ -129,6 +130,7 @@ pub struct DynamicInstanceFeatureBuffer {
     bytes: AlignedByteVec,
     n_valid_bytes: usize,
     range_manager: InstanceFeatureBufferRangeManager,
+    dirty: bool,
 }
 
 /// Identifier for a specific range of valid features in a
@@ -156,8 +158,8 @@ struct InstanceFeatureTypeDescriptor {
     alignment: Alignment,
 }
 
-impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
-    /// Creates a new empty instance feature manager.
+impl<MID: Copy + Eq + Hash> ModelInstanceManager<MID> {
+    /// Creates a new empty model instance manager.
     pub fn new() -> Self {
         Self {
             feature_storages: NoHashMap::default(),
@@ -175,10 +177,10 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
             .or_insert_with(|| InstanceFeatureStorage::new::<Fe>());
     }
 
-    /// Records the current state of the instance feature manager and returns it as a
-    /// [`InstanceFeatureManagerState`].
-    pub fn record_state(&self) -> InstanceFeatureManagerState<MID> {
-        InstanceFeatureManagerState {
+    /// Records the current state of the model instance manager and returns it as a
+    /// [`ModelInstanceManagerState`].
+    pub fn record_state(&self) -> ModelInstanceManagerState<MID> {
+        ModelInstanceManagerState {
             model_ids: self.instance_buffers.keys().cloned().collect(),
         }
     }
@@ -248,29 +250,12 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
         self.instance_buffers.get(model_id)
     }
 
-    /// Returns a mutable reference to the [`ModelInstanceBuffer`] for the model
-    /// with the given ID, or [`None`] if the model is not present.
-    pub fn get_model_instance_buffer_mut(
-        &mut self,
-        model_id: &MID,
-    ) -> Option<&mut ModelInstanceBuffer> {
-        self.instance_buffers.get_mut(model_id)
-    }
-
     /// Returns an iterator over the model IDs and their associated instance
     /// buffers.
     pub fn model_ids_and_instance_buffers(
         &self,
     ) -> impl Iterator<Item = (&MID, &'_ ModelInstanceBuffer)> {
         self.instance_buffers.iter()
-    }
-
-    /// Returns an iterator over the model IDs and their associated instance
-    /// buffers, with the buffers being mutable.
-    pub fn model_ids_and_mutable_instance_buffers(
-        &mut self,
-    ) -> impl Iterator<Item = (&MID, &'_ mut ModelInstanceBuffer)> {
-        self.instance_buffers.iter_mut()
     }
 
     /// Initialize the [`ModelInstanceBuffer`] associated with the given model
@@ -336,7 +321,8 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
     /// If no instance of the specified model exists.
     pub fn unregister_instance(&mut self, model_id: &MID) {
         let instance_buffer = self
-            .get_model_instance_buffer_mut(model_id)
+            .instance_buffers
+            .get_mut(model_id)
             .expect("Tried to unregister instance of model that has no instances");
 
         instance_buffer.unregister_instance();
@@ -463,48 +449,50 @@ impl<MID: Clone + Eq + Hash> InstanceFeatureManager<MID> {
 
     /// Removes the instance buffers that are not part of the given manager
     /// state.
-    pub fn reset_to_state(&mut self, state: &InstanceFeatureManagerState<MID>) {
+    pub fn reset_to_state(&mut self, state: &ModelInstanceManagerState<MID>) {
         self.instance_buffers
             .retain(|model_id, _| state.model_ids.contains(model_id));
 
         // TODO: remove appropriate features from storages
     }
 
-    /// Returns mutable references to the first and second instance feature
-    /// buffers of the model with the given ID, along with references to the
-    /// associated storages.
+    /// Performs any required updates for keeping the given GPU buffers in sync
+    /// with the buffered instance data.
     ///
-    /// # Panics
-    /// If any of the requested buffers are not present.
-    pub fn first_and_second_feature_buffer_mut_with_storages(
+    /// GPU buffers whose model no longer exists will be removed, and missing
+    /// GPU buffers for new models will be created.
+    pub fn sync_gpu_buffers(
         &mut self,
-        model_id: &MID,
-    ) -> (
-        (&mut DynamicInstanceFeatureBuffer, &InstanceFeatureStorage),
-        (&mut DynamicInstanceFeatureBuffer, &InstanceFeatureStorage),
-    ) {
-        let instance_buffer = self
-            .instance_buffers
-            .get_mut(model_id)
-            .expect("Tried to buffer instances of missing model");
+        graphics_device: &GraphicsDevice,
+        gpu_buffer_map: &mut ModelInstanceGPUBufferMap<MID>,
+    ) where
+        MID: fmt::Display,
+    {
+        for (model_id, model_instance_buffer) in self.instance_buffers.iter_mut() {
+            match gpu_buffer_map.buffers.entry(*model_id) {
+                Entry::Occupied(mut occupied_entry) => {
+                    let feature_gpu_buffers = occupied_entry.get_mut();
 
-        let (first_buffer, second_buffer) =
-            instance_buffer.first_and_second_feature_buffer_mut_with_storage();
+                    model_instance_buffer
+                        .copy_buffered_instance_features_to_gpu_buffers_if_modifed(
+                            graphics_device,
+                            feature_gpu_buffers,
+                        );
+                }
+                Entry::Vacant(vacant_entry) => {
+                    let feature_gpu_buffers = model_instance_buffer
+                        .copy_buffered_instance_features_to_new_gpu_buffers(
+                            graphics_device,
+                            Cow::Owned(model_id.to_string()),
+                        );
 
-        let first_storage = self
-            .feature_storages
-            .get(&first_buffer.feature_type_id())
-            .expect("Missing storage associated with first instance feature buffer");
-
-        let second_storage = self
-            .feature_storages
-            .get(&second_buffer.feature_type_id())
-            .expect("Missing storage associated with second instance feature buffer");
-
-        (
-            (first_buffer, first_storage),
-            (second_buffer, second_storage),
-        )
+                    vacant_entry.insert(feature_gpu_buffers);
+                }
+            }
+        }
+        gpu_buffer_map
+            .buffers
+            .retain(|model_id, _| self.has_model_id(model_id));
     }
 }
 
@@ -523,49 +511,6 @@ impl ModelInstanceBuffer {
             feature_buffers,
             buffer_index_map,
             instance_count: 1,
-        }
-    }
-
-    /// Creates a new GPU buffer manager for each feature type associated with
-    /// the model and copies the buffered feature values to the new GPU buffers
-    /// The buffer managers are returned in the same order as the feature types
-    /// passed to the [`InstanceFeatureManager::register_instance`] calls
-    /// for this model.
-    ///
-    /// Call [`Self::copy_buffered_instance_features_to_gpu_buffers`] with the
-    /// same list of GPU buffer managers for subsequent moves of buffered
-    /// feature values to the GPU buffers.
-    pub fn copy_buffered_instance_features_to_new_gpu_buffers(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        label: Cow<'static, str>,
-    ) -> Vec<InstanceFeatureGPUBufferManager> {
-        self.feature_buffers
-            .iter_mut()
-            .filter_map(|feature_buffer| {
-                InstanceFeatureGPUBufferManager::new(graphics_device, feature_buffer, label.clone())
-            })
-            .collect()
-    }
-
-    /// Copies all buffered feature values to the given GPU buffers.
-    ///
-    /// # Panics
-    /// If the GPU buffer managers are not given in the same order as returned
-    /// from [`Self::copy_buffered_instance_features_to_new_gpu_buffers`].
-    pub fn copy_buffered_instance_features_to_gpu_buffers(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        gpu_buffer_managers: &mut [InstanceFeatureGPUBufferManager],
-    ) {
-        for (feature_buffer, gpu_buffer_manager) in self
-            .feature_buffers
-            .iter_mut()
-            .filter(|buffer| buffer.vertex_buffer_layout().is_some())
-            .zip(gpu_buffer_managers)
-        {
-            gpu_buffer_manager
-                .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
         }
     }
 
@@ -588,7 +533,7 @@ impl ModelInstanceBuffer {
     /// Returns a mutable reference to the [`DynamicInstanceFeatureBuffer`] for
     /// features of the given type, or [`None`] if the modes does not use this
     /// feature type.
-    pub fn get_feature_buffer_mut(
+    fn get_feature_buffer_mut(
         &mut self,
         feature_type_id: InstanceFeatureTypeID,
     ) -> Option<&mut DynamicInstanceFeatureBuffer> {
@@ -697,27 +642,60 @@ impl ModelInstanceBuffer {
         }
     }
 
-    fn first_and_second_feature_buffer_mut_with_storage(
-        &mut self,
-    ) -> (
-        &mut DynamicInstanceFeatureBuffer,
-        &mut DynamicInstanceFeatureBuffer,
-    ) {
-        let (first_buffer, remaining_buffers) = self
-            .feature_buffers
-            .split_first_mut()
-            .expect("Missing first instance feature buffer");
-
-        let (second_buffer, _) = remaining_buffers
-            .split_first_mut()
-            .expect("Missing second instance feature buffer");
-
-        (first_buffer, second_buffer)
-    }
-
     fn clear_buffer_contents(&mut self) {
         for buffer in &mut self.feature_buffers {
             buffer.clear();
+        }
+    }
+
+    /// Creates a new GPU buffer manager for each feature type associated with
+    /// the model and copies the buffered feature values to the new GPU buffers
+    /// The buffer managers are returned in the same order as the feature types
+    /// passed to the [`ModelInstanceManager::register_instance`] calls
+    /// for this model.
+    ///
+    /// Call [`Self::copy_buffered_instance_features_to_gpu_buffers`] with the
+    /// same list of GPU buffer managers for subsequent moves of buffered
+    /// feature values to the GPU buffers.
+    fn copy_buffered_instance_features_to_new_gpu_buffers(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        label: Cow<'static, str>,
+    ) -> Vec<InstanceFeatureGPUBuffer> {
+        self.feature_buffers
+            .iter_mut()
+            .filter_map(|feature_buffer| {
+                let gpu_buffer =
+                    InstanceFeatureGPUBuffer::new(graphics_device, feature_buffer, label.clone());
+                feature_buffer.clear_dirty_flag();
+                gpu_buffer
+            })
+            .collect()
+    }
+
+    /// For each feature buffer that has changed since the last time this method
+    /// was called, copies all buffered feature values to the corresponding GPU
+    /// buffer.
+    ///
+    /// # Panics
+    /// If the GPU buffer managers are not given in the same order as returned
+    /// from [`Self::copy_buffered_instance_features_to_new_gpu_buffers`].
+    fn copy_buffered_instance_features_to_gpu_buffers_if_modifed(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        feature_gpu_buffers: &mut [InstanceFeatureGPUBuffer],
+    ) {
+        for (feature_buffer, feature_gpu_buffer) in self
+            .feature_buffers
+            .iter_mut()
+            .filter(|buffer| buffer.vertex_buffer_layout().is_some())
+            .zip(feature_gpu_buffers)
+        {
+            if feature_buffer.is_dirty() {
+                feature_gpu_buffer
+                    .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
+            }
+            feature_buffer.clear_dirty_flag();
         }
     }
 }
@@ -980,6 +958,7 @@ impl DynamicInstanceFeatureBuffer {
             ),
             n_valid_bytes: 0,
             range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
+            dirty: false,
         }
     }
 
@@ -996,6 +975,7 @@ impl DynamicInstanceFeatureBuffer {
             ),
             n_valid_bytes: 0,
             range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
+            dirty: false,
         }
     }
 
@@ -1116,6 +1096,12 @@ impl DynamicInstanceFeatureBuffer {
         &self.bytes
     }
 
+    /// Whether the buffer contents have been modified since
+    /// [`Self::clear_dirty_flag`] was last called.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
     /// Pushes a copy of the given feature value onto the buffer.
     ///
     /// # Panics
@@ -1163,6 +1149,8 @@ impl DynamicInstanceFeatureBuffer {
                 .for_each(|(dest, feature)| {
                     dest.copy_from_slice(feature.feature_bytes());
                 });
+
+            self.dirty = true;
         }
     }
 
@@ -1211,13 +1199,20 @@ impl DynamicInstanceFeatureBuffer {
             .begin_range(self.n_valid_features(), range_id);
     }
 
+    /// Clears the flag indicating whether the buffer contents were modified.
+    pub fn clear_dirty_flag(&mut self) {
+        self.dirty = false;
+    }
+
     /// Empties the buffer and forgets any range information.
     ///
     /// Does not actually drop buffer contents, just resets the count of valid
     /// bytes to zero.
     pub fn clear(&mut self) {
+        let had_valid_bytes = self.n_valid_bytes > 0;
         self.n_valid_bytes = 0;
         self.range_manager.clear();
+        self.dirty = had_valid_bytes;
     }
 
     /// Returns the layout of the vertex GPU buffer that can be used for the
@@ -1241,6 +1236,8 @@ impl DynamicInstanceFeatureBuffer {
             }
 
             self.bytes[start_byte_idx..end_byte_idx].copy_from_slice(feature_bytes);
+
+            self.dirty = true;
         }
     }
 
@@ -1263,6 +1260,8 @@ impl DynamicInstanceFeatureBuffer {
                 .for_each(|dest| {
                     dest.copy_from_slice(feature_bytes);
                 });
+
+            self.dirty = true;
         }
     }
 
@@ -1281,6 +1280,8 @@ impl DynamicInstanceFeatureBuffer {
             }
 
             self.bytes[start_byte_idx..end_byte_idx].copy_from_slice(feature_bytes);
+
+            self.dirty = true;
         }
     }
 
@@ -1495,20 +1496,20 @@ mod tests {
     impl_InstanceFeature!(DifferentFeature);
     impl_InstanceFeature!(ZeroSizedFeature);
 
-    type TestInstanceFeatureManager = InstanceFeatureManager<ModelID>;
+    type TestModelInstanceManager = ModelInstanceManager<ModelID>;
 
     mod manager {
         use super::*;
 
         #[test]
-        fn creating_instance_feature_manager_works() {
-            let manager = TestInstanceFeatureManager::new();
+        fn creating_model_instance_manager_works() {
+            let manager = TestModelInstanceManager::new();
             assert!(manager.model_ids_and_instance_buffers().next().is_none());
         }
 
         #[test]
         fn registering_feature_types_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
 
             assert!(manager.get_storage::<ZeroSizedFeature>().is_none());
             assert!(manager.get_storage_mut::<ZeroSizedFeature>().is_none());
@@ -1534,7 +1535,7 @@ mod tests {
 
         #[test]
         fn registering_one_instance_of_one_model_with_no_features_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.register_instance(model_id, &[]);
 
@@ -1554,14 +1555,14 @@ mod tests {
         #[test]
         #[should_panic]
         fn registering_instance_with_unregistered_features_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.register_instance(model_id, &[Feature::FEATURE_TYPE_ID]);
         }
 
         #[test]
         fn registering_one_instance_of_one_model_with_features_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             manager.register_feature_type::<Feature>();
             manager.register_feature_type::<ZeroSizedFeature>();
 
@@ -1592,7 +1593,7 @@ mod tests {
 
         #[test]
         fn registering_one_instance_of_two_models_with_no_features_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id_1 = ModelID(1);
             let model_id_2 = ModelID(2);
             manager.register_instance(model_id_1, &[]);
@@ -1626,7 +1627,7 @@ mod tests {
 
         #[test]
         fn registering_two_instances_of_one_model_with_no_features_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.register_instance(model_id, &[]);
             manager.register_instance(model_id, &[]);
@@ -1648,7 +1649,7 @@ mod tests {
 
         #[test]
         fn registering_and_then_unregistering_one_instance_of_model_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
 
             manager.register_instance(model_id, &[]);
@@ -1668,7 +1669,7 @@ mod tests {
 
         #[test]
         fn registering_and_then_unregistering_two_instances_of_model_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.register_instance(model_id, &[]);
             manager.register_instance(model_id, &[]);
@@ -1682,8 +1683,8 @@ mod tests {
 
         #[test]
         #[should_panic]
-        fn unregistering_instance_in_empty_instance_feature_manager_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
+        fn unregistering_instance_in_empty_model_instance_manager_fails() {
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.unregister_instance(&model_id);
         }
@@ -1691,7 +1692,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn buffering_unregistered_features_from_storages_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.buffer_instance_features_from_storages(&model_id, &[]);
         }
@@ -1699,14 +1700,14 @@ mod tests {
         #[test]
         #[should_panic]
         fn buffering_unregistered_feature_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.buffer_instance_feature(&model_id, &Feature(42));
         }
 
         #[test]
         fn buffering_features_from_storages_for_model_with_no_features_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.register_instance(model_id, &[]);
             manager.buffer_instance_features_from_storages(&model_id, &[]);
@@ -1714,7 +1715,7 @@ mod tests {
 
         #[test]
         fn buffering_features_from_storages_for_model_with_multiple_features_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
 
             manager.register_feature_type::<Feature>();
             manager.register_feature_type::<DifferentFeature>();
@@ -1798,7 +1799,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn buffering_too_many_feature_types_from_storages_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             let model_id = ModelID(0);
             manager.register_instance(model_id, &[]);
 
@@ -1811,7 +1812,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn buffering_feature_with_invalid_feature_id_from_storages_fails() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
             manager.register_feature_type::<Feature>();
 
             let model_id = ModelID(0);
@@ -1825,7 +1826,7 @@ mod tests {
 
         #[test]
         fn buffering_feature_directly_works() {
-            let mut manager = TestInstanceFeatureManager::new();
+            let mut manager = TestModelInstanceManager::new();
 
             manager.register_feature_type::<Feature>();
             manager.register_feature_type::<DifferentFeature>();

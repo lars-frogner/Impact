@@ -9,9 +9,8 @@ use impact_material::gpu_resource::{
     MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap,
 };
 use impact_mesh::gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap};
-use impact_model::buffer::InstanceFeatureGPUBufferManager;
 use impact_rendering::resource::BasicGPUResources;
-use impact_scene::{model::ModelID, skybox::resource::SkyboxGPUResourceManager};
+use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::resource::SkyboxGPUResourceManager};
 use impact_texture::gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap};
 use impact_voxel::{
     VoxelObjectID,
@@ -27,6 +26,7 @@ pub struct RenderResourceManager {
     pub lookup_table_bind_groups: LookupTableBindGroupMap,
     pub material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap,
     pub material_texture_bind_groups: MaterialTextureBindGroupMap,
+    pub model_instance_buffers: ModelInstanceGPUBufferMap,
     pub legacy: legacy::RenderResourceManager,
 }
 
@@ -40,6 +40,7 @@ impl RenderResourceManager {
             lookup_table_bind_groups: LookupTableBindGroupMap::new(),
             material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap::new(),
             material_texture_bind_groups: MaterialTextureBindGroupMap::new(),
+            model_instance_buffers: ModelInstanceGPUBufferMap::new(),
             legacy: legacy::RenderResourceManager::new(),
         }
     }
@@ -92,12 +93,8 @@ impl BasicGPUResources for RenderResourceManager {
         self.legacy.synchronized().get_skybox_resource_manager()
     }
 
-    fn instance_feature_buffer_managers(
-        &self,
-    ) -> &HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>> {
-        self.legacy
-            .synchronized()
-            .instance_feature_buffer_managers()
+    fn model_instance_buffer(&self) -> &ModelInstanceGPUBufferMap {
+        &self.model_instance_buffers
     }
 }
 
