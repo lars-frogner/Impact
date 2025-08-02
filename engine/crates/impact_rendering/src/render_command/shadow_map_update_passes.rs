@@ -17,8 +17,8 @@ use impact_gpu::{
     query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
 };
 use impact_light::{
-    LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES,
-    buffer::LightGPUBufferManager,
+    LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES,
+    gpu_resource::LightGPUResources,
     shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
 };
 use impact_material::MaterialTextureBindingLocations;
@@ -60,7 +60,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
-        let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
+        let max_light_count = LightManager::INITIAL_LIGHT_CAPACITY;
 
         let shader_template = OmnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
         let (_, shader) = shader_manager
@@ -69,7 +69,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let push_constants = OmnidirectionalLightShadowMapShaderTemplate::push_constants();
 
         let omnidirectional_light_bind_group_layout =
-            LightGPUBufferManager::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
+            LightGPUResources::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             );
@@ -174,11 +174,11 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = gpu_resources
-            .get_light_buffer_manager()
+        let light_gpu_resources = gpu_resources
+            .light()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let max_light_count = light_buffer_manager.max_shadowable_omnidirectional_light_count();
+        let max_light_count = light_gpu_resources.max_shadowable_omnidirectional_light_count();
 
         if max_light_count != self.max_light_count {
             let shader_template = OmnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
@@ -245,7 +245,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
     pub fn record<R>(
         &self,
-        light_storage: &LightStorage,
+        light_manager: &LightManager,
         gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
@@ -264,11 +264,11 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     where
         R: BasicGPUResources,
     {
-        let light_buffer_manager = gpu_resources
-            .get_light_buffer_manager()
+        let light_gpu_resources = gpu_resources
+            .light()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let shadow_map_manager = light_buffer_manager.omnidirectional_light_shadow_map_manager();
+        let shadow_map_manager = light_gpu_resources.omnidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
 
         if shadow_map_textures.is_empty() {
@@ -278,13 +278,13 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let mut pass_count = 0;
         let mut draw_call_count = 0;
 
-        for (light_idx, (&light_id, shadow_map_texture)) in light_buffer_manager
+        for (light_idx, (&light_id, shadow_map_texture)) in light_gpu_resources
             .shadowable_omnidirectional_light_ids()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
-            let omnidirectional_light = light_storage.shadowable_omnidirectional_light(light_id);
+            let omnidirectional_light = light_manager.shadowable_omnidirectional_light(light_id);
 
             if omnidirectional_light
                 .flags()
@@ -346,7 +346,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                 render_pass.set_bind_group(
                     0,
-                    light_buffer_manager.shadowable_omnidirectional_light_bind_group(),
+                    light_gpu_resources.shadowable_omnidirectional_light_bind_group(),
                     &[],
                 );
 
@@ -430,7 +430,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
-        let max_light_count = LightStorage::INITIAL_LIGHT_CAPACITY;
+        let max_light_count = LightManager::INITIAL_LIGHT_CAPACITY;
 
         let shader_template = UnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
         let (_, shader) = shader_manager
@@ -439,7 +439,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let push_constants = UnidirectionalLightShadowMapShaderTemplate::push_constants();
 
         let unidirectional_light_bind_group_layout =
-            LightGPUBufferManager::get_or_create_shadowable_unidirectional_light_bind_group_layout(
+            LightGPUResources::get_or_create_shadowable_unidirectional_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             );
@@ -542,11 +542,11 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        let light_buffer_manager = gpu_resources
-            .get_light_buffer_manager()
+        let light_gpu_resources = gpu_resources
+            .light()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let max_light_count = light_buffer_manager.max_shadowable_unidirectional_light_count();
+        let max_light_count = light_gpu_resources.max_shadowable_unidirectional_light_count();
 
         if max_light_count != self.max_light_count {
             let shader_template = UnidirectionalLightShadowMapShaderTemplate::new(max_light_count);
@@ -625,7 +625,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
     pub fn record<R>(
         &self,
-        light_storage: &LightStorage,
+        light_manager: &LightManager,
         gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
@@ -644,11 +644,11 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     where
         R: BasicGPUResources,
     {
-        let light_buffer_manager = gpu_resources
-            .get_light_buffer_manager()
+        let light_gpu_resources = gpu_resources
+            .light()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
-        let shadow_map_manager = light_buffer_manager.unidirectional_light_shadow_map_manager();
+        let shadow_map_manager = light_gpu_resources.unidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
 
         if shadow_map_textures.is_empty() {
@@ -658,13 +658,13 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let mut pass_count = 0;
         let mut draw_call_count = 0;
 
-        for (light_idx, (&light_id, shadow_map_texture)) in light_buffer_manager
+        for (light_idx, (&light_id, shadow_map_texture)) in light_gpu_resources
             .shadowable_unidirectional_light_ids()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
-            let unidirectional_light = light_storage.shadowable_unidirectional_light(light_id);
+            let unidirectional_light = light_manager.shadowable_unidirectional_light(light_id);
 
             if unidirectional_light
                 .flags()
@@ -727,7 +727,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                 render_pass.set_bind_group(
                     0,
-                    light_buffer_manager.shadowable_unidirectional_light_bind_group(),
+                    light_gpu_resources.shadowable_unidirectional_light_bind_group(),
                     &[],
                 );
 

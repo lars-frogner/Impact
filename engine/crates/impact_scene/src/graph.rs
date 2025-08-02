@@ -7,11 +7,11 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_camera::buffer::BufferableCamera;
+use impact_camera::gpu_resource::BufferableCamera;
 use impact_containers::{HashMap, HashSet, SlotKey, SlotMap};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
-    LightFlags, LightStorage, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
+    LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
     ShadowableUnidirectionalLight, shadow_map::CascadeIdx,
 };
 use impact_model::{
@@ -742,7 +742,7 @@ impl SceneGraph {
         model_instance_node.declare_visible_this_frame(current_frame_count);
     }
 
-    /// Goes through all omnidirectional lights in the given light storage and
+    /// Goes through all omnidirectional lights in the given light manager and
     /// updates their cubemap orientations and distance spans to encompass all
     /// model instances that may cast visible shadows in a way that preserves
     /// quality and efficiency. Then the model to cubemap face space transform
@@ -758,7 +758,7 @@ impl SceneGraph {
     /// containing model to camera transforms.
     pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
         &self,
-        light_storage: &mut LightStorage,
+        light_manager: &mut LightManager,
         model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
         shadow_mapping_enabled: bool,
@@ -774,7 +774,7 @@ impl SceneGraph {
                 world_space_bounding_sphere.translated_and_rotated(view_transform);
 
             for (light_id, omnidirectional_light) in
-                light_storage.shadowable_omnidirectional_lights_with_ids_mut()
+                light_manager.shadowable_omnidirectional_lights_with_ids_mut()
             {
                 if omnidirectional_light
                     .flags()
@@ -924,7 +924,7 @@ impl SceneGraph {
         }
     }
 
-    /// Goes through all unidirectional lights in the given light storage and
+    /// Goes through all unidirectional lights in the given light manager and
     /// updates their orthographic transforms to encompass model instances that
     /// may cast visible shadows inside the corresponding cascades in the view
     /// frustum. Then the model to light transform of every such shadow casting
@@ -939,7 +939,7 @@ impl SceneGraph {
     /// to camera transforms.
     pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
         &self,
-        light_storage: &mut LightStorage,
+        light_manager: &mut LightManager,
         model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
         shadow_mapping_enabled: bool,
@@ -955,7 +955,7 @@ impl SceneGraph {
                 world_space_bounding_sphere.translated_and_rotated(view_transform);
 
             for (light_id, unidirectional_light) in
-                light_storage.shadowable_unidirectional_lights_with_ids_mut()
+                light_manager.shadowable_unidirectional_lights_with_ids_mut()
             {
                 if unidirectional_light
                     .flags()

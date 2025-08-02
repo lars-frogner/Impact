@@ -1,7 +1,7 @@
 //! Buffering of light source data for rendering.
 
 use crate::{
-    AmbientLight, AmbientLightID, LightStorage, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
+    AmbientLight, AmbientLightID, LightManager, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
     OmnidirectionalLightID, ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalLight,
     UnidirectionalLightID,
@@ -20,11 +20,10 @@ use impact_gpu::{
 use impact_math::ConstStringHash64;
 use std::{fmt, hash::Hash};
 
-/// Manager of the set of uniform GPU buffers holding light source render
-/// data. Also manages the bind groups for these buffers and the associated
-/// shadow map textures.
+/// Contains all GPU resources for light sources, including uniform buffers and
+/// shadow maps, with associated bind groups.
 #[derive(Debug)]
-pub struct LightGPUBufferManager {
+pub struct LightGPUResources {
     ambient_light_gpu_buffer: UniformGPUBufferWithLightIDs<AmbientLightID>,
     omnidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs<OmnidirectionalLightID>,
     shadowable_omnidirectional_light_gpu_buffer:
@@ -64,7 +63,7 @@ struct UniformGPUBufferWithLightIDs<ID> {
     light_ids: Vec<ID>,
 }
 
-impl LightGPUBufferManager {
+impl LightGPUResources {
     const AMBIENT_LIGHT_VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::FRAGMENT;
     const OMNIDIRECTIONAL_LIGHT_VISIBILITY: wgpu::ShaderStages =
         wgpu::ShaderStages::VERTEX_FRAGMENT;
@@ -95,38 +94,38 @@ impl LightGPUBufferManager {
     }
 
     /// Creates a new manager with GPU buffers initialized from the given
-    /// [`LightStorage`].
-    pub fn for_light_storage(
+    /// [`LightManager`].
+    pub fn for_light_manager(
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        light_storage: &LightStorage,
+        light_manager: &LightManager,
         shadow_mapping_config: &ShadowMappingConfig,
     ) -> Self {
         let ambient_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
-            light_storage.ambient_light_buffer(),
+            light_manager.ambient_light_buffer(),
             Self::AMBIENT_LIGHT_VISIBILITY,
         );
         let omnidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
-            light_storage.omnidirectional_light_buffer(),
+            light_manager.omnidirectional_light_buffer(),
             Self::OMNIDIRECTIONAL_LIGHT_VISIBILITY,
         );
         let shadowable_omnidirectional_light_gpu_buffer =
             UniformGPUBufferWithLightIDs::for_uniform_buffer(
                 graphics_device,
-                light_storage.shadowable_omnidirectional_light_buffer(),
+                light_manager.shadowable_omnidirectional_light_buffer(),
                 Self::SHADOWABLE_OMNIDIRECTIONAL_LIGHT_VISIBILITY,
             );
         let unidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
-            light_storage.unidirectional_light_buffer(),
+            light_manager.unidirectional_light_buffer(),
             Self::UNIDIRECTIONAL_LIGHT_VISIBILITY,
         );
         let shadowable_unidirectional_light_gpu_buffer =
             UniformGPUBufferWithLightIDs::for_uniform_buffer(
                 graphics_device,
-                light_storage.shadowable_unidirectional_light_buffer(),
+                light_manager.shadowable_unidirectional_light_buffer(),
                 Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_VISIBILITY,
             );
 
@@ -328,51 +327,51 @@ impl LightGPUBufferManager {
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data
-    /// in the given light storage. Will also recreate the required bind groups
+    /// in the given light manager. Will also recreate the required bind groups
     /// if any of the GPU buffers had to be reallocated.
-    pub fn sync_with_light_storage(
+    pub fn sync_with_light_manager(
         &mut self,
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        light_storage: &LightStorage,
+        light_manager: &LightManager,
     ) {
-        let shadowable_omnidirectional_light_buffer_change = light_storage
+        let shadowable_omnidirectional_light_buffer_change = light_manager
             .shadowable_omnidirectional_light_buffer()
             .change();
-        let shadowable_unidirectional_light_buffer_change = light_storage
+        let shadowable_unidirectional_light_buffer_change = light_manager
             .shadowable_unidirectional_light_buffer()
             .change();
 
         let ambient_light_transfer_result = self
             .ambient_light_gpu_buffer
-            .transfer_uniforms_to_gpu_buffer(graphics_device, light_storage.ambient_light_buffer());
+            .transfer_uniforms_to_gpu_buffer(graphics_device, light_manager.ambient_light_buffer());
 
         let omnidirectional_light_transfer_result = self
             .omnidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
-                light_storage.omnidirectional_light_buffer(),
+                light_manager.omnidirectional_light_buffer(),
             );
 
         let shadowable_omnidirectional_light_transfer_result = self
             .shadowable_omnidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
-                light_storage.shadowable_omnidirectional_light_buffer(),
+                light_manager.shadowable_omnidirectional_light_buffer(),
             );
 
         let unidirectional_light_transfer_result = self
             .unidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
-                light_storage.unidirectional_light_buffer(),
+                light_manager.unidirectional_light_buffer(),
             );
 
         let shadowable_unidirectional_light_transfer_result = self
             .shadowable_unidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
-                light_storage.shadowable_unidirectional_light_buffer(),
+                light_manager.shadowable_unidirectional_light_buffer(),
             );
 
         if ambient_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
@@ -638,7 +637,7 @@ impl OmnidirectionalLightShadowMapManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            LightGPUBufferManager::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID.hash(),
+            LightGPUResources::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID.hash(),
             || ShadowCubemapTexture::create_bind_group_layout(graphics_device.device()),
         )
     }
@@ -701,7 +700,7 @@ impl UnidirectionalLightShadowMapManager {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> wgpu::BindGroupLayout {
         bind_group_layout_registry.get_or_create_layout(
-            LightGPUBufferManager::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID.hash(),
+            LightGPUResources::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_LAYOUT_ID.hash(),
             || CascadedShadowMapTexture::create_bind_group_layout(graphics_device.device()),
         )
     }

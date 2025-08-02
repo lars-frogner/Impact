@@ -14,7 +14,7 @@ use crate::{
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_containers::{HashMap, HashSet};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
@@ -173,7 +173,7 @@ impl GeometryPass {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         models: impl IntoIterator<Item = &'a ModelID>,
     ) -> Result<()> {
-        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+        let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
             bind_group_layout_registry,
         );
@@ -440,7 +440,7 @@ impl GeometryPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &'a mut wgpu::CommandEncoder,
     ) -> Result<Option<wgpu::RenderPass<'a>>> {
-        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
+        let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(None);
         };
 
@@ -459,7 +459,7 @@ impl GeometryPass {
 
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
 
-        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+        render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         for pipeline in self.model_pipelines.values() {
             render_pass.set_pipeline(&pipeline.pipeline);

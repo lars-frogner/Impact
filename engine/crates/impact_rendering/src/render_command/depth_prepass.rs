@@ -10,7 +10,7 @@ use crate::{
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_containers::HashSet;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
@@ -50,7 +50,7 @@ impl DepthPrepass {
 
         let push_constants = ModelDepthPrepassShaderTemplate::push_constants();
 
-        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+        let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
             bind_group_layout_registry,
         );
@@ -202,7 +202,7 @@ impl DepthPrepass {
             return Ok(());
         }
 
-        let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
+        let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(());
         };
 
@@ -223,7 +223,7 @@ impl DepthPrepass {
 
         self.set_push_constants(&mut render_pass, rendering_surface, frame_counter);
 
-        render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
+        render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         for model_id in &self.models {
             let transform_buffer = gpu_resources.model_instance_buffer()

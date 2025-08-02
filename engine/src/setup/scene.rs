@@ -40,7 +40,7 @@ pub fn setup_scene_data_for_new_entities(
 
     light::setup_lights_for_new_entities(
         scene.scene_camera(),
-        scene.light_storage(),
+        scene.light_manager(),
         components,
         desynchronized,
     );
@@ -108,7 +108,7 @@ pub fn cleanup_scene_data_for_removed_entity(
     remove_scene_graph_model_instance_node_for_entity(scene, entity, desynchronized);
 
     impact_light::setup::cleanup_light_for_removed_entity(
-        scene.light_storage(),
+        scene.light_manager(),
         entity,
         desynchronized,
     );

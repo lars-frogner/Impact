@@ -34,9 +34,10 @@ pub const JITTER_COUNT: usize = 8;
 /// Bases for the Halton sequence used to generate the jitter offsets.
 const JITTER_BASES: (u64, u64) = (2, 3);
 
-/// Owner and manager of a GPU resources for a camera.
+/// GPU resources for a camera, including the GPU buffer for the projection
+/// transform.
 #[derive(Debug)]
-pub struct CameraGPUBufferManager {
+pub struct CameraGPUResource {
     view_transform: Isometry3<f32>,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
@@ -73,7 +74,7 @@ pub struct CameraProjectionUniform {
 static JITTER_OFFSETS: LazyLock<[Vector4<f32>; JITTER_COUNT]> =
     LazyLock::new(CameraProjectionUniform::generate_jitter_offsets);
 
-impl CameraGPUBufferManager {
+impl CameraGPUResource {
     const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
     const LAYOUT_ID: ConstStringHash64 = ConstStringHash64::new("CameraProjectionUniform");
 

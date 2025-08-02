@@ -12,7 +12,7 @@ use crate::{
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -67,7 +67,7 @@ impl PostprocessingRenderPass {
         let mut bind_group_layouts = Vec::with_capacity(8);
 
         if uses_camera {
-            bind_group_layouts.push(CameraGPUBufferManager::get_or_create_bind_group_layout(
+            bind_group_layouts.push(CameraGPUResource::get_or_create_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ));
@@ -338,11 +338,11 @@ impl PostprocessingRenderPass {
         let mut bind_group_index = 0;
 
         if self.uses_camera {
-            let Some(camera_buffer_manager) = gpu_resources.get_camera_buffer_manager() else {
+            let Some(camera_gpu_resources) = gpu_resources.camera() else {
                 return Ok(());
             };
 
-            render_pass.set_bind_group(bind_group_index, camera_buffer_manager.bind_group(), &[]);
+            render_pass.set_bind_group(bind_group_index, camera_gpu_resources.bind_group(), &[]);
             bind_group_index += 1;
         }
 

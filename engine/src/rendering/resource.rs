@@ -2,15 +2,15 @@
 
 pub mod legacy;
 
-use impact_camera::buffer::CameraGPUBufferManager;
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_containers::HashMap;
-use impact_light::buffer::LightGPUBufferManager;
+use impact_light::gpu_resource::LightGPUResources;
 use impact_material::gpu_resource::{
     MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap,
 };
 use impact_mesh::gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap};
 use impact_rendering::resource::BasicGPUResources;
-use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::resource::SkyboxGPUResourceManager};
+use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::gpu_resource::SkyboxGPUResource};
 use impact_texture::gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap};
 use impact_voxel::{
     VoxelObjectID,
@@ -19,6 +19,9 @@ use impact_voxel::{
 
 #[derive(Debug)]
 pub struct RenderResourceManager {
+    pub camera: Option<CameraGPUResource>,
+    pub skybox: Option<SkyboxGPUResource>,
+    pub lights: Option<LightGPUResources>,
     pub triangle_meshes: TriangleMeshGPUResourceMap,
     pub line_segment_meshes: LineSegmentMeshGPUResourceMap,
     pub textures: TextureMap,
@@ -33,6 +36,9 @@ pub struct RenderResourceManager {
 impl RenderResourceManager {
     pub fn new() -> Self {
         Self {
+            camera: None,
+            skybox: None,
+            lights: None,
             triangle_meshes: TriangleMeshGPUResourceMap::new(),
             line_segment_meshes: LineSegmentMeshGPUResourceMap::new(),
             textures: TextureMap::new(),
@@ -53,6 +59,18 @@ impl Default for RenderResourceManager {
 }
 
 impl BasicGPUResources for RenderResourceManager {
+    fn camera(&self) -> Option<&CameraGPUResource> {
+        self.camera.as_ref()
+    }
+
+    fn skybox(&self) -> Option<&SkyboxGPUResource> {
+        self.skybox.as_ref()
+    }
+
+    fn light(&self) -> Option<&LightGPUResources> {
+        self.lights.as_ref()
+    }
+
     fn triangle_mesh(&self) -> &TriangleMeshGPUResourceMap {
         &self.triangle_meshes
     }
@@ -79,18 +97,6 @@ impl BasicGPUResources for RenderResourceManager {
 
     fn material_texture_bind_group(&self) -> &MaterialTextureBindGroupMap {
         &self.material_texture_bind_groups
-    }
-
-    fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager> {
-        self.legacy.synchronized().get_camera_buffer_manager()
-    }
-
-    fn get_light_buffer_manager(&self) -> Option<&LightGPUBufferManager> {
-        self.legacy.synchronized().get_light_buffer_manager()
-    }
-
-    fn get_skybox_resource_manager(&self) -> Option<&SkyboxGPUResourceManager> {
-        self.legacy.synchronized().get_skybox_resource_manager()
     }
 
     fn model_instance_buffer(&self) -> &ModelInstanceGPUBufferMap {

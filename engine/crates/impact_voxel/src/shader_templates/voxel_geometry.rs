@@ -7,7 +7,7 @@ use crate::{
         VoxelPushConstantVariant,
     },
 };
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     push_constant::PushConstantGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},

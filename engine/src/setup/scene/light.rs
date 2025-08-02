@@ -1,10 +1,10 @@
 //! Setup of lights for new entities.
 
-use impact_camera::buffer::BufferableCamera;
+use impact_camera::gpu_resource::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::ReferenceFrame;
 use impact_light::{
-    AmbientEmission, AmbientLightID, LightStorage, OmnidirectionalEmission, OmnidirectionalLightID,
+    AmbientEmission, AmbientLightID, LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLightID, setup,
@@ -15,44 +15,44 @@ use parking_lot::RwLock;
 
 /// Checks if the entities-to-be with the given components have the right
 /// components for a light source, and if so, adds the corresponding lights to
-/// the light storage and adds the correspondong light components with the
+/// the light manager and adds the correspondong light components with the
 /// lights' IDs to the entity.
 pub fn setup_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
-    light_storage: &RwLock<LightStorage>,
+    light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) {
-    setup_ambient_lights_for_new_entities(light_storage, components, desynchronized);
+    setup_ambient_lights_for_new_entities(light_manager, components, desynchronized);
     setup_omnidirectional_lights_for_new_entities(
         scene_camera,
-        light_storage,
+        light_manager,
         components,
         desynchronized,
     );
     setup_unidirectional_lights_for_new_entities(
         scene_camera,
-        light_storage,
+        light_manager,
         components,
         desynchronized,
     );
 }
 
 fn setup_ambient_lights_for_new_entities(
-    light_storage: &RwLock<LightStorage>,
+    light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) {
     setup!(
         {
-            let mut light_storage = light_storage.write();
+            let mut light_manager = light_manager.write();
         },
         components,
         |ambient_emission: &AmbientEmission,
          flags: Option<&SceneEntityFlags>|
          -> (AmbientLightID, SceneEntityFlags) {
             (
-                setup::setup_ambient_light(&mut light_storage, ambient_emission, desynchronized),
+                setup::setup_ambient_light(&mut light_manager, ambient_emission, desynchronized),
                 flags.copied().unwrap_or_default(),
             )
         },
@@ -62,7 +62,7 @@ fn setup_ambient_lights_for_new_entities(
 
 fn setup_omnidirectional_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
-    light_storage: &RwLock<LightStorage>,
+    light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) {
@@ -75,7 +75,7 @@ fn setup_omnidirectional_lights_for_new_entities(
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write();
+            let mut light_manager = light_manager.write();
         },
         components,
         |frame: &ReferenceFrame,
@@ -85,7 +85,7 @@ fn setup_omnidirectional_lights_for_new_entities(
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_omnidirectional_light(
-                    &mut light_storage,
+                    &mut light_manager,
                     &view_transform,
                     &frame.position.cast(),
                     omnidirectional_emission,
@@ -107,7 +107,7 @@ fn setup_omnidirectional_lights_for_new_entities(
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write();
+            let mut light_manager = light_manager.write();
         },
         components,
         |frame: &ReferenceFrame,
@@ -117,7 +117,7 @@ fn setup_omnidirectional_lights_for_new_entities(
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_shadowable_omnidirectional_light(
-                    &mut light_storage,
+                    &mut light_manager,
                     &view_transform,
                     &frame.position.cast(),
                     omnidirectional_emission,
@@ -133,7 +133,7 @@ fn setup_omnidirectional_lights_for_new_entities(
 
 fn setup_unidirectional_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
-    light_storage: &RwLock<LightStorage>,
+    light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut bool,
 ) {
@@ -146,7 +146,7 @@ fn setup_unidirectional_lights_for_new_entities(
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write();
+            let mut light_manager = light_manager.write();
         },
         components,
         |unidirectional_emission: &UnidirectionalEmission,
@@ -155,7 +155,7 @@ fn setup_unidirectional_lights_for_new_entities(
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_unidirectional_light(
-                    &mut light_storage,
+                    &mut light_manager,
                     &view_transform,
                     unidirectional_emission,
                     flags.into(),
@@ -176,7 +176,7 @@ fn setup_unidirectional_lights_for_new_entities(
                     *scene_camera.view_transform()
                 });
 
-            let mut light_storage = light_storage.write();
+            let mut light_manager = light_manager.write();
         },
         components,
         |unidirectional_emission: &ShadowableUnidirectionalEmission,
@@ -185,7 +185,7 @@ fn setup_unidirectional_lights_for_new_entities(
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_shadowable_unidirectional_light(
-                    &mut light_storage,
+                    &mut light_manager,
                     &view_transform,
                     unidirectional_emission,
                     flags.into(),

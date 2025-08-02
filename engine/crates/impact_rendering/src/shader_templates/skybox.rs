@@ -8,13 +8,13 @@ use crate::{
     },
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
 };
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
 use impact_mesh::{VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation};
-use impact_scene::skybox::resource::SkyboxGPUResourceManager;
+use impact_scene::skybox::gpu_resource::SkyboxGPUResource;
 use std::sync::LazyLock;
 
 /// Shader template for the skybox rendering pass, which writes the emitted
@@ -66,10 +66,10 @@ impl SpecificShaderTemplate for SkyboxShaderTemplate {
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
                     "skybox_properties_group" => 1,
-                    "skybox_properties_binding" => SkyboxGPUResourceManager::properties_uniform_binding(),
+                    "skybox_properties_binding" => SkyboxGPUResource::properties_uniform_binding(),
                     "skybox_texture_group" => 1,
-                    "skybox_texture_binding" => SkyboxGPUResourceManager::texture_binding(),
-                    "skybox_sampler_binding" => SkyboxGPUResourceManager::sampler_binding(),
+                    "skybox_texture_binding" => SkyboxGPUResource::texture_binding(),
+                    "skybox_sampler_binding" => SkyboxGPUResource::sampler_binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,
                 ),
             )

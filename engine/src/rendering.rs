@@ -299,14 +299,14 @@ impl RenderingSystem {
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
-        let light_storage = scene.light_storage().read();
+        let light_manager = scene.light_manager().read();
         let model_instance_manager = scene.model_instance_manager().read();
         let scene_camera = scene.scene_camera().read();
 
         self.render_command_manager.read().record(
             &self.rendering_surface,
             &surface_texture_view,
-            &light_storage,
+            &light_manager,
             &model_instance_manager,
             scene_camera.as_ref(),
             resource_manager,

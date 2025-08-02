@@ -12,12 +12,12 @@ use crate::{
     },
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
 };
-use impact_camera::buffer::CameraProjectionUniform;
+use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_light::{buffer::LightGPUBufferManager, shadow_map::ShadowCubemapTexture};
+use impact_light::{gpu_resource::LightGPUResources, shadow_map::ShadowCubemapTexture};
 use impact_mesh::{
     self, TriangleMeshID, VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation,
 };
@@ -114,7 +114,7 @@ impl SpecificShaderTemplate for ShadowableOmnidirectionalLightShaderTemplate {
                     "material_properties_texture_binding" => MaterialProperties.texture_binding(),
                     "material_properties_sampler_binding" => MaterialProperties.sampler_binding(),
                     "light_uniform_group" => 5,
-                    "light_uniform_binding" => LightGPUBufferManager::light_binding(),
+                    "light_uniform_binding" => LightGPUResources::light_binding(),
                     "shadow_map_texture_group" => 6,
                     "shadow_map_texture_binding" => ShadowCubemapTexture::texture_binding(),
                     "shadow_map_sampler_binding" => ShadowCubemapTexture::sampler_binding(),

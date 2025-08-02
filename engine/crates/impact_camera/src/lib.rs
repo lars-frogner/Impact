@@ -3,7 +3,7 @@
 #[macro_use]
 mod macros;
 
-pub mod buffer;
+pub mod gpu_resource;
 pub mod setup;
 
 use approx::assert_abs_diff_ne;

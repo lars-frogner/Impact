@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
-use impact_camera::buffer::{BufferableCamera, CameraGPUBufferManager};
+use impact_camera::gpu_resource::{BufferableCamera, CameraGPUResource};
 use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
@@ -608,7 +608,7 @@ impl VoxelGeometryPipeline {
 
         let push_constants = VoxelGeometryShaderTemplate::push_constants();
 
-        let camera_bind_group_layout = CameraGPUBufferManager::get_or_create_bind_group_layout(
+        let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
             bind_group_layout_registry,
         );
