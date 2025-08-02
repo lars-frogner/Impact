@@ -654,9 +654,9 @@ impl ModelInstanceBuffer {
     /// passed to the [`ModelInstanceManager::register_instance`] calls
     /// for this model.
     ///
-    /// Call [`Self::copy_buffered_instance_features_to_gpu_buffers`] with the
-    /// same list of GPU buffer managers for subsequent moves of buffered
-    /// feature values to the GPU buffers.
+    /// Call [`Self::copy_buffered_instance_features_to_gpu_buffers_if_modifed`]
+    /// with the same list of GPU buffer managers for subsequent moves of
+    /// buffered feature values to the GPU buffers.
     fn copy_buffered_instance_features_to_new_gpu_buffers(
         &mut self,
         graphics_device: &GraphicsDevice,

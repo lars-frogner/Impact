@@ -69,7 +69,8 @@ pub struct MaterialTextureGroupID(Hash64);
 /// - **Texture Group** ([`MaterialTextureGroup`]) - Specifies the textures
 ///   used by the material.
 /// - **Instance Features** - Per-material values of uniform properties like
-///   colors and PBR parameters stored in an [`InstanceFeatureStorage`].
+///   colors and PBR parameters stored in an
+///   [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
 ///
 /// This separation allows efficient sharing of templates and texture groups
 /// between multiple materials.
