@@ -32,7 +32,7 @@ use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle,
     camera::SceneCamera,
     graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
-    model::InstanceFeatureManager,
+    model::ModelInstanceManager,
 };
 use impact_voxel::{
     VoxelObjectID, VoxelObjectManager,
@@ -87,7 +87,7 @@ fn update_visibility_flags_for_gizmo(
 pub fn buffer_transforms_for_gizmos(
     ecs_world: &ECSWorld,
     rigid_body_manager: &RigidBodyManager,
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     gizmo_manager: &GizmoManager,
     collision_world: &CollisionWorld,
     voxel_object_manager: &VoxelObjectManager,
@@ -114,7 +114,7 @@ pub fn buffer_transforms_for_gizmos(
                 return;
             }
             buffer_transforms_for_model_instance_gizmos(
-                instance_feature_manager,
+                model_instance_manager,
                 scene_graph,
                 current_frame_count,
                 gizmos.visible_gizmos,
@@ -132,7 +132,7 @@ pub fn buffer_transforms_for_gizmos(
                 return;
             }
             buffer_transform_for_light_sphere_gizmo(
-                instance_feature_manager,
+                model_instance_manager,
                 light_storage,
                 *omnidirectional_light_id,
             );
@@ -149,7 +149,7 @@ pub fn buffer_transforms_for_gizmos(
             }
             if gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) {
                 buffer_transform_for_shadowable_light_sphere_gizmo(
-                    instance_feature_manager,
+                    model_instance_manager,
                     light_storage,
                     *omnidirectional_light_id,
                 );
@@ -159,7 +159,7 @@ pub fn buffer_transforms_for_gizmos(
                 .contains(GizmoSet::SHADOW_CUBEMAP_FACES)
             {
                 buffer_transforms_for_shadow_cubemap_faces_gizmo(
-                    instance_feature_manager,
+                    model_instance_manager,
                     light_storage,
                     *omnidirectional_light_id,
                 );
@@ -180,7 +180,7 @@ pub fn buffer_transforms_for_gizmos(
                 return;
             }
             buffer_transforms_for_shadow_map_cascades_gizmo(
-                instance_feature_manager,
+                model_instance_manager,
                 light_storage,
                 scene_camera,
                 *unidirectional_light_id,
@@ -200,7 +200,7 @@ pub fn buffer_transforms_for_gizmos(
             return;
         }
         buffer_transforms_for_kinematics_gizmos(
-            instance_feature_manager,
+            model_instance_manager,
             gizmo_manager.parameters(),
             scene_camera,
             &camera_position,
@@ -225,7 +225,7 @@ pub fn buffer_transforms_for_gizmos(
         }
         buffer_transforms_for_dynamics_gizmos(
             rigid_body_manager,
-            instance_feature_manager,
+            model_instance_manager,
             gizmo_manager.parameters(),
             scene_camera,
             &camera_position,
@@ -247,7 +247,7 @@ pub fn buffer_transforms_for_gizmos(
             return;
         }
         buffer_transforms_for_collider_gizmos(
-            instance_feature_manager,
+            model_instance_manager,
             collision_world,
             voxel_object_manager,
             scene_camera,
@@ -267,7 +267,7 @@ pub fn buffer_transforms_for_gizmos(
                 return;
             }
             buffer_transforms_for_voxel_chunks_gizmo(
-                instance_feature_manager,
+                model_instance_manager,
                 voxel_object_manager,
                 scene_graph,
                 gizmo_manager.parameters(),
@@ -280,7 +280,7 @@ pub fn buffer_transforms_for_gizmos(
 }
 
 fn buffer_transforms_for_model_instance_gizmos(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &SceneGraph,
     current_frame_count: u32,
     visible_gizmos: GizmoSet,
@@ -294,12 +294,12 @@ fn buffer_transforms_for_model_instance_gizmos(
         return;
     }
 
-    let model_view_transform = instance_feature_manager
+    let model_view_transform = model_instance_manager
         .feature::<InstanceModelViewTransformWithPrevious>(node.model_view_transform_feature_id())
         .current;
 
     if visible_gizmos.contains(GizmoType::ReferenceFrameAxes.as_set()) {
-        instance_feature_manager.buffer_instance_feature(
+        model_instance_manager.buffer_instance_feature(
             GizmoType::ReferenceFrameAxes.only_model_id(),
             &model_view_transform,
         );
@@ -309,7 +309,7 @@ fn buffer_transforms_for_model_instance_gizmos(
         if let Some(transform) =
             compute_transform_for_bounding_sphere_gizmo(node, model_view_transform)
         {
-            instance_feature_manager
+            model_instance_manager
                 .buffer_instance_feature(GizmoType::BoundingSphere.only_model_id(), &transform);
         }
     }
@@ -334,7 +334,7 @@ fn compute_transform_for_bounding_sphere_gizmo(
 }
 
 fn buffer_transform_for_light_sphere_gizmo(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     light_storage: &LightStorage,
     light_id: OmnidirectionalLightID,
 ) {
@@ -348,14 +348,14 @@ fn buffer_transform_for_light_sphere_gizmo(
         rotation: UnitQuaternion::identity(),
     };
 
-    instance_feature_manager.buffer_instance_feature(
+    model_instance_manager.buffer_instance_feature(
         GizmoType::LightSphere.only_model_id(),
         &light_sphere_from_unit_sphere,
     );
 }
 
 fn buffer_transform_for_shadowable_light_sphere_gizmo(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     light_storage: &LightStorage,
     light_id: ShadowableOmnidirectionalLightID,
 ) {
@@ -369,14 +369,14 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
         rotation: UnitQuaternion::identity(),
     };
 
-    instance_feature_manager.buffer_instance_feature(
+    model_instance_manager.buffer_instance_feature(
         GizmoType::LightSphere.only_model_id(),
         &light_sphere_from_unit_sphere,
     );
 }
 
 fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     light_storage: &LightStorage,
     light_id: ShadowableOmnidirectionalLightID,
 ) {
@@ -390,7 +390,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
         light_space_to_camera_transform.prepend_scaling(light.near_distance()),
     );
 
-    instance_feature_manager.buffer_instance_feature(
+    model_instance_manager.buffer_instance_feature(
         &GizmoType::ShadowCubemapFaces.models()[SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX]
             .model_id,
         &cubemap_near_plane_transform,
@@ -400,13 +400,13 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
         light_space_to_camera_transform.prepend_scaling(light.far_distance()),
     );
 
-    instance_feature_manager.buffer_instance_feature(
+    model_instance_manager.buffer_instance_feature(
         &GizmoType::ShadowCubemapFaces.models()[SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX]
             .model_id,
         &cubemap_far_plane_transform,
     );
 
-    instance_feature_manager.buffer_instance_feature(
+    model_instance_manager.buffer_instance_feature(
         &GizmoType::ShadowCubemapFaces.models()[SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX]
             .model_id,
         &cubemap_far_plane_transform,
@@ -414,7 +414,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 }
 
 fn buffer_transforms_for_shadow_map_cascades_gizmo(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     light_storage: &LightStorage,
     scene_camera: &SceneCamera,
     light_id: ShadowableUnidirectionalLightID,
@@ -445,7 +445,7 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
             scaling,
         };
 
-        instance_feature_manager.buffer_instance_feature(
+        model_instance_manager.buffer_instance_feature(
             &GizmoType::ShadowMapCascades.models()[cascade_idx].model_id,
             &camera_cascade_from_vertical_square,
         );
@@ -453,7 +453,7 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
 }
 
 fn buffer_transforms_for_kinematics_gizmos(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     parameters: &GizmoParameters,
     scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
@@ -467,7 +467,7 @@ fn buffer_transforms_for_kinematics_gizmos(
         let length = parameters.linear_velocity_scale * speed;
 
         if abs_diff_ne!(length, 0.0) {
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 GizmoType::LinearVelocity.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
@@ -485,7 +485,7 @@ fn buffer_transforms_for_kinematics_gizmos(
             parameters.angular_velocity_scale * motion.angular_velocity.angular_speed().radians();
 
         if abs_diff_ne!(length, 0.0) {
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 GizmoType::AngularVelocity.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
@@ -501,7 +501,7 @@ fn buffer_transforms_for_kinematics_gizmos(
 
 fn buffer_transforms_for_dynamics_gizmos(
     rigid_body_manager: &RigidBodyManager,
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     parameters: &GizmoParameters,
     scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
@@ -528,7 +528,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         let view_sphere_from_unit_sphere_transform =
             scene_camera.view_transform() * world_sphere_from_unit_sphere_transform;
 
-        instance_feature_manager.buffer_instance_feature(
+        model_instance_manager.buffer_instance_feature(
             GizmoType::CenterOfMass.only_model_id(),
             &InstanceModelViewTransform::from(view_sphere_from_unit_sphere_transform),
         );
@@ -540,7 +540,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         let length = parameters.angular_momentum_scale * magnitude;
 
         if abs_diff_ne!(length, 0.0) {
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 GizmoType::AngularMomentum.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
@@ -559,7 +559,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         let length = parameters.force_scale * magnitude;
 
         if abs_diff_ne!(length, 0.0) {
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 GizmoType::Force.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
@@ -578,7 +578,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         let length = parameters.torque_scale * magnitude;
 
         if abs_diff_ne!(length, 0.0) {
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 GizmoType::Torque.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
@@ -658,7 +658,7 @@ fn compute_rotation_to_camera_space_for_cylindrical_billboard(
 }
 
 fn buffer_transforms_for_collider_gizmos(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     collision_world: &CollisionWorld,
     voxel_object_manager: &VoxelObjectManager,
     scene_camera: &SceneCamera,
@@ -702,7 +702,7 @@ fn buffer_transforms_for_collider_gizmos(
             let model_to_camera_transform =
                 scene_camera.view_transform() * unit_sphere_to_sphere_collider_transform;
 
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id,
                 &InstanceModelViewTransform::from(model_to_camera_transform),
             );
@@ -724,7 +724,7 @@ fn buffer_transforms_for_collider_gizmos(
             let model_to_camera_transform =
                 scene_camera.view_transform() * unit_square_to_plane_collider_transform;
 
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id,
                 &InstanceModelViewTransform::from(model_to_camera_transform),
             );
@@ -768,7 +768,7 @@ fn buffer_transforms_for_collider_gizmos(
                 transforms.push(model_to_camera_transform);
             });
 
-            instance_feature_manager.buffer_instance_feature_slice(
+            model_instance_manager.buffer_instance_feature_slice(
                 &models[COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX].model_id,
                 &transforms,
             );
@@ -797,7 +797,7 @@ fn rotation_between_axes(a: &UnitVector3<f64>, b: &UnitVector3<f64>) -> UnitQuat
 }
 
 fn buffer_transforms_for_voxel_chunks_gizmo(
-    instance_feature_manager: &mut InstanceFeatureManager,
+    model_instance_manager: &mut ModelInstanceManager,
     voxel_object_manager: &VoxelObjectManager,
     scene_graph: &SceneGraph,
     parameters: &GizmoParameters,
@@ -817,7 +817,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
         return;
     };
 
-    let model_view_transform: Similarity3<_> = instance_feature_manager
+    let model_view_transform: Similarity3<_> = model_instance_manager
         .feature::<InstanceModelViewTransformWithPrevious>(node.model_view_transform_feature_id())
         .current
         .into();
@@ -855,7 +855,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             let chunk_transform = model_view_transform.prepend_scaling(voxel_extent)
                 * Translation3::from(chunk_offset_in_voxels.cast());
 
-            instance_feature_manager.buffer_instance_feature(
+            model_instance_manager.buffer_instance_feature(
                 model_id,
                 &InstanceModelViewTransform::from(chunk_transform),
             );

@@ -342,8 +342,9 @@ impl GizmoPassPipeline {
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
         for model in models {
-            let transform_buffer_manager = gpu_resources
-                .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransform>(
+            let transform_buffer = gpu_resources
+                .model_instance_buffer()
+                .get_model_buffer_for_feature_feature_type::<InstanceModelViewTransform>(
                     model.model_id(),
                 )
                 .ok_or_else(|| {
@@ -353,18 +354,14 @@ impl GizmoPassPipeline {
                     )
                 })?;
 
-            let instance_range = transform_buffer_manager.initial_feature_range();
+            let instance_range = transform_buffer.initial_feature_range();
 
             if instance_range.is_empty() {
                 continue;
             }
 
-            render_pass.set_vertex_buffer(
-                0,
-                transform_buffer_manager
-                    .vertex_gpu_buffer()
-                    .valid_buffer_slice(),
-            );
+            render_pass
+                .set_vertex_buffer(0, transform_buffer.vertex_gpu_buffer().valid_buffer_slice());
 
             let mut vertex_buffer_slot = 1;
 
@@ -413,8 +410,9 @@ impl GizmoPassPipeline {
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
         for model in models {
-            let transform_buffer_manager = gpu_resources
-                .get_instance_feature_buffer_manager_for_feature_type::<InstanceModelViewTransform>(
+            let transform_buffer = gpu_resources
+                .model_instance_buffer()
+                .get_model_buffer_for_feature_feature_type::<InstanceModelViewTransform>(
                     model.model_id(),
                 )
                 .ok_or_else(|| {
@@ -424,18 +422,14 @@ impl GizmoPassPipeline {
                     )
                 })?;
 
-            let instance_range = transform_buffer_manager.initial_feature_range();
+            let instance_range = transform_buffer.initial_feature_range();
 
             if instance_range.is_empty() {
                 continue;
             }
 
-            render_pass.set_vertex_buffer(
-                0,
-                transform_buffer_manager
-                    .vertex_gpu_buffer()
-                    .valid_buffer_slice(),
-            );
+            render_pass
+                .set_vertex_buffer(0, transform_buffer.vertex_gpu_buffer().valid_buffer_slice());
 
             let mut vertex_buffer_slot = 1;
 

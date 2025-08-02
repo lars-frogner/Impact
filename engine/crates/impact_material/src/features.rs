@@ -8,7 +8,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::MATERIAL_START;
 use impact_gpu::wgpu;
-use impact_model::InstanceFeatureManager;
+use impact_model::ModelInstanceManager;
 use impact_model::{InstanceFeatureID, impl_InstanceFeatureForGPU};
 use nalgebra::Vector2;
 use std::hash::Hash;
@@ -145,25 +145,25 @@ impl FixedColorMaterialFeature {
     }
 }
 
-pub fn register_material_feature_types<MID: Clone + Eq + Hash>(
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+pub fn register_material_feature_types<MID: Copy + Eq + Hash>(
+    model_instance_manager: &mut ModelInstanceManager<MID>,
 ) {
-    instance_feature_manager.register_feature_type::<FixedColorMaterialFeature>();
-    instance_feature_manager.register_feature_type::<UniformColorPhysicalMaterialFeature>();
-    instance_feature_manager.register_feature_type::<TexturedColorPhysicalMaterialFeature>();
-    instance_feature_manager
+    model_instance_manager.register_feature_type::<FixedColorMaterialFeature>();
+    model_instance_manager.register_feature_type::<UniformColorPhysicalMaterialFeature>();
+    model_instance_manager.register_feature_type::<TexturedColorPhysicalMaterialFeature>();
+    model_instance_manager
         .register_feature_type::<UniformColorParallaxMappedPhysicalMaterialFeature>();
-    instance_feature_manager
+    model_instance_manager
         .register_feature_type::<TexturedColorParallaxMappedPhysicalMaterialFeature>();
 }
 
 /// Creates the appropriate physical material feature for the given set of
-/// properties and adds it to the instance feature manager.
+/// properties and adds it to the model instance manager.
 ///
 /// # Returns
 /// The ID of the created feature type and the ID of the created feature.
-pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+pub fn create_physical_material_feature<MID: Copy + Eq + Hash>(
+    model_instance_manager: &mut ModelInstanceManager<MID>,
     uniform_color: Option<&UniformColor>,
     specular_reflectance: f32,
     roughness: f32,
@@ -174,7 +174,7 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
     match (uniform_color, parallax_map) {
         (Some(color), None) => (
             UniformColorPhysicalMaterialFeature::add_feature(
-                instance_feature_manager,
+                model_instance_manager,
                 color,
                 specular_reflectance,
                 roughness,
@@ -185,7 +185,7 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
         ),
         (None, None) => (
             TexturedColorPhysicalMaterialFeature::add_feature(
-                instance_feature_manager,
+                model_instance_manager,
                 specular_reflectance,
                 roughness,
                 metalness,
@@ -195,7 +195,7 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
         ),
         (Some(color), Some(parallax_map)) => (
             UniformColorParallaxMappedPhysicalMaterialFeature::add_feature(
-                instance_feature_manager,
+                model_instance_manager,
                 color,
                 specular_reflectance,
                 roughness,
@@ -208,7 +208,7 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
         ),
         (None, Some(parallax_map)) => (
             TexturedColorParallaxMappedPhysicalMaterialFeature::add_feature(
-                instance_feature_manager,
+                model_instance_manager,
                 specular_reflectance,
                 roughness,
                 metalness,
@@ -221,15 +221,15 @@ pub fn create_physical_material_feature<MID: Clone + Eq + Hash>(
 }
 
 impl UniformColorPhysicalMaterialFeature {
-    fn add_feature<MID: Clone + Eq + Hash>(
-        instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    fn add_feature<MID: Copy + Eq + Hash>(
+        model_instance_manager: &mut ModelInstanceManager<MID>,
         color: &UniformColor,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,
         emissive_luminance: f32,
     ) -> InstanceFeatureID {
-        instance_feature_manager
+        model_instance_manager
             .get_storage_mut::<Self>()
             .expect("Missing storage for UniformColorPhysicalMaterialFeature features")
             .add_feature(&Self {
@@ -243,14 +243,14 @@ impl UniformColorPhysicalMaterialFeature {
 }
 
 impl TexturedColorPhysicalMaterialFeature {
-    fn add_feature<MID: Clone + Eq + Hash>(
-        instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    fn add_feature<MID: Copy + Eq + Hash>(
+        model_instance_manager: &mut ModelInstanceManager<MID>,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,
         emissive_luminance: f32,
     ) -> InstanceFeatureID {
-        instance_feature_manager
+        model_instance_manager
             .get_storage_mut::<Self>()
             .expect("Missing storage for TexturedColorPhysicalMaterialFeature features")
             .add_feature(&Self {
@@ -263,8 +263,8 @@ impl TexturedColorPhysicalMaterialFeature {
 }
 
 impl UniformColorParallaxMappedPhysicalMaterialFeature {
-    fn add_feature<MID: Clone + Eq + Hash>(
-        instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    fn add_feature<MID: Copy + Eq + Hash>(
+        model_instance_manager: &mut ModelInstanceManager<MID>,
         color: &UniformColor,
         specular_reflectance: f32,
         roughness: f32,
@@ -272,7 +272,7 @@ impl UniformColorParallaxMappedPhysicalMaterialFeature {
         emissive_luminance: f32,
         parallax_map: &ParallaxMap,
     ) -> InstanceFeatureID {
-        instance_feature_manager
+        model_instance_manager
             .get_storage_mut::<Self>()
             .expect(
                 "Missing storage for UniformColorParallaxMappedPhysicalMaterialFeature features",
@@ -290,15 +290,15 @@ impl UniformColorParallaxMappedPhysicalMaterialFeature {
 }
 
 impl TexturedColorParallaxMappedPhysicalMaterialFeature {
-    fn add_feature<MID: Clone + Eq + Hash>(
-        instance_feature_manager: &mut InstanceFeatureManager<MID>,
+    fn add_feature<MID: Copy + Eq + Hash>(
+        model_instance_manager: &mut ModelInstanceManager<MID>,
         specular_reflectance: f32,
         roughness: f32,
         metalness: f32,
         emissive_luminance: f32,
         parallax_map: &ParallaxMap,
     ) -> InstanceFeatureID {
-        instance_feature_manager
+        model_instance_manager
             .get_storage_mut::<Self>()
             .expect(
                 "Missing storage for TexturedColorParallaxMappedPhysicalMaterialFeature features",

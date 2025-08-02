@@ -19,8 +19,10 @@ pub struct ModelID {
     hash: Hash64,
 }
 
-pub type InstanceFeatureManager = impact_model::InstanceFeatureManager<ModelID>;
-pub type InstanceFeatureManagerState = impact_model::InstanceFeatureManagerState<ModelID>;
+pub type ModelInstanceManager = impact_model::ModelInstanceManager<ModelID>;
+pub type ModelInstanceManagerState = impact_model::ModelInstanceManagerState<ModelID>;
+
+pub type ModelInstanceGPUBufferMap = impact_model::gpu_resource::ModelInstanceGPUBufferMap<ModelID>;
 
 impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the given triangle

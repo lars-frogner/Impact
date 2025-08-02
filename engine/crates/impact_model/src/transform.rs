@@ -1,6 +1,6 @@
 //! Model instance transforms.
 
-use crate::{InstanceFeatureManager, impl_InstanceFeatureForGPU};
+use crate::{ModelInstanceManager, impl_InstanceFeatureForGPU};
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
@@ -217,10 +217,10 @@ impl_InstanceFeatureForGPU!(
     ]
 );
 
-pub fn register_model_feature_types<MID: Clone + Eq + Hash>(
-    instance_feature_manager: &mut InstanceFeatureManager<MID>,
+pub fn register_model_feature_types<MID: Copy + Eq + Hash>(
+    model_instance_manager: &mut ModelInstanceManager<MID>,
 ) {
-    instance_feature_manager.register_feature_type::<InstanceModelViewTransform>();
-    instance_feature_manager.register_feature_type::<InstanceModelViewTransformWithPrevious>();
-    instance_feature_manager.register_feature_type::<InstanceModelLightTransform>();
+    model_instance_manager.register_feature_type::<InstanceModelViewTransform>();
+    model_instance_manager.register_feature_type::<InstanceModelViewTransformWithPrevious>();
+    model_instance_manager.register_feature_type::<InstanceModelLightTransform>();
 }

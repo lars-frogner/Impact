@@ -10,7 +10,7 @@ use bitflags::{Flags, bitflags};
 use bytemuck::{Pod, Zeroable};
 use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
-use impact_scene::model::{InstanceFeatureManager, ModelID};
+use impact_scene::model::{ModelID, ModelInstanceManager};
 use model::{GizmoModel, gizmo_models};
 use serde::{Deserialize, Serialize};
 
@@ -636,9 +636,9 @@ impl GizmoManager {
 
 /// Initializes the instance buffers used for the model-view transforms of the
 /// gizmo instances.
-pub fn initialize_buffers_for_gizmo_models(instance_feature_manager: &mut InstanceFeatureManager) {
+pub fn initialize_buffers_for_gizmo_models(model_instance_manager: &mut ModelInstanceManager) {
     for model_id in gizmo_models().iter().flatten().map(|model| model.model_id) {
-        instance_feature_manager
+        model_instance_manager
             .initialize_instance_buffer(model_id, &[InstanceModelViewTransform::FEATURE_TYPE_ID]);
     }
 }
