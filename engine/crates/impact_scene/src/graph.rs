@@ -14,6 +14,7 @@ use impact_light::{
     LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
     ShadowableUnidirectionalLight, shadow_map::CascadeIdx,
 };
+use impact_material::MaterialRegistry;
 use impact_model::{
     InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID,
     transform::{
@@ -457,6 +458,7 @@ impl SceneGraph {
     /// changed.
     pub fn buffer_model_instances_for_rendering(
         &self,
+        material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
         current_frame_count: u32,
@@ -487,6 +489,7 @@ impl SceneGraph {
 
             if should_buffer {
                 self.buffer_model_instances_in_group_for_rendering(
+                    material_registry,
                     model_instance_manager,
                     current_frame_count,
                     camera_space_view_frustum,
@@ -524,6 +527,7 @@ impl SceneGraph {
 
             if should_buffer {
                 Self::buffer_model_instance_for_rendering(
+                    material_registry,
                     model_instance_manager,
                     current_frame_count,
                     model_instance_node,
@@ -639,6 +643,7 @@ impl SceneGraph {
     /// If any of the child nodes of the group node does not exist.
     fn buffer_model_instances_in_group_for_rendering(
         &self,
+        material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
         current_frame_count: u32,
         camera_space_view_frustum: &Frustum<f32>,
@@ -667,6 +672,7 @@ impl SceneGraph {
 
             if should_buffer {
                 self.buffer_model_instances_in_group_for_rendering(
+                    material_registry,
                     model_instance_manager,
                     current_frame_count,
                     camera_space_view_frustum,
@@ -708,6 +714,7 @@ impl SceneGraph {
 
             if should_buffer {
                 Self::buffer_model_instance_for_rendering(
+                    material_registry,
                     model_instance_manager,
                     current_frame_count,
                     child_model_instance_node,
@@ -718,6 +725,7 @@ impl SceneGraph {
     }
 
     fn buffer_model_instance_for_rendering(
+        material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
         current_frame_count: u32,
         model_instance_node: &ModelInstanceNode,
@@ -734,10 +742,18 @@ impl SceneGraph {
             )
             .set_transform_for_new_frame(instance_model_view_transform);
 
+        let model_id = model_instance_node.model_id();
+
         model_instance_manager.buffer_instance_features_from_storages(
-            model_instance_node.model_id(),
+            model_id,
             model_instance_node.feature_ids_for_rendering(),
         );
+
+        if let Some(material) = material_registry.get(model_id.material_id()) {
+            material
+                .property_values
+                .buffer(model_instance_manager, model_id);
+        }
 
         model_instance_node.declare_visible_this_frame(current_frame_count);
     }

@@ -302,16 +302,20 @@ impl GeometryPass {
 
         layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap());
 
-        // If the material has a buffer of per-instance features, it will be directly
-        // after the transform buffers
-        if resource_registries
+        if let Some(material_property_values_feature_type_id) = resource_registries
             .material()
             .get(model_id.material_id())
-            .and_then(Material::instance_feature_id_if_applicable)
-            .is_some()
+            .and_then(|material| {
+                material
+                    .property_values
+                    .instance_feature_type_id_if_applicable()
+            })
         {
             let material_property_buffer = instance_feature_buffers
-                .get(2)
+                .iter()
+                .find(|buffer| {
+                    buffer.is_for_feature_type_with_id(material_property_values_feature_type_id)
+                })
                 .ok_or_else(|| anyhow!("Missing material GPU buffer for model {}", model_id))?;
 
             layouts.push(material_property_buffer.vertex_buffer_layout().clone());
@@ -517,14 +521,18 @@ impl GeometryPass {
 
                 let mut vertex_buffer_slot = 1;
 
-                if let Some(material_property_feature_id) =
-                    material.and_then(Material::instance_feature_id_if_applicable)
+                if let Some(material_property_values_feature_type_id) =
+                    material.and_then(|material| {
+                        material
+                            .property_values
+                            .instance_feature_type_id_if_applicable()
+                    })
                 {
                     let material_property_buffer = instance_feature_buffers
                         .iter()
                         .find(|buffer| {
                             buffer.is_for_feature_type_with_id(
-                                material_property_feature_id.feature_type_id(),
+                                material_property_values_feature_type_id,
                             )
                         })
                         .ok_or_else(|| {

@@ -453,7 +453,9 @@ impl<MID: Copy + Eq + Hash> ModelInstanceManager<MID> {
         self.instance_buffers
             .retain(|model_id, _| state.model_ids.contains(model_id));
 
-        // TODO: remove appropriate features from storages
+        for storage in self.feature_storages.values_mut() {
+            storage.remove_all_features();
+        }
     }
 
     /// Performs any required updates for keeping the given GPU buffers in sync

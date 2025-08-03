@@ -3,20 +3,19 @@
 #[macro_use]
 mod macros;
 
-pub mod features;
 pub mod gpu_resource;
 pub mod import;
 pub mod setup;
+pub mod values;
 
-pub use features::register_material_feature_types;
+pub use values::register_material_feature_types;
 
 use bytemuck::{Pod, Zeroable};
-use features::MaterialInstanceFeatureFlags;
 use impact_containers::DefaultHasher;
 use impact_gpu::wgpu;
 use impact_math::{Hash64, StringHash64, hash64};
 use impact_mesh::VertexAttributeSet;
-use impact_model::{InstanceFeatureID, InstanceFeatureTypeID};
+use impact_model::InstanceFeatureTypeID;
 use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
 use impact_texture::{
     TextureID,
@@ -31,6 +30,7 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
 };
+use values::{MaterialPropertyFlags, MaterialPropertyValues};
 
 /// A color with RGB components.
 pub type RGBColor = Vector3<f32>;
@@ -62,29 +62,27 @@ pub struct MaterialTemplateID(u64);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MaterialTextureGroupID(Hash64);
 
-/// A material defined by a template, texture group, and uniform properties.
+/// A material defined by a template, texture group, and property values.
 ///
 /// - **Template** ([`MaterialTemplate`]) - Defines the material's overall
 ///   structure and requirements.
 /// - **Texture Group** ([`MaterialTextureGroup`]) - Specifies the textures
 ///   used by the material.
-/// - **Instance Features** - Per-material values of uniform properties like
-///   colors and PBR parameters stored in an
-///   [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage).
+/// - **Property values** - Per-material values of uniform properties like
+///   colors and PBR parameters.
 ///
 /// This separation allows efficient sharing of templates and texture groups
 /// between multiple materials.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Material {
     /// The ID of the material's [`MaterialTemplate`].
     pub template_id: MaterialTemplateID,
     /// The ID of the material's [`MaterialTextureGroup`] (may represent
     /// an empty group).
     pub texture_group_id: MaterialTextureGroupID,
-    /// The ID of the entry for the material's uniform property values in the
-    /// [`InstanceFeatureStorage`](impact_model::InstanceFeatureStorage) (may be
-    /// N/A).
-    pub instance_feature_id: InstanceFeatureID,
+    /// The material's values for all uniform material properties (properties
+    /// that are not sampled from a texture).
+    pub property_values: MaterialPropertyValues,
 }
 
 /// A template defining the overall structure and requirements of a class of
@@ -103,8 +101,8 @@ pub struct MaterialTemplate {
     pub vertex_attribute_requirements: VertexAttributeSet,
     pub bind_group_template: MaterialBindGroupTemplate,
     pub texture_binding_locations: MaterialTextureBindingLocations,
+    pub property_flags: MaterialPropertyFlags,
     pub instance_feature_type_id: InstanceFeatureTypeID,
-    pub instance_feature_flags: MaterialInstanceFeatureFlags,
 }
 
 /// Template for creating a bind group layout usable by multiple material
@@ -231,15 +229,6 @@ impl Material {
             None
         } else {
             Some(self.texture_group_id)
-        }
-    }
-
-    /// Returns the instance feature ID if it is not N/A.
-    pub fn instance_feature_id_if_applicable(&self) -> Option<InstanceFeatureID> {
-        if self.instance_feature_id.is_not_applicable() {
-            None
-        } else {
-            Some(self.instance_feature_id)
         }
     }
 }

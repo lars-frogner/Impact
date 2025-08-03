@@ -199,6 +199,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Buffering visible model instances", engine, {
+            let resource_manager = engine.resource_manager().read();
             let renderer = engine.renderer().read();
             let scene = engine.scene().read();
             let scene_camera = scene.scene_camera().read();
@@ -206,6 +207,7 @@ define_task!(
                 scene.scene_graph()
                     .read()
                     .buffer_model_instances_for_rendering(
+                        &resource_manager.materials,
                         &mut scene.model_instance_manager().write(),
                         scene_camera,
                         renderer.current_frame_count(),

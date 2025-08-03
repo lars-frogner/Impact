@@ -12,10 +12,10 @@ use impact_gpu::{
 };
 use impact_material::{MaterialTemplate, MaterialTextureBindingLocations};
 use impact_material::{
-    features::{MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation},
     setup::physical::{
         PhysicalMaterialBumpMappingTextureBindings, PhysicalMaterialTextureBindingLocations,
     },
+    values::{MaterialInstanceFeatureLocation, MaterialPropertyFlags},
 };
 use impact_mesh::{VertexAttributeSet, gpu_resource::MeshVertexAttributeLocation};
 use impact_model::transform::InstanceModelViewTransformWithPrevious;
@@ -27,7 +27,7 @@ pub struct ModelGeometryShaderInput {
     /// The set of vertex attributes the model has.
     pub vertex_attributes: VertexAttributeSet,
     /// The instance feature flags for the model's material.
-    pub material_instance_feature_flags: MaterialInstanceFeatureFlags,
+    pub material_instance_feature_flags: MaterialPropertyFlags,
     /// The texture bindings for the model's material (which should be
     /// physically based).
     pub material_texture_bindings: PhysicalMaterialTextureBindingLocations,
@@ -55,7 +55,7 @@ impl ModelGeometryShaderInput {
         {
             Some(Self {
                 vertex_attributes: template.vertex_attribute_requirements,
-                material_instance_feature_flags: template.instance_feature_flags,
+                material_instance_feature_flags: template.property_flags,
                 material_texture_bindings: material_texture_bindings.clone(),
             })
         } else {
@@ -145,7 +145,7 @@ impl SpecificShaderTemplate for ModelGeometryShaderTemplate {
         if self
             .input
             .material_instance_feature_flags
-            .contains(MaterialInstanceFeatureFlags::HAS_COLOR)
+            .contains(MaterialPropertyFlags::HAS_COLOR)
         {
             flags_to_set.push("has_color_value");
         }
@@ -153,7 +153,7 @@ impl SpecificShaderTemplate for ModelGeometryShaderTemplate {
         if self
             .input
             .material_instance_feature_flags
-            .contains(MaterialInstanceFeatureFlags::USES_PARALLAX_MAPPING)
+            .contains(MaterialPropertyFlags::USES_PARALLAX_MAPPING)
         {
             flags_to_set.push("uses_parallax_mapping");
         }
@@ -285,7 +285,7 @@ mod tests {
         validate_template(&ModelGeometryShaderTemplate::new(
             ModelGeometryShaderInput {
                 vertex_attributes: VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-                material_instance_feature_flags: MaterialInstanceFeatureFlags::HAS_COLOR,
+                material_instance_feature_flags: MaterialPropertyFlags::HAS_COLOR,
                 material_texture_bindings: PhysicalMaterialTextureBindingLocations {
                     color_texture_and_sampler_bindings: None,
                     specular_reflectance_texture_and_sampler_bindings: None,
@@ -305,7 +305,7 @@ mod tests {
                 vertex_attributes: VertexAttributeSet::POSITION
                     | VertexAttributeSet::TEXTURE_COORDS
                     | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-                material_instance_feature_flags: MaterialInstanceFeatureFlags::empty(),
+                material_instance_feature_flags: MaterialPropertyFlags::empty(),
                 material_texture_bindings: PhysicalMaterialTextureBindingLocations {
                     color_texture_and_sampler_bindings: Some((0, 1)),
                     specular_reflectance_texture_and_sampler_bindings: Some((2, 3)),
@@ -329,8 +329,7 @@ mod tests {
                 vertex_attributes: VertexAttributeSet::POSITION
                     | VertexAttributeSet::TEXTURE_COORDS
                     | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-                material_instance_feature_flags:
-                    MaterialInstanceFeatureFlags::USES_PARALLAX_MAPPING,
+                material_instance_feature_flags: MaterialPropertyFlags::USES_PARALLAX_MAPPING,
                 material_texture_bindings: PhysicalMaterialTextureBindingLocations {
                     color_texture_and_sampler_bindings: Some((0, 1)),
                     specular_reflectance_texture_and_sampler_bindings: Some((2, 3)),
