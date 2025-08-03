@@ -189,7 +189,7 @@ impl VoxelTypeRegistry {
             texture_registry,
             sampler_registry,
             ImageTextureDeclaration {
-                name: String::from("voxel_color_texture_array"),
+                id: TextureID::from_name("voxel_color_texture_array"),
                 source: ImageTextureSource::ArrayImageFiles(color_texture_paths),
                 texture_config: TextureConfig {
                     color_space: ColorSpace::Srgb,
@@ -207,7 +207,7 @@ impl VoxelTypeRegistry {
             texture_registry,
             sampler_registry,
             ImageTextureDeclaration {
-                name: String::from("voxel_roughness_texture_array"),
+                id: TextureID::from_name("voxel_roughness_texture_array"),
                 source: ImageTextureSource::ArrayImageFiles(roughness_texture_paths),
                 texture_config: TextureConfig {
                     color_space: ColorSpace::Linear,
@@ -222,7 +222,7 @@ impl VoxelTypeRegistry {
             texture_registry,
             sampler_registry,
             ImageTextureDeclaration {
-                name: String::from("voxel_normal_texture_array"),
+                id: TextureID::from_name("voxel_normal_texture_array"),
                 source: ImageTextureSource::ArrayImageFiles(normal_texture_paths),
                 texture_config: TextureConfig {
                     color_space: ColorSpace::Linear,

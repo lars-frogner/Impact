@@ -8,7 +8,7 @@ use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::{Float, StringHash64};
+use impact_math::{Float, StringHash64, hash64};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
@@ -55,6 +55,21 @@ bitflags! {
     }
 }
 
+#[roc(dependencies = [impact_math::Hash64])]
+impl TriangleMeshID {
+    #[roc(body = "Hashing.hash_str_64(name)")]
+    /// Creates a triangle mesh ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash64!(name))
+    }
+}
+
+impl From<TriangleMeshID> for StringHash64 {
+    fn from(id: TriangleMeshID) -> Self {
+        id.0
+    }
+}
+
 impl fmt::Display for TriangleMeshID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -62,6 +77,27 @@ impl fmt::Display for TriangleMeshID {
 }
 
 impl ResourceID for TriangleMeshID {}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for TriangleMeshID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for TriangleMeshID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(TriangleMeshID::from_name(&s))
+    }
+}
 
 impl<F: Float> TriangleMesh<F> {
     /// Creates a new mesh described by the given vertex attributes and indices.

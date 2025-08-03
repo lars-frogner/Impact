@@ -1,15 +1,18 @@
 //! Importing resources.
 
 use anyhow::Result;
+use impact_material::import::MaterialDeclaration;
 use impact_mesh::import::TriangleMeshDeclaration;
 use impact_texture::import::ImageTextureDeclaration;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ResourceDeclarations {
     pub triangle_meshes: Vec<TriangleMeshDeclaration>,
     pub textures: Vec<ImageTextureDeclaration>,
+    pub materials: Vec<MaterialDeclaration>,
 }
 
 impl ResourceDeclarations {

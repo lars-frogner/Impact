@@ -1,25 +1,25 @@
 (
     triangle_meshes: [
         (
-            name: "dragon",
+            id: "dragon",
             source: File("../resources/Dragon_1.obj"),
         ),
         (
-            name: "abstract_object",
+            id: "abstract_object",
             source: File("../resources/abstract_object.obj"),
         ),
         (
-            name: "abstract_pyramid",
+            id: "abstract_pyramid",
             source: File("../resources/abstract_pyramid.obj"),
         ),
         (
-            name: "abstract_cube",
+            id: "abstract_cube",
             source: File("../resources/abstract_cube.obj"),
         ),
     ],
     textures: [
         (
-            name: "space_skybox",
+            id: "space_skybox",
             source: CubemapImageFiles(
                 right: "../resources/space_skybox/right.png",
                 left: "../resources/space_skybox/left.png",
@@ -34,7 +34,7 @@
             sampler_config: Some(()),
         ),
         (
-            name: "ocean_skybox",
+            id: "ocean_skybox",
             source: CubemapImageFiles(
                 right: "../resources/ocean_skybox/right.jpg",
                 left: "../resources/ocean_skybox/left.jpg",
@@ -49,7 +49,7 @@
             sampler_config: Some(()),
         ),
         (
-            name: "concrete_color_texture",
+            id: "concrete_color_texture",
             source: ImageFile("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
@@ -59,7 +59,7 @@
             )),
         ),
         (
-            name: "concrete_roughness_texture",
+            id: "concrete_roughness_texture",
             source: ImageFile("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -69,7 +69,7 @@
             )),
         ),
         (
-            name: "concrete_normal_texture",
+            id: "concrete_normal_texture",
             source: ImageFile("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -79,7 +79,7 @@
             )),
         ),
         (
-            name: "plastic_color_texture",
+            id: "plastic_color_texture",
             source: ImageFile("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
@@ -89,7 +89,7 @@
             )),
         ),
         (
-            name: "plastic_roughness_texture",
+            id: "plastic_roughness_texture",
             source: ImageFile("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -99,7 +99,7 @@
             )),
         ),
         (
-            name: "plastic_normal_texture",
+            id: "plastic_normal_texture",
             source: ImageFile("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -109,7 +109,7 @@
             )),
         ),
         (
-            name: "bricks_color_texture",
+            id: "bricks_color_texture",
             source: ImageFile("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
@@ -119,7 +119,7 @@
             )),
         ),
         (
-            name: "bricks_roughness_texture",
+            id: "bricks_roughness_texture",
             source: ImageFile("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -129,7 +129,7 @@
             )),
         ),
         (
-            name: "bricks_height_texture",
+            id: "bricks_height_texture",
             source: ImageFile("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -139,7 +139,7 @@
             )),
         ),
         (
-            name: "wood_floor_color_texture",
+            id: "wood_floor_color_texture",
             source: ImageFile("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
@@ -149,7 +149,7 @@
             )),
         ),
         (
-            name: "wood_floor_roughness_texture",
+            id: "wood_floor_roughness_texture",
             source: ImageFile("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
@@ -159,7 +159,7 @@
             )),
         ),
         (
-            name: "wood_floor_normal_texture",
+            id: "wood_floor_normal_texture",
             source: ImageFile("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
             texture_config: (
                 color_space: Linear,

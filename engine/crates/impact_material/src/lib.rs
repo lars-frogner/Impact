@@ -175,6 +175,27 @@ impl fmt::Display for MaterialID {
 
 impl ResourceID for MaterialID {}
 
+#[cfg(feature = "serde")]
+impl serde::Serialize for MaterialID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for MaterialID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(MaterialID::from_name(&s))
+    }
+}
+
 impl MaterialTemplateID {
     /// Creates an ID by hashing the given material template.
     pub fn for_template(template: &MaterialTemplate) -> Self {
