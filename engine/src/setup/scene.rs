@@ -39,11 +39,7 @@ pub fn setup_scene_data_for_new_entities(
 
     light::setup_lights_for_new_entities(scene.scene_camera(), scene.light_manager(), components);
 
-    material::setup_materials_for_new_entities(
-        resource_manager,
-        scene.model_instance_manager(),
-        components,
-    )?;
+    material::setup_materials_for_new_entities(resource_manager, components)?;
 
     voxel::setup_voxel_objects_for_new_entities(
         resource_manager,

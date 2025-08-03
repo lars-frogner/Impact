@@ -146,13 +146,13 @@ pub fn setup_scene_graph_model_instance_node(
     feature_type_ids.push(model_light_transform_feature_id.feature_type_id());
     feature_ids_for_shadow_mapping.push(model_light_transform_feature_id);
 
-    if let Some(material_feature_id) = material_registry
+    if let Some(material_property_values_feature_type_id) = material_registry
         .get(model_id.material_id())
         .ok_or_else(|| anyhow!("Missing material {} for model", model_id.material_id()))?
-        .instance_feature_id_if_applicable()
+        .property_values
+        .instance_feature_type_id_if_applicable()
     {
-        feature_type_ids.push(material_feature_id.feature_type_id());
-        feature_ids_for_rendering.push(material_feature_id);
+        feature_type_ids.push(material_property_values_feature_type_id);
     }
 
     model_instance_manager.register_instance(model_id, &feature_type_ids);

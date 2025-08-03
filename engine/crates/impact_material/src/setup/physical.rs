@@ -4,14 +4,13 @@ use crate::{
     Material, MaterialBindGroupSlot, MaterialBindGroupTemplate, MaterialID, MaterialRegistry,
     MaterialTemplate, MaterialTemplateID, MaterialTemplateRegistry,
     MaterialTextureBindingLocations, MaterialTextureGroup, MaterialTextureGroupID,
-    MaterialTextureGroupRegistry, RGBColor, features::create_physical_material_feature,
+    MaterialTextureGroupRegistry, RGBColor, values::MaterialPropertyValues,
 };
 use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
 use impact_mesh::VertexAttributeSet;
-use impact_model::ModelInstanceManager;
 use impact_texture::{SamplerRegistry, TextureID, TextureRegistry};
 use nalgebra::{Vector2, vector};
 use roc_integration::roc;
@@ -572,13 +571,12 @@ impl Default for EmissiveLuminance {
     }
 }
 
-pub fn setup_physical_material_from_optional_parts<MID: Copy + Eq + Hash>(
+pub fn setup_physical_material_from_optional_parts(
     texture_registry: &TextureRegistry,
     sampler_registry: &SamplerRegistry,
     material_registry: &mut MaterialRegistry,
     material_template_registry: &mut MaterialTemplateRegistry,
     material_texture_group_registry: &mut MaterialTextureGroupRegistry,
-    model_instance_manager: &mut ModelInstanceManager<MID>,
     uniform_color: Option<&UniformColor>,
     textured_color: Option<&TexturedColor>,
     uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
@@ -613,19 +611,17 @@ pub fn setup_physical_material_from_optional_parts<MID: Copy + Eq + Hash>(
         material_registry,
         material_template_registry,
         material_texture_group_registry,
-        model_instance_manager,
         properties,
         material_id,
     )
 }
 
-pub fn setup_physical_material<MID: Copy + Eq + Hash>(
+pub fn setup_physical_material(
     texture_registry: &TextureRegistry,
     sampler_registry: &SamplerRegistry,
     material_registry: &mut MaterialRegistry,
     material_template_registry: &mut MaterialTemplateRegistry,
     material_texture_group_registry: &mut MaterialTextureGroupRegistry,
-    model_instance_manager: &mut ModelInstanceManager<MID>,
     properties: PhysicalMaterialProperties,
     material_id: Option<MaterialID>,
 ) -> Result<MaterialID> {
@@ -812,8 +808,7 @@ pub fn setup_physical_material<MID: Copy + Eq + Hash>(
         vertex_attribute_requirements |= VertexAttributeSet::NORMAL_VECTOR;
     }
 
-    let (instance_feature_id, instance_feature_flags) = create_physical_material_feature(
-        model_instance_manager,
+    let property_values = MaterialPropertyValues::from_physical_material_properties(
         uniform_color.as_ref(),
         specular_reflectance_value,
         roughness_value,
@@ -828,8 +823,8 @@ pub fn setup_physical_material<MID: Copy + Eq + Hash>(
             slots: bind_group_slots,
         },
         texture_binding_locations: MaterialTextureBindingLocations::Physical(bindings),
-        instance_feature_type_id: instance_feature_id.feature_type_id(),
-        instance_feature_flags,
+        property_flags: property_values.flags(),
+        instance_feature_type_id: property_values.instance_feature_type_id(),
     };
 
     let template_id = MaterialTemplateID::for_template(&template);
@@ -838,7 +833,7 @@ pub fn setup_physical_material<MID: Copy + Eq + Hash>(
     let material = Material {
         template_id,
         texture_group_id,
-        instance_feature_id,
+        property_values,
     };
 
     material_registry.insert(material_id, material);
