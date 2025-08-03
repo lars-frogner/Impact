@@ -49,8 +49,7 @@ pub enum PhysicalMaterialPropertyValues {
 /// Fixed property values for a non-physical material with a uniform color that
 /// is independent of lighting.
 ///
-/// This type implements [`InstanceFeature`](impact_model::InstanceFeature), and
-/// can thus be buffered in a
+/// This type implements [`InstanceFeature`], and can thus be buffered in a
 /// [`DynamicInstanceFeatureBuffer`](impact_model::DynamicInstanceFeatureBuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -65,8 +64,7 @@ pub struct FixedColorMaterialValues {
 /// value in this object is used as a scale factor for the value sampled from
 /// the texture.
 ///
-/// This type implements [`InstanceFeature`](impact_model::InstanceFeature), and
-/// can thus be buffered in a
+/// This type implements [`InstanceFeature`], and can thus be buffered in a
 /// [`DynamicInstanceFeatureBuffer`](impact_model::DynamicInstanceFeatureBuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -85,8 +83,7 @@ pub struct UniformColorPhysicalMaterialValues {
 /// value in this object is used as a scale factor for the value sampled from
 /// the texture.
 ///
-/// This type implements [`InstanceFeature`](impact_model::InstanceFeature), and
-/// can thus be buffered in a
+/// This type implements [`InstanceFeature`], and can thus be buffered in a
 /// [`DynamicInstanceFeatureBuffer`](impact_model::DynamicInstanceFeatureBuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -105,8 +102,7 @@ pub struct TexturedColorPhysicalMaterialValues {
 /// value in this object is used as a scale factor for the value sampled from
 /// the texture.
 ///
-/// This type implements [`InstanceFeature`](impact_model::InstanceFeature), and
-/// can thus be buffered in a
+/// This type implements [`InstanceFeature`], and can thus be buffered in a
 /// [`DynamicInstanceFeatureBuffer`](impact_model::DynamicInstanceFeatureBuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
@@ -128,8 +124,7 @@ pub struct UniformColorParallaxMappedPhysicalMaterialValues {
 /// value in this object is used as a scale factor for the value sampled from
 /// the texture.
 ///
-/// This type implements [`InstanceFeature`](impact_model::InstanceFeature), and
-/// can thus be buffered in a
+/// This type implements [`InstanceFeature`], and can thus be buffered in a
 /// [`DynamicInstanceFeatureBuffer`](impact_model::DynamicInstanceFeatureBuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
