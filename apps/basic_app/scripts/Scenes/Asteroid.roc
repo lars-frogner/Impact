@@ -34,6 +34,7 @@ import pf.Comp.Motion
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
 import pf.Setup.VoxelSphereUnion
+import pf.Setup.DynamicVoxels
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.MouseButton as MouseButtonInput
 import pf.Physics.AngularVelocity as AngularVelocity
@@ -149,6 +150,7 @@ asteroid =
     |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
     |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
     |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
+    |> Setup.DynamicVoxels.add
 
 ambient_light =
     Entity.new

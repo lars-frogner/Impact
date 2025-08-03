@@ -6,7 +6,7 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
     quantities::Motion,
-    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
@@ -15,9 +15,9 @@ use impact_scene::{
 use impact_voxel::{
     VoxelObjectID, VoxelObjectManager,
     setup::{
-        self, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
+        self, DynamicVoxels, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
         MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelGradientNoisePattern,
-        VoxelSphere, VoxelSphereUnion,
+        VoxelObjectShape, VoxelObjectVoxelTypes, VoxelSphere, VoxelSphereUnion,
     },
 };
 use parking_lot::RwLock;
@@ -56,35 +56,23 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_box: &VoxelBox,
          voxel_type: &SameVoxelType,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_box_with_same_voxel_type(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_box,
-                voxel_type,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::Same(*voxel_type),
+                VoxelObjectShape::Box(*voxel_box),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -93,35 +81,23 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_sphere: &VoxelSphere,
          voxel_type: &SameVoxelType,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_sphere_with_same_voxel_type(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_sphere,
-                voxel_type,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::Same(*voxel_type),
+                VoxelObjectShape::Sphere(*voxel_sphere),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -130,35 +106,23 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
          voxel_type: &SameVoxelType,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_sphere_union_with_same_voxel_type(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_sphere_union,
-                voxel_type,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::Same(*voxel_type),
+                VoxelObjectShape::SphereUnion(*voxel_sphere_union),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -167,35 +131,23 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePattern,
          voxel_type: &SameVoxelType,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_gradient_noise_pattern_with_same_voxel_type(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_noise_pattern,
-                voxel_type,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::Same(*voxel_type),
+                VoxelObjectShape::GradientNoisePattern(*voxel_noise_pattern),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -204,35 +156,23 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_box: &VoxelBox,
          voxel_types: &GradientNoiseVoxelTypes,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_box_with_gradient_noise_voxel_types(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_box,
-                voxel_types,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::GradientNoise(Box::new(*voxel_types)),
+                VoxelObjectShape::Box(*voxel_box),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -241,35 +181,23 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_sphere: &VoxelSphere,
          voxel_types: &GradientNoiseVoxelTypes,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_sphere_with_gradient_noise_voxel_types(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_sphere,
-                voxel_types,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::GradientNoise(Box::new(*voxel_types)),
+                VoxelObjectShape::Sphere(*voxel_sphere),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -278,35 +206,48 @@ pub fn setup_voxel_objects_for_new_entities(
     setup!(
         {
             let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
          voxel_types: &GradientNoiseVoxelTypes,
-         model_transform: Option<&ModelTransform>,
-         frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_sphere_union_with_gradient_noise_voxel_types(
-                &mut rigid_body_manager,
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_sphere_union,
-                voxel_types,
-                model_transform,
-                frame,
-                motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
+                VoxelObjectVoxelTypes::GradientNoise(Box::new(*voxel_types)),
+                VoxelObjectShape::SphereUnion(*voxel_sphere_union),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
+            )
+        },
+        ![VoxelObjectID]
+    )?;
+
+    setup!(
+        {
+            let resource_manager = resource_manager.read();
+            let mut voxel_object_manager = voxel_object_manager.write();
+        },
+        components,
+        |voxel_noise_pattern: &VoxelGradientNoisePattern,
+         voxel_types: &GradientNoiseVoxelTypes,
+         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
+         multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
+         -> Result<VoxelObjectID> {
+            setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &resource_manager.voxel_types,
+                VoxelObjectVoxelTypes::GradientNoise(Box::new(*voxel_types)),
+                VoxelObjectShape::GradientNoisePattern(*voxel_noise_pattern),
+                &setup::gather_modifications(
+                    multiscale_sphere_modification,
+                    multifractal_noise_modification,
+                ),
             )
         },
         ![VoxelObjectID]
@@ -319,34 +260,23 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_object_manager = voxel_object_manager.write();
         },
         components,
-        |voxel_noise_pattern: &VoxelGradientNoisePattern,
-         voxel_types: &GradientNoiseVoxelTypes,
+        |voxel_object_id: &VoxelObjectID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-         multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<(
-            VoxelObjectID,
-            DynamicRigidBodyID,
-            ModelTransform,
-            ReferenceFrame,
-            Motion
-        )> {
-            setup::setup_voxel_gradient_noise_pattern_with_gradient_noise_voxel_types(
+         motion: Option<&Motion>|
+         -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+            setup::setup_dynamic_rigid_body_for_voxel_object(
                 &mut rigid_body_manager,
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
-                voxel_noise_pattern,
-                voxel_types,
+                *voxel_object_id,
                 model_transform,
                 frame,
                 motion,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
             )
         },
-        ![VoxelObjectID]
+        [DynamicVoxels],
+        ![DynamicRigidBodyID, KinematicRigidBodyID]
     )?;
 
     Ok(())
