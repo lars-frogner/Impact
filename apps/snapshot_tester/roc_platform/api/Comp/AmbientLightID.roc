@@ -1,8 +1,8 @@
-# Hash: b8e36e484b3bf5611cb6964f32bcf046ca8b9b6ab2d7dd0f0ecec4b125584463
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: c0a9691dbec9641129267dfa7750d6d6199f6652dea25d02712fcbece4d3d12e
+# Generated: 2025-08-03T19:47:30+00:00
 # Rust type: impact_light::AmbientLightID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 1379dde5 (dirty)
 module [
     AmbientLightID,
     add,
@@ -15,7 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The ID of an [`AmbientLight`] in the [`LightStorage`].
+## The ID of an [`AmbientLight`] in the [`LightManager`].
 AmbientLightID : U32
 
 ## Adds a value of the [AmbientLightID] component to an entity's data.

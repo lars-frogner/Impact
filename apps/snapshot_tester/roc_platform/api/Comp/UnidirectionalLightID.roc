@@ -1,8 +1,8 @@
-# Hash: 5fa673939fa1ce4db0b1c6e9d41ebe9a7b0ba35aa9457055cdaa301189002eb8
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: c9e7c7574aacf0f9abcd36a79c3602f283d4fbb7b62197ebe62cd2b61619cf00
+# Generated: 2025-08-03T19:47:30+00:00
 # Rust type: impact_light::UnidirectionalLightID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 1379dde5 (dirty)
 module [
     UnidirectionalLightID,
     add,
@@ -15,7 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The ID of a [`UnidirectionalLight`] in the [`LightStorage`].
+## The ID of a [`UnidirectionalLight`] in the [`LightManager`].
 UnidirectionalLightID : U32
 
 ## Adds a value of the [UnidirectionalLightID] component to an entity's data.

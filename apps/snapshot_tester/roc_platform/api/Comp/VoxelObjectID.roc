@@ -1,8 +1,8 @@
-# Hash: 189bfe8e74a3c33f26b3e46c56fca37f21210ec3ebe14ac6a0101f42762253e7
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 6bc151b5ab3fdf06512d85dc8cd4895d3750f4e2fe2cfa11d93a1e22c9c540d3
+# Generated: 2025-08-03T19:47:30+00:00
 # Rust type: impact_voxel::VoxelObjectID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 1379dde5 (dirty)
 module [
     VoxelObjectID,
     add,
@@ -17,7 +17,7 @@ import core.Builtin
 
 ## Identifier for a
 ## [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject) in a
-## [`VoxelManager`].
+## [`VoxelObjectManager`].
 VoxelObjectID : U32
 
 ## Adds a value of the [VoxelObjectID] component to an entity's data.

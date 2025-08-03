@@ -1,8 +1,8 @@
-# Hash: 117ae5dd229890566f19a5f4adbfe795809ed9db90b99a2c11e573db76d04a25
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: f5cee2d3721517c8071d5bb194ceee37a09e537a445dbdc77c6afa247fd3ac4e
+# Generated: 2025-08-03T19:47:30+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalLightID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 1379dde5 (dirty)
 module [
     ShadowableOmnidirectionalLightID,
     add,
@@ -15,7 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightStorage`].
+## The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightManager`].
 ShadowableOmnidirectionalLightID : U32
 
 ## Adds a value of the [ShadowableOmnidirectionalLightID] component to an entity's data.
