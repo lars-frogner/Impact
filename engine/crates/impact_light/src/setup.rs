@@ -14,15 +14,12 @@ use nalgebra::{Isometry3, Point3, UnitQuaternion, UnitVector3};
 pub fn setup_ambient_light(
     light_manager: &mut LightManager,
     ambient_emission: &AmbientEmission,
-    desynchronized: &mut bool,
 ) -> AmbientLightID {
     let ambient_light = AmbientLight::new(crate::compute_luminance_for_uniform_illuminance(
         &ambient_emission.illuminance,
     ));
 
     let id = light_manager.add_ambient_light(ambient_light);
-
-    *desynchronized = true;
 
     id
 }
@@ -33,7 +30,6 @@ pub fn setup_omnidirectional_light(
     position: &Point3<f32>,
     omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
-    desynchronized: &mut bool,
 ) -> OmnidirectionalLightID {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = OmnidirectionalLight::new(
@@ -44,8 +40,6 @@ pub fn setup_omnidirectional_light(
     );
     let id = light_manager.add_omnidirectional_light(omnidirectional_light);
 
-    *desynchronized = true;
-
     id
 }
 
@@ -55,7 +49,6 @@ pub fn setup_shadowable_omnidirectional_light(
     position: &Point3<f32>,
     omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
-    desynchronized: &mut bool,
 ) -> ShadowableOmnidirectionalLightID {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = ShadowableOmnidirectionalLight::new(
@@ -66,8 +59,6 @@ pub fn setup_shadowable_omnidirectional_light(
     );
     let id = light_manager.add_shadowable_omnidirectional_light(omnidirectional_light);
 
-    *desynchronized = true;
-
     id
 }
 
@@ -76,7 +67,6 @@ pub fn setup_unidirectional_light(
     view_transform: &Isometry3<f32>,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
-    desynchronized: &mut bool,
 ) -> UnidirectionalLightID {
     // The view transform contains no scaling, so the direction remains normalized
     let direction = UnitVector3::new_unchecked(
@@ -93,8 +83,6 @@ pub fn setup_unidirectional_light(
     );
     let id = light_manager.add_unidirectional_light(unidirectional_light);
 
-    *desynchronized = true;
-
     id
 }
 
@@ -103,7 +91,6 @@ pub fn setup_shadowable_unidirectional_light(
     view_transform: &Isometry3<f32>,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
-    desynchronized: &mut bool,
 ) -> ShadowableUnidirectionalLightID {
     // The view transform contains no scaling, so the direction remains normalized
     let direction = UnitVector3::new_unchecked(
@@ -119,8 +106,6 @@ pub fn setup_shadowable_unidirectional_light(
         flags,
     );
     let id = light_manager.add_shadowable_unidirectional_light(unidirectional_light);
-
-    *desynchronized = true;
 
     id
 }
@@ -239,11 +224,10 @@ pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
 pub fn cleanup_light_for_removed_entity(
     light_manager: &parking_lot::RwLock<LightManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
-    desynchronized: &mut bool,
 ) {
-    cleanup_ambient_light_for_removed_entity(light_manager, entity, desynchronized);
-    cleanup_omnidirectional_light_for_removed_entity(light_manager, entity, desynchronized);
-    cleanup_unidirectional_light_for_removed_entity(light_manager, entity, desynchronized);
+    cleanup_ambient_light_for_removed_entity(light_manager, entity);
+    cleanup_omnidirectional_light_for_removed_entity(light_manager, entity);
+    cleanup_unidirectional_light_for_removed_entity(light_manager, entity);
 }
 
 /// Checks if the given entity has a [`AmbientLightID`], and if so, removes
@@ -252,12 +236,10 @@ pub fn cleanup_light_for_removed_entity(
 fn cleanup_ambient_light_for_removed_entity(
     light_manager: &parking_lot::RwLock<LightManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
-    desynchronized: &mut bool,
 ) {
     if let Some(light_id) = entity.get_component::<AmbientLightID>() {
         let light_id = *light_id.access();
         light_manager.write().remove_ambient_light(light_id);
-        *desynchronized = true;
     }
 }
 
@@ -269,12 +251,10 @@ fn cleanup_ambient_light_for_removed_entity(
 fn cleanup_omnidirectional_light_for_removed_entity(
     light_manager: &parking_lot::RwLock<LightManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
-    desynchronized: &mut bool,
 ) {
     if let Some(light_id) = entity.get_component::<OmnidirectionalLightID>() {
         let light_id = *light_id.access();
         light_manager.write().remove_omnidirectional_light(light_id);
-        *desynchronized = true;
     }
 
     if let Some(light_id) = entity.get_component::<ShadowableOmnidirectionalLightID>() {
@@ -282,7 +262,6 @@ fn cleanup_omnidirectional_light_for_removed_entity(
         light_manager
             .write()
             .remove_shadowable_omnidirectional_light(light_id);
-        *desynchronized = true;
     }
 }
 
@@ -294,12 +273,10 @@ fn cleanup_omnidirectional_light_for_removed_entity(
 fn cleanup_unidirectional_light_for_removed_entity(
     light_manager: &parking_lot::RwLock<LightManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
-    desynchronized: &mut bool,
 ) {
     if let Some(light_id) = entity.get_component::<UnidirectionalLightID>() {
         let light_id = *light_id.access();
         light_manager.write().remove_unidirectional_light(light_id);
-        *desynchronized = true;
     }
 
     if let Some(light_id) = entity.get_component::<ShadowableUnidirectionalLightID>() {
@@ -307,6 +284,5 @@ fn cleanup_unidirectional_light_for_removed_entity(
         light_manager
             .write()
             .remove_shadowable_unidirectional_light(light_id);
-        *desynchronized = true;
     }
 }

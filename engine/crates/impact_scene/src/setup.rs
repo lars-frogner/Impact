@@ -177,7 +177,6 @@ pub fn remove_scene_graph_model_instance_node(
     model_instance_manager: &RwLock<ModelInstanceManager>,
     scene_graph: &RwLock<SceneGraph>,
     model_instance_node: &SceneGraphModelInstanceNodeHandle,
-    desynchronized: &mut bool,
 ) {
     let model_id = scene_graph
         .write()
@@ -185,7 +184,6 @@ pub fn remove_scene_graph_model_instance_node(
     model_instance_manager
         .write()
         .unregister_instance(&model_id);
-    *desynchronized = true;
 }
 
 #[cfg(feature = "ecs")]
@@ -193,14 +191,8 @@ pub fn remove_scene_graph_model_instance_node_for_entity(
     model_instance_manager: &RwLock<ModelInstanceManager>,
     scene_graph: &RwLock<SceneGraph>,
     entity: &impact_ecs::world::EntityEntry<'_>,
-    desynchronized: &mut bool,
 ) {
     if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeHandle>() {
-        remove_scene_graph_model_instance_node(
-            model_instance_manager,
-            scene_graph,
-            node.access(),
-            desynchronized,
-        );
+        remove_scene_graph_model_instance_node(model_instance_manager, scene_graph, node.access());
     }
 }

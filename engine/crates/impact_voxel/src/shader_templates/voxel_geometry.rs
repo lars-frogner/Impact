@@ -1,11 +1,11 @@
 //! Shader template for the voxel geometry pass.
 
 use crate::{
-    rendering_template_source,
-    resource::{
-        VoxelMaterialGPUResourceManager, VoxelMeshVertexAttributeLocation, VoxelPushConstantGroup,
+    gpu_resource::{
+        VoxelMaterialGPUResources, VoxelMeshVertexAttributeLocation, VoxelPushConstantGroup,
         VoxelPushConstantVariant,
     },
+    rendering_template_source,
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
@@ -69,11 +69,11 @@ impl SpecificShaderTemplate for VoxelGeometryShaderTemplate {
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
                     "material_group" => 1,
-                    "fixed_material_uniform_binding" => VoxelMaterialGPUResourceManager::fixed_properties_binding(),
-                    "color_texture_array_binding" => VoxelMaterialGPUResourceManager::color_texture_array_binding(),
-                    "roughness_texture_array_binding" => VoxelMaterialGPUResourceManager::roughness_texture_array_binding(),
-                    "normal_texture_array_binding" => VoxelMaterialGPUResourceManager::normal_texture_array_binding(),
-                    "sampler_binding" => VoxelMaterialGPUResourceManager::sampler_binding(),
+                    "fixed_material_uniform_binding" => VoxelMaterialGPUResources::fixed_properties_binding(),
+                    "color_texture_array_binding" => VoxelMaterialGPUResources::color_texture_array_binding(),
+                    "roughness_texture_array_binding" => VoxelMaterialGPUResources::roughness_texture_array_binding(),
+                    "normal_texture_array_binding" => VoxelMaterialGPUResources::normal_texture_array_binding(),
+                    "sampler_binding" => VoxelMaterialGPUResources::sampler_binding(),
                     "position_and_normal_group" => 2,
                     "position_buffer_binding" => 0,
                     "normal_buffer_binding" => 1,

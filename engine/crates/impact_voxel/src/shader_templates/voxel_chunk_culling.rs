@@ -2,7 +2,7 @@
 
 use crate::{
     compute_template_source,
-    resource::{VoxelPushConstantGroup, VoxelPushConstantVariant},
+    gpu_resource::{VoxelPushConstantGroup, VoxelPushConstantVariant},
 };
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},

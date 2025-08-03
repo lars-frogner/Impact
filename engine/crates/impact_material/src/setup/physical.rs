@@ -592,7 +592,6 @@ pub fn setup_physical_material_from_optional_parts<MID: Copy + Eq + Hash>(
     normal_map: Option<&NormalMap>,
     parallax_map: Option<&ParallaxMap>,
     material_id: Option<MaterialID>,
-    desynchronized: &mut bool,
 ) -> Result<MaterialID> {
     let properties = PhysicalMaterialProperties::from_optional_parts(
         uniform_color,
@@ -617,7 +616,6 @@ pub fn setup_physical_material_from_optional_parts<MID: Copy + Eq + Hash>(
         model_instance_manager,
         properties,
         material_id,
-        desynchronized,
     )
 }
 
@@ -630,7 +628,6 @@ pub fn setup_physical_material<MID: Copy + Eq + Hash>(
     model_instance_manager: &mut ModelInstanceManager<MID>,
     properties: PhysicalMaterialProperties,
     material_id: Option<MaterialID>,
-    desynchronized: &mut bool,
 ) -> Result<MaterialID> {
     let material_id = material_id.unwrap_or_else(|| MaterialID(hash64!(format!("{properties:?}"))));
 
@@ -856,8 +853,6 @@ pub fn setup_physical_material<MID: Copy + Eq + Hash>(
             }
         });
     }
-
-    *desynchronized = true;
 
     Ok(material_id)
 }

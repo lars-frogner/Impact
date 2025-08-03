@@ -270,14 +270,6 @@ impl RenderingSystem {
             .update_pixels_per_point(pixels_per_point);
     }
 
-    /// Marks the render resources as being out of sync with the source data.
-    pub fn declare_render_resources_desynchronized(&self) {
-        self.render_resource_manager
-            .write()
-            .legacy
-            .declare_desynchronized();
-    }
-
     fn render_surface(
         &mut self,
         resource_manager: &ResourceManager,

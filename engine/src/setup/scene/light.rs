@@ -21,27 +21,15 @@ pub fn setup_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) {
-    setup_ambient_lights_for_new_entities(light_manager, components, desynchronized);
-    setup_omnidirectional_lights_for_new_entities(
-        scene_camera,
-        light_manager,
-        components,
-        desynchronized,
-    );
-    setup_unidirectional_lights_for_new_entities(
-        scene_camera,
-        light_manager,
-        components,
-        desynchronized,
-    );
+    setup_ambient_lights_for_new_entities(light_manager, components);
+    setup_omnidirectional_lights_for_new_entities(scene_camera, light_manager, components);
+    setup_unidirectional_lights_for_new_entities(scene_camera, light_manager, components);
 }
 
 fn setup_ambient_lights_for_new_entities(
     light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) {
     setup!(
         {
@@ -52,7 +40,7 @@ fn setup_ambient_lights_for_new_entities(
          flags: Option<&SceneEntityFlags>|
          -> (AmbientLightID, SceneEntityFlags) {
             (
-                setup::setup_ambient_light(&mut light_manager, ambient_emission, desynchronized),
+                setup::setup_ambient_light(&mut light_manager, ambient_emission),
                 flags.copied().unwrap_or_default(),
             )
         },
@@ -64,7 +52,6 @@ fn setup_omnidirectional_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) {
     setup!(
         {
@@ -90,7 +77,6 @@ fn setup_omnidirectional_lights_for_new_entities(
                     &frame.position.cast(),
                     omnidirectional_emission,
                     flags.into(),
-                    desynchronized,
                 ),
                 flags,
             )
@@ -122,7 +108,6 @@ fn setup_omnidirectional_lights_for_new_entities(
                     &frame.position.cast(),
                     omnidirectional_emission,
                     flags.into(),
-                    desynchronized,
                 ),
                 flags,
             )
@@ -135,7 +120,6 @@ fn setup_unidirectional_lights_for_new_entities(
     scene_camera: &RwLock<Option<SceneCamera>>,
     light_manager: &RwLock<LightManager>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) {
     setup!(
         {
@@ -159,7 +143,6 @@ fn setup_unidirectional_lights_for_new_entities(
                     &view_transform,
                     unidirectional_emission,
                     flags.into(),
-                    desynchronized,
                 ),
                 flags,
             )
@@ -189,7 +172,6 @@ fn setup_unidirectional_lights_for_new_entities(
                     &view_transform,
                     unidirectional_emission,
                     flags.into(),
-                    desynchronized,
                 ),
                 flags,
             )

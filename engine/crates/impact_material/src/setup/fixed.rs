@@ -67,7 +67,6 @@ pub fn setup_fixed_material<MID: Copy + Eq + Hash>(
     model_instance_manager: &mut ModelInstanceManager<MID>,
     properties: FixedMaterialProperties,
     material_id: Option<MaterialID>,
-    desynchronized: &mut bool,
 ) -> Result<MaterialID> {
     let material_id = material_id.unwrap_or_else(|| MaterialID(hash64!(format!("{properties:?}"))));
 
@@ -105,8 +104,6 @@ pub fn setup_fixed_material<MID: Copy + Eq + Hash>(
             material_registry.insert(material_id, material);
 
             material_template_registry.insert_with_if_absent(template_id, || template);
-
-            *desynchronized = true;
 
             Ok(material_id)
         }

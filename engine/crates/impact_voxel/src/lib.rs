@@ -6,19 +6,22 @@ mod macros;
 pub mod chunks;
 pub mod collidable;
 pub mod generation;
+pub mod gpu_resource;
 pub mod interaction;
 pub mod mesh;
 pub mod render_commands;
-pub mod resource;
 pub mod setup;
 pub mod shader_templates;
 pub mod utils;
 pub mod voxel_types;
 
+use anyhow::Result;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::inertia::VoxelObjectInertialPropertyManager;
+use gpu_resource::{VoxelObjectGPUBufferMap, VoxelObjectGPUBuffers};
 use impact_containers::HashMap;
+use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
 use impact_model::{ModelInstanceManager, impl_InstanceFeature};
 use impact_physics::rigid_body::DynamicRigidBodyID;
 use mesh::MeshedChunkedVoxelObject;
@@ -472,10 +475,49 @@ impl VoxelObjectManager {
     }
 
     /// Recomputes the meshes for any voxel objects with invalidated chunks.
-    pub fn sync_voxel_object_meshes(&mut self, desynchronized: &mut bool) {
+    pub fn sync_voxel_object_meshes(&mut self) {
         for voxel_object in self.voxel_objects.values_mut() {
-            voxel_object.sync_mesh_with_object(desynchronized);
+            voxel_object.sync_mesh_with_object();
         }
+    }
+
+    /// Performs any required updates for keeping the voxel object GPU buffers
+    /// in sync with the voxel object data.
+    ///
+    /// GPU buffers whose source data no longer exists will be removed, and
+    /// missing GPU buffers for new source data will be created.
+    pub fn sync_voxel_object_gpu_buffers(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+        voxel_object_buffer_map: &mut VoxelObjectGPUBufferMap,
+    ) -> Result<()> {
+        for (voxel_object_id, voxel_object) in &mut self.voxel_objects {
+            voxel_object_buffer_map
+                .buffers
+                .entry(*voxel_object_id)
+                .and_modify(|buffers| {
+                    buffers.sync_with_voxel_object(
+                        graphics_device,
+                        voxel_object,
+                        bind_group_layout_registry,
+                    );
+                })
+                .or_insert_with(|| {
+                    VoxelObjectGPUBuffers::for_voxel_object(
+                        graphics_device,
+                        *voxel_object_id,
+                        voxel_object,
+                        bind_group_layout_registry,
+                    )
+                });
+        }
+
+        voxel_object_buffer_map
+            .buffers
+            .retain(|id, _| self.voxel_objects.contains_key(id));
+
+        Ok(())
     }
 
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {

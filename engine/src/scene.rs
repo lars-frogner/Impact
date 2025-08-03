@@ -22,14 +22,6 @@ pub struct Scene {
     skybox: RwLock<Option<Skybox>>,
 }
 
-/// Indicates whether the render resources are out of sync with its source scene
-/// data.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RenderResourcesDesynchronized {
-    Yes,
-    No,
-}
-
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(model_instance_manager: ModelInstanceManager) -> Self {
@@ -83,18 +75,10 @@ impl Scene {
         *self.skybox.write() = skybox;
     }
 
-    pub fn handle_aspect_ratio_changed(
-        &self,
-        new_aspect_ratio: f32,
-    ) -> RenderResourcesDesynchronized {
-        let mut desynchronized = RenderResourcesDesynchronized::No;
-
+    pub fn handle_aspect_ratio_changed(&self, new_aspect_ratio: f32) {
         if let Some(scene_camera) = self.scene_camera().write().as_mut() {
             scene_camera.set_aspect_ratio(new_aspect_ratio);
-            desynchronized = RenderResourcesDesynchronized::Yes;
         }
-
-        desynchronized
     }
 
     /// Resets the scene to the initial empty state.
@@ -112,15 +96,5 @@ impl Scene {
         self.scene_camera.write().take();
 
         self.skybox.write().take();
-    }
-}
-
-impl RenderResourcesDesynchronized {
-    pub fn is_yes(&self) -> bool {
-        *self == Self::Yes
-    }
-
-    pub fn set_yes(&mut self) {
-        *self = Self::Yes;
     }
 }

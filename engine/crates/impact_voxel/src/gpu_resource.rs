@@ -42,35 +42,31 @@ pub trait VoxelResourceRegistries {
 }
 
 pub trait VoxelGPUResources {
-    /// Returns the GPU resource manager for voxel materials, or [`None`] if it
-    /// has not been initialized.
-    fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager>;
+    /// Returns the GPU resources for voxel materials, or [`None`] if they have
+    /// not been initialized.
+    fn voxel_materials(&self) -> Option<&VoxelMaterialGPUResources>;
 
-    /// Returns a reference to the map of voxel object GPU buffer managers.
-    fn voxel_object_buffer_managers(&self) -> &HashMap<VoxelObjectID, VoxelObjectGPUBufferManager>;
-
-    /// Returns the GPU buffer manager for the given voxel object identifier if
-    /// the voxel object exists, otherwise returns [`None`].
-    fn get_voxel_object_buffer_manager(
-        &self,
-        voxel_object_id: VoxelObjectID,
-    ) -> Option<&VoxelObjectGPUBufferManager> {
-        self.voxel_object_buffer_managers().get(&voxel_object_id)
-    }
+    /// Returns the map of voxel object GPU buffers.
+    fn voxel_object_buffer(&self) -> &VoxelObjectGPUBufferMap;
 }
 
-/// Owner and manager of the GPU resources for all voxel materials.
+/// GPU resources for all voxel materials.
 #[derive(Debug)]
-pub struct VoxelMaterialGPUResourceManager {
+pub struct VoxelMaterialGPUResources {
     n_voxel_types: usize,
     _fixed_property_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
 }
 
-/// Owner and manager of GPU buffers for a
-/// [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject).
+/// Map of GPU buffers for each voxel object.
 #[derive(Debug)]
-pub struct VoxelObjectGPUBufferManager {
+pub struct VoxelObjectGPUBufferMap {
+    pub(crate) buffers: HashMap<VoxelObjectID, VoxelObjectGPUBuffers>,
+}
+
+/// GPU buffers for a [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject).
+#[derive(Debug)]
+pub struct VoxelObjectGPUBuffers {
     chunk_extent: f64,
     origin_offset_in_root: [f32; 3],
     position_buffer: GPUBuffer,
@@ -109,19 +105,70 @@ pub enum VoxelPushConstantVariant {
     Rendering(BasicPushConstantVariant),
 }
 
-impl VoxelMaterialGPUResourceManager {
+impl VoxelMaterialGPUResources {
     const MATERIAL_RESOURCES_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
         ConstStringHash64::new("VoxelMaterialResources");
 }
 
-impl VoxelObjectGPUBufferManager {
+impl VoxelObjectGPUBufferMap {
+    pub fn new() -> Self {
+        Self {
+            buffers: HashMap::default(),
+        }
+    }
+
+    /// Whether there are no voxel objects in the map.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the number of voxel objects in the map.
+    pub fn len(&self) -> usize {
+        self.buffers.len()
+    }
+
+    /// Whether GPU buffers exist for the given voxel object.
+    pub fn contains(&self, voxel_object_id: VoxelObjectID) -> bool {
+        self.buffers.contains_key(&voxel_object_id)
+    }
+
+    /// Returns an iterator over all voxel object IDs in the map.
+    pub fn voxel_object_ids(&self) -> impl Iterator<Item = VoxelObjectID> {
+        self.buffers.keys().copied()
+    }
+
+    /// Returns an iterator over all voxel object IDs in the map and their
+    /// associated buffers.
+    pub fn iter(&self) -> impl Iterator<Item = (VoxelObjectID, &VoxelObjectGPUBuffers)> {
+        self.buffers
+            .iter()
+            .map(|(voxel_object_id, buffer)| (*voxel_object_id, buffer))
+    }
+
+    /// Returns the GPU buffers for the given voxel object identifier if the
+    /// voxel object exists, otherwise returns [`None`].
+    pub fn get_voxel_object_buffers(
+        &self,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<&VoxelObjectGPUBuffers> {
+        self.buffers.get(&voxel_object_id)
+    }
+}
+
+impl Default for VoxelObjectGPUBufferMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VoxelObjectGPUBuffers {
     const POSITION_AND_NORMAL_BUFFER_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
         ConstStringHash64::new("VoxelPositionAndNormalBuffer");
     const CHUNK_SUBMESH_AND_ARGUMENT_BUFFER_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
         ConstStringHash64::new("VoxelChunkSubmeshAndArgumentBuffer");
 }
 
-impl VoxelMaterialGPUResourceManager {
+impl VoxelMaterialGPUResources {
     pub const fn fixed_properties_binding() -> u32 {
         0
     }
@@ -278,10 +325,9 @@ impl VoxelMaterialGPUResourceManager {
     }
 }
 
-impl VoxelObjectGPUBufferManager {
-    /// Creates a new manager of GPU resources for the given
-    /// [`MeshedChunkedVoxelObject`]. This involves initializing GPU buffers for
-    /// the relevant data in the object's
+impl VoxelObjectGPUBuffers {
+    /// Creates new GPU buffers for the given [`MeshedChunkedVoxelObject`],
+    /// initializing for the relevant data in the object's
     /// [`ChunkedVoxelObjectMesh`](crate::mesh::ChunkedVoxelObjectMesh).
     pub fn for_voxel_object(
         graphics_device: &GraphicsDevice,

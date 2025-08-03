@@ -34,22 +34,15 @@ pub fn setup_scene_data_for_new_entities(
     scene: &Scene,
     rigid_body_manager: &RwLock<RigidBodyManager>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) -> Result<()> {
     mesh::setup_meshes_for_new_entities(resource_manager, components)?;
 
-    light::setup_lights_for_new_entities(
-        scene.scene_camera(),
-        scene.light_manager(),
-        components,
-        desynchronized,
-    );
+    light::setup_lights_for_new_entities(scene.scene_camera(), scene.light_manager(), components);
 
     material::setup_materials_for_new_entities(
         resource_manager,
         scene.model_instance_manager(),
         components,
-        desynchronized,
     )?;
 
     voxel::setup_voxel_objects_for_new_entities(
@@ -73,7 +66,6 @@ pub fn add_new_entities_to_scene_graph(
     ecs_world: &RwLock<ECSWorld>,
     get_render_state: &mut impl FnMut() -> CameraRenderState,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) -> Result<()> {
     setup_scene_graph_parent_nodes_for_new_entities(ecs_world, components)?;
     setup_scene_graph_group_nodes_for_new_entities(scene, components);
@@ -83,7 +75,6 @@ pub fn add_new_entities_to_scene_graph(
         scene.scene_camera(),
         get_render_state,
         components,
-        desynchronized,
     )?;
 
     setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, components)?;
@@ -100,30 +91,20 @@ pub fn add_new_entities_to_scene_graph(
 
 /// Performs any modifications required to clean up the scene when
 /// the given entity is removed.
-pub fn cleanup_scene_data_for_removed_entity(
-    scene: &Scene,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut bool,
-) {
-    remove_scene_graph_model_instance_node_for_entity(scene, entity, desynchronized);
+pub fn cleanup_scene_data_for_removed_entity(scene: &Scene, entity: &EntityEntry<'_>) {
+    remove_scene_graph_model_instance_node_for_entity(scene, entity);
 
-    impact_light::setup::cleanup_light_for_removed_entity(
-        scene.light_manager(),
-        entity,
-        desynchronized,
-    );
+    impact_light::setup::cleanup_light_for_removed_entity(scene.light_manager(), entity);
 
     camera::remove_camera_from_scene_for_removed_entity(
         scene.scene_graph(),
         scene.scene_camera(),
         entity,
-        desynchronized,
     );
 
     impact_voxel::setup::cleanup_voxel_object_for_removed_entity(
         scene.voxel_object_manager(),
         entity,
-        desynchronized,
     );
 }
 
@@ -222,15 +203,10 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
     )
 }
 
-fn remove_scene_graph_model_instance_node_for_entity(
-    scene: &Scene,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut bool,
-) {
+fn remove_scene_graph_model_instance_node_for_entity(scene: &Scene, entity: &EntityEntry<'_>) {
     impact_scene::setup::remove_scene_graph_model_instance_node_for_entity(
         scene.model_instance_manager(),
         scene.scene_graph(),
         entity,
-        desynchronized,
     );
 }

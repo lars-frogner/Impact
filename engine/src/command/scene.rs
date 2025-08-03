@@ -21,11 +21,6 @@ pub enum SceneCommand {
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {
     impact_log::info!("Setting skybox to {skybox:?}");
     engine.scene().read().set_skybox(Some(skybox));
-
-    engine
-        .renderer()
-        .read()
-        .declare_render_resources_desynchronized();
 }
 
 pub fn set_scene_entity_active_state(

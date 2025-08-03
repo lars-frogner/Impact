@@ -3,12 +3,17 @@
 use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::NoHashMap;
-use impact_gpu::texture::{
-    ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
+use impact_gpu::{
+    bind_group_layout::BindGroupLayoutRegistry,
+    device::GraphicsDevice,
+    texture::{
+        ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
+    },
 };
 use impact_math::Hash32;
 use impact_texture::{
     ImageTextureSource, SamplerRegistry, TextureID, TextureRegistry,
+    gpu_resource::{SamplerMap, TextureMap},
     import::ImageTextureDeclaration,
 };
 use nalgebra::{Vector4, vector};
@@ -17,6 +22,8 @@ use std::{
     borrow::Cow,
     path::{Path, PathBuf},
 };
+
+use crate::gpu_resource::VoxelMaterialGPUResources;
 
 /// A type identifier that determines all the properties of a voxel.
 #[roc(parents = "Voxel")]
@@ -299,6 +306,29 @@ impl VoxelTypeRegistry {
     /// types.
     pub fn normal_texture_array_id(&self) -> Option<TextureID> {
         self.normal_texture_array_id
+    }
+
+    /// Performs any required updates for keeping the given voxel material GPU
+    /// resources in sync with the voxel type registry.
+    pub fn sync_material_gpu_resources(
+        &self,
+        graphics_device: &GraphicsDevice,
+        textures: &TextureMap,
+        samplers: &SamplerMap,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+        voxel_material_resource_manager: &mut Option<VoxelMaterialGPUResources>,
+    ) -> Result<()> {
+        if voxel_material_resource_manager.is_none() && self.n_voxel_types() > 0 {
+            *voxel_material_resource_manager =
+                Some(VoxelMaterialGPUResources::for_voxel_type_registry(
+                    graphics_device,
+                    textures,
+                    samplers,
+                    self,
+                    bind_group_layout_registry,
+                )?);
+        }
+        Ok(())
     }
 }
 

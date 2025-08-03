@@ -47,7 +47,7 @@ impl<MID: Eq + Hash> ModelInstanceGPUBufferMap<MID> {
         self.buffers.keys()
     }
 
-    /// Returns an iterator over all model IDs the map and their associated
+    /// Returns an iterator over all model IDs in the map and their associated
     /// buffers.
     pub fn iter(&self) -> impl Iterator<Item = (&MID, &[InstanceFeatureGPUBuffer])> {
         self.buffers

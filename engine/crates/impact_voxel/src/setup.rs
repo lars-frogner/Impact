@@ -10,8 +10,8 @@ use crate::{
         MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFGenerator, SDFUnion,
         SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator, VoxelTypeGenerator,
     },
+    gpu_resource::VOXEL_MODEL_ID,
     mesh::MeshedChunkedVoxelObject,
-    resource::VOXEL_MODEL_ID,
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use anyhow::{Result, anyhow, bail};
@@ -1080,13 +1080,10 @@ pub fn create_model_instance_node_for_voxel_object(
 pub fn cleanup_voxel_object(
     voxel_object_manager: &RwLock<VoxelObjectManager>,
     voxel_object_id: VoxelObjectID,
-    desynchronized: &mut bool,
 ) {
     voxel_object_manager
         .write()
         .remove_voxel_object(voxel_object_id);
-
-    *desynchronized = true;
 }
 
 /// Checks if the given entity has a [`VoxelObjectID`], and if so, removes the
@@ -1095,14 +1092,9 @@ pub fn cleanup_voxel_object(
 pub fn cleanup_voxel_object_for_removed_entity(
     voxel_object_manager: &RwLock<VoxelObjectManager>,
     entity: &impact_ecs::world::EntityEntry<'_>,
-    desynchronized: &mut bool,
 ) {
     if let Some(voxel_object_id) = entity.get_component::<VoxelObjectID>() {
-        cleanup_voxel_object(
-            voxel_object_manager,
-            *voxel_object_id.access(),
-            desynchronized,
-        );
+        cleanup_voxel_object(voxel_object_manager, *voxel_object_id.access());
     }
 }
 

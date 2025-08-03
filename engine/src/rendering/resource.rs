@@ -1,9 +1,6 @@
 //! GPU resource management.
 
-pub mod legacy;
-
 use impact_camera::gpu_resource::CameraGPUResource;
-use impact_containers::HashMap;
 use impact_light::gpu_resource::LightGPUResources;
 use impact_material::gpu_resource::{
     MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap,
@@ -12,9 +9,8 @@ use impact_mesh::gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPURe
 use impact_rendering::resource::BasicGPUResources;
 use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::gpu_resource::SkyboxGPUResource};
 use impact_texture::gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap};
-use impact_voxel::{
-    VoxelObjectID,
-    resource::{VoxelGPUResources, VoxelMaterialGPUResourceManager, VoxelObjectGPUBufferManager},
+use impact_voxel::gpu_resource::{
+    VoxelGPUResources, VoxelMaterialGPUResources, VoxelObjectGPUBufferMap,
 };
 
 #[derive(Debug)]
@@ -30,7 +26,8 @@ pub struct RenderResourceManager {
     pub material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap,
     pub material_texture_bind_groups: MaterialTextureBindGroupMap,
     pub model_instance_buffers: ModelInstanceGPUBufferMap,
-    pub legacy: legacy::RenderResourceManager,
+    pub voxel_materials: Option<VoxelMaterialGPUResources>,
+    pub voxel_object_buffers: VoxelObjectGPUBufferMap,
 }
 
 impl RenderResourceManager {
@@ -47,7 +44,8 @@ impl RenderResourceManager {
             material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap::new(),
             material_texture_bind_groups: MaterialTextureBindGroupMap::new(),
             model_instance_buffers: ModelInstanceGPUBufferMap::new(),
-            legacy: legacy::RenderResourceManager::new(),
+            voxel_materials: None,
+            voxel_object_buffers: VoxelObjectGPUBufferMap::new(),
         }
     }
 }
@@ -105,13 +103,11 @@ impl BasicGPUResources for RenderResourceManager {
 }
 
 impl VoxelGPUResources for RenderResourceManager {
-    fn get_voxel_material_resource_manager(&self) -> Option<&VoxelMaterialGPUResourceManager> {
-        self.legacy
-            .synchronized()
-            .get_voxel_material_resource_manager()
+    fn voxel_materials(&self) -> Option<&VoxelMaterialGPUResources> {
+        self.voxel_materials.as_ref()
     }
 
-    fn voxel_object_buffer_managers(&self) -> &HashMap<VoxelObjectID, VoxelObjectGPUBufferManager> {
-        self.legacy.synchronized().voxel_object_buffer_managers()
+    fn voxel_object_buffer(&self) -> &VoxelObjectGPUBufferMap {
+        &self.voxel_object_buffers
     }
 }

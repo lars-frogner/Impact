@@ -29,20 +29,13 @@ pub fn setup_materials_for_new_entities<MID: Copy + Eq + Hash>(
     resource_manager: &RwLock<ResourceManager>,
     model_instance_manager: &RwLock<ModelInstanceManager<MID>>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) -> Result<()> {
-    setup_fixed_materials_for_new_entities(
-        resource_manager,
-        model_instance_manager,
-        components,
-        desynchronized,
-    )?;
+    setup_fixed_materials_for_new_entities(resource_manager, model_instance_manager, components)?;
 
     setup_physical_materials_for_new_entities(
         resource_manager,
         model_instance_manager,
         components,
-        desynchronized,
     )?;
 
     Ok(())
@@ -52,7 +45,6 @@ fn setup_fixed_materials_for_new_entities<MID: Copy + Eq + Hash>(
     resource_manager: &RwLock<ResourceManager>,
     model_instance_manager: &RwLock<ModelInstanceManager<MID>>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) -> Result<()> {
     setup!(
         {
@@ -73,7 +65,6 @@ fn setup_fixed_materials_for_new_entities<MID: Copy + Eq + Hash>(
                     color: Color::Uniform(*fixed_color),
                 },
                 None,
-                desynchronized,
             )
         },
         ![MaterialID]
@@ -97,7 +88,6 @@ fn setup_fixed_materials_for_new_entities<MID: Copy + Eq + Hash>(
                     color: Color::Textured(*fixed_texture),
                 },
                 None,
-                desynchronized,
             )
         },
         ![MaterialID]
@@ -108,7 +98,6 @@ fn setup_physical_materials_for_new_entities<MID: Copy + Eq + Hash>(
     resource_manager: &RwLock<ResourceManager>,
     model_instance_manager: &RwLock<ModelInstanceManager<MID>>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut bool,
 ) -> Result<()> {
     setup!(
         {
@@ -149,7 +138,6 @@ fn setup_physical_materials_for_new_entities<MID: Copy + Eq + Hash>(
                 normal_map,
                 parallax_map,
                 None,
-                desynchronized,
             )
         },
         ![MaterialID, TexturedColor]
@@ -194,7 +182,6 @@ fn setup_physical_materials_for_new_entities<MID: Copy + Eq + Hash>(
                 normal_map,
                 parallax_map,
                 None,
-                desynchronized,
             )
         },
         ![MaterialID, UniformColor]
