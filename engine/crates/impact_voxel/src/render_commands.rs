@@ -2,12 +2,11 @@
 
 use crate::{
     VoxelObjectID,
-    mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
-    resource::{
-        VOXEL_MODEL_ID, VoxelGPUResources, VoxelMaterialGPUResourceManager,
-        VoxelObjectGPUBufferManager, VoxelPushConstantGroup, VoxelPushConstantVariant,
-        VoxelResourceRegistries,
+    gpu_resource::{
+        VOXEL_MODEL_ID, VoxelGPUResources, VoxelMaterialGPUResources, VoxelObjectGPUBuffers,
+        VoxelPushConstantGroup, VoxelPushConstantVariant, VoxelResourceRegistries,
     },
+    mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
     shader_templates::{
         voxel_chunk_culling::VoxelChunkCullingShaderTemplate,
         voxel_geometry::VoxelGeometryShaderTemplate,
@@ -211,10 +210,10 @@ impl VoxelRenderCommands {
     where
         R: BasicGPUResources + VoxelGPUResources,
     {
-        let voxel_object_buffer_managers = gpu_resources.voxel_object_buffer_managers();
+        let voxel_object_buffer_map = gpu_resources.voxel_object_buffer();
 
         // Return early if there are no voxel objects
-        if voxel_object_buffer_managers.is_empty() {
+        if voxel_object_buffer_map.is_empty() {
             return Ok(());
         }
 
@@ -252,29 +251,27 @@ impl VoxelRenderCommands {
         );
 
         for voxel_object_id in voxel_object_ids {
-            let voxel_object_buffer_manager = voxel_object_buffer_managers
-                .get(voxel_object_id)
+            let voxel_object_buffers = voxel_object_buffer_map
+                .get_voxel_object_buffers(*voxel_object_id)
                 .ok_or_else(|| {
-                    anyhow!("Missing GPU buffer for voxel object {}", voxel_object_id)
+                    anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
                 })?;
 
-            let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
+            let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 
             render_pass.set_vertex_buffer(
                 1,
-                voxel_object_buffer_manager
+                voxel_object_buffers
                     .vertex_position_gpu_buffer()
                     .valid_buffer_slice(),
             );
 
             render_pass.set_index_buffer(
-                voxel_object_buffer_manager
-                    .index_gpu_buffer()
-                    .valid_buffer_slice(),
+                voxel_object_buffers.index_gpu_buffer().valid_buffer_slice(),
                 VoxelMeshIndex::format(),
             );
 
-            let indirect_buffer = voxel_object_buffer_manager
+            let indirect_buffer = voxel_object_buffers
                 .indexed_indirect_argument_gpu_buffer()
                 .buffer();
 
@@ -292,8 +289,9 @@ impl VoxelChunkCullingPass {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
         let bind_group_layout =
-            VoxelObjectGPUBufferManager::get_or_create_submesh_and_argument_buffer_bind_group_layout(
-                graphics_device,bind_group_layout_registry
+            VoxelObjectGPUBuffers::get_or_create_submesh_and_argument_buffer_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
             );
 
         let push_constants = VoxelChunkCullingShaderTemplate::push_constants();
@@ -477,10 +475,10 @@ impl VoxelChunkCullingPass {
         R: BasicGPUResources + VoxelGPUResources,
         F: InstanceFeature + AsInstanceModelViewTransform,
     {
-        let voxel_object_buffer_managers = render_resources.voxel_object_buffer_managers();
+        let voxel_object_buffer_map = render_resources.voxel_object_buffer();
 
         // Return early if there are no voxel objects
-        if voxel_object_buffer_managers.is_empty() {
+        if voxel_object_buffer_map.is_empty() {
             return Ok(());
         }
 
@@ -533,20 +531,20 @@ impl VoxelChunkCullingPass {
             .zip(voxel_object_ids)
             .zip(voxel_object_to_frustum_transforms)
         {
-            let voxel_object_buffer_manager = voxel_object_buffer_managers
-                .get(voxel_object_id)
+            let voxel_object_buffers = voxel_object_buffer_map
+                .get_voxel_object_buffers(*voxel_object_id)
                 .ok_or_else(|| {
-                    anyhow!("Missing GPU buffer for voxel object {}", voxel_object_id)
+                    anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
                 })?;
 
-            let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
+            let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 
             // We want to transform the frustum planes to the normalized voxel object space
             // where the chunk extent is unity
             let frustum_to_voxel_object_transform =
                 Self::compute_transform_from_frustum_space_to_normalized_voxel_object_space(
                     *voxel_object_to_frustum_transform.as_instance_model_view_transform(),
-                    voxel_object_buffer_manager.chunk_extent(),
+                    voxel_object_buffers.chunk_extent(),
                 );
 
             let frustum_planes =
@@ -557,9 +555,9 @@ impl VoxelChunkCullingPass {
             compute_pass.set_bind_group(
                 0,
                 if for_indexed_draw_calls {
-                    voxel_object_buffer_manager.submesh_and_indexed_argument_buffer_bind_group()
+                    voxel_object_buffers.submesh_and_indexed_argument_buffer_bind_group()
                 } else {
-                    voxel_object_buffer_manager.submesh_and_argument_buffer_bind_group()
+                    voxel_object_buffers.submesh_and_argument_buffer_bind_group()
                 },
                 &[],
             );
@@ -571,7 +569,7 @@ impl VoxelChunkCullingPass {
 
         impact_log::trace!(
             "Recorded chunk culling pass for {} voxel objects",
-            voxel_object_buffer_managers.len()
+            voxel_object_buffer_map.len()
         );
 
         Ok(())
@@ -613,14 +611,13 @@ impl VoxelGeometryPipeline {
             bind_group_layout_registry,
         );
 
-        let material_bind_group_layout =
-            VoxelMaterialGPUResourceManager::get_or_create_bind_group_layout(
-                graphics_device,
-                bind_group_layout_registry,
-            );
+        let material_bind_group_layout = VoxelMaterialGPUResources::get_or_create_bind_group_layout(
+            graphics_device,
+            bind_group_layout_registry,
+        );
 
         let position_and_normal_buffer_bind_group_layout =
-            VoxelObjectGPUBufferManager::get_or_create_position_and_normal_buffer_bind_group_layout(
+            VoxelObjectGPUBuffers::get_or_create_position_and_normal_buffer_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             );
@@ -742,13 +739,13 @@ impl VoxelGeometryPipeline {
     fn set_per_object_push_constants(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
-        voxel_object_buffer_manager: &VoxelObjectGPUBufferManager,
+        voxel_object_buffers: &VoxelObjectGPUBuffers,
     ) {
         self.push_constants
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::GenericVec3f32),
-                || voxel_object_buffer_manager.origin_offset_in_root(),
+                || voxel_object_buffers.origin_offset_in_root(),
             );
     }
 
@@ -764,10 +761,10 @@ impl VoxelGeometryPipeline {
     where
         R: BasicGPUResources + VoxelGPUResources,
     {
-        let voxel_object_buffer_managers = gpu_resources.voxel_object_buffer_managers();
+        let voxel_object_buffer_map = gpu_resources.voxel_object_buffer();
 
         // Return early if there are no voxel objects
-        if voxel_object_buffer_managers.is_empty() {
+        if voxel_object_buffer_map.is_empty() {
             return Ok(());
         }
 
@@ -796,8 +793,8 @@ impl VoxelGeometryPipeline {
             )
             .ok_or_else(|| anyhow!("Missing model-view transform GPU buffer for voxel objects"))?;
 
-        let material_gpu_resource_manager = gpu_resources
-            .get_voxel_material_resource_manager()
+        let material_gpu_resources = gpu_resources
+            .voxel_materials()
             .ok_or_else(|| anyhow!("Missing voxel material GPU resource manager"))?;
 
         // We don't assign the camera projection uniform bind group here, as it will
@@ -805,7 +802,7 @@ impl VoxelGeometryPipeline {
 
         render_pass.set_pipeline(&self.pipeline);
 
-        render_pass.set_bind_group(1, material_gpu_resource_manager.bind_group(), &[]);
+        render_pass.set_bind_group(1, material_gpu_resources.bind_group(), &[]);
 
         self.set_constant_push_constants(
             render_pass,
@@ -823,46 +820,42 @@ impl VoxelGeometryPipeline {
         );
 
         for voxel_object_id in visible_voxel_object_ids {
-            let voxel_object_buffer_manager = voxel_object_buffer_managers
-                .get(voxel_object_id)
+            let voxel_object_buffers = voxel_object_buffer_map
+                .get_voxel_object_buffers(*voxel_object_id)
                 .ok_or_else(|| {
-                    anyhow!("Missing GPU buffer for voxel object {}", voxel_object_id)
+                    anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
                 })?;
 
-            self.set_per_object_push_constants(render_pass, voxel_object_buffer_manager);
+            self.set_per_object_push_constants(render_pass, voxel_object_buffers);
 
-            let chunk_count = u32::try_from(voxel_object_buffer_manager.n_chunks()).unwrap();
+            let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 
             render_pass.set_bind_group(
                 2,
-                voxel_object_buffer_manager.position_and_normal_buffer_bind_group(),
+                voxel_object_buffers.position_and_normal_buffer_bind_group(),
                 &[],
             );
 
             render_pass.set_vertex_buffer(
                 1,
-                voxel_object_buffer_manager
-                    .index_gpu_buffer()
-                    .valid_buffer_slice(),
+                voxel_object_buffers.index_gpu_buffer().valid_buffer_slice(),
             );
 
             render_pass.set_vertex_buffer(
                 2,
-                voxel_object_buffer_manager
+                voxel_object_buffers
                     .index_material_gpu_buffer()
                     .valid_buffer_slice(),
             );
 
-            let indirect_buffer = voxel_object_buffer_manager
-                .indirect_argument_gpu_buffer()
-                .buffer();
+            let indirect_buffer = voxel_object_buffers.indirect_argument_gpu_buffer().buffer();
 
             render_pass.multi_draw_indirect(indirect_buffer, 0, chunk_count);
         }
 
         impact_log::trace!(
             "Recorded geometry pass for {} voxel objects",
-            voxel_object_buffer_managers.len()
+            voxel_object_buffer_map.len()
         );
 
         Ok(())

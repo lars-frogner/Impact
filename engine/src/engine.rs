@@ -284,16 +284,9 @@ impl Engine {
 
         drop(renderer);
 
-        let render_resources_desynchronized = self
-            .scene()
+        self.scene()
             .read()
             .handle_aspect_ratio_changed(new_aspect_ratio);
-
-        if render_resources_desynchronized.is_yes() {
-            self.renderer()
-                .read()
-                .declare_render_resources_desynchronized();
-        }
     }
 
     pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
@@ -360,9 +353,6 @@ impl Engine {
         self.ecs_world.write().remove_all_entities();
         self.scene.read().clear();
         self.simulator.write().reset();
-        self.renderer
-            .read()
-            .declare_render_resources_desynchronized();
     }
 
     pub fn controls_enabled(&self) -> bool {

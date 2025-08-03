@@ -212,8 +212,7 @@ pub fn update_mesh(profiler: impl Profiler) {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
             black_box((indices, position, voxel));
         });
-        let mut desynchronized = false;
-        mesh.sync_with_voxel_object(&mut object, &mut desynchronized);
+        mesh.sync_with_voxel_object(&mut object);
         black_box((&object, &mesh));
     });
 }

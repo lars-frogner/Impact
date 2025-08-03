@@ -167,9 +167,8 @@ impl MeshedChunkedVoxelObject {
     /// have been invalidated (it is assumed that this is the same voxel object
     /// used for creating the mesh initially). Invalidated mesh data may be
     /// overwritten to reuse buffer space.
-    pub fn sync_mesh_with_object(&mut self, desynchronized: &mut bool) {
-        self.mesh
-            .sync_with_voxel_object(&mut self.object, desynchronized);
+    pub fn sync_mesh_with_object(&mut self) {
+        self.mesh.sync_with_voxel_object(&mut self.object);
     }
 
     /// Signaling that the mesh modifications have been synchronized with the GPU.
@@ -259,15 +258,8 @@ impl ChunkedVoxelObjectMesh {
     /// have been invalidated (it is assumed that this is the same voxel object
     /// used for creating the mesh initially). Invalidated mesh data may be
     /// overwritten to reuse buffer space.
-    pub fn sync_with_voxel_object(
-        &mut self,
-        voxel_object: &mut ChunkedVoxelObject,
-        desynchronized: &mut bool,
-    ) {
+    pub fn sync_with_voxel_object(&mut self, voxel_object: &mut ChunkedVoxelObject) {
         let invalidated_mesh_chunk_indices = voxel_object.invalidated_mesh_chunk_indices();
-        if invalidated_mesh_chunk_indices.len() > 0 {
-            *desynchronized = true;
-        }
 
         for chunk_indices in invalidated_mesh_chunk_indices {
             if let Some(chunk_flags) =

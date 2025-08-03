@@ -31,8 +31,8 @@ use impact_rendering::{
 };
 use impact_scene::{camera::SceneCamera, model::ModelInstanceManager};
 use impact_voxel::{
+    gpu_resource::{VoxelGPUResources, VoxelResourceRegistries},
     render_commands::VoxelRenderCommands,
-    resource::{VoxelGPUResources, VoxelResourceRegistries},
 };
 
 /// Manager of commands for rendering the scene. Postprocessing commands are

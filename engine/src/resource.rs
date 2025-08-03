@@ -8,7 +8,7 @@ use impact_material::{MaterialRegistry, MaterialTemplateRegistry, MaterialTextur
 use impact_mesh::{LineSegmentMeshRegistry, TriangleMeshRegistry};
 use impact_rendering::resource::BasicResourceRegistries;
 use impact_texture::{SamplerRegistry, TextureRegistry, lookup_table::LookupTableRegistry};
-use impact_voxel::{resource::VoxelResourceRegistries, voxel_types::VoxelTypeRegistry};
+use impact_voxel::{gpu_resource::VoxelResourceRegistries, voxel_types::VoxelTypeRegistry};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 

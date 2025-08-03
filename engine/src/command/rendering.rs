@@ -53,7 +53,6 @@ pub fn set_temporal_anti_aliasing(
 
         if let Some(camera) = scene_camera.as_mut() {
             camera.set_jitter_enabled(state.state.is_enabled());
-            renderer.declare_render_resources_desynchronized();
         }
     }
     state
