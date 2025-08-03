@@ -1,8 +1,8 @@
-# Hash: ebfa9e53e7b668d0664b29f3902f6072c2566fd2f2c00542f1ef1d4a8d0c93c2
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 5ddad9fce8ac2cfae2b2e42d0228bf194b797884a2373cee98125b6f06c51c84
+# Generated: 2025-08-03T19:47:30+00:00
 # Rust type: impact_light::OmnidirectionalLightID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 1379dde5 (dirty)
 module [
     OmnidirectionalLightID,
     add,
@@ -15,7 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The ID of an [`OmnidirectionalLight`] in the [`LightStorage`].
+## The ID of an [`OmnidirectionalLight`] in the [`LightManager`].
 OmnidirectionalLightID : U32
 
 ## Adds a value of the [OmnidirectionalLightID] component to an entity's data.

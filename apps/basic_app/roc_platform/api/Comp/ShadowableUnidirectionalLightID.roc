@@ -1,8 +1,8 @@
-# Hash: e26d13ccd58d0c19b08cbd6970901a444fb62269fd32e47d21a3deb5743737fd
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: d981c29d982ce7e9425379efe0a212d310e40daed558de776f66eca44033d28c
+# Generated: 2025-08-03T19:37:47+00:00
 # Rust type: impact_light::ShadowableUnidirectionalLightID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 1379dde5 (dirty)
 module [
     ShadowableUnidirectionalLightID,
     add,
@@ -15,7 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The ID of a [`ShadowableUnidirectionalLight`] in the [`LightStorage`].
+## The ID of a [`ShadowableUnidirectionalLight`] in the [`LightManager`].
 ShadowableUnidirectionalLightID : U32
 
 ## Adds a value of the [ShadowableUnidirectionalLightID] component to an entity's data.
