@@ -38,7 +38,7 @@ macro_rules! declare_builtin_triangle_mesh {
             $(#[$spec_meta])*
             fn $declaration_fn_name() -> $crate::import::TriangleMeshDeclaration {
                 $crate::import::TriangleMeshDeclaration {
-                    name: String::from($desc),
+                    id: *[<$id_fn_name:upper>],
                     source: $crate::import::TriangleMeshSource::Template($template),
                     texture_projection: None,
                 }

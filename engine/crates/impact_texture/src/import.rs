@@ -6,15 +6,14 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use impact_gpu::texture::{SamplerConfig, TextureConfig};
-use impact_math::hash64;
 use std::path::Path;
 
 /// Declaration of an image-based texture.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct ImageTextureDeclaration {
-    /// The name of the texture.
-    pub name: String,
+    /// The ID of the texture.
+    pub id: TextureID,
     /// The source of the image data.
     pub source: ImageTextureSource,
     /// Configuration for the texture.
@@ -78,7 +77,7 @@ pub fn load_declared_image_textures(
 ) -> Result<()> {
     for declaration in texture_declarations {
         load_declared_image_texture(texture_registry, sampler_registry, declaration.clone())
-            .with_context(|| format!("Failed to load texture: {}", declaration.name))?;
+            .with_context(|| format!("Failed to load texture: {}", declaration.id))?;
     }
     Ok(())
 }
@@ -98,20 +97,19 @@ pub fn load_declared_image_texture(
     sampler_registry: &mut SamplerRegistry,
     declaration: ImageTextureDeclaration,
 ) -> Result<TextureID> {
-    let texture_id = TextureID(hash64!(&declaration.name));
+    let texture_id = declaration.id;
 
     if texture_registry.contains(texture_id) {
         bail!(
-            "Tried to load texture under already existing name: {}",
-            declaration.name
+            "Tried to load texture under already existing ID: {}",
+            declaration.id
         );
     }
 
     let metadata = match &declaration.source {
         ImageTextureSource::ImageFile(image_path) => {
             impact_log::debug!(
-                "Reading metadata for image texture `{}` from {}",
-                declaration.name,
+                "Reading metadata for image texture `{texture_id}` from {}",
                 image_path.display(),
             );
             impact_io::image::read_metadata_for_image_at_path(image_path).with_context(|| {
@@ -127,8 +125,7 @@ pub fn load_declared_image_texture(
             }
             let image_path = &image_paths[0];
             impact_log::debug!(
-                "Reading metadata for image texture array `{}` from {}",
-                declaration.name,
+                "Reading metadata for image texture array `{texture_id}` from {}",
                 image_path.display()
             );
             // No need to check the metadata for all the images here, that will
@@ -142,8 +139,7 @@ pub fn load_declared_image_texture(
         }
         ImageTextureSource::CubemapImageFiles { right, .. } => {
             impact_log::debug!(
-                "Reading metadata for cubemap texture `{}` from {}",
-                declaration.name,
+                "Reading metadata for cubemap texture `{texture_id}` from {}",
                 right.display()
             );
             impact_io::image::read_metadata_for_image_at_path(right)

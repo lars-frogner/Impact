@@ -19,7 +19,7 @@ pub use triangle::*;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::Point;
-use impact_math::{Float, StringHash64, hash64};
+use impact_math::Float;
 use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
 };
@@ -128,36 +128,6 @@ pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
     "tangent space quaternion",
     "color",
 ];
-
-#[roc(dependencies = [impact_math::Hash64])]
-impl TriangleMeshID {
-    #[roc(body = "Hashing.hash_str_64(name)")]
-    /// Creates a triangle mesh ID hashed from the given name.
-    pub fn from_name(name: &str) -> Self {
-        Self(hash64!(name))
-    }
-}
-
-impl From<TriangleMeshID> for StringHash64 {
-    fn from(id: TriangleMeshID) -> Self {
-        id.0
-    }
-}
-
-#[roc(dependencies = [impact_math::Hash64])]
-impl LineSegmentMeshID {
-    #[roc(body = "Hashing.hash_str_64(name)")]
-    /// Creates a line segment mesh ID hashed from the given name.
-    pub fn from_name(name: &str) -> Self {
-        Self(hash64!(name))
-    }
-}
-
-impl From<LineSegmentMeshID> for StringHash64 {
-    fn from(id: LineSegmentMeshID) -> Self {
-        id.0
-    }
-}
 
 impl fmt::Display for MeshID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

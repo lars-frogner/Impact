@@ -5,7 +5,7 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, StringHash64};
+use impact_math::{Float, StringHash64, hash64};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
@@ -44,6 +44,21 @@ bitflags! {
     }
 }
 
+#[roc(dependencies = [impact_math::Hash64])]
+impl LineSegmentMeshID {
+    #[roc(body = "Hashing.hash_str_64(name)")]
+    /// Creates a line segment mesh ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash64!(name))
+    }
+}
+
+impl From<LineSegmentMeshID> for StringHash64 {
+    fn from(id: LineSegmentMeshID) -> Self {
+        id.0
+    }
+}
+
 impl fmt::Display for LineSegmentMeshID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -51,6 +66,27 @@ impl fmt::Display for LineSegmentMeshID {
 }
 
 impl ResourceID for LineSegmentMeshID {}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for LineSegmentMeshID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for LineSegmentMeshID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(LineSegmentMeshID::from_name(&s))
+    }
+}
 
 impl<F: Float> LineSegmentMesh<F> {
     /// Creates a new mesh described by the given vertex positions and colors.

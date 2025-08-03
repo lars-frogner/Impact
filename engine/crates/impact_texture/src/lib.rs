@@ -30,7 +30,6 @@ use std::{
 stringhash64_newtype!(
     /// Identifier for a texture.
     #[roc(parents = "Texture")]
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
     [pub] TextureID
 );
@@ -99,6 +98,27 @@ impl TextureID {
 }
 
 impl ResourceID for TextureID {}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for TextureID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for TextureID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(TextureID::from_name(&s))
+    }
+}
 
 impl From<&SamplerConfig> for SamplerID {
     fn from(config: &SamplerConfig) -> Self {

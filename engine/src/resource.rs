@@ -131,6 +131,14 @@ impl ResourceManager {
             &mut self.samplers,
             &resource_declarations.textures,
         )?;
+        impact_material::import::load_declared_materials(
+            &self.textures,
+            &self.samplers,
+            &mut self.materials,
+            &mut self.material_templates,
+            &mut self.material_texture_groups,
+            &resource_declarations.materials,
+        )?;
         Ok(())
     }
 }
