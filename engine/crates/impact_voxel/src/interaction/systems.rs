@@ -14,7 +14,10 @@ use impact_ecs::{
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_physics::{fph, rigid_body::RigidBodyManager};
+use impact_physics::{
+    fph,
+    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+};
 use impact_scene::{SceneEntityFlags, SceneGraphParentNodeHandle, graph::SceneGraph};
 use tinyvec::TinyVec;
 
@@ -40,7 +43,8 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                     entity_id,
                     voxel_object_id: *voxel_object_id,
                 });
-            }
+            },
+            [DynamicRigidBodyID] // We only let dynamic voxel objects participate in interactions
         );
     }
 

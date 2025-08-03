@@ -1,7 +1,5 @@
 //! Setup of voxel objects.
 
-use parking_lot::RwLock;
-
 use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
@@ -32,6 +30,7 @@ use impact_scene::{
     graph::SceneGraph, model::ModelInstanceManager,
 };
 use nalgebra::Vector3;
+use parking_lot::RwLock;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -173,6 +172,40 @@ define_setup_type! {
     }
 }
 
+define_setup_type! {
+    target = VoxelObjectID;
+    /// A voxel object with dynamic voxels will behave like a dynamic rigid body
+    /// and respond to voxel absorption.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct DynamicVoxels;
+}
+
+/// Template for the voxel types of a voxel object.
+#[derive(Clone, Debug)]
+pub enum VoxelObjectVoxelTypes {
+    Same(SameVoxelType),
+    GradientNoise(Box<GradientNoiseVoxelTypes>),
+}
+
+/// Template for the shape of a voxel object.
+#[derive(Clone, Debug)]
+pub enum VoxelObjectShape {
+    Box(VoxelBox),
+    Sphere(VoxelSphere),
+    SphereUnion(VoxelSphereUnion),
+    GradientNoisePattern(VoxelGradientNoisePattern),
+}
+
+/// A modification to the signed distance field of a voxel object.
+#[derive(Copy, Clone, Debug)]
+pub enum VoxelObjectSDFModification {
+    None,
+    MultiscaleSphere(MultiscaleSphereSDFModification),
+    MultifractalNoise(MultifractalNoiseSDFModification),
+}
+
 #[roc(dependencies=[VoxelType])]
 impl SameVoxelType {
     #[roc(body = "{ voxel_type_idx: NativeNum.to_usize(voxel_type) }")]
@@ -291,6 +324,18 @@ impl MultiscaleSphereSDFModification {
             seed,
         }
     }
+
+    fn apply<SD: SDFGenerator>(&self, sdf_generator: SD) -> MultiscaleSphereSDFModifier<SD> {
+        MultiscaleSphereSDFModifier::new(
+            sdf_generator,
+            self.octaves,
+            self.max_scale,
+            self.persistence,
+            self.inflation,
+            self.smoothness,
+            self.seed,
+        )
+    }
 }
 
 #[roc]
@@ -320,6 +365,18 @@ impl MultifractalNoiseSDFModification {
             amplitude,
             seed,
         }
+    }
+
+    fn apply<SD: SDFGenerator>(&self, sdf_generator: SD) -> MultifractalNoiseSDFModifier<SD> {
+        MultifractalNoiseSDFModifier::new(
+            sdf_generator,
+            self.octaves,
+            self.frequency,
+            self.lacunarity,
+            self.persistence,
+            self.amplitude,
+            u32::try_from(self.seed).unwrap(),
+        )
     }
 }
 
@@ -359,6 +416,10 @@ impl VoxelBox {
     pub fn extents_in_voxels(&self) -> [f64; 3] {
         [self.extent_x, self.extent_y, self.extent_z]
     }
+
+    fn generator(&self) -> BoxSDFGenerator {
+        BoxSDFGenerator::new(self.extents_in_voxels())
+    }
 }
 
 #[roc]
@@ -388,6 +449,10 @@ impl VoxelSphere {
 
     pub fn radius_in_voxels(&self) -> f64 {
         self.radius
+    }
+
+    fn generator(&self) -> SphereSDFGenerator {
+        SphereSDFGenerator::new(self.radius_in_voxels())
     }
 }
 
@@ -436,6 +501,17 @@ impl VoxelSphereUnion {
 
     pub fn radius_2_in_voxels(&self) -> f64 {
         self.radius_2
+    }
+
+    fn generator(&self) -> SDFUnion<SphereSDFGenerator, SphereSDFGenerator> {
+        let sdf_generator_1 = SphereSDFGenerator::new(self.radius_1_in_voxels());
+        let sdf_generator_2 = SphereSDFGenerator::new(self.radius_2_in_voxels());
+        SDFUnion::new(
+            sdf_generator_1,
+            sdf_generator_2,
+            self.center_offsets.into(),
+            self.smoothness,
+        )
     }
 }
 
@@ -486,40 +562,75 @@ impl VoxelGradientNoisePattern {
     pub fn extents_in_voxels(&self) -> [f64; 3] {
         [self.extent_x, self.extent_y, self.extent_z]
     }
+
+    fn generator(&self) -> GradientNoiseSDFGenerator {
+        GradientNoiseSDFGenerator::new(
+            self.extents_in_voxels(),
+            self.noise_frequency,
+            self.noise_threshold,
+            u32::try_from(self.seed).unwrap(),
+        )
+    }
 }
 
-pub fn setup_voxel_box_with_same_voxel_type(
+const MAX_MODIFICATIONS: usize = 2;
+
+pub fn gather_modifications(
+    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
+    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
+) -> [VoxelObjectSDFModification; MAX_MODIFICATIONS] {
+    let mut modifications = [VoxelObjectSDFModification::None; MAX_MODIFICATIONS];
+    let mut idx = 0;
+
+    if let Some(modification) = multiscale_sphere_modification {
+        modifications[idx] = VoxelObjectSDFModification::MultiscaleSphere(*modification);
+        idx += 1;
+    }
+
+    if let Some(modification) = multifractal_noise_modification {
+        modifications[idx] = VoxelObjectSDFModification::MultifractalNoise(*modification);
+    }
+
+    modifications
+}
+
+pub fn setup_voxel_object(
+    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_type_registry: &VoxelTypeRegistry,
+    voxel_types: VoxelObjectVoxelTypes,
+    shape: VoxelObjectShape,
+    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
+) -> Result<VoxelObjectID> {
+    let voxel_object = generate_voxel_object_with_types_shape_and_modifications(
+        voxel_type_registry,
+        voxel_types,
+        shape,
+        sdf_modifications,
+    )
+    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel shape"))?;
+
+    let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+
+    let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
+
+    Ok(voxel_object_id)
+}
+
+pub fn setup_dynamic_rigid_body_for_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
-    voxel_box: &VoxelBox,
-    voxel_type: &SameVoxelType,
+    voxel_object_id: VoxelObjectID,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator = BoxSDFGenerator::new(voxel_box.extents_in_voxels());
-    let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
-
-    let voxel_object = generate_voxel_object(
-        voxel_box.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel box"))?;
+) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+    let voxel_object = voxel_object_manager
+        .get_voxel_object(voxel_object_id)
+        .ok_or_else(|| anyhow!("Tried to setup dynamic rigid body for missing voxel object"))?;
 
     let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
+        voxel_object.object(),
         voxel_type_registry.mass_densities(),
     );
 
@@ -536,464 +647,9 @@ pub fn setup_voxel_box_with_same_voxel_type(
         rigid_body_id,
     };
 
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
+    voxel_object_manager.add_physics_context_for_voxel_object(voxel_object_id, physics_context);
 
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_sphere_with_same_voxel_type(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_sphere: &VoxelSphere,
-    voxel_type: &SameVoxelType,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator = SphereSDFGenerator::new(voxel_sphere.radius_in_voxels());
-    let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
-
-    let voxel_object = generate_voxel_object(
-        voxel_sphere.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel sphere"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_sphere_union_with_same_voxel_type(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_sphere_union: &VoxelSphereUnion,
-    voxel_type: &SameVoxelType,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator_1 = SphereSDFGenerator::new(voxel_sphere_union.radius_1_in_voxels());
-    let sdf_generator_2 = SphereSDFGenerator::new(voxel_sphere_union.radius_2_in_voxels());
-    let sdf_generator = SDFUnion::new(
-        sdf_generator_1,
-        sdf_generator_2,
-        voxel_sphere_union.center_offsets.into(),
-        voxel_sphere_union.smoothness,
-    );
-    let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
-
-    let voxel_object = generate_voxel_object(
-        voxel_sphere_union.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel sphere union"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_gradient_noise_pattern_with_same_voxel_type(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_noise_pattern: &VoxelGradientNoisePattern,
-    voxel_type: &SameVoxelType,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator = GradientNoiseSDFGenerator::new(
-        voxel_noise_pattern.extents_in_voxels(),
-        voxel_noise_pattern.noise_frequency,
-        voxel_noise_pattern.noise_threshold,
-        u32::try_from(voxel_noise_pattern.seed).unwrap(),
-    );
-    let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_type.voxel_type());
-
-    let voxel_object = generate_voxel_object(
-        voxel_noise_pattern.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel gradient noise pattern"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_box_with_gradient_noise_voxel_types(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_box: &VoxelBox,
-    voxel_types: &GradientNoiseVoxelTypes,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator = BoxSDFGenerator::new(voxel_box.extents_in_voxels());
-    let voxel_type_generator =
-        gradient_noise_voxel_type_generator_from_component(voxel_type_registry, voxel_types);
-
-    let voxel_object = generate_voxel_object(
-        voxel_box.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel box"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_sphere_with_gradient_noise_voxel_types(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_sphere: &VoxelSphere,
-    voxel_types: &GradientNoiseVoxelTypes,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator = SphereSDFGenerator::new(voxel_sphere.radius_in_voxels());
-    let voxel_type_generator =
-        gradient_noise_voxel_type_generator_from_component(voxel_type_registry, voxel_types);
-
-    let voxel_object = generate_voxel_object(
-        voxel_sphere.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel sphere"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_sphere_union_with_gradient_noise_voxel_types(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_sphere_union: &VoxelSphereUnion,
-    voxel_types: &GradientNoiseVoxelTypes,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator_1 = SphereSDFGenerator::new(voxel_sphere_union.radius_1_in_voxels());
-    let sdf_generator_2 = SphereSDFGenerator::new(voxel_sphere_union.radius_2_in_voxels());
-    let sdf_generator = SDFUnion::new(
-        sdf_generator_1,
-        sdf_generator_2,
-        voxel_sphere_union.center_offsets.into(),
-        voxel_sphere_union.smoothness,
-    );
-    let voxel_type_generator =
-        gradient_noise_voxel_type_generator_from_component(voxel_type_registry, voxel_types);
-
-    let voxel_object = generate_voxel_object(
-        voxel_sphere_union.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel sphere union"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
-}
-
-pub fn setup_voxel_gradient_noise_pattern_with_gradient_noise_voxel_types(
-    rigid_body_manager: &mut RigidBodyManager,
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_noise_pattern: &VoxelGradientNoisePattern,
-    voxel_types: &GradientNoiseVoxelTypes,
-    model_transform: Option<&ModelTransform>,
-    frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> Result<(
-    VoxelObjectID,
-    DynamicRigidBodyID,
-    ModelTransform,
-    ReferenceFrame,
-    Motion,
-)> {
-    let sdf_generator = GradientNoiseSDFGenerator::new(
-        voxel_noise_pattern.extents_in_voxels(),
-        voxel_noise_pattern.noise_frequency,
-        voxel_noise_pattern.noise_threshold,
-        u32::try_from(voxel_noise_pattern.seed).unwrap(),
-    );
-    let voxel_type_generator =
-        gradient_noise_voxel_type_generator_from_component(voxel_type_registry, voxel_types);
-
-    let voxel_object = generate_voxel_object(
-        voxel_noise_pattern.voxel_extent,
-        sdf_generator,
-        voxel_type_generator,
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel gradient noise pattern"))?;
-
-    let inertial_property_manager = VoxelObjectInertialPropertyManager::initialized_from(
-        &voxel_object,
-        voxel_type_registry.mass_densities(),
-    );
-
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
-        rigid_body_manager,
-        inertial_property_manager.derive_inertial_properties(),
-        model_transform,
-        frame,
-        motion,
-    )?;
-
-    let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager,
-        rigid_body_id,
-    };
-
-    let voxel_object_id =
-        mesh_and_store_voxel_object(voxel_object_manager, voxel_object, physics_context);
-
-    Ok((
-        voxel_object_id,
-        rigid_body_id,
-        model_transform,
-        frame,
-        velocity,
-    ))
+    Ok((rigid_body_id, model_transform, frame, velocity))
 }
 
 pub fn create_model_instance_node_for_voxel_object(
@@ -1098,74 +754,127 @@ pub fn cleanup_voxel_object_for_removed_entity(
     }
 }
 
-fn generate_voxel_object(
-    voxel_extent: f64,
-    sdf_generator: impl SDFGenerator,
-    voxel_type_generator: impl VoxelTypeGenerator,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-    multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
+fn generate_voxel_object_with_types_shape_and_modifications(
+    voxel_type_registry: &VoxelTypeRegistry,
+    voxel_types: VoxelObjectVoxelTypes,
+    shape: VoxelObjectShape,
+    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
 ) -> Option<ChunkedVoxelObject> {
-    match (
-        multiscale_sphere_modification,
-        multifractal_noise_modification,
-    ) {
-        (Some(multiscale_sphere_modification), Some(multifractal_noise_modification)) => {
-            let sdf_generator = MultiscaleSphereSDFModifier::new(
-                sdf_generator,
-                multiscale_sphere_modification.octaves,
-                multiscale_sphere_modification.max_scale,
-                multiscale_sphere_modification.persistence,
-                multiscale_sphere_modification.inflation,
-                multiscale_sphere_modification.smoothness,
-                multiscale_sphere_modification.seed,
-            );
-            let sdf_generator = MultifractalNoiseSDFModifier::new(
-                sdf_generator,
-                multifractal_noise_modification.octaves,
-                multifractal_noise_modification.frequency,
-                multifractal_noise_modification.lacunarity,
-                multifractal_noise_modification.persistence,
-                multifractal_noise_modification.amplitude,
-                u32::try_from(multifractal_noise_modification.seed).unwrap(),
-            );
-            let generator =
-                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
-            ChunkedVoxelObject::generate(&generator)
+    match voxel_types {
+        VoxelObjectVoxelTypes::Same(voxel_types) => {
+            let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_types.voxel_type());
+            generate_voxel_object_with_shape_and_modifications(
+                voxel_type_generator,
+                shape,
+                sdf_modifications,
+            )
         }
-        (Some(modification), None) => {
-            let sdf_generator = MultiscaleSphereSDFModifier::new(
-                sdf_generator,
-                modification.octaves,
-                modification.max_scale,
-                modification.persistence,
-                modification.inflation,
-                modification.smoothness,
-                modification.seed,
+        VoxelObjectVoxelTypes::GradientNoise(voxel_types) => {
+            let voxel_type_generator = gradient_noise_voxel_type_generator_from_component(
+                voxel_type_registry,
+                &voxel_types,
             );
-            let generator =
-                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
-            ChunkedVoxelObject::generate(&generator)
-        }
-        (None, Some(modification)) => {
-            let sdf_generator = MultifractalNoiseSDFModifier::new(
-                sdf_generator,
-                modification.octaves,
-                modification.frequency,
-                modification.lacunarity,
-                modification.persistence,
-                modification.amplitude,
-                u32::try_from(modification.seed).unwrap(),
-            );
-            let generator =
-                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
-            ChunkedVoxelObject::generate(&generator)
-        }
-        (None, None) => {
-            let generator =
-                SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
-            ChunkedVoxelObject::generate(&generator)
+            generate_voxel_object_with_shape_and_modifications(
+                voxel_type_generator,
+                shape,
+                sdf_modifications,
+            )
         }
     }
+}
+
+fn generate_voxel_object_with_shape_and_modifications(
+    voxel_type_generator: impl VoxelTypeGenerator,
+    shape: VoxelObjectShape,
+    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
+) -> Option<ChunkedVoxelObject> {
+    match shape {
+        VoxelObjectShape::Box(shape) => generate_voxel_object_with_modifications(
+            voxel_type_generator,
+            shape.voxel_extent,
+            shape.generator(),
+            sdf_modifications,
+        ),
+        VoxelObjectShape::Sphere(shape) => generate_voxel_object_with_modifications(
+            voxel_type_generator,
+            shape.voxel_extent,
+            shape.generator(),
+            sdf_modifications,
+        ),
+        VoxelObjectShape::SphereUnion(shape) => generate_voxel_object_with_modifications(
+            voxel_type_generator,
+            shape.voxel_extent,
+            shape.generator(),
+            sdf_modifications,
+        ),
+        VoxelObjectShape::GradientNoisePattern(shape) => generate_voxel_object_with_modifications(
+            voxel_type_generator,
+            shape.voxel_extent,
+            shape.generator(),
+            sdf_modifications,
+        ),
+    }
+}
+
+fn generate_voxel_object_with_modifications(
+    voxel_type_generator: impl VoxelTypeGenerator,
+    voxel_extent: f64,
+    sdf_generator: impl SDFGenerator,
+    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
+) -> Option<ChunkedVoxelObject> {
+    match &sdf_modifications[0] {
+        VoxelObjectSDFModification::None => {
+            generate_voxel_object(voxel_type_generator, voxel_extent, sdf_generator)
+        }
+        VoxelObjectSDFModification::MultiscaleSphere(modification) => {
+            generate_voxel_object_with_modifications_2(
+                voxel_type_generator,
+                voxel_extent,
+                modification.apply(sdf_generator),
+                sdf_modifications,
+            )
+        }
+        VoxelObjectSDFModification::MultifractalNoise(modification) => {
+            generate_voxel_object_with_modifications_2(
+                voxel_type_generator,
+                voxel_extent,
+                modification.apply(sdf_generator),
+                sdf_modifications,
+            )
+        }
+    }
+}
+
+fn generate_voxel_object_with_modifications_2(
+    voxel_type_generator: impl VoxelTypeGenerator,
+    voxel_extent: f64,
+    sdf_generator: impl SDFGenerator,
+    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
+) -> Option<ChunkedVoxelObject> {
+    match &sdf_modifications[1] {
+        VoxelObjectSDFModification::None => {
+            generate_voxel_object(voxel_type_generator, voxel_extent, sdf_generator)
+        }
+        VoxelObjectSDFModification::MultiscaleSphere(modification) => generate_voxel_object(
+            voxel_type_generator,
+            voxel_extent,
+            modification.apply(sdf_generator),
+        ),
+        VoxelObjectSDFModification::MultifractalNoise(modification) => generate_voxel_object(
+            voxel_type_generator,
+            voxel_extent,
+            modification.apply(sdf_generator),
+        ),
+    }
+}
+
+fn generate_voxel_object(
+    voxel_type_generator: impl VoxelTypeGenerator,
+    voxel_extent: f64,
+    sdf_generator: impl SDFGenerator,
+) -> Option<ChunkedVoxelObject> {
+    let generator = SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
+    ChunkedVoxelObject::generate(&generator)
 }
 
 fn setup_rigid_body_for_new_voxel_object(
@@ -1195,20 +904,6 @@ fn setup_rigid_body_for_new_voxel_object(
     );
 
     Ok((rigid_body_id, model_transform, frame, motion))
-}
-
-fn mesh_and_store_voxel_object(
-    voxel_object_manager: &mut VoxelObjectManager,
-    voxel_object: ChunkedVoxelObject,
-    physics_context: VoxelObjectPhysicsContext,
-) -> VoxelObjectID {
-    let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
-
-    let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
-
-    voxel_object_manager.add_physics_context_for_voxel_object(voxel_object_id, physics_context);
-
-    voxel_object_id
 }
 
 fn gradient_noise_voxel_type_generator_from_component(
