@@ -365,6 +365,29 @@ define_task!(
     }
 );
 
+define_task!(
+    /// Updates the collidables of voxel objects to reflect their current
+    /// [`ModelTransform`](impact_geometry::ModelTransform).
+    [pub] SyncVoxelObjectCollidables,
+    depends_on = [SyncVoxelObjectModelTransforms],
+    execute_on = [PhysicsTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Synchronizing voxel object collidables", engine, {
+            let ecs_world = engine.ecs_world().read();
+            let simulator = engine.simulator().read();
+            let mut collision_world = simulator.collision_world().write();
+
+            impact_voxel::collidable::systems::sync_voxel_object_collidables(
+                &ecs_world,
+                &mut collision_world,
+            );
+
+            Ok(())
+        })
+    }
+);
+
 // =============================================================================
 // GIZMO PROCESSING
 // =============================================================================
@@ -839,6 +862,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncVoxelObjectMeshes)?;
     task_scheduler.register_task(ApplyVoxelAbsorption)?;
     task_scheduler.register_task(SyncVoxelObjectModelTransforms)?;
+    task_scheduler.register_task(SyncVoxelObjectCollidables)?;
 
     // Gizmo Processing
     task_scheduler.register_task(UpdateVisibilityFlagsForGizmos)?;

@@ -3,6 +3,9 @@
 
 pub mod setup;
 
+#[cfg(feature = "ecs")]
+pub mod systems;
+
 use crate::{VoxelObjectID, VoxelObjectManager};
 use impact_physics::{
     collision::{
@@ -20,7 +23,7 @@ use impact_physics::{
     fph,
     material::ContactResponseParameters,
 };
-use nalgebra::{Isometry3, UnitVector3, Vector3};
+use nalgebra::{Isometry3, Translation3, UnitQuaternion, UnitVector3, Vector3};
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -35,10 +38,14 @@ pub enum Collidable {
 pub enum LocalCollidable {
     Sphere(SphereCollidable),
     Plane(PlaneCollidable),
-    VoxelObject {
-        object_id: VoxelObjectID,
-        response_params: ContactResponseParameters,
-    },
+    VoxelObject(LocalVoxelObjectCollidable),
+}
+
+#[derive(Clone, Debug)]
+pub struct LocalVoxelObjectCollidable {
+    object_id: VoxelObjectID,
+    response_params: ContactResponseParameters,
+    origin_offset: Vector3<f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,14 +68,14 @@ impl collision::Collidable for Collidable {
                 Self::Sphere(sphere.transformed(transform_to_world_space))
             }
             Self::Local::Plane(plane) => Self::Plane(plane.transformed(transform_to_world_space)),
-            Self::Local::VoxelObject {
-                object_id,
-                response_params,
-            } => Self::VoxelObject(VoxelObjectCollidable::new(
-                *object_id,
-                *response_params,
-                *transform_to_world_space,
-            )),
+            Self::Local::VoxelObject(voxel_object) => {
+                Self::VoxelObject(VoxelObjectCollidable::new(
+                    voxel_object.object_id,
+                    voxel_object.response_params,
+                    voxel_object.origin_offset,
+                    *transform_to_world_space,
+                ))
+            }
         }
     }
 
@@ -178,12 +185,18 @@ impl VoxelObjectCollidable {
     pub fn new(
         object_id: VoxelObjectID,
         response_params: ContactResponseParameters,
+        origin_offset: Vector3<f32>,
         transform_to_world_space: Isometry3<fph>,
     ) -> Self {
         Self {
             object_id,
             response_params,
-            transform_to_object_space: transform_to_world_space.inverse(),
+            transform_to_object_space: (transform_to_world_space
+                * Isometry3::from_parts(
+                    Translation3::from(-origin_offset.cast()),
+                    UnitQuaternion::identity(),
+                ))
+            .inverse(),
         }
     }
 

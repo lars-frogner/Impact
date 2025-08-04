@@ -1,6 +1,7 @@
 //! Setup of collidables for new entities.
 
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_geometry::ModelTransform;
 use impact_physics::{
     collision::{
         self, CollidableID,
@@ -96,12 +97,14 @@ pub fn setup_collidables_for_new_entities(
         components,
         |voxel_collidable: &VoxelCollidable,
          voxel_object_id: &VoxelObjectID,
-         rigid_body_id: &DynamicRigidBodyID|
+         rigid_body_id: &DynamicRigidBodyID,
+         model_transform: &ModelTransform|
          -> CollidableID {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
                 *voxel_object_id,
                 (*rigid_body_id).into(),
+                model_transform.offset,
                 voxel_collidable,
             )
         }
@@ -114,12 +117,16 @@ pub fn setup_collidables_for_new_entities(
         components,
         |voxel_collidable: &VoxelCollidable,
          voxel_object_id: &VoxelObjectID,
-         rigid_body_id: &KinematicRigidBodyID|
+         rigid_body_id: &KinematicRigidBodyID,
+         model_transform: Option<&ModelTransform>|
          -> CollidableID {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
                 *voxel_object_id,
                 (*rigid_body_id).into(),
+                model_transform
+                    .map(|model_transform| model_transform.offset)
+                    .unwrap_or_default(),
                 voxel_collidable,
             )
         }
