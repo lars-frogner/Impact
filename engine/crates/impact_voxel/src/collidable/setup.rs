@@ -2,7 +2,7 @@
 
 use crate::{
     VoxelObjectID,
-    collidable::{CollisionWorld, LocalCollidable},
+    collidable::{CollisionWorld, LocalCollidable, LocalVoxelObjectCollidable},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_physics::{
@@ -10,6 +10,7 @@ use impact_physics::{
     material::ContactResponseParameters,
     rigid_body::RigidBodyID,
 };
+use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -55,14 +56,16 @@ pub fn setup_voxel_collidable(
     collision_world: &mut CollisionWorld,
     object_id: VoxelObjectID,
     rigid_body_id: RigidBodyID,
+    origin_offset: Vector3<f32>,
     collidable: &VoxelCollidable,
 ) -> CollidableID {
     collision_world.add_collidable(
         rigid_body_id,
         collidable.kind(),
-        LocalCollidable::VoxelObject {
+        LocalCollidable::VoxelObject(LocalVoxelObjectCollidable {
             object_id,
             response_params: *collidable.response_params(),
-        },
+            origin_offset,
+        }),
     )
 }
