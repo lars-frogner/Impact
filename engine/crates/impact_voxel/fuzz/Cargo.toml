@@ -24,6 +24,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane"
+path = "fuzz_targets/obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "obtaining_surface_voxels_maybe_intersecting_sphere"
+path = "fuzz_targets/obtaining_surface_voxels_maybe_intersecting_sphere.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "obtaining_voxels_within_sphere"
 path = "fuzz_targets/obtaining_voxels_within_sphere.rs"
 test = false

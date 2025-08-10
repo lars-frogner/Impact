@@ -14,62 +14,18 @@ use nalgebra::{self as na, Point3, point};
 use std::{array, ops::Range};
 
 impl ChunkedVoxelObject {
-    pub fn for_each_surface_voxel_maybe_intersecting_plane(
+    /// Finds non-empty voxels with at least one exposed face that are not fully
+    /// outside the negative halfspace of the given plane and calls the given
+    /// closure with their indices, the voxels themselves and their placement on
+    /// the surface. For efficiency, the closure may also be called with voxels
+    /// that are fully outside the negative halfspace of the plane.
+    pub fn for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &self,
         plane: &Plane<f64>,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         let included_voxel_ranges = self.voxel_ranges_in_object_within_plane(plane);
-
-        if included_voxel_ranges.iter().any(Range::is_empty) {
-            return;
-        }
-
-        let included_chunk_ranges = included_voxel_ranges
-            .clone()
-            .map(chunk_range_encompassing_voxel_range);
-
-        for chunk_i in included_chunk_ranges[0].clone() {
-            for chunk_j in included_chunk_ranges[1].clone() {
-                for chunk_k in included_chunk_ranges[2].clone() {
-                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
-                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
-
-                    // Only non-uniform chunks can have surface voxels
-                    let VoxelChunk::NonUniform(chunk) = &self.chunks[chunk_idx] else {
-                        continue;
-                    };
-
-                    let object_voxel_ranges_in_chunk =
-                        chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
-
-                    let included_voxel_ranges_in_chunk: [_; 3] = array::from_fn(|dim| {
-                        let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
-                        let included_range = &included_voxel_ranges[dim];
-                        usize::max(range_in_chunk.start, included_range.start)
-                            ..usize::min(range_in_chunk.end, included_range.end)
-                    });
-
-                    let voxels = chunk_voxels(&self.voxels, chunk.data_offset);
-
-                    for i in included_voxel_ranges_in_chunk[0].clone() {
-                        for j in included_voxel_ranges_in_chunk[1].clone() {
-                            for k in included_voxel_ranges_in_chunk[2].clone() {
-                                let voxel_idx =
-                                    linear_voxel_idx_within_chunk_from_object_voxel_indices(
-                                        i, j, k,
-                                    );
-                                let voxel = &voxels[voxel_idx];
-                                if let Some(VoxelPlacement::Surface(placement)) = voxel.placement()
-                                {
-                                    f([i, j, k], voxel, placement);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        self.for_each_surface_voxel_in_voxel_ranges(included_voxel_ranges, f);
     }
 
     /// Finds non-empty voxels with at least one exposed face that are not
@@ -430,6 +386,17 @@ impl ChunkedVoxelObject {
         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
+    /// Returns the object space axis aligned bounding box of the voxel at the
+    /// given object voxel indices.
+    pub fn voxel_aabb_from_object_voxel_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> AxisAlignedBox<f64> {
+        voxel_aabb_from_object_voxel_indices(self.voxel_extent, i, j, k)
+    }
+
     fn handle_chunk_voxels_modified(
         voxels: &mut [Voxel],
         split_detector: &mut SplitDetector,
@@ -493,6 +460,31 @@ impl ChunkedVoxelObject {
                 let mut adjacent_chunk_indices = chunk_indices;
                 adjacent_chunk_indices[dim] += 1;
                 invalidated_mesh_chunk_indices.insert(adjacent_chunk_indices);
+            }
+        }
+    }
+
+    #[cfg(any(test, feature = "fuzzing"))]
+    fn for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
+        &self,
+        plane: &Plane<f64>,
+        f: &mut impl FnMut([usize; 3], &Voxel),
+    ) {
+        for i in self.occupied_voxel_ranges[0].clone() {
+            for j in self.occupied_voxel_ranges[1].clone() {
+                for k in self.occupied_voxel_ranges[2].clone() {
+                    let voxel_aabb = self.voxel_aabb_from_object_voxel_indices(i, j, k);
+                    if voxel_aabb
+                        .all_corners()
+                        .any(|corner| !plane.point_lies_in_positive_halfspace(&corner))
+                    {
+                        if let Some(voxel) = self.get_voxel(i, j, k) {
+                            if let Some(VoxelPlacement::Surface(_)) = voxel.placement() {
+                                f([i, j, k], voxel);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -597,13 +589,30 @@ impl ChunkedVoxelObject {
         self.voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), plane)
     }
 
-    #[allow(clippy::unused_self, clippy::todo)]
     fn voxel_ranges_within_plane(
         &self,
-        _max_voxel_ranges: [Range<usize>; 3],
-        _plane: &Plane<f64>,
+        max_voxel_ranges: [Range<usize>; 3],
+        plane: &Plane<f64>,
     ) -> [Range<usize>; 3] {
-        todo!()
+        let voxel_extent = self.voxel_extent();
+
+        let lower_corner = point![
+            max_voxel_ranges[0].start as f64 * voxel_extent,
+            max_voxel_ranges[1].start as f64 * voxel_extent,
+            max_voxel_ranges[2].start as f64 * voxel_extent
+        ];
+
+        let upper_corner = point![
+            max_voxel_ranges[0].end as f64 * voxel_extent,
+            max_voxel_ranges[1].end as f64 * voxel_extent,
+            max_voxel_ranges[2].end as f64 * voxel_extent
+        ];
+
+        let aabb = AxisAlignedBox::new(lower_corner, upper_corner);
+
+        let aabb_within_plane = aabb.projected_onto_negative_halfspace(plane);
+
+        self.voxel_ranges_touching_aab(max_voxel_ranges, &aabb_within_plane)
     }
 }
 
@@ -626,6 +635,26 @@ pub(super) fn voxel_center_position_from_object_voxel_indices(
     ]
 }
 
+pub(super) fn voxel_aabb_from_object_voxel_indices(
+    voxel_extent: f64,
+    i: usize,
+    j: usize,
+    k: usize,
+) -> AxisAlignedBox<f64> {
+    AxisAlignedBox::new(
+        point![
+            i as f64 * voxel_extent,
+            j as f64 * voxel_extent,
+            k as f64 * voxel_extent
+        ],
+        point![
+            (i as f64 + 1.0) * voxel_extent,
+            (j as f64 + 1.0) * voxel_extent,
+            (k as f64 + 1.0) * voxel_extent
+        ],
+    )
+}
+
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
@@ -633,15 +662,40 @@ pub mod fuzzing {
         chunks::inertia::VoxelObjectInertialPropertyManager,
         generation::fuzzing::ArbitrarySDFVoxelGenerator,
     };
+    use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
-    use nalgebra::vector;
+    use nalgebra::{UnitVector3, vector};
     use std::mem;
+
+    #[derive(Clone, Debug)]
+    pub struct ArbitraryPlane(Plane<f64>);
 
     #[derive(Clone, Debug)]
     pub struct ArbitrarySphere(Sphere<f64>);
 
     #[derive(Clone, Debug)]
     pub struct ArbitraryCapsule(Capsule<f64>);
+
+    impl Arbitrary<'_> for ArbitraryPlane {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let displacement = 1e3 * (2.0 * arbitrary_norm_f64(u)? - 1.0);
+            let nx = 2.0 * arbitrary_norm_f64(u)? - 1.0;
+            let ny = 2.0 * arbitrary_norm_f64(u)? - 1.0;
+            let mut nz = 2.0 * arbitrary_norm_f64(u)? - 1.0;
+            if abs_diff_eq!(nx, 0.0) && abs_diff_eq!(ny, 0.0) && abs_diff_eq!(nz, 0.0) {
+                nz = 1e-3;
+            }
+            Ok(Self(Plane::new(
+                UnitVector3::new_normalize(vector![nx, ny, nz]),
+                displacement,
+            )))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 5 * mem::size_of::<i32>();
+            (size, Some(size))
+        }
+    }
 
     impl Arbitrary<'_> for ArbitrarySphere {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
@@ -682,7 +736,42 @@ pub mod fuzzing {
         }
     }
 
-    pub fn fuzz_test_obtaining_voxels_maybe_intersecting_sphere(
+    pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane(
+        (generator, plane): (ArbitrarySDFVoxelGenerator, ArbitraryPlane),
+    ) {
+        if let Some(object) = ChunkedVoxelObject::generate(&generator) {
+            let mut indices_of_touched_voxels = HashSet::default();
+
+            object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
+                &plane.0,
+                &mut |indices, voxel, placement| {
+                    assert!(!voxel.is_empty());
+                    assert!(matches!(
+                        voxel.placement(),
+                        Some(VoxelPlacement::Surface(pl)) if pl == placement
+                    ));
+                    let was_absent = indices_of_touched_voxels.insert(indices);
+                    assert!(
+                        was_absent,
+                        "Voxel in negative halfspace of plane found twice: {indices:?}"
+                    );
+                },
+            );
+
+            object.for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
+                &plane.0,
+                &mut |indices, _| {
+                    let was_present = indices_of_touched_voxels.remove(&indices);
+                    assert!(
+                        was_present,
+                        "Voxel in negative halfspace of plane was not found: {indices:?}"
+                    );
+                },
+            );
+        }
+    }
+
+    pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_sphere(
         (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
     ) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {

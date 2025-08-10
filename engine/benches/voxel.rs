@@ -83,6 +83,7 @@ define_criterion_target!(
 define_criterion_target!(chunked_voxel_object, compute_all_derived_state);
 define_criterion_target!(chunked_voxel_object, initialize_inertial_properties);
 define_criterion_target!(chunked_voxel_object, create_mesh);
+define_criterion_target!(chunked_voxel_object, obtain_surface_voxels_within_sphere);
 define_criterion_target!(chunked_voxel_object, modify_voxels_within_sphere);
 define_criterion_target!(chunked_voxel_object, split_off_disconnected_region);
 define_criterion_target!(
@@ -90,6 +91,7 @@ define_criterion_target!(
     split_off_disconnected_region_with_inertial_property_transfer
 );
 define_criterion_target!(chunked_voxel_object, update_mesh);
+define_criterion_target!(chunked_voxel_object, obtain_sphere_voxel_object_contacts);
 
 criterion::criterion_group!(
     name = benches;
@@ -105,9 +107,11 @@ criterion::criterion_group!(
         initialize_inertial_properties,
         for_each_exposed_chunk_with_sdf,
         create_mesh,
+        obtain_surface_voxels_within_sphere,
         modify_voxels_within_sphere,
         split_off_disconnected_region,
         split_off_disconnected_region_with_inertial_property_transfer,
         update_mesh,
+        obtain_sphere_voxel_object_contacts,
 );
 criterion::criterion_main!(benches);

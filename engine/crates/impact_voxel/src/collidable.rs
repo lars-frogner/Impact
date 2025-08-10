@@ -6,7 +6,8 @@ pub mod setup;
 #[cfg(feature = "ecs")]
 pub mod systems;
 
-use crate::{VoxelObjectID, VoxelObjectManager};
+use crate::{VoxelObjectID, VoxelObjectManager, VoxelSurfacePlacement, chunks::ChunkedVoxelObject};
+use impact_geometry::{Plane, Sphere};
 use impact_physics::{
     collision::{
         self, CollidableDescriptor, CollidableID, CollidableOrder, CollidableWithId,
@@ -14,8 +15,8 @@ use impact_physics::{
             contact_id_from_collidable_ids_and_indices,
             plane::PlaneCollidable,
             sphere::{
-                SphereCollidable, generate_sphere_plane_contact_manifold,
-                generate_sphere_sphere_contact_manifold,
+                SphereCollidable, determine_sphere_plane_contact_geometry,
+                generate_sphere_plane_contact_manifold, generate_sphere_sphere_contact_manifold,
             },
         },
     },
@@ -239,11 +240,37 @@ fn generate_sphere_voxel_object_contact_manifold(
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
         return;
     };
-    let voxel_object = voxel_object.object();
 
+    for_each_sphere_voxel_object_contact(
+        voxel_object.object(),
+        transform_to_object_space,
+        sphere.sphere(),
+        &mut |indices, geometry| {
+            let id = contact_id_from_collidable_ids_and_indices(
+                sphere_collidable_id,
+                voxel_object_collidable_id,
+                indices,
+            );
+
+            contact_manifold.add_contact(ContactWithID {
+                id,
+                contact: Contact {
+                    geometry,
+                    response_params,
+                },
+            });
+        },
+    );
+}
+
+pub fn for_each_sphere_voxel_object_contact(
+    voxel_object: &ChunkedVoxelObject,
+    transform_to_object_space: &Isometry3<fph>,
+    sphere: &Sphere<fph>,
+    f: &mut impl FnMut([usize; 3], ContactGeometry),
+) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();
 
-    let sphere = sphere.sphere();
     let sphere_in_object_space = sphere.translated_and_rotated(transform_to_object_space);
 
     let max_squared_center_distance =
@@ -278,20 +305,53 @@ fn generate_sphere_voxel_object_contact_manifold(
 
             let penetration_depth = fph::max(0.0, radius_sum - center_distance);
 
+            let contact_geometry = ContactGeometry {
+                position,
+                surface_normal,
+                penetration_depth,
+            };
+
+            f([i, j, k], contact_geometry);
+        },
+    );
+}
+
+fn generate_voxel_object_plane_contact_manifold(
+    voxel_object_manager: &VoxelObjectManager,
+    voxel_object: &VoxelObjectCollidable,
+    plane: &PlaneCollidable,
+    voxel_object_collidable_id: CollidableID,
+    plane_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
+) {
+    let VoxelObjectCollidable {
+        object_id,
+        response_params,
+        transform_to_object_space,
+    } = voxel_object;
+
+    let response_params =
+        ContactResponseParameters::combined(response_params, plane.response_params());
+
+    let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
+        return;
+    };
+
+    for_each_voxel_object_plane_contact(
+        voxel_object.object(),
+        transform_to_object_space,
+        plane.plane(),
+        &mut |indices, geometry| {
             let id = contact_id_from_collidable_ids_and_indices(
-                sphere_collidable_id,
+                plane_collidable_id,
                 voxel_object_collidable_id,
-                [i, j, k],
+                indices,
             );
 
             contact_manifold.add_contact(ContactWithID {
                 id,
                 contact: Contact {
-                    geometry: ContactGeometry {
-                        position,
-                        surface_normal,
-                        penetration_depth,
-                    },
+                    geometry,
                     response_params,
                 },
             });
@@ -299,12 +359,37 @@ fn generate_sphere_voxel_object_contact_manifold(
     );
 }
 
-fn generate_voxel_object_plane_contact_manifold(
-    _voxel_object_manager: &VoxelObjectManager,
-    _voxel_object: &VoxelObjectCollidable,
-    _plane: &PlaneCollidable,
-    _voxel_object_collidable_id: CollidableID,
-    _plane_collidable_id: CollidableID,
-    _contact_manifold: &mut ContactManifold,
+pub fn for_each_voxel_object_plane_contact(
+    voxel_object: &ChunkedVoxelObject,
+    transform_to_object_space: &Isometry3<fph>,
+    plane: &Plane<fph>,
+    f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
+    let voxel_radius = 0.5 * voxel_object.voxel_extent();
+
+    let plane_in_object_space = plane.translated_and_rotated(transform_to_object_space);
+
+    voxel_object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
+        &plane_in_object_space,
+        &mut |[i, j, k], _, placement| {
+            // In the case of a plane, we only need contacts for the corner
+            // voxels
+            if placement != VoxelSurfacePlacement::Corner {
+                return;
+            }
+
+            let voxel_center_in_object_space =
+                voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
+
+            let voxel_center =
+                transform_to_object_space.inverse_transform_point(&voxel_center_in_object_space);
+
+            if let Some(contact_geometry) = determine_sphere_plane_contact_geometry(
+                &Sphere::new(voxel_center, voxel_radius),
+                plane,
+            ) {
+                f([i, j, k], contact_geometry);
+            }
+        },
+    );
 }

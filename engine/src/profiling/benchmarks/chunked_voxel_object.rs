@@ -1,16 +1,18 @@
 //! Benchmarks for chunked voxel object functionality.
 
 use impact_geometry::Sphere;
+use impact_physics::quantities::Position;
 use impact_profiling::Profiler;
 use impact_voxel::{
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
+    collidable,
     generation::{
         BoxSDFGenerator, SDFUnion, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
     },
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,
 };
-use nalgebra::{UnitVector3, vector};
+use nalgebra::{Isometry3, Translation, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::hint::black_box;
 
 pub fn construction(profiler: impl Profiler) {
@@ -117,6 +119,30 @@ pub fn create_mesh(profiler: impl Profiler) {
     profiler.profile(&mut || ChunkedVoxelObjectMesh::create(&object));
 }
 
+pub fn obtain_surface_voxels_within_sphere(profiler: impl Profiler) {
+    let object_radius = 100.0;
+    let sphere_radius = 0.15 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let sphere = Sphere::new(
+        object.compute_aabb::<f64>().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+        sphere_radius,
+    );
+    profiler.profile(&mut || {
+        object.for_each_surface_voxel_maybe_intersecting_sphere(
+            &sphere,
+            &mut |indices, position, voxel| {
+                black_box((indices, position, voxel));
+            },
+        );
+    });
+}
+
 pub fn modify_voxels_within_sphere(profiler: impl Profiler) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
@@ -214,5 +240,34 @@ pub fn update_mesh(profiler: impl Profiler) {
         });
         mesh.sync_with_voxel_object(&mut object);
         black_box((&object, &mesh));
+    });
+}
+
+pub fn obtain_sphere_voxel_object_contacts(profiler: impl Profiler) {
+    let object_radius = 100.0;
+    let sphere_radius = 0.15 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let sphere = Sphere::new(Position::origin(), sphere_radius);
+    let transform_to_object_space = Isometry3::from_parts(
+        Translation::from(
+            object.compute_aabb::<f64>().center()
+                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+        ),
+        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
+    );
+    profiler.profile(&mut || {
+        collidable::for_each_sphere_voxel_object_contact(
+            &object,
+            &transform_to_object_space,
+            &sphere,
+            &mut |indices, geometry| {
+                black_box((indices, geometry));
+            },
+        );
     });
 }
