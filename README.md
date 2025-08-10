@@ -95,19 +95,19 @@ Here is how the laser beam in the video above was created in the script's `setup
 
 ```roc
 Entity.new
-    |> Comp.Parent.add_new(entity_ids.player)
-    |> Comp.ReferenceFrame.add_unscaled(
+    |> Setup.Parent.add_new(entity_ids.player)
+    |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
     )
-    |> Comp.CylinderMesh.add_new(100, 0.02, 16)
-    |> Comp.UniformColor.add((0.9, 0.05, 0.05))
-    |> Comp.UniformEmissiveLuminance.add(1e6)
+    |> Setup.CylinderMesh.add_new(100, 0.02, 16)
+    |> Setup.UniformColor.add((0.9, 0.05, 0.05))
+    |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3, 200)
     |> Comp.SceneEntityFlags.add(
-        Scene.SceneEntityFlags.union(
-            Scene.SceneEntityFlags.is_disabled,
-            Scene.SceneEntityFlags.casts_no_shadows,
+        Comp.SceneEntityFlags.union(
+        Comp.SceneEntityFlags.is_disabled,
+        Comp.SceneEntityFlags.casts_no_shadows,
         ),
     )
     |> Entity.create_with_id!(entity_ids.laser)?
@@ -123,52 +123,47 @@ state =
         Pressed -> Enabled
         Released -> Disabled
 
-Command.execute!(Scene(SetSceneEntityActiveState({ entity_id, state })))
+Command.execute!(Engine(Scene(SetSceneEntityActiveState({ entity_id, state }))))
 ```
 
 Here is an example of how entities can be created in batch (these are the red balls in one of the screenshots).
 
 ```roc
 Entity.new_multi(List.len(positions))
-    |> Comp.SphereMesh.add_multiple_new(
+    |> Setup.SphereMesh.add_multiple_new(
         Same(100),
+    )?
+    |> Comp.ModelTransform.add_multiple_with_scale(
+        Same(Num.to_f32(2 * radius)),
     )?
     |> Comp.ReferenceFrame.add_multiple_unoriented(
         All(positions),
     )?
-    |> Comp.Velocity.add_multiple_stationary
-    |> Comp.UniformRigidBody.add_multiple(
+    |> Comp.Motion.add_multiple_stationary
+    |> Setup.DynamicRigidBodySubstance.add_multiple(
         Same({ mass_density: 1.0 }),
     )?
-    |> Comp.UniformContactResponse.add_multiple(
-        Same(
-            {
-                restitution_coef: 0.7,
-                static_friction_coef: 0.5,
-                dynamic_friction_coef: 0.3,
-            },
-        ),
-    )?
-    |> Comp.SphereCollidable.add_multiple_new(
+    |> Setup.SphericalCollidable.add_multiple_new(
         Same(Dynamic),
-        Same(Sphere.new(Point3.origin, 1.0)),
+        Same(Sphere.new(Point3.origin, radius)),
+        Same(Physics.ContactResponseParameters.new(0.7, 0.5, 0.3)),
     )?
-    |> Comp.UniformGravity.add_multiple_earth
-    |> Comp.TexturedColor.add_multiple(
+    |> Setup.ConstantAcceleration.add_multiple_earth
+    |> Setup.TexturedColor.add_multiple(
         Same(texture_ids.color),
     )?
-    |> Comp.UniformSpecularReflectance.add_multiple_in_range_of(
-        Same(Comp.UniformSpecularReflectance.plastic),
+    |> Setup.UniformSpecularReflectance.add_multiple_in_range_of(
+        Same(Setup.UniformSpecularReflectance.plastic),
         Same(0),
     )?
-    |> Comp.TexturedRoughness.add_multiple_unscaled(
+    |> Setup.TexturedRoughness.add_multiple_unscaled(
         Same(texture_ids.roughness),
     )?
-    |> Comp.NormalMap.add_multiple(
+    |> Setup.NormalMap.add_multiple(
         Same(texture_ids.normal),
     )?
-    |> Comp.PlanarTextureProjection.add_multiple_for_rectangle(
-        Same(Comp.RectangleMesh.unit_square),
+    |> Setup.PlanarTextureProjection.add_multiple_for_rectangle(
+        Same(Setup.RectangleMesh.unit_square),
         Same(0.2),
         Same(0.2),
     )?
