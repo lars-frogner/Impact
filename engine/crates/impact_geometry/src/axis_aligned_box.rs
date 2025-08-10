@@ -137,6 +137,13 @@ impl<F: Float> AxisAlignedBox<F> {
         self.upper_corner().z - self.lower_corner().z
     }
 
+    /// Returns an iterator over the all the eight corners of the box. The
+    /// corners are ordered from smaller to larger coordinates, with the
+    /// z-component varying fastest.
+    pub fn all_corners(&self) -> impl Iterator<Item = Point3<F>> {
+        (0..8).map(|idx| self.corner(idx))
+    }
+
     /// Returns the box corner with the given index. The corners are ordered
     /// from smaller to larger coordinates, with the z-component varying
     /// fastest.
@@ -310,7 +317,7 @@ where
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::point;
+    use nalgebra::{UnitVector3, point, vector};
 
     #[test]
     fn box_lies_outside_with_non_overlapping_boxes_works() {
@@ -447,5 +454,105 @@ mod tests {
         assert_abs_diff_eq!(aabb.opposite_corner(2), point![upper.x, lower.y, upper.z]);
         assert_abs_diff_eq!(aabb.opposite_corner(1), point![upper.x, upper.y, lower.z]);
         assert_abs_diff_eq!(aabb.opposite_corner(0), upper);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_box_fully_in_negative_halfspace_unchanged() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let plane = Plane::from_normal_and_point(Vector3::z_axis(), &point![0.0, 0.0, 2.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        assert_abs_diff_eq!(projected, aabb);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_box_fully_in_positive_halfspace_clips_to_plane() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 2.0], point![1.0, 1.0, 3.0]);
+        let plane = Plane::from_normal_and_point(Vector3::z_axis(), &point![0.0, 0.0, 1.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        let expected = AxisAlignedBox::new(point![0.0, 0.0, 1.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(projected, expected);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_intersecting_box_clips_upper_part() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let plane = Plane::from_normal_and_point(Vector3::z_axis(), &point![0.0, 0.0, 1.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        let expected = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 1.0]);
+        assert_abs_diff_eq!(projected, expected);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_plane_through_yz_works() {
+        let aabb = AxisAlignedBox::new(point![-1.0, -1.0, -1.0], point![1.0, 1.0, 1.0]);
+        let plane = Plane::from_normal_and_point(Vector3::x_axis(), &point![0.5, 0.0, 0.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        let expected = AxisAlignedBox::new(point![-1.0, -1.0, -1.0], point![0.5, 1.0, 1.0]);
+        assert_abs_diff_eq!(projected, expected);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_plane_through_xz_works() {
+        let aabb = AxisAlignedBox::new(point![-1.0, -1.0, -1.0], point![1.0, 1.0, 1.0]);
+        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &point![0.0, 0.3, 0.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        let expected = AxisAlignedBox::new(point![-1.0, -1.0, -1.0], point![1.0, 0.3, 1.0]);
+        assert_abs_diff_eq!(projected, expected);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_negative_normal_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let plane = Plane::from_normal_and_point(
+            UnitVector3::new_unchecked(vector![0.0, 0.0, -1.0]),
+            &point![0.0, 0.0, 1.0],
+        );
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        let expected = AxisAlignedBox::new(point![0.0, 0.0, 1.0], point![2.0, 2.0, 2.0]);
+        assert_abs_diff_eq!(projected, expected);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_diagonal_plane_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let plane = Plane::from_normal_and_point(
+            UnitVector3::new_normalize(vector![1.0, 1.0, 0.0]),
+            &point![1.0, 1.0, 0.0],
+        );
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+
+        // The projection should reduce the box size while preserving volume in negative halfspace
+        assert!(projected.corners[0].x >= aabb.corners[0].x);
+        assert!(projected.corners[0].y >= aabb.corners[0].y);
+        assert!(projected.corners[1].x <= aabb.corners[1].x);
+        assert!(projected.corners[1].y <= aabb.corners[1].y);
+        assert_abs_diff_eq!(projected.corners[0].z, aabb.corners[0].z);
+        assert_abs_diff_eq!(projected.corners[1].z, aabb.corners[1].z);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_plane_parallel_to_axis_preserves_other_dimensions() {
+        let aabb = AxisAlignedBox::new(point![-2.0, -3.0, -4.0], point![5.0, 7.0, 8.0]);
+        let plane = Plane::from_normal_and_point(Vector3::z_axis(), &point![0.0, 0.0, 2.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+
+        // X and Y dimensions should be unchanged
+        assert_abs_diff_eq!(projected.corners[0].x, aabb.corners[0].x);
+        assert_abs_diff_eq!(projected.corners[0].y, aabb.corners[0].y);
+        assert_abs_diff_eq!(projected.corners[1].x, aabb.corners[1].x);
+        assert_abs_diff_eq!(projected.corners[1].y, aabb.corners[1].y);
+
+        // Z dimension should be clipped
+        assert_abs_diff_eq!(projected.corners[0].z, aabb.corners[0].z);
+        assert_abs_diff_eq!(projected.corners[1].z, 2.0);
+    }
+
+    #[test]
+    fn projecting_onto_negative_halfspace_with_box_touching_plane_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let plane = Plane::from_normal_and_point(Vector3::z_axis(), &point![0.0, 0.0, 1.0]);
+        let projected = aabb.projected_onto_negative_halfspace(&plane);
+        let expected = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(projected, expected);
     }
 }

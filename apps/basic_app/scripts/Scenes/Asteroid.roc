@@ -5,8 +5,9 @@ module [
 ]
 
 import core.Radians
+import core.Plane
 import core.UnitQuaternion
-import core.UnitVector3
+import core.UnitVector3 exposing [y_axis]
 import core.Vector3
 import pf.Command
 import pf.Entity
@@ -40,8 +41,10 @@ import InputHandling.MouseButton as MouseButtonInput
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Texture.TextureID
 import pf.Comp.SceneEntityFlags
+import pf.Setup.PlanarCollidable
 import pf.Setup.VoxelCollidable
 import pf.Physics.ContactResponseParameters
+import pf.Setup.ConstantAcceleration
 
 entity_ids = {
     player: Entity.id("player"),
@@ -141,9 +144,15 @@ ground =
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(500)
     |> Comp.ReferenceFrame.add_unoriented((0, -20, 0))
+    |> Comp.Motion.add_stationary
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformSpecularReflectance.add(0.01)
     |> Setup.UniformRoughness.add(0.5)
+    |> Setup.PlanarCollidable.add_new(
+        Static,
+        Plane.new(y_axis, 0),
+        Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
+    )
 
 asteroid =
     Entity.new
@@ -154,9 +163,10 @@ asteroid =
     |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
-        Static,
+        Dynamic,
         Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
     )
+    |> Setup.ConstantAcceleration.add_earth
 
 ambient_light =
     Entity.new
