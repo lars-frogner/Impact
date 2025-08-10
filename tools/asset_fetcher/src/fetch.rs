@@ -41,7 +41,7 @@ pub fn fetch_asset(asset: &Asset, target_dir: &Path) -> Result<()> {
     // Process each download
     for (index, download) in downloads.iter().enumerate() {
         println!(
-            "  Downloading file {}/{}: {}",
+            "Downloading file {}/{}: {}",
             index + 1,
             downloads.len(),
             download.url
@@ -173,6 +173,8 @@ fn extract_zip_archive<R>(archive_file: R, target_dir: &Path) -> Result<()>
 where
     R: io::Read + io::Seek,
 {
+    println!("Unzipping archive into {}", target_dir.display());
+
     let mut archive = zip::ZipArchive::new(archive_file)?;
 
     for i in 0..archive.len() {
