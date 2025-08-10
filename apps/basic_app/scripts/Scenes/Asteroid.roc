@@ -39,7 +39,9 @@ import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.MouseButton as MouseButtonInput
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Texture.TextureID
-import pf.Scene.SceneEntityFlags
+import pf.Comp.SceneEntityFlags
+import pf.Setup.VoxelCollidable
+import pf.Physics.ContactResponseParameters
 
 entity_ids = {
     player: Entity.id("player"),
@@ -115,10 +117,10 @@ laser =
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3, 200)
-    |> Scene.SceneEntityFlags.add(
-        Scene.SceneEntityFlags.union(
-            Scene.SceneEntityFlags.is_disabled,
-            Scene.SceneEntityFlags.casts_no_shadows,
+    |> Comp.SceneEntityFlags.add(
+        Comp.SceneEntityFlags.union(
+            Comp.SceneEntityFlags.is_disabled,
+            Comp.SceneEntityFlags.casts_no_shadows,
         ),
     )
 
@@ -132,7 +134,7 @@ absorbing_sphere =
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
     |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 1, 15)
-    |> Scene.SceneEntityFlags.add(Scene.SceneEntityFlags.is_disabled)
+    |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
 ground =
     Entity.new
@@ -151,6 +153,10 @@ asteroid =
     |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
     |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(10)))
     |> Setup.DynamicVoxels.add
+    |> Setup.VoxelCollidable.add_new(
+        Static,
+        Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
+    )
 
 ambient_light =
     Entity.new
