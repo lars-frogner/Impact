@@ -328,6 +328,7 @@ define_task!(
             let scene_graph = scene.scene_graph().read();
 
             impact_voxel::interaction::systems::apply_absorption(
+                engine.component_metadata_registry(),
                 &mut entity_stager,
                 &ecs_world,
                 &scene_graph,

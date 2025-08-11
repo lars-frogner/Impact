@@ -1,6 +1,5 @@
 //! Manager for all systems and data in the engine.
 
-pub mod components;
 pub mod entity;
 pub mod game_loop;
 
@@ -10,7 +9,6 @@ pub mod window;
 use crate::{
     application::Application,
     command::{self, EngineCommand},
-    component::ComponentRegistry,
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
@@ -24,6 +22,7 @@ use anyhow::{Result, anyhow};
 use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
     component::Component,
+    metadata::ComponentMetadataRegistry,
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
@@ -50,7 +49,7 @@ use std::{
 pub struct Engine {
     app: Arc<dyn Application>,
     graphics_device: Arc<GraphicsDevice>,
-    component_registry: RwLock<ComponentRegistry>,
+    component_metadata_registry: ComponentMetadataRegistry,
     ecs_world: RwLock<ECSWorld>,
     entity_stager: Mutex<EntityStager>,
     renderer: RwLock<RenderingSystem>,
@@ -95,8 +94,8 @@ impl Engine {
         app: Arc<dyn Application>,
         graphics: GraphicsContext,
     ) -> Result<Self> {
-        let mut component_registry = ComponentRegistry::new();
-        components::register_all_components(&mut component_registry)?;
+        let mut component_metadata_registry = ComponentMetadataRegistry::new();
+        crate::component::register_metadata_for_all_components(&mut component_metadata_registry)?;
 
         let ecs_world = ECSWorld::new(config.ecs.seed);
 
@@ -151,7 +150,7 @@ impl Engine {
         let engine = Self {
             app,
             graphics_device,
-            component_registry: RwLock::new(component_registry),
+            component_metadata_registry,
             ecs_world: RwLock::new(ecs_world),
             entity_stager: Mutex::new(EntityStager::new()),
             renderer: RwLock::new(renderer),
@@ -182,10 +181,9 @@ impl Engine {
         &self.graphics_device
     }
 
-    /// Returns a reference to the ECS [`ComponentRegistry`], guarded by a
-    /// [`RwLock`].
-    pub fn component_registry(&self) -> &RwLock<ComponentRegistry> {
-        &self.component_registry
+    /// Returns a reference to the [`GraphicsDevice`].
+    pub fn component_metadata_registry(&self) -> &ComponentMetadataRegistry {
+        &self.component_metadata_registry
     }
 
     /// Returns a reference to the ECS [`World`](impact_ecs::world::World),
