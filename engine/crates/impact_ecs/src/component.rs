@@ -1,5 +1,6 @@
 //! Representation and storage of ECS components.
 
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{AlignedByteVec, Alignment};
 use std::{mem, ops::Deref};
@@ -116,6 +117,19 @@ pub struct ComponentDescriptor {
 
 inventory::collect!(ComponentDescriptor);
 
+/// Declares that the specified [`ComponentFlags`] are set for a component type.
+/// Component types can register a flag declaration in a distributed registry by
+/// evoking [`inventory::submit!`] on a static `ComponentFlagDeclaration` value.
+#[derive(Debug)]
+pub struct ComponentFlagDeclaration {
+    /// The ID of the component.
+    pub id: ComponentID,
+    /// Flags for the component.
+    pub flags: ComponentFlags,
+}
+
+inventory::collect!(ComponentFlagDeclaration);
+
 /// The category of a component.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ComponentCategory {
@@ -125,6 +139,16 @@ pub enum ComponentCategory {
     /// A helper component used for creating entities, which is no longer
     /// present in the entity after it has been created.
     Setup,
+}
+
+bitflags! {
+    /// Bitflags describing properties of a specific component type.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct ComponentFlags: u8 {
+        /// Components of this type can be copied directly from the parent when
+        /// a child entity is created.
+        const INHERITABLE = 1 << 0;
+    }
 }
 
 /// Container that stores instances of one type of [`Component`]
@@ -196,6 +220,12 @@ impl ComponentID {
 
     pub(crate) const fn dummy() -> Self {
         Self(0)
+    }
+}
+
+impl Default for ComponentID {
+    fn default() -> Self {
+        Self::zeroed()
     }
 }
 
@@ -279,9 +309,8 @@ impl ComponentStorage {
         }
     }
 
-    /// Initializes a new storage for component instances with
-    /// the given ID and size, and stores the given bytes representing
-    /// a single component instance.
+    /// Initializes a new storage for component instances with the given ID, and
+    /// stores the given bytes representing a single component instance.
     pub fn new_for_single_instance(
         component_id: ComponentID,
         bytes: AlignedByteVec,
@@ -372,6 +401,28 @@ impl ComponentStorage {
         } else {
             bytemuck::cast_slice_mut(&mut self.bytes)
         }
+    }
+
+    /// Returns the component at the given index as a separate single-instance
+    /// storage.
+    ///
+    /// # Note
+    /// `idx` refers to the whole component, not its byte boundary.
+    ///
+    /// # Panics
+    /// If `idx` is outside the bounds of the storage.
+    pub fn component_as_storage(&self, idx: usize) -> SingleInstance<Self> {
+        if self.component_size == 0 {
+            return Self::new_for_single_zero_sized_instance(self.component_id);
+        }
+
+        let component_start = idx.checked_mul(self.component_size).unwrap();
+        let component_bytes = &self.bytes[component_start..component_start + self.component_size];
+
+        Self::new_for_single_instance(
+            self.component_id,
+            AlignedByteVec::copied_from_slice(self.bytes.alignment(), component_bytes),
+        )
     }
 
     /// Appends the given component to the end of the storage.
@@ -1168,7 +1219,70 @@ mod tests {
         let mut storage = ComponentStorage::from_view(&RECT_1);
         storage.clear();
         storage.push(&RECT_2);
-        assert_eq!(storage.component_count(), 1);
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
+    }
+
+    #[test]
+    fn component_as_storage_for_single_component_works() {
+        let storage = ComponentStorage::from_view(&RECT_1);
+        let component_storage = storage.component_as_storage(0);
+
+        assert_eq!(component_storage.component_count(), 1);
+        assert_eq!(
+            component_storage.component_size(),
+            mem::size_of::<Rectangle>()
+        );
+        assert_eq!(component_storage.slice::<Rectangle>(), &[RECT_1]);
+    }
+
+    #[test]
+    fn component_as_storage_for_multiple_components_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.push(&RECT_2);
+        storage.push(&RECT_3);
+
+        let first_component = storage.component_as_storage(0);
+        let second_component = storage.component_as_storage(1);
+        let third_component = storage.component_as_storage(2);
+
+        assert_eq!(first_component.slice::<Rectangle>(), &[RECT_1]);
+        assert_eq!(second_component.slice::<Rectangle>(), &[RECT_2]);
+        assert_eq!(third_component.slice::<Rectangle>(), &[RECT_3]);
+
+        // Each component storage should have exactly one component
+        assert_eq!(first_component.component_count(), 1);
+        assert_eq!(second_component.component_count(), 1);
+        assert_eq!(third_component.component_count(), 1);
+    }
+
+    #[test]
+    fn component_as_storage_for_zero_sized_component_works() {
+        let mut storage = ComponentStorage::from_view(&Marked);
+        storage.push(&Marked);
+
+        let first_component = storage.component_as_storage(0);
+        let second_component = storage.component_as_storage(1);
+
+        assert_eq!(first_component.component_count(), 1);
+        assert_eq!(first_component.component_size(), 0);
+        assert_eq!(first_component.size(), 0);
+
+        assert_eq!(second_component.component_count(), 1);
+        assert_eq!(second_component.component_size(), 0);
+        assert_eq!(second_component.size(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn component_as_storage_with_invalid_index_panics() {
+        let storage = ComponentStorage::from_view(&RECT_1);
+        storage.component_as_storage(1); // Index 1 is out of bounds for single component
+    }
+
+    #[test]
+    #[should_panic]
+    fn component_as_storage_with_invalid_index_on_empty_storage_panics() {
+        let storage = ComponentStorage::with_capacity::<Rectangle>(0);
+        storage.component_as_storage(0); // Index 0 is out of bounds for empty storage
     }
 }

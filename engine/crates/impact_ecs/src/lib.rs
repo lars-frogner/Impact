@@ -1,7 +1,11 @@
 //! Implementation of an [Entity Component System](https://en.wikipedia.org/wiki/Entity_component_system) engine.
 
+#[macro_use]
+pub mod macros;
+
 pub mod archetype;
 pub mod component;
+pub mod metadata;
 pub mod world;
 
 #[cfg(feature = "profiling")]

@@ -168,17 +168,15 @@ impl Engine {
         let mut setup_component_names = Vec::with_capacity(components.n_component_types());
         let mut standard_component_names = Vec::with_capacity(components.n_component_types());
 
-        let component_registry = self.component_registry.read();
-
         for component_id in components.component_ids() {
-            let entry = component_registry.component_with_id(component_id);
-            match entry.category {
+            let component_metadata = self.component_metadata_registry.metadata(component_id);
+            match component_metadata.category {
                 ComponentCategory::Standard => {
-                    standard_component_names.push(entry.name);
+                    standard_component_names.push(component_metadata.name);
                 }
                 ComponentCategory::Setup => {
                     setup_component_ids.push(component_id);
-                    setup_component_names.push(entry.name);
+                    setup_component_names.push(component_metadata.name);
                 }
             }
         }

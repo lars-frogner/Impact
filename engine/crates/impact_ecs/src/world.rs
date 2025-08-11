@@ -3,7 +3,7 @@
 use super::{
     archetype::{
         Archetype, ArchetypeComponentStorage, ArchetypeComponents, ArchetypeID, ArchetypeTable,
-        ComponentStorageEntry, ComponentStorageEntryMut,
+        ComponentStorageEntry, ComponentStorageEntryMut, SingleInstanceArchetypeComponentStorage,
     },
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
@@ -690,6 +690,14 @@ impl<'a> EntityEntry<'a> {
     pub fn component_mut<C: Component>(&self) -> ComponentStorageEntryMut<'_, C> {
         self.get_component_mut::<C>()
             .expect("Requested invalid component")
+    }
+
+    /// Returns a [`SingleInstanceArchetypeComponentStorage`] containing the
+    /// cloned data for all the components of the entity.
+    pub fn cloned_components(&self) -> SingleInstanceArchetypeComponentStorage {
+        self.table
+            .get_cloned_components_for_entity(self.entity_id)
+            .unwrap()
     }
 }
 

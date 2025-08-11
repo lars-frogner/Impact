@@ -1102,6 +1102,28 @@ impl ArchetypeTable {
         ))
     }
 
+    /// Returns a [`SingleInstanceArchetypeComponentStorage`] containing the
+    /// cloned data for all the components of the entity with the given ID, or
+    /// [`None`] if the entity is not present in the table.
+    pub fn get_cloned_components_for_entity(
+        &self,
+        entity_id: EntityID,
+    ) -> Option<SingleInstanceArchetypeComponentStorage> {
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
+
+        let mut component_arrays = Vec::with_capacity(self.component_storages.len());
+        for storage in &self.component_storages {
+            let single_component_storage = storage.read().component_as_storage(entity_idx);
+            component_arrays.push(single_component_storage);
+        }
+
+        Some(ArchetypeComponents::new(
+            self.archetype.clone(),
+            component_arrays,
+            1,
+        ))
+    }
+
     /// Returns a [`TableEntityEntry`] that can be used to read the components
     /// of the entity with the given [`EntityID`]. If the entity is not present
     /// in the table, [`None`] is returned.
@@ -2636,5 +2658,95 @@ mod tests {
         assert!(!table.has_entity(entity_0));
         assert!(table.has_entity(entity_1));
         assert_eq!(table.entity(entity_1).component::<Byte>(), &BYTE2);
+    }
+
+    #[test]
+    fn getting_cloned_components_for_existing_entity_with_single_component_works() {
+        let entity_0 = EntityID(0);
+        let table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+
+        let cloned_components = table.get_cloned_components_for_entity(entity_0).unwrap();
+
+        assert_eq!(cloned_components.archetype(), &archetype_of!(Byte));
+        assert_eq!(cloned_components.n_component_types(), 1);
+        assert_eq!(cloned_components.component_count(), 1);
+        assert!(cloned_components.has_component_type::<Byte>());
+        assert_eq!(cloned_components.components_of_type::<Byte>(), &[BYTE]);
+    }
+
+    #[test]
+    fn getting_cloned_components_for_existing_entity_with_multiple_components_works() {
+        let entity_42 = EntityID(42);
+        let table = ArchetypeTable::new_with_entities(
+            [entity_42],
+            (&BYTE, &POS, &RECT).try_into().unwrap(),
+        );
+
+        let cloned_components = table.get_cloned_components_for_entity(entity_42).unwrap();
+
+        assert_eq!(
+            cloned_components.archetype(),
+            &archetype_of!(Byte, Position, Rectangle)
+        );
+        assert_eq!(cloned_components.n_component_types(), 3);
+        assert_eq!(cloned_components.component_count(), 1);
+        assert!(cloned_components.has_component_type::<Byte>());
+        assert!(cloned_components.has_component_type::<Position>());
+        assert!(cloned_components.has_component_type::<Rectangle>());
+        assert_eq!(cloned_components.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(cloned_components.components_of_type::<Position>(), &[POS]);
+        assert_eq!(cloned_components.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn getting_cloned_components_for_nonexistent_entity_returns_none() {
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+        let table =
+            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap());
+
+        let result = table.get_cloned_components_for_entity(entity_1);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn getting_cloned_components_for_entity_from_empty_table_returns_none() {
+        let entity_0 = EntityID(0);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        table.remove_all_entities();
+
+        let result = table.get_cloned_components_for_entity(entity_0);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn getting_cloned_components_gives_independent_data_with_multiple_entities() {
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap());
+        table.add_entities([entity_1], (&BYTE2, &POS2).try_into().unwrap());
+
+        let cloned_components_0 = table.get_cloned_components_for_entity(entity_0).unwrap();
+        let cloned_components_1 = table.get_cloned_components_for_entity(entity_1).unwrap();
+
+        // Verify each entity has its own correct data
+        assert_eq!(cloned_components_0.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(cloned_components_0.components_of_type::<Position>(), &[POS]);
+        assert_eq!(cloned_components_1.components_of_type::<Byte>(), &[BYTE2]);
+        assert_eq!(
+            cloned_components_1.components_of_type::<Position>(),
+            &[POS2]
+        );
+
+        // Verify both have the same archetype but independent data
+        assert_eq!(
+            cloned_components_0.archetype(),
+            cloned_components_1.archetype()
+        );
+        assert_eq!(cloned_components_0.component_count(), 1);
+        assert_eq!(cloned_components_1.component_count(), 1);
     }
 }
