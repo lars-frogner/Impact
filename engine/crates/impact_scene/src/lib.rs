@@ -54,6 +54,12 @@ define_component_type! {
     }
 }
 
+#[cfg(feature = "ecs")]
+impact_ecs::declare_component_flags! {
+    SceneEntityFlags => impact_ecs::component::ComponentFlags::INHERITABLE,
+    SceneGraphParentNodeHandle => impact_ecs::component::ComponentFlags::INHERITABLE,
+}
+
 define_component_type! {
     /// Handle to a group node in a scene graph.
     #[roc(parents = "Comp")]

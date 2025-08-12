@@ -47,9 +47,13 @@ pub trait VoxelObjectInteractionContext {
         &mut self,
     ) -> TinyVec<[VoxelAbsorbingCapsuleEntity; 4]>;
 
-    /// Called when a new voxel object entity is created, typically from
+    /// Called when a new voxel object entity should be created due to
     /// disconnection.
-    fn on_new_voxel_object_entity(&mut self, entity: NewVoxelObjectEntity);
+    fn on_new_disconnected_voxel_object_entity(
+        &mut self,
+        entity: NewVoxelObjectEntity,
+        parent_entity_id: Self::EntityID,
+    );
 
     /// Called when a voxel object becomes empty.
     fn on_empty_voxel_object_entity(&mut self, entity_id: Self::EntityID);

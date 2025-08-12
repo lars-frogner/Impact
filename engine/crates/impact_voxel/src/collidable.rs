@@ -182,6 +182,12 @@ impl collision::Collidable for Collidable {
     }
 }
 
+impl LocalVoxelObjectCollidable {
+    pub fn response_params(&self) -> &ContactResponseParameters {
+        &self.response_params
+    }
+}
+
 impl VoxelObjectCollidable {
     pub fn new(
         object_id: VoxelObjectID,

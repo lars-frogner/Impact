@@ -146,13 +146,16 @@ impl VoxelAbsorbingCapsule {
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
-pub fn apply_absorption<C: VoxelObjectInteractionContext>(
+pub fn apply_absorption<C>(
     context: &mut C,
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     time_step_duration: fph,
-) {
+) where
+    C: VoxelObjectInteractionContext,
+    <C as VoxelObjectInteractionContext>::EntityID: Clone,
+{
     let mut voxel_object_entities = Vec::with_capacity(voxel_object_manager.voxel_object_count());
 
     context.gather_voxel_object_entities(&mut voxel_object_entities);
@@ -230,7 +233,7 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
             );
 
             if original_object_empty {
-                context.on_empty_voxel_object_entity(entity_id);
+                context.on_empty_voxel_object_entity(entity_id.clone());
             }
             if let Some(DynamicDisconnectedVoxelObject {
                 voxel_object,
@@ -252,10 +255,13 @@ pub fn apply_absorption<C: VoxelObjectInteractionContext>(
                 voxel_object_manager
                     .add_physics_context_for_voxel_object(voxel_object_id, physics_context);
 
-                context.on_new_voxel_object_entity(NewVoxelObjectEntity {
-                    voxel_object_id,
-                    rigid_body_id,
-                });
+                context.on_new_disconnected_voxel_object_entity(
+                    NewVoxelObjectEntity {
+                        voxel_object_id,
+                        rigid_body_id,
+                    },
+                    entity_id,
+                );
             }
         }
     }
