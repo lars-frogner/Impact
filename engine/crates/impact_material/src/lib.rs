@@ -52,6 +52,11 @@ define_component_type! {
     pub struct MaterialID(pub StringHash64);
 }
 
+#[cfg(feature = "ecs")]
+impact_ecs::declare_component_flags! {
+    MaterialID => impact_ecs::component::ComponentFlags::INHERITABLE,
+}
+
 /// Identifier for a [`MaterialTemplate`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

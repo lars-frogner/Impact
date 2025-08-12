@@ -712,6 +712,23 @@ where
     }
 }
 
+impl<A> ArchetypeComponents<SingleInstance<A>>
+where
+    A: ComponentArray,
+{
+    /// Returns a reference to the component of type `C` if present, otherwise
+    /// returns [`None`].
+    pub fn get_component<C: Component>(&self) -> Option<&C> {
+        let component_idx = self.component_index_map.get(C::component_id())?;
+
+        Some(bytemuck::from_bytes(
+            self.component_arrays[component_idx]
+                .view()
+                .component_bytes(),
+        ))
+    }
+}
+
 impl<A> SingleInstance<ArchetypeComponents<A>>
 where
     A: ComponentArray,

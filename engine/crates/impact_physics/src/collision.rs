@@ -104,6 +104,11 @@ impl<C: Collidable> CollisionWorld<C> {
         self.collidables(descriptor.kind).get(descriptor.idx)
     }
 
+    pub fn get_local_collidable(&self, collidable_id: CollidableID) -> Option<&C::Local> {
+        let descriptor = self.collidable_descriptors.get(&collidable_id)?;
+        Some(&descriptor.local_collidable)
+    }
+
     pub fn get_local_collidable_mut(
         &mut self,
         collidable_id: CollidableID,

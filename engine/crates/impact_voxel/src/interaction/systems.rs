@@ -2,6 +2,7 @@
 
 use crate::{
     VoxelObjectID, VoxelObjectManager,
+    collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
     interaction::{
         self, NewVoxelObjectEntity, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
         VoxelObjectEntity, VoxelObjectInteractionContext,
@@ -10,11 +11,15 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use impact_ecs::{
+    component::{ComponentArray, ComponentFlags, ComponentStorage},
+    metadata::ComponentMetadataRegistry,
     query,
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
+    collision::CollidableID,
+    force::{ForceGeneratorManager, constant_acceleration::ConstantAccelerationGeneratorID},
     fph,
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
@@ -24,9 +29,12 @@ use tinyvec::TinyVec;
 /// ECS-based implementation of a voxel object interaction context.
 #[derive(Debug)]
 pub struct ECSVoxelObjectInteractionContext<'a> {
+    pub component_metadata_registry: &'a ComponentMetadataRegistry,
     pub entity_stager: &'a mut EntityStager,
     pub ecs_world: &'a ECSWorld,
     pub scene_graph: &'a SceneGraph,
+    pub force_generator_manager: &'a ForceGeneratorManager,
+    pub collision_world: &'a CollisionWorld,
 }
 
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
@@ -140,9 +148,74 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
         entities
     }
 
-    fn on_new_voxel_object_entity(&mut self, entity: NewVoxelObjectEntity) {
+    fn on_new_disconnected_voxel_object_entity(
+        &mut self,
+        entity: NewVoxelObjectEntity,
+        parent_entity_id: EntityID,
+    ) {
+        let parent_components = self.ecs_world.entity(parent_entity_id).cloned_components();
+
+        let mut components = Vec::with_capacity(parent_components.n_component_types());
+
+        components.push(ComponentStorage::from_single_instance_view(
+            &entity.voxel_object_id,
+        ));
+        components.push(ComponentStorage::from_single_instance_view(
+            &entity.rigid_body_id,
+        ));
+
+        if let Some(collidable_id) = parent_components.get_component::<CollidableID>() {
+            if let Some(descriptor) = self
+                .collision_world
+                .get_collidable_descriptor(*collidable_id)
+            {
+                if let LocalCollidable::VoxelObject(local_collidable) =
+                    descriptor.local_collidable()
+                {
+                    components.push(ComponentStorage::from_single_instance_view(
+                        &VoxelCollidable::new(
+                            descriptor.kind(),
+                            *local_collidable.response_params(),
+                        ),
+                    ));
+                }
+            }
+        }
+
+        if let Some(force_generator_id) =
+            parent_components.get_component::<ConstantAccelerationGeneratorID>()
+        {
+            if let Some(force_generator) = self
+                .force_generator_manager
+                .constant_accelerations()
+                .get_generator(force_generator_id)
+            {
+                components.push(ComponentStorage::from_single_instance_view(
+                    &force_generator.acceleration,
+                ));
+            }
+        }
+
+        // TODO: Handle local forces, spring forces, and (later) constraints,
+        // all of which should only remain with one of the disconnected bodies
+        // based on where their anchor points are
+
+        // TODO: We don't handle drag force yet (that would also have to be
+        // updated for the original object, since its shape has changed)
+
+        // Add directly inherited components
+        for component_storage in parent_components.into_component_arrays() {
+            let metadata = self
+                .component_metadata_registry
+                .metadata(component_storage.component_id());
+
+            if metadata.flags.contains(ComponentFlags::INHERITABLE) {
+                components.push(component_storage);
+            }
+        }
+
         self.entity_stager
-            .stage_entity_for_creation((&entity.voxel_object_id, &entity.rigid_body_id))
+            .stage_entity_for_creation(components)
             .expect("Failed to stage voxel object entity for creation");
     }
 
@@ -172,18 +245,24 @@ pub fn sync_voxel_object_model_transforms(
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
 pub fn apply_absorption(
+    component_metadata_registry: &ComponentMetadataRegistry,
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
     scene_graph: &SceneGraph,
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
+    force_generator_manager: &ForceGeneratorManager,
+    collision_world: &CollisionWorld,
     time_step_duration: fph,
 ) {
     let mut interaction_context = ECSVoxelObjectInteractionContext {
+        component_metadata_registry,
         entity_stager,
         ecs_world,
         scene_graph,
+        force_generator_manager,
+        collision_world,
     };
 
     absorption::apply_absorption(
