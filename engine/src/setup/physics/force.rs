@@ -6,17 +6,16 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::ModelTransform;
 use impact_mesh::TriangleMeshID;
 use impact_physics::{
+    anchor::AnchorManager,
     force::{
         ForceGeneratorManager,
         constant_acceleration::ConstantAccelerationGeneratorID,
         detailed_drag::DetailedDragForceGeneratorID,
         local_force::LocalForceGeneratorID,
-        setup::{
-            self, ConstantAcceleration, DetailedDragProperties, DynamicDynamicSpringForceGenerator,
-            DynamicKinematicSpringForceGenerator, LocalForce,
-        },
+        setup::{self, ConstantAcceleration, DetailedDragProperties, LocalForce},
         spring_force::{
-            DynamicDynamicSpringForceGeneratorID, DynamicKinematicSpringForceGeneratorID,
+            DynamicDynamicSpringForceGeneratorID, DynamicDynamicSpringForceProperties,
+            DynamicKinematicSpringForceGeneratorID, DynamicKinematicSpringForceProperties,
         },
     },
     rigid_body::DynamicRigidBodyID,
@@ -24,6 +23,7 @@ use impact_physics::{
 use parking_lot::RwLock;
 
 pub fn setup_forces_for_new_entities(
+    anchor_manager: &RwLock<AnchorManager>,
     force_generator_manager: &RwLock<ForceGeneratorManager>,
     resource_manager: &RwLock<ResourceManager>,
     components: &mut ArchetypeComponentStorage,
@@ -46,37 +46,47 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
+            let mut anchor_manager = anchor_manager.write();
             let mut force_generator_manager = force_generator_manager.write();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID, local_force: &LocalForce| -> LocalForceGeneratorID {
-            setup::setup_local_force(&mut force_generator_manager, *rigid_body_id, *local_force)
-        }
-    );
-
-    setup!(
-        {
-            let mut force_generator_manager = force_generator_manager.write();
-        },
-        components,
-        |generator: &DynamicDynamicSpringForceGenerator| -> DynamicDynamicSpringForceGeneratorID {
-            setup::setup_dynamic_dynamic_spring_force_generator(
+            setup::setup_local_force(
+                &mut anchor_manager,
                 &mut force_generator_manager,
-                *generator,
+                *rigid_body_id,
+                *local_force,
             )
         }
     );
 
     setup!(
         {
+            let mut anchor_manager = anchor_manager.write();
             let mut force_generator_manager = force_generator_manager.write();
         },
         components,
-        |generator: &DynamicKinematicSpringForceGenerator|
-         -> DynamicKinematicSpringForceGeneratorID {
-            setup::setup_dynamic_kinematic_spring_force_generator(
+        |properties: &DynamicDynamicSpringForceProperties| -> DynamicDynamicSpringForceGeneratorID {
+            setup::setup_dynamic_dynamic_spring_force(
+                &mut anchor_manager,
                 &mut force_generator_manager,
-                *generator,
+                *properties,
+            )
+        }
+    );
+
+    setup!(
+        {
+            let mut anchor_manager = anchor_manager.write();
+            let mut force_generator_manager = force_generator_manager.write();
+        },
+        components,
+        |properties: &DynamicKinematicSpringForceProperties|
+         -> DynamicKinematicSpringForceGeneratorID {
+            setup::setup_dynamic_kinematic_spring_force(
+                &mut anchor_manager,
+                &mut force_generator_manager,
+                *properties,
             )
         }
     );

@@ -1,9 +1,11 @@
 //! Constraint solving based on the sequential impulse method.
 
 use super::{
-    ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint, contact::ContactWithID,
+    AnchoredTwoBodyConstraint, ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint,
+    contact::ContactWithID,
 };
 use crate::{
+    anchor::AnchorManager,
     constraint::{
         ConstraintID,
         contact::{ContactID, PreparedContact},
@@ -11,7 +13,7 @@ use crate::{
     },
     fph,
     quantities::AngularVelocity,
-    rigid_body::{RigidBodyID, RigidBodyManager},
+    rigid_body::{RigidBodyManager, TypedRigidBodyID},
 };
 use bitflags::bitflags;
 use impact_containers::KeyIndexMapper;
@@ -26,7 +28,7 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct ConstraintSolver {
     bodies: Vec<ConstrainedBody>,
-    body_index_map: KeyIndexMapper<RigidBodyID>,
+    body_index_map: KeyIndexMapper<TypedRigidBodyID>,
     contacts: ConstraintCache<ContactID, PreparedContact>,
     spherical_joints: ConstraintCache<ConstraintID, PreparedSphericalJoint>,
     config: ConstraintSolverConfig,
@@ -119,8 +121,8 @@ impl ConstraintSolver {
     pub fn prepare_contact(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
-        rigid_body_a_id: RigidBodyID,
-        rigid_body_b_id: RigidBodyID,
+        rigid_body_a_id: TypedRigidBodyID,
+        rigid_body_b_id: TypedRigidBodyID,
         contact: &ContactWithID,
     ) {
         if let Some(prepared_contact) = self.prepare_constraint_for_body_pair(
@@ -142,13 +144,13 @@ impl ConstraintSolver {
     pub fn prepare_spherical_joint(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
+        anchor_manager: &AnchorManager,
         id: ConstraintID,
         joint: &SphericalJoint,
     ) {
-        if let Some(prepared_joint) = self.prepare_constraint_for_body_pair(
+        if let Some(prepared_joint) = self.prepare_anchored_constraint_for_body_pair(
             rigid_body_manager,
-            joint.rigid_body_a_id,
-            joint.rigid_body_b_id,
+            anchor_manager,
             joint,
         ) {
             self.spherical_joints.register_prepared_constraint(
@@ -287,8 +289,8 @@ impl ConstraintSolver {
     fn prepare_constraint_for_body_pair<C: TwoBodyConstraint>(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
-        rigid_body_a_id: RigidBodyID,
-        rigid_body_b_id: RigidBodyID,
+        rigid_body_a_id: TypedRigidBodyID,
+        rigid_body_b_id: TypedRigidBodyID,
         constraint: &C,
     ) -> Option<BodyPairConstraint<C::Prepared>> {
         let (body_a_idx, body_b_idx) =
@@ -306,11 +308,41 @@ impl ConstraintSolver {
         })
     }
 
+    fn prepare_anchored_constraint_for_body_pair<C: AnchoredTwoBodyConstraint>(
+        &mut self,
+        rigid_body_manager: &RigidBodyManager,
+        anchor_manager: &AnchorManager,
+        constraint: &C,
+    ) -> Option<BodyPairConstraint<C::Prepared>> {
+        let (anchor_a, anchor_b) = constraint.resolve_anchors(anchor_manager)?;
+
+        let (body_a_idx, body_b_idx) = self.prepare_body_pair(
+            rigid_body_manager,
+            anchor_a.rigid_body_id(),
+            anchor_b.rigid_body_id(),
+        )?;
+
+        let prepared_constraint = constraint.prepare(
+            &self.bodies[body_a_idx],
+            &self.bodies[body_b_idx],
+            anchor_a,
+            anchor_b,
+        );
+
+        Some(BodyPairConstraint {
+            body_a_idx,
+            body_b_idx,
+            constraint: prepared_constraint,
+            accumulated_impulses: Zero::zero(),
+            flags: ConstraintFlags::WAS_PREPARED,
+        })
+    }
+
     fn prepare_body_pair(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
-        rigid_body_a_id: RigidBodyID,
-        rigid_body_b_id: RigidBodyID,
+        rigid_body_a_id: TypedRigidBodyID,
+        rigid_body_b_id: TypedRigidBodyID,
     ) -> Option<(usize, usize)> {
         let body_a_idx = self.prepare_body(rigid_body_manager, rigid_body_a_id)?;
         let body_b_idx = self.prepare_body(rigid_body_manager, rigid_body_b_id)?;
@@ -320,18 +352,18 @@ impl ConstraintSolver {
     fn prepare_body(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
-        rigid_body_id: RigidBodyID,
+        rigid_body_id: TypedRigidBodyID,
     ) -> Option<usize> {
         if let Some(body_idx) = self.body_index_map.get(rigid_body_id) {
             return Some(body_idx);
         }
 
         let constrained_body = match rigid_body_id {
-            RigidBodyID::Dynamic(id) => {
+            TypedRigidBodyID::Dynamic(id) => {
                 let rigid_body = rigid_body_manager.get_dynamic_rigid_body(id)?;
                 ConstrainedBody::from_dynamic_rigid_body(rigid_body)
             }
-            RigidBodyID::Kinematic(id) => {
+            TypedRigidBodyID::Kinematic(id) => {
                 let rigid_body = rigid_body_manager.get_kinematic_rigid_body(id)?;
                 ConstrainedBody::from_kinematic_rigid_body(rigid_body)
             }
@@ -514,18 +546,18 @@ fn apply_positional_corrections_sequentially_for_body_pair_constraints<
 
 fn synchronize_prepared_constrained_body_velocities(
     rigid_body_manager: &RigidBodyManager,
-    rigid_body_id: RigidBodyID,
+    rigid_body_id: TypedRigidBodyID,
     constrained_body: &mut ConstrainedBody,
 ) {
     match rigid_body_id {
-        RigidBodyID::Dynamic(id) => {
+        TypedRigidBodyID::Dynamic(id) => {
             let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(id) else {
                 return;
             };
             constrained_body.velocity = rigid_body.compute_velocity();
             constrained_body.angular_velocity = rigid_body.compute_angular_velocity().as_vector();
         }
-        RigidBodyID::Kinematic(id) => {
+        TypedRigidBodyID::Kinematic(id) => {
             let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body(id) else {
                 return;
             };
@@ -537,11 +569,11 @@ fn synchronize_prepared_constrained_body_velocities(
 
 fn apply_constrained_body_velocities_and_configuration_to_rigid_body(
     rigid_body_manager: &mut RigidBodyManager,
-    rigid_body_id: RigidBodyID,
+    rigid_body_id: TypedRigidBodyID,
     constrained_body: &ConstrainedBody,
 ) {
     match rigid_body_id {
-        RigidBodyID::Dynamic(id) => {
+        TypedRigidBodyID::Dynamic(id) => {
             let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(id) else {
                 return;
             };
@@ -552,7 +584,7 @@ fn apply_constrained_body_velocities_and_configuration_to_rigid_body(
                 constrained_body.angular_velocity,
             ));
         }
-        RigidBodyID::Kinematic(id) => {
+        TypedRigidBodyID::Kinematic(id) => {
             let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(id) else {
                 return;
             };

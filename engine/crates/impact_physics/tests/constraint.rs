@@ -4,6 +4,7 @@ use approx::assert_abs_diff_eq;
 use impact_geometry::{Plane, ReferenceFrame, Sphere};
 use impact_math::{Angle, Radians};
 use impact_physics::{
+    anchor::AnchorManager,
     collision::{
         self, CollidableKind,
         collidable::basic::{CollisionWorld, LocalCollidable},
@@ -161,6 +162,7 @@ fn setup_bodies_and_run_constraints(
     spheres: impl IntoIterator<Item = SphereBody>,
     planes: impl IntoIterator<Item = PlaneBody>,
 ) -> (Vec<DynamicRigidBodyID>, Vec<KinematicRigidBodyID>) {
+    let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
 
     let sphere_entities = setup_sphere_bodies(rigid_body_manager, &mut collision_world, spheres);
@@ -168,7 +170,12 @@ fn setup_bodies_and_run_constraints(
 
     collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
 
-    constraint_manager.prepare_constraints(rigid_body_manager, &collision_world, &());
+    constraint_manager.prepare_constraints(
+        rigid_body_manager,
+        &anchor_manager,
+        &collision_world,
+        &(),
+    );
     constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
 
     (sphere_entities, plane_entities)

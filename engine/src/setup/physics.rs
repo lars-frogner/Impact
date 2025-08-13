@@ -25,6 +25,7 @@ pub fn setup_physics_for_new_entities(
     )?;
 
     force::setup_forces_for_new_entities(
+        simulator.anchor_manager(),
         simulator.force_generator_manager(),
         resource_manager,
         components,
@@ -43,23 +44,5 @@ pub fn setup_physics_for_new_entities(
 /// Performs any modifications required to clean up the physics simulator
 /// when the given entity is removed.
 pub fn cleanup_physics_for_removed_entity(simulator: &PhysicsSimulator, entity: &EntityEntry<'_>) {
-    impact_physics::collision::setup::remove_collidable_for_entity(
-        simulator.collision_world(),
-        entity,
-    );
-
-    impact_physics::driven_motion::setup::remove_motion_drivers_for_entity(
-        simulator.motion_driver_manager(),
-        entity,
-    );
-
-    impact_physics::force::setup::remove_force_generators_for_entity(
-        simulator.force_generator_manager(),
-        entity,
-    );
-
-    impact_physics::rigid_body::setup::remove_rigid_body_for_entity(
-        simulator.rigid_body_manager(),
-        entity,
-    );
+    simulator.perform_cleanup_for_removed_entity(entity);
 }

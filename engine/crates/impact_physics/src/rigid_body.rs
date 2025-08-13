@@ -36,7 +36,7 @@ define_component_type! {
 
 /// Identifier for a [`DynamicRigidBody`] or [`KinematicRigidBody`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum RigidBodyID {
+pub enum TypedRigidBodyID {
     Dynamic(DynamicRigidBodyID),
     Kinematic(KinematicRigidBodyID),
 }
@@ -91,13 +91,13 @@ pub struct KinematicRigidBody {
     angular_velocity: AngularVelocity,
 }
 
-impl From<DynamicRigidBodyID> for RigidBodyID {
+impl From<DynamicRigidBodyID> for TypedRigidBodyID {
     fn from(id: DynamicRigidBodyID) -> Self {
         Self::Dynamic(id)
     }
 }
 
-impl From<KinematicRigidBodyID> for RigidBodyID {
+impl From<KinematicRigidBodyID> for TypedRigidBodyID {
     fn from(id: KinematicRigidBodyID) -> Self {
         Self::Kinematic(id)
     }

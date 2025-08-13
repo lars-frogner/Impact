@@ -5,10 +5,11 @@ pub mod solver;
 pub mod spherical_joint;
 
 use crate::{
+    anchor::{AnchorManager, TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
     collision::{Collidable, Collision, CollisionWorld},
     fph,
     quantities::{Orientation, Position, Velocity},
-    rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyID, RigidBodyManager},
+    rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager, TypedRigidBodyID},
 };
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
@@ -42,6 +43,35 @@ trait TwoBodyConstraint {
     /// Creates an instantiation of the constraint that has been prepared for
     /// constraint solving in the current frame.
     fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared;
+}
+
+/// Represents a constraint involving anchor points in two rigid bodies.
+trait AnchoredTwoBodyConstraint {
+    type Prepared: PreparedTwoBodyConstraint;
+
+    /// Returns the IDs of the anchor points in the two bodies.
+    fn anchors(&self) -> (&TypedRigidBodyAnchorID, &TypedRigidBodyAnchorID);
+
+    /// Looks up the anchors and return them if both are present.
+    fn resolve_anchors<'a>(
+        &self,
+        anchor_manager: &'a AnchorManager,
+    ) -> Option<(TypedRigidBodyAnchorRef<'a>, TypedRigidBodyAnchorRef<'a>)> {
+        let (anchor_a_id, anchor_b_id) = self.anchors();
+        let anchor_a = anchor_manager.get(anchor_a_id)?;
+        let anchor_b = anchor_manager.get(anchor_b_id)?;
+        Some((anchor_a, anchor_b))
+    }
+
+    /// Creates an instantiation of the constraint that has been prepared for
+    /// constraint solving in the current frame.
+    fn prepare<'a>(
+        &self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+        anchor_a: TypedRigidBodyAnchorRef<'a>,
+        anchor_b: TypedRigidBodyAnchorRef<'a>,
+    ) -> Self::Prepared;
 }
 
 /// Represents a [`TwoBodyConstraint`] that has been prepared for constraint
@@ -143,6 +173,7 @@ impl ConstraintManager {
     pub fn prepare_constraints<C: Collidable>(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
+        anchor_manager: &AnchorManager,
         collision_world: &CollisionWorld<C>,
         collidable_context: &C::Context,
     ) {
@@ -171,7 +202,7 @@ impl ConstraintManager {
 
         for (id, joint) in &self.spherical_joints {
             self.solver
-                .prepare_spherical_joint(rigid_body_manager, *id, joint);
+                .prepare_spherical_joint(rigid_body_manager, anchor_manager, *id, joint);
         }
 
         // Any constraints left over from the previous frame that were not
@@ -183,7 +214,7 @@ impl ConstraintManager {
     pub fn prepare_specific_contacts_only<'a>(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
-        contacts: impl IntoIterator<Item = (RigidBodyID, RigidBodyID, &'a ContactWithID)>,
+        contacts: impl IntoIterator<Item = (TypedRigidBodyID, TypedRigidBodyID, &'a ContactWithID)>,
     ) {
         self.solver.clear_prepared_bodies();
 

@@ -2,6 +2,7 @@
 
 use impact_geometry::{ReferenceFrame, Sphere};
 use impact_physics::{
+    anchor::AnchorManager,
     collision::{
         self, CollidableKind, Collision,
         collidable::basic::{CollisionWorld, LocalCollidable},
@@ -55,6 +56,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 
 pub fn solve_contact_velocities(profiler: impl Profiler) {
     let mut rigid_body_manager = RigidBodyManager::new();
+    let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
 
     setup_stationary_overlapping_spheres(&mut rigid_body_manager, &mut collision_world);
@@ -63,7 +65,12 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
         n_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(&rigid_body_manager, &collision_world, &());
+    constraint_manager.prepare_constraints(
+        &rigid_body_manager,
+        &anchor_manager,
+        &collision_world,
+        &(),
+    );
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().clone();
@@ -74,6 +81,7 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
 
 pub fn correct_contact_configurations(profiler: impl Profiler) {
     let mut rigid_body_manager = RigidBodyManager::new();
+    let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
 
     setup_stationary_overlapping_spheres(&mut rigid_body_manager, &mut collision_world);
@@ -82,7 +90,12 @@ pub fn correct_contact_configurations(profiler: impl Profiler) {
         n_positional_correction_iterations: 10,
         ..Default::default()
     });
-    constraint_manager.prepare_constraints(&rigid_body_manager, &collision_world, &());
+    constraint_manager.prepare_constraints(
+        &rigid_body_manager,
+        &anchor_manager,
+        &collision_world,
+        &(),
+    );
 
     profiler.profile(&mut || {
         let mut solver = constraint_manager.solver().clone();

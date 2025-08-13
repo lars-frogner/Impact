@@ -3,6 +3,7 @@
 #[macro_use]
 mod macros;
 
+pub mod anchor;
 pub mod collision;
 pub mod constraint;
 pub mod driven_motion;
@@ -17,6 +18,7 @@ pub mod setup;
 #[cfg(feature = "ecs")]
 pub mod systems;
 
+use anchor::AnchorManager;
 use anyhow::{Result, bail};
 use collision::{Collidable, CollisionWorld};
 use constraint::{ConstraintManager, solver::ConstraintSolverConfig};
@@ -37,6 +39,7 @@ pub type fph = f64;
 pub struct PhysicsSimulator<C: Collidable = collision::collidable::basic::Collidable> {
     config: SimulatorConfig,
     rigid_body_manager: RwLock<RigidBodyManager>,
+    anchor_manager: RwLock<AnchorManager>,
     force_generator_manager: RwLock<ForceGeneratorManager>,
     motion_driver_manager: RwLock<MotionDriverManager>,
     constraint_manager: RwLock<ConstraintManager>,
@@ -102,6 +105,7 @@ impl<C: Collidable> PhysicsSimulator<C> {
         Ok(Self {
             config,
             rigid_body_manager: RwLock::new(RigidBodyManager::new()),
+            anchor_manager: RwLock::new(AnchorManager::new()),
             force_generator_manager: RwLock::new(ForceGeneratorManager::new(
                 rigid_body_force_config,
             )?),
@@ -186,6 +190,11 @@ impl<C: Collidable> PhysicsSimulator<C> {
         &self.rigid_body_manager
     }
 
+    /// Returns a reference to the [`AnchorManager`], guarded by a [`RwLock`].
+    pub fn anchor_manager(&self) -> &RwLock<AnchorManager> {
+        &self.anchor_manager
+    }
+
     /// Returns a reference to the [`ForceGeneratorManager`], guarded by a
     /// [`RwLock`].
     pub fn force_generator_manager(&self) -> &RwLock<ForceGeneratorManager> {
@@ -257,6 +266,7 @@ impl<C: Collidable> PhysicsSimulator<C> {
 
     fn do_advance_simulation(&mut self, collidable_context: &C::Context) {
         let mut rigid_body_manager = self.rigid_body_manager.write();
+        let anchor_manager = self.anchor_manager.read();
         let force_generator_manager = self.force_generator_manager.read();
         let motion_driver_manager = self.motion_driver_manager.read();
         let mut constraint_manager = self.constraint_manager.write();
@@ -266,6 +276,7 @@ impl<C: Collidable> PhysicsSimulator<C> {
         for _ in 0..self.n_substeps() {
             Self::perform_step(
                 &mut rigid_body_manager,
+                &anchor_manager,
                 &force_generator_manager,
                 &motion_driver_manager,
                 &mut constraint_manager,
@@ -285,6 +296,7 @@ impl<C: Collidable> PhysicsSimulator<C> {
 
     fn perform_step(
         rigid_body_manager: &mut RigidBodyManager,
+        anchor_manager: &AnchorManager,
         force_generator_manager: &ForceGeneratorManager,
         motion_driver_manager: &MotionDriverManager,
         constraint_manager: &mut ConstraintManager,
@@ -302,6 +314,7 @@ impl<C: Collidable> PhysicsSimulator<C> {
             impact_log::with_timing_info_logging!("Preparing constraints"; {
                 constraint_manager.prepare_constraints(
                     rigid_body_manager,
+                    anchor_manager,
                     collision_world,
                     collidable_context,
                 );
@@ -326,7 +339,11 @@ impl<C: Collidable> PhysicsSimulator<C> {
 
         motion_driver_manager.apply_motion(rigid_body_manager, new_simulation_time);
 
-        force_generator_manager.apply_forces_and_torques(medium, rigid_body_manager);
+        force_generator_manager.apply_forces_and_torques(
+            medium,
+            rigid_body_manager,
+            anchor_manager,
+        );
     }
 }
 
