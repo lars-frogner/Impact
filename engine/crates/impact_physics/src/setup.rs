@@ -1,7 +1,7 @@
 //! Physics setup.
 
 #[cfg(feature = "ecs")]
-impl super::PhysicsSimulator {
+impl<C: crate::collision::Collidable> super::PhysicsSimulator<C> {
     /// Performs any modifications required to clean up the physics simulator
     /// when the given entity is removed.
     pub fn perform_cleanup_for_removed_entity(&self, entity: &impact_ecs::world::EntityEntry<'_>) {
@@ -16,6 +16,8 @@ impl super::PhysicsSimulator {
             &self.force_generator_manager,
             entity,
         );
+
+        crate::anchor::setup::remove_anchors_for_entity(&self.anchor_manager, entity);
 
         crate::rigid_body::setup::remove_rigid_body_for_entity(&self.rigid_body_manager, entity);
     }

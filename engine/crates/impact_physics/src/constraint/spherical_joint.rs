@@ -1,15 +1,22 @@
 //! Spherical (ball and socket) joints.
 
-use super::{ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint};
-use crate::{fph, rigid_body::RigidBodyID};
+use super::{AnchoredTwoBodyConstraint, ConstrainedBody, PreparedTwoBodyConstraint};
+use crate::{
+    anchor::{TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
+    fph,
+};
 use nalgebra::Vector3;
 
 #[derive(Clone, Debug)]
 pub struct SphericalJoint {
-    pub rigid_body_a_id: RigidBodyID,
-    pub rigid_body_b_id: RigidBodyID,
-    pub offset_in_body_a: Vector3<fph>,
-    pub offset_in_body_b: Vector3<fph>,
+    pub anchor_a: TypedRigidBodyAnchorID,
+    pub anchor_b: TypedRigidBodyAnchorID,
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvedSphericalJoint<'a> {
+    pub anchor_a: TypedRigidBodyAnchorRef<'a>,
+    pub anchor_b: TypedRigidBodyAnchorRef<'a>,
 }
 
 #[derive(Clone, Debug)]
@@ -17,12 +24,24 @@ pub struct PreparedSphericalJoint {
     _attachment_point_displacement: Vector3<fph>,
 }
 
-impl TwoBodyConstraint for SphericalJoint {
+impl AnchoredTwoBodyConstraint for SphericalJoint {
     type Prepared = PreparedSphericalJoint;
 
-    fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared {
-        let body_a_attachment_point = body_a.position + body_a.orientation * self.offset_in_body_a;
-        let body_b_attachment_point = body_b.position + body_b.orientation * self.offset_in_body_b;
+    fn anchors(&self) -> (&TypedRigidBodyAnchorID, &TypedRigidBodyAnchorID) {
+        (&self.anchor_a, &self.anchor_b)
+    }
+
+    fn prepare<'a>(
+        &self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+        anchor_a: TypedRigidBodyAnchorRef<'a>,
+        anchor_b: TypedRigidBodyAnchorRef<'a>,
+    ) -> Self::Prepared {
+        let body_a_attachment_point =
+            body_a.position + body_a.orientation * anchor_a.point().coords;
+        let body_b_attachment_point =
+            body_b.position + body_b.orientation * anchor_b.point().coords;
 
         let attachment_point_displacement = body_a_attachment_point - body_b_attachment_point;
 

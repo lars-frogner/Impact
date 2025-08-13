@@ -8,7 +8,7 @@ license = { workspace = true }
 [features]
 arbitrary = ["dep:arbitrary"]
 bincode = ["dep:bincode", "serde"]
-ecs = ["dep:inventory", "dep:impact_ecs"]
+ecs = ["dep:inventory", "dep:impact_ecs", "impact_geometry/ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde", "nalgebra/serde-serialize"]
 

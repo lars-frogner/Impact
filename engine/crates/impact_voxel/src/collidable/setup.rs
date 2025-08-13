@@ -8,7 +8,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_physics::{
     collision::{CollidableID, CollidableKind},
     material::ContactResponseParameters,
-    rigid_body::RigidBodyID,
+    rigid_body::TypedRigidBodyID,
 };
 use nalgebra::Vector3;
 use roc_integration::roc;
@@ -55,7 +55,7 @@ impl VoxelCollidable {
 pub fn setup_voxel_collidable(
     collision_world: &mut CollisionWorld,
     object_id: VoxelObjectID,
-    rigid_body_id: RigidBodyID,
+    rigid_body_id: TypedRigidBodyID,
     origin_offset: Vector3<f32>,
     collidable: &VoxelCollidable,
 ) -> CollidableID {

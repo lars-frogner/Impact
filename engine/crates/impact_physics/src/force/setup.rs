@@ -1,4 +1,4 @@
-//! Force setup.
+//! Force setup and cleanup.
 
 pub use crate::force::{
     constant_acceleration::ConstantAcceleration,
@@ -8,12 +8,14 @@ pub use crate::force::{
 };
 
 use crate::{
+    anchor::{AnchorManager, DynamicRigidBodyAnchor, KinematicRigidBodyAnchor},
     force::{
         ForceGeneratorManager,
         constant_acceleration::{ConstantAccelerationGenerator, ConstantAccelerationGeneratorID},
         local_force::{LocalForceGenerator, LocalForceGeneratorID},
         spring_force::{
-            DynamicDynamicSpringForceGeneratorID, DynamicKinematicSpringForceGeneratorID,
+            DynamicDynamicSpringForceGeneratorID, DynamicDynamicSpringForceProperties,
+            DynamicKinematicSpringForceGeneratorID, DynamicKinematicSpringForceProperties,
         },
     },
     rigid_body::DynamicRigidBodyID,
@@ -33,34 +35,72 @@ pub fn setup_constant_acceleration(
 }
 
 pub fn setup_local_force(
+    anchor_manager: &mut AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
     rigid_body_id: DynamicRigidBodyID,
     local_force: LocalForce,
 ) -> LocalForceGeneratorID {
+    let anchor = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
+        rigid_body_id,
+        point: local_force.point,
+    });
+
     force_generator_manager
         .local_forces_mut()
         .insert_generator(LocalForceGenerator {
-            rigid_body_id,
-            local_force,
+            anchor,
+            force: local_force.force,
         })
 }
 
-pub fn setup_dynamic_dynamic_spring_force_generator(
+pub fn setup_dynamic_dynamic_spring_force(
+    anchor_manager: &mut AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
-    generator: DynamicDynamicSpringForceGenerator,
+    properties: DynamicDynamicSpringForceProperties,
 ) -> DynamicDynamicSpringForceGeneratorID {
+    let anchor_1 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
+        rigid_body_id: properties.rigid_body_1,
+        point: properties.attachment_point_1,
+    });
+
+    let anchor_2 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
+        rigid_body_id: properties.rigid_body_2,
+        point: properties.attachment_point_2,
+    });
+
     force_generator_manager
         .dynamic_dynamic_spring_forces_mut()
-        .insert_generator(generator)
+        .insert_generator(DynamicDynamicSpringForceGenerator {
+            anchor_1,
+            anchor_2,
+            spring: properties.spring,
+        })
 }
 
-pub fn setup_dynamic_kinematic_spring_force_generator(
+pub fn setup_dynamic_kinematic_spring_force(
+    anchor_manager: &mut AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
-    generator: DynamicKinematicSpringForceGenerator,
+    properties: DynamicKinematicSpringForceProperties,
 ) -> DynamicKinematicSpringForceGeneratorID {
+    let anchor_1 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
+        rigid_body_id: properties.rigid_body_1,
+        point: properties.attachment_point_1,
+    });
+
+    let anchor_2 = anchor_manager
+        .kinematic_mut()
+        .insert(KinematicRigidBodyAnchor {
+            rigid_body_id: properties.rigid_body_2,
+            point: properties.attachment_point_2,
+        });
+
     force_generator_manager
         .dynamic_kinematic_spring_forces_mut()
-        .insert_generator(generator)
+        .insert_generator(DynamicKinematicSpringForceGenerator {
+            anchor_1,
+            anchor_2,
+            spring: properties.spring,
+        })
 }
 
 #[cfg(feature = "ecs")]

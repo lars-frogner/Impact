@@ -1,13 +1,11 @@
 //! Forces from springs attached to two rigid bodies.
 
 use crate::{
+    anchor::{AnchorManager, DynamicRigidBodyAnchorID, KinematicRigidBodyAnchorID},
     force::ForceGeneratorRegistry,
     fph,
     quantities::Position,
-    rigid_body::{
-        DynamicRigidBody, DynamicRigidBodyID, KinematicRigidBody, KinematicRigidBodyID,
-        RigidBodyManager,
-    },
+    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
@@ -42,51 +40,70 @@ define_component_type! {
     pub struct DynamicKinematicSpringForceGeneratorID(u64);
 }
 
+/// Generator for a spring force between two dynamic rigid bodies.
+#[derive(Copy, Clone, Debug)]
+pub struct DynamicDynamicSpringForceGenerator {
+    /// The anchor the first end of the spring is attached to.
+    pub anchor_1: DynamicRigidBodyAnchorID,
+    /// The anchor the second end of the spring is attached to.
+    pub anchor_2: DynamicRigidBodyAnchorID,
+    /// The spring connecting the two anchors.
+    pub spring: Spring,
+}
+
+/// Generator for a spring force between two dynamic rigid bodies.
+#[derive(Copy, Clone, Debug)]
+pub struct DynamicKinematicSpringForceGenerator {
+    /// The anchor the first end of the spring is attached to.
+    pub anchor_1: DynamicRigidBodyAnchorID,
+    /// The anchor the second end of the spring is attached to.
+    pub anchor_2: KinematicRigidBodyAnchorID,
+    /// The spring connecting the two anchors.
+    pub spring: Spring,
+}
+
 define_setup_type! {
     target = DynamicDynamicSpringForceGeneratorID;
     /// Generator for a spring force between two dynamic rigid bodies.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct DynamicDynamicSpringForceGenerator {
+    pub struct DynamicDynamicSpringForceProperties {
         /// The first dynamic rigid body the spring is attached to.
         pub rigid_body_1: DynamicRigidBodyID,
+        /// The point where the spring is attached to the first body, in that
+        /// body's local reference frame.
+        pub attachment_point_1: Position,
         /// The second dynamic rigid body the spring is attached to.
         pub rigid_body_2: DynamicRigidBodyID,
-        /// The spring force between the two bodies.
-        pub force: SpringForce,
+        /// The point where the spring is attached to the second body, in that
+        /// body's local reference frame.
+        pub attachment_point_2: Position,
+        /// The spring connecting the bodies.
+        pub spring: Spring,
     }
 }
 
 define_setup_type! {
     target = DynamicKinematicSpringForceGeneratorID;
-    /// Generator for a spring force between a dynamic and a kinematic rigid body.
+    /// Generator for a spring force between two dynamic rigid bodies.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct DynamicKinematicSpringForceGenerator {
+    pub struct DynamicKinematicSpringForceProperties {
         /// The dynamic rigid body the spring is attached to.
         pub rigid_body_1: DynamicRigidBodyID,
+        /// The point where the spring is attached to the first (dynamic) body,
+        /// in that body's local reference frame.
+        pub attachment_point_1: Position,
         /// The kinematic rigid body the spring is attached to.
         pub rigid_body_2: KinematicRigidBodyID,
-        /// The spring force between the two bodies.
-        pub force: SpringForce,
+        /// The point where the spring is attached to the second (kinematic)
+        /// body, in that body's local reference frame.
+        pub attachment_point_2: Position,
+        /// The spring connecting the bodies.
+        pub spring: Spring,
     }
-}
-
-/// A spring force between to rigid bodies.
-#[roc(parents = "Physics")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct SpringForce {
-    /// The spring connecting the bodies.
-    pub spring: Spring,
-    /// The point where the spring is attached to the first body, in that
-    /// body's local reference frame.
-    pub attachment_point_1: Position,
-    /// The point where the spring is attached to the second body, in that
-    /// body's local reference frame.
-    pub attachment_point_2: Position,
 }
 
 /// A spring or elastic band.
@@ -116,97 +133,26 @@ impl From<u64> for DynamicKinematicSpringForceGeneratorID {
     }
 }
 
-#[roc]
 impl DynamicDynamicSpringForceGenerator {
-    #[roc(body = "{ rigid_body_1, rigid_body_2, force }")]
-    pub fn new(
-        rigid_body_1: DynamicRigidBodyID,
-        rigid_body_2: DynamicRigidBodyID,
-        force: SpringForce,
-    ) -> Self {
-        Self {
-            rigid_body_1,
-            rigid_body_2,
-            force,
-        }
-    }
-
     /// Applies the force to the appropriate dynamic rigid bodies.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager) {
+    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, anchor_manager: &AnchorManager) {
+        let Some(anchor_1) = anchor_manager.dynamic().get(self.anchor_1) else {
+            return;
+        };
+        let Some(anchor_2) = anchor_manager.dynamic().get(self.anchor_2) else {
+            return;
+        };
+
         let Some([rigid_body_1, rigid_body_2]) = rigid_body_manager
-            .get_two_dynamic_rigid_bodies_mut(self.rigid_body_1, self.rigid_body_2)
+            .get_two_dynamic_rigid_bodies_mut(anchor_1.rigid_body_id, anchor_2.rigid_body_id)
         else {
             return;
         };
-        self.force
-            .apply_between_dynamic_bodies(rigid_body_1, rigid_body_2);
-    }
-}
 
-#[roc]
-impl DynamicKinematicSpringForceGenerator {
-    #[roc(body = "{ rigid_body_1, rigid_body_2, force }")]
-    pub fn new(
-        rigid_body_1: DynamicRigidBodyID,
-        rigid_body_2: KinematicRigidBodyID,
-        force: SpringForce,
-    ) -> Self {
-        Self {
-            rigid_body_1,
-            rigid_body_2,
-            force,
-        }
-    }
-
-    /// Applies the force to the appropriate dynamic rigid body.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager) {
-        let Some((rigid_body_1, rigid_body_2)) = rigid_body_manager
-            .get_dynamic_rigid_body_mut_and_kinematic_rigid_body(
-                self.rigid_body_1,
-                self.rigid_body_2,
-            )
-        else {
-            return;
-        };
-        self.force
-            .apply_to_dynamic_body_from_kinematic_body(rigid_body_1, rigid_body_2);
-    }
-}
-
-#[roc]
-impl SpringForce {
-    /// Defines the force from the given string between the given attachment
-    /// points in their respective body's reference frame.
-    #[roc(body = r#"
-    {
-        spring,
-        attachment_point_1,
-        attachment_point_2,
-    }"#)]
-    pub fn new(spring: Spring, attachment_point_1: Position, attachment_point_2: Position) -> Self {
-        Self {
-            attachment_point_1,
-            attachment_point_2,
-            spring,
-        }
-    }
-
-    /// Defines the force from the given string between the origins of two
-    /// bodies' reference frames.
-    pub fn between_origins(spring: Spring) -> Self {
-        Self::new(spring, Position::origin(), Position::origin())
-    }
-
-    /// Applies the force to the given connected dynamic rigid bodies.
-    pub fn apply_between_dynamic_bodies(
-        &self,
-        rigid_body_1: &mut DynamicRigidBody,
-        rigid_body_2: &mut DynamicRigidBody,
-    ) {
         let attachment_point_1 =
-            rigid_body_1.transform_point_from_body_to_world_space(&self.attachment_point_1);
+            rigid_body_1.transform_point_from_body_to_world_space(&anchor_1.point);
         let attachment_point_2 =
-            rigid_body_2.transform_point_from_body_to_world_space(&self.attachment_point_2);
+            rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
 
         let Some((spring_direction, length)) =
             UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
@@ -233,18 +179,31 @@ impl SpringForce {
         rigid_body_1.apply_force(&(-force_on_2), &attachment_point_1);
         rigid_body_2.apply_force(&force_on_2, &attachment_point_2);
     }
+}
 
-    /// Applies the force to the given dynamic rigid body (body 1) connected to
-    /// the given kinematic rigid body (body 2).
-    pub fn apply_to_dynamic_body_from_kinematic_body(
-        &self,
-        rigid_body_1: &mut DynamicRigidBody,
-        rigid_body_2: &KinematicRigidBody,
-    ) {
+impl DynamicKinematicSpringForceGenerator {
+    /// Applies the force to the appropriate dynamic rigid body.
+    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, anchor_manager: &AnchorManager) {
+        let Some(anchor_1) = anchor_manager.dynamic().get(self.anchor_1) else {
+            return;
+        };
+        let Some(anchor_2) = anchor_manager.kinematic().get(self.anchor_2) else {
+            return;
+        };
+
+        let Some((rigid_body_1, rigid_body_2)) = rigid_body_manager
+            .get_dynamic_rigid_body_mut_and_kinematic_rigid_body(
+                anchor_1.rigid_body_id,
+                anchor_2.rigid_body_id,
+            )
+        else {
+            return;
+        };
+
         let attachment_point_1 =
-            rigid_body_1.transform_point_from_body_to_world_space(&self.attachment_point_1);
+            rigid_body_1.transform_point_from_body_to_world_space(&anchor_1.point);
         let attachment_point_2 =
-            rigid_body_2.transform_point_from_body_to_world_space(&self.attachment_point_2);
+            rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
 
         let Some((spring_direction, length)) =
             UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
@@ -269,6 +228,46 @@ impl SpringForce {
             -self.spring.scalar_force(length, rate_of_length_change) * spring_direction.as_ref();
 
         rigid_body_1.apply_force(&force_on_1, &attachment_point_1);
+    }
+}
+
+#[roc]
+impl DynamicDynamicSpringForceProperties {
+    #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
+    pub fn new(
+        rigid_body_1: DynamicRigidBodyID,
+        attachment_point_1: Position,
+        rigid_body_2: DynamicRigidBodyID,
+        attachment_point_2: Position,
+        spring: Spring,
+    ) -> Self {
+        Self {
+            rigid_body_1,
+            attachment_point_1,
+            rigid_body_2,
+            attachment_point_2,
+            spring,
+        }
+    }
+}
+
+#[roc]
+impl DynamicKinematicSpringForceProperties {
+    #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
+    pub fn new(
+        rigid_body_1: DynamicRigidBodyID,
+        attachment_point_1: Position,
+        rigid_body_2: KinematicRigidBodyID,
+        attachment_point_2: Position,
+        spring: Spring,
+    ) -> Self {
+        Self {
+            rigid_body_1,
+            attachment_point_1,
+            rigid_body_2,
+            attachment_point_2,
+            spring,
+        }
     }
 }
 

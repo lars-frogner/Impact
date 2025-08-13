@@ -6,7 +6,7 @@ pub mod setup;
 use crate::{
     constraint::contact::ContactManifold,
     fph,
-    rigid_body::{RigidBodyID, RigidBodyManager},
+    rigid_body::{RigidBodyManager, TypedRigidBodyID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::HashMap;
@@ -42,7 +42,7 @@ pub struct CollisionWorld<C: Collidable> {
 pub struct CollidableDescriptor<C: Collidable> {
     kind: CollidableKind,
     local_collidable: C::Local,
-    rigid_body_id: RigidBodyID,
+    rigid_body_id: TypedRigidBodyID,
     idx: usize,
 }
 
@@ -119,7 +119,7 @@ impl<C: Collidable> CollisionWorld<C> {
 
     pub fn add_collidable(
         &mut self,
-        rigid_body_id: RigidBodyID,
+        rigid_body_id: TypedRigidBodyID,
         kind: CollidableKind,
         local_collidable: C::Local,
     ) -> CollidableID {
@@ -138,13 +138,13 @@ impl<C: Collidable> CollisionWorld<C> {
 
         for (&collidable_id, descriptor) in &mut self.collidable_descriptors {
             let (position, orientation) = match descriptor.rigid_body_id {
-                RigidBodyID::Dynamic(id) => {
+                TypedRigidBodyID::Dynamic(id) => {
                     let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(id) else {
                         continue;
                     };
                     (rigid_body.position(), rigid_body.orientation())
                 }
-                RigidBodyID::Kinematic(id) => {
+                TypedRigidBodyID::Kinematic(id) => {
                     let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body(id) else {
                         continue;
                     };
@@ -300,7 +300,11 @@ impl<C: Collidable> Default for CollisionWorld<C> {
 }
 
 impl<C: Collidable> CollidableDescriptor<C> {
-    fn new(rigid_body_id: RigidBodyID, kind: CollidableKind, local_collidable: C::Local) -> Self {
+    fn new(
+        rigid_body_id: TypedRigidBodyID,
+        kind: CollidableKind,
+        local_collidable: C::Local,
+    ) -> Self {
         Self {
             kind,
             local_collidable,
@@ -313,7 +317,7 @@ impl<C: Collidable> CollidableDescriptor<C> {
         &self.local_collidable
     }
 
-    pub fn rigid_body_id(&self) -> RigidBodyID {
+    pub fn rigid_body_id(&self) -> TypedRigidBodyID {
         self.rigid_body_id
     }
 

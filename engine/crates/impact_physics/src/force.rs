@@ -6,7 +6,7 @@ pub mod local_force;
 pub mod setup;
 pub mod spring_force;
 
-use crate::{UniformMedium, rigid_body::RigidBodyManager};
+use crate::{UniformMedium, anchor::AnchorManager, rigid_body::RigidBodyManager};
 use anyhow::Result;
 use constant_acceleration::ConstantAccelerationRegistry;
 use detailed_drag::{DetailedDragForceRegistry, DragLoadMapConfig};
@@ -106,6 +106,7 @@ impl ForceGeneratorManager {
         &self,
         medium: &UniformMedium,
         rigid_body_manager: &mut RigidBodyManager,
+        anchor_manager: &AnchorManager,
     ) {
         rigid_body_manager.reset_all_forces_and_torques();
 
@@ -113,13 +114,13 @@ impl ForceGeneratorManager {
             generator.apply(rigid_body_manager);
         }
         for generator in self.local_forces.generators() {
-            generator.apply(rigid_body_manager);
+            generator.apply(rigid_body_manager, anchor_manager);
         }
         for generator in self.dynamic_dynamic_spring_forces.generators() {
-            generator.apply(rigid_body_manager);
+            generator.apply(rigid_body_manager, anchor_manager);
         }
         for generator in self.dynamic_kinematic_spring_forces.generators() {
-            generator.apply(rigid_body_manager);
+            generator.apply(rigid_body_manager, anchor_manager);
         }
         self.detailed_drag_forces.apply(rigid_body_manager, medium);
     }

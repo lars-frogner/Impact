@@ -7,7 +7,7 @@ use crate::{
     },
     fph,
     material::ContactResponseParameters,
-    rigid_body::RigidBodyID,
+    rigid_body::TypedRigidBodyID,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{Plane, Sphere};
@@ -115,7 +115,7 @@ impl PlanarCollidable {
 
 pub fn setup_spherical_collidable<C: Collidable>(
     collision_world: &mut CollisionWorld<C>,
-    rigid_body_id: RigidBodyID,
+    rigid_body_id: TypedRigidBodyID,
     collidable: &SphericalCollidable,
     get_local: impl FnOnce(SphereCollidable) -> C::Local,
 ) -> CollidableID {
@@ -131,7 +131,7 @@ pub fn setup_spherical_collidable<C: Collidable>(
 
 pub fn setup_planar_collidable<C: Collidable>(
     collision_world: &mut CollisionWorld<C>,
-    rigid_body_id: RigidBodyID,
+    rigid_body_id: TypedRigidBodyID,
     collidable: &PlanarCollidable,
     get_local: impl FnOnce(PlaneCollidable) -> C::Local,
 ) -> CollidableID {
