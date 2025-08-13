@@ -6,7 +6,7 @@ use impact_containers::NoHashMap;
 use std::collections::hash_map::Entry;
 
 /// Registry for holding metadata about all
-/// [`Component`](impact_ecs::component::Component)s.
+/// [`Component`](crate::component::Component)s.
 #[derive(Debug)]
 pub struct ComponentMetadataRegistry {
     components: NoHashMap<ComponentID, ComponentMetadata>,
