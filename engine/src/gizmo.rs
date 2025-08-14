@@ -81,9 +81,9 @@ pub struct GizmoVisibilities {
     /// The visibility of the gizmo indicating reference frame axes.
     ///
     /// When visible, a red, green and blue line segment representing the x- y-
-    /// and z-axis (respectively) of the local reference frame will be shown
-    /// atop applicable entities. The lines are of unit length in the local
-    /// reference frame. They meet at the original origin of the entity, so any
+    /// and z-axis (respectively) of the model frame will be shown atop
+    /// applicable entities. The lines are of unit length in the local reference
+    /// frame. They meet at the original origin of the entity, so any
     /// origin offset (typically used to shift the origin to the center of mass)
     /// is not accounted for.
     pub reference_frame_axes: GizmoVisibility,
@@ -345,7 +345,7 @@ impl GizmoType {
             Self::ReferenceFrameAxes => {
                 "\
                 When enabled, a red, green and blue line segment representing the x- y- \
-                and z-axis (respectively) of the local reference frame will be shown \
+                and z-axis (respectively) of the model frame frame will be shown \
                 atop applicable entities. The lines are of unit length in the local \
                 reference frame. They meet at the original origin of the entity, so any \
                 origin offset (typically used to shift the origin to the center of mass) \

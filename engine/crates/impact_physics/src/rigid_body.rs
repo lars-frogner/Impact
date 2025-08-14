@@ -425,26 +425,22 @@ impl DynamicRigidBody {
         &self.total_torque
     }
 
-    /// Transforms a vector from the local reference frame of the rigid body to
-    /// world space.
+    /// Transforms a vector from the body-fixed frame to world space.
     pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
         transform_vector_from_body_to_world_space(&self.orientation, vector)
     }
 
-    /// Transforms a vector from world space to the local reference frame of the
-    /// rigid body.
+    /// Transforms a vector from world space to the body-fixed frame.
     pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
         transform_vector_from_world_to_body_space(&self.orientation, vector)
     }
 
-    /// Transforms a point from the local reference frame of the rigid body to
-    /// world space.
+    /// Transforms a point from the body-fixed frame to world space.
     pub fn transform_point_from_body_to_world_space(&self, point: &Point3<fph>) -> Point3<fph> {
         transform_point_from_body_to_world_space(&self.position, &self.orientation, point)
     }
 
-    /// Transforms a point from world space to the local reference frame of the
-    /// rigid body.
+    /// Transforms a point from world space to the body-fixed frame.
     pub fn transform_point_from_world_to_body_space(&self, point: &Point3<fph>) -> Point3<fph> {
         transform_point_from_world_to_body_space(&self.position, &self.orientation, point)
     }
@@ -627,26 +623,22 @@ impl KinematicRigidBody {
         &self.angular_velocity
     }
 
-    /// Transforms a vector from the local reference frame of the rigid body to
-    /// world space.
+    /// Transforms a vector from the body-fixed frame to world space.
     pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
         transform_vector_from_body_to_world_space(&self.orientation, vector)
     }
 
-    /// Transforms a vector from world space to the local reference frame of the
-    /// rigid body.
+    /// Transforms a vector from world space to the body-fixed frame.
     pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
         transform_vector_from_world_to_body_space(&self.orientation, vector)
     }
 
-    /// Transforms a point from the local reference frame of the rigid body to
-    /// world space.
+    /// Transforms a point from the body-fixed frame to world space.
     pub fn transform_point_from_body_to_world_space(&self, point: &Point3<fph>) -> Point3<fph> {
         transform_point_from_body_to_world_space(&self.position, &self.orientation, point)
     }
 
-    /// Transforms a point from world space to the local reference frame of the
-    /// rigid body.
+    /// Transforms a point from world space to the body-fixed frame.
     pub fn transform_point_from_world_to_body_space(&self, point: &Point3<fph>) -> Point3<fph> {
         transform_point_from_world_to_body_space(&self.position, &self.orientation, point)
     }
@@ -713,8 +705,7 @@ impl AbsDiffEq for KinematicRigidBody {
     }
 }
 
-/// Transforms a vector from the local reference frame of a rigid body to
-/// world space.
+/// Transforms a vector from the body-fixed frame to world space.
 pub fn transform_vector_from_body_to_world_space(
     body_orientation: &Orientation,
     vector: &Vector3<fph>,
@@ -722,8 +713,7 @@ pub fn transform_vector_from_body_to_world_space(
     body_orientation.transform_vector(vector)
 }
 
-/// Transforms a vector from world space to the local reference frame of a
-/// rigid body.
+/// Transforms a vector from world space to the body-fixed frame.
 pub fn transform_vector_from_world_to_body_space(
     body_orientation: &Orientation,
     vector: &Vector3<fph>,
@@ -731,8 +721,7 @@ pub fn transform_vector_from_world_to_body_space(
     body_orientation.inverse_transform_vector(vector)
 }
 
-/// Transforms a point from the local reference frame of a rigid body to
-/// world space.
+/// Transforms a point from the body-fixed frame to world space.
 pub fn transform_point_from_body_to_world_space(
     body_position: &Position,
     body_orientation: &Orientation,
@@ -741,8 +730,7 @@ pub fn transform_point_from_body_to_world_space(
     body_position + body_orientation.transform_point(point).coords
 }
 
-/// Transforms a point from world space to the local reference frame of a
-/// rigid body.
+/// Transforms a point from world space to the body-fixed frame.
 pub fn transform_point_from_world_to_body_space(
     body_position: &Position,
     body_orientation: &Orientation,
