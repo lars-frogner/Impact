@@ -72,12 +72,12 @@ define_setup_type! {
         /// The first dynamic rigid body the spring is attached to.
         pub rigid_body_1: DynamicRigidBodyID,
         /// The point where the spring is attached to the first body, in that
-        /// body's fixed frame.
+        /// body's model space.
         pub attachment_point_1: Position,
         /// The second dynamic rigid body the spring is attached to.
         pub rigid_body_2: DynamicRigidBodyID,
         /// The point where the spring is attached to the second body, in that
-        /// body's fixed frame.
+        /// body's model space.
         pub attachment_point_2: Position,
         /// The spring connecting the bodies.
         pub spring: Spring,
@@ -94,12 +94,12 @@ define_setup_type! {
         /// The dynamic rigid body the spring is attached to.
         pub rigid_body_1: DynamicRigidBodyID,
         /// The point where the spring is attached to the first (dynamic) body,
-        /// in that body's fixed frame.
+        /// in that body's model space.
         pub attachment_point_1: Position,
         /// The kinematic rigid body the spring is attached to.
         pub rigid_body_2: KinematicRigidBodyID,
         /// The point where the spring is attached to the second (kinematic)
-        /// body, in that body's fixed frame.
+        /// body, in that body's model space.
         pub attachment_point_2: Position,
         /// The spring connecting the bodies.
         pub spring: Spring,

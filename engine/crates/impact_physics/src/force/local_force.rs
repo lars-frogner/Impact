@@ -40,7 +40,7 @@ define_setup_type! {
     pub struct LocalForce {
         /// The force vector in the body-fixed frame.
         pub force: Force,
-        /// The point where the force is applied, in the body-fixed frame.
+        /// The point where the force is applied, in the body's model space.
         pub point: Position,
     }
 }

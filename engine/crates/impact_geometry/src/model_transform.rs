@@ -2,7 +2,7 @@
 
 use crate::ReferenceFrame;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Similarity3, Translation3, Vector3};
+use nalgebra::{Point3, Similarity3, Translation3, Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -12,7 +12,7 @@ define_component_type! {
     #[roc(parents = "Comp")]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
     pub struct ModelTransform {
-        /// The offset applied to a model-space position before scaling to
+        /// The offset subtracted from a model-space position before scaling to
         /// transform it to the parent entity's space.
         pub offset: Vector3<f32>,
         /// The scaling factor applied to a model-space position after the
@@ -55,6 +55,15 @@ impl ModelTransform {
     /// space of the parent entity.
     pub fn crate_transform_to_entity_space(&self) -> Similarity3<f32> {
         Similarity3::from_scaling(self.scale) * Translation3::from(-self.offset)
+    }
+
+    /// Transforms the given point from model space to the space of the parent
+    /// entity.
+    pub fn transform_point_from_model_space_to_entity_space(
+        &self,
+        point: &Point3<f32>,
+    ) -> Point3<f32> {
+        (point - self.offset) * self.scale
     }
 
     /// Updates the pre-scaling offset to yield the given offset after scaling.
