@@ -12,7 +12,11 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{Capsule, Sphere};
-use impact_physics::{fph, rigid_body::RigidBodyManager};
+use impact_physics::{
+    anchor::{AnchorManager, DynamicRigidBodyAnchor},
+    fph,
+    rigid_body::RigidBodyManager,
+};
 use nalgebra::{Isometry3, Point3, Translation3, Vector3};
 use roc_integration::roc;
 
@@ -151,6 +155,7 @@ pub fn apply_absorption<C>(
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
+    anchor_manager: &mut AnchorManager,
     time_step_duration: fph,
 ) where
     C: VoxelObjectInteractionContext,
@@ -225,9 +230,11 @@ pub fn apply_absorption<C>(
                 original_object_empty,
                 disconnected_object,
             } = interaction::handle_voxel_object_after_removing_voxels(
+                anchor_manager,
                 voxel_type_registry,
                 voxel_object,
                 &mut physics_context.inertial_property_manager,
+                physics_context.rigid_body_id,
                 rigid_body,
                 local_center_of_mass,
             );
@@ -239,6 +246,7 @@ pub fn apply_absorption<C>(
                 voxel_object,
                 inertial_property_manager,
                 rigid_body,
+                anchors,
             }) = disconnected_object
             {
                 let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
@@ -254,6 +262,18 @@ pub fn apply_absorption<C>(
 
                 voxel_object_manager
                     .add_physics_context_for_voxel_object(voxel_object_id, physics_context);
+
+                // Update the anchors that have moved from the original object
+                // to the disconnected object
+                for (anchor_id, point) in anchors {
+                    anchor_manager.dynamic_mut().replace(
+                        anchor_id,
+                        DynamicRigidBodyAnchor {
+                            rigid_body_id,
+                            point,
+                        },
+                    );
+                }
 
                 context.on_new_disconnected_voxel_object_entity(
                     NewVoxelObjectEntity {

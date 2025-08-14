@@ -18,6 +18,7 @@ use impact_ecs::{
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
+    anchor::AnchorManager,
     collision::CollidableID,
     force::{ForceGeneratorManager, constant_acceleration::ConstantAccelerationGeneratorID},
     fph,
@@ -196,10 +197,6 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
             }
         }
 
-        // TODO: Handle local forces, spring forces, and (later) constraints,
-        // all of which should only remain with one of the disconnected bodies
-        // based on where their anchor points are
-
         // TODO: We don't handle drag force yet (that would also have to be
         // updated for the original object, since its shape has changed)
 
@@ -252,6 +249,7 @@ pub fn apply_absorption(
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
+    anchor_manager: &mut AnchorManager,
     force_generator_manager: &ForceGeneratorManager,
     collision_world: &CollisionWorld,
     time_step_duration: fph,
@@ -270,6 +268,7 @@ pub fn apply_absorption(
         voxel_object_manager,
         voxel_type_registry,
         rigid_body_manager,
+        anchor_manager,
         time_step_duration,
     );
 }
