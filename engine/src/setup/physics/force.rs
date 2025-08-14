@@ -50,12 +50,16 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = force_generator_manager.write();
         },
         components,
-        |rigid_body_id: &DynamicRigidBodyID, local_force: &LocalForce| -> LocalForceGeneratorID {
+        |rigid_body_id: &DynamicRigidBodyID,
+         local_force: &LocalForce,
+         model_transform: Option<&ModelTransform>|
+         -> LocalForceGeneratorID {
             setup::setup_local_force(
                 &mut anchor_manager,
                 &mut force_generator_manager,
                 *rigid_body_id,
                 *local_force,
+                model_transform,
             )
         }
     );
@@ -66,11 +70,14 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = force_generator_manager.write();
         },
         components,
-        |properties: &DynamicDynamicSpringForceProperties| -> DynamicDynamicSpringForceGeneratorID {
+        |properties: &DynamicDynamicSpringForceProperties,
+         model_transform: Option<&ModelTransform>|
+         -> DynamicDynamicSpringForceGeneratorID {
             setup::setup_dynamic_dynamic_spring_force(
                 &mut anchor_manager,
                 &mut force_generator_manager,
                 *properties,
+                model_transform,
             )
         }
     );
@@ -81,12 +88,14 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = force_generator_manager.write();
         },
         components,
-        |properties: &DynamicKinematicSpringForceProperties|
+        |properties: &DynamicKinematicSpringForceProperties,
+         model_transform: Option<&ModelTransform>|
          -> DynamicKinematicSpringForceGeneratorID {
             setup::setup_dynamic_kinematic_spring_force(
                 &mut anchor_manager,
                 &mut force_generator_manager,
                 *properties,
+                model_transform,
             )
         }
     );
