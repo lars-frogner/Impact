@@ -323,6 +323,7 @@ define_task!(
             let resource_manager = engine.resource_manager().read();
             let simulator = engine.simulator().read();
             let mut rigid_body_manager = simulator.rigid_body_manager().write();
+            let mut anchor_manager = simulator.anchor_manager().write();
             let force_generator_manager = simulator.force_generator_manager().read();
             let collision_world = simulator.collision_world().read();
             let scene = engine.scene().read();
@@ -337,6 +338,7 @@ define_task!(
                 &mut voxel_object_manager,
                 &resource_manager.voxel_types,
                 &mut rigid_body_manager,
+                &mut anchor_manager,
                 &force_generator_manager,
                 &collision_world,
                 simulator.time_step_duration(),

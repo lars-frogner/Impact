@@ -560,6 +560,18 @@ impl ChunkedVoxelObject {
         chunk_voxels(&self.voxels, chunk.data_offset)
     }
 
+    /// Returns a reference to the voxel containing the given model space
+    /// coordinates (fractional indices scaled by the voxel extent) in the
+    /// object's voxel grid, or [`None`] if the voxel is empty or the
+    /// coordinates are out of bounds.
+    pub fn get_voxel_at_coords(&self, x: f64, y: f64, z: f64) -> Option<&Voxel> {
+        let inverse_voxel_extent = self.voxel_extent.recip();
+        let i = (x * inverse_voxel_extent) as i64;
+        let j = (y * inverse_voxel_extent) as i64;
+        let k = (z * inverse_voxel_extent) as i64;
+        self.get_voxel(i, j, k)
+    }
+
     /// Returns a reference to the voxel at the given indices in the object's
     /// voxel grid, or [`None`] if the voxel is empty or the indices are out of
     /// bounds.
