@@ -43,8 +43,7 @@ pub enum TypedRigidBodyAnchorID {
 pub struct DynamicRigidBodyAnchor {
     /// The dynamic rigid body the anchor is attached to.
     pub rigid_body_id: DynamicRigidBodyID,
-    /// The point where the anchor is attached, in the local reference frame of
-    /// the body.
+    /// The point where the anchor is attached, in the body-fixed frame.
     pub point: Position,
 }
 
@@ -55,8 +54,7 @@ pub struct DynamicRigidBodyAnchor {
 pub struct KinematicRigidBodyAnchor {
     /// The kinematic rigid body the anchor is attached to.
     pub rigid_body_id: KinematicRigidBodyID,
-    /// The point where the anchor is attached, in the local reference frame of
-    /// the body.
+    /// The point where the anchor is attached, in the body-fixed frame.
     pub point: Position,
 }
 
@@ -86,8 +84,11 @@ pub struct SpecificAnchorManager<A: Anchor> {
 pub trait Anchor {
     type RigidBodyID: Eq + Hash;
     type ID: Copy + Default + Eq + Hash + From<u64>;
+    type Point;
 
     fn rigid_body_id(&self) -> Self::RigidBodyID;
+
+    fn point(&self) -> &Self::Point;
 }
 
 impl From<u64> for DynamicRigidBodyAnchorID {
@@ -105,18 +106,28 @@ impl From<u64> for KinematicRigidBodyAnchorID {
 impl Anchor for DynamicRigidBodyAnchor {
     type ID = DynamicRigidBodyAnchorID;
     type RigidBodyID = DynamicRigidBodyID;
+    type Point = Position;
 
     fn rigid_body_id(&self) -> Self::RigidBodyID {
         self.rigid_body_id
+    }
+
+    fn point(&self) -> &Self::Point {
+        &self.point
     }
 }
 
 impl Anchor for KinematicRigidBodyAnchor {
     type ID = KinematicRigidBodyAnchorID;
     type RigidBodyID = KinematicRigidBodyID;
+    type Point = Position;
 
     fn rigid_body_id(&self) -> Self::RigidBodyID {
         self.rigid_body_id
+    }
+
+    fn point(&self) -> &Self::Point {
+        &self.point
     }
 }
 
@@ -129,8 +140,7 @@ impl<'a> TypedRigidBodyAnchorRef<'a> {
         }
     }
 
-    /// Returns the position of the anchor in the local reference frame of the
-    /// rigid body.
+    /// Returns the position of the anchor in the body-fixed frame.
     pub fn point(&self) -> &Position {
         match self {
             Self::Dynamic(anchor) => &anchor.point,
@@ -207,13 +217,16 @@ impl<A: Anchor> SpecificAnchorManager<A> {
         self.anchors.get(&id)
     }
 
-    /// Returns an iterator over all the anchors on the rigid body with the
-    /// given ID.
-    pub fn anchors_for_body(&self, rigid_body_id: A::RigidBodyID) -> impl Iterator<Item = &A> {
+    /// Returns an iterator over all the anchor points on the rigid body with
+    /// the given ID.
+    pub fn anchor_points_for_body(
+        &self,
+        rigid_body_id: A::RigidBodyID,
+    ) -> impl Iterator<Item = &A::Point> {
         self.anchor_ids_by_body
             .get(&rigid_body_id)
             .into_iter()
-            .flat_map(|anchor_ids| anchor_ids.iter().map(|id| &self.anchors[id]))
+            .flat_map(|anchor_ids| anchor_ids.iter().map(|id| self.anchors[id].point()))
     }
 
     /// Inserts the given anchor into the manager and returns a new ID for it.
@@ -277,9 +290,14 @@ mod tests {
     impl Anchor for TestAnchor {
         type RigidBodyID = TestBodyID;
         type ID = TestAnchorID;
+        type Point = f64;
 
         fn rigid_body_id(&self) -> Self::RigidBodyID {
             self.body_id
+        }
+
+        fn point(&self) -> &Self::Point {
+            &self.value
         }
     }
 
@@ -320,7 +338,7 @@ mod tests {
         let manager = SpecificAnchorManager::<TestAnchor>::new();
         let body_id = TestBodyID(999);
 
-        assert!(manager.anchors_for_body(body_id).next().is_none());
+        assert!(manager.anchor_points_for_body(body_id).next().is_none());
     }
 
     #[test]
@@ -346,12 +364,10 @@ mod tests {
         manager.insert(anchor2);
         manager.insert(other_anchor);
 
-        let anchors: Vec<_> = manager.anchors_for_body(body_id).collect();
-        assert_eq!(anchors.len(), 2);
-
-        let values: Vec<_> = anchors.iter().map(|a| a.value).collect();
-        assert!(values.contains(&1.0));
-        assert!(values.contains(&2.0));
+        let points: Vec<_> = manager.anchor_points_for_body(body_id).copied().collect();
+        assert_eq!(points.len(), 2);
+        assert!(points.contains(&1.0));
+        assert!(points.contains(&2.0));
     }
 
     #[test]
@@ -383,7 +399,7 @@ mod tests {
         assert!(manager.get(id2).is_none());
         assert!(manager.get(other_id).is_some());
 
-        assert!(manager.anchors_for_body(body_id).next().is_none());
+        assert!(manager.anchor_points_for_body(body_id).next().is_none());
     }
 
     #[test]

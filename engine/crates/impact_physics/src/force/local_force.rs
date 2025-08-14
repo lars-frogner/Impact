@@ -26,22 +26,21 @@ define_component_type! {
 pub struct LocalForceGenerator {
     /// The anchor point where the force is applied.
     pub anchor: DynamicRigidBodyAnchorID,
-    /// The force vector in the body's local reference frame.
+    /// The force vector in the body-fixed frame.
     pub force: Force,
 }
 
 define_setup_type! {
     target = LocalForceGeneratorID;
-    /// A constant force vector and the point where it is applied, all in the body's
-    /// local reference frame.
+    /// A constant force vector and the point where it is applied, all in the
+    /// body-fixed frame.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct LocalForce {
-        /// The force vector in the body's local reference frame.
+        /// The force vector in the body-fixed frame.
         pub force: Force,
-        /// The point where the force is applied, in the body's local reference
-        /// frame.
+        /// The point where the force is applied, in the body-fixed frame.
         pub point: Position,
     }
 }

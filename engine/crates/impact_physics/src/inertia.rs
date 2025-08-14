@@ -178,7 +178,7 @@ impl InertialProperties {
         self.mass
     }
 
-    /// Returns the center of mass of the body (in the body's reference frame).
+    /// Returns the center of mass of the body (in the body's model space).
     pub fn center_of_mass(&self) -> &Position {
         &self.center_of_mass
     }
