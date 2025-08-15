@@ -436,6 +436,7 @@ define_task!(
             let gizmo_manager = engine.gizmo_manager().read();
             let simulator = engine.simulator().read();
             let rigid_body_manager = simulator.rigid_body_manager().read();
+            let anchor_manager = simulator.anchor_manager().read();
             let collision_world = simulator.collision_world().read();
             let scene = engine.scene().read();
             let mut model_instance_manager = scene.model_instance_manager().write();
@@ -447,6 +448,7 @@ define_task!(
             gizmo::systems::buffer_transforms_for_gizmos(
                 &ecs_world,
                 &rigid_body_manager,
+                &anchor_manager,
                 &mut model_instance_manager,
                 &gizmo_manager,
                 &collision_world,

@@ -82,7 +82,7 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
         GizmoType::BoundingSphere | GizmoType::LightSphere => {
             vec![define_obscurable_triangle_model(gizmo.label())]
         }
-        GizmoType::CenterOfMass => {
+        GizmoType::CenterOfMass | GizmoType::Anchors => {
             vec![define_non_obscurable_triangle_model(gizmo.label())]
         }
         GizmoType::DynamicCollider | GizmoType::StaticCollider | GizmoType::PhantomCollider => {

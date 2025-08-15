@@ -24,9 +24,10 @@ use impact_light::{
 use impact_math::Angle;
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_physics::{
+    anchor::AnchorManager,
     collision::{CollidableID, CollidableKind},
     quantities::Motion,
-    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager, TypedRigidBodyID},
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle,
@@ -42,6 +43,7 @@ use impact_voxel::{
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use parking_lot::RwLock;
 use std::iter;
+use tinyvec::TinyVec;
 
 /// Updates the appropriate gizmo visibility flags for all applicable
 /// entities based on which gizmos have been newly configured to be
@@ -87,6 +89,7 @@ fn update_visibility_flags_for_gizmo(
 pub fn buffer_transforms_for_gizmos(
     ecs_world: &ECSWorld,
     rigid_body_manager: &RigidBodyManager,
+    anchor_manager: &AnchorManager,
     model_instance_manager: &mut ModelInstanceManager,
     gizmo_manager: &GizmoManager,
     collision_world: &CollisionWorld,
@@ -187,6 +190,38 @@ pub fn buffer_transforms_for_gizmos(
             );
         }
     );
+
+    query!(ecs_world, |gizmos: &GizmosComp,
+                       frame: &ReferenceFrame,
+                       rigid_body_id: &DynamicRigidBodyID,
+                       flags: &SceneEntityFlags| {
+        if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
+            return;
+        }
+        buffer_transforms_for_anchor_gizmos(
+            anchor_manager,
+            model_instance_manager,
+            scene_camera,
+            frame,
+            TypedRigidBodyID::Dynamic(*rigid_body_id),
+        );
+    });
+
+    query!(ecs_world, |gizmos: &GizmosComp,
+                       frame: &ReferenceFrame,
+                       rigid_body_id: &KinematicRigidBodyID,
+                       flags: &SceneEntityFlags| {
+        if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
+            return;
+        }
+        buffer_transforms_for_anchor_gizmos(
+            anchor_manager,
+            model_instance_manager,
+            scene_camera,
+            frame,
+            TypedRigidBodyID::Kinematic(*rigid_body_id),
+        );
+    });
 
     query!(ecs_world, |gizmos: &GizmosComp,
                        frame: &ReferenceFrame,
@@ -448,6 +483,46 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
         model_instance_manager.buffer_instance_feature(
             &GizmoType::ShadowMapCascades.models()[cascade_idx].model_id,
             &camera_cascade_from_vertical_square,
+        );
+    }
+}
+
+fn buffer_transforms_for_anchor_gizmos(
+    anchor_manager: &AnchorManager,
+    model_instance_manager: &mut ModelInstanceManager,
+    scene_camera: &SceneCamera,
+    frame: &ReferenceFrame,
+    rigid_body_id: TypedRigidBodyID,
+) {
+    const RADIUS: f32 = 0.1;
+
+    let anchor_points: TinyVec<[_; 8]> = match rigid_body_id {
+        TypedRigidBodyID::Dynamic(rigid_body_id) => anchor_manager
+            .dynamic()
+            .anchors_for_body(rigid_body_id)
+            .map(|(_, point)| *point)
+            .collect(),
+        TypedRigidBodyID::Kinematic(rigid_body_id) => anchor_manager
+            .kinematic()
+            .anchors_for_body(rigid_body_id)
+            .map(|(_, point)| *point)
+            .collect(),
+    };
+
+    for anchor_point in anchor_points {
+        let world_sphere_from_unit_sphere_transform = frame.create_transform_to_parent_space()
+            * Similarity3::from_parts(
+                anchor_point.coords.cast().into(),
+                UnitQuaternion::identity(),
+                RADIUS,
+            );
+
+        let view_sphere_from_unit_sphere_transform =
+            scene_camera.view_transform() * world_sphere_from_unit_sphere_transform;
+
+        model_instance_manager.buffer_instance_feature(
+            GizmoType::Anchors.only_model_id(),
+            &InstanceModelViewTransform::from(view_sphere_from_unit_sphere_transform),
         );
     }
 }
