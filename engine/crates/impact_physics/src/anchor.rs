@@ -13,9 +13,7 @@ use crate::{
     quantities::Position,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, TypedRigidBodyID},
 };
-use bytemuck::{Pod, Zeroable};
 use impact_containers::HashMap;
-use roc_integration::roc;
 use std::{collections::hash_map::Entry, fmt, hash::Hash};
 use tinyvec::TinyVec;
 
@@ -37,9 +35,7 @@ pub enum TypedRigidBodyAnchorID {
 }
 
 /// An anchor point on a dynamic rigid body.
-#[roc(parents = "Physics")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug)]
 pub struct DynamicRigidBodyAnchor {
     /// The dynamic rigid body the anchor is attached to.
     pub rigid_body_id: DynamicRigidBodyID,
@@ -48,9 +44,7 @@ pub struct DynamicRigidBodyAnchor {
 }
 
 /// An anchor point on a kinematic rigid body.
-#[roc(parents = "Physics")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug)]
 pub struct KinematicRigidBodyAnchor {
     /// The kinematic rigid body the anchor is attached to.
     pub rigid_body_id: KinematicRigidBodyID,
