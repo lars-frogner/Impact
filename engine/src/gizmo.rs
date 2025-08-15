@@ -31,10 +31,11 @@ pub enum GizmoType {
     AngularMomentum = 8,
     Force = 9,
     Torque = 10,
-    DynamicCollider = 11,
-    StaticCollider = 12,
-    PhantomCollider = 13,
-    VoxelChunks = 14,
+    Anchors = 11,
+    DynamicCollider = 12,
+    StaticCollider = 13,
+    PhantomCollider = 14,
+    VoxelChunks = 15,
 }
 
 bitflags! {
@@ -56,10 +57,11 @@ bitflags! {
         const ANGULAR_MOMENTUM     = 1 << 8;
         const FORCE                = 1 << 9;
         const TORQUE               = 1 << 10;
-        const DYNAMIC_COLLIDER     = 1 << 11;
-        const STATIC_COLLIDER      = 1 << 12;
-        const PHANTOM_COLLIDER     = 1 << 13;
-        const VOXEL_CHUNKS         = 1 << 14;
+        const ANCHORS              = 1 << 11;
+        const DYNAMIC_COLLIDER     = 1 << 12;
+        const STATIC_COLLIDER      = 1 << 13;
+        const PHANTOM_COLLIDER     = 1 << 14;
+        const VOXEL_CHUNKS         = 1 << 15;
     }
 }
 
@@ -167,6 +169,12 @@ pub struct GizmoVisibilities {
     /// proportional to the magnitude of the axis, with the proportionality
     /// factor being equal to [`GizmoParameters::torque_scale`].
     pub torque: GizmoVisibility,
+    /// The visibility of the gizmos showing anchors for constraints and forces
+    /// on rigid bodies.
+    ///
+    /// When visible, a small semitransparent magenta sphere will be rendered
+    /// for each force or constraint anchor at its location on its rigid body.
+    pub anchors: GizmoVisibility,
     /// The visibility of the gizmos showing collider geometry for dynamic
     /// collidables.
     ///
@@ -270,7 +278,7 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 15] {
+    pub const fn all() -> [Self; 16] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingSphere,
@@ -283,6 +291,7 @@ impl GizmoType {
             Self::AngularMomentum,
             Self::Force,
             Self::Torque,
+            Self::Anchors,
             Self::DynamicCollider,
             Self::StaticCollider,
             Self::PhantomCollider,
@@ -311,6 +320,7 @@ impl GizmoType {
             Self::AngularMomentum => GizmoSet::ANGULAR_MOMENTUM,
             Self::Force => GizmoSet::FORCE,
             Self::Torque => GizmoSet::TORQUE,
+            Self::Anchors => GizmoSet::ANCHORS,
             Self::DynamicCollider => GizmoSet::DYNAMIC_COLLIDER,
             Self::StaticCollider => GizmoSet::STATIC_COLLIDER,
             Self::PhantomCollider => GizmoSet::PHANTOM_COLLIDER,
@@ -332,6 +342,7 @@ impl GizmoType {
             Self::AngularMomentum => "Angular momenta",
             Self::Force => "Forces",
             Self::Torque => "Torques",
+            Self::Anchors => "Anchors",
             Self::DynamicCollider => "Dynamic colliders",
             Self::StaticCollider => "Static colliders",
             Self::PhantomCollider => "Phantom colliders",
@@ -421,6 +432,11 @@ impl GizmoType {
                 from the center of mass of rigid bodies. The length of the arrow is \
                 proportional to the magnitude of the axis, with the proportionality \
                 factor being set by the `Torque scale` parameter."
+            }
+            Self::Anchors => {
+                "\
+                When enabled, a small semitransparent magenta sphere will be rendered \
+                for each force or constraint anchor at its location on its rigid body."
             }
             Self::DynamicCollider => {
                 "\
@@ -526,6 +542,7 @@ impl GizmoVisibilities {
             GizmoType::AngularMomentum => self.angular_momentum,
             GizmoType::Force => self.force,
             GizmoType::Torque => self.torque,
+            GizmoType::Anchors => self.anchors,
             GizmoType::DynamicCollider => self.dynamic_collider,
             GizmoType::StaticCollider => self.static_collider,
             GizmoType::PhantomCollider => self.phantom_collider,
@@ -547,6 +564,7 @@ impl GizmoVisibilities {
             GizmoType::AngularMomentum => &mut self.angular_momentum,
             GizmoType::Force => &mut self.force,
             GizmoType::Torque => &mut self.torque,
+            GizmoType::Anchors => &mut self.anchors,
             GizmoType::DynamicCollider => &mut self.dynamic_collider,
             GizmoType::StaticCollider => &mut self.static_collider,
             GizmoType::PhantomCollider => &mut self.phantom_collider,

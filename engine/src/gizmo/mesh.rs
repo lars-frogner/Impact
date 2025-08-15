@@ -139,6 +139,15 @@ impl GizmoType {
                     .line_segment_meshes
                     .insert(self.only_line_segment_mesh_id(), mesh);
             }
+            Self::Anchors => {
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
+                    32,
+                    VertexColor::MAGENTA.with_alpha(0.4),
+                );
+                resource_manager
+                    .triangle_meshes
+                    .insert(self.only_triangle_mesh_id(), mesh);
+            }
             Self::DynamicCollider | Self::StaticCollider | Self::PhantomCollider => {
                 let color = match self {
                     Self::DynamicCollider => VertexColor::GREEN,
