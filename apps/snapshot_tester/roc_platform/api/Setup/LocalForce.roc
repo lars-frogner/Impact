@@ -1,10 +1,13 @@
-# Hash: 396e5ad76f7b55899ea8eac105318476ee41700123bbda27290faa6f22e5a122
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: a8ff5b4b598471ce89f9d928f147ec704430fb33c133428af0f710e014c23101
+# Generated: 2025-08-15T19:14:52+00:00
 # Rust type: impact_physics::force::local_force::LocalForce
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: e6f6ed4f (dirty)
 module [
     LocalForce,
+    new,
+    add_new,
+    add_multiple_new,
     add,
     add_multiple,
     write_bytes,
@@ -17,15 +20,33 @@ import core.Builtin
 import core.Point3
 import core.Vector3
 
-## A constant force vector and the point where it is applied, all in the body's
-## local reference frame.
+## A constant force vector and the point where it is applied, all in the
+## body-fixed frame.
 LocalForce : {
-    ## The force vector in the body's local reference frame.
+    ## The force vector in the body-fixed frame.
     force : Vector3.Vector3 Binary64,
-    ## The point where the force is applied, in the body's local reference
-    ## frame.
+    ## The point where the force is applied, in the body's model space.
     point : Point3.Point3 Binary64,
 }
+
+new : Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> LocalForce
+new = |force, point|
+    { force, point }
+
+add_new : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> Entity.Data
+add_new = |entity_data, force, point|
+    add(entity_data, new(force, point))
+
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
+add_multiple_new = |entity_data, force, point|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map2(
+            force, point,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [LocalForce] component to an entity's data.
 ## Note that an entity never should have more than a single value of
