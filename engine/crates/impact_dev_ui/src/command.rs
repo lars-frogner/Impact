@@ -30,7 +30,7 @@ impl UserInterface {
                 if to.set(&mut self.config.interactive).changed {
                     if self.config.interactive {
                         ui::egui::unconfine_cursor(output);
-                    } else {
+                    } else if !self.config.disable_cursor_capture {
                         ui::egui::confine_cursor(output);
                     }
                     engine.set_controls_enabled(!self.config.interactive);
