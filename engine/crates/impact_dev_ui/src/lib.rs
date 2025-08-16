@@ -50,6 +50,7 @@ pub struct UserInterfaceConfig {
     pub show_task_timings: bool,
     pub show_render_pass_timings: bool,
     pub show_time_overlay: bool,
+    pub disable_cursor_capture: bool,
 }
 
 impl UserInterface {
@@ -108,7 +109,7 @@ impl UserInterface {
 
         // The cursor icon will be reset each run, so it won't stay hidden
         // unless we make it
-        if !self.config.interactive {
+        if !self.config.interactive && !self.config.disable_cursor_capture {
             ui::egui::ensure_cursor_hidden(&mut output);
         }
 
@@ -137,6 +138,7 @@ impl Default for UserInterfaceConfig {
             show_task_timings: false,
             show_render_pass_timings: false,
             show_time_overlay: true,
+            disable_cursor_capture: false,
         }
     }
 }
