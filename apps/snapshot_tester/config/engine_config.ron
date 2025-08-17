@@ -84,9 +84,6 @@
             velocity: (0.0, 0.0, 0.0),
         ),
     ),
-    voxel: (
-        voxel_types_path: None,
-    ),
     controller: (
         motion: SemiDirectional((
             movement_speed: 8.0,
