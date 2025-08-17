@@ -137,11 +137,11 @@ impl<F: Float> AxisAlignedBox<F> {
         self.upper_corner().z - self.lower_corner().z
     }
 
-    /// Returns an iterator over the all the eight corners of the box. The
-    /// corners are ordered from smaller to larger coordinates, with the
-    /// z-component varying fastest.
-    pub fn all_corners(&self) -> impl Iterator<Item = Point3<F>> {
-        (0..8).map(|idx| self.corner(idx))
+    /// Returns an array with all the eight corners of the box. The corners are
+    /// ordered from smaller to larger coordinates, with the z-component varying
+    /// fastest.
+    pub fn all_corners(&self) -> [Point3<F>; 8] {
+        [0, 1, 2, 3, 4, 5, 6, 7].map(|idx| self.corner(idx))
     }
 
     /// Returns the box corner with the given index. The corners are ordered
@@ -167,6 +167,17 @@ impl<F: Float> AxisAlignedBox<F> {
     /// If the given index exceeds 7.
     pub fn opposite_corner(&self, corner_idx: usize) -> Point3<F> {
         self.corner(OPPOSITE_CORNER_INDICES[corner_idx])
+    }
+
+    /// Whether the given point is inside this axis-aligned box. A point exactly on the
+    /// surface of the box is considered inside.
+    pub fn contains_point(&self, point: &Point3<F>) -> bool {
+        point.x >= self.lower_corner().x
+            && point.x <= self.upper_corner().x
+            && point.y >= self.lower_corner().y
+            && point.y <= self.upper_corner().y
+            && point.z >= self.lower_corner().z
+            && point.z <= self.upper_corner().z
     }
 
     /// Whether all of the given axis-aligned box is outside this box. If the

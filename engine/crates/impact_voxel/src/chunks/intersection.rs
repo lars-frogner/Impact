@@ -476,7 +476,8 @@ impl ChunkedVoxelObject {
                     let voxel_aabb = self.voxel_aabb_from_object_voxel_indices(i, j, k);
                     if voxel_aabb
                         .all_corners()
-                        .any(|corner| !plane.point_lies_in_positive_halfspace(&corner))
+                        .iter()
+                        .any(|corner| !plane.point_lies_in_positive_halfspace(corner))
                     {
                         if let Some(voxel) = self.get_voxel(i, j, k) {
                             if let Some(VoxelPlacement::Surface(_)) = voxel.placement() {
