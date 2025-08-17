@@ -86,10 +86,10 @@
         ),
     ),
     voxel: (
-        texture_resolution: 256,
-        voxel_types_path: Some("default_voxel_type.ron"),
-        // texture_resolution: 4096,
-        // voxel_types_path: Some("voxel_types.ron"),
+        // texture_resolution: 256,
+        // voxel_types_path: Some("default_voxel_type.ron"),
+        texture_resolution: 4096,
+        voxel_types_path: Some("voxel_types.ron"),
     ),
     controller: (
         motion: SemiDirectional((
