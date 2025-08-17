@@ -1,0 +1,35 @@
+[
+    // AmbientCG Surface Material (ZIP archive with all maps)
+    (
+        name: "concrete",
+        info: AmbientCG(Surface((
+            id: "Concrete034",
+            resolution: FourK,
+            format: Jpg,
+        ))),
+    ),
+    (
+        name: "plastic",
+        info: AmbientCG(Surface((
+            id: "Plastic007",
+            resolution: FourK,
+            format: Jpg,
+        ))),
+    ),
+    (
+        name: "bricks",
+        info: AmbientCG(Surface((
+            id: "Bricks059",
+            resolution: FourK,
+            format: Jpg,
+        ))),
+    ),
+    (
+        name: "wood_floor",
+        info: AmbientCG(Surface((
+            id: "WoodFloor041",
+            resolution: FourK,
+            format: Jpg,
+        ))),
+    ),
+]
