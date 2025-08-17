@@ -1,6 +1,7 @@
 (
     resources: (
-        resource_file_path: Some("resources.ron"),
+        resource_file_path: None,
+        // resource_file_path: Some("resources.ron"),
         lookup_table_dir: "../resources/lookup_tables",
     ),
     rendering: (
@@ -85,7 +86,10 @@
         ),
     ),
     voxel: (
-        voxel_types_path: Some("voxel_types.ron"),
+        texture_resolution: 256,
+        voxel_types_path: Some("default_voxel_type.ron"),
+        // texture_resolution: 4096,
+        // voxel_types_path: Some("voxel_types.ron"),
     ),
     controller: (
         motion: SemiDirectional((

@@ -35,14 +35,17 @@ pub fn load_declared_materials(
     material_declarations: &[MaterialDeclaration],
 ) -> Result<()> {
     for declaration in material_declarations {
-        load_declared_material(
+        if let Err(error) = load_declared_material(
             texture_registry,
             sampler_registry,
             material_registry,
             material_template_registry,
             material_texture_group_registry,
             declaration,
-        )?;
+        ) {
+            // Failing to load a material is not fatal, since we might not need it
+            impact_log::error!("Failed to load material {}: {error:#}", declaration.id);
+        }
     }
     Ok(())
 }

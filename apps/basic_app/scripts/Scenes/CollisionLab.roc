@@ -39,6 +39,7 @@ import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
 import pf.Setup.VoxelBox
 import pf.Setup.VoxelCollidable
+import pf.Setup.DynamicVoxels
 import pf.Entity
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Texture.TextureID as TextureID
@@ -60,26 +61,26 @@ setup! = |_|
     Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
 
     sphere_radius = 0.5
-    n_y = 4
+    n_y = 0
     room_extent = 16.0
     n_spheres_y = 2 * n_y + 1
 
     create_spheres!(
         sphere_radius,
-        (4, n_y, 4),
-        (0, (n_spheres_y - 1) * sphere_radius, 0),
+        (0, n_y, 0),
+        (0, (n_spheres_y - 1) * sphere_radius + 4, 0),
         create_texture_ids("plastic"),
     )?
 
     create_room!(
         room_extent,
-        20,
+        0,
         create_texture_ids("concrete"),
     )?
 
     voxel_extent = 0.25
     box_size = 6.0
-    # Entity.create_with_id!(entity_ids.voxel_box, voxel_box(voxel_extent, box_size, room_extent))?
+    Entity.create_with_id!(entity_ids.voxel_box, voxel_box(voxel_extent, box_size, room_extent))?
 
     Ok({})
 
@@ -274,7 +275,7 @@ create_room! = |extent, angular_speed, texture_ids|
 voxel_box = |voxel_extent, box_size, room_extent|
     Entity.new
     |> Setup.VoxelBox.add_new(voxel_extent, box_size, box_size, box_size)
-    |> Setup.SameVoxelType.add_new(1)
+    |> Setup.SameVoxelType.add_new("Metal")
     |> Comp.ReferenceFrame.add_unoriented(
         (
             0.0,
@@ -287,3 +288,4 @@ voxel_box = |voxel_extent, box_size, room_extent|
         Static,
         Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
     )
+    |> Setup.DynamicVoxels.add

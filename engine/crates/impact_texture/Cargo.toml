@@ -9,7 +9,12 @@ license = { workspace = true }
 arbitrary = ["dep:arbitrary", "impact_math/arbitrary"]
 bincode = ["dep:bincode", "serde"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
-serde = ["dep:serde", "impact_gpu/serde", "impact_math/serde"]
+serde = [
+    "dep:serde",
+    "impact_gpu/serde",
+    "impact_io/serde",
+    "impact_math/serde",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -24,6 +29,7 @@ impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_resource = { path = "../impact_resource" }
 inventory = { workspace = true, optional = true }
+nalgebra = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 

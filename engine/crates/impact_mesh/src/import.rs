@@ -43,7 +43,10 @@ pub fn load_declared_meshes(
     triangle_mesh_declarations: &[TriangleMeshDeclaration],
 ) -> Result<()> {
     for declaration in triangle_mesh_declarations {
-        load_declared_triangle_mesh(registry, declaration)?;
+        if let Err(error) = load_declared_triangle_mesh(registry, declaration) {
+            // Failing to load a mesh is not fatal, since we might not need it
+            impact_log::error!("Failed to load triangle mesh {}: {error:#}", declaration.id);
+        }
     }
     Ok(())
 }

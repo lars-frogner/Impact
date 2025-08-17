@@ -1,5 +1,6 @@
 //! Voxel types and their properties.
 
+use crate::gpu_resource::VoxelMaterialGPUResources;
 use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::NoHashMap;
@@ -10,28 +11,26 @@ use impact_gpu::{
         ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
     },
 };
+use impact_io::image::{Image, ImageMetadata, PixelFormat};
 use impact_math::Hash32;
 use impact_texture::{
-    ImageTextureSource, SamplerRegistry, TextureID, TextureRegistry,
+    ImageSource, ImageTextureSource, SamplerRegistry, TextureID, TextureRegistry,
     gpu_resource::{SamplerMap, TextureMap},
     import::ImageTextureDeclaration,
 };
-use nalgebra::{Vector4, vector};
-use roc_integration::roc;
+use nalgebra::{Vector3, Vector4, vector};
 use std::{
     borrow::Cow,
+    num::NonZeroU32,
     path::{Path, PathBuf},
 };
 
-use crate::gpu_resource::VoxelMaterialGPUResources;
-
 /// A type identifier that determines all the properties of a voxel.
-#[roc(parents = "Voxel")]
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelType(u8);
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct VoxelTypeSpecifications(pub Vec<VoxelTypeSpecification>);
 
 /// Specifies all relevant aspects of a voxel type.
@@ -40,13 +39,28 @@ pub struct VoxelTypeSpecifications(pub Vec<VoxelTypeSpecification>);
 pub struct VoxelTypeSpecification {
     pub name: Cow<'static, str>,
     pub mass_density: f32,
+    pub color: VoxelColor,
     pub specular_reflectance: f32,
-    pub roughness_scale: f32,
+    pub roughness: VoxelRoughness,
     pub metalness: f32,
     pub emissive_luminance: f32,
-    pub color_texture_path: PathBuf,
-    pub roughness_texture_path: PathBuf,
-    pub normal_texture_path: PathBuf,
+    pub normal_map: Option<PathBuf>,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum VoxelColor {
+    Uniform(RBGColor),
+    Textured(PathBuf),
+}
+
+pub type RBGColor = Vector3<f32>;
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum VoxelRoughness {
+    Uniform(f32),
+    Textured { path: PathBuf, scale_factor: f32 },
 }
 
 /// Registry containing the names and properties of all voxel types.
@@ -113,14 +127,13 @@ impl VoxelTypeRegistry {
         voxel_config: crate::VoxelConfig,
     ) -> anyhow::Result<Self> {
         match voxel_config.voxel_types_path {
-            Some(file_path) => {
-                Self::from_voxel_type_ron_file(texture_registry, sampler_registry, file_path)
-            }
-            None => Self::create(
+            Some(file_path) => Self::from_voxel_type_ron_file(
                 texture_registry,
                 sampler_registry,
-                VoxelTypeSpecifications::default(),
+                voxel_config.texture_resolution,
+                file_path,
             ),
+            None => Ok(Self::empty()),
         }
     }
 
@@ -131,10 +144,28 @@ impl VoxelTypeRegistry {
     pub fn from_voxel_type_ron_file(
         texture_registry: &mut TextureRegistry,
         sampler_registry: &mut SamplerRegistry,
+        texture_resolution: NonZeroU32,
         file_path: impl AsRef<Path>,
     ) -> Result<Self> {
         let voxel_types = VoxelTypeSpecifications::from_ron_file(file_path)?;
-        Self::create(texture_registry, sampler_registry, voxel_types)
+        Self::create(
+            texture_registry,
+            sampler_registry,
+            texture_resolution,
+            voxel_types,
+        )
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            name_lookup_table: NoHashMap::default(),
+            names: Vec::new(),
+            mass_densities: Vec::new(),
+            fixed_material_properties: Vec::new(),
+            color_texture_array_id: None,
+            roughness_texture_array_id: None,
+            normal_texture_array_id: None,
+        }
     }
 
     /// Creates a new voxel type registry for the specified voxel types.
@@ -150,18 +181,23 @@ impl VoxelTypeRegistry {
     pub fn create(
         texture_registry: &mut TextureRegistry,
         sampler_registry: &mut SamplerRegistry,
+        texture_resolution: NonZeroU32,
         voxel_types: VoxelTypeSpecifications,
     ) -> Result<Self> {
+        if voxel_types.0.is_empty() {
+            return Ok(Self::empty());
+        }
+
         voxel_types.validate()?;
 
         let (
             names,
             mass_densities,
             fixed_material_properties,
-            color_texture_paths,
-            roughness_texture_paths,
-            normal_texture_paths,
-        ) = voxel_types.unzip();
+            color_texture_sources,
+            roughness_texture_sources,
+            normal_texture_sources,
+        ) = voxel_types.resolve(texture_resolution);
 
         let name_lookup_table: NoHashMap<_, _> = names
             .iter()
@@ -173,24 +209,12 @@ impl VoxelTypeRegistry {
             bail!("Duplicate voxel type names in registry");
         }
 
-        if names.is_empty() {
-            return Ok(Self {
-                name_lookup_table,
-                names,
-                mass_densities,
-                fixed_material_properties,
-                color_texture_array_id: None,
-                roughness_texture_array_id: None,
-                normal_texture_array_id: None,
-            });
-        }
-
         let color_texture_array_id = impact_texture::import::load_declared_image_texture(
             texture_registry,
             sampler_registry,
             ImageTextureDeclaration {
                 id: TextureID::from_name("voxel_color_texture_array"),
-                source: ImageTextureSource::ArrayImageFiles(color_texture_paths),
+                source: ImageTextureSource::ArrayImages(color_texture_sources),
                 texture_config: TextureConfig {
                     color_space: ColorSpace::Srgb,
                     max_mip_level_count: None,
@@ -208,7 +232,7 @@ impl VoxelTypeRegistry {
             sampler_registry,
             ImageTextureDeclaration {
                 id: TextureID::from_name("voxel_roughness_texture_array"),
-                source: ImageTextureSource::ArrayImageFiles(roughness_texture_paths),
+                source: ImageTextureSource::ArrayImages(roughness_texture_sources),
                 texture_config: TextureConfig {
                     color_space: ColorSpace::Linear,
                     max_mip_level_count: None,
@@ -223,7 +247,7 @@ impl VoxelTypeRegistry {
             sampler_registry,
             ImageTextureDeclaration {
                 id: TextureID::from_name("voxel_normal_texture_array"),
-                source: ImageTextureSource::ArrayImageFiles(normal_texture_paths),
+                source: ImageTextureSource::ArrayImages(normal_texture_sources),
                 texture_config: TextureConfig {
                     color_space: ColorSpace::Linear,
                     max_mip_level_count: None,
@@ -341,35 +365,60 @@ impl VoxelTypeSpecifications {
     }
 
     #[allow(clippy::type_complexity)]
-    fn unzip(
+    fn resolve(
         self,
+        texture_resolution: NonZeroU32,
     ) -> (
         Vec<Cow<'static, str>>,
         Vec<f32>,
         Vec<FixedVoxelMaterialProperties>,
-        Vec<PathBuf>,
-        Vec<PathBuf>,
-        Vec<PathBuf>,
+        Vec<ImageSource>,
+        Vec<ImageSource>,
+        Vec<ImageSource>,
     ) {
         let mut names = Vec::with_capacity(self.0.len());
         let mut mass_densities = Vec::with_capacity(self.0.len());
         let mut fixed_material_properties = Vec::with_capacity(self.0.len());
-        let mut color_texture_paths = Vec::with_capacity(self.0.len());
-        let mut roughness_texture_paths = Vec::with_capacity(self.0.len());
-        let mut normal_texture_paths = Vec::with_capacity(self.0.len());
+        let mut color_texture_sources = Vec::with_capacity(self.0.len());
+        let mut roughness_texture_sources = Vec::with_capacity(self.0.len());
+        let mut normal_texture_sources = Vec::with_capacity(self.0.len());
 
         for VoxelTypeSpecification {
             name,
             mass_density,
+            color,
             specular_reflectance,
-            roughness_scale,
+            roughness,
             metalness,
             emissive_luminance,
-            color_texture_path,
-            roughness_texture_path,
-            normal_texture_path,
+            normal_map,
         } in self.0
         {
+            let color_texture_source = match color {
+                VoxelColor::Textured(path) => ImageSource::File(path),
+                VoxelColor::Uniform(color) => {
+                    ImageSource::Bytes(create_uniform_color_image(texture_resolution, color))
+                }
+            };
+
+            let (roughness_texture_source, roughness_scale) = match roughness {
+                VoxelRoughness::Textured { path, scale_factor } => {
+                    (ImageSource::File(path), scale_factor)
+                }
+                VoxelRoughness::Uniform(roughness) => (
+                    ImageSource::Bytes(create_uniform_roughness_image(
+                        texture_resolution,
+                        roughness,
+                    )),
+                    1.0,
+                ),
+            };
+
+            let normal_texture_source = match normal_map {
+                Some(path) => ImageSource::File(path),
+                None => ImageSource::Bytes(create_identity_normal_image(texture_resolution)),
+            };
+
             names.push(name);
             mass_densities.push(mass_density);
             fixed_material_properties.push(FixedVoxelMaterialProperties::new(
@@ -378,18 +427,18 @@ impl VoxelTypeSpecifications {
                 metalness,
                 emissive_luminance,
             ));
-            color_texture_paths.push(color_texture_path);
-            roughness_texture_paths.push(roughness_texture_path);
-            normal_texture_paths.push(normal_texture_path);
+            color_texture_sources.push(color_texture_source);
+            roughness_texture_sources.push(roughness_texture_source);
+            normal_texture_sources.push(normal_texture_source);
         }
 
         (
             names,
             mass_densities,
             fixed_material_properties,
-            color_texture_paths,
-            roughness_texture_paths,
-            normal_texture_paths,
+            color_texture_sources,
+            roughness_texture_sources,
+            normal_texture_sources,
         )
     }
 }
@@ -446,8 +495,76 @@ impl VoxelTypeSpecification {
     /// Resolves all paths in the specification by prepending the given root
     /// path to all paths.
     pub fn resolve_paths(&mut self, root_path: &Path) {
-        self.color_texture_path = root_path.join(&self.color_texture_path);
-        self.roughness_texture_path = root_path.join(&self.roughness_texture_path);
-        self.normal_texture_path = root_path.join(&self.normal_texture_path);
+        if let VoxelColor::Textured(path) = &mut self.color {
+            *path = root_path.join(&path);
+        }
+        if let VoxelRoughness::Textured { path, .. } = &mut self.roughness {
+            *path = root_path.join(&path);
+        }
+        if let Some(path) = &mut self.normal_map {
+            *path = root_path.join(&path);
+        }
     }
+}
+
+fn create_uniform_color_image(texture_resolution: NonZeroU32, color: RBGColor) -> Image {
+    let pixel_count = texture_resolution.get().pow(2) as usize;
+
+    let meta = ImageMetadata {
+        width: texture_resolution.get(),
+        height: texture_resolution.get(),
+        pixel_format: PixelFormat::Rgba8,
+    };
+
+    let pixel = [
+        float_to_u8(color.x),
+        float_to_u8(color.y),
+        float_to_u8(color.z),
+        255,
+    ];
+
+    let mut data = Vec::with_capacity(pixel.len() * pixel_count);
+    for _ in 0..pixel_count {
+        data.extend_from_slice(&pixel);
+    }
+
+    Image { meta, data }
+}
+
+fn create_uniform_roughness_image(texture_resolution: NonZeroU32, roughness: f32) -> Image {
+    let pixel_count = texture_resolution.get().pow(2) as usize;
+
+    let meta = ImageMetadata {
+        width: texture_resolution.get(),
+        height: texture_resolution.get(),
+        pixel_format: PixelFormat::Luma8,
+    };
+
+    let data = vec![float_to_u8(roughness); pixel_count];
+
+    Image { meta, data }
+}
+
+fn create_identity_normal_image(texture_resolution: NonZeroU32) -> Image {
+    let pixel_count = texture_resolution.get().pow(2) as usize;
+
+    let meta = ImageMetadata {
+        width: texture_resolution.get(),
+        height: texture_resolution.get(),
+        pixel_format: PixelFormat::Rgba8,
+    };
+
+    let pixel = [0, 0, 255, 255];
+
+    let mut data = Vec::with_capacity(pixel.len() * pixel_count);
+
+    for _ in 0..pixel_count {
+        data.extend_from_slice(&pixel);
+    }
+
+    Image { meta, data }
+}
+
+fn float_to_u8(x: f32) -> u8 {
+    ((x * 255.0) as u8).clamp(0, 255)
 }

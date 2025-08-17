@@ -1,8 +1,8 @@
 //! Importing textures from declarations.
 
 use crate::{
-    ImageTextureCreateInfo, ImageTextureSource, SamplerCreateInfo, SamplerID, SamplerRegistry,
-    TextureCreateInfo, TextureID, TextureRegistry,
+    ImageSource, ImageTextureCreateInfo, ImageTextureSource, SamplerCreateInfo, SamplerID,
+    SamplerRegistry, TextureCreateInfo, TextureID, TextureRegistry,
 };
 use anyhow::{Context, Result, bail};
 use impact_gpu::texture::{SamplerConfig, TextureConfig};
@@ -37,15 +37,19 @@ impl ImageTextureSource {
     /// path to all paths.
     fn resolve_paths(&mut self, root_path: &Path) {
         match self {
-            Self::ImageFile(image_path) => {
-                *image_path = root_path.join(&image_path);
-            }
-            Self::ArrayImageFiles(image_paths) => {
-                for image_path in image_paths {
+            Self::Image(source) => {
+                if let ImageSource::File(image_path) = source {
                     *image_path = root_path.join(&image_path);
                 }
             }
-            Self::CubemapImageFiles {
+            Self::ArrayImages(sources) => {
+                for source in sources {
+                    if let ImageSource::File(image_path) = source {
+                        *image_path = root_path.join(&image_path);
+                    }
+                }
+            }
+            Self::CubemapImages {
                 right,
                 left,
                 top,
@@ -54,12 +58,24 @@ impl ImageTextureSource {
                 back,
                 ..
             } => {
-                *right = root_path.join(&right);
-                *left = root_path.join(&left);
-                *top = root_path.join(&top);
-                *bottom = root_path.join(&bottom);
-                *front = root_path.join(&front);
-                *back = root_path.join(&back);
+                if let ImageSource::File(image_path) = right {
+                    *image_path = root_path.join(&image_path);
+                };
+                if let ImageSource::File(image_path) = left {
+                    *image_path = root_path.join(&image_path);
+                };
+                if let ImageSource::File(image_path) = top {
+                    *image_path = root_path.join(&image_path);
+                };
+                if let ImageSource::File(image_path) = bottom {
+                    *image_path = root_path.join(&image_path);
+                };
+                if let ImageSource::File(image_path) = front {
+                    *image_path = root_path.join(&image_path);
+                };
+                if let ImageSource::File(image_path) = back {
+                    *image_path = root_path.join(&image_path);
+                };
             }
         }
     }
@@ -76,8 +92,12 @@ pub fn load_declared_image_textures(
     texture_declarations: &[ImageTextureDeclaration],
 ) -> Result<()> {
     for declaration in texture_declarations {
-        load_declared_image_texture(texture_registry, sampler_registry, declaration.clone())
-            .with_context(|| format!("Failed to load texture: {}", declaration.id))?;
+        if let Err(error) =
+            load_declared_image_texture(texture_registry, sampler_registry, declaration.clone())
+        {
+            // Failing to load a texture is not fatal, since we might not need it
+            impact_log::error!("Failed to load texture {}: {error:#}", declaration.id);
+        }
     }
     Ok(())
 }
@@ -107,44 +127,60 @@ pub fn load_declared_image_texture(
     }
 
     let metadata = match &declaration.source {
-        ImageTextureSource::ImageFile(image_path) => {
-            impact_log::debug!(
-                "Reading metadata for image texture `{texture_id}` from {}",
-                image_path.display(),
-            );
-            impact_io::image::read_metadata_for_image_at_path(image_path).with_context(|| {
-                format!(
-                    "Failed to read image metadata from {}",
-                    image_path.display()
-                )
-            })
-        }
-        ImageTextureSource::ArrayImageFiles(image_paths) => {
-            if image_paths.is_empty() {
-                bail!("Got empty list of paths for texture array");
+        ImageTextureSource::Image(source) => match source {
+            ImageSource::File(image_path) => {
+                impact_log::debug!(
+                    "Reading metadata for image texture `{texture_id}` from {}",
+                    image_path.display(),
+                );
+                impact_io::image::read_metadata_for_image_at_path(image_path).with_context(|| {
+                    format!(
+                        "Failed to read image metadata from {}",
+                        image_path.display()
+                    )
+                })
             }
-            let image_path = &image_paths[0];
-            impact_log::debug!(
-                "Reading metadata for image texture array `{texture_id}` from {}",
-                image_path.display()
-            );
+            ImageSource::Bytes(image) => Ok(image.meta.clone()),
+        },
+        ImageTextureSource::ArrayImages(sources) => {
+            if sources.is_empty() {
+                bail!("Got empty list of sources for texture array");
+            }
             // No need to check the metadata for all the images here, that will
             // be done when the texture is created
-            impact_io::image::read_metadata_for_image_at_path(image_path).with_context(|| {
-                format!(
-                    "Failed to read image metadata from {}",
+            match &sources[0] {
+                ImageSource::File(image_path) => {
+                    impact_log::debug!(
+                        "Reading metadata for image texture array `{texture_id}` from {}",
+                        image_path.display()
+                    );
+                    impact_io::image::read_metadata_for_image_at_path(image_path).with_context(
+                        || {
+                            format!(
+                                "Failed to read image metadata from {}",
+                                image_path.display()
+                            )
+                        },
+                    )
+                }
+                ImageSource::Bytes(image) => Ok(image.meta.clone()),
+            }
+        }
+        ImageTextureSource::CubemapImages { right, .. } => match right {
+            ImageSource::File(image_path) => {
+                impact_log::debug!(
+                    "Reading metadata for cubemap texture `{texture_id}` from {}",
                     image_path.display()
-                )
-            })
-        }
-        ImageTextureSource::CubemapImageFiles { right, .. } => {
-            impact_log::debug!(
-                "Reading metadata for cubemap texture `{texture_id}` from {}",
-                right.display()
-            );
-            impact_io::image::read_metadata_for_image_at_path(right)
-                .with_context(|| format!("Failed to read image metadata from {}", right.display()))
-        }
+                );
+                impact_io::image::read_metadata_for_image_at_path(image_path).with_context(|| {
+                    format!(
+                        "Failed to read image metadata from {}",
+                        image_path.display()
+                    )
+                })
+            }
+            ImageSource::Bytes(image) => Ok(image.meta.clone()),
+        },
     }?;
 
     let image_texture_info = ImageTextureCreateInfo::new(

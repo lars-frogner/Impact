@@ -6,9 +6,10 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-ron = ["dep:ron", "dep:serde"]
+ron = ["dep:ron", "serde"]
 png = ["dep:png"]
 jpeg = ["dep:zune-jpeg"]
+serde = ["dep:serde"]
 
 [dependencies]
 anyhow = { workspace = true }
