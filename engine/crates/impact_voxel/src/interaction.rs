@@ -440,8 +440,8 @@ fn handle_anchors_for_disconnected_voxel_object(
 
     for (anchor_id, anchor_point) in lost_anchors {
         // The anchor point is relative to the original center of mass of the
-        // original voxel object, so this gives it relative to the center of
-        // mass of the disconnected object
+        // original voxel object, so this gives it relative to the origin of the
+        // disconnected object
         let local_anchor = anchor_point + original_local_center_of_mass_relative_to_new_origin;
 
         if disconnected_object
@@ -450,7 +450,7 @@ fn handle_anchors_for_disconnected_voxel_object(
         {
             // The anchor is attached to the disconnected object, so we must
             // specify it relative to this object's center of mass
-            let new_anchor_point = anchor_point - new_local_center_of_mass;
+            let new_anchor_point = local_anchor - new_local_center_of_mass;
 
             disconnected_body_anchors.push((anchor_id, new_anchor_point));
         } else {

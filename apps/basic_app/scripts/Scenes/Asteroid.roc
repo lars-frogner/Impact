@@ -160,11 +160,11 @@ ground =
 asteroid =
     Entity.new
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 30))
-    # |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
-    |> Setup.VoxelBox.add_new(0.25, 31, 15, 15)
-    # |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
-    |> Setup.SameVoxelType.add_new("Default")
-    # |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
+    |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
+    # |> Setup.VoxelBox.add_new(0.25, 31, 15, 15)
+    |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
+    # |> Setup.SameVoxelType.add_new("Default")
+    |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
     |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(0)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
@@ -172,7 +172,7 @@ asteroid =
         Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
     )
     # |> Setup.ConstantAcceleration.add_earth
-    |> Setup.LocalForce.add_new((0, 0, 0), (0.25, 0.25, 0.25))
+    |> Setup.LocalForce.add_new((0.1, 0.1, 0.1), (4, 4, 4))
 
 ambient_light =
     Entity.new
