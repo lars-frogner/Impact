@@ -17,7 +17,7 @@ pub use axis_aligned_box::AxisAlignedBox;
 pub use capsule::Capsule;
 pub use frustum::Frustum;
 pub use model_transform::ModelTransform;
-pub use oriented_box::OrientedBox;
+pub use oriented_box::{OrientedBox, compute_box_intersection_bounds};
 pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
 pub use reference_frame::ReferenceFrame;

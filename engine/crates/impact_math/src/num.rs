@@ -28,6 +28,8 @@ pub trait Float:
     const FRAC_1_PI: Self;
     const MIN: Self;
     const MAX: Self;
+    const INFINITY: Self;
+    const NEG_INFINITY: Self;
 }
 
 macro_rules! impl_float {
@@ -54,6 +56,8 @@ macro_rules! impl_float {
             const FRAC_1_PI: Self = std::$f::consts::FRAC_1_PI;
             const MIN: Self = Self::MIN;
             const MAX: Self = Self::MAX;
+            const INFINITY: Self = Self::INFINITY;
+            const NEG_INFINITY: Self = Self::NEG_INFINITY;
         }
     };
 }
