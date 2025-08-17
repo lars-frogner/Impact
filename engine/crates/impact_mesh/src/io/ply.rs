@@ -75,76 +75,76 @@ fn convert_ply_vertices_and_faces_to_mesh(
     let mut vertex_normal_vectors = Vec::new();
     let mut vertex_texture_coords = Vec::new();
 
-    if prop_idx + 3 <= vertex_property_names.len() {
-        if let ("x", "y", "z") = (
+    if prop_idx + 3 <= vertex_property_names.len()
+        && let ("x", "y", "z") = (
             vertex_property_names[prop_idx].as_str(),
             vertex_property_names[prop_idx + 1].as_str(),
             vertex_property_names[prop_idx + 2].as_str(),
-        ) {
-            vertex_positions = vertex_list
-                .iter()
-                .map(|PlyVertex { property_values }| {
-                    VertexPosition(point![
-                        property_values[prop_idx],
-                        property_values[prop_idx + 1],
-                        property_values[prop_idx + 2]
-                    ])
-                })
-                .collect();
+        )
+    {
+        vertex_positions = vertex_list
+            .iter()
+            .map(|PlyVertex { property_values }| {
+                VertexPosition(point![
+                    property_values[prop_idx],
+                    property_values[prop_idx + 1],
+                    property_values[prop_idx + 2]
+                ])
+            })
+            .collect();
 
-            prop_idx += 3;
-        }
+        prop_idx += 3;
     }
 
-    if prop_idx + 3 <= vertex_property_names.len() {
-        if let ("red", "green", "blue") = (
+    if prop_idx + 3 <= vertex_property_names.len()
+        && let ("red", "green", "blue") = (
             vertex_property_names[prop_idx].as_str(),
             vertex_property_names[prop_idx + 1].as_str(),
             vertex_property_names[prop_idx + 2].as_str(),
-        ) {
-            // Ignore vertex colors
-            prop_idx += 3;
-        }
+        )
+    {
+        // Ignore vertex colors
+        prop_idx += 3;
     }
 
-    if prop_idx + 3 <= vertex_property_names.len() {
-        if let ("nx", "ny", "nz") = (
+    if prop_idx + 3 <= vertex_property_names.len()
+        && let ("nx", "ny", "nz") = (
             vertex_property_names[prop_idx].as_str(),
             vertex_property_names[prop_idx + 1].as_str(),
             vertex_property_names[prop_idx + 2].as_str(),
-        ) {
-            vertex_normal_vectors = vertex_list
-                .iter()
-                .map(|PlyVertex { property_values }| {
-                    VertexNormalVector(UnitVector3::new_normalize(vector![
-                        property_values[prop_idx],
-                        property_values[prop_idx + 1],
-                        property_values[prop_idx + 2]
-                    ]))
-                })
-                .collect();
+        )
+    {
+        vertex_normal_vectors = vertex_list
+            .iter()
+            .map(|PlyVertex { property_values }| {
+                VertexNormalVector(UnitVector3::new_normalize(vector![
+                    property_values[prop_idx],
+                    property_values[prop_idx + 1],
+                    property_values[prop_idx + 2]
+                ]))
+            })
+            .collect();
 
-            prop_idx += 3;
-        }
+        prop_idx += 3;
     }
 
-    if prop_idx + 2 <= vertex_property_names.len() {
-        if let ("texture_u" | "u", "texture_v" | "v") = (
+    if prop_idx + 2 <= vertex_property_names.len()
+        && let ("texture_u" | "u", "texture_v" | "v") = (
             vertex_property_names[prop_idx].as_str(),
             vertex_property_names[prop_idx + 1].as_str(),
-        ) {
-            vertex_texture_coords = vertex_list
-                .iter()
-                .map(|PlyVertex { property_values }| {
-                    VertexTextureCoords(vector![
-                        property_values[prop_idx],
-                        property_values[prop_idx + 1]
-                    ])
-                })
-                .collect();
+        )
+    {
+        vertex_texture_coords = vertex_list
+            .iter()
+            .map(|PlyVertex { property_values }| {
+                VertexTextureCoords(vector![
+                    property_values[prop_idx],
+                    property_values[prop_idx + 1]
+                ])
+            })
+            .collect();
 
-            prop_idx += 2;
-        }
+        prop_idx += 2;
     }
 
     assert_eq!(prop_idx, vertex_property_names.len());
