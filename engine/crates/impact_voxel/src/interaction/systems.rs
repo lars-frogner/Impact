@@ -165,12 +165,11 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
             &entity.rigid_body_id,
         ));
 
-        if let Some(collidable_id) = parent_components.get_component::<CollidableID>() {
-            if let Some(descriptor) = self
+        if let Some(collidable_id) = parent_components.get_component::<CollidableID>()
+            && let Some(descriptor) = self
                 .collision_world
                 .get_collidable_descriptor(*collidable_id)
-            {
-                if let LocalCollidable::VoxelObject(local_collidable) =
+                && let LocalCollidable::VoxelObject(local_collidable) =
                     descriptor.local_collidable()
                 {
                     components.push(ComponentStorage::from_single_instance_view(
@@ -180,13 +179,10 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                         ),
                     ));
                 }
-            }
-        }
 
         if let Some(force_generator_id) =
             parent_components.get_component::<ConstantAccelerationGeneratorID>()
-        {
-            if let Some(force_generator) = self
+            && let Some(force_generator) = self
                 .force_generator_manager
                 .constant_accelerations()
                 .get_generator(force_generator_id)
@@ -195,7 +191,6 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                     &force_generator.acceleration,
                 ));
             }
-        }
 
         // TODO: We don't handle drag force yet (that would also have to be
         // updated for the original object, since its shape has changed)

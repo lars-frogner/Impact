@@ -770,29 +770,26 @@ impl ChunkedVoxelObject {
 
         for j in self.occupied_voxel_ranges[1].clone() {
             for k in self.occupied_voxel_ranges[2].clone() {
-                if let Some(voxel) = self.get_voxel(0, j, k) {
-                    if voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_DN) {
+                if let Some(voxel) = self.get_voxel(0, j, k)
+                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_DN) {
                         invalid_present_flags.push(([0, j, k], VoxelFlags::HAS_ADJACENT_X_DN));
                     }
-                }
             }
         }
         for i in self.occupied_voxel_ranges[0].clone() {
             for k in self.occupied_voxel_ranges[2].clone() {
-                if let Some(voxel) = self.get_voxel(i, 0, k) {
-                    if voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_DN) {
+                if let Some(voxel) = self.get_voxel(i, 0, k)
+                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_DN) {
                         invalid_present_flags.push(([i, 0, k], VoxelFlags::HAS_ADJACENT_Y_DN));
                     }
-                }
             }
         }
         for i in self.occupied_voxel_ranges[0].clone() {
             for j in self.occupied_voxel_ranges[1].clone() {
-                if let Some(voxel) = self.get_voxel(i, j, 0) {
-                    if voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_DN) {
+                if let Some(voxel) = self.get_voxel(i, j, 0)
+                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_DN) {
                         invalid_present_flags.push(([i, j, 0], VoxelFlags::HAS_ADJACENT_Z_DN));
                     }
-                }
             }
         }
 

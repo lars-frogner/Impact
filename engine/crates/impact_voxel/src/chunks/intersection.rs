@@ -464,6 +464,7 @@ impl ChunkedVoxelObject {
         }
     }
 
+    #[allow(dead_code)]
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
         &self,
@@ -478,12 +479,10 @@ impl ChunkedVoxelObject {
                         .all_corners()
                         .iter()
                         .any(|corner| !plane.point_lies_in_positive_halfspace(corner))
+                        && let Some(voxel) = self.get_voxel(i, j, k)
+                        && let Some(VoxelPlacement::Surface(_)) = voxel.placement()
                     {
-                        if let Some(voxel) = self.get_voxel(i, j, k) {
-                            if let Some(VoxelPlacement::Surface(_)) = voxel.placement() {
-                                f([i, j, k], voxel);
-                            }
-                        }
+                        f([i, j, k], voxel);
                     }
                 }
             }
@@ -503,12 +502,10 @@ impl ChunkedVoxelObject {
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
                     if na::distance(&voxel_center_position, sphere.center())
                         <= 0.5 * self.voxel_extent + sphere.radius()
+                        && let Some(voxel) = self.get_voxel(i, j, k)
+                        && let Some(VoxelPlacement::Surface(_)) = voxel.placement()
                     {
-                        if let Some(voxel) = self.get_voxel(i, j, k) {
-                            if let Some(VoxelPlacement::Surface(_)) = voxel.placement() {
-                                f([i, j, k], voxel);
-                            }
-                        }
+                        f([i, j, k], voxel);
                     }
                 }
             }
@@ -526,10 +523,10 @@ impl ChunkedVoxelObject {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
-                    if sphere.contains_point(&voxel_center_position) {
-                        if let Some(voxel) = self.get_voxel(i, j, k) {
-                            f([i, j, k], voxel);
-                        }
+                    if sphere.contains_point(&voxel_center_position)
+                        && let Some(voxel) = self.get_voxel(i, j, k)
+                    {
+                        f([i, j, k], voxel);
                     }
                 }
             }
@@ -548,10 +545,10 @@ impl ChunkedVoxelObject {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
-                    if containment_tester.contains_point(&voxel_center_position) {
-                        if let Some(voxel) = self.get_voxel(i, j, k) {
-                            f([i, j, k], voxel);
-                        }
+                    if containment_tester.contains_point(&voxel_center_position)
+                        && let Some(voxel) = self.get_voxel(i, j, k)
+                    {
+                        f([i, j, k], voxel);
                     }
                 }
             }

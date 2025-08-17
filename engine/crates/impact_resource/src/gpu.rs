@@ -130,11 +130,10 @@ where
     type GPUContext = GR::GPUContext;
 
     fn ensure(&mut self, gpu_context: &Self::GPUContext, id: R::ID, resource: &R) -> Result<()> {
-        if let Entry::Vacant(entry) = self.gpu_resources.entry(id) {
-            if let Some(gpu_resource) = GR::create(gpu_context, id, resource)? {
+        if let Entry::Vacant(entry) = self.gpu_resources.entry(id)
+            && let Some(gpu_resource) = GR::create(gpu_context, id, resource)? {
                 entry.insert(gpu_resource);
             }
-        }
         Ok(())
     }
 

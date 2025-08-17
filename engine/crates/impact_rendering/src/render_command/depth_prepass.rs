@@ -140,13 +140,11 @@ impl DepthPrepass {
                         .material_template()
                         .get(material.template_id)
                 })
-            {
-                if let MaterialTextureBindingLocations::Fixed(_) =
+                && let MaterialTextureBindingLocations::Fixed(_) =
                     material_template.texture_binding_locations
                 {
                     self.models.insert(*model_id);
                 }
-            }
         }
     }
 

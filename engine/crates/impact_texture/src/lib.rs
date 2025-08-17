@@ -182,11 +182,10 @@ impl ImageTextureCreateInfo {
             bail!("Got zero width or height for texture image");
         }
 
-        if let ImageTextureSource::ArrayImages(sources) = &source {
-            if sources.is_empty() {
+        if let ImageTextureSource::ArrayImages(sources) = &source
+            && sources.is_empty() {
                 bail!("Got empty source list for image texture array");
             }
-        }
 
         // Ensure the pixel format is compatible with the configuration
         determine_valid_texel_description(metadata.pixel_format, &texture_config)?;

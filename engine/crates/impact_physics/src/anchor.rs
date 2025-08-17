@@ -258,8 +258,8 @@ impl<A: Anchor> SpecificAnchorManager<A> {
 
     /// Removes the anchor with the given ID if it exists.
     pub fn remove(&mut self, anchor_id: A::ID) {
-        if let Some(anchor) = self.anchors.remove(&anchor_id) {
-            if let Entry::Occupied(mut entry) =
+        if let Some(anchor) = self.anchors.remove(&anchor_id)
+            && let Entry::Occupied(mut entry) =
                 self.anchor_ids_by_body.entry(anchor.rigid_body_id())
             {
                 let body_anchor_ids = entry.get_mut();
@@ -272,7 +272,6 @@ impl<A: Anchor> SpecificAnchorManager<A> {
                     }
                 }
             }
-        }
     }
 
     /// Inserts the given anchor under the given ID, replacing the existing
