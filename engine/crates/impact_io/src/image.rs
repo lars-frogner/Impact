@@ -10,6 +10,7 @@ use std::{
 
 /// Represents a decoded image with pixel data.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Image {
     /// Metadata for the image.
     pub meta: ImageMetadata,
@@ -18,6 +19,7 @@ pub struct Image {
 }
 
 /// Metadata for an image.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageMetadata {
     /// Width of the image in pixels.
@@ -29,6 +31,7 @@ pub struct ImageMetadata {
 }
 
 /// Supported image formats for pixel data.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
     /// RGBA format with 8 bits per channel.

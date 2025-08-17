@@ -29,6 +29,7 @@ use roc_integration::roc;
 use std::{
     fmt,
     hash::Hash,
+    num::NonZeroU32,
     path::{Path, PathBuf},
 };
 use utils::{Dimension, Side};
@@ -120,8 +121,9 @@ pub struct VoxelObjectPhysicsContext {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct VoxelConfig {
+    pub texture_resolution: NonZeroU32,
     /// Path to the RON file containing the specification of each voxel type.
     #[cfg_attr(feature = "serde", serde(default))]
     pub voxel_types_path: Option<PathBuf>,
@@ -539,6 +541,15 @@ impl VoxelConfig {
     pub fn resolve_paths(&mut self, root_path: &Path) {
         if let Some(voxel_types_path) = self.voxel_types_path.as_mut() {
             *voxel_types_path = root_path.join(&voxel_types_path);
+        }
+    }
+}
+
+impl Default for VoxelConfig {
+    fn default() -> Self {
+        Self {
+            texture_resolution: NonZeroU32::new(256).unwrap(),
+            voxel_types_path: None,
         }
     }
 }

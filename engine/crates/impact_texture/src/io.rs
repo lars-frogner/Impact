@@ -34,7 +34,7 @@ pub fn create_texture_from_image_path(
     crate::create_texture_from_image(
         graphics_device,
         mipmapper_generator,
-        image,
+        &image,
         texture_config,
         label,
     )
@@ -80,12 +80,12 @@ pub fn create_cubemap_texture_from_image_paths<P: AsRef<Path>>(
 
     crate::create_cubemap_texture_from_images(
         graphics_device,
-        right_image,
-        left_image,
-        top_image,
-        bottom_image,
-        front_image,
-        back_image,
+        &right_image,
+        &left_image,
+        &top_image,
+        &bottom_image,
+        &front_image,
+        &back_image,
         texture_config,
         label,
     )

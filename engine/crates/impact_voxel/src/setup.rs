@@ -40,8 +40,7 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SameVoxelType {
-        /// The index of the voxel type.
-        voxel_type_idx: usize,
+        voxel_type_name_hash: Hash32,
     }
 }
 
@@ -206,17 +205,19 @@ pub enum VoxelObjectSDFModification {
     MultifractalNoise(MultifractalNoiseSDFModification),
 }
 
-#[roc(dependencies=[VoxelType])]
+#[roc]
 impl SameVoxelType {
-    #[roc(body = "{ voxel_type_idx: NativeNum.to_usize(voxel_type) }")]
-    pub fn new(voxel_type: VoxelType) -> Self {
+    #[roc(body = "{ voxel_type_name_hash: Hashing.hash_str_32(voxel_type_name) }")]
+    pub fn new(voxel_type_name: &str) -> Self {
         Self {
-            voxel_type_idx: voxel_type.idx(),
+            voxel_type_name_hash: Hash32::from_str(voxel_type_name),
         }
     }
 
-    pub fn voxel_type(&self) -> VoxelType {
-        VoxelType::from_idx(self.voxel_type_idx)
+    pub fn voxel_type(&self, voxel_type_registry: &VoxelTypeRegistry) -> Result<VoxelType> {
+        voxel_type_registry
+            .voxel_type_for_name_hash(self.voxel_type_name_hash)
+            .ok_or_else(|| anyhow!("Missing voxel type for name in `SameVoxelType`"))
     }
 }
 
@@ -277,7 +278,12 @@ impl GradientNoiseVoxelTypes {
             voxel_types.push(
                 voxel_type_registry
                     .voxel_type_for_name_hash(name_hash)
-                    .ok_or_else(|| anyhow!("Missing voxel type for name at index {}", idx))?,
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Missing voxel type for name at index {} in `GradientNoiseVoxelTypes`",
+                            idx
+                        )
+                    })?,
             );
         }
         Ok(voxel_types)
@@ -606,8 +612,7 @@ pub fn setup_voxel_object(
         voxel_types,
         shape,
         sdf_modifications,
-    )
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel shape"))?;
+    )?;
 
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
 
@@ -759,10 +764,11 @@ fn generate_voxel_object_with_types_shape_and_modifications(
     voxel_types: VoxelObjectVoxelTypes,
     shape: VoxelObjectShape,
     sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
-) -> Option<ChunkedVoxelObject> {
+) -> Result<ChunkedVoxelObject> {
     match voxel_types {
         VoxelObjectVoxelTypes::Same(voxel_types) => {
-            let voxel_type_generator = SameVoxelTypeGenerator::new(voxel_types.voxel_type());
+            let voxel_type_generator =
+                SameVoxelTypeGenerator::new(voxel_types.voxel_type(voxel_type_registry)?);
             generate_voxel_object_with_shape_and_modifications(
                 voxel_type_generator,
                 shape,
@@ -773,7 +779,7 @@ fn generate_voxel_object_with_types_shape_and_modifications(
             let voxel_type_generator = gradient_noise_voxel_type_generator_from_component(
                 voxel_type_registry,
                 &voxel_types,
-            );
+            )?;
             generate_voxel_object_with_shape_and_modifications(
                 voxel_type_generator,
                 shape,
@@ -781,6 +787,7 @@ fn generate_voxel_object_with_types_shape_and_modifications(
             )
         }
     }
+    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel shape"))
 }
 
 fn generate_voxel_object_with_shape_and_modifications(
@@ -909,13 +916,11 @@ fn setup_rigid_body_for_new_voxel_object(
 fn gradient_noise_voxel_type_generator_from_component(
     voxel_type_registry: &VoxelTypeRegistry,
     voxel_types: &GradientNoiseVoxelTypes,
-) -> GradientNoiseVoxelTypeGenerator {
-    GradientNoiseVoxelTypeGenerator::new(
-        voxel_types
-            .voxel_types(voxel_type_registry)
-            .expect("Invalid voxel types"),
+) -> Result<GradientNoiseVoxelTypeGenerator> {
+    Ok(GradientNoiseVoxelTypeGenerator::new(
+        voxel_types.voxel_types(voxel_type_registry)?,
         voxel_types.noise_frequency(),
         voxel_types.voxel_type_frequency(),
         u32::try_from(voxel_types.seed()).unwrap(),
-    )
+    ))
 }

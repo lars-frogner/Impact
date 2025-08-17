@@ -559,12 +559,7 @@ impl TaskStatus {
     }
 
     fn register_error(&self, worker_id: WorkerID, task_id: TaskID, error: TaskError) {
-        impact_log::error!(
-            "Worker {} registered error on task {}: {}",
-            worker_id,
-            task_id,
-            &error
-        );
+        impact_log::error!("Worker {worker_id} registered error on task {task_id}: {error:#}");
         self.some_task_failed.store(true, Ordering::Relaxed);
         self.errors_of_failed_tasks.lock().insert(task_id, error);
     }
