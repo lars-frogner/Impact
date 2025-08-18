@@ -25,8 +25,8 @@ ecs = [
 ]
 fuzzing = ["arbitrary"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
-ron = ["dep:impact_io", "impact_io/ron", "serde"]
-serde = ["dep:serde"]
+ron = ["impact_io/ron", "serde"]
+serde = ["dep:serde", "nalgebra/serde-serialize"]
 unchecked = []
 
 [dependencies]
@@ -42,7 +42,7 @@ impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
-impact_io = { path = "../impact_io", optional = true }
+impact_io = { path = "../impact_io" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_mesh = { path = "../impact_mesh" }

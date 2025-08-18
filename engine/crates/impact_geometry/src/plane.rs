@@ -147,6 +147,12 @@ impl<F: Float> Plane<F> {
         }
     }
 
+    /// Computes the plane resulting from scaling this plane with the given
+    /// uniform scale factor.
+    pub fn scaled(&self, scale: F) -> Self {
+        Self::new(self.unit_normal, self.displacement * scale)
+    }
+
     /// Computes the plane resulting from rotating this plane with the given
     /// rotation quaternion.
     pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {

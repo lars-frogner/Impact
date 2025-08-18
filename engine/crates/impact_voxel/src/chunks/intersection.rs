@@ -17,28 +17,43 @@ impl ChunkedVoxelObject {
     /// Finds non-empty voxels with at least one exposed face that are not fully
     /// outside the negative halfspace of the given plane and calls the given
     /// closure with their indices, the voxels themselves and their placement on
-    /// the surface. For efficiency, the closure may also be called with voxels
+    /// the surface.
+    ///
+    /// The plane should be specified in the model space of the voxel object,
+    /// where the lower corner of the grid is at the origin and the cartesian
+    /// axes are aligned with the grid.
+    ///
+    /// For efficiency, the closure may also be called with voxels
     /// that are fully outside the negative halfspace of the plane.
     pub fn for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &self,
         plane: &Plane<f64>,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
-        let included_voxel_ranges = self.voxel_ranges_in_object_within_plane(plane);
+        let normalized_plane = plane.scaled(self.voxel_extent.recip());
+        let included_voxel_ranges = self.voxel_ranges_in_object_within_plane(&normalized_plane);
         self.for_each_surface_voxel_in_voxel_ranges(included_voxel_ranges, f);
     }
 
     /// Finds non-empty voxels with at least one exposed face that are not
     /// fully outside the given sphere and calls the given closure with
     /// their indices, the voxels themselves and their placement on the
-    /// surface. For efficiency, the closure may also be called with voxels
+    /// surface.
+    ///
+    /// The sphere should be specified in the model space of the voxel object,
+    /// where the lower corner of the grid is at the origin and the cartesian
+    /// axes are aligned with the grid.
+    ///
+    /// For efficiency, the closure may also be called with voxels
     /// that are fully outside the sphere.
     pub fn for_each_surface_voxel_maybe_intersecting_sphere(
         &self,
         sphere: &Sphere<f64>,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
-        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_aab(&sphere.compute_aabb());
+        let normalized_sphere = sphere.scaled(self.voxel_extent.recip());
+        let touched_voxel_ranges =
+            self.voxel_ranges_in_object_touching_aab(&normalized_sphere.compute_aabb());
         self.for_each_surface_voxel_in_voxel_ranges(touched_voxel_ranges, f);
     }
 
@@ -113,6 +128,10 @@ impl ChunkedVoxelObject {
     /// between the voxel center and the center of the sphere and a mutable
     /// reference to the voxel itself.
     ///
+    /// The sphere should be specified in the model space of the voxel object,
+    /// where the lower corner of the grid is at the origin and the cartesian
+    /// axes are aligned with the grid.
+    ///
     /// Since it is assumed that the given closure will modify the voxels, the
     /// adjacency information will be updated for all voxels within the sphere,
     /// and any chunk whose mesh data would be invalidated by changes to these
@@ -129,7 +148,10 @@ impl ChunkedVoxelObject {
         sphere: &Sphere<f64>,
         modify_voxel: &mut impl FnMut([usize; 3], f64, &mut Voxel),
     ) {
-        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_aab(&sphere.compute_aabb());
+        let normalized_sphere = sphere.scaled(self.voxel_extent.recip());
+
+        let touched_voxel_ranges =
+            self.voxel_ranges_in_object_touching_aab(&normalized_sphere.compute_aabb());
 
         if touched_voxel_ranges.iter().any(Range::is_empty) {
             return;
@@ -138,6 +160,9 @@ impl ChunkedVoxelObject {
         let touched_chunk_ranges = touched_voxel_ranges
             .clone()
             .map(chunk_range_encompassing_voxel_range);
+
+        let voxel_extent_squared = self.voxel_extent.powi(2);
+        let normalized_sphere_radius_squared = normalized_sphere.radius_squared();
 
         let mut removed_chunks = false;
 
@@ -184,23 +209,24 @@ impl ChunkedVoxelObject {
                     for i in touched_voxel_ranges_in_chunk[0].clone() {
                         for j in touched_voxel_ranges_in_chunk[1].clone() {
                             for k in touched_voxel_ranges_in_chunk[2].clone() {
-                                let voxel_center_position =
-                                    voxel_center_position_from_object_voxel_indices(
-                                        self.voxel_extent,
-                                        i,
-                                        j,
-                                        k,
+                                let normalized_voxel_center_position =
+                                    normalized_voxel_center_position_from_object_voxel_indices(
+                                        i, j, k,
                                     );
 
-                                let distance_squared =
-                                    na::distance_squared(sphere.center(), &voxel_center_position);
+                                let normalized_distance_squared = na::distance_squared(
+                                    normalized_sphere.center(),
+                                    &normalized_voxel_center_position,
+                                );
 
-                                if distance_squared < sphere.radius_squared() {
+                                if normalized_distance_squared < normalized_sphere_radius_squared {
                                     let voxel_idx =
                                         linear_voxel_idx_within_chunk_from_object_voxel_indices(
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
+                                    let distance_squared =
+                                        normalized_distance_squared * voxel_extent_squared;
                                     modify_voxel([i, j, k], distance_squared, voxel);
                                     chunk_touched = true;
                                 }
@@ -241,6 +267,10 @@ impl ChunkedVoxelObject {
     /// central axis of the capsule's cylinder and a mutable reference to
     /// the voxel itself.
     ///
+    /// The capsule should be specified in the model space of the voxel object,
+    /// where the lower corner of the grid is at the origin and the cartesian
+    /// axes are aligned with the grid.
+    ///
     /// Since it is assumed that the given closure will modify the voxels, the
     /// adjacency information will be updated for all voxels within the capsule,
     /// and any chunk whose mesh data would be invalidated by changes to these
@@ -257,8 +287,10 @@ impl ChunkedVoxelObject {
         capsule: &Capsule<f64>,
         modify_voxel: &mut impl FnMut([usize; 3], f64, &mut Voxel),
     ) {
+        let normalized_capsule = capsule.scaled(self.voxel_extent.recip());
+
         let touched_voxel_ranges =
-            self.voxel_ranges_in_object_touching_aab(&capsule.compute_aabb());
+            self.voxel_ranges_in_object_touching_aab(&normalized_capsule.compute_aabb());
 
         if touched_voxel_ranges.iter().any(Range::is_empty) {
             return;
@@ -268,7 +300,9 @@ impl ChunkedVoxelObject {
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        let containment_tester = capsule.create_point_containment_tester();
+        let voxel_extent_squared = self.voxel_extent.powi(2);
+
+        let containment_tester = normalized_capsule.create_point_containment_tester();
 
         let mut removed_chunks = false;
 
@@ -281,15 +315,17 @@ impl ChunkedVoxelObject {
                     let object_voxel_ranges_in_chunk =
                         chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
 
-                    let Some(chunk_subcapsule) = capsule
-                        .with_segment_clamped_to_aab(&self.compute_chunk_aabb(&chunk_indices))
+                    let Some(normalized_chunk_subcapsule) = normalized_capsule
+                        .with_segment_clamped_to_aab(&normalized_chunk_aabb_from_chunk_indices(
+                            chunk_i, chunk_j, chunk_k,
+                        ))
                     else {
                         continue;
                     };
 
-                    let touched_voxel_ranges_in_chunk = self.voxel_ranges_touching_aab(
+                    let touched_voxel_ranges_in_chunk = voxel_ranges_touching_aab(
                         object_voxel_ranges_in_chunk.clone(),
-                        &chunk_subcapsule.compute_aabb(),
+                        &normalized_chunk_subcapsule.compute_aabb(),
                     );
 
                     if touched_voxel_ranges_in_chunk.iter().any(Range::is_empty) {
@@ -323,17 +359,14 @@ impl ChunkedVoxelObject {
                     for i in touched_voxel_ranges_in_chunk[0].clone() {
                         for j in touched_voxel_ranges_in_chunk[1].clone() {
                             for k in touched_voxel_ranges_in_chunk[2].clone() {
-                                let voxel_center_position =
-                                    voxel_center_position_from_object_voxel_indices(
-                                        self.voxel_extent,
-                                        i,
-                                        j,
-                                        k,
+                                let normalized_voxel_center_position =
+                                    normalized_voxel_center_position_from_object_voxel_indices(
+                                        i, j, k,
                                     );
 
-                                if let Some(shortest_distance_squared) = containment_tester
+                                if let Some(shortest_normalized_distance_squared) = containment_tester
                                     .shortest_squared_distance_from_point_to_segment_if_contained(
-                                        &voxel_center_position,
+                                        &normalized_voxel_center_position,
                                     )
                                 {
                                     let voxel_idx =
@@ -341,6 +374,7 @@ impl ChunkedVoxelObject {
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
+                                    let shortest_distance_squared = shortest_normalized_distance_squared * voxel_extent_squared;
                                     modify_voxel([i, j, k], shortest_distance_squared, voxel);
                                     chunk_touched = true;
                                 }
@@ -464,7 +498,6 @@ impl ChunkedVoxelObject {
         }
     }
 
-    #[allow(dead_code)]
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
         &self,
@@ -555,62 +588,22 @@ impl ChunkedVoxelObject {
         }
     }
 
-    fn voxel_ranges_in_object_touching_aab(&self, aab: &AxisAlignedBox<f64>) -> [Range<usize>; 3] {
-        self.voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), aab)
-    }
-
-    fn voxel_ranges_touching_aab(
+    /// The AAB should be in normalized voxel object space (where voxel extent
+    /// is 1.0).
+    fn voxel_ranges_in_object_touching_aab(
         &self,
-        max_voxel_ranges: [Range<usize>; 3],
-        aab: &AxisAlignedBox<f64>,
+        normalized_aab: &AxisAlignedBox<f64>,
     ) -> [Range<usize>; 3] {
-        let inverse_voxel_extent = self.voxel_extent().recip();
-        let lower_aab_voxel_space_coord = aab.lower_corner() * inverse_voxel_extent;
-        let upper_aab_voxel_space_coord = aab.upper_corner() * inverse_voxel_extent;
-
-        let mut touched_voxel_ranges = max_voxel_ranges;
-
-        for dim in 0..3 {
-            let range = &mut touched_voxel_ranges[dim];
-            range.start = range
-                .start
-                .max(lower_aab_voxel_space_coord[dim].floor().max(0.0) as usize);
-            range.end = range
-                .end
-                .min(upper_aab_voxel_space_coord[dim].ceil() as usize);
-        }
-
-        touched_voxel_ranges
+        voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), normalized_aab)
     }
 
-    fn voxel_ranges_in_object_within_plane(&self, plane: &Plane<f64>) -> [Range<usize>; 3] {
-        self.voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), plane)
-    }
-
-    fn voxel_ranges_within_plane(
+    /// The plane should be in normalized voxel object space (where voxel extent
+    /// is 1.0).
+    fn voxel_ranges_in_object_within_plane(
         &self,
-        max_voxel_ranges: [Range<usize>; 3],
-        plane: &Plane<f64>,
+        normalized_plane: &Plane<f64>,
     ) -> [Range<usize>; 3] {
-        let voxel_extent = self.voxel_extent();
-
-        let lower_corner = point![
-            max_voxel_ranges[0].start as f64 * voxel_extent,
-            max_voxel_ranges[1].start as f64 * voxel_extent,
-            max_voxel_ranges[2].start as f64 * voxel_extent
-        ];
-
-        let upper_corner = point![
-            max_voxel_ranges[0].end as f64 * voxel_extent,
-            max_voxel_ranges[1].end as f64 * voxel_extent,
-            max_voxel_ranges[2].end as f64 * voxel_extent
-        ];
-
-        let aabb = AxisAlignedBox::new(lower_corner, upper_corner);
-
-        let aabb_within_plane = aabb.projected_onto_negative_halfspace(plane);
-
-        self.voxel_ranges_touching_aab(max_voxel_ranges, &aabb_within_plane)
+        voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), normalized_plane)
     }
 }
 
@@ -620,7 +613,52 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
     start..end
 }
 
-pub(super) fn voxel_center_position_from_object_voxel_indices(
+/// The plane should be in normalized voxel object space (where voxel extent
+/// is 1.0).
+fn voxel_ranges_within_plane(
+    max_voxel_ranges: [Range<usize>; 3],
+    normalized_plane: &Plane<f64>,
+) -> [Range<usize>; 3] {
+    let lower_corner = point![
+        max_voxel_ranges[0].start as f64,
+        max_voxel_ranges[1].start as f64,
+        max_voxel_ranges[2].start as f64
+    ];
+
+    let upper_corner = point![
+        max_voxel_ranges[0].end as f64,
+        max_voxel_ranges[1].end as f64,
+        max_voxel_ranges[2].end as f64
+    ];
+
+    let aabb = AxisAlignedBox::new(lower_corner, upper_corner);
+
+    let aabb_within_plane = aabb.projected_onto_negative_halfspace(normalized_plane);
+
+    voxel_ranges_touching_aab(max_voxel_ranges, &aabb_within_plane)
+}
+
+/// The AAB should be in normalized voxel object space (where voxel extent is
+/// 1.0).
+fn voxel_ranges_touching_aab(
+    max_voxel_ranges: [Range<usize>; 3],
+    normalized_aab: &AxisAlignedBox<f64>,
+) -> [Range<usize>; 3] {
+    let lower_corner = normalized_aab.lower_corner();
+    let upper_corner = normalized_aab.upper_corner();
+
+    let mut touched_voxel_ranges = max_voxel_ranges;
+
+    for dim in 0..3 {
+        let range = &mut touched_voxel_ranges[dim];
+        range.start = range.start.max(lower_corner[dim].floor().max(0.0) as usize);
+        range.end = range.end.min(upper_corner[dim].ceil() as usize);
+    }
+
+    touched_voxel_ranges
+}
+
+fn voxel_center_position_from_object_voxel_indices(
     voxel_extent: f64,
     i: usize,
     j: usize,
@@ -633,7 +671,34 @@ pub(super) fn voxel_center_position_from_object_voxel_indices(
     ]
 }
 
-pub(super) fn voxel_aabb_from_object_voxel_indices(
+fn normalized_voxel_center_position_from_object_voxel_indices(
+    i: usize,
+    j: usize,
+    k: usize,
+) -> Point3<f64> {
+    point![(i as f64 + 0.5), (j as f64 + 0.5), (k as f64 + 0.5)]
+}
+
+fn normalized_chunk_aabb_from_chunk_indices(
+    chunk_i: usize,
+    chunk_j: usize,
+    chunk_k: usize,
+) -> AxisAlignedBox<f64> {
+    AxisAlignedBox::new(
+        point![
+            (chunk_i * CHUNK_SIZE) as f64,
+            (chunk_j * CHUNK_SIZE) as f64,
+            (chunk_k * CHUNK_SIZE) as f64
+        ],
+        point![
+            ((chunk_i + 1) * CHUNK_SIZE) as f64,
+            ((chunk_j + 1) * CHUNK_SIZE) as f64,
+            ((chunk_k + 1) * CHUNK_SIZE) as f64
+        ],
+    )
+}
+
+fn voxel_aabb_from_object_voxel_indices(
     voxel_extent: f64,
     i: usize,
     j: usize,
@@ -952,7 +1017,8 @@ pub mod fuzzing {
     }
 }
 
-#[cfg(all(test, not(miri)))]
+// #[cfg(all(test, not(miri)))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
@@ -962,12 +1028,59 @@ mod tests {
     use nalgebra::{UnitVector3, vector};
 
     #[test]
-    fn finding_surface_voxels_intersecting_sphere_finds_correct_voxels() {
-        let object_radius = 20.0;
-        let sphere_radius = 0.2 * object_radius;
+    fn finding_surface_voxels_intersecting_negative_halfspace_of_plane_finds_correct_voxels() {
+        let object_radius = 10.0;
+        let plane_displacement = 0.8 * object_radius;
 
         let generator = SDFVoxelGenerator::new(
-            1.0,
+            0.5,
+            SphereSDFGenerator::new(object_radius),
+            SameVoxelTypeGenerator::new(VoxelType::default()),
+        );
+        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+
+        let plane = Plane::new(
+            UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
+            plane_displacement,
+        );
+
+        let mut indices_of_touched_voxels = HashSet::default();
+
+        object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
+            &plane,
+            &mut |indices, voxel, placement| {
+                assert!(!voxel.is_empty());
+                assert!(matches!(
+                    voxel.placement(),
+                    Some(VoxelPlacement::Surface(pl)) if pl == placement
+                ));
+                let was_absent = indices_of_touched_voxels.insert(indices);
+                assert!(
+                    was_absent,
+                    "Voxel in negative plane halfspace found twice: {indices:?}"
+                );
+            },
+        );
+
+        object.for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
+            &plane,
+            &mut |indices, _| {
+                let was_present = indices_of_touched_voxels.remove(&indices);
+                assert!(
+                    was_present,
+                    "Voxel in negative plane halfspace was not found: {indices:?}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn finding_surface_voxels_intersecting_sphere_finds_correct_voxels() {
+        let object_radius = 10.0;
+        let sphere_radius = 0.6 * object_radius;
+
+        let generator = SDFVoxelGenerator::new(
+            0.5,
             SphereSDFGenerator::new(object_radius),
             SameVoxelTypeGenerator::new(VoxelType::default()),
         );
@@ -1002,11 +1115,11 @@ mod tests {
 
     #[test]
     fn modifying_voxels_within_sphere_finds_correct_voxels() {
-        let object_radius = 20.0;
-        let sphere_radius = 0.2 * object_radius;
+        let object_radius = 10.0;
+        let sphere_radius = 0.4 * object_radius;
 
         let generator = SDFVoxelGenerator::new(
-            1.0,
+            0.5,
             SphereSDFGenerator::new(object_radius),
             SameVoxelTypeGenerator::new(VoxelType::default()),
         );
@@ -1041,13 +1154,13 @@ mod tests {
 
     #[test]
     fn modifying_voxels_within_capsule_finds_correct_voxels() {
-        let object_radius = 20.0;
+        let object_radius = 10.0;
         let capsule_direction = UnitVector3::new_normalize(-vector![1.0, 1.0, 1.0]);
         let capsule_vector = capsule_direction.scale(10.0);
-        let capsule_radius = 0.2 * object_radius;
+        let capsule_radius = 0.4 * object_radius;
 
         let generator = SDFVoxelGenerator::new(
-            1.0,
+            0.5,
             SphereSDFGenerator::new(object_radius),
             SameVoxelTypeGenerator::new(VoxelType::default()),
         );
