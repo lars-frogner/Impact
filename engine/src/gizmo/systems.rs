@@ -343,10 +343,10 @@ fn buffer_transforms_for_model_instance_gizmos(
     if visible_gizmos.contains(GizmoType::BoundingSphere.as_set())
         && let Some(transform) =
             compute_transform_for_bounding_sphere_gizmo(node, model_view_transform)
-        {
-            model_instance_manager
-                .buffer_instance_feature(GizmoType::BoundingSphere.only_model_id(), &transform);
-        }
+    {
+        model_instance_manager
+            .buffer_instance_feature(GizmoType::BoundingSphere.only_model_id(), &transform);
+    }
 }
 
 fn compute_transform_for_bounding_sphere_gizmo(
