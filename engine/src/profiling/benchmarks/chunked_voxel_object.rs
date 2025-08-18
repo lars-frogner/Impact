@@ -1,6 +1,6 @@
 //! Benchmarks for chunked voxel object functionality.
 
-use impact_geometry::Sphere;
+use impact_geometry::{Plane, Sphere};
 use impact_physics::quantities::Position;
 use impact_profiling::Profiler;
 use impact_voxel::{
@@ -117,6 +117,29 @@ pub fn create_mesh(profiler: impl Profiler) {
     );
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     profiler.profile(&mut || ChunkedVoxelObjectMesh::create(&object));
+}
+
+pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(profiler: impl Profiler) {
+    let object_radius = 100.0;
+    let plane_displacement = 0.4 * object_radius;
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(object_radius),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let plane = Plane::new(
+        UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
+        plane_displacement,
+    );
+    profiler.profile(&mut || {
+        object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
+            &plane,
+            &mut |indices, position, voxel| {
+                black_box((indices, position, voxel));
+            },
+        );
+    });
 }
 
 pub fn obtain_surface_voxels_within_sphere(profiler: impl Profiler) {

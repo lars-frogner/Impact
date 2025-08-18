@@ -479,13 +479,6 @@ impl ChunkedVoxelObject {
         AxisAlignedBox::new(lower_corner, upper_corner)
     }
 
-    fn compute_chunk_aabb(&self, chunk_indices: &[usize; 3]) -> AxisAlignedBox<f64> {
-        let chunk_extent = self.chunk_extent();
-        let lower_corner = Point3::from(chunk_indices.map(|index| index as f64 * chunk_extent));
-        let upper_corner = lower_corner + Vector3::from([chunk_extent; 3]);
-        AxisAlignedBox::new(lower_corner, upper_corner)
-    }
-
     /// Computes a sphere enclosing all non-empty voxels in the object.
     pub fn compute_bounding_sphere<F: Float>(&self) -> Sphere<F> {
         let bounding_sphere_for_chunk_centers =
@@ -771,25 +764,28 @@ impl ChunkedVoxelObject {
         for j in self.occupied_voxel_ranges[1].clone() {
             for k in self.occupied_voxel_ranges[2].clone() {
                 if let Some(voxel) = self.get_voxel(0, j, k)
-                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_DN) {
-                        invalid_present_flags.push(([0, j, k], VoxelFlags::HAS_ADJACENT_X_DN));
-                    }
+                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_DN)
+                {
+                    invalid_present_flags.push(([0, j, k], VoxelFlags::HAS_ADJACENT_X_DN));
+                }
             }
         }
         for i in self.occupied_voxel_ranges[0].clone() {
             for k in self.occupied_voxel_ranges[2].clone() {
                 if let Some(voxel) = self.get_voxel(i, 0, k)
-                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_DN) {
-                        invalid_present_flags.push(([i, 0, k], VoxelFlags::HAS_ADJACENT_Y_DN));
-                    }
+                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_DN)
+                {
+                    invalid_present_flags.push(([i, 0, k], VoxelFlags::HAS_ADJACENT_Y_DN));
+                }
             }
         }
         for i in self.occupied_voxel_ranges[0].clone() {
             for j in self.occupied_voxel_ranges[1].clone() {
                 if let Some(voxel) = self.get_voxel(i, j, 0)
-                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_DN) {
-                        invalid_present_flags.push(([i, j, 0], VoxelFlags::HAS_ADJACENT_Z_DN));
-                    }
+                    && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_DN)
+                {
+                    invalid_present_flags.push(([i, j, 0], VoxelFlags::HAS_ADJACENT_Z_DN));
+                }
             }
         }
 

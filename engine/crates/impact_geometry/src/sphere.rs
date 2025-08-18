@@ -177,6 +177,12 @@ impl<F: Float> Sphere<F> {
         max_squared_distance_from_center <= self.radius_squared()
     }
 
+    /// Computes the sphere resulting from scaling this sphere with the given
+    /// uniform scale factor.
+    pub fn scaled(&self, scale: F) -> Self {
+        Self::new(self.center.coords.scale(scale).into(), self.radius * scale)
+    }
+
     /// Computes the sphere resulting from rotating this sphere with the given
     /// rotation quaternion.
     pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {

@@ -63,6 +63,16 @@ impl<F: Float> Capsule<F> {
         self.radius
     }
 
+    /// Computes the capsule resulting from scaling this capsule with the given
+    /// uniform scale factor.
+    pub fn scaled(&self, scale: F) -> Self {
+        Self::new(
+            self.segment_start.coords.scale(scale).into(),
+            self.segment_vector.scale(scale),
+            self.radius * scale,
+        )
+    }
+
     /// Computes the capsule resulting from transforming this capsule with the
     /// given similarity transform.
     pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
