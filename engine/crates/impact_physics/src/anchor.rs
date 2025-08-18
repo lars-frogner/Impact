@@ -261,17 +261,17 @@ impl<A: Anchor> SpecificAnchorManager<A> {
         if let Some(anchor) = self.anchors.remove(&anchor_id)
             && let Entry::Occupied(mut entry) =
                 self.anchor_ids_by_body.entry(anchor.rigid_body_id())
-            {
-                let body_anchor_ids = entry.get_mut();
+        {
+            let body_anchor_ids = entry.get_mut();
 
-                if let Some(anchor_idx) = body_anchor_ids.iter().position(|id| *id == anchor_id) {
-                    body_anchor_ids.swap_remove(anchor_idx);
+            if let Some(anchor_idx) = body_anchor_ids.iter().position(|id| *id == anchor_id) {
+                body_anchor_ids.swap_remove(anchor_idx);
 
-                    if body_anchor_ids.is_empty() {
-                        entry.remove();
-                    }
+                if body_anchor_ids.is_empty() {
+                    entry.remove();
                 }
             }
+        }
     }
 
     /// Inserts the given anchor under the given ID, replacing the existing

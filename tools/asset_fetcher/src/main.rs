@@ -81,9 +81,10 @@ fn determine_present_assets(target_dir: &Path) -> Result<HashSet<String>> {
     for entry in fs::read_dir(target_dir)? {
         let entry = entry?;
         if entry.file_type()?.is_dir()
-            && let Some(name) = entry.file_name().to_str() {
-                present_assets.insert(name.to_string());
-            }
+            && let Some(name) = entry.file_name().to_str()
+        {
+            present_assets.insert(name.to_string());
+        }
     }
 
     Ok(present_assets)

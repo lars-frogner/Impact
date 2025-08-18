@@ -270,9 +270,10 @@ mod inner {
         /// The alignment of this type if it is a POD struct.
         pub fn alignment_as_pod_struct(&self) -> Option<usize> {
             if let ir::TypeComposition::Struct { alignment, .. } = &self.ty.composition
-                && self.flags.contains(RegisteredTypeFlags::IS_POD) {
-                    return Some(*alignment);
-                }
+                && self.flags.contains(RegisteredTypeFlags::IS_POD)
+            {
+                return Some(*alignment);
+            }
             None
         }
 

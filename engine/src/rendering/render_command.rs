@@ -295,16 +295,17 @@ impl RenderCommandManager {
         )?;
 
         if let Some(ref mut pass) = geometry_pass
-            && let Some(voxel_render_commands) = &self.voxel_render_commands {
-                voxel_render_commands.record_to_geometry_pass(
-                    rendering_surface,
-                    model_instance_manager,
-                    gpu_resources,
-                    postprocessor,
-                    frame_counter,
-                    pass,
-                )?;
-            }
+            && let Some(voxel_render_commands) = &self.voxel_render_commands
+        {
+            voxel_render_commands.record_to_geometry_pass(
+                rendering_surface,
+                model_instance_manager,
+                gpu_resources,
+                postprocessor,
+                frame_counter,
+                pass,
+            )?;
+        }
         drop(geometry_pass);
 
         self.omnidirectional_light_shadow_map_update_passes.record(

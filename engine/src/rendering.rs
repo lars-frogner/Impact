@@ -410,9 +410,10 @@ impl RenderingSystem {
     /// given set of task errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
         if let Some(render_error) = task_errors.get_error_of(Render.id())
-            && let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref() {
-                self.handle_surface_lost();
-                task_errors.clear_error_of(Render.id());
-            }
+            && let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref()
+        {
+            self.handle_surface_lost();
+            task_errors.clear_error_of(Render.id());
+        }
     }
 }
