@@ -240,6 +240,24 @@ impl<F: Float> AxisAlignedBox<F> {
         }
     }
 
+    /// Computes the axis-aligned box resulting from scaling this box with the
+    /// given uniform scale factor.
+    pub fn scaled(&self, scale: F) -> Self {
+        Self::new(
+            self.lower_corner().coords.scale(scale).into(),
+            self.upper_corner().coords.scale(scale).into(),
+        )
+    }
+
+    /// Computes the axis-aligned box resulting from translating this box with
+    /// the given displacement vector.
+    pub fn translated(&self, displacement: &Vector3<F>) -> Self {
+        Self::new(
+            self.lower_corner() + displacement,
+            self.upper_corner() + displacement,
+        )
+    }
+
     /// Given a line segment defined by a start point and an offset to the end
     /// point, finds the start and end segment parameter representing the
     /// subsegment lying within the box, or returns [`None`] if the segment lies

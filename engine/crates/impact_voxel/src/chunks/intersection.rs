@@ -9,9 +9,12 @@ use crate::{
     },
 };
 use impact_containers::HashSet;
-use impact_geometry::{AxisAlignedBox, Capsule, Plane, Sphere};
-use nalgebra::{self as na, Point3, point};
+use impact_geometry::{AxisAlignedBox, Capsule, OrientedBox, Plane, Sphere};
+use nalgebra::{self as na, Isometry3, Point3, point, vector};
 use std::{array, ops::Range};
+
+pub type VoxelRanges = [Range<usize>; 3];
+pub type ChunkRanges = [Range<usize>; 3];
 
 impl ChunkedVoxelObject {
     /// Finds non-empty voxels with at least one exposed face that are not fully
@@ -67,9 +70,12 @@ impl ChunkedVoxelObject {
         self.for_each_surface_voxel_in_voxel_ranges(self.occupied_voxel_ranges.clone(), f);
     }
 
-    fn for_each_surface_voxel_in_voxel_ranges(
+    /// Finds non-empty voxels with at least one exposed face in the given voxel
+    /// ranges and calls the given closure with their indices, the voxels
+    /// themselves and their placement on the surface.
+    pub fn for_each_surface_voxel_in_voxel_ranges(
         &self,
-        included_voxel_ranges: [Range<usize>; 3],
+        included_voxel_ranges: VoxelRanges,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         if included_voxel_ranges.iter().any(Range::is_empty) {
@@ -253,7 +259,7 @@ impl ChunkedVoxelObject {
         }
 
         if removed_chunks {
-            self.shrink_occupied_ranges();
+            self.update_occupied_ranges();
         }
 
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
@@ -401,7 +407,7 @@ impl ChunkedVoxelObject {
         }
 
         if removed_chunks {
-            self.shrink_occupied_ranges();
+            self.update_occupied_ranges();
         }
 
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
@@ -434,12 +440,12 @@ impl ChunkedVoxelObject {
     fn handle_chunk_voxels_modified(
         voxels: &mut [Voxel],
         split_detector: &mut SplitDetector,
-        occupied_chunk_ranges: &[Range<usize>; 3],
+        occupied_chunk_ranges: &ChunkRanges,
         chunk: &mut VoxelChunk,
         chunk_indices: [usize; 3],
         chunk_idx: usize,
-        object_voxel_ranges_in_chunk: [Range<usize>; 3],
-        touched_voxel_ranges_in_chunk: [Range<usize>; 3],
+        object_voxel_ranges_in_chunk: VoxelRanges,
+        touched_voxel_ranges_in_chunk: VoxelRanges,
         invalidated_mesh_chunk_indices: &mut HashSet<[usize; 3]>,
         removed_chunks: &mut bool,
     ) {
@@ -593,17 +599,56 @@ impl ChunkedVoxelObject {
     fn voxel_ranges_in_object_touching_aab(
         &self,
         normalized_aab: &AxisAlignedBox<f64>,
-    ) -> [Range<usize>; 3] {
+    ) -> VoxelRanges {
         voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), normalized_aab)
     }
 
     /// The plane should be in normalized voxel object space (where voxel extent
     /// is 1.0).
-    fn voxel_ranges_in_object_within_plane(
-        &self,
-        normalized_plane: &Plane<f64>,
-    ) -> [Range<usize>; 3] {
+    fn voxel_ranges_in_object_within_plane(&self, normalized_plane: &Plane<f64>) -> VoxelRanges {
         voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), normalized_plane)
+    }
+
+    pub fn determine_voxel_ranges_encompassing_intersection(
+        object_a: &Self,
+        object_b: &Self,
+        transform_from_b_to_a: &Isometry3<f64>,
+    ) -> Option<(VoxelRanges, VoxelRanges)> {
+        let object_a_aabb = normalized_aabb_from_voxel_ranges(&object_a.occupied_voxel_ranges)
+            .scaled(object_a.voxel_extent);
+        let object_b_aabb = normalized_aabb_from_voxel_ranges(&object_b.occupied_voxel_ranges)
+            .scaled(object_b.voxel_extent);
+
+        let object_b_obb = OrientedBox::from_axis_aligned_box(&object_b_aabb);
+
+        let object_b_obb_in_a = object_b_obb.translated_and_rotated(transform_from_b_to_a);
+
+        let (intersection_aabb_in_a, intersection_aabb_in_b_relative_to_center) =
+            impact_geometry::compute_box_intersection_bounds(&object_a_aabb, &object_b_obb_in_a)?;
+
+        // `compute_box_intersection_bounds` returns the second bounds relative
+        // to the center of box B, but we need it relative to the lower corner
+        let intersection_aabb_in_b =
+            intersection_aabb_in_b_relative_to_center.translated(&vector![
+                object_b_obb_in_a.half_width(),
+                object_b_obb_in_a.half_height(),
+                object_b_obb_in_a.half_depth()
+            ]);
+
+        let intersection_voxel_ranges_in_a = voxel_ranges_touching_aab(
+            object_a.occupied_voxel_ranges.clone(),
+            &intersection_aabb_in_a.scaled(object_a.voxel_extent.recip()),
+        );
+
+        let intersection_voxel_ranges_in_b = voxel_ranges_touching_aab(
+            object_b.occupied_voxel_ranges.clone(),
+            &intersection_aabb_in_b.scaled(object_b.voxel_extent.recip()),
+        );
+
+        Some((
+            intersection_voxel_ranges_in_a,
+            intersection_voxel_ranges_in_b,
+        ))
     }
 }
 
@@ -616,34 +661,23 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
 /// The plane should be in normalized voxel object space (where voxel extent
 /// is 1.0).
 fn voxel_ranges_within_plane(
-    max_voxel_ranges: [Range<usize>; 3],
+    max_voxel_ranges: VoxelRanges,
     normalized_plane: &Plane<f64>,
-) -> [Range<usize>; 3] {
-    let lower_corner = point![
-        max_voxel_ranges[0].start as f64,
-        max_voxel_ranges[1].start as f64,
-        max_voxel_ranges[2].start as f64
-    ];
+) -> VoxelRanges {
+    let normalized_aabb = normalized_aabb_from_voxel_ranges(&max_voxel_ranges);
 
-    let upper_corner = point![
-        max_voxel_ranges[0].end as f64,
-        max_voxel_ranges[1].end as f64,
-        max_voxel_ranges[2].end as f64
-    ];
+    let normalized_aabb_within_plane =
+        normalized_aabb.projected_onto_negative_halfspace(normalized_plane);
 
-    let aabb = AxisAlignedBox::new(lower_corner, upper_corner);
-
-    let aabb_within_plane = aabb.projected_onto_negative_halfspace(normalized_plane);
-
-    voxel_ranges_touching_aab(max_voxel_ranges, &aabb_within_plane)
+    voxel_ranges_touching_aab(max_voxel_ranges, &normalized_aabb_within_plane)
 }
 
 /// The AAB should be in normalized voxel object space (where voxel extent is
 /// 1.0).
 fn voxel_ranges_touching_aab(
-    max_voxel_ranges: [Range<usize>; 3],
+    max_voxel_ranges: VoxelRanges,
     normalized_aab: &AxisAlignedBox<f64>,
-) -> [Range<usize>; 3] {
+) -> VoxelRanges {
     let lower_corner = normalized_aab.lower_corner();
     let upper_corner = normalized_aab.upper_corner();
 
@@ -716,6 +750,22 @@ fn voxel_aabb_from_object_voxel_indices(
             (k as f64 + 1.0) * voxel_extent
         ],
     )
+}
+
+fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox<f64> {
+    let lower_corner = point![
+        voxel_ranges[0].start as f64,
+        voxel_ranges[1].start as f64,
+        voxel_ranges[2].start as f64
+    ];
+
+    let upper_corner = point![
+        voxel_ranges[0].end as f64,
+        voxel_ranges[1].end as f64,
+        voxel_ranges[2].end as f64
+    ];
+
+    AxisAlignedBox::new(lower_corner, upper_corner)
 }
 
 #[cfg(feature = "fuzzing")]
