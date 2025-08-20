@@ -45,3 +45,7 @@ pub use roc_integration;
 
 #[cfg(feature = "egui")]
 pub use egui;
+
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+static ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;

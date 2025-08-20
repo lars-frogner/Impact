@@ -28,6 +28,16 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Mold
             _ -> Ld
 
+    allocator =
+        when Env.var!("ALLOCATOR") is
+            Ok(str) if !(Str.is_empty(str)) ->
+                when str is
+                    "jemalloc" -> JemallocAllocator
+                    "dhat" -> DhatAllocator
+                    _ -> SystemAllocator
+
+            _ -> SystemAllocator
+
     roc_debug_mode =
         when Env.var!("ROC_DEBUG") is
             Ok(str) if !(Str.is_empty(str)) -> Debug
@@ -43,6 +53,11 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> AddressSanitizer
             _ -> NoAddressSanitizer
 
+    valgrind_mode =
+        when Env.var!("VALGRIND") is
+            Ok(str) if !(Str.is_empty(str)) -> Valgrind
+            _ -> NoValgrind
+
     fuzzing_mode =
         when Env.var!("FUZZING") is
             Ok(str) if !(Str.is_empty(str)) -> Fuzzing
@@ -57,7 +72,7 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, backend, linker, rust_debug_mode, asan_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, backend, linker, allocator, rust_debug_mode, asan_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, rust_debug_mode, os_and_arch)?
 
@@ -65,7 +80,7 @@ main! = |_args|
 
     link_script_with_platform!(platform_dir, app_dir)?
 
-    cargo_build_cli!(app_dir, rust_debug_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_cli!(app_dir, rust_debug_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
 
     crate_name = find_crate_name!(app_dir)?
 
@@ -112,9 +127,9 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [SystemAllocator, JemallocAllocator, DhatAllocator], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, valgrind_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(allocator)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
@@ -129,6 +144,11 @@ cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mod
         when backend is
             LLVM -> []
             Cranelift -> ["-Zcodegen-backend"]
+
+    allocator_args =
+        when allocator is
+            SystemAllocator | DhatAllocator -> []
+            JemallocAllocator -> ["--features", "jemalloc"]
 
     debug_args =
         when debug_mode is
@@ -150,6 +170,11 @@ cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mod
             Ld -> []
             Mold -> ["RUSTFLAGS=-C link-arg=-fuse-ld=mold"]
 
+    allocator_env_vars =
+        when allocator is
+            SystemAllocator -> []
+            JemallocAllocator | DhatAllocator -> ["RUSTFLAGS=-C debuginfo=2 -C force-frame-pointers=yes -C strip=none"]
+
     asan_env_vars =
         when asan_mode is
             NoAddressSanitizer -> []
@@ -158,16 +183,28 @@ cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, fuzzing_mod
                     "RUSTFLAGS=-C debuginfo=2 -C debug-assertions -C overflow-checks=yes -Z sanitizer=address -C link-arg=-lasan",
                 ]
 
+    valgrind_env_vars =
+        when valgrind_mode is
+            NoValgrind -> []
+            Valgrind ->
+                [
+                    # Valgrind doesn't handle AVX512
+                    "RUSTFLAGS=-C target-cpu=x86-64",
+                ]
+
     Cmd.exec!(
         "env",
         backend_env_vars
         |> List.concat(linker_env_vars)
+        |> List.concat(allocator_env_vars)
         |> List.concat(asan_env_vars)
+        |> List.concat(valgrind_env_vars)
         |> List.append("cargo")
         |> List.concat(nightly_arg)
         |> List.append("build")
         |> List.concat(base_args)
         |> List.concat(backend_args)
+        |> List.concat(allocator_args)
         |> List.concat(debug_args)
         |> List.concat(fuzzing_args),
     )
@@ -274,13 +311,13 @@ link_script_with_platform! = |platform_dir, app_dir|
     )
     |> Result.map_err(ErrLinkingScriptWithPlatform)
 
-cargo_build_cli! : Str, [Debug, Release], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_cli! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
+cargo_build_cli! : Str, [Debug, Release], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_cli! = |app_dir, debug_mode, valgrind_mode, fuzzing_mode, os_and_arch|
     Stdout.line!("Building CLI binary with options: ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
-    base_args = ["build", "--manifest-path", "${app_dir}/cli/Cargo.toml", "--target", target_triple]
+    base_args = ["--manifest-path", "${app_dir}/cli/Cargo.toml", "--target", target_triple]
 
     debug_args =
         when debug_mode is
@@ -292,7 +329,22 @@ cargo_build_cli! = |app_dir, debug_mode, fuzzing_mode, os_and_arch|
             NoFuzzing -> []
             Fuzzing -> ["--features", "fuzzing"]
 
-    Cmd.exec!("cargo", List.concat(base_args, debug_args) |> List.concat(fuzzing_args))
+    valgrind_env_vars =
+        when valgrind_mode is
+            NoValgrind -> []
+            Valgrind ->
+                [
+                    "RUSTFLAGS=-C target-cpu=x86-64",
+                ]
+
+    Cmd.exec!(
+        "env",
+        valgrind_env_vars
+        |> List.concat(["cargo", "build"])
+        |> List.concat(base_args)
+        |> List.concat(debug_args)
+        |> List.concat(fuzzing_args),
+    )
     |> Result.map_err(ErrBuildingCLI)
 
 create_distribution! : Str, Str, Str, [Debug, Release], OSAndArch => Result {} _

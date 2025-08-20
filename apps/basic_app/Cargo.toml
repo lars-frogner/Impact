@@ -112,6 +112,7 @@ fuzzing = [
     "impact/arbitrary",
     "impact_dev_ui/arbitrary",
 ]
+jemalloc = ["impact/jemalloc"]
 roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 
 [dependencies]
