@@ -44,6 +44,7 @@ pub struct SceneGraph {
     model_instance_nodes: NodeStorage<ModelInstanceNode>,
     camera_nodes: NodeStorage<CameraNode>,
     model_metadata: ModelMetadata,
+    scratch_space: ScratchSpace,
 }
 
 /// Flat storage for all the [`SceneGraph`] nodes of a given
@@ -138,6 +139,17 @@ pub struct CameraNode {
     camera_to_parent_transform: Isometry3<f32>,
 }
 
+#[derive(Debug)]
+struct ScratchSpace {
+    bounding_sphere_operation_stack: Vec<BoundingSphereUpdateOperation>,
+}
+
+#[derive(Clone, Debug)]
+enum BoundingSphereUpdateOperation {
+    VisitChildren(GroupNodeID),
+    ComputeBounds(GroupNodeID),
+}
+
 bitflags! {
     /// Bitflags encoding a set of binary states or properties for a model instance.
     #[repr(transparent)]
@@ -161,12 +173,17 @@ impl SceneGraph {
 
         let root_node_id = group_nodes.add_node(GroupNode::root());
 
+        let scratch_space = ScratchSpace {
+            bounding_sphere_operation_stack: Vec::with_capacity(32),
+        };
+
         Self {
             root_node_id,
             group_nodes,
             model_instance_nodes,
             camera_nodes,
             model_metadata,
+            scratch_space,
         }
     }
 
@@ -445,7 +462,89 @@ impl SceneGraph {
     /// Updates the bounding spheres of all nodes in the scene graph (excluding
     /// contributions from hidden model instances).
     pub fn update_all_bounding_spheres(&mut self) {
-        self.update_bounding_spheres(self.root_node_id());
+        fn merge_spheres(accum: &mut Option<Sphere<f32>>, sphere: Sphere<f32>) {
+            match accum {
+                None => {
+                    *accum = Some(sphere);
+                }
+                Some(accum_sphere) => {
+                    *accum = Some(Sphere::bounding_sphere_from_pair(accum_sphere, &sphere));
+                }
+            }
+        }
+
+        let operation_stack = &mut self.scratch_space.bounding_sphere_operation_stack;
+        operation_stack.clear();
+
+        operation_stack.push(BoundingSphereUpdateOperation::VisitChildren(
+            self.root_node_id,
+        ));
+
+        while let Some(operation) = operation_stack.pop() {
+            match operation {
+                // We need to update the bounding sphere of each child group node
+                // before its parent, so we don't proceed until we have pushed all
+                // children on the stack after their parents
+                BoundingSphereUpdateOperation::VisitChildren(group_node_id) => {
+                    operation_stack
+                        .push(BoundingSphereUpdateOperation::ComputeBounds(group_node_id));
+
+                    let group_node = self.group_nodes.node(group_node_id);
+                    for child_group_node_id in group_node.child_group_node_ids() {
+                        operation_stack.push(BoundingSphereUpdateOperation::VisitChildren(
+                            *child_group_node_id,
+                        ));
+                    }
+                }
+                BoundingSphereUpdateOperation::ComputeBounds(group_node_id) => {
+                    let mut group_bounding_sphere = None;
+
+                    let group_node = self.group_nodes.node(group_node_id);
+
+                    for child_group_node_id in group_node.child_group_node_ids() {
+                        let child_group_node = self.group_nodes.node(*child_group_node_id);
+
+                        if let Some(child_group_bounding_sphere) =
+                            child_group_node.get_bounding_sphere()
+                        {
+                            merge_spheres(
+                                &mut group_bounding_sphere,
+                                child_group_bounding_sphere.translated_and_rotated(
+                                    child_group_node.group_to_parent_transform(),
+                                ),
+                            );
+                        }
+                    }
+
+                    for model_instance_node_id in group_node.child_model_instance_node_ids() {
+                        let model_instance_node =
+                            self.model_instance_nodes.node(*model_instance_node_id);
+
+                        // Hidden instances don't affect the parent bounds
+                        if model_instance_node
+                            .flags()
+                            .contains(ModelInstanceFlags::IS_HIDDEN)
+                        {
+                            continue;
+                        }
+
+                        if let Some(model_bounding_sphere) =
+                            model_instance_node.get_model_bounding_sphere()
+                        {
+                            merge_spheres(
+                                &mut group_bounding_sphere,
+                                model_bounding_sphere
+                                    .transformed(model_instance_node.model_to_parent_transform()),
+                            );
+                        }
+                    }
+
+                    self.group_nodes
+                        .node_mut(group_node_id)
+                        .set_bounding_sphere(group_bounding_sphere);
+                }
+            }
+        }
     }
 
     /// Computes the model-to-camera space transforms of all the model instances
@@ -565,70 +664,6 @@ impl SceneGraph {
     fn compute_view_transform(&self, camera_node: &CameraNode) -> Isometry3<f32> {
         let parent_node = self.group_nodes.node(camera_node.parent_node_id());
         camera_node.parent_to_camera_transform() * parent_node.root_to_group_transform()
-    }
-
-    /// Updates the bounding sphere of the specified group node and all its
-    /// non-hidden children. Each bounding sphere is defined in the local space
-    /// of its group node.
-    ///
-    /// # Returns
-    /// The bounding sphere of the specified group node, defined in the space of
-    /// its parent group node (used for recursion).
-    ///
-    /// # Panics
-    /// If the specified group node does not exist.
-    fn update_bounding_spheres(&mut self, group_node_id: GroupNodeID) -> Option<Sphere<f32>> {
-        let group_node = self.group_nodes.node(group_node_id);
-
-        let child_group_node_ids = group_node.obtain_child_group_node_ids();
-        let model_instance_node_ids = group_node.obtain_child_model_instance_node_ids();
-
-        let mut child_bounding_spheres =
-            Vec::with_capacity(child_group_node_ids.len() + model_instance_node_ids.len());
-
-        child_bounding_spheres.extend(
-            child_group_node_ids
-                .into_iter()
-                .filter_map(|group_node_id| self.update_bounding_spheres(group_node_id)),
-        );
-
-        child_bounding_spheres.extend(model_instance_node_ids.into_iter().filter_map(
-            |model_instance_node_id| {
-                let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-
-                if model_instance_node
-                    .flags()
-                    .contains(ModelInstanceFlags::IS_HIDDEN)
-                {
-                    // Hidden instances don't affect the parent bounds
-                    None
-                } else {
-                    model_instance_node
-                        .get_model_bounding_sphere()
-                        .map(|bounding_sphere| {
-                            bounding_sphere
-                                .transformed(model_instance_node.model_to_parent_transform())
-                        })
-                }
-            },
-        ));
-
-        let group_node = self.group_nodes.node_mut(group_node_id);
-
-        if child_bounding_spheres.is_empty() {
-            group_node.set_bounding_sphere(None);
-            None
-        } else {
-            let bounding_sphere = child_bounding_spheres.pop().unwrap();
-            let bounding_sphere = bounding_sphere.bounding_sphere_with(&child_bounding_spheres);
-
-            let bounding_sphere_in_parent_space =
-                bounding_sphere.translated_and_rotated(group_node.group_to_parent_transform());
-
-            group_node.set_bounding_sphere(Some(bounding_sphere));
-
-            Some(bounding_sphere_in_parent_space)
-        }
     }
 
     /// Determines the group/model-to-camera transforms of the group nodes and
@@ -1890,9 +1925,10 @@ mod tests {
             ModelInstanceFlags::empty(),
         );
 
-        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        scene_graph.update_all_bounding_spheres();
+        let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert_spheres_equal(
-            &root_bounding_sphere.unwrap(),
+            root_bounding_sphere.unwrap(),
             &bounding_sphere.transformed(&model_to_parent_transform),
         );
 
@@ -1937,9 +1973,10 @@ mod tests {
             ModelInstanceFlags::empty(),
         );
 
-        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        scene_graph.update_all_bounding_spheres();
+        let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert_spheres_equal(
-            &root_bounding_sphere.unwrap(),
+            root_bounding_sphere.unwrap(),
             &Sphere::bounding_sphere_from_pair(&bounding_sphere_1, &bounding_sphere_2),
         );
     }
@@ -1996,12 +2033,10 @@ mod tests {
         let correct_root_bounding_sphere =
             correct_group_1_bounding_sphere.translated_and_rotated(&group_1_to_parent_transform);
 
-        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        scene_graph.update_all_bounding_spheres();
+        let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
 
-        assert_spheres_equal(
-            &root_bounding_sphere.unwrap(),
-            &correct_root_bounding_sphere,
-        );
+        assert_spheres_equal(root_bounding_sphere.unwrap(), &correct_root_bounding_sphere);
 
         assert_spheres_equal(
             scene_graph
@@ -2028,7 +2063,8 @@ mod tests {
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(root, Isometry3::identity());
         let group_2 = scene_graph.create_group_node(group_1, Isometry3::identity());
-        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        scene_graph.update_all_bounding_spheres();
+        let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert!(root_bounding_sphere.is_none());
         assert!(
             scene_graph
