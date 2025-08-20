@@ -83,6 +83,19 @@ pub fn resolve_connected_regions_between_all_chunks(profiler: impl Profiler) {
     black_box(object);
 }
 
+pub fn update_occupied_voxel_ranges(profiler: impl Profiler) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        SphereSDFGenerator::new(100.0),
+        SameVoxelTypeGenerator::new(VoxelType::default()),
+    );
+    let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    profiler.profile(&mut || {
+        object.update_occupied_voxel_ranges();
+    });
+    black_box(object);
+}
+
 pub fn compute_all_derived_state(profiler: impl Profiler) {
     let generator = SDFVoxelGenerator::new(
         1.0,

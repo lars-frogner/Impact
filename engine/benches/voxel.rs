@@ -80,6 +80,7 @@ define_criterion_target!(
     chunked_voxel_object,
     resolve_connected_regions_between_all_chunks
 );
+define_criterion_target!(chunked_voxel_object, update_occupied_voxel_ranges);
 define_criterion_target!(chunked_voxel_object, compute_all_derived_state);
 define_criterion_target!(chunked_voxel_object, initialize_inertial_properties);
 define_criterion_target!(chunked_voxel_object, create_mesh);
@@ -107,6 +108,7 @@ criterion::criterion_group!(
         update_connected_regions_for_all_chunks,
         update_all_chunk_boundary_adjacencies,
         resolve_connected_regions_between_all_chunks,
+        update_occupied_voxel_ranges,
         compute_all_derived_state,
         initialize_inertial_properties,
         for_each_exposed_chunk_with_sdf,
