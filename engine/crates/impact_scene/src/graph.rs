@@ -8,7 +8,7 @@ use crate::{
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_camera::gpu_resource::BufferableCamera;
-use impact_containers::{HashMap, HashSet, SlotKey, SlotMap};
+use impact_containers::{HashMap, SlotKey, SlotMap};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
     LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
@@ -28,6 +28,7 @@ use std::{
     collections::hash_map::Entry,
     sync::atomic::{AtomicU32, Ordering},
 };
+use tinyvec::TinyVec;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
 /// and enables useful operations on them.
@@ -71,19 +72,19 @@ pub trait SceneGraphNodeID: NodeIDToSlotKey + SlotKeyToNodeID + Pod {}
 /// Identifier for a group node in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct GroupNodeID(SlotKey);
 
 /// Identifier for a [`ModelInstanceNode`] in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ModelInstanceNodeID(SlotKey);
 
 /// Identifier for a [`CameraNode`] in a [`SceneGraph`].
 #[roc(parents = "Scene")]
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CameraNodeID(SlotKey);
 
 /// Represents a type of node identifier that may provide an associated
@@ -100,6 +101,15 @@ pub trait SlotKeyToNodeID {
     fn from_key(key: SlotKey) -> Self;
 }
 
+/// Type alias for a collection of child group node IDs with inline capacity of 8.
+type ChildGroupNodeIds = TinyVec<[GroupNodeID; 8]>;
+
+/// Type alias for a collection of child model instance node IDs with inline capacity of 8.
+type ChildModelInstanceNodeIds = TinyVec<[ModelInstanceNodeID; 8]>;
+
+/// Type alias for a collection of child camera node IDs with inline capacity of 8.
+type ChildCameraNodeIds = TinyVec<[CameraNodeID; 8]>;
+
 /// A [`SceneGraph`] node that has a group of other nodes as children. The
 /// children may be [`ModelInstanceNode`]s, [`CameraNode`]s and/or other group
 /// nodes. It holds a transform representing group's spatial relationship with
@@ -108,9 +118,9 @@ pub trait SlotKeyToNodeID {
 pub struct GroupNode {
     parent_node_id: Option<GroupNodeID>,
     group_to_parent_transform: Isometry3<f32>,
-    child_group_node_ids: HashSet<GroupNodeID>,
-    child_model_instance_node_ids: HashSet<ModelInstanceNodeID>,
-    child_camera_node_ids: HashSet<CameraNodeID>,
+    child_group_node_ids: ChildGroupNodeIds,
+    child_model_instance_node_ids: ChildModelInstanceNodeIds,
+    child_camera_node_ids: ChildCameraNodeIds,
     bounding_sphere: Option<Sphere<f32>>,
     group_to_root_transform: Isometry3<f32>,
 }
@@ -1297,9 +1307,9 @@ impl GroupNode {
         Self {
             parent_node_id,
             group_to_parent_transform,
-            child_group_node_ids: HashSet::default(),
-            child_model_instance_node_ids: HashSet::default(),
-            child_camera_node_ids: HashSet::default(),
+            child_group_node_ids: ChildGroupNodeIds::default(),
+            child_model_instance_node_ids: ChildModelInstanceNodeIds::default(),
+            child_camera_node_ids: ChildCameraNodeIds::default(),
             bounding_sphere: None,
             group_to_root_transform: Isometry3::identity(),
         }
@@ -1325,16 +1335,16 @@ impl GroupNode {
         self.parent_node_id.unwrap()
     }
 
-    fn child_group_node_ids(&self) -> &HashSet<GroupNodeID> {
+    fn child_group_node_ids(&self) -> &ChildGroupNodeIds {
         &self.child_group_node_ids
     }
 
-    fn child_model_instance_node_ids(&self) -> &HashSet<ModelInstanceNodeID> {
+    fn child_model_instance_node_ids(&self) -> &ChildModelInstanceNodeIds {
         &self.child_model_instance_node_ids
     }
 
     #[cfg(test)]
-    fn child_camera_node_ids(&self) -> &HashSet<CameraNodeID> {
+    fn child_camera_node_ids(&self) -> &ChildCameraNodeIds {
         &self.child_camera_node_ids
     }
 
@@ -1369,29 +1379,46 @@ impl GroupNode {
     }
 
     fn add_child_group_node(&mut self, group_node_id: GroupNodeID) {
-        self.child_group_node_ids.insert(group_node_id);
+        self.child_group_node_ids.push(group_node_id);
     }
 
     fn add_child_model_instance_node(&mut self, model_instance_node_id: ModelInstanceNodeID) {
         self.child_model_instance_node_ids
-            .insert(model_instance_node_id);
+            .push(model_instance_node_id);
     }
 
     fn add_child_camera_node(&mut self, camera_node_id: CameraNodeID) {
-        self.child_camera_node_ids.insert(camera_node_id);
+        self.child_camera_node_ids.push(camera_node_id);
     }
 
     fn remove_child_group_node(&mut self, group_node_id: GroupNodeID) {
-        self.child_group_node_ids.remove(&group_node_id);
+        if let Some(pos) = self
+            .child_group_node_ids
+            .iter()
+            .position(|&id| id == group_node_id)
+        {
+            self.child_group_node_ids.remove(pos);
+        }
     }
 
     fn remove_child_model_instance_node(&mut self, model_instance_node_id: ModelInstanceNodeID) {
-        self.child_model_instance_node_ids
-            .remove(&model_instance_node_id);
+        if let Some(pos) = self
+            .child_model_instance_node_ids
+            .iter()
+            .position(|&id| id == model_instance_node_id)
+        {
+            self.child_model_instance_node_ids.remove(pos);
+        }
     }
 
     fn remove_child_camera_node(&mut self, camera_node_id: CameraNodeID) {
-        self.child_camera_node_ids.remove(&camera_node_id);
+        if let Some(pos) = self
+            .child_camera_node_ids
+            .iter()
+            .position(|&id| id == camera_node_id)
+        {
+            self.child_camera_node_ids.remove(pos);
+        }
     }
 
     fn set_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<f32>>) {

@@ -297,6 +297,12 @@ impl PartialOrd for SlotKey {
     }
 }
 
+impl Default for SlotKey {
+    fn default() -> Self {
+        Self::dummy()
+    }
+}
+
 impl fmt::Display for SlotKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_legal() {
