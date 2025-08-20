@@ -207,6 +207,6 @@ impl InstanceFeatureGPUBuffer {
 
         self.n_features = u32::try_from(feature_buffer.n_valid_features()).unwrap();
 
-        self.range_map = feature_buffer.create_range_map();
+        feature_buffer.update_range_map(&mut self.range_map);
     }
 }
