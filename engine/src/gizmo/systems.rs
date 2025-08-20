@@ -16,7 +16,7 @@ use crate::gizmo::{
 use approx::abs_diff_ne;
 use impact_camera::gpu_resource::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
@@ -30,17 +30,19 @@ use impact_physics::{
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager, TypedRigidBodyID},
 };
 use impact_scene::{
-    SceneEntityFlags, SceneGraphModelInstanceNodeHandle,
+    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
     camera::SceneCamera,
     graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
     model::ModelInstanceManager,
 };
 use impact_voxel::{
     VoxelObjectID, VoxelObjectManager,
-    chunks::{CHUNK_SIZE, VoxelChunk},
+    chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
 };
-use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{
+    Isometry3, Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
+};
 use parking_lot::RwLock;
 use std::iter;
 use tinyvec::TinyVec;
@@ -312,6 +314,65 @@ pub fn buffer_transforms_for_gizmos(
             );
         }
     );
+
+    let mut voxel_objects = Vec::new();
+
+    query!(
+        ecs_world,
+        |gizmos: &GizmosComp,
+         frame: &ReferenceFrame,
+         model_transform: &ModelTransform,
+         voxel_object_id: &VoxelObjectID,
+         flags: &SceneEntityFlags| {
+            if !gizmos
+                .visible_gizmos
+                .contains(GizmoSet::VOXEL_INTERSECTIONS)
+                || flags.is_disabled()
+            {
+                return;
+            }
+            let model_to_world_transform = frame.create_transform_to_parent_space()
+                * model_transform.crate_transform_to_entity_space().isometry;
+
+            voxel_objects.push((*voxel_object_id, model_to_world_transform));
+        },
+        ![SceneGraphParentNodeHandle]
+    );
+    query!(ecs_world, |gizmos: &GizmosComp,
+                       frame: &ReferenceFrame,
+                       model_transform: &ModelTransform,
+                       voxel_object_id: &VoxelObjectID,
+                       parent: &SceneGraphParentNodeHandle,
+                       flags: &SceneEntityFlags| {
+        if !gizmos
+            .visible_gizmos
+            .contains(GizmoSet::VOXEL_INTERSECTIONS)
+            || flags.is_disabled()
+        {
+            return;
+        }
+        let parent_group_node = scene_graph.group_nodes().node(parent.id);
+
+        let model_to_world_transform = parent_group_node.group_to_root_transform()
+            * frame.create_transform_to_parent_space()
+            * model_transform.crate_transform_to_entity_space().isometry;
+
+        voxel_objects.push((*voxel_object_id, model_to_world_transform));
+    });
+
+    for (i, (object_a, a_to_world)) in voxel_objects.iter().enumerate() {
+        for (object_b, b_to_world) in &voxel_objects[i + 1..] {
+            buffer_transforms_for_voxel_intersections_gizmo(
+                model_instance_manager,
+                voxel_object_manager,
+                scene_camera,
+                *object_a,
+                *object_b,
+                a_to_world,
+                b_to_world,
+            );
+        }
+    }
 }
 
 fn buffer_transforms_for_model_instance_gizmos(
@@ -934,4 +995,76 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
                 &InstanceModelViewTransform::from(chunk_transform),
             );
         });
+}
+
+fn buffer_transforms_for_voxel_intersections_gizmo(
+    model_instance_manager: &mut ModelInstanceManager,
+    voxel_object_manager: &VoxelObjectManager,
+    scene_camera: &SceneCamera,
+    object_a_id: VoxelObjectID,
+    object_b_id: VoxelObjectID,
+    transform_from_a_to_world_space: &Isometry3<f32>,
+    transform_from_b_to_world_space: &Isometry3<f32>,
+) {
+    let Some(object_a) = voxel_object_manager.get_voxel_object(object_a_id) else {
+        return;
+    };
+    let object_a = object_a.object();
+
+    let Some(object_b) = voxel_object_manager.get_voxel_object(object_b_id) else {
+        return;
+    };
+    let object_b = object_b.object();
+
+    let transform_from_b_to_a =
+        transform_from_a_to_world_space.inverse() * transform_from_b_to_world_space;
+
+    let Some((voxel_ranges_for_a, voxel_ranges_for_b)) =
+        ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
+            object_a,
+            object_b,
+            &transform_from_b_to_a.cast(),
+        )
+    else {
+        return;
+    };
+
+    let transform_from_a_to_camera_space =
+        scene_camera.view_transform() * transform_from_a_to_world_space;
+
+    let transform_from_b_to_camera_space =
+        scene_camera.view_transform() * transform_from_b_to_world_space;
+
+    let mut transforms = Vec::with_capacity(256);
+
+    let mut add_transforms = |voxel_object: &ChunkedVoxelObject,
+                              transform_from_object_to_camera_space: &Isometry3<f32>,
+                              i,
+                              j,
+                              k| {
+        let voxel_center_in_object_space =
+            voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
+
+        let voxel_center_in_camera_space = transform_from_object_to_camera_space
+            .transform_point(&voxel_center_in_object_space.cast());
+
+        let model_to_camera_transform = InstanceModelViewTransform {
+            translation: voxel_center_in_camera_space.coords,
+            rotation: transform_from_object_to_camera_space.rotation,
+            scaling: 0.5 * voxel_object.voxel_extent() as f32,
+        };
+
+        transforms.push(model_to_camera_transform);
+    };
+
+    object_a.for_each_surface_voxel_in_voxel_ranges(voxel_ranges_for_a, &mut |[i, j, k], _, _| {
+        add_transforms(object_a, &transform_from_a_to_camera_space, i, j, k);
+    });
+
+    object_b.for_each_surface_voxel_in_voxel_ranges(voxel_ranges_for_b, &mut |[i, j, k], _, _| {
+        add_transforms(object_b, &transform_from_b_to_camera_space, i, j, k);
+    });
+
+    model_instance_manager
+        .buffer_instance_feature_slice(GizmoType::VoxelIntersections.only_model_id(), &transforms);
 }

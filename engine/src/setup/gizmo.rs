@@ -7,6 +7,7 @@ use impact_light::{
     OmnidirectionalLightID, ShadowableOmnidirectionalLightID, ShadowableUnidirectionalLightID,
 };
 use impact_physics::collision::CollidableID;
+use impact_voxel::VoxelObjectID;
 
 /// Adds the [`GizmosComp`] component to the new entities if they have any of
 /// the relevant components. The components are initialized based on which
@@ -69,6 +70,18 @@ pub fn setup_gizmos_for_new_entities(
             OmnidirectionalLightID,
             ShadowableOmnidirectionalLightID,
             ShadowableUnidirectionalLightID
+        ]
+    );
+    setup!(
+        components,
+        |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(gizmo_manager, gizmos) },
+        [VoxelObjectID],
+        ![
+            ReferenceFrame,
+            OmnidirectionalLightID,
+            ShadowableOmnidirectionalLightID,
+            ShadowableUnidirectionalLightID,
+            CollidableID
         ]
     );
 }
