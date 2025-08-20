@@ -134,11 +134,13 @@ pub struct ModelInstanceNode {
     model_bounding_sphere: Option<Sphere<f32>>,
     model_to_parent_transform: Similarity3<f32>,
     model_id: ModelID,
-    feature_ids_for_rendering: Vec<InstanceFeatureID>,
-    feature_ids_for_shadow_mapping: Vec<InstanceFeatureID>,
+    feature_ids_for_rendering: FeatureIDSet,
+    feature_ids_for_shadow_mapping: FeatureIDSet,
     flags: ModelInstanceFlags,
     frame_count_when_last_visible: AtomicU32,
 }
+
+pub type FeatureIDSet = TinyVec<[InstanceFeatureID; 4]>;
 
 /// A [`SceneGraph`] leaf node representing a [`Camera`](impact_camera::Camera).
 /// It holds at transform representing the camera's spatial relationship with
@@ -265,8 +267,8 @@ impl SceneGraph {
         model_to_parent_transform: Similarity3<f32>,
         model_id: ModelID,
         frustum_culling_bounding_sphere: Option<Sphere<f32>>,
-        feature_ids_for_rendering: Vec<InstanceFeatureID>,
-        feature_ids_for_shadow_mapping: Vec<InstanceFeatureID>,
+        feature_ids_for_rendering: FeatureIDSet,
+        feature_ids_for_shadow_mapping: FeatureIDSet,
         flags: ModelInstanceFlags,
     ) -> ModelInstanceNodeID {
         if !feature_ids_for_rendering.is_empty() {
@@ -1450,8 +1452,8 @@ impl ModelInstanceNode {
         model_bounding_sphere: Option<Sphere<f32>>,
         model_to_parent_transform: Similarity3<f32>,
         model_id: ModelID,
-        feature_ids_for_rendering: Vec<InstanceFeatureID>,
-        feature_ids_for_shadow_mapping: Vec<InstanceFeatureID>,
+        feature_ids_for_rendering: FeatureIDSet,
+        feature_ids_for_shadow_mapping: FeatureIDSet,
         flags: ModelInstanceFlags,
     ) -> Self {
         Self {
@@ -1641,17 +1643,17 @@ mod tests {
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             create_dummy_model_instance_rendering_feature_ids(),
-            Vec::new(),
+            FeatureIDSet::new(),
             ModelInstanceFlags::empty(),
         )
     }
 
-    fn create_dummy_model_instance_rendering_feature_ids() -> Vec<InstanceFeatureID> {
+    fn create_dummy_model_instance_rendering_feature_ids() -> FeatureIDSet {
         let id_1 = InstanceFeatureStorage::new::<InstanceModelViewTransformWithPrevious>()
             .add_feature(&InstanceModelViewTransformWithPrevious::zeroed());
         let id_2 = InstanceFeatureStorage::new::<InstanceModelLightTransform>()
             .add_feature(&InstanceModelLightTransform::zeroed());
-        vec![id_1, id_2]
+        FeatureIDSet::from_iter([id_1, id_2])
     }
 
     fn create_dummy_camera_node(
@@ -1943,7 +1945,7 @@ mod tests {
             create_dummy_model_id(""),
             Some(bounding_sphere),
             create_dummy_model_instance_rendering_feature_ids(),
-            Vec::new(),
+            FeatureIDSet::new(),
             ModelInstanceFlags::empty(),
         );
 
@@ -1982,7 +1984,7 @@ mod tests {
             create_dummy_model_id("1"),
             Some(bounding_sphere_1),
             create_dummy_model_instance_rendering_feature_ids(),
-            Vec::new(),
+            FeatureIDSet::new(),
             ModelInstanceFlags::empty(),
         );
         scene_graph.create_model_instance_node(
@@ -1991,7 +1993,7 @@ mod tests {
             create_dummy_model_id("2"),
             Some(bounding_sphere_2),
             create_dummy_model_instance_rendering_feature_ids(),
-            Vec::new(),
+            FeatureIDSet::new(),
             ModelInstanceFlags::empty(),
         );
 
@@ -2032,7 +2034,7 @@ mod tests {
             create_dummy_model_id("1"),
             Some(bounding_sphere_1),
             create_dummy_model_instance_rendering_feature_ids(),
-            Vec::new(),
+            FeatureIDSet::new(),
             ModelInstanceFlags::empty(),
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_to_parent_transform);
@@ -2042,7 +2044,7 @@ mod tests {
             create_dummy_model_id("2"),
             Some(bounding_sphere_2),
             create_dummy_model_instance_rendering_feature_ids(),
-            Vec::new(),
+            FeatureIDSet::new(),
             ModelInstanceFlags::empty(),
         );
 

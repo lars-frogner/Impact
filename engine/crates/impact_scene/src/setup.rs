@@ -3,7 +3,7 @@
 use crate::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
-    graph::SceneGraph,
+    graph::{FeatureIDSet, SceneGraph},
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
@@ -14,6 +14,7 @@ use impact_model::transform::{
 };
 use nalgebra::{Isometry3, Similarity3};
 use parking_lot::RwLock;
+use tinyvec::TinyVec;
 
 /// A parent entity.
 ///
@@ -123,9 +124,9 @@ pub fn setup_scene_graph_model_instance_node(
         )
     };
 
-    let mut feature_type_ids = Vec::with_capacity(3);
-    let mut feature_ids_for_rendering = Vec::with_capacity(2);
-    let mut feature_ids_for_shadow_mapping = Vec::with_capacity(1);
+    let mut feature_type_ids: TinyVec<[_; 4]> = TinyVec::new();
+    let mut feature_ids_for_rendering = FeatureIDSet::new();
+    let mut feature_ids_for_shadow_mapping = FeatureIDSet::new();
 
     // Add entries for the model-to-camera and model-to-light transforms
     // for the scene graph to access and modify using the returned IDs

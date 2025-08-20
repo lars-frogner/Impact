@@ -719,6 +719,12 @@ impl InstanceFeatureTypeID {
     }
 }
 
+impl Default for InstanceFeatureTypeID {
+    fn default() -> Self {
+        Self::not_applicable()
+    }
+}
+
 impl fmt::Display for InstanceFeatureTypeID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -748,6 +754,12 @@ impl InstanceFeatureID {
     /// Returns `true` if this ID does not represent a valid feature.
     pub fn is_not_applicable(&self) -> bool {
         self.feature_type_id == InstanceFeatureTypeID::not_applicable() && self.idx == u64::MAX
+    }
+}
+
+impl Default for InstanceFeatureID {
+    fn default() -> Self {
+        Self::not_applicable()
     }
 }
 
