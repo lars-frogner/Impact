@@ -27,7 +27,8 @@ use impact_physics::{
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::SceneGraph, model::ModelInstanceManager,
+    graph::{FeatureIDSet, SceneGraph},
+    model::ModelInstanceManager,
 };
 use nalgebra::Vector3;
 use parking_lot::RwLock;
@@ -727,8 +728,8 @@ pub fn create_model_instance_node_for_voxel_object(
             model_to_parent_transform,
             model_id,
             bounding_sphere,
-            vec![model_view_transform_feature_id, voxel_object_id_feature_id],
-            vec![model_light_transform_feature_id, voxel_object_id_feature_id],
+            FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
+            FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
             flags.into(),
         )),
         model_transform,
