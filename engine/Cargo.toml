@@ -166,6 +166,7 @@ arbitrary = [
     "impact_texture/arbitrary",
     "impact_voxel/arbitrary",
 ]
+jemalloc = ["dep:tikv-jemallocator"]
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_controller/roc_codegen",
@@ -238,6 +239,10 @@ impact_texture = { path = "crates/impact_texture", features = [
 impact_thread = { path = "crates/impact_thread" }
 impact_voxel = { path = "crates/impact_voxel", features = ["ecs", "ron"] }
 inventory = { workspace = true }
+tikv-jemallocator = { version = "0.6", optional = true, features = [
+    "profiling",
+    "disable_initial_exec_tls",
+] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }
 parking_lot = { workspace = true }

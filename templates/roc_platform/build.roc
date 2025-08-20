@@ -23,7 +23,12 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Debug
             _ -> Release
 
-    cargo_build_platform!(platform_dir, linker, debug_mode)?
+    valgrind_mode =
+        when Env.var!("VALGRIND") is
+            Ok(str) if !(Str.is_empty(str)) -> Valgrind
+            _ -> NoValgrind
+
+    cargo_build_platform!(platform_dir, linker, debug_mode, valgrind_mode)?
 
     rust_target_dir = get_rust_target_dir!(platform_dir, debug_mode)
 
@@ -50,9 +55,9 @@ get_rust_target_dir! = |platform_dir, debug_mode|
         Err(_) ->
             "${target_root}/${debug_or_release}/"
 
-cargo_build_platform! : Str, [Ld, Mold], [Debug, Release] => Result {} _
-cargo_build_platform! = |platform_dir, linker, debug_mode|
-    Stdout.line!("Building platform crate with options: ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}")?
+cargo_build_platform! : Str, [Ld, Mold], [Debug, Release], [Valgrind, NoValgrind] => Result {} _
+cargo_build_platform! = |platform_dir, linker, debug_mode, valgrind_mode|
+    Stdout.line!("Building platform crate with options: ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(valgrind_mode)}")?
 
     base_args = ["--manifest-path", "${platform_dir}/Cargo.toml"]
 
@@ -66,9 +71,18 @@ cargo_build_platform! = |platform_dir, linker, debug_mode|
             Ld -> []
             Mold -> ["RUSTFLAGS=-C link-arg=-fuse-ld=mold"]
 
+    valgrind_env_vars =
+        when valgrind_mode is
+            NoValgrind -> []
+            Valgrind ->
+                [
+                    "RUSTFLAGS=-C target-cpu=x86-64",
+                ]
+
     Cmd.exec!(
         "env",
         linker_env_vars
+        |> List.concat(valgrind_env_vars)
         |> List.concat(["cargo", "build"])
         |> List.concat(base_args)
         |> List.concat(debug_args),
