@@ -485,41 +485,44 @@ where
         // increment its count of completed dependencies. We keep
         // track of any dependent tasks that have no uncompleted
         // dependencies left as a result of completing this task.
-        let ready_dependent_task_indices: Vec<_> = ordered_task
+        let mut ready_dependent_task_indices = ordered_task
             .indices_of_dependent_tasks()
             .iter()
-            .cloned()
-            .filter(|&dependent_task_idx| {
+            .filter_map(|&dependent_task_idx| {
                 let dependent_task = state.task_ordering().task(dependent_task_idx);
                 let task_ready = dependent_task.complete_dependency();
-                task_ready == TaskReady::Yes
-            })
-            .collect();
+                if task_ready == TaskReady::Yes {
+                    Some(dependent_task_idx)
+                } else {
+                    None
+                }
+            });
 
-        // Schedule each task that has no dependencies left for
-        // execution, leaving one for this thread to start executing
+        // Take the first ready task for this thread to start executing
         // immediately
-        if ready_dependent_task_indices.len() > 1 {
-            for &ready_dependent_task_idx in &ready_dependent_task_indices[1..] {
-                impact_log::with_trace_logging!(
-                    "Worker {} scheduling execution of task {}",
-                    channel.owning_worker_id(),
-                    state
-                        .task_ordering()
-                        .task(ready_dependent_task_idx)
-                        .task()
-                        .id();
-                    {
-                        channel.send_execute_instruction(Self::create_message(
-                            &state,
-                            &execution_tags,
-                            ready_dependent_task_idx,
-                        ));
-                    }
-                );
-            }
+        let first_ready_dependent_task_idx = ready_dependent_task_indices.next();
+
+        // Schedule each remaining ready task
+        for ready_dependent_task_idx in ready_dependent_task_indices {
+            impact_log::with_trace_logging!(
+                "Worker {} scheduling execution of task {}",
+                channel.owning_worker_id(),
+                state
+                    .task_ordering()
+                    .task(ready_dependent_task_idx)
+                    .task()
+                    .id();
+                {
+                    channel.send_execute_instruction(Self::create_message(
+                        &state,
+                        &execution_tags,
+                        ready_dependent_task_idx,
+                    ));
+                }
+            );
         }
-        if let Some(&ready_dependent_task_idx) = ready_dependent_task_indices.first() {
+
+        if let Some(ready_dependent_task_idx) = first_ready_dependent_task_idx {
             Self::execute_task_and_schedule_dependencies(
                 channel,
                 (state, execution_tags, ready_dependent_task_idx),
