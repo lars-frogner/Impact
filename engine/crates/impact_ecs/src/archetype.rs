@@ -9,27 +9,37 @@ use super::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap, NoHashSet};
+use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap};
 use impact_ecs_macros::archetype_of;
+use impact_math::Hash32;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use pastey::paste;
 use std::{
-    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     iter,
     marker::PhantomData,
 };
+use tinyvec::TinyVec;
 
 /// Representation of an archetype.
 ///
 /// An archetype refers to a specific set of [`Component`]s
 /// that an entity can have. All entities with the exact
 /// same set of components belong to the same archetype.
+///
+/// # Implementation
+///
+/// Component IDs are stored in a sorted [`TinyVec`] with inline storage
+/// for up to 8 components. This avoids heap allocation for typical
+/// archetypes while maintaining efficient lookup operations through
+/// binary search on the sorted array.
 #[derive(Clone, Debug)]
 pub struct Archetype {
     id: ArchetypeID,
-    component_ids: NoHashSet<ComponentID>,
+    component_ids: ArchetypeComponentIDs,
 }
+
+pub type ArchetypeComponentIDs = TinyVec<[ComponentID; 8]>;
 
 /// Unique identifier for an [`Archetype`], obtained by hashing
 /// the sorted list of component IDs defining the archetype.
@@ -280,13 +290,26 @@ impl Archetype {
     /// Whether this archetype includes the component type
     /// with the given ID.
     pub fn contains_component_id(&self, component_id: ComponentID) -> bool {
-        self.component_ids.contains(&component_id)
+        self.component_ids.binary_search(&component_id).is_ok()
     }
 
     /// Whether this archetype includes at least all the component
     /// types included in the given archetype.
     pub fn contains(&self, other: &Self) -> bool {
-        self.component_ids.is_superset(&other.component_ids)
+        // Two-pointer technique for checking if self contains all of other's components
+        let mut i = 0;
+        let mut j = 0;
+        while i < self.component_ids.len() && j < other.component_ids.len() {
+            if self.component_ids[i] == other.component_ids[j] {
+                i += 1;
+                j += 1;
+            } else if self.component_ids[i] < other.component_ids[j] {
+                i += 1;
+            } else {
+                return false;
+            }
+        }
+        j == other.component_ids.len()
     }
 
     /// Whether the archetype includes none of the component IDs
@@ -309,11 +332,11 @@ impl Archetype {
         }
 
         Ok(Self::new_from_sorted_component_ids_unchecked(
-            &component_ids,
+            ArchetypeComponentIDs::from_iter(component_ids),
         ))
     }
 
-    fn new_from_sorted_component_ids(component_ids: &[ComponentID]) -> Result<Self> {
+    fn new_from_sorted_component_ids(component_ids: ArchetypeComponentIDs) -> Result<Self> {
         if !component_ids.is_empty() {
             // Verify that no component is represented multiple times
             let duplicates_exist = (1..component_ids.len())
@@ -326,17 +349,15 @@ impl Archetype {
         Ok(Self::new_from_sorted_component_ids_unchecked(component_ids))
     }
 
-    fn new_from_sorted_component_ids_unchecked(component_ids: &[ComponentID]) -> Self {
-        let id = Self::create_id_from_sorted_component_ids(component_ids);
-        let component_ids = component_ids.iter().cloned().collect();
+    fn new_from_sorted_component_ids_unchecked(component_ids: ArchetypeComponentIDs) -> Self {
+        let id = Self::create_id_from_sorted_component_ids(&component_ids);
+        let component_ids = TinyVec::from_iter(component_ids.iter().cloned());
         Self { id, component_ids }
     }
 
     /// Obtains an archetype ID by hashing the slice of sorted component IDs.
     fn create_id_from_sorted_component_ids(component_ids: &[ComponentID]) -> ArchetypeID {
-        let mut hasher = DefaultHasher::new();
-        component_ids.hash(&mut hasher);
-        ArchetypeID(hasher.finish() as u32)
+        ArchetypeID(Hash32::from_bytes(bytemuck::cast_slice(component_ids)).into())
     }
 }
 
@@ -418,12 +439,13 @@ where
             bail!("The number of component instances differs between component types");
         }
 
-        let mut component_ids: Vec<_> = component_arrays.iter().map(A::component_id).collect();
+        let mut component_ids: ArchetypeComponentIDs =
+            component_arrays.iter().map(A::component_id).collect();
 
         // Make sure components IDs are sorted before determining archetype
         component_ids.sort();
 
-        let archetype = Archetype::new_from_sorted_component_ids(&component_ids)?;
+        let archetype = Archetype::new_from_sorted_component_ids(component_ids)?;
 
         Ok(Self::new(archetype, component_arrays, component_count))
     }
@@ -675,9 +697,10 @@ where
     }
 
     fn find_archetype(component_arrays: &[A]) -> Archetype {
-        let mut component_ids: Vec<_> = component_arrays.iter().map(A::component_id).collect();
+        let mut component_ids: ArchetypeComponentIDs =
+            component_arrays.iter().map(A::component_id).collect();
         component_ids.sort();
-        Archetype::new_from_sorted_component_ids_unchecked(&component_ids)
+        Archetype::new_from_sorted_component_ids_unchecked(component_ids)
     }
 }
 
@@ -786,7 +809,7 @@ where
             bail!("Tried to create empty single instance `ArchetypeComponents`");
         }
 
-        let mut component_ids: Vec<_> = component_arrays
+        let mut component_ids: ArchetypeComponentIDs = component_arrays
             .iter()
             .map(|array| array.component_id())
             .collect();
@@ -794,7 +817,7 @@ where
         // Make sure components IDs are sorted before determining archetype
         component_ids.sort();
 
-        let archetype = Archetype::new_from_sorted_component_ids(&component_ids)?;
+        let archetype = Archetype::new_from_sorted_component_ids(component_ids)?;
 
         Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
             archetype,
@@ -2765,5 +2788,32 @@ mod tests {
         );
         assert_eq!(cloned_components_0.component_count(), 1);
         assert_eq!(cloned_components_1.component_count(), 1);
+    }
+
+    #[test]
+    fn tinyvec_implementation_works_correctly() {
+        // Test that TinyVec-based archetype behaves correctly
+        let archetype1 = archetype_of!(Byte, Position);
+        let archetype2 = archetype_of!(Byte);
+        let archetype3 = archetype_of!(Position, Rectangle);
+
+        // Test containment
+        assert!(archetype1.contains(&archetype2));
+        assert!(!archetype2.contains(&archetype1));
+        assert!(!archetype1.contains(&archetype3));
+
+        // Test component count
+        assert_eq!(archetype1.n_components(), 2);
+        assert_eq!(archetype2.n_components(), 1);
+        assert_eq!(archetype3.n_components(), 2);
+
+        // Test component ID checks
+        assert!(archetype1.contains_component_id(Byte::component_id()));
+        assert!(archetype1.contains_component_id(Position::component_id()));
+        assert!(!archetype1.contains_component_id(Rectangle::component_id()));
+
+        // Test none_of check
+        assert!(archetype2.contains_none_of(&[Rectangle::component_id()]));
+        assert!(!archetype2.contains_none_of(&[Byte::component_id()]));
     }
 }
