@@ -3,6 +3,7 @@
 #[macro_use]
 mod macros;
 
+pub mod alloc;
 pub mod application;
 pub mod command;
 pub mod component;
