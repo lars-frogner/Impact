@@ -1038,6 +1038,12 @@ impl DynamicInstanceFeatureBuffer {
         InstanceFeatureBufferRangeMap::from_manager(&self.range_manager)
     }
 
+    /// Updates the given [`InstanceFeatureBufferRangeMap`] with the information
+    /// describing the ranges that have been defined with [`Self::begin_range`].
+    pub fn update_range_map(&self, range_map: &mut InstanceFeatureBufferRangeMap) {
+        range_map.update_from_manager(&self.range_manager);
+    }
+
     /// Returns the number of bytes from the beginning of the buffer that are
     /// currently valid.
     pub fn n_valid_bytes(&self) -> usize {
@@ -1412,6 +1418,21 @@ impl InstanceFeatureBufferRangeMap {
             range_start_indices,
             range_id_index_map,
         }
+    }
+
+    fn update_from_manager(&mut self, manager: &InstanceFeatureBufferRangeManager) {
+        self.range_start_indices.clear();
+        self.range_start_indices
+            .extend_from_slice(&manager.range_start_indices[..manager.range_id_index_mapper.len()]);
+
+        self.range_id_index_map.clear();
+        self.range_id_index_map.extend(
+            manager
+                .range_id_index_mapper
+                .as_map()
+                .iter()
+                .map(|(k, v)| (*k, *v)),
+        );
     }
 
     /// Returns the range with the given [`InstanceFeatureBufferRangeID`]. If
