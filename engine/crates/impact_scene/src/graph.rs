@@ -141,6 +141,7 @@ pub struct CameraNode {
 
 #[derive(Debug)]
 struct ScratchSpace {
+    transform_update_operation_stack: Vec<(GroupNodeID, Isometry3<f32>)>,
     bounding_sphere_operation_stack: Vec<BoundingSphereUpdateOperation>,
 }
 
@@ -174,6 +175,7 @@ impl SceneGraph {
         let root_node_id = group_nodes.add_node(GroupNode::root());
 
         let scratch_space = ScratchSpace {
+            transform_update_operation_stack: Vec::with_capacity(32),
             bounding_sphere_operation_stack: Vec::with_capacity(32),
         };
 
@@ -444,7 +446,23 @@ impl SceneGraph {
     /// Updates the transform from local space to the space of the root node for
     /// all group nodes in the scene graph.
     pub fn update_all_group_to_root_transforms(&mut self) {
-        self.update_group_to_root_transforms(self.root_node_id(), Isometry3::identity());
+        let operation_stack = &mut self.scratch_space.transform_update_operation_stack;
+        operation_stack.clear();
+
+        operation_stack.push((self.root_node_id, Isometry3::identity()));
+
+        while let Some((node_id, parent_to_root_transform)) = operation_stack.pop() {
+            let group_node = self.group_nodes.node_mut(node_id);
+
+            let group_to_root_transform =
+                parent_to_root_transform * group_node.group_to_parent_transform();
+
+            group_node.set_group_to_root_transform(group_to_root_transform);
+
+            for child_group_node_id in group_node.child_group_node_ids() {
+                operation_stack.push((*child_group_node_id, group_to_root_transform));
+            }
+        }
     }
 
     /// Updates the world-to-camera transform of the given scene camera based on
@@ -633,29 +651,6 @@ impl SceneGraph {
                     &model_view_transform,
                 );
             }
-        }
-    }
-
-    /// Updates the transform from local space to the space of the root node for
-    /// the specified group node and all its children, by concatenating their
-    /// group-to-parent transforms recursively.
-    ///
-    /// # Panics
-    /// If the specified group node does not exist.
-    fn update_group_to_root_transforms(
-        &mut self,
-        group_node_id: GroupNodeID,
-        parent_to_root_transform: Isometry3<f32>,
-    ) {
-        let group_node = self.group_nodes.node_mut(group_node_id);
-
-        let group_to_root_transform =
-            parent_to_root_transform * group_node.group_to_parent_transform();
-
-        group_node.set_group_to_root_transform(group_to_root_transform);
-
-        for child_group_node_id in group_node.obtain_child_group_node_ids() {
-            self.update_group_to_root_transforms(child_group_node_id, group_to_root_transform);
         }
     }
 
