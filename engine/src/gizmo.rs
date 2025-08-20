@@ -36,6 +36,7 @@ pub enum GizmoType {
     StaticCollider = 13,
     PhantomCollider = 14,
     VoxelChunks = 15,
+    VoxelIntersections = 16,
 }
 
 bitflags! {
@@ -45,7 +46,7 @@ bitflags! {
     /// information.
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
-    pub struct GizmoSet: u16 {
+    pub struct GizmoSet: u32 {
         const REFERENCE_FRAME_AXES = 1 << 0;
         const BOUNDING_SPHERE      = 1 << 1;
         const LIGHT_SPHERE         = 1 << 2;
@@ -62,6 +63,7 @@ bitflags! {
         const STATIC_COLLIDER      = 1 << 13;
         const PHANTOM_COLLIDER     = 1 << 14;
         const VOXEL_CHUNKS         = 1 << 15;
+        const VOXEL_INTERSECTIONS  = 1 << 16;
     }
 }
 
@@ -211,6 +213,12 @@ pub struct GizmoVisibilities {
     /// (for uniform chunks) cube is rendered for each non-empty chunk in voxel
     /// objects, outlining the chunk boundaries.
     pub voxel_chunks: GizmoVisibility,
+    /// The visibility of the gizmos showing voxels intersecting other voxel
+    /// objects.
+    ///
+    /// When visible, a collection of yellow semitransparent voxel-sized spheres
+    /// will be rendered for all voxels intersecting another voxel object.
+    pub voxel_intersections: GizmoVisibility,
 }
 
 /// The configuration parameters associated with each gizmo type.
@@ -278,7 +286,7 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 16] {
+    pub const fn all() -> [Self; 17] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingSphere,
@@ -296,6 +304,7 @@ impl GizmoType {
             Self::StaticCollider,
             Self::PhantomCollider,
             Self::VoxelChunks,
+            Self::VoxelIntersections,
         ]
     }
 
@@ -325,6 +334,7 @@ impl GizmoType {
             Self::StaticCollider => GizmoSet::STATIC_COLLIDER,
             Self::PhantomCollider => GizmoSet::PHANTOM_COLLIDER,
             Self::VoxelChunks => GizmoSet::VOXEL_CHUNKS,
+            Self::VoxelIntersections => GizmoSet::VOXEL_INTERSECTIONS,
         }
     }
 
@@ -347,6 +357,7 @@ impl GizmoType {
             Self::StaticCollider => "Static colliders",
             Self::PhantomCollider => "Phantom colliders",
             Self::VoxelChunks => "Voxel chunks",
+            Self::VoxelIntersections => "Voxel intersections",
         }
     }
 
@@ -471,6 +482,12 @@ impl GizmoType {
                 (for uniform chunks) cube is rendered for each non-empty chunk in voxel \
                 objects, outlining the chunk boundaries."
             }
+            Self::VoxelIntersections => {
+                "\
+                When enabled, a collection of yellow semitransparent voxel-sized spheres \
+                will be rendered for all voxels intersecting another voxel object.
+            "
+            }
         }
     }
 
@@ -547,6 +564,7 @@ impl GizmoVisibilities {
             GizmoType::StaticCollider => self.static_collider,
             GizmoType::PhantomCollider => self.phantom_collider,
             GizmoType::VoxelChunks => self.voxel_chunks,
+            GizmoType::VoxelIntersections => self.voxel_intersections,
         }
     }
 
@@ -569,6 +587,7 @@ impl GizmoVisibilities {
             GizmoType::StaticCollider => &mut self.static_collider,
             GizmoType::PhantomCollider => &mut self.phantom_collider,
             GizmoType::VoxelChunks => &mut self.voxel_chunks,
+            GizmoType::VoxelIntersections => &mut self.voxel_intersections,
         }
     }
 }

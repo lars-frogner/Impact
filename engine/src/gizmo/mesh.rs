@@ -203,6 +203,15 @@ impl GizmoType {
                     );
                 }
             }
+            Self::VoxelIntersections => {
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
+                    8,
+                    VertexColor::YELLOW.with_alpha(0.1),
+                );
+                resource_manager
+                    .triangle_meshes
+                    .insert(self.only_triangle_mesh_id(), mesh);
+            }
         }
     }
 }
