@@ -6,6 +6,7 @@
     ),
     rendering: (
         basic: (
+            enabled: true,
             wireframe_mode_on: false,
             timings_enabled: false,
         ),

@@ -246,6 +246,9 @@ impl RenderingSystem {
         scene: &Scene,
         user_interface: &dyn UserInterface,
     ) -> Result<()> {
+        if !self.basic_config.enabled {
+            return Ok(());
+        }
         impact_log::with_timing_info_logging!("Rendering"; {
             self.surface_texture_to_present = self.render_surface(
                 resource_manager,

@@ -1,4 +1,5 @@
 (
+    run_mode: Windowed,
     ui_config_path: "ui_config.ron",
     engine_config_path: "engine_config.ron",
 )

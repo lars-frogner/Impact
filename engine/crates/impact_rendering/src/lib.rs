@@ -14,9 +14,14 @@ pub mod surface;
 use impact_gpu::{device::GraphicsDevice, wgpu};
 
 /// Basic rendering configuration options.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct BasicRenderingConfig {
+    pub enabled: bool,
     pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
 }
@@ -44,6 +49,7 @@ impl BasicRenderingConfig {
 impl Default for BasicRenderingConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             wireframe_mode_on: false,
             timings_enabled: false,
         }
