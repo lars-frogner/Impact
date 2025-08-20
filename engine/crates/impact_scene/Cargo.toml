@@ -7,7 +7,12 @@ license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary", "impact_texture/arbitrary"]
-ecs = ["dep:inventory", "dep:impact_ecs", "impact_light/ecs"]
+ecs = [
+    "dep:inventory",
+    "dep:impact_ecs",
+    "impact_geometry/ecs",
+    "impact_light/ecs",
+]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
