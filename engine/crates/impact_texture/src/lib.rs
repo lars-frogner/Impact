@@ -478,6 +478,7 @@ where
 /// - [`create_texture_array_from_images`]
 /// - [`create_cubemap_texture_from_images`]
 /// - [`create_texture_from_lookup_table`](lookup_table::create_texture_from_lookup_table).
+#[allow(unused_variables)]
 pub(crate) fn create_texture_from_info(
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
