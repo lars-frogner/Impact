@@ -2,7 +2,7 @@
 
 use crate::{AxisAlignedBox, Plane};
 use impact_math::Float;
-use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3, point};
+use nalgebra::{Isometry3, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3, point};
 
 /// A box with arbitrary position, orientation and extents.
 #[derive(Clone, Debug)]
@@ -147,6 +147,18 @@ impl<F: Float> OrientedBox<F> {
             transform.scaling() * self.half_width,
             transform.scaling() * self.half_height,
             transform.scaling() * self.half_depth,
+        )
+    }
+
+    /// Creates a new box corresponding to transforming this box with the given
+    /// isometry transform.
+    pub fn translated_and_rotated(&self, transform: &Isometry3<F>) -> Self {
+        Self::new(
+            transform.transform_point(&self.center),
+            transform.rotation * self.orientation,
+            self.half_width,
+            self.half_height,
+            self.half_depth,
         )
     }
 

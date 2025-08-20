@@ -626,7 +626,7 @@ impl ChunkedVoxelObject {
 
         // Now that we have removed part of the original object, we may be able to
         // shrink the recorded occupied chunk and voxel ranges
-        self.shrink_occupied_ranges();
+        self.update_occupied_ranges();
 
         // Any chunk within or adjacent to the block of chunks covering the disconnected
         // region may have invalidated adjacencies
