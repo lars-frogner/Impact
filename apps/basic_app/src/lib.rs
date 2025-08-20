@@ -38,10 +38,18 @@ pub struct BasicApp {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BasicAppConfig {
+    pub run_mode: RunMode,
     pub window: WindowConfig,
     pub runtime: RuntimeConfig,
     pub engine_config_path: PathBuf,
     pub ui_config_path: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunMode {
+    #[default]
+    Windowed,
+    Headless,
 }
 
 impl BasicApp {
@@ -101,12 +109,14 @@ impl BasicAppConfig {
     pub fn load(
         self,
     ) -> Result<(
+        RunMode,
         WindowConfig,
         RuntimeConfig,
         EngineConfig,
         UserInterfaceConfig,
     )> {
         let Self {
+            run_mode,
             window,
             runtime,
             engine_config_path,
@@ -116,7 +126,7 @@ impl BasicAppConfig {
         let engine = EngineConfig::from_ron_file(engine_config_path)?;
         let ui = UserInterfaceConfig::from_ron_file(ui_config_path)?;
 
-        Ok((window, runtime, engine, ui))
+        Ok((run_mode, window, runtime, engine, ui))
     }
 
     /// Resolves all paths in the configuration by prepending the given root
@@ -130,6 +140,7 @@ impl BasicAppConfig {
 impl Default for BasicAppConfig {
     fn default() -> Self {
         Self {
+            run_mode: RunMode::default(),
             window: WindowConfig::default(),
             runtime: RuntimeConfig::default(),
             engine_config_path: PathBuf::from("engine_config.roc"),

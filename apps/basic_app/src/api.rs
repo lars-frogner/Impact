@@ -2,11 +2,15 @@
 
 pub mod ffi;
 
-use crate::{BasicApp, BasicAppConfig, ENGINE};
+use crate::{BasicApp, BasicAppConfig, ENGINE, RunMode};
 use anyhow::{Result, bail};
 use impact::{
-    command::EngineCommand, engine::Engine, impact_ecs::world::EntityID, roc_integration::Roc,
-    run::window::run as run_engine,
+    command::EngineCommand,
+    engine::Engine,
+    impact_ecs::world::EntityID,
+    roc_integration::Roc,
+    run::{headless, window},
+    runtime::headless::HeadlessConfig,
 };
 use impact_dev_ui::{UICommand, UICommandQueue, UserInterface};
 use std::{path::Path, sync::Arc};
@@ -21,12 +25,20 @@ pub fn run_with_config(config: BasicAppConfig) -> Result<()> {
     env_logger::init();
     impact_log::debug!("Running application");
 
-    let (window_config, runtime_config, engine_config, ui_config) = config.load()?;
+    let (run_mode, window_config, runtime_config, engine_config, ui_config) = config.load()?;
 
     let user_interface = UserInterface::new(ui_config);
     let app = Arc::new(BasicApp::new(user_interface));
 
-    run_engine(app, window_config, runtime_config, engine_config)
+    match run_mode {
+        RunMode::Windowed => window::run(app, window_config, runtime_config, engine_config),
+        RunMode::Headless => {
+            let headless_config = HeadlessConfig {
+                surface_size: window_config.initial_size,
+            };
+            headless::run(app, headless_config, runtime_config, engine_config)
+        }
+    }
 }
 
 pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
