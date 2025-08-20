@@ -36,6 +36,7 @@ pub struct Loop3<const N: usize> {
     k_range: Range<usize>,
     move_j_loop_out: bool,
     move_k_loop_out: bool,
+    reverse_primary_axis: bool,
 }
 
 /// A [`Loop3`] with a flat slice containing a data value for each grid
@@ -103,6 +104,7 @@ impl<const N: usize> Loop3<N> {
             k_range: 0..N,
             move_j_loop_out: false,
             move_k_loop_out: false,
+            reverse_primary_axis: false,
         }
     }
 
@@ -114,6 +116,7 @@ impl<const N: usize> Loop3<N> {
             k_range: Self::interior_range(),
             move_j_loop_out: false,
             move_k_loop_out: false,
+            reverse_primary_axis: false,
         }
     }
 
@@ -159,6 +162,41 @@ impl<const N: usize> Loop3<N> {
             k_range: z_side.as_range::<N>(),
             move_j_loop_out: false,
             move_k_loop_out: false,
+            reverse_primary_axis: false,
+        }
+    }
+
+    /// Creates a loop over all grid locations, iterating from the specified
+    /// side along the specified dimension first. For `Side::Upper`, the
+    /// dimension is iterated in reverse order.
+    pub const fn over_all_from_side(dim: Dimension, side: Side) -> Self {
+        let reverse = matches!(side, Side::Upper);
+
+        match dim {
+            Dimension::X => Self {
+                i_range: 0..N,
+                j_range: 0..N,
+                k_range: 0..N,
+                move_j_loop_out: false,
+                move_k_loop_out: false,
+                reverse_primary_axis: reverse,
+            },
+            Dimension::Y => Self {
+                i_range: 0..N,
+                j_range: 0..N,
+                k_range: 0..N,
+                move_j_loop_out: true,
+                move_k_loop_out: false,
+                reverse_primary_axis: reverse,
+            },
+            Dimension::Z => Self {
+                i_range: 0..N,
+                j_range: 0..N,
+                k_range: 0..N,
+                move_j_loop_out: false,
+                move_k_loop_out: true,
+                reverse_primary_axis: reverse,
+            },
         }
     }
 
@@ -172,6 +210,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: Self::full_range(),
                 move_j_loop_out: false,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Self {
                 i_range: Side::Upper.as_range::<N>(),
@@ -179,6 +218,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: Self::full_range(),
                 move_j_loop_out: false,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Self {
                 i_range: Self::interior_range(),
@@ -186,6 +226,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: Self::full_range(),
                 move_j_loop_out: true,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Self {
                 i_range: Self::interior_range(),
@@ -193,6 +234,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: Self::full_range(),
                 move_j_loop_out: true,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Self {
                 i_range: Self::interior_range(),
@@ -200,6 +242,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: Side::Lower.as_range::<N>(),
                 move_j_loop_out: false,
                 move_k_loop_out: true,
+                reverse_primary_axis: false,
             },
             Self {
                 i_range: Self::interior_range(),
@@ -207,6 +250,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: Side::Upper.as_range::<N>(),
                 move_j_loop_out: false,
                 move_k_loop_out: true,
+                reverse_primary_axis: false,
             },
         ]
     }
@@ -219,6 +263,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: range.start..range.end,
                 move_j_loop_out: false,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Dimension::Y => Self {
                 i_range: range.start..range.end,
@@ -226,6 +271,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: range.start..range.end,
                 move_j_loop_out: true,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Dimension::Z => Self {
                 i_range: range.start..range.end,
@@ -233,6 +279,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: side.as_range::<N>(),
                 move_j_loop_out: false,
                 move_k_loop_out: true,
+                reverse_primary_axis: false,
             },
         }
     }
@@ -250,6 +297,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: range.start..range.end,
                 move_j_loop_out: false,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
             Dimension::Y => Self {
                 i_range: range.start..range.end,
@@ -257,6 +305,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: secondary_side.as_range::<N>(),
                 move_j_loop_out: true,
                 move_k_loop_out: true,
+                reverse_primary_axis: false,
             },
             Dimension::Z => Self {
                 i_range: secondary_side.as_range::<N>(),
@@ -264,6 +313,7 @@ impl<const N: usize> Loop3<N> {
                 k_range: face_side.as_range::<N>(),
                 move_j_loop_out: true,
                 move_k_loop_out: false,
+                reverse_primary_axis: false,
             },
         }
     }
@@ -338,8 +388,12 @@ impl<const N: usize> Loop3<N> {
     /// the 3D indices of the iteration.
     #[inline]
     pub fn execute(&self, f: &mut impl FnMut(usize, usize, usize)) {
-        match (self.move_j_loop_out, self.move_k_loop_out) {
-            (false, false) => {
+        match (
+            self.move_j_loop_out,
+            self.move_k_loop_out,
+            self.reverse_primary_axis,
+        ) {
+            (false, false, false) => {
                 for i in self.i_range() {
                     for j in self.j_range() {
                         for k in self.k_range() {
@@ -348,7 +402,16 @@ impl<const N: usize> Loop3<N> {
                     }
                 }
             }
-            (true, false) => {
+            (false, false, true) => {
+                for i in self.i_range().rev() {
+                    for j in self.j_range() {
+                        for k in self.k_range() {
+                            f(i, j, k);
+                        }
+                    }
+                }
+            }
+            (true, false, false) => {
                 for j in self.j_range() {
                     for i in self.i_range() {
                         for k in self.k_range() {
@@ -357,7 +420,16 @@ impl<const N: usize> Loop3<N> {
                     }
                 }
             }
-            (false, true) => {
+            (true, false, true) => {
+                for j in self.j_range().rev() {
+                    for i in self.i_range() {
+                        for k in self.k_range() {
+                            f(i, j, k);
+                        }
+                    }
+                }
+            }
+            (false, true, false) => {
                 for k in self.k_range() {
                     for i in self.i_range() {
                         for j in self.j_range() {
@@ -366,11 +438,129 @@ impl<const N: usize> Loop3<N> {
                     }
                 }
             }
-            (true, true) => {
+            (false, true, true) => {
+                for k in self.k_range().rev() {
+                    for i in self.i_range() {
+                        for j in self.j_range() {
+                            f(i, j, k);
+                        }
+                    }
+                }
+            }
+            (true, true, false) => {
                 for j in self.j_range() {
                     for k in self.k_range() {
                         for i in self.i_range() {
                             f(i, j, k);
+                        }
+                    }
+                }
+            }
+            (true, true, true) => {
+                for j in self.j_range().rev() {
+                    for k in self.k_range() {
+                        for i in self.i_range() {
+                            f(i, j, k);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Executes the given closure for each iteration in the loop with
+    /// short-circuiting. The closure should return `true` to continue
+    /// iteration or `false` to break early.
+    pub fn execute_short_circuiting(&self, f: &mut impl FnMut(usize, usize, usize) -> bool) {
+        match (
+            self.move_j_loop_out,
+            self.move_k_loop_out,
+            self.reverse_primary_axis,
+        ) {
+            (false, false, false) => {
+                'outer: for i in self.i_range() {
+                    for j in self.j_range() {
+                        for k in self.k_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (false, false, true) => {
+                'outer: for i in self.i_range().rev() {
+                    for j in self.j_range() {
+                        for k in self.k_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (true, false, false) => {
+                'outer: for j in self.j_range() {
+                    for i in self.i_range() {
+                        for k in self.k_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (true, false, true) => {
+                'outer: for j in self.j_range().rev() {
+                    for i in self.i_range() {
+                        for k in self.k_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (false, true, false) => {
+                'outer: for k in self.k_range() {
+                    for i in self.i_range() {
+                        for j in self.j_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (false, true, true) => {
+                'outer: for k in self.k_range().rev() {
+                    for i in self.i_range() {
+                        for j in self.j_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (true, true, false) => {
+                'outer: for j in self.j_range() {
+                    for k in self.k_range() {
+                        for i in self.i_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            (true, true, true) => {
+                'outer: for j in self.j_range().rev() {
+                    for k in self.k_range() {
+                        for i in self.i_range() {
+                            if !f(i, j, k) {
+                                break 'outer;
+                            }
                         }
                     }
                 }
@@ -382,8 +572,12 @@ impl<const N: usize> Loop3<N> {
     /// the 3D indices and the linear index of the iteration.
     #[inline]
     pub fn execute_with_linear_idx(&self, f: &mut impl FnMut(&[usize; 3], usize)) {
-        match (self.move_j_loop_out, self.move_k_loop_out) {
-            (false, false) => {
+        match (
+            self.move_j_loop_out,
+            self.move_k_loop_out,
+            self.reverse_primary_axis,
+        ) {
+            (false, false, false) => {
                 for i in self.i_range() {
                     for j in self.j_range() {
                         for k in self.k_range() {
@@ -392,7 +586,16 @@ impl<const N: usize> Loop3<N> {
                     }
                 }
             }
-            (true, false) => {
+            (false, false, true) => {
+                for i in self.i_range().rev() {
+                    for j in self.j_range() {
+                        for k in self.k_range() {
+                            f(&[i, j, k], Self::linear_idx(i, j, k));
+                        }
+                    }
+                }
+            }
+            (true, false, false) => {
                 for j in self.j_range() {
                     for i in self.i_range() {
                         for k in self.k_range() {
@@ -401,7 +604,16 @@ impl<const N: usize> Loop3<N> {
                     }
                 }
             }
-            (false, true) => {
+            (true, false, true) => {
+                for j in self.j_range().rev() {
+                    for i in self.i_range() {
+                        for k in self.k_range() {
+                            f(&[i, j, k], Self::linear_idx(i, j, k));
+                        }
+                    }
+                }
+            }
+            (false, true, false) => {
                 for k in self.k_range() {
                     for i in self.i_range() {
                         for j in self.j_range() {
@@ -410,8 +622,26 @@ impl<const N: usize> Loop3<N> {
                     }
                 }
             }
-            (true, true) => {
+            (false, true, true) => {
+                for k in self.k_range().rev() {
+                    for i in self.i_range() {
+                        for j in self.j_range() {
+                            f(&[i, j, k], Self::linear_idx(i, j, k));
+                        }
+                    }
+                }
+            }
+            (true, true, false) => {
                 for j in self.j_range() {
+                    for k in self.k_range() {
+                        for i in self.i_range() {
+                            f(&[i, j, k], Self::linear_idx(i, j, k));
+                        }
+                    }
+                }
+            }
+            (true, true, true) => {
+                for j in self.j_range().rev() {
                     for k in self.k_range() {
                         for i in self.i_range() {
                             f(&[i, j, k], Self::linear_idx(i, j, k));

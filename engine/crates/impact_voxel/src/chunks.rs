@@ -189,13 +189,15 @@ impl ChunkedVoxelObject {
     }
 
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
-    /// and calls [`Self::compute_all_derived_state`] on it. Returns [`None`]
-    /// if the resulting object would not contain any voxels.
+    /// and calls [`Self::shrink_occupied_voxel_ranges`] and
+    /// [`Self::compute_all_derived_state`] on it. Returns [`None`] if the
+    /// resulting object would not contain any voxels.
     pub fn generate<G>(generator: &G) -> Option<Self>
     where
         G: VoxelGenerator,
     {
         let mut object = Self::generate_without_derived_state(generator)?;
+        object.update_occupied_voxel_ranges();
         object.compute_all_derived_state();
         Some(object)
     }
@@ -642,16 +644,23 @@ impl ChunkedVoxelObject {
         self.resolve_connected_regions_between_all_chunks();
     }
 
-    /// Shrinks the recorded occupied chunk and voxel ranges to a tighter fit if
-    /// chunks have been removed.
-    pub fn shrink_occupied_ranges(&mut self) {
+    /// Updates the recorded occupied chunk and voxel ranges by checking which
+    /// chunks and voxels are occupied.
+    pub fn update_occupied_ranges(&mut self) {
+        self.update_occupied_chunk_ranges();
+        self.update_occupied_voxel_ranges();
+    }
+
+    /// Updates the recorded occupied chunk ranges by checking which chunks are
+    /// occupied.
+    fn update_occupied_chunk_ranges(&mut self) {
         let mut min_chunk_indices = vector![usize::MAX, usize::MAX, usize::MAX];
         let mut max_chunk_indices = vector![0, 0, 0];
         let mut has_non_empty_chunks = false;
 
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
-                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_j in 0..self.chunk_counts[1] {
+                for chunk_k in 0..self.chunk_counts[2] {
                     let chunk_indices = [chunk_i, chunk_j, chunk_k];
                     let chunk_idx = self.linear_chunk_idx(&chunk_indices);
                     match &self.chunks[chunk_idx] {
@@ -671,11 +680,104 @@ impl ChunkedVoxelObject {
         } else {
             [0..0, 0..0, 0..0]
         };
+    }
 
-        self.occupied_voxel_ranges = self
-            .occupied_chunk_ranges
-            .clone()
-            .map(|range| range.start * CHUNK_SIZE..range.end * CHUNK_SIZE);
+    /// Updates the recorded occupied voxel ranges by checking which voxels in
+    /// the outer occupied chunks are occupied. Make sure the occupied chunk
+    /// ranges are up to date before calling this method.
+    pub fn update_occupied_voxel_ranges(&mut self) {
+        if self.occupied_chunk_ranges.iter().any(Range::is_empty) {
+            self.occupied_voxel_ranges = [0..0, 0..0, 0..0];
+            return;
+        }
+
+        self.occupied_voxel_ranges = Dimension::all().map(|dim| {
+            let first = self.find_voxel_bound_for_dimension(dim, Side::Lower);
+            let last = self.find_voxel_bound_for_dimension(dim, Side::Upper);
+            first..last + 1
+        });
+    }
+
+    /// Finds the occupied voxel bound along the specified dimension and side.
+    fn find_voxel_bound_for_dimension(&self, search_dim: Dimension, side: Side) -> usize {
+        let search_axis = search_dim.idx();
+        let other_axes = match search_axis {
+            0 => (1, 2),
+            1 => (0, 2),
+            2 => (0, 1),
+            _ => unreachable!(),
+        };
+
+        assert!(!self.occupied_chunk_ranges[search_axis].is_empty());
+
+        let (chunk_l, mut bound) = match side {
+            Side::Lower => (self.occupied_chunk_ranges[search_axis].start, usize::MAX),
+            Side::Upper => (self.occupied_chunk_ranges[search_axis].end - 1, 0),
+        };
+
+        let chunk_start_voxel = chunk_l * CHUNK_SIZE;
+
+        for chunk_m in self.occupied_chunk_ranges[other_axes.0].clone() {
+            for chunk_n in self.occupied_chunk_ranges[other_axes.1].clone() {
+                let mut chunk_indices = [0; 3];
+                chunk_indices[search_axis] = chunk_l;
+                chunk_indices[other_axes.0] = chunk_m;
+                chunk_indices[other_axes.1] = chunk_n;
+
+                let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                match &self.chunks[chunk_idx] {
+                    VoxelChunk::Empty => {}
+                    VoxelChunk::Uniform(_) => {
+                        return match side {
+                            Side::Lower => chunk_start_voxel,
+                            Side::Upper => chunk_start_voxel + CHUNK_SIZE - 1,
+                        };
+                    }
+                    VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                        let chunk_voxels = chunk_voxels(&self.voxels, *data_offset);
+
+                        if let Some(bound_in_chunk) =
+                            Self::find_voxel_bound_in_chunk(chunk_voxels, search_dim, side)
+                        {
+                            bound = match side {
+                                Side::Lower => bound.min(chunk_start_voxel + bound_in_chunk),
+                                Side::Upper => bound.max(chunk_start_voxel + bound_in_chunk),
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        bound
+    }
+
+    /// Finds the voxel bound within a chunk along the search dimension.
+    fn find_voxel_bound_in_chunk(
+        chunk_voxels: &[Voxel],
+        search_dim: Dimension,
+        side: Side,
+    ) -> Option<usize> {
+        let mut result = None;
+
+        Loop3::<CHUNK_SIZE>::over_all_from_side(search_dim, side).execute_short_circuiting(
+            &mut |i, j, k| {
+                let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
+                if !chunk_voxels[idx].is_empty() {
+                    result = Some(match search_dim {
+                        Dimension::X => i,
+                        Dimension::Y => j,
+                        Dimension::Z => k,
+                    });
+                    false // Break early
+                } else {
+                    true // Continue
+                }
+            },
+        );
+
+        result
     }
 
     /// Returns an iterator over the indices in the object's chunk grid of the
@@ -692,9 +794,102 @@ impl ChunkedVoxelObject {
         self.invalidated_mesh_chunk_indices.clear();
     }
 
+    /// Validates the occupied voxel ranges computed by the efficient
+    /// [`Self::update_occupied_voxel_ranges`] method by performing a simple
+    /// brute-force iteration over all voxels and checking their bounds.
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn validate_occupied_voxel_ranges(&self) {
+        let expected_ranges = if self.occupied_chunk_ranges.iter().any(Range::is_empty) {
+            [0..0, 0..0, 0..0]
+        } else {
+            let mut min_bounds = [usize::MAX; 3];
+            let mut max_bounds = [0; 3];
+            let mut found_any_voxel = false;
+
+            // Scan all voxels in occupied chunk ranges
+            for chunk_x in self.occupied_chunk_ranges[0].clone() {
+                for chunk_y in self.occupied_chunk_ranges[1].clone() {
+                    for chunk_z in self.occupied_chunk_ranges[2].clone() {
+                        let chunk_indices = [chunk_x, chunk_y, chunk_z];
+                        let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                        match &self.chunks[chunk_idx] {
+                            VoxelChunk::Empty => {}
+                            VoxelChunk::Uniform(_) => {
+                                // Entire chunk is occupied
+                                let chunk_start = [
+                                    chunk_x * CHUNK_SIZE,
+                                    chunk_y * CHUNK_SIZE,
+                                    chunk_z * CHUNK_SIZE,
+                                ];
+                                let chunk_end = [
+                                    chunk_start[0] + CHUNK_SIZE - 1,
+                                    chunk_start[1] + CHUNK_SIZE - 1,
+                                    chunk_start[2] + CHUNK_SIZE - 1,
+                                ];
+
+                                for dim in 0..3 {
+                                    min_bounds[dim] = min_bounds[dim].min(chunk_start[dim]);
+                                    max_bounds[dim] = max_bounds[dim].max(chunk_end[dim]);
+                                }
+                                found_any_voxel = true;
+                            }
+                            VoxelChunk::NonUniform(non_uniform_chunk) => {
+                                let chunk_voxels =
+                                    chunk_voxels(&self.voxels, non_uniform_chunk.data_offset);
+
+                                // Check each voxel in the chunk
+                                for i in 0..CHUNK_SIZE {
+                                    for j in 0..CHUNK_SIZE {
+                                        for k in 0..CHUNK_SIZE {
+                                            let voxel_idx =
+                                                linear_voxel_idx_within_chunk(&[i, j, k]);
+                                            if !chunk_voxels[voxel_idx].is_empty() {
+                                                let global_coords = [
+                                                    chunk_x * CHUNK_SIZE + i,
+                                                    chunk_y * CHUNK_SIZE + j,
+                                                    chunk_z * CHUNK_SIZE + k,
+                                                ];
+
+                                                for dim in 0..3 {
+                                                    min_bounds[dim] =
+                                                        min_bounds[dim].min(global_coords[dim]);
+                                                    max_bounds[dim] =
+                                                        max_bounds[dim].max(global_coords[dim]);
+                                                }
+                                                found_any_voxel = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if found_any_voxel {
+                [
+                    min_bounds[0]..max_bounds[0] + 1,
+                    min_bounds[1]..max_bounds[1] + 1,
+                    min_bounds[2]..max_bounds[2] + 1,
+                ]
+            } else {
+                [0..0, 0..0, 0..0]
+            }
+        };
+
+        assert_eq!(
+            self.occupied_voxel_ranges, expected_ranges,
+            "Occupied voxel ranges are not correctly shrunk. Expected: {:?}, Found: {:?}",
+            expected_ranges, self.occupied_voxel_ranges
+        );
+    }
+
     /// Validates the adjacency [`VoxelFlags`] computed by the efficient
-    /// [`Self::initialize_adjacencies`] method by performing a simple
-    /// brute-force iteration over all voxels and checking their neighbors.
+    /// [`Self::update_internal_adjacencies_for_all_chunks`] method by
+    /// performing a simple brute-force iteration over all voxels and checking
+    /// their neighbors.
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn validate_adjacencies(&self) {
         let mut invalid_missing_flags = Vec::new();
@@ -799,13 +994,11 @@ impl ChunkedVoxelObject {
     }
 
     /// Validates the obscuredness [`VoxelChunkFlags`] computed by the efficient
-    /// [`Self::initialize_adjacencies`] method for chunks by performing a
-    /// simple brute-force iteration over all chunks and checking their
-    /// neighbors.
+    /// [`Self::update_all_chunk_boundary_adjacencies`] method for chunks by
+    /// performing a simple brute-force iteration over all chunks and checking
+    /// their neighbors.
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn validate_chunk_obscuredness(&self) {
-        use super::utils::Dimension;
-
         let mut invalid_missing_flags = Vec::new();
         let mut invalid_present_flags = Vec::new();
         let mut invalid_uniform = Vec::new();
@@ -2306,6 +2499,7 @@ pub mod fuzzing {
 
     pub fn fuzz_test_voxel_object_generation(generator: ArbitrarySDFVoxelGenerator) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
+            object.validate_occupied_voxel_ranges();
             object.validate_adjacencies();
             object.validate_chunk_obscuredness();
             object.validate_sdf();
@@ -2846,6 +3040,54 @@ mod tests {
                 generator.voxel_extent() * (4 * CHUNK_SIZE) as f64
             ]
         );
+    }
+
+    #[test]
+    fn should_shrink_occupied_voxel_ranges_correctly_for_single_voxel() {
+        let generator = OffsetBoxVoxelGenerator::single_default();
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        object.update_occupied_voxel_ranges();
+
+        assert_eq!(object.occupied_voxel_ranges, [0..1, 0..1, 0..1]);
+    }
+
+    #[test]
+    fn should_shrink_occupied_voxel_ranges_correctly_for_multiple_chunks() {
+        let generator = OffsetBoxVoxelGenerator::new(
+            [9, 9, 9],
+            [0, 0, 0],
+            Voxel::maximally_inside(VoxelType::default()),
+        );
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        object.update_occupied_voxel_ranges();
+
+        assert_eq!(object.occupied_voxel_ranges, [0..9, 0..9, 0..9]);
+    }
+
+    #[test]
+    fn should_shrink_occupied_voxel_ranges_correctly_for_offset_chunk() {
+        let generator = OffsetBoxVoxelGenerator::offset_with_default([1, 1, 1], [5, 5, 5]);
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        object.update_occupied_voxel_ranges();
+
+        assert_eq!(object.occupied_voxel_ranges, [5..6, 5..6, 5..6]);
+    }
+
+    #[test]
+    fn should_shrink_occupied_voxel_ranges_correctly_for_sparse_multi_chunk() {
+        const GRID_SIZE: usize = 20;
+        let mut voxels = [[[0u8; GRID_SIZE]; GRID_SIZE]; GRID_SIZE];
+
+        voxels[2][2][5] = 1; // Min boundaries (chunk 0)
+        voxels[18][17][19] = 1; // Max boundaries (chunk 1)
+        voxels[3][3][6] = 1; // Additional voxel near minimums
+        voxels[17][16][18] = 1; // Additional voxel near maximums
+
+        let generator = ManualVoxelGenerator::new(voxels);
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        object.update_occupied_voxel_ranges();
+
+        assert_eq!(object.occupied_voxel_ranges, [2..19, 2..18, 5..20]);
     }
 
     #[test]
