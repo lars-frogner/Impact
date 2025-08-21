@@ -104,10 +104,11 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Updating scene object group-to-world transforms", engine, {
             let scene = engine.scene().read();
-            scene.scene_graph()
-                .write()
-                .update_all_group_to_root_transforms();
-
+            TaskArenas::with(|arena| {
+                scene.scene_graph()
+                    .write()
+                    .update_all_group_to_root_transforms(arena);
+            });
             Ok(())
         })
     }
@@ -122,10 +123,11 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Updating scene object bounding spheres", engine, {
             let scene = engine.scene().read();
-            scene.scene_graph()
-                .write()
-                .update_all_bounding_spheres();
-
+            TaskArenas::with(|arena| {
+                scene.scene_graph()
+                    .write()
+                    .update_all_bounding_spheres(arena);
+            });
             Ok(())
         })
     }
