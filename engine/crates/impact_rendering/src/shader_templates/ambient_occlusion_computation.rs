@@ -73,7 +73,7 @@ impl SpecificShaderTemplate for AmbientOcclusionComputationShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "max_samples" => MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
                     "projection_uniform_group" => 0,

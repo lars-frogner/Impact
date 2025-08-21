@@ -28,7 +28,7 @@ impl SpecificShaderTemplate for FixedColorShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "model_view_transform_rotation_location" => InstanceModelViewTransform::rotation_location(),
                     "model_view_transform_translation_location" => InstanceModelViewTransform::translation_and_scaling_location(),

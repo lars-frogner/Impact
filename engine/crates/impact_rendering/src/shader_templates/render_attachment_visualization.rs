@@ -51,7 +51,7 @@ impl SpecificShaderTemplate for RenderAttachmentVisualizationShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "input_texture_binding" => self.render_attachment_quantity.texture_binding(),
                     "input_sampler_binding" => self.render_attachment_quantity.sampler_binding(),

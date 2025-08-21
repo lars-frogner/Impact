@@ -47,7 +47,7 @@ impl SpecificShaderTemplate for UnidirectionalLightShadowMapShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "max_light_count" => self.max_light_count,
                     "cascade_count" => MAX_SHADOW_MAP_CASCADES,

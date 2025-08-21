@@ -63,7 +63,7 @@ impl SpecificShaderTemplate for DynamicRangeCompressionShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "tone_mapping_method" => self.tone_mapping_method,
                     "input_texture_binding" => self.input_render_attachment_quantity.texture_binding(),

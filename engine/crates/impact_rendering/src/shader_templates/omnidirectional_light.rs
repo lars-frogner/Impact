@@ -93,7 +93,7 @@ impl SpecificShaderTemplate for OmnidirectionalLightShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                ["emulate_area_light_reflection"],
+                &["emulate_area_light_reflection"],
                 shader_template_replacements!(
                     "max_light_count" => self.max_light_count,
                     "projection_uniform_group" => 0,
