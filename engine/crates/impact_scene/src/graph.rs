@@ -5,7 +5,9 @@ use crate::{
     camera::SceneCamera,
     model::{ModelID, ModelInstanceManager},
 };
+use allocator_api2::vec;
 use bitflags::bitflags;
+use bumpalo::Bump;
 use bytemuck::{Pod, Zeroable};
 use impact_camera::gpu_resource::BufferableCamera;
 use impact_containers::{HashMap, SlotKey, SlotMap};
@@ -45,7 +47,6 @@ pub struct SceneGraph {
     model_instance_nodes: NodeStorage<ModelInstanceNode>,
     camera_nodes: NodeStorage<CameraNode>,
     model_metadata: ModelMetadata,
-    scratch_space: ScratchSpace,
 }
 
 /// Flat storage for all the [`SceneGraph`] nodes of a given
@@ -151,12 +152,6 @@ pub struct CameraNode {
     camera_to_parent_transform: Isometry3<f32>,
 }
 
-#[derive(Debug)]
-struct ScratchSpace {
-    transform_update_operation_stack: Vec<(GroupNodeID, Isometry3<f32>)>,
-    bounding_sphere_operation_stack: Vec<BoundingSphereUpdateOperation>,
-}
-
 #[derive(Clone, Debug)]
 enum BoundingSphereUpdateOperation {
     VisitChildren(GroupNodeID),
@@ -186,18 +181,12 @@ impl SceneGraph {
 
         let root_node_id = group_nodes.add_node(GroupNode::root());
 
-        let scratch_space = ScratchSpace {
-            transform_update_operation_stack: Vec::with_capacity(32),
-            bounding_sphere_operation_stack: Vec::with_capacity(32),
-        };
-
         Self {
             root_node_id,
             group_nodes,
             model_instance_nodes,
             camera_nodes,
             model_metadata,
-            scratch_space,
         }
     }
 
@@ -457,9 +446,8 @@ impl SceneGraph {
 
     /// Updates the transform from local space to the space of the root node for
     /// all group nodes in the scene graph.
-    pub fn update_all_group_to_root_transforms(&mut self) {
-        let operation_stack = &mut self.scratch_space.transform_update_operation_stack;
-        operation_stack.clear();
+    pub fn update_all_group_to_root_transforms(&mut self, arena: &Bump) {
+        let mut operation_stack = vec::Vec::with_capacity_in(32, arena);
 
         operation_stack.push((self.root_node_id, Isometry3::identity()));
 
@@ -491,7 +479,7 @@ impl SceneGraph {
 
     /// Updates the bounding spheres of all nodes in the scene graph (excluding
     /// contributions from hidden model instances).
-    pub fn update_all_bounding_spheres(&mut self) {
+    pub fn update_all_bounding_spheres(&mut self, arena: &Bump) {
         fn merge_spheres(accum: &mut Option<Sphere<f32>>, sphere: Sphere<f32>) {
             match accum {
                 None => {
@@ -503,8 +491,7 @@ impl SceneGraph {
             }
         }
 
-        let operation_stack = &mut self.scratch_space.bounding_sphere_operation_stack;
-        operation_stack.clear();
+        let mut operation_stack = vec::Vec::with_capacity_in(32, arena);
 
         operation_stack.push(BoundingSphereUpdateOperation::VisitChildren(
             self.root_node_id,
@@ -1883,7 +1870,7 @@ mod tests {
         let group_3 = scene_graph.create_group_node(group_2, Isometry3::identity());
         let camera = scene_graph.create_camera_node(group_3, Isometry3::identity());
 
-        scene_graph.update_all_group_to_root_transforms();
+        scene_graph.update_all_group_to_root_transforms(&Bump::new());
 
         let transform = scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
@@ -1910,7 +1897,7 @@ mod tests {
             Isometry3::from_parts(Translation3::identity(), Rotation3::identity().into()),
         );
 
-        scene_graph.update_all_group_to_root_transforms();
+        scene_graph.update_all_group_to_root_transforms(&Bump::new());
 
         let root_to_camera_transform =
             scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
@@ -1949,7 +1936,7 @@ mod tests {
             ModelInstanceFlags::empty(),
         );
 
-        scene_graph.update_all_bounding_spheres();
+        scene_graph.update_all_bounding_spheres(&Bump::new());
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert_spheres_equal(
             root_bounding_sphere.unwrap(),
@@ -1997,7 +1984,7 @@ mod tests {
             ModelInstanceFlags::empty(),
         );
 
-        scene_graph.update_all_bounding_spheres();
+        scene_graph.update_all_bounding_spheres(&Bump::new());
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert_spheres_equal(
             root_bounding_sphere.unwrap(),
@@ -2057,7 +2044,7 @@ mod tests {
         let correct_root_bounding_sphere =
             correct_group_1_bounding_sphere.translated_and_rotated(&group_1_to_parent_transform);
 
-        scene_graph.update_all_bounding_spheres();
+        scene_graph.update_all_bounding_spheres(&Bump::new());
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
 
         assert_spheres_equal(root_bounding_sphere.unwrap(), &correct_root_bounding_sphere);
@@ -2087,7 +2074,7 @@ mod tests {
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(root, Isometry3::identity());
         let group_2 = scene_graph.create_group_node(group_1, Isometry3::identity());
-        scene_graph.update_all_bounding_spheres();
+        scene_graph.update_all_bounding_spheres(&Bump::new());
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert!(root_bounding_sphere.is_none());
         assert!(
