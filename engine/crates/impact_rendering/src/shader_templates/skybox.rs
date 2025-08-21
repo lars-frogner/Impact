@@ -61,7 +61,7 @@ impl SpecificShaderTemplate for SkyboxShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),

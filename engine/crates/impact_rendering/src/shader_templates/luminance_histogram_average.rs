@@ -53,7 +53,7 @@ impl SpecificShaderTemplate for LuminanceHistogramAverageShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "bin_count" => self.bin_count,
                     "params_group" => 0,

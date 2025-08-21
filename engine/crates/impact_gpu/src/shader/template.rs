@@ -1,10 +1,12 @@
 //! Generation of shaders from templates.
 
 use crate::shader::ShaderID;
-use anyhow::{Result, bail};
-use impact_containers::{HashMap, HashSet};
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
+use anyhow::{Result, anyhow, bail};
+use impact_containers::HashSet;
 use regex::Regex;
 use std::{borrow::Cow, fmt, iter, sync::LazyLock};
+use tinyvec::TinyVec;
 
 /// Specific shader template that can be resolved to generate a shader.
 pub trait SpecificShaderTemplate: fmt::Debug {
@@ -30,14 +32,22 @@ pub trait SpecificShaderTemplate: fmt::Debug {
 #[derive(Clone, Debug)]
 pub struct ShaderTemplate<'a> {
     source_code: &'a str,
-    replacement_regexes: HashMap<&'a str, Regex>,
+    replacer: Replacer<'a>,
     conditional_blocks: Vec<ConditionalBlock<'a>>,
-    flags: HashSet<Flag<'a>>,
+    flags: Vec<Flag<'a>>,
 }
 
 #[derive(Clone, Debug)]
+struct Replacer<'a> {
+    ac: AhoCorasick,
+    patterns: ReplacementPatternSet<'a>,
+}
+
+type ReplacementPatternSet<'a> = TinyVec<[&'a str; 8]>;
+
+#[derive(Clone, Debug)]
 struct ConditionalBlock<'a> {
-    full_text_regex: Regex,
+    full_text: &'a str,
     if_condition: Condition<'a>,
     if_body: &'a str,
     elseif_condition: Option<Condition<'a>>,
@@ -55,8 +65,8 @@ struct Flag<'a> {
     name: &'a str,
 }
 
-static REPLACEMENT_LABEL_CAPTURE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\{\{(.*?)\}\}").unwrap());
+static REPLACEMENT_PATTERN_CAPTURE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\{\{.*?\}\})").unwrap());
 static CONDITIONAL_CAPTURE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"#if\s*\((.*?)\)\s([\s\S]*?)[^\S\r\n]*(?:#elseif\s*\((.*?)\)\s([\s\S]*?))?[^\S\r\n]*(?:#else\s([\s\S]*?))?[^\S\r\n]*#endif\b").unwrap()
 });
@@ -64,32 +74,26 @@ static CONDITIONAL_CAPTURE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 impl<'a> ShaderTemplate<'a> {
     /// Creates a new template from the given template source code.
     pub fn new(source_code: &'a str) -> Result<Self> {
-        let replacement_regexes = find_replacement_labels(source_code)?
-            .into_iter()
-            .map(|label| {
-                (
-                    label,
-                    Regex::new(&format!("\\{{\\{{{label}\\}}\\}}")).unwrap(),
-                )
-            })
-            .collect();
-
+        let replacer = Replacer::new(source_code)?;
         let conditional_blocks = find_conditional_blocks(source_code)?;
-
         let flags = extract_flags(&conditional_blocks);
-
         Ok(Self {
             source_code,
-            replacement_regexes,
+            replacer,
             conditional_blocks,
             flags,
         })
     }
 
-    /// Creates and returns a [`HashSet`] containing the replacement labels in
-    /// the template.
-    pub fn obtain_replacement_label_set(&self) -> HashSet<&'a str> {
-        self.replacement_regexes.keys().copied().collect()
+    pub fn replacement_label_count(&self) -> usize {
+        self.replacer.patterns.len()
+    }
+
+    pub fn contains_replacement_label(&self, label: &str) -> bool {
+        self.replacer
+            .patterns
+            .iter()
+            .any(|pattern| label == label_from_replacement_pattern(pattern))
     }
 
     /// Creates and returns a [`HashSet`] containing the full set of flags used
@@ -113,69 +117,87 @@ impl<'a> ShaderTemplate<'a> {
     /// - A label in `replacements` does not exist in the template after
     ///   resolving all conditional blocks.
     /// - The same label occurs multiple times in `replacements`.
-    /// - Not all labels in the template afer resolving conditional blocks are
-    ///   included in `replacements`.
     pub fn resolve<'b>(
         &self,
-        flags_to_set: impl IntoIterator<Item = &'b str>,
-        replacements: impl IntoIterator<Item = (&'b str, String)>,
+        flags_to_set: &[&'b str],
+        replacements: &[(&'b str, String)],
     ) -> Result<String> {
+        for flag in flags_to_set {
+            let flag = Flag::new(flag)?;
+            if !self.flags.contains(&flag) {
+                bail!(
+                    "Not all flags to set are present in the template (present flags: {:?})",
+                    &self.flags,
+                );
+            }
+        }
+
         let mut resolved_source_code = Cow::Borrowed(self.source_code);
 
-        let mut set_flags = HashSet::default();
-        for flag in flags_to_set {
-            set_flags.insert(Flag::new(flag)?);
-        }
-
-        if !set_flags.is_subset(&self.flags) {
-            bail!(
-                "Not all flags to set are present in the template (present flags: {:?})",
-                &self.flags,
-            );
-        }
-
         for conditional_block in &self.conditional_blocks {
-            conditional_block.resolve(&set_flags, &mut resolved_source_code);
+            conditional_block.resolve(flags_to_set, &mut resolved_source_code);
         }
 
-        let mut replacement_regexes = self.replacement_regexes.clone();
-        replacement_regexes.retain(|_, regex| regex.is_match(&resolved_source_code));
-
-        let mut replaced_label_count = 0;
-        for (label, replacement) in replacements {
-            let replacement_regex = if let Some(replacement_regex) = replacement_regexes.get(label)
-            {
-                replacement_regex
-            } else if self.replacement_regexes.contains_key(label) {
-                // The label to replace exists in an excluded conditional block, so we just skip
-                // it instead of returning an error
-                continue;
-            } else {
-                bail!("No label `{}` to replace in template", label)
-            };
-
-            *resolved_source_code.to_mut() = replacement_regex
-                .replace_all(&resolved_source_code, replacement)
-                .into_owned();
-
-            replaced_label_count += 1;
-        }
-
-        if replaced_label_count < replacement_regexes.len() {
-            bail!(
-                "Not all labels replaced in template (all labels to replace: {})",
-                replacement_regexes
-                    .keys()
-                    .copied()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-        }
-        if replaced_label_count > replacement_regexes.len() {
-            bail!("Tried to replace same label multiple times");
-        }
+        self.replacer
+            .replace(replacements, &mut resolved_source_code)?;
 
         Ok(resolved_source_code.into_owned())
+    }
+}
+
+impl<'a> Replacer<'a> {
+    fn new(source_code: &'a str) -> Result<Self> {
+        let patterns = find_replacement_patterns(source_code)?;
+
+        let ac = AhoCorasickBuilder::new()
+            .match_kind(MatchKind::LeftmostLongest)
+            .build(&patterns)
+            .unwrap();
+
+        Ok(Self { ac, patterns })
+    }
+
+    fn replace<'b>(
+        &self,
+        replacements: &[(&'b str, String)],
+        resolved_source_code: &mut Cow<'a, str>,
+    ) -> Result<()> {
+        if self.patterns.is_empty() {
+            return Ok(());
+        }
+
+        for (i, (label_a, _)) in replacements.iter().enumerate() {
+            for (label_b, _) in &replacements[i + 1..] {
+                if label_a == label_b {
+                    bail!("Duplicate label `{label_a}` in replacements")
+                }
+            }
+        }
+
+        let source = resolved_source_code.as_ref();
+        let mut replaced = String::with_capacity(source.len());
+        let mut cursor = 0;
+
+        for m in self.ac.find_iter(source) {
+            replaced.push_str(&source[cursor..m.start()]);
+
+            let pattern = self.patterns[m.pattern().as_usize()];
+            let label = label_from_replacement_pattern(pattern);
+
+            let replacement = replacements
+                .iter()
+                .find_map(|(l, rep)| (*l == label).then_some(rep))
+                .ok_or_else(|| anyhow!("No label `{label}` to replace in template"))?;
+
+            replaced.push_str(replacement);
+            cursor = m.end();
+        }
+
+        replaced.push_str(&source[cursor..]);
+
+        *resolved_source_code = Cow::Owned(replaced);
+
+        Ok(())
     }
 }
 
@@ -188,7 +210,6 @@ impl<'a> ConditionalBlock<'a> {
         elseif_body: Option<&'a str>,
         else_body: Option<&'a str>,
     ) -> Result<Self> {
-        let full_text_regex = Regex::new(&regex::escape(full_text)).unwrap();
         let if_condition = Condition::new(Flag::new(if_condition)?);
         let elseif_condition = if let Some(elseif_condition) = elseif_condition {
             Some(Condition::new(Flag::new(elseif_condition)?))
@@ -196,7 +217,7 @@ impl<'a> ConditionalBlock<'a> {
             None
         };
         Ok(Self {
-            full_text_regex,
+            full_text,
             if_condition,
             if_body,
             elseif_condition,
@@ -215,7 +236,7 @@ impl<'a> ConditionalBlock<'a> {
         )
     }
 
-    fn resolve<'b>(&self, set_flags: &HashSet<Flag<'b>>, resolved_source_code: &mut Cow<'a, str>) {
+    fn resolve<'b>(&self, set_flags: &[&'b str], resolved_source_code: &mut Cow<'a, str>) {
         let replacement_text = if self.if_condition.is_true(set_flags) {
             self.if_body
         } else if self
@@ -228,10 +249,19 @@ impl<'a> ConditionalBlock<'a> {
             self.else_body.unwrap_or("")
         };
 
-        *resolved_source_code.to_mut() = self
-            .full_text_regex
-            .replace_all(resolved_source_code, replacement_text)
-            .into_owned();
+        let source = resolved_source_code.as_ref();
+
+        let mut replaced = String::with_capacity(source.len());
+        let mut cursor = 0;
+        while let Some(i) = source[cursor..].find(self.full_text) {
+            let i = cursor + i;
+            replaced.push_str(&source[cursor..i]);
+            replaced.push_str(replacement_text);
+            cursor = i + self.full_text.len();
+        }
+        replaced.push_str(&source[cursor..]);
+
+        *resolved_source_code = Cow::Owned(replaced);
     }
 }
 
@@ -244,8 +274,8 @@ impl<'a> Condition<'a> {
         iter::once(self.flag)
     }
 
-    fn is_true(&self, set_flags: &HashSet<Flag<'a>>) -> bool {
-        set_flags.contains(&self.flag)
+    fn is_true(&self, set_flags: &[&'a str]) -> bool {
+        set_flags.contains(&self.flag.name)
     }
 }
 
@@ -293,21 +323,28 @@ fn create_flag_and_replacement_list_string<'b>(
         .join(", ")
 }
 
-fn find_replacement_labels(source_code: &str) -> Result<HashSet<&str>> {
-    let mut labels = HashSet::default();
-    for captures in REPLACEMENT_LABEL_CAPTURE_REGEX.captures_iter(source_code) {
-        if let Some(label) = captures.get(1) {
-            let label = label.as_str();
+fn find_replacement_patterns(source_code: &str) -> Result<ReplacementPatternSet<'_>> {
+    let mut patterns = ReplacementPatternSet::new();
+    for captures in REPLACEMENT_PATTERN_CAPTURE_REGEX.captures_iter(source_code) {
+        if let Some(pattern) = captures.get(1) {
+            let pattern = pattern.as_str();
+            let label = label_from_replacement_pattern(pattern);
             if !is_valid_identifier(label) {
                 bail!(
                     "Invalid label in template (only alphanumeric characters and underscores are allowed): {}",
                     label
                 );
             }
-            labels.insert(label);
+            if !patterns.contains(&pattern) {
+                patterns.push(pattern);
+            }
         }
     }
-    Ok(labels)
+    Ok(patterns)
+}
+
+fn label_from_replacement_pattern(pattern: &str) -> &str {
+    &pattern[2..pattern.len() - 2]
 }
 
 fn find_conditional_blocks(source_code: &str) -> Result<Vec<ConditionalBlock<'_>>> {
@@ -331,10 +368,14 @@ fn find_conditional_blocks(source_code: &str) -> Result<Vec<ConditionalBlock<'_>
     Ok(conditional_blocks)
 }
 
-fn extract_flags<'a>(conditional_blocks: &[ConditionalBlock<'a>]) -> HashSet<Flag<'a>> {
-    let mut flags = HashSet::with_capacity_and_hasher(conditional_blocks.len(), Default::default());
+fn extract_flags<'a>(conditional_blocks: &[ConditionalBlock<'a>]) -> Vec<Flag<'a>> {
+    let mut flags = Vec::with_capacity(conditional_blocks.len());
     for conditional_block in conditional_blocks {
-        flags.extend(conditional_block.flags());
+        for flag in conditional_block.flags() {
+            if !flags.contains(&flag) {
+                flags.push(flag);
+            }
+        }
     }
     flags
 }
@@ -465,40 +506,36 @@ mod tests {
     #[test]
     fn should_find_no_labels_for_empty_template() {
         let template = ShaderTemplate::new("").unwrap();
-        assert!(template.obtain_replacement_label_set().is_empty());
+        assert_eq!(template.replacement_label_count(), 0);
     }
 
     #[test]
     fn should_find_correct_label_for_template_with_only_label() {
         let template = ShaderTemplate::new("{{test}}").unwrap();
-        let labels = template.obtain_replacement_label_set();
-        assert_eq!(labels.len(), 1);
-        assert!(labels.contains("test"));
+        assert_eq!(template.replacement_label_count(), 1);
+        assert!(template.contains_replacement_label("test"));
     }
 
     #[test]
     fn should_find_correct_label_for_template_with_only_same_label_twice() {
         let template = ShaderTemplate::new("{{test}}{{test}}").unwrap();
-        let labels = template.obtain_replacement_label_set();
-        assert_eq!(labels.len(), 1);
-        assert!(labels.contains("test"));
+        assert_eq!(template.replacement_label_count(), 1);
+        assert!(template.contains_replacement_label("test"));
     }
 
     #[test]
     fn should_find_correct_labels_for_template_with_only_two_labels() {
         let template = ShaderTemplate::new("{{test1}}{{test2}}").unwrap();
-        let labels = template.obtain_replacement_label_set();
-        assert_eq!(labels.len(), 2);
-        assert!(labels.contains("test1"));
-        assert!(labels.contains("test2"));
+        assert_eq!(template.replacement_label_count(), 2);
+        assert!(template.contains_replacement_label("test1"));
+        assert!(template.contains_replacement_label("test2"));
     }
 
     #[test]
     fn should_find_correct_label_for_template_with_label_and_other_stuff() {
         let template = ShaderTemplate::new("{ {{test}}test}_").unwrap();
-        let labels = template.obtain_replacement_label_set();
-        assert_eq!(labels.len(), 1);
-        assert!(labels.contains("test"));
+        assert_eq!(template.replacement_label_count(), 1);
+        assert!(template.contains_replacement_label("test"));
     }
 
     #[test]
@@ -517,75 +554,78 @@ mod tests {
     #[test]
     fn should_give_empty_string_when_resolving_empty_template() {
         let template = ShaderTemplate::new("").unwrap();
-        assert!(template.resolve([], []).unwrap().is_empty());
+        assert!(template.resolve(&[], &[]).unwrap().is_empty());
     }
 
     #[test]
     fn should_fail_to_resolve_empty_template_with_set_flag() {
         let template = ShaderTemplate::new("").unwrap();
-        assert!(template.resolve(["flag"], []).is_err());
+        assert!(template.resolve(&["flag"], &[]).is_err());
     }
 
     #[test]
     fn should_fail_to_resolve_template_with_missing_flag() {
         let template = ShaderTemplate::new("#if (flag) #endif").unwrap();
-        assert!(template.resolve(["otherflag"], []).is_err());
+        assert!(template.resolve(&["otherflag"], &[]).is_err());
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_block() {
         let template = ShaderTemplate::new("#if (flag) #endif").unwrap();
-        assert_eq!(template.resolve(["flag"], []).unwrap(), "");
-        assert_eq!(template.resolve([], []).unwrap(), "");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_else_block() {
         let template = ShaderTemplate::new("#if (flag) #else #endif").unwrap();
-        assert_eq!(template.resolve(["flag"], []).unwrap(), "");
-        assert_eq!(template.resolve([], []).unwrap(), "");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_elseif_block() {
         let template = ShaderTemplate::new("#if (flag1) #elseif (flag2) #endif").unwrap();
-        assert_eq!(template.resolve(["flag1", "flag2"], []).unwrap(), "");
-        assert_eq!(template.resolve(["flag1"], []).unwrap(), "");
-        assert_eq!(template.resolve(["flag2"], []).unwrap(), "");
-        assert_eq!(template.resolve([], []).unwrap(), "");
+        assert_eq!(template.resolve(&["flag1", "flag2"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_elseif_else_block() {
         let template = ShaderTemplate::new("#if (flag1) #elseif (flag2) #else #endif").unwrap();
-        assert_eq!(template.resolve(["flag1", "flag2"], []).unwrap(), "");
-        assert_eq!(template.resolve(["flag1"], []).unwrap(), "");
-        assert_eq!(template.resolve(["flag2"], []).unwrap(), "");
-        assert_eq!(template.resolve([], []).unwrap(), "");
+        assert_eq!(template.resolve(&["flag1", "flag2"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_simple_if_block() {
         let template = ShaderTemplate::new("#if (flag) content #endif").unwrap();
-        assert_eq!(template.resolve(["flag"], []).unwrap(), "content");
-        assert_eq!(template.resolve([], []).unwrap(), "");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "content");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_simple_if_else_block() {
         let template = ShaderTemplate::new("#if (flag) content #else othercontent #endif").unwrap();
-        assert_eq!(template.resolve(["flag"], []).unwrap(), "content");
-        assert_eq!(template.resolve([], []).unwrap(), "othercontent");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "content");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "othercontent");
     }
 
     #[test]
     fn should_resolve_template_with_simple_if_elseif_block() {
         let template =
             ShaderTemplate::new("#if (flag1) content #elseif (flag2) othercontent #endif").unwrap();
-        assert_eq!(template.resolve(["flag1", "flag2"], []).unwrap(), "content");
-        assert_eq!(template.resolve(["flag1"], []).unwrap(), "content");
-        assert_eq!(template.resolve(["flag2"], []).unwrap(), "othercontent");
-        assert_eq!(template.resolve([], []).unwrap(), "");
+        assert_eq!(
+            template.resolve(&["flag1", "flag2"], &[]).unwrap(),
+            "content"
+        );
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "content");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "othercontent");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
@@ -594,10 +634,13 @@ mod tests {
             "#if (flag1) content #elseif (flag2) othercontent #else yetothercontent #endif",
         )
         .unwrap();
-        assert_eq!(template.resolve(["flag1", "flag2"], []).unwrap(), "content");
-        assert_eq!(template.resolve(["flag1"], []).unwrap(), "content");
-        assert_eq!(template.resolve(["flag2"], []).unwrap(), "othercontent");
-        assert_eq!(template.resolve([], []).unwrap(), "yetothercontent");
+        assert_eq!(
+            template.resolve(&["flag1", "flag2"], &[]).unwrap(),
+            "content"
+        );
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "content");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "othercontent");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "yetothercontent");
     }
 
     #[test]
@@ -619,7 +662,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            template.resolve(["flag1", "flag2"], []).unwrap(),
+            template.resolve(&["flag1", "flag2"], &[]).unwrap(),
             "\
             content1\n\
             <other code>\n\
@@ -627,7 +670,7 @@ mod tests {
             "
         );
         assert_eq!(
-            template.resolve(["flag1"], []).unwrap(),
+            template.resolve(&["flag1"], &[]).unwrap(),
             "\
             content1\n\
             <other code>\n\
@@ -635,7 +678,7 @@ mod tests {
             "
         );
         assert_eq!(
-            template.resolve(["flag2"], []).unwrap(),
+            template.resolve(&["flag2"], &[]).unwrap(),
             "\
             othercontent1\n\
             <other code>\n\
@@ -643,22 +686,12 @@ mod tests {
             "
         );
         assert_eq!(
-            template.resolve([], []).unwrap(),
+            template.resolve(&[], &[]).unwrap(),
             "\
             othercontent1\n\
             <other code>\n\
             othercontent2\n\
             "
-        );
-    }
-
-    #[test]
-    fn should_fail_to_resolve_empty_template_with_replacement() {
-        let template = ShaderTemplate::new("").unwrap();
-        assert!(
-            template
-                .resolve([], [("label", "actual".to_string())])
-                .is_err()
         );
     }
 
@@ -666,8 +699,8 @@ mod tests {
     fn should_fail_to_resolve_with_duplicate_replacement() {
         let template = ShaderTemplate::new("{{label}}").unwrap();
         let result = template.resolve(
-            [],
-            [
+            &[],
+            &[
                 ("label", "actual1".to_string()),
                 ("label", "actual2".to_string()),
             ],
@@ -678,14 +711,14 @@ mod tests {
     #[test]
     fn should_fail_to_resolve_with_replacement_label_missing_from_template() {
         let template = ShaderTemplate::new("{{label}}").unwrap();
-        let result = template.resolve([], [("notlabel", "actual".to_string())]);
+        let result = template.resolve(&[], &[("notlabel", "actual".to_string())]);
         assert!(result.is_err());
     }
 
     #[test]
     fn should_fail_to_resolve_with_too_few_replacements() {
         let template = ShaderTemplate::new("{{label}}").unwrap();
-        let result = template.resolve([], []);
+        let result = template.resolve(&[], &[]);
         assert!(result.is_err());
     }
 
@@ -693,7 +726,7 @@ mod tests {
     fn should_resolve_template_with_only_label() {
         let template = ShaderTemplate::new("{{label}}").unwrap();
         let resolved = template
-            .resolve([], [("label", "actual".to_string())])
+            .resolve(&[], &[("label", "actual".to_string())])
             .unwrap();
         assert_eq!(&resolved, "actual");
     }
@@ -702,7 +735,7 @@ mod tests {
     fn should_resolve_template_with_only_same_label_twice() {
         let template = ShaderTemplate::new("{{label}}{{label}}").unwrap();
         let resolved = template
-            .resolve([], [("label", "actual".to_string())])
+            .resolve(&[], &[("label", "actual".to_string())])
             .unwrap();
         assert_eq!(&resolved, "actualactual");
     }
@@ -712,8 +745,8 @@ mod tests {
         let template = ShaderTemplate::new("{{label1}}{{label2}}").unwrap();
         let resolved = template
             .resolve(
-                [],
-                [
+                &[],
+                &[
                     ("label1", "actual1".to_string()),
                     ("label2", "actual2".to_string()),
                 ],
@@ -727,8 +760,8 @@ mod tests {
         let template = ShaderTemplate::new("{ {{label1}}label1{{label2}}_").unwrap();
         let resolved = template
             .resolve(
-                [],
-                [
+                &[],
+                &[
                     ("label1", "actual1".to_string()),
                     ("label2", "actual2".to_string()),
                 ],
@@ -740,8 +773,8 @@ mod tests {
     #[test]
     fn should_only_require_label_in_taken_conditional_branch() {
         let template = ShaderTemplate::new("#if (flag) {{label}} #endif").unwrap();
-        assert_eq!(template.resolve([], []).unwrap(), "");
-        assert!(template.resolve(["flag"], []).is_err());
+        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
+        assert!(template.resolve(&["flag"], &[]).is_err());
     }
 
     #[test]
@@ -766,8 +799,8 @@ mod tests {
         assert_eq!(
             template
                 .resolve(
-                    ["flag1"],
-                    [
+                    &["flag1"],
+                    &[
                         ("label1", "actual1".to_string()),
                         ("label2", "actual2".to_string()),
                         ("label3", "actual3".to_string()),

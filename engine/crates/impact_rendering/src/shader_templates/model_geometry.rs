@@ -265,7 +265,7 @@ impl SpecificShaderTemplate for ModelGeometryShaderTemplate {
         }
 
         TEMPLATE
-            .resolve(flags_to_set, replacements)
+            .resolve(&flags_to_set, &replacements)
             .expect("Shader template resolution failed")
     }
 }

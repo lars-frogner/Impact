@@ -55,7 +55,7 @@ impl SpecificShaderTemplate for VoxelChunkCullingShaderTemplate {
         };
         TEMPLATE
             .resolve(
-                flags_to_set.iter().copied(),
+                flags_to_set,
                 shader_template_replacements!(
                     "chunk_submesh_group" => 0,
                     "chunk_submesh_binding" => 0,

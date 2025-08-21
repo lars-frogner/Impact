@@ -91,7 +91,7 @@ impl SpecificShaderTemplate for AmbientLightShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "max_light_count" => self.max_light_count,
                     "projection_uniform_group" => 0,

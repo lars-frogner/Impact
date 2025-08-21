@@ -39,7 +39,7 @@ impl SpecificShaderTemplate for ModelDepthPrepassShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "jitter_count" => CameraProjectionUniform::jitter_count(),
                     "model_view_transform_rotation_location" => InstanceModelViewTransformWithPrevious::current_rotation_location(),

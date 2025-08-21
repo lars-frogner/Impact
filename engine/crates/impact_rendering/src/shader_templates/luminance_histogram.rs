@@ -66,7 +66,7 @@ impl SpecificShaderTemplate for LuminanceHistogramShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "threads_per_side" => self.threads_per_side,
                     "texture_group" => 0,

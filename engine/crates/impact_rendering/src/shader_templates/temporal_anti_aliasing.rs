@@ -74,7 +74,7 @@ impl SpecificShaderTemplate for TemporalAntiAliasingShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "linear_depth_texture_group" => 0,
                     "linear_depth_texture_binding" => LinearDepth.texture_binding(),

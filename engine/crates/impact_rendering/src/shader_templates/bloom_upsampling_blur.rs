@@ -46,7 +46,7 @@ impl SpecificShaderTemplate for BloomUpsamplingBlurShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "blur_filter_radius" => self.blur_filter_radius,
                     "input_texture_binding" => self.render_attachment_quantity.texture_binding(),

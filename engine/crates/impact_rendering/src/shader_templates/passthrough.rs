@@ -73,7 +73,7 @@ impl SpecificShaderTemplate for PassthroughShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "input_texture_binding" => self.input_render_attachment_quantity.texture_binding(),
                     "input_sampler_binding" => self.input_render_attachment_quantity.sampler_binding(),

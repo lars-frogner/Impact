@@ -44,7 +44,7 @@ impl SpecificShaderTemplate for OmnidirectionalLightShadowMapShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "max_light_count" => self.max_light_count,
                     "model_light_transform_rotation_location" => InstanceModelLightTransform::rotation_location(),

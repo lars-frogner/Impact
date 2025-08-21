@@ -52,7 +52,7 @@ impl SpecificShaderTemplate for BloomBlendingShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "blurred_luminance_normalization" => self.blurred_luminance_normalization,
                     "blurred_luminance_weight" => self.blurred_luminance_weight,

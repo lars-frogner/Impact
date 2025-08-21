@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! shader_template_replacements {
     ($($label:literal => $replacement:expr),* $(,)?) => {
-        [$(($label, ($replacement).to_string())),*]
+        &[$(($label, ($replacement).to_string())),*]
     };
 }
 

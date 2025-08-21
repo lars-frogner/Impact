@@ -77,7 +77,7 @@ impl SpecificShaderTemplate for GaussianBlurShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "direction" => self.direction,
                     "max_samples" => MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,

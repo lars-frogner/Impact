@@ -57,7 +57,7 @@ impl SpecificShaderTemplate for VoxelGeometryShaderTemplate {
     fn resolve(&self) -> String {
         TEMPLATE
             .resolve(
-                [],
+                &[],
                 shader_template_replacements!(
                     "jitter_count" => CameraProjectionUniform::jitter_count(),
                     "texture_frequency" => self.texture_frequency,
