@@ -10,6 +10,8 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
+use allocator_api2::{alloc::Allocator, vec};
+use bumpalo::Bump;
 use impact_ecs::{
     component::{ComponentArray, ComponentFlags, ComponentStorage},
     metadata::ComponentMetadataRegistry,
@@ -41,7 +43,10 @@ pub struct ECSVoxelObjectInteractionContext<'a> {
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
     type EntityID = EntityID;
 
-    fn gather_voxel_object_entities(&mut self, entities: &mut Vec<VoxelObjectEntity<EntityID>>) {
+    fn gather_voxel_object_entities<A: Allocator>(
+        &mut self,
+        entities: &mut vec::Vec<VoxelObjectEntity<EntityID>, A>,
+    ) {
         query!(
             self.ecs_world,
             |entity_id: EntityID, voxel_object_id: &VoxelObjectID, flags: &SceneEntityFlags| {
@@ -233,6 +238,7 @@ pub fn sync_voxel_object_model_transforms(
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
 pub fn apply_absorption(
+    arena: &Bump,
     component_metadata_registry: &ComponentMetadataRegistry,
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
@@ -255,6 +261,7 @@ pub fn apply_absorption(
     };
 
     absorption::apply_absorption(
+        arena,
         &mut interaction_context,
         voxel_object_manager,
         voxel_type_registry,
