@@ -1,6 +1,7 @@
 //! Utilities for multithreading.
 
 use anyhow::Error;
+use crossbeam_channel::{Receiver, Sender};
 use impact_containers::HashMap;
 use impact_math::Hash64;
 use parking_lot::{Condvar, Mutex};
@@ -10,7 +11,6 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        mpsc::{self, Receiver, Sender},
     },
     thread::{self, JoinHandle},
 };
@@ -28,11 +28,13 @@ use std::{
 /// # use parking_lot::Mutex;
 /// #
 /// let n_workers = 2;
+/// let queue_capacity = 256;
 /// let n_tasks = 2;
 ///
 /// let pool = ThreadPool::new(
 ///     // At least one worker is required
 ///     NonZeroUsize::new(n_workers).unwrap(),
+///     NonZeroUsize::new(queue_capacity).unwrap(),
 ///     // Define task closure that increments a shared count
 ///     &|_channel, (count, incr): (Arc<Mutex<usize>>, usize)| {
 ///         *count.lock() += incr;
@@ -123,7 +125,7 @@ pub struct ThreadPoolTaskErrors {
 pub struct ThreadPoolChannel<M> {
     owning_worker_id: Option<WorkerID>,
     sender: Sender<WorkerInstruction<M>>,
-    receiver: Arc<Mutex<Receiver<WorkerInstruction<M>>>>,
+    receiver: Receiver<WorkerInstruction<M>>,
 }
 
 /// A shared structure for handling communication between
@@ -162,12 +164,16 @@ impl<M> ThreadPool<M> {
     /// the execution instruction as well as a reference to a
     /// [`ThreadPoolChannel`] that can be used to send messages
     /// to other worker threads from the closure.
-    pub fn new<T>(n_workers: NonZeroUsize, execute_task: &'static T) -> Self
+    pub fn new<T>(
+        n_workers: NonZeroUsize,
+        queue_capacity: NonZeroUsize,
+        execute_task: &'static T,
+    ) -> Self
     where
         M: Send + 'static,
         T: Fn(&ThreadPoolChannel<M>, M) -> TaskClosureReturnValue + Sync,
     {
-        let communicator = ThreadPoolCommunicator::new(n_workers);
+        let communicator = ThreadPoolCommunicator::new(n_workers, queue_capacity);
 
         let workers = (0..n_workers.get() as u64)
             .map(|worker_id| {
@@ -363,10 +369,8 @@ impl fmt::Display for ThreadPoolTaskErrors {
 impl std::error::Error for ThreadPoolTaskErrors {}
 
 impl<M> ThreadPoolChannel<M> {
-    fn new() -> Self {
-        let (sender, receiver) = mpsc::channel::<WorkerInstruction<M>>();
-        let receiver = Arc::new(Mutex::new(receiver));
-
+    fn new(capacity: NonZeroUsize) -> Self {
+        let (sender, receiver) = crossbeam_channel::bounded(capacity.get());
         Self {
             owning_worker_id: None,
             sender,
@@ -397,7 +401,7 @@ impl<M> ThreadPoolChannel<M> {
     }
 
     fn wait_for_next_instruction(&self) -> WorkerInstruction<M> {
-        self.receiver.lock().recv().unwrap()
+        self.receiver.recv().unwrap()
     }
 
     /// Creates a new instance of the channel for use by the
@@ -407,14 +411,14 @@ impl<M> ThreadPoolChannel<M> {
         Self {
             owning_worker_id: Some(worker_id),
             sender: self.sender.clone(),
-            receiver: Arc::clone(&self.receiver),
+            receiver: self.receiver.clone(),
         }
     }
 }
 
 impl<M> ThreadPoolCommunicator<M> {
-    fn new(n_workers: NonZeroUsize) -> Self {
-        let channel = ThreadPoolChannel::new();
+    fn new(n_workers: NonZeroUsize, queue_capacity: NonZeroUsize) -> Self {
+        let channel = ThreadPoolChannel::new(queue_capacity);
         let execution_progress = ExecutionProgress::new();
         let task_status = TaskStatus::new();
         Self {
@@ -620,17 +624,36 @@ mod tests {
 
     struct NoMessage;
 
+    fn communicator<M>(n_workers: usize) -> ThreadPoolCommunicator<M> {
+        ThreadPoolCommunicator::new(
+            NonZeroUsize::new(n_workers).unwrap(),
+            NonZeroUsize::new(16).unwrap(),
+        )
+    }
+
+    fn thread_pool<M, T>(n_workers: usize, execute_task: &'static T) -> ThreadPool<M>
+    where
+        M: Send + 'static,
+        T: Fn(&ThreadPoolChannel<M>, M) -> TaskClosureReturnValue + Sync,
+    {
+        ThreadPool::new(
+            NonZeroUsize::new(n_workers).unwrap(),
+            NonZeroUsize::new(10).unwrap(),
+            execute_task,
+        )
+    }
+
     #[test]
     fn creating_thread_communicator_works() {
         let n_workers = 2;
-        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
+        let comm = communicator::<NoMessage>(n_workers);
         assert_eq!(comm.n_workers().get(), n_workers);
     }
 
     #[test]
     fn sending_message_with_communicator_works() {
         let n_workers = 1;
-        let comm = ThreadPoolCommunicator::new(NonZeroUsize::new(n_workers).unwrap());
+        let comm = communicator(n_workers);
         comm.channel().send_execute_instruction(42);
         let message = comm.channel().wait_for_next_instruction();
         assert_eq!(message, WorkerInstruction::Execute(42));
@@ -639,7 +662,7 @@ mod tests {
     #[test]
     fn keeping_track_of_pending_task_count_works() {
         let n_workers = 1;
-        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
+        let comm = communicator::<NoMessage>(n_workers);
         assert_eq!(comm.execution_progress().pending_task_count(), 0);
         comm.execution_progress().add_to_pending_task_count(2);
         assert_eq!(comm.execution_progress().pending_task_count(), 2);
@@ -661,7 +684,7 @@ mod tests {
     #[should_panic]
     fn registering_executed_task_when_none_are_pending_fails() {
         let n_workers = 2;
-        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
+        let comm = communicator::<NoMessage>(n_workers);
         comm.execution_progress()
             .register_executed_tasks(WorkerID(0), 1);
     }
@@ -669,9 +692,8 @@ mod tests {
     #[test]
     fn creating_thread_pool_works() {
         let n_workers = 2;
-        let pool = ThreadPool::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap(), &|_, _| {
-            TaskClosureReturnValue::success()
-        });
+        let pool =
+            thread_pool::<NoMessage, _>(n_workers, &|_, _| TaskClosureReturnValue::success());
         assert_eq!(pool.n_workers().get(), n_workers);
     }
 
@@ -679,14 +701,13 @@ mod tests {
     fn executing_thread_pool_works() {
         let n_workers = 2;
         let count = Arc::new(Mutex::new(0));
-        let pool = ThreadPool::new(NonZeroUsize::new(n_workers).unwrap(), &|_,
-                                                                            (count, incr): (
-            Arc<Mutex<usize>>,
-            usize,
-        )| {
-            *count.lock() += incr;
-            TaskClosureReturnValue::success()
-        });
+        let pool = thread_pool(
+            n_workers,
+            &|_, (count, incr): (Arc<Mutex<usize>>, usize)| {
+                *count.lock() += incr;
+                TaskClosureReturnValue::success()
+            },
+        );
         pool.execute_and_wait(
             iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers),
             n_workers,
@@ -700,11 +721,8 @@ mod tests {
     fn capturing_task_error_works() {
         let n_workers = 2;
         let count = Arc::new(Mutex::new(1));
-        let pool = ThreadPool::new(NonZeroUsize::new(n_workers).unwrap(), &|_,
-                                                                            (
-            count,
-            task_id,
-        ): (
+        let pool = thread_pool(n_workers, &|_,
+                                            (count, task_id): (
             Arc<Mutex<usize>>,
             TaskID,
         )| {

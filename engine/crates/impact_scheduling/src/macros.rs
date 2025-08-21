@@ -57,8 +57,9 @@
 ///
 /// let engine = Engine::new();
 /// let n_workers = NonZeroUsize::new(2).unwrap();
+/// let queue_capacity = NonZeroUsize::new(256).unwrap();
 ///
-/// let mut scheduler = TaskScheduler::new(n_workers, engine);
+/// let mut scheduler = TaskScheduler::new(n_workers, queue_capacity, engine);
 ///
 /// // Add newly defined tasks to scheduler
 /// scheduler.register_task(ComputeForces).unwrap();

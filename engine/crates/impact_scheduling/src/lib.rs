@@ -62,6 +62,7 @@ pub trait Task<S>: Sync + Send + Debug {
 #[derive(Debug)]
 pub struct TaskScheduler<S> {
     n_workers: NonZeroUsize,
+    queue_capacity: NonZeroUsize,
     tasks: TaskPool<S>,
     dependency_graph: TaskDependencyGraph<S>,
     executor: Option<TaskExecutor<S>>,
@@ -137,9 +138,10 @@ where
 {
     /// Creates a new task scheduler that will operate with the given number of
     /// worker threads on the given external state.
-    pub fn new(n_workers: NonZeroUsize, external_state: S) -> Self {
+    pub fn new(n_workers: NonZeroUsize, queue_capacity: NonZeroUsize, external_state: S) -> Self {
         Self {
             n_workers,
+            queue_capacity,
             tasks: HashMap::default(),
             dependency_graph: TaskDependencyGraph::new(),
             executor: None,
@@ -206,6 +208,7 @@ where
     pub fn complete_task_registration(&mut self) -> Result<()> {
         self.executor = Some(TaskExecutor::new(
             self.n_workers,
+            self.queue_capacity,
             &self.tasks,
             &mut self.dependency_graph,
             self.external_state.clone(),
@@ -380,6 +383,7 @@ where
 {
     fn new(
         n_workers: NonZeroUsize,
+        queue_capacity: NonZeroUsize,
         task_pool: &TaskPool<S>,
         dependency_graph: &mut TaskDependencyGraph<S>,
         external_state: S,
@@ -389,7 +393,11 @@ where
             dependency_graph,
             external_state,
         )?);
-        let thread_pool = ThreadPool::new(n_workers, &Self::execute_task_and_schedule_dependencies);
+        let thread_pool = ThreadPool::new(
+            n_workers,
+            queue_capacity,
+            &Self::execute_task_and_schedule_dependencies,
+        );
         Ok(Self { state, thread_pool })
     }
 
@@ -791,6 +799,7 @@ mod tests {
     fn create_scheduler(n_workers: usize) -> TestTaskScheduler {
         TaskScheduler::new(
             NonZeroUsize::new(n_workers).unwrap(),
+            NonZeroUsize::new(16).unwrap(),
             Arc::new(TaskRecorder::new()),
         )
     }
