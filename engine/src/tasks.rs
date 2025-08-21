@@ -1,6 +1,7 @@
 //! Task definitions, arranged in dependency-consistent order.
 
 use crate::{
+    alloc::TaskArenas,
     gizmo,
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
@@ -330,19 +331,22 @@ define_task!(
             let mut voxel_object_manager = scene.voxel_object_manager().write();
             let scene_graph = scene.scene_graph().read();
 
-            impact_voxel::interaction::systems::apply_absorption(
-                engine.component_metadata_registry(),
-                &mut entity_stager,
-                &ecs_world,
-                &scene_graph,
-                &mut voxel_object_manager,
-                &resource_manager.voxel_types,
-                &mut rigid_body_manager,
-                &mut anchor_manager,
-                &force_generator_manager,
-                &collision_world,
-                simulator.time_step_duration(),
-            );
+            TaskArenas::with(|arena| {
+                impact_voxel::interaction::systems::apply_absorption(
+                    arena,
+                    engine.component_metadata_registry(),
+                    &mut entity_stager,
+                    &ecs_world,
+                    &scene_graph,
+                    &mut voxel_object_manager,
+                    &resource_manager.voxel_types,
+                    &mut rigid_body_manager,
+                    &mut anchor_manager,
+                    &force_generator_manager,
+                    &collision_world,
+                    simulator.time_step_duration(),
+                );
+            });
 
             Ok(())
         })
