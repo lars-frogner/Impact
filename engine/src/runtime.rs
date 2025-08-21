@@ -32,6 +32,7 @@ pub struct Runtime<UI> {
 #[serde(default)]
 pub struct RuntimeConfig {
     n_worker_threads: NonZeroUsize,
+    task_queue_capacity: NonZeroUsize,
 }
 
 impl<UI> Runtime<UI>
@@ -44,7 +45,8 @@ where
 
         let ctx = RuntimeContext::new(engine.clone(), user_interface.clone());
 
-        let task_scheduler = tasks::create_task_scheduler(ctx, config.n_worker_threads)?;
+        let task_scheduler =
+            tasks::create_task_scheduler(ctx, config.n_worker_threads, config.task_queue_capacity)?;
 
         Ok(Self {
             engine,
@@ -95,6 +97,7 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
             n_worker_threads: NonZeroUsize::new(1).unwrap(),
+            task_queue_capacity: NonZeroUsize::new(1024).unwrap(),
         }
     }
 }

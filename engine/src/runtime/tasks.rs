@@ -44,8 +44,9 @@ impl RuntimeContext {
 pub fn create_task_scheduler(
     ctx: RuntimeContext,
     n_workers: NonZeroUsize,
+    queue_capacity: NonZeroUsize,
 ) -> Result<RuntimeTaskScheduler> {
-    let mut task_scheduler = RuntimeTaskScheduler::new(n_workers, ctx);
+    let mut task_scheduler = RuntimeTaskScheduler::new(n_workers, queue_capacity, ctx);
     tasks::register_all_tasks(&mut task_scheduler)?;
     task_scheduler.complete_task_registration()?;
     Ok(task_scheduler)
