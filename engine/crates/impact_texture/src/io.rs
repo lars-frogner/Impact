@@ -1,5 +1,6 @@
 //! Input/output of texture data.
 
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, anyhow, bail};
 use impact_gpu::{
     device::GraphicsDevice,
@@ -22,109 +23,24 @@ use std::path::Path;
 ///   data between buffers and textures).
 /// - The image is grayscale and the color space in the configuration is not
 ///   linear.
-pub fn create_texture_from_image_path(
+pub fn create_texture_from_image_path<A>(
+    arena: A,
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
     image_path: impl AsRef<Path>,
     texture_config: TextureConfig,
     label: &str,
-) -> Result<Texture> {
+) -> Result<Texture>
+where
+    A: Copy + Allocator,
+{
     let image_path = image_path.as_ref();
-    let image = image::load_image_from_path(image_path)?;
+    let image = image::load_image_from_path(arena, image_path)?;
     crate::create_texture_from_image(
+        arena,
         graphics_device,
         mipmapper_generator,
         &image,
-        texture_config,
-        label,
-    )
-}
-
-/// Creates a cubemap texture for the image files representing cubemap faces
-/// at the given paths, using the given configuration parameters.
-///
-/// # Errors
-/// Returns an error if:
-/// - The image dimensions or pixel formats do not match.
-/// - The image file can not be read or decoded.
-/// - The image width or height is zero.
-/// - The row size (width times texel size) is not a multiple of 256 bytes
-///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
-///   data between buffers and textures).
-/// - The image is grayscale and the color space in the configuration is not
-///   linear.
-pub fn create_cubemap_texture_from_image_paths<P: AsRef<Path>>(
-    graphics_device: &GraphicsDevice,
-    right_image_path: P,
-    left_image_path: P,
-    top_image_path: P,
-    bottom_image_path: P,
-    front_image_path: P,
-    back_image_path: P,
-    texture_config: TextureConfig,
-    label: &str,
-) -> Result<Texture> {
-    let right_image_path = right_image_path.as_ref();
-    let left_image_path = left_image_path.as_ref();
-    let top_image_path = top_image_path.as_ref();
-    let bottom_image_path = bottom_image_path.as_ref();
-    let front_image_path = front_image_path.as_ref();
-    let back_image_path = back_image_path.as_ref();
-
-    let right_image = image::load_image_from_path(right_image_path)?;
-    let left_image = image::load_image_from_path(left_image_path)?;
-    let top_image = image::load_image_from_path(top_image_path)?;
-    let bottom_image = image::load_image_from_path(bottom_image_path)?;
-    let front_image = image::load_image_from_path(front_image_path)?;
-    let back_image = image::load_image_from_path(back_image_path)?;
-
-    crate::create_cubemap_texture_from_images(
-        graphics_device,
-        &right_image,
-        &left_image,
-        &top_image,
-        &bottom_image,
-        &front_image,
-        &back_image,
-        texture_config,
-        label,
-    )
-}
-
-/// Creates a texture array for the image files at the given paths, using
-/// the given configuration parameters.
-///
-/// # Errors
-/// Returns an error if:
-/// - The image file can not be read or decoded.
-/// - The number of images is zero.
-/// - Any of the images are wrapped in an [`Err`].
-/// - The image width or height is zero.
-/// - The image is grayscale and the color space in the configuration is not
-///   linear.
-/// - The image dimensions or pixel formats do not match.
-/// - The row size (width times texel size) is not a multiple of 256 bytes
-///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
-///   data between buffers and textures).
-pub fn create_texture_array_from_image_paths<I, P>(
-    graphics_device: &GraphicsDevice,
-    mipmapper_generator: &MipmapperGenerator,
-    image_paths: impl IntoIterator<IntoIter = I>,
-    texture_config: TextureConfig,
-    label: &str,
-) -> Result<Texture>
-where
-    I: ExactSizeIterator<Item = P>,
-    P: AsRef<Path>,
-{
-    let images = image_paths
-        .into_iter()
-        .map(|image_path: P| image::load_image_from_path(image_path.as_ref()));
-
-    crate::create_texture_array_from_images(
-        graphics_device,
-        mipmapper_generator,
-        images,
         texture_config,
         label,
     )
@@ -138,14 +54,18 @@ where
 /// - The format of the given texture is not supported.
 /// - The mip level is invalid.
 /// - The texture array index is invalid.
-pub fn save_texture_as_png_file(
+pub fn save_texture_as_png_file<A>(
+    arena: A,
     graphics_device: &GraphicsDevice,
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
     already_gamma_corrected: bool,
     output_path: impl AsRef<Path>,
-) -> Result<()> {
+) -> Result<()>
+where
+    A: Copy + Allocator,
+{
     fn byte_to_float(byte: u8) -> f32 {
         f32::from(byte) / 255.0
     }
@@ -200,7 +120,9 @@ pub fn save_texture_as_png_file(
         | wgpu::TextureFormat::Bgra8Unorm
         | wgpu::TextureFormat::Bgra8UnormSrgb
         | wgpu::TextureFormat::R8Unorm => {
-            let mut data = impact_gpu::texture::extract_texture_bytes(
+            let mut data = AVec::new_in(arena);
+            impact_gpu::texture::extract_texture_data_into(
+                &mut data,
                 graphics_device.device(),
                 graphics_device.queue(),
                 texture,
@@ -248,7 +170,9 @@ pub fn save_texture_as_png_file(
             }
         }
         wgpu::TextureFormat::Rgba16Float | wgpu::TextureFormat::R16Float => {
-            let mut data = impact_gpu::texture::extract_texture_data_and_convert::<half::f16, f32>(
+            let mut data = AVec::new_in(arena);
+            impact_gpu::texture::extract_converted_texture_data_into::<A, half::f16, f32>(
+                &mut data,
                 graphics_device.device(),
                 graphics_device.queue(),
                 texture,
@@ -297,7 +221,9 @@ pub fn save_texture_as_png_file(
         | wgpu::TextureFormat::Rgba32Float
         | wgpu::TextureFormat::R32Float
         | wgpu::TextureFormat::Rg32Float => {
-            let mut data = impact_gpu::texture::extract_texture_data::<f32>(
+            let mut data = AVec::<f32, A>::new_in(arena);
+            impact_gpu::texture::extract_texture_data_into(
+                &mut data,
                 graphics_device.device(),
                 graphics_device.queue(),
                 texture,
@@ -309,7 +235,8 @@ pub fn save_texture_as_png_file(
                 let (rg_data, rem) = data.as_chunks::<2>();
                 assert!(rem.is_empty());
 
-                let mut rgba_data = vec![0.0; data.len() * 2];
+                let mut rgba_data = AVec::new_in(arena);
+                rgba_data.resize(data.len() * 2, 0.0);
 
                 for (i, &[r, g]) in rg_data.iter().enumerate() {
                     rgba_data[i * 4] = r;

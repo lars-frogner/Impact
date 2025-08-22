@@ -18,6 +18,7 @@ use crate::{
     resource::{ResourceConfig, ResourceManager},
     scene::Scene,
 };
+use allocator_api2::alloc::Allocator;
 use anyhow::{Result, anyhow};
 use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
@@ -252,23 +253,29 @@ impl Engine {
 
     /// Captures and saves a screenshot to the specified path, or, if not
     /// specified, to a timestamped PNG file in the current directory.
-    pub fn capture_screenshot(&self, output_path: Option<&Path>) -> Result<()> {
+    pub fn capture_screenshot<A>(&self, arena: A, output_path: Option<&Path>) -> Result<()>
+    where
+        A: Copy + Allocator,
+    {
         self.screen_capturer.request_screenshot_save();
         self.screen_capturer
-            .save_screenshot_if_requested(self.renderer(), output_path)
+            .save_screenshot_if_requested(arena, self.renderer(), output_path)
     }
 
     /// Captures and saves any screenshots or related textures requested through
     /// the [`ScreenCapturer`].
-    pub fn save_requested_screenshots(&self) -> Result<()> {
+    pub fn save_requested_screenshots<A>(&self, arena: A) -> Result<()>
+    where
+        A: Copy + Allocator,
+    {
         self.screen_capturer
-            .save_screenshot_if_requested(self.renderer(), None)?;
+            .save_screenshot_if_requested(arena, self.renderer(), None)?;
 
         self.screen_capturer
-            .save_omnidirectional_light_shadow_maps_if_requested(self.renderer())?;
+            .save_omnidirectional_light_shadow_maps_if_requested(arena, self.renderer())?;
 
         self.screen_capturer
-            .save_unidirectional_light_shadow_maps_if_requested(self.renderer())
+            .save_unidirectional_light_shadow_maps_if_requested(arena, self.renderer())
     }
 
     /// Sets a new size for the rendering surface and updates

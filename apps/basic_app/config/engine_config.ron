@@ -1,7 +1,6 @@
 (
     resources: (
-        resource_file_path: None,
-        // resource_file_path: Some("resources.ron"),
+        resource_file_path: Some("resources.ron"),
         lookup_table_dir: "../resources/lookup_tables",
     ),
     rendering: (

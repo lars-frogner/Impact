@@ -13,6 +13,7 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde", "nalgebra/serde-serialize"]
 
 [dependencies]
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 approx = { workspace = true }
 bitflags = { workspace = true }

@@ -3,6 +3,7 @@
 pub mod mipmap;
 
 use crate::{buffer, device::GraphicsDevice};
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, bail};
 use bytemuck::Pod;
 use mipmap::MipmapperGenerator;
@@ -216,7 +217,8 @@ impl Texture {
     /// - The row size (width times texel size) is not a multiple of 256 bytes
     ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
-    pub fn create(
+    pub fn create<A>(
+        arena: A,
         graphics_device: &GraphicsDevice,
         mipmapper_generator: Option<&MipmapperGenerator>,
         byte_buffer: &[u8],
@@ -227,7 +229,10 @@ impl Texture {
         is_cubemap: bool,
         texture_config: TextureConfig,
         label: &str,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        A: Copy + Allocator,
+    {
         let texture_size = wgpu::Extent3d {
             width: u32::from(width),
             height: u32::from(height),
@@ -307,6 +312,7 @@ impl Texture {
 
         if let Some(mipmapper_generator) = mipmapper_generator {
             mipmapper_generator.update_texture_mipmaps(
+                arena,
                 graphics_device,
                 &texture,
                 Cow::Owned(label.to_string()),
@@ -678,35 +684,82 @@ pub fn create_sampler_bind_group_layout_entry(
     }
 }
 
-pub fn extract_texture_data_and_convert<IN: Pod, OUT: From<IN>>(
+pub fn extract_converted_texture_data_into<A, IN, OUT>(
+    image_data: &mut AVec<OUT, A>,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
-) -> Result<Vec<OUT>> {
-    let data = extract_texture_data::<IN>(device, queue, texture, mip_level, texture_array_idx)?;
-    Ok(data.into_iter().map(|value| OUT::from(value)).collect())
+) -> Result<()>
+where
+    A: Allocator,
+    IN: Pod,
+    OUT: From<IN>,
+{
+    let size = texture
+        .size()
+        .mip_level_size(mip_level, texture.dimension());
+
+    image_data.clear();
+    image_data.reserve(size.width as usize * size.height as usize);
+
+    for_each_row_of_texture_bytes(
+        device,
+        queue,
+        texture,
+        mip_level,
+        texture_array_idx,
+        &mut |row_bytes| {
+            image_data.extend(
+                bytemuck::cast_slice::<_, IN>(row_bytes)
+                    .iter()
+                    .copied()
+                    .map(Into::into),
+            );
+        },
+    )
 }
 
-pub fn extract_texture_data<T: Pod>(
+pub fn extract_texture_data_into<A, T>(
+    image_data: &mut AVec<T, A>,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
-) -> Result<Vec<T>> {
-    let data = extract_texture_bytes(device, queue, texture, mip_level, texture_array_idx)?;
-    Ok(bytemuck::cast_slice(&data).to_vec())
+) -> Result<()>
+where
+    A: Allocator,
+    T: Pod,
+{
+    let size = texture
+        .size()
+        .mip_level_size(mip_level, texture.dimension());
+
+    image_data.clear();
+    image_data.reserve(size.width as usize * size.height as usize);
+
+    for_each_row_of_texture_bytes(
+        device,
+        queue,
+        texture,
+        mip_level,
+        texture_array_idx,
+        &mut |row_bytes| {
+            image_data.extend_from_slice(bytemuck::cast_slice(row_bytes));
+        },
+    )
 }
 
-pub fn extract_texture_bytes(
+fn for_each_row_of_texture_bytes(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
-) -> Result<Vec<u8>> {
+    f: &mut impl FnMut(&[u8]),
+) -> Result<()> {
     assert!(mip_level <= texture.mip_level_count());
 
     assert!(texture_array_idx < texture.depth_or_array_layers());
@@ -778,25 +831,14 @@ pub fn extract_texture_bytes(
 
     let buffer_view = buffer::map_buffer_slice_to_cpu(device, buffer.slice(..))?;
 
-    let texture_image_size = (bytes_per_row * height) as usize;
-
     // Extract only the data of the texture with the given texture array index
     let layer_start = texture_array_idx * padded_layer_size as usize;
 
-    // Return the buffer data directly if there is no padding
-    if bytes_per_row == padded_bytes_per_row {
-        return Ok(buffer_view[layer_start..layer_start + texture_image_size].to_vec());
-    }
-
-    let mut image_buffer = Vec::with_capacity(texture_image_size);
-
-    // Only copy over non-padding data
     for row_idx in 0..height as usize {
         let start = layer_start + row_idx * padded_bytes_per_row as usize;
         let end = start + bytes_per_row as usize;
-        image_buffer.extend_from_slice(&buffer_view[start..end]);
+        f(&buffer_view[start..end]);
     }
-    assert_eq!(image_buffer.len(), texture_image_size);
 
-    Ok(image_buffer)
+    Ok(())
 }

@@ -21,12 +21,12 @@
         (
             id: "space_skybox",
             source: CubemapImages(
-                right: File("../resources/space_skybox/right.png"),
-                left: File("../resources/space_skybox/left.png"),
-                top: File("../resources/space_skybox/top.png"),
-                bottom: File("../resources/space_skybox/bottom.png"),
-                front: File("../resources/space_skybox/front.png"),
-                back: File("../resources/space_skybox/back.png"),
+                right: "../resources/space_skybox/right.png",
+                left: "../resources/space_skybox/left.png",
+                top: "../resources/space_skybox/top.png",
+                bottom: "../resources/space_skybox/bottom.png",
+                front: "../resources/space_skybox/front.png",
+                back: "../resources/space_skybox/back.png",
             ),
             texture_config: (
                 color_space: Srgb,
@@ -36,12 +36,12 @@
         (
             id: "ocean_skybox",
             source: CubemapImages(
-                right: File("../resources/ocean_skybox/right.jpg"),
-                left: File("../resources/ocean_skybox/left.jpg"),
-                top: File("../resources/ocean_skybox/top.jpg"),
-                bottom: File("../resources/ocean_skybox/bottom.jpg"),
-                front: File("../resources/ocean_skybox/front.jpg"),
-                back: File("../resources/ocean_skybox/back.jpg"),
+                right: "../resources/ocean_skybox/right.jpg",
+                left: "../resources/ocean_skybox/left.jpg",
+                top: "../resources/ocean_skybox/top.jpg",
+                bottom: "../resources/ocean_skybox/bottom.jpg",
+                front: "../resources/ocean_skybox/front.jpg",
+                back: "../resources/ocean_skybox/back.jpg",
             ),
             texture_config: (
                 color_space: Srgb,
@@ -50,7 +50,7 @@
         ),
         (
             id: "concrete_color_texture",
-            source: Image(File("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg")),
+            source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
             ),
@@ -60,7 +60,7 @@
         ),
         (
             id: "concrete_roughness_texture",
-            source: Image(File("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg")),
+            source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -70,7 +70,7 @@
         ),
         (
             id: "concrete_normal_texture",
-            source: Image(File("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg")),
+            source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -80,7 +80,7 @@
         ),
         (
             id: "plastic_color_texture",
-            source: Image(File("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg")),
+            source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
             ),
@@ -90,7 +90,7 @@
         ),
         (
             id: "plastic_roughness_texture",
-            source: Image(File("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg")),
+            source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -100,7 +100,7 @@
         ),
         (
             id: "plastic_normal_texture",
-            source: Image(File("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg")),
+            source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -110,7 +110,7 @@
         ),
         (
             id: "bricks_color_texture",
-            source: Image(File("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg")),
+            source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
             ),
@@ -120,7 +120,7 @@
         ),
         (
             id: "bricks_roughness_texture",
-            source: Image(File("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg")),
+            source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -130,7 +130,7 @@
         ),
         (
             id: "bricks_height_texture",
-            source: Image(File("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg")),
+            source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -140,7 +140,7 @@
         ),
         (
             id: "wood_floor_color_texture",
-            source: Image(File("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg")),
+            source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
             ),
@@ -150,7 +150,7 @@
         ),
         (
             id: "wood_floor_roughness_texture",
-            source: Image(File("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg")),
+            source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -160,7 +160,7 @@
         ),
         (
             id: "wood_floor_normal_texture",
-            source: Image(File("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg")),
+            source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
             texture_config: (
                 color_space: Linear,
             ),
@@ -170,7 +170,7 @@
         ),
         (
             id: "ground_color_texture",
-            source: Image(File("../resources/Ground029_4K-JPG/Ground029_4K-JPG_Color.jpg")),
+            source: Image("../resources/Ground029_4K-JPG/Ground029_4K-JPG_Color.jpg"),
             texture_config: (
                 color_space: Srgb,
             ),

@@ -16,7 +16,14 @@ impl TaskArenas {
     /// the arena afterwards.
     pub fn with<R>(f: impl FnOnce(&Bump) -> R) -> R {
         let result = THREAD_LOCAL_ARENA.with(|arena| f(&arena.borrow()));
-        THREAD_LOCAL_ARENA.with(|arena| arena.borrow_mut().reset());
+        THREAD_LOCAL_ARENA.with(|arena| {
+            let mut arena = arena.borrow_mut();
+            impact_log::debug!(
+                "Resetting task arena with {} allocated bytes",
+                arena.allocated_bytes()
+            );
+            arena.reset();
+        });
         result
     }
 }

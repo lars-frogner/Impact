@@ -12,6 +12,7 @@ jpeg = ["dep:zune-jpeg"]
 serde = ["dep:serde"]
 
 [dependencies]
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 impact_log = { path = "../impact_log" }
 png = { version = "0.17", optional = true }

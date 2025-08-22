@@ -6,6 +6,7 @@ use crate::{
     VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
     VertexTangentSpaceQuaternion, VertexTextureCoords,
 };
+use allocator_api2::alloc::Allocator;
 use anyhow::{Result, anyhow};
 use bytemuck::Pod;
 use impact_gpu::{
@@ -464,11 +465,15 @@ impl MeshGPUResource {
 impl GPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
     type GPUContext = GraphicsDevice;
 
-    fn create(
+    fn create<A>(
+        _scratch: A,
         graphics_device: &GraphicsDevice,
         id: TriangleMeshID,
         mesh: &TriangleMesh<f32>,
-    ) -> Result<Option<Self>> {
+    ) -> Result<Option<Self>>
+    where
+        A: Copy + Allocator,
+    {
         Ok(Some(Self::for_triangle_mesh(
             graphics_device,
             mesh,
@@ -496,11 +501,15 @@ impl MutableGPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
 impl GPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
     type GPUContext = GraphicsDevice;
 
-    fn create(
+    fn create<A>(
+        _scratch: A,
         graphics_device: &GraphicsDevice,
         id: LineSegmentMeshID,
         mesh: &LineSegmentMesh<f32>,
-    ) -> Result<Option<Self>> {
+    ) -> Result<Option<Self>>
+    where
+        A: Copy + Allocator,
+    {
         Ok(Some(Self::for_line_segment_mesh(
             graphics_device,
             mesh,

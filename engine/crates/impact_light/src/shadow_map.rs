@@ -1,5 +1,6 @@
 //! Textures representing shadow maps.
 
+use allocator_api2::alloc::Allocator;
 use anyhow::Result;
 use impact_geometry::CubemapFace;
 use impact_gpu::{device::GraphicsDevice, wgpu};
@@ -141,13 +142,18 @@ impl ShadowCubemapTexture {
 
     /// Saves the specified face texture as a grayscale PNG image at the given
     /// output path.
-    pub fn save_face_as_png_file(
+    pub fn save_face_as_png_file<A>(
         &self,
+        arena: A,
         graphics_device: &GraphicsDevice,
         face: CubemapFace,
         output_path: impl AsRef<Path>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        A: Copy + Allocator,
+    {
         impact_texture::io::save_texture_as_png_file(
+            arena,
             graphics_device,
             &self.texture,
             0,
@@ -330,13 +336,18 @@ impl CascadedShadowMapTexture {
 
     /// Saves the specified cascade texture as a grayscale PNG image at the
     /// given output path.
-    pub fn save_cascade_as_png_file(
+    pub fn save_cascade_as_png_file<A>(
         &self,
+        arena: A,
         graphics_device: &GraphicsDevice,
         cascade_idx: u32,
         output_path: impl AsRef<Path>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        A: Copy + Allocator,
+    {
         impact_texture::io::save_texture_as_png_file(
+            arena,
             graphics_device,
             &self.texture,
             0,

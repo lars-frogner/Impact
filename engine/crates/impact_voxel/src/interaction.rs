@@ -14,7 +14,7 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::{VoxelAbsorbingCapsule, VoxelAbsorbingSphere};
-use allocator_api2::{alloc::Allocator, vec};
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact_geometry::ModelTransform;
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
@@ -36,7 +36,7 @@ pub trait VoxelObjectInteractionContext {
     /// Gathers all voxel object entities that may participate in interactions.
     fn gather_voxel_object_entities<A: Allocator>(
         &mut self,
-        entities: &mut vec::Vec<VoxelObjectEntity<Self::EntityID>, A>,
+        entities: &mut AVec<VoxelObjectEntity<Self::EntityID>, A>,
     );
 
     /// Gathers all active voxel-absorbing sphere entities.

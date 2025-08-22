@@ -10,8 +10,7 @@ use crate::{
     mesh::MeshedChunkedVoxelObject,
     voxel_types::VoxelTypeRegistry,
 };
-use allocator_api2::vec;
-use bumpalo::Bump;
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{Capsule, Sphere};
 use impact_physics::{
@@ -152,8 +151,8 @@ impl VoxelAbsorbingCapsule {
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
-pub fn apply_absorption<C>(
-    arena: &Bump,
+pub fn apply_absorption<A, C>(
+    arena: A,
     context: &mut C,
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
@@ -161,6 +160,7 @@ pub fn apply_absorption<C>(
     anchor_manager: &mut AnchorManager,
     time_step_duration: fph,
 ) where
+    A: Allocator,
     C: VoxelObjectInteractionContext,
     <C as VoxelObjectInteractionContext>::EntityID: Clone,
 {
@@ -172,7 +172,7 @@ pub fn apply_absorption<C>(
     }
 
     let mut voxel_object_entities =
-        vec::Vec::with_capacity_in(voxel_object_manager.voxel_object_count(), arena);
+        AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), arena);
 
     context.gather_voxel_object_entities(&mut voxel_object_entities);
 
