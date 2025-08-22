@@ -7,19 +7,20 @@ thread_local! {
     static THREAD_LOCAL_ARENA: RefCell<Bump> = RefCell::new(Bump::new());
 }
 
-/// Thread-local arenas for allocating memory that will not outlive the task.
+/// Thread-local arenas for allocating memory that will not outlive a resource
+/// operation.
 #[derive(Debug)]
-pub struct TaskArenas;
+pub struct ResourceOperationArenas;
 
-impl TaskArenas {
-    /// Calls the given closure with this thread's per-task arena, and resets
-    /// the arena afterwards.
+impl ResourceOperationArenas {
+    /// Calls the given closure with this thread's resource operation arena, and
+    /// resets the arena afterwards.
     pub fn with<R>(f: impl FnOnce(&Bump) -> R) -> R {
         let result = THREAD_LOCAL_ARENA.with(|arena| f(&arena.borrow()));
         THREAD_LOCAL_ARENA.with(|arena| {
             let mut arena = arena.borrow_mut();
             impact_log::debug!(
-                "Resetting task arena with {} allocated bytes",
+                "Resetting resource operation arena with {} allocated bytes",
                 arena.allocated_bytes()
             );
             arena.reset();

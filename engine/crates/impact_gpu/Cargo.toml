@@ -13,6 +13,7 @@ serde = ["dep:serde"]
 
 [dependencies]
 aho-corasick = "1.1"
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }

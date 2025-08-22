@@ -5,6 +5,7 @@ pub mod import;
 pub mod io;
 pub mod lookup_table;
 
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context, Result, anyhow, bail};
 use gpu_resource::SamplingTexture;
 use impact_containers::DefaultHasher;
@@ -21,7 +22,6 @@ use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry}
 use lookup_table::LookupTableTextureCreateInfo;
 use roc_integration::roc;
 use std::{
-    borrow::{Borrow, Cow},
     fmt,
     hash::{Hash, Hasher},
     num::NonZeroU32,
@@ -67,27 +67,27 @@ pub struct ImageTextureCreateInfo {
 }
 
 /// Source for image-based texture data.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub enum ImageTextureSource {
-    Image(ImageSource),
-    ArrayImages(Vec<ImageSource>),
-    CubemapImages {
-        right: ImageSource,
-        left: ImageSource,
-        top: ImageSource,
-        bottom: ImageSource,
-        front: ImageSource,
-        back: ImageSource,
+    Single(ImageSource),
+    Array {
+        sources: Vec<ImageSource>,
+        usage: TextureArrayUsage,
     },
 }
 
 /// Source for an image.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub enum ImageSource {
     File(PathBuf),
     Bytes(Image),
+}
+
+/// Intended usage for a texture array.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextureArrayUsage {
+    Generic,
+    Cubemap,
 }
 
 /// Contains the information required to create a specific
@@ -182,9 +182,7 @@ impl ImageTextureCreateInfo {
             bail!("Got zero width or height for texture image");
         }
 
-        if let ImageTextureSource::ArrayImages(sources) = &source
-            && sources.is_empty()
-        {
+        if source.depth_or_array_layers().is_none() {
             bail!("Got empty source list for image texture array");
         }
 
@@ -216,25 +214,43 @@ impl ImageTextureCreateInfo {
 
     /// Returns the depth or array layers for this texture.
     pub fn depth_or_array_layers(&self) -> DepthOrArrayLayers {
-        match &self.source {
-            ImageTextureSource::Image(_) => DepthOrArrayLayers::Depth(NonZeroU32::new(1).unwrap()),
-            ImageTextureSource::ArrayImages(sources) => DepthOrArrayLayers::ArrayLayers(
-                NonZeroU32::new(u32::try_from(sources.len()).unwrap()).unwrap(),
-            ),
-            ImageTextureSource::CubemapImages { .. } => {
-                DepthOrArrayLayers::ArrayLayers(NonZeroU32::new(6).unwrap())
-            }
-        }
+        self.source.depth_or_array_layers().unwrap()
     }
 
     /// Whether this texture represents a cubemap.
     pub fn is_cubemap(&self) -> bool {
-        matches!(&self.source, ImageTextureSource::CubemapImages { .. })
+        self.source.is_cubemap()
     }
 }
 
 impl Resource for SamplerCreateInfo {
     type ID = SamplerID;
+}
+
+impl ImageTextureSource {
+    /// Returns the depth or array layers for this texture source, or [`None`]
+    /// if it is an empty array.
+    pub fn depth_or_array_layers(&self) -> Option<DepthOrArrayLayers> {
+        match self {
+            Self::Single(_) => Some(DepthOrArrayLayers::Depth(NonZeroU32::new(1).unwrap())),
+            Self::Array { sources, .. } => (!sources.is_empty()).then(|| {
+                DepthOrArrayLayers::ArrayLayers(
+                    NonZeroU32::new(u32::try_from(sources.len()).unwrap()).unwrap(),
+                )
+            }),
+        }
+    }
+
+    /// Whether this source represents a cubemap texture.
+    pub fn is_cubemap(&self) -> bool {
+        matches!(
+            self,
+            Self::Array {
+                usage: TextureArrayUsage::Cubemap,
+                ..
+            }
+        )
+    }
 }
 
 /// Creates a texture for the image file represented by the given raw byte
@@ -250,15 +266,20 @@ impl Resource for SamplerCreateInfo {
 ///   data between buffers and textures).
 /// - The image is grayscale and the color space in the configuration is not
 ///   linear.
-pub fn create_texture_from_bytes(
+pub fn create_texture_from_bytes<A>(
+    arena: A,
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
     byte_buffer: &[u8],
     texture_config: TextureConfig,
     label: &str,
-) -> Result<Texture> {
-    let image = impact_io::image::load_image_from_bytes(byte_buffer)?;
+) -> Result<Texture>
+where
+    A: Copy + Allocator,
+{
+    let image = impact_io::image::load_image_from_bytes(arena, byte_buffer)?;
     create_texture_from_image(
+        arena,
         graphics_device,
         mipmapper_generator,
         &image,
@@ -278,13 +299,18 @@ pub fn create_texture_from_bytes(
 ///   data between buffers and textures).
 /// - The image is grayscale and the color space in the configuration is not
 ///   linear.
-pub fn create_texture_from_image(
+pub fn create_texture_from_image<A, IA>(
+    arena: A,
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
-    image: &Image,
+    image: &Image<IA>,
     texture_config: TextureConfig,
     label: &str,
-) -> Result<Texture> {
+) -> Result<Texture>
+where
+    A: Copy + Allocator,
+    IA: Allocator,
+{
     let (width, height) = image.dimensions();
     let width = NonZeroU32::new(width).ok_or_else(|| anyhow!("Image width is zero"))?;
     let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
@@ -294,6 +320,7 @@ pub fn create_texture_from_image(
         determine_valid_texel_description(image.meta.pixel_format, &texture_config)?;
 
     Texture::create(
+        arena,
         graphics_device,
         Some(mipmapper_generator),
         &image.data,
@@ -307,87 +334,14 @@ pub fn create_texture_from_image(
     )
 }
 
-/// Creates a cubemap texture for the given loaded images representing
-/// cubemap faces, using the given configuration parameters.
-///
-/// # Errors
-/// Returns an error if:
-/// - The image dimensions or pixel formats do not match.
-/// - The image width or height is zero.
-/// - The row size (width times texel size) is not a multiple of 256 bytes
-///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
-///   data between buffers and textures).
-/// - The image is grayscale and the color space in the configuration is not
-///   linear.
-pub fn create_cubemap_texture_from_images(
-    graphics_device: &GraphicsDevice,
-    right_image: &Image,
-    left_image: &Image,
-    top_image: &Image,
-    bottom_image: &Image,
-    front_image: &Image,
-    back_image: &Image,
-    texture_config: TextureConfig,
-    label: &str,
-) -> Result<Texture> {
-    let dimensions = right_image.dimensions();
-    if left_image.dimensions() != dimensions
-        || top_image.dimensions() != dimensions
-        || bottom_image.dimensions() != dimensions
-        || front_image.dimensions() != dimensions
-        || back_image.dimensions() != dimensions
-    {
-        bail!("Inconsistent dimensions for cubemap texture images")
-    }
-
-    let pixel_format = right_image.meta.pixel_format;
-    if left_image.meta.pixel_format != pixel_format
-        || top_image.meta.pixel_format != pixel_format
-        || bottom_image.meta.pixel_format != pixel_format
-        || front_image.meta.pixel_format != pixel_format
-        || back_image.meta.pixel_format != pixel_format
-    {
-        bail!("Inconsistent pixel formats for cubemap texture images")
-    }
-
-    let (width, height) = right_image.dimensions();
-    let width = NonZeroU32::new(width).ok_or_else(|| anyhow!("Image width is zero"))?;
-    let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
-    let array_layers = NonZeroU32::new(6).unwrap();
-
-    let texel_description = determine_valid_texel_description(pixel_format, &texture_config)?;
-
-    let mut byte_buffer = Vec::with_capacity(
-        (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
-    );
-
-    byte_buffer.extend_from_slice(&right_image.data);
-    byte_buffer.extend_from_slice(&left_image.data);
-    byte_buffer.extend_from_slice(&top_image.data);
-    byte_buffer.extend_from_slice(&bottom_image.data);
-    byte_buffer.extend_from_slice(&front_image.data);
-    byte_buffer.extend_from_slice(&back_image.data);
-
-    Texture::create(
-        graphics_device,
-        None,
-        &byte_buffer,
-        width,
-        height,
-        DepthOrArrayLayers::ArrayLayers(array_layers),
-        texel_description,
-        true,
-        texture_config,
-        label,
-    )
-}
-
-/// Creates a texture array for the given loaded images, using the given
-/// configuration parameters.
+/// Creates a texture array for the given image sources, using the given
+/// configuration parameters. The `verify_metadata` will be called with the
+/// metadata of each image.
 ///
 /// # Errors
 /// Returns an error if:
 /// - The number of images is zero.
+/// - The usage is `Cubemap` and the number of images is not six.
 /// - Any of the images are wrapped in an [`Err`].
 /// - The image width or height is zero.
 /// - The image is grayscale and the color space in the configuration is not
@@ -396,61 +350,102 @@ pub fn create_cubemap_texture_from_images(
 /// - The row size (width times texel size) is not a multiple of 256 bytes
 ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
 ///   data between buffers and textures).
-pub fn create_texture_array_from_images<I, Im>(
+pub fn create_texture_array_from_image_sources<'a, A, I, V>(
+    arena: A,
     graphics_device: &GraphicsDevice,
-    mipmapper_generator: &MipmapperGenerator,
-    images: impl IntoIterator<IntoIter = I>,
+    mipmapper_generator: Option<&MipmapperGenerator>,
+    image_sources: I,
+    verify_metadata: V,
     texture_config: TextureConfig,
+    usage: TextureArrayUsage,
     label: &str,
 ) -> Result<Texture>
 where
-    I: ExactSizeIterator<Item = Result<Im>>,
-    Im: Borrow<Image>,
+    A: Copy + Allocator,
+    I: ExactSizeIterator<Item = &'a ImageSource>,
+    V: Fn(&ImageMetadata) -> Result<()>,
 {
-    let mut images = images.into_iter();
-    let n_images = images.len();
+    let mut sources = image_sources.into_iter();
+    let n_images = sources.len();
 
-    let first_image = images
+    let first_source = sources
         .next()
-        .ok_or_else(|| anyhow!("No images for texture array"))??;
+        .ok_or_else(|| anyhow!("No image sources for texture array"))?;
 
-    let dimensions = first_image.borrow().dimensions();
-    let width = NonZeroU32::new(dimensions.0).ok_or_else(|| anyhow!("Image width is zero"))?;
-    let height = NonZeroU32::new(dimensions.1).ok_or_else(|| anyhow!("Image height is zero"))?;
+    if usage == TextureArrayUsage::Cubemap && n_images != 6 {
+        bail!("Expected 6 images for texture cubemap, got {n_images}");
+    }
+
     let array_layers = NonZeroU32::new(u32::try_from(n_images).unwrap()).unwrap();
 
-    let pixel_format = first_image.borrow().meta.pixel_format;
-    let texel_description = determine_valid_texel_description(pixel_format, &texture_config)?;
+    let image_size_from_meta = |meta: &ImageMetadata| -> Result<usize> {
+        let texel_description =
+            determine_valid_texel_description(meta.pixel_format, &texture_config)?;
 
-    let mut byte_buffer = Vec::with_capacity(
-        n_images * (width.get() * height.get() * texel_description.n_bytes()) as usize,
-    );
+        Ok(meta.width as usize * meta.height as usize * texel_description.n_bytes() as usize)
+    };
 
-    byte_buffer.extend_from_slice(&first_image.borrow().data);
+    let (mut byte_buffer, meta) = match first_source {
+        ImageSource::File(path) => {
+            let image = impact_io::image::load_image_from_path(arena, path).with_context(|| {
+                format!("Failed to load array texture image from {}", path.display())
+            })?;
+            verify_metadata(&image.meta)?;
 
-    for image in images {
-        let image = image?;
+            let mut byte_buffer = image.data;
+            byte_buffer.reserve((n_images - 1) * image_size_from_meta(&image.meta)?);
 
-        if image.borrow().dimensions() != dimensions {
-            bail!("Inconsistent dimensions for texture array images")
+            (byte_buffer, image.meta)
         }
+        ImageSource::Bytes(image) => {
+            verify_metadata(&image.meta)?;
 
-        if image.borrow().meta.pixel_format != pixel_format {
-            bail!("Inconsistent pixel formats for texture array images")
+            let mut byte_buffer =
+                AVec::with_capacity_in(n_images * image_size_from_meta(&image.meta)?, arena);
+
+            byte_buffer.extend_from_slice(&image.data);
+
+            (byte_buffer, image.meta.clone())
         }
+    };
 
-        byte_buffer.extend_from_slice(&image.borrow().data);
+    let width = NonZeroU32::new(meta.width).ok_or_else(|| anyhow!("Image width is zero"))?;
+    let height = NonZeroU32::new(meta.height).ok_or_else(|| anyhow!("Image height is zero"))?;
+    let texel_description = determine_valid_texel_description(meta.pixel_format, &texture_config)?;
+
+    for source in sources {
+        let source_meta = match source {
+            ImageSource::File(path) => {
+                let image =
+                    impact_io::image::load_image_from_path(arena, path).with_context(|| {
+                        format!("Failed to load array texture image from {}", path.display())
+                    })?;
+                verify_metadata(&image.meta)?;
+                byte_buffer.extend_from_slice(&image.data);
+                image.meta
+            }
+            ImageSource::Bytes(image) => {
+                verify_metadata(&image.meta)?;
+                byte_buffer.extend_from_slice(&image.data);
+                image.meta.clone()
+            }
+        };
+
+        if source_meta != meta {
+            bail!("Inconsistent metadata for array images: {source_meta:?} != {meta:?}");
+        }
     }
 
     Texture::create(
+        arena,
         graphics_device,
-        Some(mipmapper_generator),
+        mipmapper_generator,
         &byte_buffer,
         width,
         height,
         DepthOrArrayLayers::ArrayLayers(array_layers),
         texel_description,
-        false,
+        usage == TextureArrayUsage::Cubemap,
         texture_config,
         label,
     )
@@ -459,9 +454,9 @@ where
 /// Creates a texture from the given [`TextureCreateInfo`].
 ///
 /// Loads image or lookup table data from files specified in the info and
-/// creates the appropriate texture type (standard, array, cubemap, or lookup
-/// table). Mipmaps will be generated automatically for image-based textures
-/// configured for it.
+/// creates the appropriate texture type (standard, array (including cubemap),
+/// or lookup table). Mipmaps will be generated automatically for image-based
+/// textures configured for it.
 ///
 /// # Returns
 /// A [`SamplingTexture`] matching the type and configuration specified in the
@@ -476,15 +471,18 @@ where
 /// See also
 /// - [`create_texture_from_image`],
 /// - [`create_texture_array_from_images`]
-/// - [`create_cubemap_texture_from_images`]
 /// - [`create_texture_from_lookup_table`](lookup_table::create_texture_from_lookup_table).
 #[allow(unused_variables)]
-pub(crate) fn create_texture_from_info(
+pub(crate) fn create_texture_from_info<A>(
+    arena: A,
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
     texture_info: &TextureCreateInfo,
     label: &str,
-) -> Result<SamplingTexture> {
+) -> Result<SamplingTexture>
+where
+    A: Copy + Allocator,
+{
     fn verify_image_metadata(from_info: &ImageMetadata, from_image: &ImageMetadata) -> Result<()> {
         if from_info != from_image {
             bail!(
@@ -516,24 +514,16 @@ pub(crate) fn create_texture_from_info(
             let sampler_id = image_texture_info.sampler_config.as_ref().map(Into::into);
 
             let texture = match &image_texture_info.source {
-                ImageTextureSource::Image(source) => {
-                    let image = match source {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
-                    };
+                ImageTextureSource::Single(ImageSource::File(path)) => {
+                    let image =
+                        impact_io::image::load_image_from_path(arena, path).with_context(|| {
+                            format!("Failed to load texture image from {}", path.display())
+                        })?;
 
                     verify_image_metadata(image_metadata, &image.meta)?;
 
                     create_texture_from_image(
+                        arena,
                         graphics_device,
                         mipmapper_generator,
                         &image,
@@ -541,138 +531,32 @@ pub(crate) fn create_texture_from_info(
                         label,
                     )?
                 }
-                ImageTextureSource::ArrayImages(sources) => {
-                    let images = sources.iter().map(|source| {
-                        let image = match source {
-                            ImageSource::File(image_path) => Cow::Owned(
-                                impact_io::image::load_image_from_path(image_path).with_context(
-                                    || {
-                                        format!(
-                                            "Failed to load array texture image from {}",
-                                            image_path.display()
-                                        )
-                                    },
-                                )?,
-                            ),
-                            ImageSource::Bytes(image) => Cow::Borrowed(image),
-                        };
+                ImageTextureSource::Single(ImageSource::Bytes(image)) => {
+                    verify_image_metadata(image_metadata, &image.meta)?;
 
-                        verify_image_metadata(image_metadata, &image.meta)?;
-
-                        Ok(image)
-                    });
-
-                    create_texture_array_from_images(
+                    create_texture_from_image(
+                        arena,
                         graphics_device,
                         mipmapper_generator,
-                        images,
+                        image,
                         texture_config,
                         label,
                     )?
                 }
-                ImageTextureSource::CubemapImages {
-                    right,
-                    left,
-                    top,
-                    bottom,
-                    front,
-                    back,
-                } => {
-                    let right_image = match right {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load right cubemap texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
-                    };
-                    let left_image = match left {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load left cubemap texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
-                    };
-                    let top_image = match top {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load top cubemap texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
-                    };
-                    let bottom_image = match bottom {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load bottom cubemap texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
-                    };
-                    let front_image = match front {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load front cubemap texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
-                    };
-                    let back_image = match back {
-                        ImageSource::File(image_path) => Cow::Owned(
-                            impact_io::image::load_image_from_path(image_path).with_context(
-                                || {
-                                    format!(
-                                        "Failed to load back cubemap texture image from {}",
-                                        image_path.display()
-                                    )
-                                },
-                            )?,
-                        ),
-                        ImageSource::Bytes(image) => Cow::Borrowed(image),
+                ImageTextureSource::Array { sources, usage } => {
+                    let mipmapper_generator = match usage {
+                        TextureArrayUsage::Generic => Some(mipmapper_generator),
+                        TextureArrayUsage::Cubemap => None,
                     };
 
-                    verify_image_metadata(image_metadata, &right_image.meta)?;
-                    verify_image_metadata(image_metadata, &left_image.meta)?;
-                    verify_image_metadata(image_metadata, &top_image.meta)?;
-                    verify_image_metadata(image_metadata, &bottom_image.meta)?;
-                    verify_image_metadata(image_metadata, &front_image.meta)?;
-                    verify_image_metadata(image_metadata, &back_image.meta)?;
-
-                    create_cubemap_texture_from_images(
+                    create_texture_array_from_image_sources(
+                        arena,
                         graphics_device,
-                        &right_image,
-                        &left_image,
-                        &top_image,
-                        &bottom_image,
-                        &front_image,
-                        &back_image,
+                        mipmapper_generator,
+                        sources.iter(),
+                        |meta| verify_image_metadata(image_metadata, meta),
                         texture_config,
+                        *usage,
                         label,
                     )?
                 }
@@ -694,6 +578,7 @@ pub(crate) fn create_texture_from_info(
                             })?;
                         verify_table_metadata(metadata, table.metadata())?;
                         lookup_table::create_texture_from_lookup_table(
+                            arena,
                             graphics_device,
                             &table,
                             label,
@@ -706,6 +591,7 @@ pub(crate) fn create_texture_from_info(
                             })?;
                         verify_table_metadata(metadata, table.metadata())?;
                         lookup_table::create_texture_from_lookup_table(
+                            arena,
                             graphics_device,
                             &table,
                             label,

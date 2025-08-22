@@ -838,7 +838,10 @@ define_task!(
                 &scene,
                 ctx.user_interface(),
             )?;
-            engine.save_requested_screenshots()
+
+            TaskArenas::with(|arena| {
+                engine.save_requested_screenshots(arena)
+            })
         })
     }
 );

@@ -17,6 +17,7 @@ serde = [
 ]
 
 [dependencies]
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bincode = { workspace = true, optional = true }

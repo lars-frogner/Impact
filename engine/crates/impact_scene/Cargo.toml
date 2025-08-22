@@ -21,7 +21,6 @@ anyhow = { workspace = true }
 approx = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bitflags = { workspace = true }
-bumpalo = { workspace = true }
 bytemuck = { workspace = true }
 impact_camera = { path = "../impact_camera" }
 impact_containers = { path = "../impact_containers" }

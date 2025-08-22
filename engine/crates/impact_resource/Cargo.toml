@@ -8,10 +8,13 @@ license = { workspace = true }
 [features]
 
 [dependencies]
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 bitflags = { workspace = true }
+bumpalo = { workspace = true }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
+impact_log = { path = "../impact_log" }
 
 [lints]
 workspace = true

@@ -4,6 +4,7 @@ use crate::{
     MaterialBindGroupTemplate, MaterialTemplate, MaterialTemplateID, MaterialTextureGroup,
     MaterialTextureGroupID,
 };
+use allocator_api2::alloc::Allocator;
 use anyhow::{Result, anyhow};
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_resource::gpu::{GPUResource, GPUResourceMap};
@@ -81,11 +82,15 @@ impl MaterialTemplateBindGroupLayout {
 impl<'a> GPUResource<'a, MaterialTemplate> for MaterialTemplateBindGroupLayout {
     type GPUContext = GraphicsDevice;
 
-    fn create(
+    fn create<A>(
+        _scratch: A,
         graphics_device: &GraphicsDevice,
         id: MaterialTemplateID,
         template: &MaterialTemplate,
-    ) -> Result<Option<Self>> {
+    ) -> Result<Option<Self>>
+    where
+        A: Copy + Allocator,
+    {
         Ok(Self::create(graphics_device, template, &id.to_string()))
     }
 
@@ -162,11 +167,15 @@ impl<'a> GPUResource<'a, MaterialTextureGroup> for MaterialTextureBindGroup {
         &'a MaterialTemplateBindGroupLayoutMap,
     );
 
-    fn create(
+    fn create<A>(
+        _scratch: A,
         (graphics_device, textures, samplers, bind_group_layouts): &Self::GPUContext,
         id: MaterialTextureGroupID,
         group: &MaterialTextureGroup,
-    ) -> Result<Option<Self>> {
+    ) -> Result<Option<Self>>
+    where
+        A: Copy + Allocator,
+    {
         Self::create(
             graphics_device,
             textures,

@@ -1,6 +1,7 @@
 //! Mipmapping.
 
 use crate::device::GraphicsDevice;
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact_containers::HashMap;
 use std::{borrow::Cow, sync::Arc};
 
@@ -15,10 +16,13 @@ pub struct MipmapperGenerator {
 
 /// Mipmap generator for a specific texture.
 #[derive(Debug)]
-pub struct Mipmapper {
+pub struct Mipmapper<A: Allocator> {
     pipeline: Arc<wgpu::RenderPipeline>,
-    texture_views_for_array_layers_and_mip_levels: Vec<Vec<wgpu::TextureView>>,
-    bind_groups_for_array_layers_and_previous_mip_levels: Vec<Vec<wgpu::BindGroup>>,
+    // It is important that the wgpu handles are dropped, so when we use an
+    // arena allocator, we must make sure that `Mipmapper` is dropped before we
+    // reset the arena
+    texture_views_for_array_layers_and_mip_levels: AVec<AVec<wgpu::TextureView, A>, A>,
+    bind_groups_for_array_layers_and_previous_mip_levels: AVec<AVec<wgpu::BindGroup, A>, A>,
     label: Cow<'static, str>,
 }
 
@@ -103,12 +107,16 @@ impl MipmapperGenerator {
     ///
     /// # Panics
     /// If the texture's dimension or format is not supported.
-    pub fn generate_mipmapper(
+    pub fn generate_mipmapper<A>(
         &self,
+        alloc: A,
         graphics_device: &GraphicsDevice,
         texture: &wgpu::Texture,
         label: Cow<'static, str>,
-    ) -> Option<Mipmapper> {
+    ) -> Option<Mipmapper<A>>
+    where
+        A: Copy + Allocator,
+    {
         if texture.mip_level_count() < 2 {
             return None;
         }
@@ -130,29 +138,30 @@ impl MipmapperGenerator {
                 )
             });
 
-        let texture_views_for_array_layers_and_mip_levels: Vec<_> = (0..texture
-            .depth_or_array_layers())
-            .map(|array_layer| {
-                (0..texture.mip_level_count())
-                    .map(|mip_level| {
-                        texture.create_view(&wgpu::TextureViewDescriptor {
-                            dimension: Some(wgpu::TextureViewDimension::D2),
-                            base_mip_level: mip_level,
-                            mip_level_count: Some(1),
-                            base_array_layer: array_layer,
-                            array_layer_count: Some(1),
-                            ..Default::default()
-                        })
+        let mut texture_views_for_array_layers_and_mip_levels = AVec::new_in(alloc);
+        texture_views_for_array_layers_and_mip_levels.extend(
+            (0..texture.depth_or_array_layers()).map(|array_layer| {
+                let mut texture_views = AVec::new_in(alloc);
+                texture_views.extend((0..texture.mip_level_count()).map(|mip_level| {
+                    texture.create_view(&wgpu::TextureViewDescriptor {
+                        dimension: Some(wgpu::TextureViewDimension::D2),
+                        base_mip_level: mip_level,
+                        mip_level_count: Some(1),
+                        base_array_layer: array_layer,
+                        array_layer_count: Some(1),
+                        ..Default::default()
                     })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
+                }));
+                texture_views
+            }),
+        );
 
-        let bind_groups_for_array_layers_and_previous_mip_levels = (0..texture
-            .depth_or_array_layers())
-            .map(|array_layer| {
-                (1..texture.mip_level_count() as usize)
-                    .map(|target_mip_level| {
+        let mut bind_groups_for_array_layers_and_previous_mip_levels = AVec::new_in(alloc);
+        bind_groups_for_array_layers_and_previous_mip_levels.extend(
+            (0..texture.depth_or_array_layers()).map(|array_layer| {
+                let mut bind_groups = AVec::new_in(alloc);
+                bind_groups.extend((1..texture.mip_level_count() as usize).map(
+                    |target_mip_level| {
                         graphics_device
                             .device()
                             .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -173,10 +182,11 @@ impl MipmapperGenerator {
                                 ],
                                 label: Some(&format!("{label} mipmap bind group")),
                             })
-                    })
-                    .collect()
-            })
-            .collect();
+                    },
+                ));
+                bind_groups
+            }),
+        );
 
         Some(Mipmapper {
             pipeline: Arc::clone(pipeline),
@@ -188,19 +198,22 @@ impl MipmapperGenerator {
 
     /// Populates all mipmap levels of the given texture with the appropriately
     /// mipmapped versions of the full texture.
-    pub fn update_texture_mipmaps(
+    pub fn update_texture_mipmaps<A>(
         &self,
+        arena: A,
         graphics_device: &GraphicsDevice,
         texture: &wgpu::Texture,
         label: Cow<'static, str>,
-    ) {
-        if let Some(mipmapper) = self.generate_mipmapper(graphics_device, texture, label) {
+    ) where
+        A: Copy + Allocator,
+    {
+        if let Some(mipmapper) = self.generate_mipmapper(arena, graphics_device, texture, label) {
             mipmapper.update_texture_mipmaps(graphics_device);
         }
     }
 }
 
-impl Mipmapper {
+impl<A: Allocator> Mipmapper<A> {
     /// Populates all mipmap levels of this [`Mipmapper`]'s texture with the
     /// appropriately mipmapped versions of the full texture.
     pub fn update_texture_mipmaps(&self, graphics_device: &GraphicsDevice) {

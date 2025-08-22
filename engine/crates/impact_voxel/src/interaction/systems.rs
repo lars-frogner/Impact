@@ -10,8 +10,7 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
-use allocator_api2::{alloc::Allocator, vec};
-use bumpalo::Bump;
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact_ecs::{
     component::{ComponentArray, ComponentFlags, ComponentStorage},
     metadata::ComponentMetadataRegistry,
@@ -45,7 +44,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
     fn gather_voxel_object_entities<A: Allocator>(
         &mut self,
-        entities: &mut vec::Vec<VoxelObjectEntity<EntityID>, A>,
+        entities: &mut AVec<VoxelObjectEntity<EntityID>, A>,
     ) {
         query!(
             self.ecs_world,
@@ -237,8 +236,8 @@ pub fn sync_voxel_object_model_transforms(
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
-pub fn apply_absorption(
-    arena: &Bump,
+pub fn apply_absorption<A: Allocator>(
+    arena: A,
     component_metadata_registry: &ComponentMetadataRegistry,
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,

@@ -1,6 +1,7 @@
 //! Voxel types and their properties.
 
 use crate::gpu_resource::VoxelMaterialGPUResources;
+use allocator_api2::vec::Vec as AVec;
 use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::NoHashMap;
@@ -14,9 +15,9 @@ use impact_gpu::{
 use impact_io::image::{Image, ImageMetadata, PixelFormat};
 use impact_math::Hash32;
 use impact_texture::{
-    ImageSource, ImageTextureSource, SamplerRegistry, TextureID, TextureRegistry,
+    ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
+    TextureRegistry,
     gpu_resource::{SamplerMap, TextureMap},
-    import::ImageTextureDeclaration,
 };
 use nalgebra::{Vector3, Vector4, vector};
 use std::{
@@ -209,51 +210,58 @@ impl VoxelTypeRegistry {
             bail!("Duplicate voxel type names in registry");
         }
 
-        let color_texture_array_id = impact_texture::import::load_declared_image_texture(
+        let color_texture_array_id = TextureID::from_name("voxel_color_texture_array");
+        let roughness_texture_array_id = TextureID::from_name("voxel_roughness_texture_array");
+        let normal_texture_array_id = TextureID::from_name("voxel_normal_texture_array");
+
+        impact_texture::import::load_image_texture(
             texture_registry,
             sampler_registry,
-            ImageTextureDeclaration {
-                id: TextureID::from_name("voxel_color_texture_array"),
-                source: ImageTextureSource::ArrayImages(color_texture_sources),
-                texture_config: TextureConfig {
-                    color_space: ColorSpace::Srgb,
-                    max_mip_level_count: None,
-                },
-                sampler_config: Some(SamplerConfig {
-                    addressing: TextureAddressingConfig::Repeating,
-                    filtering: TextureFilteringConfig::Basic,
-                }),
+            color_texture_array_id,
+            ImageTextureSource::Array {
+                sources: color_texture_sources,
+                usage: TextureArrayUsage::Generic,
             },
+            TextureConfig {
+                color_space: ColorSpace::Srgb,
+                max_mip_level_count: None,
+            },
+            Some(SamplerConfig {
+                addressing: TextureAddressingConfig::Repeating,
+                filtering: TextureFilteringConfig::Basic,
+            }),
         )
         .context("Failed to load voxel color texture array")?;
 
-        let roughness_texture_array_id = impact_texture::import::load_declared_image_texture(
+        impact_texture::import::load_image_texture(
             texture_registry,
             sampler_registry,
-            ImageTextureDeclaration {
-                id: TextureID::from_name("voxel_roughness_texture_array"),
-                source: ImageTextureSource::ArrayImages(roughness_texture_sources),
-                texture_config: TextureConfig {
-                    color_space: ColorSpace::Linear,
-                    max_mip_level_count: None,
-                },
-                sampler_config: None,
+            roughness_texture_array_id,
+            ImageTextureSource::Array {
+                sources: roughness_texture_sources,
+                usage: TextureArrayUsage::Generic,
             },
+            TextureConfig {
+                color_space: ColorSpace::Linear,
+                max_mip_level_count: None,
+            },
+            None,
         )
         .context("Failed to load voxel roughness texture array")?;
 
-        let normal_texture_array_id = impact_texture::import::load_declared_image_texture(
+        impact_texture::import::load_image_texture(
             texture_registry,
             sampler_registry,
-            ImageTextureDeclaration {
-                id: TextureID::from_name("voxel_normal_texture_array"),
-                source: ImageTextureSource::ArrayImages(normal_texture_sources),
-                texture_config: TextureConfig {
-                    color_space: ColorSpace::Linear,
-                    max_mip_level_count: None,
-                },
-                sampler_config: None,
+            normal_texture_array_id,
+            ImageTextureSource::Array {
+                sources: normal_texture_sources,
+                usage: TextureArrayUsage::Generic,
             },
+            TextureConfig {
+                color_space: ColorSpace::Linear,
+                max_mip_level_count: None,
+            },
+            None,
         )
         .context("Failed to load voxel normal texture array")?;
 
@@ -523,7 +531,7 @@ fn create_uniform_color_image(texture_resolution: NonZeroU32, color: RBGColor) -
         255,
     ];
 
-    let mut data = Vec::with_capacity(pixel.len() * pixel_count);
+    let mut data = AVec::with_capacity(pixel.len() * pixel_count);
     for _ in 0..pixel_count {
         data.extend_from_slice(&pixel);
     }
@@ -540,7 +548,8 @@ fn create_uniform_roughness_image(texture_resolution: NonZeroU32, roughness: f32
         pixel_format: PixelFormat::Luma8,
     };
 
-    let data = vec![float_to_u8(roughness); pixel_count];
+    let mut data = AVec::new();
+    data.resize(pixel_count, float_to_u8(roughness));
 
     Image { meta, data }
 }
@@ -556,7 +565,7 @@ fn create_identity_normal_image(texture_resolution: NonZeroU32) -> Image {
 
     let pixel = [0, 0, 255, 255];
 
-    let mut data = Vec::with_capacity(pixel.len() * pixel_count);
+    let mut data = AVec::with_capacity(pixel.len() * pixel_count);
 
     for _ in 0..pixel_count {
         data.extend_from_slice(&pixel);
