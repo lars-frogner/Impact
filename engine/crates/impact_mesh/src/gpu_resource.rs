@@ -637,6 +637,39 @@ where
     )
 }
 
+/// Creates a vertex GPU buffer with capacity for the given number of vertices,
+/// with the initialized of the start of the buffer with the given vertices
+/// being encoded via the given staging belt.
+///
+/// # Panics
+/// - If `total_vertex_capacity` is zero.
+/// - If the length of the `initial_vertices` slice exceeds
+///   `total_vertex_capacity`.
+pub fn new_vertex_gpu_buffer_with_spare_capacity_and_encoded_initialization<V>(
+    graphics_device: &GraphicsDevice,
+    staging_belt: &mut wgpu::util::StagingBelt,
+    command_encoder: &mut wgpu::CommandEncoder,
+    total_vertex_capacity: usize,
+    initial_vertices: &[V],
+    label: Cow<'static, str>,
+) -> GPUBuffer
+where
+    V: VertexBufferable,
+{
+    let buffer_size = mem::size_of::<V>()
+        .checked_mul(total_vertex_capacity)
+        .unwrap();
+    let valid_bytes = bytemuck::cast_slice(initial_vertices);
+    new_vertex_gpu_buffer_with_bytes_and_spare_capacity_with_encoded_initialization(
+        graphics_device,
+        staging_belt,
+        command_encoder,
+        buffer_size,
+        valid_bytes,
+        label,
+    )
+}
+
 /// Creates a vertex GPU buffer initialized with the given bytes
 /// representing vertex data, with the first `n_valid_bytes` considered
 /// valid data.
@@ -674,6 +707,32 @@ pub fn new_vertex_gpu_buffer_with_bytes_and_spare_capacity(
 ) -> GPUBuffer {
     GPUBuffer::new_with_spare_capacity(
         graphics_device,
+        buffer_size,
+        valid_bytes,
+        GPUBufferType::Vertex.usage(),
+        label,
+    )
+}
+
+/// Creates a vertex GPU buffer with the given size. A write of the given slice
+/// of valid bytes into the beginning of the buffer will be encoded via the
+/// given staging belt.
+///
+/// # Panics
+/// - If `buffer_size` is zero.
+/// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+pub fn new_vertex_gpu_buffer_with_bytes_and_spare_capacity_with_encoded_initialization(
+    graphics_device: &GraphicsDevice,
+    staging_belt: &mut wgpu::util::StagingBelt,
+    command_encoder: &mut wgpu::CommandEncoder,
+    buffer_size: usize,
+    valid_bytes: &[u8],
+    label: Cow<'static, str>,
+) -> GPUBuffer {
+    GPUBuffer::new_with_spare_capacity_and_encoded_initialization(
+        graphics_device,
+        staging_belt,
+        command_encoder,
         buffer_size,
         valid_bytes,
         GPUBufferType::Vertex.usage(),

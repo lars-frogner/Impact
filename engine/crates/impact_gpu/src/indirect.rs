@@ -92,6 +92,36 @@ impl GPUBuffer {
     }
 
     /// Creates a new GPU buffer for draw call arguments for use with
+    /// [`wgpu::RenderPass::draw_indirect`],
+    /// [`wgpu::RenderPass::multi_draw_indirect`] or
+    /// [`wgpu::RenderPass::multi_draw_indirect_count`]. The buffer has room
+    /// for the given number of argument objects, and the initialized of the
+    /// beginning of the buffer with the given slice of argument objects is
+    /// encoded via the given staging belt.
+    pub fn new_draw_indirect_buffer_with_spare_capacity_and_encoded_initialization(
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        total_indirect_draw_arg_capacity: usize,
+        initial_indirect_draw_args: &[DrawIndirectArgs],
+        label: Cow<'static, str>,
+    ) -> Self {
+        let buffer_size = mem::size_of::<DrawIndirectArgs>()
+            .checked_mul(total_indirect_draw_arg_capacity)
+            .unwrap();
+        let valid_bytes = bytemuck::cast_slice(initial_indirect_draw_args);
+        Self::new_with_spare_capacity_and_encoded_initialization(
+            graphics_device,
+            staging_belt,
+            command_encoder,
+            buffer_size,
+            valid_bytes,
+            GPUBufferType::Indirect.usage(),
+            label,
+        )
+    }
+
+    /// Creates a new GPU buffer for draw call arguments for use with
     /// [`wgpu::RenderPass::draw_indexed_indirect`],
     /// [`wgpu::RenderPass::multi_draw_indexed_indirect`] or
     /// [`wgpu::RenderPass::multi_draw_indexed_indirect_count`].
@@ -128,6 +158,36 @@ impl GPUBuffer {
         let valid_bytes = bytemuck::cast_slice(initial_indirect_draw_args);
         Self::new_with_spare_capacity(
             graphics_device,
+            buffer_size,
+            valid_bytes,
+            GPUBufferType::Indirect.usage(),
+            label,
+        )
+    }
+
+    /// Creates a new GPU buffer for draw call arguments for use with
+    /// [`wgpu::RenderPass::draw_indexed_indirect`],
+    /// [`wgpu::RenderPass::multi_draw_indexed_indirect`] or
+    /// [`wgpu::RenderPass::multi_draw_indexed_indirect_count`]. The buffer
+    /// has room for the given number of argument objects, and the
+    /// initialized of the beginning of the buffer with the given slice of
+    /// argument objects is encoded via the given staging belt.
+    pub fn new_draw_indexed_indirect_buffer_with_spare_capacity_and_encoded_initialization(
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        total_indirect_draw_arg_capacity: usize,
+        initial_indirect_draw_args: &[DrawIndexedIndirectArgs],
+        label: Cow<'static, str>,
+    ) -> Self {
+        let buffer_size = mem::size_of::<DrawIndexedIndirectArgs>()
+            .checked_mul(total_indirect_draw_arg_capacity)
+            .unwrap();
+        let valid_bytes = bytemuck::cast_slice(initial_indirect_draw_args);
+        Self::new_with_spare_capacity_and_encoded_initialization(
+            graphics_device,
+            staging_belt,
+            command_encoder,
             buffer_size,
             valid_bytes,
             GPUBufferType::Indirect.usage(),

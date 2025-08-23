@@ -374,8 +374,10 @@ impl MultiUniformGPUBuffer {
     }
 
     /// Writes the valid uniforms in the given uniform buffer into the uniform
-    /// GPU buffer if the uniform buffer has changed (reallocating the render
-    /// buffer if required).
+    /// GPU buffer if the uniform buffer has changed (recreating the GPU buffer
+    /// if required). When the existing GPU buffer can be reused, the update is
+    /// encoded via the given staging belt to avoid allocating a new staging
+    /// buffer.
     ///
     /// # Returns
     /// A [`UniformTransferResult`] indicating whether the GPU buffer had to
@@ -387,6 +389,8 @@ impl MultiUniformGPUBuffer {
     pub fn transfer_uniforms_to_gpu_buffer<ID, U>(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         uniform_buffer: &UniformBuffer<ID, U>,
     ) -> UniformTransferResult
     where
@@ -424,8 +428,10 @@ impl MultiUniformGPUBuffer {
                     None
                 };
 
-                self.gpu_buffer.update_valid_bytes(
+                self.gpu_buffer.encode_update_of_valid_bytes(
                     graphics_device,
+                    staging_belt,
+                    command_encoder,
                     bytemuck::cast_slice(valid_uniforms),
                     new_count,
                 );

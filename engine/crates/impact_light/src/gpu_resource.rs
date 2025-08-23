@@ -332,6 +332,8 @@ impl LightGPUResources {
     pub fn sync_with_light_manager(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_manager: &LightManager,
     ) {
@@ -344,12 +346,19 @@ impl LightGPUResources {
 
         let ambient_light_transfer_result = self
             .ambient_light_gpu_buffer
-            .transfer_uniforms_to_gpu_buffer(graphics_device, light_manager.ambient_light_buffer());
+            .transfer_uniforms_to_gpu_buffer(
+                graphics_device,
+                staging_belt,
+                command_encoder,
+                light_manager.ambient_light_buffer(),
+            );
 
         let omnidirectional_light_transfer_result = self
             .omnidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 light_manager.omnidirectional_light_buffer(),
             );
 
@@ -357,6 +366,8 @@ impl LightGPUResources {
             .shadowable_omnidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 light_manager.shadowable_omnidirectional_light_buffer(),
             );
 
@@ -364,6 +375,8 @@ impl LightGPUResources {
             .unidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 light_manager.unidirectional_light_buffer(),
             );
 
@@ -371,6 +384,8 @@ impl LightGPUResources {
             .shadowable_unidirectional_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 light_manager.shadowable_unidirectional_light_buffer(),
             );
 
@@ -770,6 +785,8 @@ where
     fn transfer_uniforms_to_gpu_buffer<U>(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         uniform_buffer: &UniformBuffer<ID, U>,
     ) -> UniformTransferResult
     where
@@ -786,8 +803,12 @@ where
             CollectionChange::None => {}
         }
 
-        self.uniform_gpu_buffer
-            .transfer_uniforms_to_gpu_buffer(graphics_device, uniform_buffer)
+        self.uniform_gpu_buffer.transfer_uniforms_to_gpu_buffer(
+            graphics_device,
+            staging_belt,
+            command_encoder,
+            uniform_buffer,
+        )
     }
 }
 

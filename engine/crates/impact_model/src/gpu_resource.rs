@@ -172,9 +172,11 @@ impl InstanceFeatureGPUBuffer {
         self.n_features > self.initial_feature_range().end
     }
 
-    /// Writes the valid features in the given model instance feature
-    /// buffer into the instance feature GPU buffer (reallocating the
-    /// GPU buffer if required).
+    /// Writes the valid features in the given model instance feature buffer
+    /// into the instance feature GPU buffer (recreating the GPU buffer if
+    /// required). When the existing GPU buffer can be reused, the update is
+    /// encoded via the given staging belt to avoid allocating a new staging
+    /// buffer.
     ///
     /// # Panics
     /// If the given buffer stores features of a different type than the
@@ -182,6 +184,8 @@ impl InstanceFeatureGPUBuffer {
     pub fn copy_instance_features_to_gpu_buffer(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         feature_buffer: &DynamicInstanceFeatureBuffer,
     ) {
         assert_eq!(feature_buffer.feature_type_id(), self.feature_type_id);
@@ -201,8 +205,12 @@ impl InstanceFeatureGPUBuffer {
                 self.feature_gpu_buffer.label().clone(),
             );
         } else {
-            self.feature_gpu_buffer
-                .update_valid_bytes(graphics_device, valid_bytes);
+            self.feature_gpu_buffer.encode_update_of_valid_bytes(
+                graphics_device,
+                staging_belt,
+                command_encoder,
+                valid_bytes,
+            );
         }
 
         self.n_features = u32::try_from(feature_buffer.n_valid_features()).unwrap();

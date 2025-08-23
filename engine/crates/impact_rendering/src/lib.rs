@@ -21,7 +21,6 @@ use impact_gpu::{device::GraphicsDevice, wgpu};
 )]
 #[derive(Clone, Debug)]
 pub struct BasicRenderingConfig {
-    pub enabled: bool,
     pub wireframe_mode_on: bool,
     pub timings_enabled: bool,
 }
@@ -49,7 +48,6 @@ impl BasicRenderingConfig {
 impl Default for BasicRenderingConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             wireframe_mode_on: false,
             timings_enabled: false,
         }

@@ -466,6 +466,8 @@ impl<MID: Copy + Eq + Hash> ModelInstanceManager<MID> {
     pub fn sync_gpu_buffers(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         gpu_buffer_map: &mut ModelInstanceGPUBufferMap<MID>,
     ) where
         MID: fmt::Display,
@@ -478,6 +480,8 @@ impl<MID: Copy + Eq + Hash> ModelInstanceManager<MID> {
                     model_instance_buffer
                         .copy_buffered_instance_features_to_gpu_buffers_if_modifed(
                             graphics_device,
+                            staging_belt,
+                            command_encoder,
                             feature_gpu_buffers,
                         );
                 }
@@ -685,6 +689,8 @@ impl ModelInstanceBuffer {
     fn copy_buffered_instance_features_to_gpu_buffers_if_modifed(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         feature_gpu_buffers: &mut [InstanceFeatureGPUBuffer],
     ) {
         for (feature_buffer, feature_gpu_buffer) in self
@@ -694,8 +700,12 @@ impl ModelInstanceBuffer {
             .zip(feature_gpu_buffers)
         {
             if feature_buffer.is_dirty() {
-                feature_gpu_buffer
-                    .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
+                feature_gpu_buffer.copy_instance_features_to_gpu_buffer(
+                    graphics_device,
+                    staging_belt,
+                    command_encoder,
+                    feature_buffer,
+                );
             }
             feature_buffer.clear_dirty_flag();
         }

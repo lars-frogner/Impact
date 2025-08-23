@@ -15,13 +15,12 @@ pub mod shader_templates;
 pub mod utils;
 pub mod voxel_types;
 
-use anyhow::Result;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::inertia::VoxelObjectInertialPropertyManager;
 use gpu_resource::{VoxelObjectGPUBufferMap, VoxelObjectGPUBuffers};
 use impact_containers::HashMap;
-use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
+use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use impact_model::{ModelInstanceManager, impl_InstanceFeature};
 use impact_physics::rigid_body::DynamicRigidBodyID;
 use mesh::MeshedChunkedVoxelObject;
@@ -491,9 +490,11 @@ impl VoxelObjectManager {
     pub fn sync_voxel_object_gpu_buffers(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         voxel_object_buffer_map: &mut VoxelObjectGPUBufferMap,
-    ) -> Result<()> {
+    ) {
         for (voxel_object_id, voxel_object) in &mut self.voxel_objects {
             voxel_object_buffer_map
                 .buffers
@@ -501,6 +502,8 @@ impl VoxelObjectManager {
                 .and_modify(|buffers| {
                     buffers.sync_with_voxel_object(
                         graphics_device,
+                        staging_belt,
+                        command_encoder,
                         voxel_object,
                         bind_group_layout_registry,
                     );
@@ -508,6 +511,8 @@ impl VoxelObjectManager {
                 .or_insert_with(|| {
                     VoxelObjectGPUBuffers::for_voxel_object(
                         graphics_device,
+                        staging_belt,
+                        command_encoder,
                         *voxel_object_id,
                         voxel_object,
                         bind_group_layout_registry,
@@ -518,8 +523,6 @@ impl VoxelObjectManager {
         voxel_object_buffer_map
             .buffers
             .retain(|id, _| self.voxel_objects.contains_key(id));
-
-        Ok(())
     }
 
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {

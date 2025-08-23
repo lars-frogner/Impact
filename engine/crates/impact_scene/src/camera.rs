@@ -5,7 +5,7 @@ use impact_camera::{
     Camera,
     gpu_resource::{BufferableCamera, CameraGPUResource},
 };
-use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice};
+use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use nalgebra::{Isometry3, Point3};
 
 /// Represents a [`Camera`] that has a camera node in a [`SceneGraph`](crate::graph::SceneGraph).
@@ -84,12 +84,19 @@ impl BufferableCamera for SceneCamera {
 pub fn sync_gpu_resources_for_scene_camera(
     scene_camera: Option<&SceneCamera>,
     graphics_device: &GraphicsDevice,
+    staging_belt: &mut wgpu::util::StagingBelt,
+    command_encoder: &mut wgpu::CommandEncoder,
     bind_group_layout_registry: &BindGroupLayoutRegistry,
     camera_gpu_resources: &mut Option<CameraGPUResource>,
 ) {
     if let Some(scene_camera) = scene_camera {
         if let Some(camera_gpu_resources) = camera_gpu_resources {
-            camera_gpu_resources.sync_with_camera(graphics_device, scene_camera);
+            camera_gpu_resources.sync_with_camera(
+                graphics_device,
+                staging_belt,
+                command_encoder,
+                scene_camera,
+            );
         } else {
             *camera_gpu_resources = Some(CameraGPUResource::for_camera(
                 graphics_device,
