@@ -15,6 +15,7 @@ use impact_geometry::{
 };
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, uniform::UniformBuffer,
+    wgpu,
 };
 use impact_math::{Angle, Degrees, Float, UpperExclusiveBounds};
 use nalgebra::{
@@ -899,7 +900,7 @@ impl LightManager {
 
     /// Returns an iterator over the unidirectional lights in the storage where
     /// each item contains the light ID and a mutable reference to the light.
-    pub fn unidirectional_lights_with_ids_muts(
+    pub fn unidirectional_lights_with_ids_mut(
         &mut self,
     ) -> impl Iterator<Item = (UnidirectionalLightID, &mut UnidirectionalLight)> {
         self.unidirectional_light_buffer
@@ -938,6 +939,8 @@ impl LightManager {
     pub fn sync_gpu_resources(
         &self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_gpu_resources: &mut Option<LightGPUResources>,
         shadow_mapping_config: &ShadowMappingConfig,
@@ -945,6 +948,8 @@ impl LightManager {
         if let Some(light_gpu_resources) = light_gpu_resources {
             light_gpu_resources.sync_with_light_manager(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 bind_group_layout_registry,
                 self,
             );

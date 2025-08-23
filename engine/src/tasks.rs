@@ -658,24 +658,18 @@ define_task!(
 );
 
 define_task!(
-    /// Synchronizes camera and skybox GPU resources.
-    [pub] SyncMinorResources,
-    depends_on = [SyncSceneCameraViewTransform],
+    /// Synchronizes miscellaneous GPU resources.
+    [pub] SyncMiscGPUResources,
+    depends_on = [],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing camera and skybox GPU resources", engine, {
+        instrument_engine_task!("Synchronizing miscellaneous GPU resources", engine, {
+            let resource_manager = engine.resource_manager().read();
             let renderer = engine.renderer().read();
             let scene = engine.scene().read();
             let mut render_resource_manager = renderer.render_resource_manager().write();
             let render_resource_manager = &mut *render_resource_manager;
-
-            impact_scene::camera::sync_gpu_resources_for_scene_camera(
-                scene.scene_camera().read().as_ref(),
-                renderer.graphics_device(),
-                renderer.bind_group_layout_registry(),
-                &mut render_resource_manager.camera,
-            );
 
             impact_scene::skybox::sync_gpu_resources_for_skybox(
                 scene.skybox().read().as_ref(),
@@ -685,26 +679,6 @@ define_task!(
                 &mut render_resource_manager.skybox,
             )?;
 
-            Ok(())
-        })
-    }
-);
-
-define_task!(
-    /// Synchronizes voxel object GPU resources.
-    [pub] SyncVoxelObjectGPUResources,
-    depends_on = [SyncVoxelObjectMeshes],
-    execute_on = [RenderingTag],
-    |ctx: &RuntimeContext| {
-        let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing voxel object GPU resources", engine, {
-            let resource_manager = engine.resource_manager().read();
-            let renderer = engine.renderer().read();
-            let mut render_resource_manager = renderer.render_resource_manager().write();
-            let render_resource_manager = &mut *render_resource_manager;
-            let scene = engine.scene().read();
-            let mut voxel_object_manager = scene.voxel_object_manager().write();
-
             resource_manager.voxel_types.sync_material_gpu_resources(
                 renderer.graphics_device(),
                 &render_resource_manager.textures,
@@ -713,75 +687,8 @@ define_task!(
                 &mut render_resource_manager.voxel_materials,
             )?;
 
-            voxel_object_manager.sync_voxel_object_gpu_buffers(
-                renderer.graphics_device(),
-                renderer.bind_group_layout_registry(),
-                &mut render_resource_manager.voxel_object_buffers,
-            )?;
-
             Ok(())
         })
-    }
-);
-
-define_task!(
-    /// Synchronizes light GPU resources.
-    [pub] SyncLightGPUResources,
-    depends_on = [
-        SyncLightsInStorage,
-        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
-    ],
-    execute_on = [RenderingTag],
-    |ctx: &RuntimeContext| {
-        let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing light GPU resources", engine, {
-            let renderer = engine.renderer().read();
-            let mut render_resource_manager = renderer.render_resource_manager().write();
-            let scene = engine.scene().read();
-            let light_manager = scene.light_manager().read();
-
-            light_manager.sync_gpu_resources(
-                renderer.graphics_device(),
-                renderer.bind_group_layout_registry(),
-                &mut render_resource_manager.lights,
-                renderer.shadow_mapping_config(),
-            );
-
-            Ok(())
-        })
-    }
-);
-
-define_task!(
-    /// Synchronizes model instance GPU buffers.
-    [pub] SyncModelInstanceBuffers,
-    depends_on = [
-        BufferModelInstancesForRendering,
-        BufferTransformsForGizmos,
-        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
-    ],
-    execute_on = [RenderingTag],
-    |ctx: &RuntimeContext| {
-        let engine = ctx.engine();
-        instrument_engine_task!(
-            "Synchronizing model instance GPU buffers",
-            engine,
-            {
-                let renderer = engine.renderer().read();
-                let mut render_resource_manager = renderer.render_resource_manager().write();
-                let scene = engine.scene().read();
-                let mut model_instance_manager = scene.model_instance_manager().write();
-
-                model_instance_manager.sync_gpu_buffers(
-                    renderer.graphics_device(),
-                    &mut render_resource_manager.model_instance_buffers,
-                );
-
-                Ok(())
-            }
-        )
     }
 );
 
@@ -790,55 +697,46 @@ define_task!(
 // =============================================================================
 
 define_task!(
-    /// Ensures that all render commands required for rendering the entities
-    /// are up to date with the current render resources.
-    [pub] SyncRenderCommands,
+    /// Executes the [`RenderingSystem::record_commands_and_render_surface`]
+    /// method.
+    [pub] RecordCommandsAndRender,
     depends_on = [
-        SyncMinorResources,
         SyncMeshGPUResources,
         SyncTextureGPUResources,
         SyncMaterialGPUResources,
-        SyncVoxelObjectGPUResources,
-        SyncLightGPUResources,
-        SyncModelInstanceBuffers
+        SyncMiscGPUResources,
+        SyncSceneCameraViewTransform,
+        SyncVoxelObjectMeshes,
+        SyncLightsInStorage,
+        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
+        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
+        BufferModelInstancesForRendering,
+        BufferTransformsForGizmos
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing render commands", engine, {
+        instrument_engine_task!("Recording commands and rendering surface", engine, {
             let resource_manager = engine.resource_manager().read();
-            let renderer = engine.renderer().read();
-            let mut shader_manager = renderer.shader_manager().write();
-            let render_resource_manager = renderer.render_resource_manager().read();
-            let mut render_command_manager = renderer.render_command_manager().write();
-
-            render_command_manager.sync_with_render_resources(
-                renderer.graphics_device(),
-                &mut shader_manager,
-                &*resource_manager,
-                &*render_resource_manager,
-                renderer.bind_group_layout_registry(),
+            let scene = engine.scene().read();
+            engine.renderer().write().record_commands_and_render_surface(
+                &resource_manager,
+                &scene,
+                ctx.user_interface(),
             )
         })
     }
 );
 
 define_task!(
-    /// Executes the [`RenderingSystem::render_to_surface`] method.
-    [pub] Render,
-    depends_on = [SyncRenderCommands],
+    /// Captures and saves any screenshots or related textures requested through
+    /// the [`ScreenCapturer`].
+    [pub] SaveRequestedScreenshots,
+    depends_on = [RecordCommandsAndRender],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Rendering", engine, {
-            let resource_manager = engine.resource_manager().read();
-            let scene = engine.scene().read();
-            engine.renderer().write().render_to_surface(
-                &resource_manager,
-                &scene,
-                ctx.user_interface(),
-            )?;
-
+        instrument_engine_task!("Saving requested screenshots", engine, {
             TaskArenas::with(|arena| {
                 engine.save_requested_screenshots(arena)
             })
@@ -894,12 +792,9 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncMeshGPUResources)?;
     task_scheduler.register_task(SyncTextureGPUResources)?;
     task_scheduler.register_task(SyncMaterialGPUResources)?;
-    task_scheduler.register_task(SyncMinorResources)?;
-    task_scheduler.register_task(SyncVoxelObjectGPUResources)?;
-    task_scheduler.register_task(SyncLightGPUResources)?;
-    task_scheduler.register_task(SyncModelInstanceBuffers)?;
+    task_scheduler.register_task(SyncMiscGPUResources)?;
 
     // Render Pipeline Execution
-    task_scheduler.register_task(SyncRenderCommands)?;
-    task_scheduler.register_task(Render)
+    task_scheduler.register_task(RecordCommandsAndRender)?;
+    task_scheduler.register_task(SaveRequestedScreenshots)
 }

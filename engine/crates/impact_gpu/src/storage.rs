@@ -273,6 +273,36 @@ impl GPUBuffer {
         )
     }
 
+    /// Creates a storage GPU buffer with capacity for the given number of
+    /// values, with the initialization of the start of the buffer to the
+    /// given values being encoded via the given staging belt.
+    ///
+    /// # Panics
+    /// - If `total_value_capacity` is zero.
+    /// - If the length of the `initial_values` slice exceeds
+    ///   `total_value_capacity`.
+    pub fn new_storage_buffer_with_spare_capacity_and_encoded_initialization<T: Pod>(
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        total_value_capacity: usize,
+        initial_values: &[T],
+        label: Cow<'static, str>,
+    ) -> Self {
+        let buffer_size = mem::size_of::<T>()
+            .checked_mul(total_value_capacity)
+            .unwrap();
+        let valid_bytes = bytemuck::cast_slice(initial_values);
+        Self::new_storage_buffer_with_bytes_and_spare_capacity_with_encoded_initialization(
+            graphics_device,
+            staging_belt,
+            command_encoder,
+            buffer_size,
+            valid_bytes,
+            label,
+        )
+    }
+
     /// Creates a storage GPU buffer initialized with the given bytes.
     ///
     /// # Panics
@@ -305,6 +335,32 @@ impl GPUBuffer {
     ) -> Self {
         Self::new_with_spare_capacity(
             graphics_device,
+            buffer_size,
+            valid_bytes,
+            GPUBufferType::Storage.usage(),
+            label,
+        )
+    }
+
+    /// Creates a storage GPU buffer with the given size. A write of the
+    /// given slice of valid bytes into the beginning of the buffer will be
+    /// encoded via the given staging belt.
+    ///
+    /// # Panics
+    /// - If `buffer_size` is zero.
+    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    pub fn new_storage_buffer_with_bytes_and_spare_capacity_with_encoded_initialization(
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        buffer_size: usize,
+        valid_bytes: &[u8],
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new_with_spare_capacity_and_encoded_initialization(
+            graphics_device,
+            staging_belt,
+            command_encoder,
             buffer_size,
             valid_bytes,
             GPUBufferType::Storage.usage(),

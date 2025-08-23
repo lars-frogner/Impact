@@ -129,6 +129,50 @@ impl GPUBuffer {
         }
     }
 
+    /// Creates a GPU buffer with the given size and usage. A write of the given
+    /// slice of valid bytes into the beginning of the buffer will be encoded
+    /// via the given staging belt.
+    ///
+    /// # Panics
+    /// - If `buffer_size` is zero.
+    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    pub fn new_with_spare_capacity_and_encoded_initialization(
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        buffer_size: usize,
+        valid_bytes: &[u8],
+        usage: wgpu::BufferUsages,
+        label: Cow<'static, str>,
+    ) -> Self {
+        assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
+        assert!(valid_bytes.len() <= buffer_size);
+
+        let buffer_label = format!("{label} GPU buffer");
+        let buffer = Self::create_uninitialized_buffer(
+            graphics_device.device(),
+            buffer_size as u64,
+            usage | wgpu::BufferUsages::COPY_DST,
+            &buffer_label,
+        );
+        encode_write_to_buffer_via_staging_belt(
+            graphics_device.device(),
+            staging_belt,
+            command_encoder,
+            &buffer,
+            0,
+            valid_bytes,
+            buffer_size,
+        );
+
+        Self {
+            buffer,
+            buffer_size,
+            n_valid_bytes: AtomicUsize::new(valid_bytes.len()),
+            label,
+        }
+    }
+
     /// Creates an uninitialized GPU buffer of the given type with room for
     /// `buffer_size` bytes.
     ///
@@ -217,6 +261,40 @@ impl GPUBuffer {
         );
     }
 
+    /// Encodes a write of the given slice of bytes to the existing buffer via
+    /// the given staging belt, starting at the given byte offset. All bytes in
+    /// the buffer that were previously considered valid will still be consider
+    /// valid, along with any bytes up to the last byte written by this call.
+    ///
+    /// # Panics
+    /// If the end of the region of updated bytes would exceed the total size of
+    /// the buffer.
+    pub fn encode_update_of_bytes_from_offset(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        byte_offset: usize,
+        updated_bytes: &[u8],
+    ) {
+        let end_offset = byte_offset + updated_bytes.len();
+        assert!(end_offset <= self.buffer_size());
+
+        if end_offset > self.n_valid_bytes() {
+            self.set_n_valid_bytes(end_offset);
+        }
+
+        encode_write_to_buffer_via_staging_belt(
+            graphics_device.device(),
+            staging_belt,
+            command_encoder,
+            self.buffer(),
+            byte_offset,
+            updated_bytes,
+            self.buffer_size(),
+        );
+    }
+
     /// Queues a write of the given slice of bytes to the existing
     /// buffer, starting at the beginning of the buffer. Any existing
     /// bytes in the buffer that are not overwritten are from then
@@ -237,6 +315,34 @@ impl GPUBuffer {
         );
     }
 
+    /// Encodes a write of the given slice of bytes to the existing buffer via
+    /// the given staging belt, starting at the beginning of the buffer. Any
+    /// existing bytes in the buffer that are not overwritten are from then on
+    /// considered invalid.
+    ///
+    /// # Panics
+    /// If the slice of updated bytes exceeds the total size of the
+    /// buffer.
+    pub fn encode_update_of_valid_bytes(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        updated_bytes: &[u8],
+    ) {
+        self.set_n_valid_bytes(updated_bytes.len());
+
+        encode_write_to_buffer_via_staging_belt(
+            graphics_device.device(),
+            staging_belt,
+            command_encoder,
+            self.buffer(),
+            0,
+            updated_bytes,
+            self.buffer_size(),
+        );
+    }
+
     /// Queues a write of the given slice of bytes to the existing
     /// buffer, starting at the beginning of the buffer. The slice
     /// must have the same size as the buffer.
@@ -247,6 +353,29 @@ impl GPUBuffer {
     pub fn update_all_bytes(&self, graphics_device: &GraphicsDevice, updated_bytes: &[u8]) {
         assert_eq!(updated_bytes.len(), self.buffer_size());
         self.update_valid_bytes(graphics_device, updated_bytes);
+    }
+
+    /// Encodes a write of the given slice of bytes to the existing buffer via
+    /// the given staging belt, starting at the beginning of the buffer. The
+    /// slice must have the same size as the buffer.
+    ///
+    /// # Panics
+    /// If the slice of updated bytes does not match the total size of
+    /// the buffer.
+    pub fn encode_update_of_all_bytes(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        updated_bytes: &[u8],
+    ) {
+        assert_eq!(updated_bytes.len(), self.buffer_size());
+        self.encode_update_of_valid_bytes(
+            graphics_device,
+            staging_belt,
+            command_encoder,
+            updated_bytes,
+        );
     }
 
     /// Queues a write of the given slice of bytes to the existing buffer,
@@ -261,6 +390,33 @@ impl GPUBuffer {
 
         queue_write_to_buffer(
             graphics_device.queue(),
+            self.buffer(),
+            0,
+            updated_bytes,
+            self.buffer_size(),
+        );
+    }
+
+    /// Encodes a write of the given slice of bytes to the existing buffer via
+    /// the given staging belt, starting at the beginning of the buffer. The
+    /// number of valid bytes in the buffer does not change.
+    ///
+    /// # Panics
+    /// If the slice of updated bytes exceeds the total number of valid bytes in
+    /// the buffer.
+    pub fn encode_update_of_first_bytes(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        updated_bytes: &[u8],
+    ) {
+        assert!(updated_bytes.len() <= self.n_valid_bytes());
+
+        encode_write_to_buffer_via_staging_belt(
+            graphics_device.device(),
+            staging_belt,
+            command_encoder,
             self.buffer(),
             0,
             updated_bytes,
@@ -438,6 +594,41 @@ impl CountedGPUBuffer {
         );
     }
 
+    /// Encodes a write of the given slice of bytes to the existing buffer via
+    /// the given staging belt, starting just after the padded count at the
+    /// beginning of the buffer. Any existing bytes in the buffer that are not
+    /// overwritten are from then on considered invalid. If `new_count` is
+    /// [`Some`], the count at the beginning of the buffer will be updated to
+    /// the specified value.
+    ///
+    /// # Panics
+    /// If the combined size of the padded count and the slice of updated bytes
+    /// exceeds the total size of the buffer.
+    pub fn encode_update_of_valid_bytes(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        updated_bytes: &[u8],
+        new_count: Option<Count>,
+    ) {
+        self.n_valid_bytes.store(
+            Self::compute_size_including_count(self.padded_count_size, updated_bytes.len()),
+            Ordering::Release,
+        );
+
+        Self::encode_writes_to_counted_buffer_via_staging_belt(
+            graphics_device.device(),
+            staging_belt,
+            command_encoder,
+            self.buffer(),
+            new_count,
+            updated_bytes,
+            self.buffer_size,
+            self.padded_count_size,
+        );
+    }
+
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
     /// binding for the full counted GPU buffer.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
@@ -522,6 +713,41 @@ impl CountedGPUBuffer {
         // Update the count if needed
         if let Some(count) = count {
             queue_write_to_buffer(queue, buffer, 0, bytemuck::bytes_of(&count), buffer_size);
+        }
+    }
+
+    fn encode_writes_to_counted_buffer_via_staging_belt(
+        device: &wgpu::Device,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        buffer: &wgpu::Buffer,
+        count: Option<Count>,
+        bytes: &[u8],
+        buffer_size: usize,
+        padded_count_size: usize,
+    ) {
+        // Write actual data starting just after the padded count
+        encode_write_to_buffer_via_staging_belt(
+            device,
+            staging_belt,
+            command_encoder,
+            buffer,
+            padded_count_size,
+            bytes,
+            buffer_size,
+        );
+
+        // Update the count if needed
+        if let Some(count) = count {
+            encode_write_to_buffer_via_staging_belt(
+                device,
+                staging_belt,
+                command_encoder,
+                buffer,
+                0,
+                bytemuck::bytes_of(&count),
+                buffer_size,
+            );
         }
     }
 }
@@ -637,6 +863,36 @@ fn queue_write_to_buffer(
             wgpu::BufferSize::new(bytes.len() as u64).unwrap(),
         )
         .unwrap();
+
+    view.copy_from_slice(bytes);
+}
+
+fn encode_write_to_buffer_via_staging_belt(
+    device: &wgpu::Device,
+    staging_belt: &mut wgpu::util::StagingBelt,
+    command_encoder: &mut wgpu::CommandEncoder,
+    buffer: &wgpu::Buffer,
+    byte_offset: usize,
+    bytes: &[u8],
+    buffer_size: usize,
+) {
+    let n_updated_bytes = bytes.len();
+    if n_updated_bytes == 0 {
+        return;
+    }
+
+    assert!(
+        byte_offset.checked_add(n_updated_bytes).unwrap() <= buffer_size,
+        "Bytes to write do not fit in original buffer"
+    );
+
+    let mut view = staging_belt.write_buffer(
+        command_encoder,
+        buffer,
+        byte_offset as wgpu::BufferAddress,
+        wgpu::BufferSize::new(bytes.len() as u64).unwrap(),
+        device,
+    );
 
     view.copy_from_slice(bytes);
 }

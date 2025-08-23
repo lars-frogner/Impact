@@ -136,6 +136,8 @@ impl CameraGPUResource {
     pub fn sync_with_camera(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         camera: &impl BufferableCamera,
     ) {
         self.view_transform = *camera.view_transform();
@@ -143,7 +145,7 @@ impl CameraGPUResource {
         if camera.camera().projection_transform_changed()
             || camera.jitter_enabled() != self.jitter_enabled
         {
-            self.sync_gpu_buffer(graphics_device, camera);
+            self.sync_gpu_buffer(graphics_device, staging_belt, command_encoder, camera);
             camera.camera().reset_projection_change_tracking();
             self.jitter_enabled = camera.jitter_enabled();
         }
@@ -188,10 +190,21 @@ impl CameraGPUResource {
         })
     }
 
-    fn sync_gpu_buffer(&self, graphics_device: &GraphicsDevice, camera: &impl BufferableCamera) {
+    fn sync_gpu_buffer(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        camera: &impl BufferableCamera,
+    ) {
         let projection_uniform = CameraProjectionUniform::new(camera);
         self.projection_uniform_gpu_buffer
-            .update_valid_bytes(graphics_device, bytemuck::bytes_of(&projection_uniform));
+            .encode_update_of_valid_bytes(
+                graphics_device,
+                staging_belt,
+                command_encoder,
+                bytemuck::bytes_of(&projection_uniform),
+            );
     }
 }
 

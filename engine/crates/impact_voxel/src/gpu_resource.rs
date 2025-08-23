@@ -27,7 +27,7 @@ use impact_gpu::{
 use impact_math::{ConstStringHash64, Hash64};
 use impact_mesh::gpu_resource::{
     MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
-    new_vertex_gpu_buffer_with_spare_capacity,
+    new_vertex_gpu_buffer_with_spare_capacity_and_encoded_initialization,
 };
 use impact_rendering::push_constant::BasicPushConstantVariant;
 use impact_scene::model::ModelID;
@@ -331,6 +331,8 @@ impl VoxelObjectGPUBuffers {
     /// [`ChunkedVoxelObjectMesh`](crate::mesh::ChunkedVoxelObjectMesh).
     pub fn for_voxel_object(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         voxel_object_id: VoxelObjectID,
         voxel_object: &MeshedChunkedVoxelObject,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
@@ -339,42 +341,56 @@ impl VoxelObjectGPUBuffers {
 
         let position_buffer = Self::create_position_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.positions(),
             Cow::Owned(format!("{voxel_object_id} vertex position")),
         );
 
         let normal_vector_buffer = Self::create_normal_vector_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.normal_vectors(),
             Cow::Owned(format!("{voxel_object_id} normal vector")),
         );
 
         let index_material_buffer = Self::create_index_material_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.index_materials(),
             Cow::Owned(format!("{voxel_object_id} index material")),
         );
 
         let index_buffer = Self::create_index_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.indices(),
             Cow::Owned(format!("{voxel_object_id}")),
         );
 
         let chunk_submesh_buffer = Self::create_chunk_submesh_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.chunk_submeshes(),
             Cow::Owned(format!("{voxel_object_id} chunk info")),
         );
 
         let indirect_argument_buffer = Self::create_indirect_argument_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.n_chunks(),
             Cow::Owned(format!("{voxel_object_id} draw argument")),
         );
 
         let indexed_indirect_argument_buffer = Self::create_indexed_indirect_argument_buffer(
             graphics_device,
+            staging_belt,
+            command_encoder,
             mesh.n_chunks(),
             Cow::Owned(format!("{voxel_object_id} indexed draw argument")),
         );
@@ -548,6 +564,8 @@ impl VoxelObjectGPUBuffers {
     pub fn sync_with_voxel_object(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         voxel_object: &mut MeshedChunkedVoxelObject,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) {
@@ -565,8 +583,10 @@ impl VoxelObjectGPUBuffers {
         if updated_data_ranges.is_empty() && chunks_were_removed {
             // If the only modifications are removed chunks, we just copy over the new chunk
             // buffer and call it a day
-            self.chunk_submesh_buffer.update_valid_bytes(
+            self.chunk_submesh_buffer.encode_update_of_valid_bytes(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 bytemuck::cast_slice(mesh.chunk_submeshes()),
             );
 
@@ -583,11 +603,15 @@ impl VoxelObjectGPUBuffers {
 
             self.position_buffer = Self::create_position_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.positions(),
                 self.position_buffer.label().clone(),
             );
             self.normal_vector_buffer = Self::create_normal_vector_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.normal_vectors(),
                 self.normal_vector_buffer.label().clone(),
             );
@@ -612,12 +636,16 @@ impl VoxelObjectGPUBuffers {
                 let vertex_range = ranges.vertex_range.clone();
                 Self::update_buffer_range(
                     graphics_device,
+                    staging_belt,
+                    command_encoder,
                     &self.position_buffer,
                     mesh.positions(),
                     vertex_range.clone(),
                 );
                 Self::update_buffer_range(
                     graphics_device,
+                    staging_belt,
+                    command_encoder,
                     &self.normal_vector_buffer,
                     mesh.normal_vectors(),
                     vertex_range,
@@ -632,11 +660,15 @@ impl VoxelObjectGPUBuffers {
 
             self.index_material_buffer = Self::create_index_material_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.index_materials(),
                 self.index_material_buffer.label().clone(),
             );
             self.index_buffer = Self::create_index_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.indices(),
                 self.index_buffer.label().clone(),
             );
@@ -647,12 +679,16 @@ impl VoxelObjectGPUBuffers {
                 let index_range = ranges.index_range.clone();
                 Self::update_buffer_range(
                     graphics_device,
+                    staging_belt,
+                    command_encoder,
                     &self.index_material_buffer,
                     mesh.index_materials(),
                     index_range.clone(),
                 );
                 Self::update_buffer_range(
                     graphics_device,
+                    staging_belt,
+                    command_encoder,
                     &self.index_buffer,
                     mesh.indices(),
                     index_range,
@@ -667,16 +703,22 @@ impl VoxelObjectGPUBuffers {
 
             self.chunk_submesh_buffer = Self::create_chunk_submesh_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.chunk_submeshes(),
                 self.chunk_submesh_buffer.label().clone(),
             );
             self.indirect_argument_buffer = Self::create_indirect_argument_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.n_chunks(),
                 self.indirect_argument_buffer.label().clone(),
             );
             self.indexed_indirect_argument_buffer = Self::create_indexed_indirect_argument_buffer(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 mesh.n_chunks(),
                 self.indexed_indirect_argument_buffer.label().clone(),
             );
@@ -706,8 +748,10 @@ impl VoxelObjectGPUBuffers {
             // If the updated chunks still fit in the existing buffer, we simply overwrite
             // the existing chunk buffer with the new data (since this buffer is relatively
             // small, we don't bother writing only the parts that actually changed)
-            self.chunk_submesh_buffer.update_valid_bytes(
+            self.chunk_submesh_buffer.encode_update_of_valid_bytes(
                 graphics_device,
+                staging_belt,
+                command_encoder,
                 bytemuck::cast_slice(mesh.chunk_submeshes()),
             );
         }
@@ -717,6 +761,8 @@ impl VoxelObjectGPUBuffers {
 
     fn create_position_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         positions: &[VoxelMeshVertexPosition],
         label: Cow<'static, str>,
     ) -> GPUBuffer {
@@ -728,8 +774,10 @@ impl VoxelObjectGPUBuffers {
         // updating shadow maps) and as a storage buffer for the geometry pass
         let usage = GPUBufferType::Vertex.usage() | wgpu::BufferUsages::STORAGE;
 
-        GPUBuffer::new_with_spare_capacity(
+        GPUBuffer::new_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             buffer_size,
             bytemuck::cast_slice(positions),
             usage,
@@ -739,14 +787,18 @@ impl VoxelObjectGPUBuffers {
 
     fn create_normal_vector_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         normal_vectors: &[VoxelMeshVertexNormalVector],
         label: Cow<'static, str>,
     ) -> GPUBuffer {
         let total_capacity = Self::add_spare_buffer_capacity(normal_vectors.len());
 
         // The normal vector is bound as a storage buffer for the geometry pass
-        GPUBuffer::new_storage_buffer_with_spare_capacity(
+        GPUBuffer::new_storage_buffer_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             total_capacity,
             normal_vectors,
             label,
@@ -755,6 +807,8 @@ impl VoxelObjectGPUBuffers {
 
     fn create_index_material_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         index_materials: &[VoxelMeshIndexMaterials],
         label: Cow<'static, str>,
     ) -> GPUBuffer {
@@ -762,8 +816,10 @@ impl VoxelObjectGPUBuffers {
 
         // The the index material buffer is bound as a vertex buffer for the
         // geometry pass
-        new_vertex_gpu_buffer_with_spare_capacity(
+        new_vertex_gpu_buffer_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             total_capacity,
             index_materials,
             label,
@@ -772,6 +828,8 @@ impl VoxelObjectGPUBuffers {
 
     fn create_index_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         indices: &[VoxelMeshIndex],
         label: Cow<'static, str>,
     ) -> GPUBuffer {
@@ -784,8 +842,10 @@ impl VoxelObjectGPUBuffers {
         // pass
         let usage = GPUBufferType::Index.usage() | wgpu::BufferUsages::VERTEX;
 
-        GPUBuffer::new_with_spare_capacity(
+        GPUBuffer::new_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             buffer_size,
             bytemuck::cast_slice(indices),
             usage,
@@ -795,14 +855,18 @@ impl VoxelObjectGPUBuffers {
 
     fn create_chunk_submesh_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         chunk_submeshes: &[ChunkSubmesh],
         label: Cow<'static, str>,
     ) -> GPUBuffer {
         let total_capacity = Self::add_spare_buffer_capacity(chunk_submeshes.len());
 
         // The normal vector is bound as a storage buffer for the geometry pass
-        GPUBuffer::new_storage_buffer_with_spare_capacity(
+        GPUBuffer::new_storage_buffer_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             total_capacity,
             chunk_submeshes,
             label,
@@ -811,14 +875,18 @@ impl VoxelObjectGPUBuffers {
 
     fn create_indirect_argument_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         n_chunks: usize,
         label: Cow<'static, str>,
     ) -> GPUBuffer {
         let total_capacity = Self::add_spare_buffer_capacity(n_chunks);
 
         // Used for non-indexed indirect draw calls
-        GPUBuffer::new_draw_indirect_buffer_with_spare_capacity(
+        GPUBuffer::new_draw_indirect_buffer_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             total_capacity,
             &vec![DrawIndirectArgs::default(); n_chunks],
             label,
@@ -827,14 +895,18 @@ impl VoxelObjectGPUBuffers {
 
     fn create_indexed_indirect_argument_buffer(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         n_chunks: usize,
         label: Cow<'static, str>,
     ) -> GPUBuffer {
         let total_capacity = Self::add_spare_buffer_capacity(n_chunks);
 
         // Used for indexed indirect draw calls
-        GPUBuffer::new_draw_indexed_indirect_buffer_with_spare_capacity(
+        GPUBuffer::new_draw_indexed_indirect_buffer_with_spare_capacity_and_encoded_initialization(
             graphics_device,
+            staging_belt,
+            command_encoder,
             total_capacity,
             &vec![DrawIndexedIndirectArgs::default(); n_chunks],
             label,
@@ -924,14 +996,18 @@ impl VoxelObjectGPUBuffers {
 
     fn update_buffer_range<T: Pod>(
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
         buffer: &GPUBuffer,
         all_values: &[T],
         range: Range<usize>,
     ) {
         let byte_offset = mem::size_of::<T>().checked_mul(range.start).unwrap();
 
-        buffer.update_bytes_from_offset(
+        buffer.encode_update_of_bytes_from_offset(
             graphics_device,
+            staging_belt,
+            command_encoder,
             byte_offset,
             bytemuck::cast_slice(&all_values[range]),
         );

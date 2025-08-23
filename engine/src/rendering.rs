@@ -4,7 +4,9 @@ pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
 
-use crate::{resource::ResourceManager, scene::Scene, tasks::Render, ui::UserInterface};
+use crate::{
+    resource::ResourceManager, scene::Scene, tasks::RecordCommandsAndRender, ui::UserInterface,
+};
 use anyhow::Result;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
@@ -23,7 +25,7 @@ use impact_rendering::{
 };
 use impact_scheduling::Task;
 use impact_thread::ThreadPoolTaskErrors;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
 use serde::{Deserialize, Serialize};
@@ -39,11 +41,12 @@ pub struct RenderingSystem {
     shader_manager: RwLock<ShaderManager>,
     bind_group_layout_registry: BindGroupLayoutRegistry,
     render_resource_manager: RwLock<RenderResourceManager>,
-    render_command_manager: RwLock<RenderCommandManager>,
+    render_command_manager: RenderCommandManager,
     render_attachment_texture_manager: RwLock<RenderAttachmentTextureManager>,
     gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
+    staging_belt: wgpu::util::StagingBelt,
     frame_counter: u32,
     timestamp_query_manager: TimestampQueryManager,
     basic_config: BasicRenderingConfig,
@@ -129,11 +132,12 @@ impl RenderingSystem {
             shader_manager: RwLock::new(shader_manager),
             bind_group_layout_registry,
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            render_command_manager: RwLock::new(render_command_manager),
+            render_command_manager,
             render_attachment_texture_manager: RwLock::new(render_attachment_texture_manager),
             gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
+            staging_belt: wgpu::util::StagingBelt::new(1024 * 1024),
             frame_counter: 1,
             timestamp_query_manager,
             basic_config: config.basic,
@@ -172,9 +176,8 @@ impl RenderingSystem {
         &self.render_resource_manager
     }
 
-    /// Returns a reference to the [`RenderCommandManager`], guarded by a
-    /// [`RwLock`].
-    pub fn render_command_manager(&self) -> &RwLock<RenderCommandManager> {
+    /// Returns a reference to the [`RenderCommandManager`].
+    pub fn render_command_manager(&self) -> &RenderCommandManager {
         &self.render_command_manager
     }
 
@@ -232,53 +235,77 @@ impl RenderingSystem {
         }
     }
 
-    /// Renders to the surface using the current synchronized render resources.
-    /// The surface texture to present (if any) is stored for later presentation
-    /// by calling [`Self::present`].
+    /// Creates a command encoder and records commands for synchronizing dynamic
+    /// GPU resources (resources that benefit from a staging belt), before
+    /// synchronizing and recording render commands. After the commands are
+    /// submitted, the surface texture to present (if any) is stored for later
+    /// presentation by calling [`Self::present`].
     ///
     /// # Errors
     /// Returns an error if:
     /// - The surface texture to render to can not be obtained.
-    /// - Recording a render pass fails.
-    pub fn render_to_surface(
+    /// - Synchronizing or recording render commands fails.
+    pub fn record_commands_and_render_surface(
         &mut self,
         resource_manager: &ResourceManager,
         scene: &Scene,
         user_interface: &dyn UserInterface,
     ) -> Result<()> {
-        if !self.basic_config.enabled {
-            return Ok(());
-        }
-        impact_log::with_timing_info_logging!("Rendering"; {
-            self.surface_texture_to_present = self.render_surface(
-                resource_manager,
-                scene,
-                user_interface,
-            )?;
-        });
-        Ok(())
-    }
+        let mut command_encoder =
+            Self::create_render_command_encoder(self.graphics_device.device());
 
-    /// Sets a new width and height for the rendering surface and any textures
-    /// that need to have the same dimensions as the surface.
-    pub fn resize_rendering_surface(&mut self, new_width: NonZeroU32, new_height: NonZeroU32) {
-        self.rendering_surface
-            .resize(&self.graphics_device, new_width, new_height);
+        let mut render_resource_manager = self.render_resource_manager.write();
 
-        self.recreate_render_attachment_textures();
-    }
+        let light_manager = scene.light_manager().read();
+        let mut model_instance_manager = scene.model_instance_manager().write();
+        let mut voxel_object_manager = scene.voxel_object_manager().write();
+        let scene_camera = scene.scene_camera().read();
 
-    pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
-        self.rendering_surface
-            .update_pixels_per_point(pixels_per_point);
-    }
+        impact_scene::camera::sync_gpu_resources_for_scene_camera(
+            scene_camera.as_ref(),
+            &self.graphics_device,
+            &mut self.staging_belt,
+            &mut command_encoder,
+            &self.bind_group_layout_registry,
+            &mut render_resource_manager.camera,
+        );
 
-    fn render_surface(
-        &mut self,
-        resource_manager: &ResourceManager,
-        scene: &Scene,
-        user_interface: &dyn UserInterface,
-    ) -> Result<Option<wgpu::SurfaceTexture>> {
+        voxel_object_manager.sync_voxel_object_gpu_buffers(
+            &self.graphics_device,
+            &mut self.staging_belt,
+            &mut command_encoder,
+            &self.bind_group_layout_registry,
+            &mut render_resource_manager.voxel_object_buffers,
+        );
+
+        light_manager.sync_gpu_resources(
+            &self.graphics_device,
+            &mut self.staging_belt,
+            &mut command_encoder,
+            &self.bind_group_layout_registry,
+            &mut render_resource_manager.lights,
+            &self.shadow_mapping_config,
+        );
+
+        model_instance_manager.sync_gpu_buffers(
+            &self.graphics_device,
+            &mut self.staging_belt,
+            &mut command_encoder,
+            &mut render_resource_manager.model_instance_buffers,
+        );
+
+        let render_resource_manager = RwLockWriteGuard::downgrade(render_resource_manager);
+
+        self.staging_belt.finish();
+
+        self.render_command_manager.sync_with_render_resources(
+            &self.graphics_device,
+            &mut self.shader_manager.write(),
+            resource_manager,
+            &*render_resource_manager,
+            &self.bind_group_layout_registry,
+        )?;
+
         self.render_attachment_texture_manager
             .write()
             .swap_previous_and_current_attachment_variants(&self.graphics_device);
@@ -291,21 +318,14 @@ impl RenderingSystem {
             .timestamp_query_manager
             .create_timestamp_query_registry();
 
-        let mut command_encoder =
-            Self::create_render_command_encoder(self.graphics_device.device());
-
-        let light_manager = scene.light_manager().read();
-        let model_instance_manager = scene.model_instance_manager().read();
-        let scene_camera = scene.scene_camera().read();
-
-        self.render_command_manager.read().record(
+        self.render_command_manager.record(
             &self.rendering_surface,
             &surface_texture_view,
             &light_manager,
             &model_instance_manager,
             scene_camera.as_ref(),
             resource_manager,
-            &*self.render_resource_manager.read(),
+            &*render_resource_manager,
             &self.render_attachment_texture_manager.read(),
             &self.gpu_resource_group_manager.read(),
             &self.storage_gpu_buffer_manager.read(),
@@ -330,6 +350,8 @@ impl RenderingSystem {
             .queue()
             .submit(std::iter::once(command_encoder.finish()));
 
+        self.staging_belt.recall();
+
         self.timestamp_query_manager
             .load_recorded_timing_results(&self.graphics_device)?;
 
@@ -341,7 +363,23 @@ impl RenderingSystem {
                 &self.storage_gpu_buffer_manager.read(),
             )?;
 
-        Ok(surface_texture)
+        self.surface_texture_to_present = surface_texture;
+
+        Ok(())
+    }
+
+    /// Sets a new width and height for the rendering surface and any textures
+    /// that need to have the same dimensions as the surface.
+    pub fn resize_rendering_surface(&mut self, new_width: NonZeroU32, new_height: NonZeroU32) {
+        self.rendering_surface
+            .resize(&self.graphics_device, new_width, new_height);
+
+        self.recreate_render_attachment_textures();
+    }
+
+    pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
+        self.rendering_surface
+            .update_pixels_per_point(pixels_per_point);
     }
 
     pub fn set_wireframe_mode_enabled(&mut self, enabled: bool) {
@@ -395,8 +433,8 @@ impl RenderingSystem {
         })
     }
 
-    fn sync_render_command_manager_with_basic_config(&self) {
-        self.render_command_manager.write().sync_with_config(
+    fn sync_render_command_manager_with_basic_config(&mut self) {
+        self.render_command_manager.sync_with_config(
             &self.graphics_device,
             &self.shader_manager.read(),
             &self.basic_config,
@@ -412,11 +450,11 @@ impl RenderingSystem {
     /// Identifies rendering-related errors that need special handling in the
     /// given set of task errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
-        if let Some(render_error) = task_errors.get_error_of(Render.id())
+        if let Some(render_error) = task_errors.get_error_of(RecordCommandsAndRender.id())
             && let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref()
         {
             self.handle_surface_lost();
-            task_errors.clear_error_of(Render.id());
+            task_errors.clear_error_of(RecordCommandsAndRender.id());
         }
     }
 }
