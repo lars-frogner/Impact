@@ -16,6 +16,12 @@ impl Engine {
     pub fn perform_game_loop_iteration(&self, task_scheduler: &RuntimeTaskScheduler) -> Result<()> {
         let mut game_loop_controller = self.game_loop_controller.lock();
 
+        if game_loop_controller.reached_max_iterations() {
+            impact_log::info!("Reached max iterations, requesting shutdown");
+            self.request_shutdown();
+            return Ok(());
+        }
+
         if !game_loop_controller.should_perform_iteration() {
             return Ok(());
         }

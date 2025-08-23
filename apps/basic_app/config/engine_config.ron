@@ -103,6 +103,7 @@
     ),
     game_loop: (
         max_fps: None,
+        max_iterations: None,
     ),
     user_interface: (
         initially_interactive: true,
