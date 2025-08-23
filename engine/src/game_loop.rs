@@ -22,6 +22,7 @@ pub struct GameLoopController {
 #[serde(default)]
 pub struct GameLoopConfig {
     max_fps: Option<NonZeroU32>,
+    max_iterations: Option<u64>,
     state: GameLoopState,
 }
 
@@ -55,6 +56,12 @@ impl GameLoopController {
 
     pub fn iteration(&self) -> u64 {
         self.iteration
+    }
+
+    pub fn reached_max_iterations(&self) -> bool {
+        self.config
+            .max_iterations
+            .is_some_and(|max_iterations| self.iteration >= max_iterations)
     }
 
     pub fn add_frame_duration(&mut self, frame_duration: Duration) {
