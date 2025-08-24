@@ -6,6 +6,7 @@ use crate::UserInterfaceConfig;
 use impact::{
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
+    lock_order::OrderedRwLock,
     rendering::RenderingSystem,
 };
 use impact_math::{Bounds, UpperExclusiveBounds};
@@ -251,7 +252,7 @@ enum ExposureMode {
 
 impl RenderingOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut renderer = engine.renderer().write();
+        let mut renderer = engine.renderer().owrite();
 
         option_panel(ctx, config, "rendering_option_panel", |ui| {
             option_group(ui, "shadow_mapping_options", |ui| {
@@ -291,7 +292,7 @@ fn shadow_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 }
 
 fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().write();
+    let mut postprocessor = renderer.postprocessor().owrite();
 
     let enabled = postprocessor.ambient_occlusion_enabled_mut();
 
@@ -331,7 +332,7 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
         || intensity.changed()
         || contrast.changed()
     {
-        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read();
+        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
 
         postprocessor.set_ambient_occlusion_config(
             renderer.graphics_device(),
@@ -342,7 +343,7 @@ fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 }
 
 fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().write();
+    let mut postprocessor = renderer.postprocessor().owrite();
 
     let enabled = postprocessor.temporal_anti_aliasing_enabled_mut();
 
@@ -369,7 +370,7 @@ fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     );
 
     if current_frame_weight.changed() || variance_clipping_threshold.changed() {
-        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read();
+        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
 
         postprocessor.set_temporal_anti_aliasing_config(
             renderer.graphics_device(),
@@ -380,7 +381,7 @@ fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 }
 
 fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().write();
+    let mut postprocessor = renderer.postprocessor().owrite();
     let capturing_camera = postprocessor.capturing_camera_mut();
     let settings = capturing_camera.settings_mut();
 
@@ -469,7 +470,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
                     max_luminance_value.max(min_luminance_value.next_up()),
                 );
 
-                let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read();
+                let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
 
                 capturing_camera.set_average_luminance_computation_config(
                     renderer.graphics_device(),
@@ -511,7 +512,7 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 }
 
 fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().write();
+    let mut postprocessor = renderer.postprocessor().owrite();
     let capturing_camera = postprocessor.capturing_camera_mut();
 
     let enabled = capturing_camera.produces_bloom_mut();
@@ -549,9 +550,9 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
         || blur_filter_radius.changed()
         || blurred_luminance_weight.changed()
     {
-        let mut shader_manager = renderer.shader_manager().write();
+        let mut shader_manager = renderer.shader_manager().owrite();
         let mut render_attachment_texture_manager =
-            renderer.render_attachment_texture_manager().write();
+            renderer.render_attachment_texture_manager().owrite();
 
         capturing_camera.set_bloom_config(
             renderer.graphics_device(),
@@ -563,7 +564,7 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 }
 
 fn dynamic_range_compression_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().write();
+    let mut postprocessor = renderer.postprocessor().owrite();
     let capturing_camera = postprocessor.capturing_camera_mut();
     let config = capturing_camera.dynamic_range_compression_config_mut();
 
@@ -602,7 +603,7 @@ fn wireframe_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
 }
 
 fn render_attachment_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().write();
+    let mut postprocessor = renderer.postprocessor().owrite();
 
     let mut quantity = postprocessor.visualized_render_attachment_quantity();
     let original_quantity = quantity;

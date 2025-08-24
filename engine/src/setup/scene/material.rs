@@ -1,6 +1,6 @@
 //! Setup of materials for new entities.
 
-use crate::resource::ResourceManager;
+use crate::{lock_order::OrderedRwLock, resource::ResourceManager};
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_material::{
@@ -37,11 +37,11 @@ fn setup_fixed_materials_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |fixed_color: &FixedColor| -> Result<MaterialID> {
-            let resource_manager = &mut *resource_manager;
+            let resource_manager = &mut **resource_manager;
             setup::fixed::setup_fixed_material(
                 &resource_manager.textures,
                 &resource_manager.samplers,
@@ -58,11 +58,11 @@ fn setup_fixed_materials_for_new_entities(
     )?;
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |fixed_texture: &FixedTexture| -> Result<MaterialID> {
-            let resource_manager = &mut *resource_manager;
+            let resource_manager = &mut **resource_manager;
             setup::fixed::setup_fixed_material(
                 &resource_manager.textures,
                 &resource_manager.samplers,
@@ -85,7 +85,7 @@ fn setup_physical_materials_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |uniform_color: &UniformColor,
@@ -100,7 +100,7 @@ fn setup_physical_materials_for_new_entities(
          normal_map: Option<&NormalMap>,
          parallax_map: Option<&ParallaxMap>|
          -> Result<MaterialID> {
-            let resource_manager = &mut *resource_manager;
+            let resource_manager = &mut **resource_manager;
             setup::physical::setup_physical_material_from_optional_parts(
                 &resource_manager.textures,
                 &resource_manager.samplers,
@@ -127,7 +127,7 @@ fn setup_physical_materials_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |textured_color: &TexturedColor,
@@ -142,7 +142,7 @@ fn setup_physical_materials_for_new_entities(
          normal_map: Option<&NormalMap>,
          parallax_map: Option<&ParallaxMap>|
          -> Result<MaterialID> {
-            let resource_manager = &mut *resource_manager;
+            let resource_manager = &mut **resource_manager;
             setup::physical::setup_physical_material_from_optional_parts(
                 &resource_manager.textures,
                 &resource_manager.samplers,

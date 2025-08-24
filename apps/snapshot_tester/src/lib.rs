@@ -9,9 +9,11 @@ pub use impact::{self, roc_integration};
 #[cfg(feature = "roc_codegen")]
 pub use impact::component::gather_roc_type_ids_for_all_components;
 
+use crate::testing::ComparisonOutcome;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
+    bumpalo::Bump,
     command::{EngineCommand, scene::SceneCommand},
     engine::Engine,
     impact_io,
@@ -25,8 +27,6 @@ use std::{
     sync::Arc,
 };
 use testing::TestScene;
-
-use crate::testing::ComparisonOutcome;
 
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 
@@ -139,7 +139,12 @@ impl Application for SnapshotTester {
         scripting::setup_scene(first_scene)
     }
 
-    fn on_game_loop_iteration_completed(&self, engine: &Engine, iteration: u64) -> Result<()> {
+    fn on_game_loop_iteration_completed(
+        &self,
+        arena: &Bump,
+        engine: &Engine,
+        iteration: u64,
+    ) -> Result<()> {
         let iteration = iteration as usize;
 
         let rendered_scene = self.test_scenes[iteration];
@@ -147,7 +152,7 @@ impl Application for SnapshotTester {
         let output_image_path = rendered_scene.append_filename(&self.config.output_dir);
 
         // Capture and save screenshot for the scene that was just rendered
-        engine.capture_screenshot(Some(&output_image_path))?;
+        engine.capture_screenshot(arena, Some(&output_image_path))?;
 
         // Prepare for next scene
         engine.execute_command(EngineCommand::Scene(SceneCommand::Clear))?;

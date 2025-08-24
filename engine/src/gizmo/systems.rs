@@ -43,26 +43,20 @@ use impact_voxel::{
 use nalgebra::{
     Isometry3, Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
 };
-use parking_lot::RwLock;
 use std::iter;
 use tinyvec::TinyVec;
 
 /// Updates the appropriate gizmo visibility flags for all applicable
 /// entities based on which gizmos have been newly configured to be
 /// globally visible or hidden.
-pub fn update_visibility_flags_for_gizmos(
-    gizmo_manager: &mut GizmoManager,
-    ecs_world: &RwLock<ECSWorld>,
-) {
+pub fn update_visibility_flags_for_gizmos(gizmo_manager: &mut GizmoManager, ecs_world: &ECSWorld) {
     if !gizmo_manager.global_visibility_changed_for_any_of_gizmos(GizmoSet::all()) {
         return;
     }
 
-    let ecs_world = ecs_world.read();
-
     for gizmo in GizmoType::all() {
         if gizmo_manager.global_visibility_changed_for_any_of_gizmos(gizmo.as_set()) {
-            update_visibility_flags_for_gizmo(&ecs_world, gizmo_manager, gizmo);
+            update_visibility_flags_for_gizmo(ecs_world, gizmo_manager, gizmo);
         }
     }
     gizmo_manager.declare_visibilities_synchronized();

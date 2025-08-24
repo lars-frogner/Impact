@@ -1,6 +1,6 @@
 //! Commands for scene manipulation.
 
-use crate::{command::uils::ActiveState, engine::Engine};
+use crate::{command::uils::ActiveState, engine::Engine, lock_order::OrderedRwLock};
 use anyhow::Result;
 use impact_ecs::world::EntityID;
 use impact_scene::skybox::Skybox;
@@ -20,7 +20,7 @@ pub enum SceneCommand {
 
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {
     impact_log::info!("Setting skybox to {skybox:?}");
-    engine.scene().read().set_skybox(Some(skybox));
+    engine.scene().oread().set_skybox(Some(skybox));
 }
 
 pub fn set_scene_entity_active_state(

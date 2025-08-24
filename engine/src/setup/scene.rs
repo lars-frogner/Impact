@@ -6,7 +6,9 @@ pub mod material;
 pub mod mesh;
 pub mod voxel;
 
-use crate::{resource::ResourceManager, scene::Scene};
+use crate::{
+    lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
+};
 use anyhow::{Result, anyhow};
 use camera::CameraRenderState;
 use impact_ecs::{
@@ -17,7 +19,6 @@ use impact_ecs::{
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_material::MaterialID;
 use impact_mesh::TriangleMeshID;
-use impact_physics::rigid_body::RigidBodyManager;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
@@ -31,22 +32,17 @@ use parking_lot::RwLock;
 /// by calling [`add_new_entities_to_scene_graph`].
 pub fn setup_scene_data_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    scene: &Scene,
-    rigid_body_manager: &RwLock<RigidBodyManager>,
+    scene: &RwLock<Scene>,
+    simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     mesh::setup_meshes_for_new_entities(resource_manager, components)?;
 
-    light::setup_lights_for_new_entities(scene.scene_camera(), scene.light_manager(), components);
+    light::setup_lights_for_new_entities(scene, components);
 
     material::setup_materials_for_new_entities(resource_manager, components)?;
 
-    voxel::setup_voxel_objects_for_new_entities(
-        resource_manager,
-        rigid_body_manager,
-        scene.voxel_object_manager(),
-        components,
-    )?;
+    voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, components)?;
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, components);
 
@@ -57,51 +53,34 @@ pub fn setup_scene_data_for_new_entities(
 /// required, and adds the corresponding scene graph components to the entities'
 /// components.
 pub fn add_new_entities_to_scene_graph(
-    resource_manager: &RwLock<ResourceManager>,
-    scene: &Scene,
     ecs_world: &RwLock<ECSWorld>,
+    resource_manager: &RwLock<ResourceManager>,
+    scene: &RwLock<Scene>,
     get_render_state: &mut impl FnMut() -> CameraRenderState,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup_scene_graph_parent_nodes_for_new_entities(ecs_world, components)?;
     setup_scene_graph_group_nodes_for_new_entities(scene, components);
 
-    camera::add_camera_to_scene_for_new_entity(
-        scene.scene_graph(),
-        scene.scene_camera(),
-        get_render_state,
-        components,
-    )?;
+    camera::add_camera_to_scene_for_new_entity(scene, get_render_state, components)?;
 
     setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, components)?;
 
-    voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
-        scene.voxel_object_manager(),
-        scene.model_instance_manager(),
-        scene.scene_graph(),
-        components,
-    )?;
+    voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(scene, components)?;
 
     Ok(())
 }
 
 /// Performs any modifications required to clean up the scene when
 /// the given entity is removed.
-pub fn cleanup_scene_data_for_removed_entity(scene: &Scene, entity: &EntityEntry<'_>) {
+pub fn cleanup_scene_data_for_removed_entity(scene: &RwLock<Scene>, entity: &EntityEntry<'_>) {
     remove_scene_graph_model_instance_node_for_entity(scene, entity);
 
-    impact_light::setup::cleanup_light_for_removed_entity(scene.light_manager(), entity);
+    light::cleanup_light_for_removed_entity(scene, entity);
 
-    camera::remove_camera_from_scene_for_removed_entity(
-        scene.scene_graph(),
-        scene.scene_camera(),
-        entity,
-    );
+    camera::remove_camera_from_scene_for_removed_entity(scene, entity);
 
-    impact_voxel::setup::cleanup_voxel_object_for_removed_entity(
-        scene.voxel_object_manager(),
-        entity,
-    );
+    voxel::cleanup_voxel_object_for_removed_entity(scene, entity);
 }
 
 fn setup_scene_graph_parent_nodes_for_new_entities(
@@ -110,7 +89,7 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let ecs_world = ecs_world.read();
+            let ecs_world = ecs_world.oread();
         },
         components,
         |parent: &Parent| -> Result<SceneGraphParentNodeHandle> {
@@ -125,12 +104,13 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
 }
 
 fn setup_scene_graph_group_nodes_for_new_entities(
-    scene: &Scene,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(
         {
-            let mut scene_graph = scene.scene_graph().write();
+            let scene = scene.oread();
+            let mut scene_graph = scene.scene_graph().owrite();
         },
         components,
         |frame: Option<&ReferenceFrame>,
@@ -151,14 +131,15 @@ fn setup_scene_graph_group_nodes_for_new_entities(
 
 fn setup_scene_graph_model_instance_nodes_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    scene: &Scene,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut model_instance_manager = scene.model_instance_manager().write();
-            let mut scene_graph = scene.scene_graph().write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut model_instance_manager = scene.model_instance_manager().owrite();
+            let mut scene_graph = scene.scene_graph().owrite();
         },
         components,
         |mesh_id: &TriangleMeshID,
@@ -199,10 +180,18 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
     )
 }
 
-fn remove_scene_graph_model_instance_node_for_entity(scene: &Scene, entity: &EntityEntry<'_>) {
-    impact_scene::setup::remove_scene_graph_model_instance_node_for_entity(
-        scene.model_instance_manager(),
-        scene.scene_graph(),
-        entity,
-    );
+fn remove_scene_graph_model_instance_node_for_entity(
+    scene: &RwLock<Scene>,
+    entity: &EntityEntry<'_>,
+) {
+    if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeHandle>() {
+        let scene = scene.oread();
+        let mut model_instance_manager = scene.model_instance_manager().owrite();
+        let mut scene_graph = scene.scene_graph().owrite();
+        impact_scene::setup::remove_scene_graph_model_instance_node(
+            &mut model_instance_manager,
+            &mut scene_graph,
+            node.access(),
+        );
+    }
 }

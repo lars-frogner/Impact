@@ -7,8 +7,6 @@
 //! done through the registry without knowledge of the constraints and forces
 //! that rely on those anchors.
 
-pub mod setup;
-
 use crate::{
     quantities::Position,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, TypedRigidBodyID},

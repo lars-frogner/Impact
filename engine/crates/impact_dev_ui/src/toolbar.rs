@@ -2,6 +2,7 @@ use crate::UserInterfaceConfig;
 use impact::{
     egui::{Context, DragValue, Frame, TopBottomPanel},
     engine::Engine,
+    lock_order::OrderedRwLock,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -41,7 +42,7 @@ impl Toolbar {
                     {
                         engine
                             .renderer()
-                            .write()
+                            .owrite()
                             .set_render_pass_timings_enabled(config.show_render_pass_timings);
                     }
 

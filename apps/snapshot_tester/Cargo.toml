@@ -106,6 +106,8 @@ license = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["checked_lock_order"]
+checked_lock_order = ["impact/checked_lock_order"]
 roc_codegen = ["impact/roc_codegen"]
 
 [dependencies]

@@ -1,15 +1,16 @@
 //! Setup of lights for new entities.
 
+use crate::{lock_order::OrderedRwLock, scene::Scene};
 use impact_camera::gpu_resource::BufferableCamera;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ReferenceFrame;
 use impact_light::{
-    AmbientEmission, AmbientLightID, LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
+    AmbientEmission, AmbientLightID, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLightID, setup,
 };
-use impact_scene::{SceneEntityFlags, camera::SceneCamera};
+use impact_scene::SceneEntityFlags;
 use nalgebra::Isometry3;
 use parking_lot::RwLock;
 
@@ -18,22 +19,22 @@ use parking_lot::RwLock;
 /// the light manager and adds the correspondong light components with the
 /// lights' IDs to the entity.
 pub fn setup_lights_for_new_entities(
-    scene_camera: &RwLock<Option<SceneCamera>>,
-    light_manager: &RwLock<LightManager>,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) {
-    setup_ambient_lights_for_new_entities(light_manager, components);
-    setup_omnidirectional_lights_for_new_entities(scene_camera, light_manager, components);
-    setup_unidirectional_lights_for_new_entities(scene_camera, light_manager, components);
+    setup_ambient_lights_for_new_entities(scene, components);
+    setup_omnidirectional_lights_for_new_entities(scene, components);
+    setup_unidirectional_lights_for_new_entities(scene, components);
 }
 
 fn setup_ambient_lights_for_new_entities(
-    light_manager: &RwLock<LightManager>,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(
         {
-            let mut light_manager = light_manager.write();
+            let scene = scene.oread();
+            let mut light_manager = scene.light_manager().owrite();
         },
         components,
         |ambient_emission: &AmbientEmission,
@@ -49,20 +50,22 @@ fn setup_ambient_lights_for_new_entities(
 }
 
 fn setup_omnidirectional_lights_for_new_entities(
-    scene_camera: &RwLock<Option<SceneCamera>>,
-    light_manager: &RwLock<LightManager>,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(
         {
-            let view_transform = scene_camera
-                .read()
+            let scene = scene.oread();
+
+            let view_transform = scene
+                .scene_camera()
+                .oread()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_manager = light_manager.write();
+            let mut light_manager = scene.light_manager().owrite();
         },
         components,
         |frame: &ReferenceFrame,
@@ -86,14 +89,17 @@ fn setup_omnidirectional_lights_for_new_entities(
 
     setup!(
         {
-            let view_transform = scene_camera
-                .read()
+            let scene = scene.oread();
+
+            let view_transform = scene
+                .scene_camera()
+                .oread()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_manager = light_manager.write();
+            let mut light_manager = scene.light_manager().owrite();
         },
         components,
         |frame: &ReferenceFrame,
@@ -117,20 +123,22 @@ fn setup_omnidirectional_lights_for_new_entities(
 }
 
 fn setup_unidirectional_lights_for_new_entities(
-    scene_camera: &RwLock<Option<SceneCamera>>,
-    light_manager: &RwLock<LightManager>,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(
         {
-            let view_transform = scene_camera
-                .read()
+            let scene = scene.oread();
+
+            let view_transform = scene
+                .scene_camera()
+                .oread()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_manager = light_manager.write();
+            let mut light_manager = scene.light_manager().owrite();
         },
         components,
         |unidirectional_emission: &UnidirectionalEmission,
@@ -152,14 +160,17 @@ fn setup_unidirectional_lights_for_new_entities(
 
     setup!(
         {
-            let view_transform = scene_camera
-                .read()
+            let scene = scene.oread();
+
+            let view_transform = scene
+                .scene_camera()
+                .oread()
                 .as_ref()
                 .map_or_else(Isometry3::identity, |scene_camera| {
                     *scene_camera.view_transform()
                 });
 
-            let mut light_manager = light_manager.write();
+            let mut light_manager = scene.light_manager().owrite();
         },
         components,
         |unidirectional_emission: &ShadowableUnidirectionalEmission,
@@ -178,4 +189,41 @@ fn setup_unidirectional_lights_for_new_entities(
         },
         ![ShadowableUnidirectionalLightID]
     );
+}
+
+pub fn cleanup_light_for_removed_entity(scene: &RwLock<Scene>, entity: &EntityEntry<'_>) {
+    if let Some(light_id) = entity.get_component::<AmbientLightID>() {
+        let scene = scene.oread();
+        let mut light_manager = scene.light_manager().owrite();
+        let light_id = *light_id.access();
+        light_manager.remove_ambient_light(light_id);
+    }
+
+    if let Some(light_id) = entity.get_component::<OmnidirectionalLightID>() {
+        let scene = scene.oread();
+        let mut light_manager = scene.light_manager().owrite();
+        let light_id = *light_id.access();
+        light_manager.remove_omnidirectional_light(light_id);
+    }
+
+    if let Some(light_id) = entity.get_component::<ShadowableOmnidirectionalLightID>() {
+        let scene = scene.oread();
+        let mut light_manager = scene.light_manager().owrite();
+        let light_id = *light_id.access();
+        light_manager.remove_shadowable_omnidirectional_light(light_id);
+    }
+
+    if let Some(light_id) = entity.get_component::<UnidirectionalLightID>() {
+        let scene = scene.oread();
+        let mut light_manager = scene.light_manager().owrite();
+        let light_id = *light_id.access();
+        light_manager.remove_unidirectional_light(light_id);
+    }
+
+    if let Some(light_id) = entity.get_component::<ShadowableUnidirectionalLightID>() {
+        let scene = scene.oread();
+        let mut light_manager = scene.light_manager().owrite();
+        let light_id = *light_id.access();
+        light_manager.remove_shadowable_unidirectional_light(light_id);
+    }
 }

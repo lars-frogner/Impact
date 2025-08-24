@@ -2,12 +2,18 @@
 
 use crate::engine::Engine;
 use anyhow::Result;
+use bumpalo::Bump;
 use std::sync::Arc;
 
 pub trait Application: Send + Sync + std::fmt::Debug {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()>;
 
-    fn on_game_loop_iteration_completed(&self, _engine: &Engine, _iteration: u64) -> Result<()> {
+    fn on_game_loop_iteration_completed(
+        &self,
+        _arena: &Bump,
+        _engine: &Engine,
+        _iteration: u64,
+    ) -> Result<()> {
         Ok(())
     }
 

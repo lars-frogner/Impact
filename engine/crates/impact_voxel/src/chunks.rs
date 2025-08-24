@@ -189,7 +189,7 @@ impl ChunkedVoxelObject {
     }
 
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
-    /// and calls [`Self::shrink_occupied_voxel_ranges`] and
+    /// and calls [`Self::update_occupied_voxel_ranges`] and
     /// [`Self::compute_all_derived_state`] on it. Returns [`None`] if the
     /// resulting object would not contain any voxels.
     pub fn generate<G>(generator: &G) -> Option<Self>
@@ -423,7 +423,7 @@ impl ChunkedVoxelObject {
 
     /// Checks whether the object consists of fewer than
     /// [`NON_EMPTY_VOXEL_THRESHOLD`] non-empty voxels. Assumes that
-    /// [`Self::shrink_occupied_ranges`] has been called since the last time a
+    /// [`Self::update_occupied_ranges`] has been called since the last time a
     /// chunk was emptied.
     pub fn is_effectively_empty(&self) -> bool {
         let occupied_chunk_count: usize =
