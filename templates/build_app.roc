@@ -52,10 +52,10 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> AddressSanitizer
             _ -> NoAddressSanitizer
 
-    heap_profiling_mode =
-        when Env.var!("HEAP_PROFILING") is
-            Ok(str) if !(Str.is_empty(str)) -> HeapProfiling
-            _ -> NoHeapProfiling
+    profiling_mode =
+        when Env.var!("PROFILING") is
+            Ok(str) if !(Str.is_empty(str)) -> Profiling
+            _ -> NoProfiling
 
     valgrind_mode =
         when Env.var!("VALGRIND") is
@@ -76,7 +76,7 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, backend, linker, allocator, rust_debug_mode, asan_mode, heap_profiling_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, backend, linker, allocator, rust_debug_mode, asan_mode, profiling_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, rust_debug_mode, os_and_arch)?
 
@@ -131,9 +131,9 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [SystemAllocator, JemallocAllocator], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [HeapProfiling, NoHeapProfiling], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, heap_profiling_mode, valgrind_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(allocator)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(heap_profiling_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [SystemAllocator, JemallocAllocator], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Profiling, NoProfiling], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, profiling_mode, valgrind_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(allocator)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(profiling_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
@@ -182,10 +182,10 @@ cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, 
                     "RUSTFLAGS=-C debuginfo=2 -C debug-assertions -C overflow-checks=yes -Z sanitizer=address -C link-arg=-lasan",
                 ]
 
-    heap_profiling_env_vars =
-        when heap_profiling_mode is
-            NoHeapProfiling -> []
-            HeapProfiling -> ["RUSTFLAGS=-C debuginfo=2 -C force-frame-pointers=yes -C strip=none"]
+    profiling_env_vars =
+        when profiling_mode is
+            NoProfiling -> []
+            Profiling -> ["RUSTFLAGS=-C debuginfo=2 -C force-frame-pointers=yes -C strip=none"]
 
     valgrind_env_vars =
         when valgrind_mode is
@@ -201,7 +201,7 @@ cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, 
         backend_env_vars
         |> List.concat(linker_env_vars)
         |> List.concat(asan_env_vars)
-        |> List.concat(heap_profiling_env_vars)
+        |> List.concat(profiling_env_vars)
         |> List.concat(valgrind_env_vars)
         |> List.append("cargo")
         |> List.concat(nightly_arg)
