@@ -723,33 +723,63 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Recording commands and rendering surface", engine, {
-            let resource_manager = engine.resource_manager().oread();
-            let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
-            let light_manager = scene.light_manager().oread();
-            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
-            let mut model_instance_manager = scene.model_instance_manager().owrite();
-            let mut renderer = engine.renderer().owrite();
 
-            let command_encoder = renderer.record_synchronization_commands(
+        let resource_manager = engine.resource_manager().oread();
+        let scene = engine.scene().oread();
+        let scene_camera = scene.scene_camera().oread();
+        let light_manager = scene.light_manager().oread();
+        let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+        let mut model_instance_manager = scene.model_instance_manager().owrite();
+        let mut renderer = engine.renderer().owrite();
+
+        let command_encoder = instrument_engine_task!("Recording resource synchronization commands", engine, {
+            renderer.record_resource_synchronization_commands(
                 (**scene_camera).as_ref(),
                 &light_manager,
                 &mut voxel_object_manager,
                 &mut model_instance_manager,
-            );
+            )
+        });
 
-            drop(voxel_object_manager);
-            let model_instance_manager = model_instance_manager.downgrade();
+        drop(voxel_object_manager);
+        let model_instance_manager = model_instance_manager.downgrade();
 
+        instrument_engine_task!("Synchronizing render commands", engine, {
+            renderer.synchronize_render_commands(&resource_manager)
+        })?;
+
+        let (surface_texture_view, surface_texture) = instrument_engine_task!("Preparing rendering", engine, {
+            renderer.prepare_rendering()
+        })?;
+
+        instrument_engine_task!("Rendering surface", engine, {
             renderer.render_surface(
-                command_encoder,
                 &resource_manager,
                 (**scene_camera).as_ref(),
                 &light_manager,
                 &model_instance_manager,
+                command_encoder,
+                surface_texture_view,
+                surface_texture,
                 ctx.user_interface(),
             )
+        })
+    }
+);
+
+define_task!(
+    /// Performs updates that use data from the GPU after rendering. This
+    /// involves fetching timestamps and the average incident luminance.
+    [pub] PerformPostRenderingUpdates,
+    depends_on = [RecordCommandsAndRender],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Performing post-rendering updates", engine, {
+            let mut renderer = engine.renderer().owrite();
+            renderer.load_recorded_timing_results()?;
+            let renderer = renderer.downgrade();
+            renderer.update_exposure()
         })
     }
 );
@@ -822,5 +852,6 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
 
     // Render Pipeline Execution
     task_scheduler.register_task(RecordCommandsAndRender)?;
+    task_scheduler.register_task(PerformPostRenderingUpdates)?;
     task_scheduler.register_task(SaveRequestedScreenshots)
 }

@@ -241,7 +241,7 @@ impl RenderingSystem {
     /// Creates a command encoder and records commands for synchronizing dynamic
     /// GPU resources (resources that benefit from a staging belt). Returns the
     /// command encoder so that it can be passed to [`Self::render_surface`].
-    pub fn record_synchronization_commands(
+    pub fn record_resource_synchronization_commands(
         &mut self,
         scene_camera: Option<&SceneCamera>,
         light_manager: &LightManager,
@@ -299,23 +299,37 @@ impl RenderingSystem {
         command_encoder
     }
 
-    /// Synchronizes and records render commands. After the commands are
-    /// submitted, the surface texture to present (if any) is stored for later
-    /// presentation by calling [`Self::present`].
+    /// Synchronizes the render commands with the current render resources. Must
+    /// be called after [`Self::record_resource_synchronization_commands`].
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - The surface texture to render to can not be obtained.
-    /// - Synchronizing or recording render commands fails.
-    pub fn render_surface(
+    /// Returns an error if synchronization fails due to missing resources.
+    pub fn synchronize_render_commands(
         &mut self,
-        mut command_encoder: wgpu::CommandEncoder,
         resource_manager: &ResourceManager,
-        scene_camera: Option<&SceneCamera>,
-        light_manager: &LightManager,
-        model_instance_manager: &ModelInstanceManager,
-        user_interface: &dyn UserInterface,
     ) -> Result<()> {
+        let render_resource_manager = self.render_resource_manager.oread();
+        let mut shader_manager = self.shader_manager.owrite();
+        self.render_command_manager.sync_with_render_resources(
+            &self.graphics_device,
+            &mut shader_manager,
+            resource_manager,
+            &**render_resource_manager,
+            &self.bind_group_layout_registry,
+        )
+    }
+
+    /// Performs minor preparations for [`Self::render_surface`], including
+    /// swapping render attachments and obtaining the surface texture view. The
+    /// latter may require the function to wait for the next surface texture to
+    /// be ready. This should be called immediately before
+    /// [`Self::render_surface`].
+    ///
+    /// # Errors
+    /// Return an error if obtaining the surface texture fails.
+    pub fn prepare_rendering(
+        &mut self,
+    ) -> Result<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)> {
         self.render_attachment_texture_manager
             .owrite()
             .swap_previous_and_current_attachment_variants(&self.graphics_device);
@@ -324,19 +338,31 @@ impl RenderingSystem {
             .rendering_surface
             .get_texture_view_with_presentable_texture()?;
 
+        Ok((surface_texture_view, surface_texture))
+    }
+
+    /// Records render commands and submits the command encoder. The surface
+    /// texture to present (if any) is stored for later presentation by calling
+    /// [`Self::present`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The surface texture to render to can not be obtained.
+    /// - Recording render commands fails.
+    pub fn render_surface(
+        &mut self,
+        resource_manager: &ResourceManager,
+        scene_camera: Option<&SceneCamera>,
+        light_manager: &LightManager,
+        model_instance_manager: &ModelInstanceManager,
+        mut command_encoder: wgpu::CommandEncoder,
+        surface_texture_view: wgpu::TextureView,
+        surface_texture: Option<wgpu::SurfaceTexture>,
+        user_interface: &dyn UserInterface,
+    ) -> Result<()> {
         let mut timestamp_recorder = self
             .timestamp_query_manager
             .create_timestamp_query_registry();
-
-        let render_resource_manager = self.render_resource_manager.oread();
-
-        self.render_command_manager.sync_with_render_resources(
-            &self.graphics_device,
-            &mut self.shader_manager.owrite(),
-            resource_manager,
-            &**render_resource_manager,
-            &self.bind_group_layout_registry,
-        )?;
 
         self.render_command_manager.record(
             &self.rendering_surface,
@@ -345,7 +371,7 @@ impl RenderingSystem {
             light_manager,
             model_instance_manager,
             resource_manager,
-            &**render_resource_manager,
+            &**self.render_resource_manager.oread(),
             &self.render_attachment_texture_manager.oread(),
             &self.gpu_resource_group_manager.oread(),
             &self.storage_gpu_buffer_manager.oread(),
@@ -355,8 +381,6 @@ impl RenderingSystem {
             &mut timestamp_recorder,
             &mut command_encoder,
         )?;
-
-        drop(render_resource_manager);
 
         user_interface.render(
             &self.graphics_device,
@@ -376,16 +400,27 @@ impl RenderingSystem {
 
         self.surface_texture_to_present = surface_texture;
 
-        self.timestamp_query_manager
-            .load_recorded_timing_results(&self.graphics_device)?;
+        Ok(())
+    }
 
+    /// Loads the timestamps recorded during rendering. Call after
+    /// [`Self::render_surface`]. This method will wait for the GPU to finish
+    /// rendering.
+    pub fn load_recorded_timing_results(&mut self) -> Result<()> {
+        self.timestamp_query_manager
+            .load_recorded_timing_results(&self.graphics_device)
+    }
+
+    /// Updates the exposure based on the current settings and potentially the
+    /// average incident luminance. Call after [`Self::render_surface`]. This
+    /// method will wait for the GPU to finish rendering if it needs the average
+    /// incident luminance.
+    pub fn update_exposure(&self) -> Result<()> {
         let storage_gpu_buffer_manager = self.storage_gpu_buffer_manager.oread();
         let mut postprocessor = self.postprocessor.owrite();
         postprocessor
             .capturing_camera_mut()
-            .update_exposure(&self.graphics_device, &storage_gpu_buffer_manager)?;
-
-        Ok(())
+            .update_exposure(&self.graphics_device, &storage_gpu_buffer_manager)
     }
 
     /// Sets a new width and height for the rendering surface and any textures
