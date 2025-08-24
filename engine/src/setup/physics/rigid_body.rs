@@ -1,8 +1,8 @@
 //! Setup of rigid bodies for new entities.
 
-use crate::resource::ResourceManager;
+use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager};
 use anyhow::{Result, anyhow};
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_mesh::{
     TriangleMeshID,
@@ -13,8 +13,7 @@ use impact_physics::{
     inertia::InertialProperties,
     quantities::Motion,
     rigid_body::{
-        self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager,
-        setup::DynamicRigidBodySubstance,
+        self, DynamicRigidBodyID, KinematicRigidBodyID, setup::DynamicRigidBodySubstance,
     },
 };
 use parking_lot::RwLock;
@@ -24,15 +23,16 @@ use parking_lot::RwLock;
 /// corresponding rigid bodies and adds the [`DynamicRigidBodyID`]s and/or
 /// [`KinematicRigidBodyID`]s to the entities.
 pub fn setup_rigid_bodies_for_new_entities(
-    rigid_body_manager: &RwLock<RigidBodyManager>,
     resource_manager: &RwLock<ResourceManager>,
+    simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     // Make sure entities with a manually created dynamic rigid body get the
     // correct [`ReferenceFrame`] and [`Motion`] components.
     setup!(
         {
-            let rigid_body_manager = rigid_body_manager.read();
+            let simulator = simulator.oread();
+            let rigid_body_manager = simulator.rigid_body_manager().oread();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID,
@@ -52,7 +52,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |mesh: &BoxMesh,
@@ -91,7 +92,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |mesh: &CylinderMesh,
@@ -129,7 +131,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |mesh: &ConeMesh,
@@ -167,7 +170,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |substance: &DynamicRigidBodySubstance,
@@ -206,7 +210,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |substance: &DynamicRigidBodySubstance,
@@ -245,8 +250,9 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
-            let resource_manager = resource_manager.read();
+            let resource_manager = resource_manager.oread();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |mesh_id: &TriangleMeshID,
@@ -289,7 +295,8 @@ pub fn setup_rigid_bodies_for_new_entities(
 
     setup!(
         {
-            let mut rigid_body_manager = rigid_body_manager.write();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |frame: Option<&ReferenceFrame>, motion: &Motion| -> KinematicRigidBodyID {
@@ -303,4 +310,20 @@ pub fn setup_rigid_bodies_for_new_entities(
     );
 
     Ok(())
+}
+
+pub fn remove_rigid_body_for_entity(
+    simulator: &RwLock<PhysicsSimulator>,
+    entity: &EntityEntry<'_>,
+) {
+    if let Some(rigid_body_id) = entity.get_component::<DynamicRigidBodyID>() {
+        let simulator = simulator.oread();
+        let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+        rigid_body_manager.remove_dynamic_rigid_body(*rigid_body_id.access());
+    }
+    if let Some(rigid_body_id) = entity.get_component::<KinematicRigidBodyID>() {
+        let simulator = simulator.oread();
+        let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+        rigid_body_manager.remove_kinematic_rigid_body(*rigid_body_id.access());
+    }
 }

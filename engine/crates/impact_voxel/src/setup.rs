@@ -31,7 +31,6 @@ use impact_scene::{
     model::ModelInstanceManager,
 };
 use nalgebra::Vector3;
-use parking_lot::RwLock;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -735,29 +734,6 @@ pub fn create_model_instance_node_for_voxel_object(
         model_transform,
         flags,
     ))
-}
-
-/// Removes the voxel object with the given [`VoxelObjectID`]
-/// from the [`VoxelObjectManager`].
-pub fn cleanup_voxel_object(
-    voxel_object_manager: &RwLock<VoxelObjectManager>,
-    voxel_object_id: VoxelObjectID,
-) {
-    voxel_object_manager
-        .write()
-        .remove_voxel_object(voxel_object_id);
-}
-
-/// Checks if the given entity has a [`VoxelObjectID`], and if so, removes the
-/// assocated voxel object from the given [`VoxelObjectManager`].
-#[cfg(feature = "ecs")]
-pub fn cleanup_voxel_object_for_removed_entity(
-    voxel_object_manager: &RwLock<VoxelObjectManager>,
-    entity: &impact_ecs::world::EntityEntry<'_>,
-) {
-    if let Some(voxel_object_id) = entity.get_component::<VoxelObjectID>() {
-        cleanup_voxel_object(voxel_object_manager, *voxel_object_id.access());
-    }
 }
 
 fn generate_voxel_object_with_types_shape_and_modifications(

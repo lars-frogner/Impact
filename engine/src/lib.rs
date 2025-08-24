@@ -13,6 +13,7 @@ pub mod game_loop;
 pub mod gizmo;
 pub mod gpu;
 pub mod instrumentation;
+pub mod lock_order;
 pub mod physics;
 pub mod rendering;
 pub mod resource;
@@ -43,6 +44,8 @@ pub use impact_model;
 pub use impact_rendering;
 pub use impact_scene;
 pub use roc_integration;
+
+pub use bumpalo;
 
 #[cfg(feature = "egui")]
 pub use egui;

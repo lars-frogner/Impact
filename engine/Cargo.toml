@@ -168,6 +168,7 @@ arbitrary = [
     "impact_texture/arbitrary",
     "impact_voxel/arbitrary",
 ]
+checked_lock_order = []
 jemalloc = ["dep:tikv-jemallocator"]
 roc_codegen = [
     "impact_containers/roc_codegen",
@@ -249,6 +250,7 @@ tikv-jemallocator = { version = "0.6", optional = true, features = [
 ] }
 nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }
+num-traits = { workspace = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 pollster = "0.4"

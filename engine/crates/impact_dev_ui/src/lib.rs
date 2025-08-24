@@ -14,6 +14,7 @@ use anyhow::Result;
 use impact::{
     egui::{Context, FullOutput, RawInput},
     engine::Engine,
+    lock_order::OrderedRwLock,
     ui,
 };
 use option_panels::{
@@ -70,7 +71,7 @@ impl UserInterface {
 
         engine
             .renderer()
-            .write()
+            .owrite()
             .set_render_pass_timings_enabled(self.config.show_render_pass_timings);
     }
 

@@ -1,6 +1,6 @@
 //! Screen capture.
 
-use crate::rendering::RenderingSystem;
+use crate::{lock_order::OrderedRwLock, rendering::RenderingSystem};
 use allocator_api2::alloc::Allocator;
 use anyhow::Result;
 use impact_geometry::CubemapFace;
@@ -75,7 +75,7 @@ impl ScreenCapturer {
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read();
+            let renderer = renderer.oread();
 
             let surface_texture = match renderer.rendering_surface() {
                 RenderingSurface::Headless(surface) => surface.surface_texture(),
@@ -131,9 +131,8 @@ impl ScreenCapturer {
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read();
-
-            let render_resource_manager = renderer.render_resource_manager().read();
+            let renderer = renderer.oread();
+            let render_resource_manager = renderer.render_resource_manager().oread();
 
             if let Some(light_gpu_resources) = render_resource_manager.light() {
                 for (light_idx, texture) in light_gpu_resources
@@ -184,9 +183,8 @@ impl ScreenCapturer {
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let renderer = renderer.read();
-
-            let render_resource_manager = renderer.render_resource_manager().read();
+            let renderer = renderer.oread();
+            let render_resource_manager = renderer.render_resource_manager().oread();
 
             if let Some(light_gpu_resources) = render_resource_manager.light() {
                 for (light_idx, texture) in light_gpu_resources

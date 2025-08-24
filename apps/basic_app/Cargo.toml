@@ -106,6 +106,7 @@ license = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [features]
+checked_lock_order = ["impact/checked_lock_order"]
 fuzzing = [
     "dep:arbitrary",
     "dep:rand",

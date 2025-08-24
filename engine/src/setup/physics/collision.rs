@@ -1,6 +1,7 @@
 //! Setup of collidables for new entities.
 
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ModelTransform;
 use impact_physics::{
     collision::{
@@ -11,7 +12,7 @@ use impact_physics::{
 };
 use impact_voxel::{
     VoxelObjectID,
-    collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
+    collidable::{LocalCollidable, setup::VoxelCollidable},
 };
 use parking_lot::RwLock;
 
@@ -19,12 +20,13 @@ use parking_lot::RwLock;
 /// representing a collidable, and if so, creates the corresponding collidables
 /// and adds the [`CollidableID`]s to the entity.
 pub fn setup_collidables_for_new_entities(
-    collision_world: &RwLock<CollisionWorld>,
+    simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(
         {
-            let mut collision_world = collision_world.write();
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
         },
         components,
         |spherical_collidable: &SphericalCollidable,
@@ -41,7 +43,8 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write();
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
         },
         components,
         |spherical_collidable: &SphericalCollidable,
@@ -58,7 +61,8 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write();
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
         },
         components,
         |planar_collidable: &PlanarCollidable,
@@ -75,7 +79,8 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write();
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
         },
         components,
         |planar_collidable: &PlanarCollidable,
@@ -92,7 +97,8 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write();
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
         },
         components,
         |voxel_collidable: &VoxelCollidable,
@@ -112,7 +118,8 @@ pub fn setup_collidables_for_new_entities(
 
     setup!(
         {
-            let mut collision_world = collision_world.write();
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
         },
         components,
         |voxel_collidable: &VoxelCollidable,
@@ -131,4 +138,15 @@ pub fn setup_collidables_for_new_entities(
             )
         }
     );
+}
+
+pub fn remove_collidable_for_entity(
+    simulator: &RwLock<PhysicsSimulator>,
+    entity: &EntityEntry<'_>,
+) {
+    if let Some(collidable_id) = entity.get_component::<CollidableID>() {
+        let simulator = simulator.oread();
+        let mut collision_world = simulator.collision_world().owrite();
+        collision_world.remove_collidable(*collidable_id.access());
+    }
 }

@@ -1,9 +1,9 @@
 //! Setup of driven motion for new entities.
 
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_physics::{
     driven_motion::{
-        MotionDriverManager,
         circular::CircularTrajectoryDriverID,
         constant_acceleration::ConstantAccelerationTrajectoryDriverID,
         constant_rotation::ConstantRotationDriverID,
@@ -19,12 +19,13 @@ use impact_physics::{
 use parking_lot::RwLock;
 
 pub fn setup_driven_motion_for_new_entities(
-    motion_driver_manager: &RwLock<MotionDriverManager>,
+    simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
 ) {
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write();
+            let simulator = simulator.oread();
+            let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -40,7 +41,8 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write();
+            let simulator = simulator.oread();
+            let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -56,7 +58,8 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write();
+            let simulator = simulator.oread();
+            let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -68,7 +71,8 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write();
+            let simulator = simulator.oread();
+            let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -84,7 +88,8 @@ pub fn setup_driven_motion_for_new_entities(
 
     setup!(
         {
-            let mut motion_driver_manager = motion_driver_manager.write();
+            let simulator = simulator.oread();
+            let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         components,
         |rigid_body_id: &KinematicRigidBodyID,
@@ -93,4 +98,45 @@ pub fn setup_driven_motion_for_new_entities(
             setup::setup_orbital_trajectory(&mut motion_driver_manager, *rigid_body_id, *trajectory)
         }
     );
+}
+
+pub fn remove_motion_drivers_for_entity(
+    simulator: &RwLock<PhysicsSimulator>,
+    entity: &EntityEntry<'_>,
+) {
+    if let Some(driver_id) = entity.get_component::<CircularTrajectoryDriverID>() {
+        let simulator = simulator.oread();
+        let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
+        motion_driver_manager
+            .circular_trajectories_mut()
+            .remove_driver(*driver_id.access());
+    }
+    if let Some(driver_id) = entity.get_component::<ConstantAccelerationTrajectoryDriverID>() {
+        let simulator = simulator.oread();
+        let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
+        motion_driver_manager
+            .constant_acceleration_trajectories_mut()
+            .remove_driver(*driver_id.access());
+    }
+    if let Some(driver_id) = entity.get_component::<ConstantRotationDriverID>() {
+        let simulator = simulator.oread();
+        let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
+        motion_driver_manager
+            .constant_rotations_mut()
+            .remove_driver(*driver_id.access());
+    }
+    if let Some(driver_id) = entity.get_component::<HarmonicOscillatorTrajectoryDriverID>() {
+        let simulator = simulator.oread();
+        let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
+        motion_driver_manager
+            .harmonic_oscillator_trajectories_mut()
+            .remove_driver(*driver_id.access());
+    }
+    if let Some(driver_id) = entity.get_component::<OrbitalTrajectoryDriverID>() {
+        let simulator = simulator.oread();
+        let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
+        motion_driver_manager
+            .orbital_trajectories_mut()
+            .remove_driver(*driver_id.access());
+    }
 }

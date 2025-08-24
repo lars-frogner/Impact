@@ -1,6 +1,6 @@
 //! Setup of meshes for new entities.
 
-use crate::resource::ResourceManager;
+use crate::{lock_order::OrderedRwLock, resource::ResourceManager};
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_material::MaterialID;
@@ -24,7 +24,7 @@ pub fn setup_meshes_for_new_entities(
 ) -> Result<()> {
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |rectangle_mesh: &RectangleMesh,
@@ -41,7 +41,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |box_mesh: &BoxMesh,
@@ -58,7 +58,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |cylinder_mesh: &CylinderMesh,
@@ -75,7 +75,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |cone_mesh: &ConeMesh,
@@ -92,7 +92,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |circular_frustum_mesh: &CircularFrustumMesh,
@@ -109,7 +109,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |sphere_mesh: &SphereMesh,
@@ -126,7 +126,7 @@ pub fn setup_meshes_for_new_entities(
 
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |hemisphere_mesh: &HemisphereMesh,
@@ -175,7 +175,7 @@ pub fn generate_missing_vertex_properties_for_new_entity_meshes(
 ) {
     setup!(
         {
-            let mut resource_manager = resource_manager.write();
+            let mut resource_manager = resource_manager.owrite();
         },
         components,
         |mesh_id: &TriangleMeshID, material_id: &MaterialID| {

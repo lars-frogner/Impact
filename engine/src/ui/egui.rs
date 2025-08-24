@@ -3,7 +3,10 @@
 mod rendering;
 mod window;
 
-use crate::{application::Application, engine::Engine, ui::UserInterface, window::Window};
+use crate::{
+    application::Application, engine::Engine, lock_order::OrderedRwLock, ui::UserInterface,
+    window::Window,
+};
 use anyhow::Result;
 use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, wgpu};
 use impact_rendering::surface::RenderingSurface;
@@ -42,7 +45,7 @@ impl EguiUserInterface {
 
         let window_integration = EguiWindowIntegration::new(egui_ctx.clone(), &window);
 
-        let rendering_system = engine.renderer().read();
+        let rendering_system = engine.renderer().oread();
         let renderer = EguiRenderer::new(
             rendering_system.graphics_device(),
             rendering_system.rendering_surface(),

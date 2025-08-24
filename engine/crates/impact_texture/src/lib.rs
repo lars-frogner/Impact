@@ -470,7 +470,7 @@ where
 ///
 /// See also
 /// - [`create_texture_from_image`],
-/// - [`create_texture_array_from_images`]
+/// - [`create_texture_array_from_image_sources`]
 /// - [`create_texture_from_lookup_table`](lookup_table::create_texture_from_lookup_table).
 #[allow(unused_variables)]
 pub(crate) fn create_texture_from_info<A>(

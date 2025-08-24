@@ -13,7 +13,8 @@ use crate::{
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
-    physics::PhysicsSimulator,
+    lock_order::OrderedRwLock,
+    physics::{PhysicsConfig, PhysicsSimulator},
     rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
     resource::{ResourceConfig, ResourceManager},
     scene::Scene,
@@ -27,12 +28,11 @@ use impact_ecs::{
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
-use impact_physics::PhysicsConfig;
 use impact_scene::model::ModelInstanceManager;
 use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
-use parking_lot::{Mutex, RwLock, RwLockReadGuard};
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Debug,
@@ -51,19 +51,19 @@ pub struct Engine {
     app: Arc<dyn Application>,
     graphics_device: Arc<GraphicsDevice>,
     component_metadata_registry: ComponentMetadataRegistry,
-    ecs_world: RwLock<ECSWorld>,
+    game_loop_controller: Mutex<GameLoopController>,
     entity_stager: Mutex<EntityStager>,
-    renderer: RwLock<RenderingSystem>,
+    ecs_world: RwLock<ECSWorld>,
     resource_manager: RwLock<ResourceManager>,
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
-    gizmo_manager: RwLock<GizmoManager>,
+    renderer: RwLock<RenderingSystem>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
+    gizmo_manager: RwLock<GizmoManager>,
+    metrics: RwLock<EngineMetrics>,
     screen_capturer: ScreenCapturer,
     task_timer: TaskTimer,
-    metrics: RwLock<EngineMetrics>,
-    game_loop_controller: Mutex<GameLoopController>,
     controls_enabled: AtomicBool,
     shutdown_requested: AtomicBool,
 }
@@ -71,15 +71,15 @@ pub struct Engine {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EngineConfig {
-    pub resources: ResourceConfig,
-    pub rendering: RenderingConfig,
-    pub physics: PhysicsConfig,
-    pub voxel: VoxelConfig,
-    pub controller: ControllerConfig,
+    pub game_loop: GameLoopConfig,
     pub ecs: ECSConfig,
+    pub resources: ResourceConfig,
+    pub voxel: VoxelConfig,
+    pub physics: PhysicsConfig,
+    pub rendering: RenderingConfig,
+    pub controller: ControllerConfig,
     pub gizmo: GizmoConfig,
     pub instrumentation: InstrumentationConfig,
-    pub game_loop: GameLoopConfig,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -152,19 +152,19 @@ impl Engine {
             app,
             graphics_device,
             component_metadata_registry,
-            ecs_world: RwLock::new(ecs_world),
+            game_loop_controller: Mutex::new(game_loop_controller),
             entity_stager: Mutex::new(EntityStager::new()),
-            renderer: RwLock::new(renderer),
+            ecs_world: RwLock::new(ecs_world),
             resource_manager: RwLock::new(resource_manager),
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
-            gizmo_manager: RwLock::new(gizmo_manager),
+            renderer: RwLock::new(renderer),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
+            gizmo_manager: RwLock::new(gizmo_manager),
+            metrics: RwLock::new(EngineMetrics::default()),
             screen_capturer: ScreenCapturer::new(),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
-            metrics: RwLock::new(EngineMetrics::default()),
-            game_loop_controller: Mutex::new(game_loop_controller),
             controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
         };
@@ -187,10 +187,10 @@ impl Engine {
         &self.component_metadata_registry
     }
 
-    /// Returns a reference to the ECS [`World`](impact_ecs::world::World),
-    /// guarded by a [`RwLock`].
-    pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
-        &self.ecs_world
+    /// Returns a reference to the [`GameLoopController`], guarded by a
+    /// [`Mutex`].
+    pub fn game_loop_controller(&self) -> &Mutex<GameLoopController> {
+        &self.game_loop_controller
     }
 
     /// Returns a reference to the [`EntityStager`], guarded by a [`Mutex`].
@@ -198,9 +198,10 @@ impl Engine {
         &self.entity_stager
     }
 
-    /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
-    pub fn renderer(&self) -> &RwLock<RenderingSystem> {
-        &self.renderer
+    /// Returns a reference to the ECS [`World`](impact_ecs::world::World),
+    /// guarded by a [`RwLock`].
+    pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
+        &self.ecs_world
     }
 
     /// Returns a reference to the [`ResourceManager`], guarded by a [`RwLock`].
@@ -219,15 +220,25 @@ impl Engine {
         &self.simulator
     }
 
-    /// Returns a reference to the [`GizmoManager`], guarded by a [`RwLock`].
-    pub fn gizmo_manager(&self) -> &RwLock<GizmoManager> {
-        &self.gizmo_manager
+    /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
+    pub fn renderer(&self) -> &RwLock<RenderingSystem> {
+        &self.renderer
     }
 
     /// Returns a reference to the [`MotionController`], guarded by a [`Mutex`],
     /// or [`None`] if there is no motion controller.
     pub fn motion_controller(&self) -> Option<&Mutex<Box<dyn MotionController>>> {
         self.motion_controller.as_ref()
+    }
+
+    /// Returns a reference to the [`GizmoManager`], guarded by a [`RwLock`].
+    pub fn gizmo_manager(&self) -> &RwLock<GizmoManager> {
+        &self.gizmo_manager
+    }
+
+    /// Returns the current [`EngineMetrics`], guarded by a [`RwLock`].
+    pub fn metrics(&self) -> &RwLock<EngineMetrics> {
+        &self.metrics
     }
 
     /// Returns a reference to the [`ScreenCapturer`].
@@ -238,17 +249,6 @@ impl Engine {
     /// Returns a reference to the [`TaskTimer`].
     pub fn task_timer(&self) -> &TaskTimer {
         &self.task_timer
-    }
-
-    /// Returns the current [`EngineMetrics`], wrapped in a read guard.
-    pub fn metrics(&self) -> RwLockReadGuard<'_, EngineMetrics> {
-        self.metrics.read()
-    }
-
-    /// Returns a reference to the [`GameLoopController`], guarded by a
-    /// [`Mutex`].
-    pub fn game_loop_controller(&self) -> &Mutex<GameLoopController> {
-        &self.game_loop_controller
     }
 
     /// Captures and saves a screenshot to the specified path, or, if not
@@ -281,7 +281,7 @@ impl Engine {
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
-        let mut renderer = self.renderer().write();
+        let mut renderer = self.renderer().owrite();
 
         renderer.resize_rendering_surface(new_width, new_height);
 
@@ -290,13 +290,13 @@ impl Engine {
         drop(renderer);
 
         self.scene()
-            .read()
+            .oread()
             .handle_aspect_ratio_changed(new_aspect_ratio);
     }
 
     pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
         self.renderer()
-            .write()
+            .owrite()
             .update_pixels_per_point(pixels_per_point);
     }
 
@@ -314,7 +314,7 @@ impl Engine {
 
             let (_, window_height) = self
                 .renderer
-                .read()
+                .oread()
                 .rendering_surface()
                 .surface_dimensions();
 
@@ -329,21 +329,32 @@ impl Engine {
         if !self.controls_enabled() {
             return;
         }
-        let ecs_world = self.ecs_world().read();
-        let simulator = self.simulator.read();
-        let mut rigid_body_manager = simulator.rigid_body_manager().write();
-        let time_step_duration = simulator.scaled_time_step_duration();
 
         if let Some(orientation_controller) = &self.orientation_controller {
+            let ecs_world = self.ecs_world.oread();
+            let simulator = self.simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+            let time_step_duration = simulator.scaled_time_step_duration();
+
             impact_controller::systems::update_controlled_entity_angular_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
                 orientation_controller.lock().as_mut(),
                 time_step_duration,
             );
-        }
 
-        if let Some(motion_controller) = &self.motion_controller {
+            if let Some(motion_controller) = &self.motion_controller {
+                impact_controller::systems::update_controlled_entity_velocities(
+                    &ecs_world,
+                    &mut rigid_body_manager,
+                    motion_controller.lock().as_ref(),
+                );
+            }
+        } else if let Some(motion_controller) = &self.motion_controller {
+            let ecs_world = self.ecs_world.oread();
+            let simulator = self.simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+
             impact_controller::systems::update_controlled_entity_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
@@ -355,9 +366,9 @@ impl Engine {
     /// Resets the scene, ECS world and physics simulator to the initial empty
     /// state and sets the simulation time to zero.
     pub fn reset_world(&self) {
-        self.ecs_world.write().remove_all_entities();
-        self.scene.read().clear();
-        self.simulator.write().reset();
+        self.ecs_world.owrite().remove_all_entities();
+        self.scene.oread().clear();
+        self.simulator.owrite().reset();
     }
 
     pub fn controls_enabled(&self) -> bool {
@@ -368,9 +379,9 @@ impl Engine {
         self.controls_enabled.store(enabled, Ordering::Relaxed);
 
         if !enabled {
-            let ecs_world = self.ecs_world.read();
-            let simulator = self.simulator.read();
-            let mut rigid_body_manager = simulator.rigid_body_manager().write();
+            let ecs_world = self.ecs_world.oread();
+            let simulator = self.simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
 
             if let Some(motion_controller) = &self.motion_controller {
                 let mut motion_controller = motion_controller.lock();
@@ -398,15 +409,17 @@ impl Engine {
     }
 
     pub fn gather_metrics_after_completed_frame(&self, smooth_frame_duration: Duration) {
-        let mut metrics = self.metrics.write();
+        let mut metrics = self.metrics.owrite();
+
         metrics.current_smooth_frame_duration = smooth_frame_duration;
 
         self.task_timer
             .report_task_execution_times(&mut metrics.last_task_execution_times);
 
-        self.simulator()
-            .write()
-            .update_time_step_duration(&smooth_frame_duration);
+        drop(metrics);
+
+        let mut simulator = self.simulator.owrite();
+        simulator.update_time_step_duration(&smooth_frame_duration);
     }
 
     pub fn shutdown_requested(&self) -> bool {
@@ -424,7 +437,7 @@ impl Engine {
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
-        self.renderer.read().handle_task_errors(task_errors);
+        self.renderer.oread().handle_task_errors(task_errors);
     }
 
     fn with_component_mut<C: Component, R>(
@@ -432,7 +445,7 @@ impl Engine {
         entity_id: EntityID,
         f: impl FnOnce(&mut C) -> Result<R>,
     ) -> Result<R> {
-        let ecs_world = self.ecs_world.read();
+        let ecs_world = self.ecs_world.oread();
 
         let entity_entry = ecs_world
             .get_entity(entity_id)

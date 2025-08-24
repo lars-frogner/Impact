@@ -1,19 +1,21 @@
 //! Management of voxels for entities.
 
-use crate::resource::ResourceManager;
+use crate::{
+    lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
+};
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
     quantities::Motion,
-    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
+    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::SceneGraph, model::ModelInstanceManager, setup::Uncullable,
+    setup::Uncullable,
 };
 use impact_voxel::{
-    VoxelObjectID, VoxelObjectManager,
+    VoxelObjectID,
     setup::{
         self, DynamicVoxels, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
         MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelGradientNoisePattern,
@@ -24,15 +26,16 @@ use parking_lot::RwLock;
 
 pub fn setup_voxel_objects_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    rigid_body_manager: &RwLock<RigidBodyManager>,
-    voxel_object_manager: &RwLock<VoxelObjectManager>,
+    scene: &RwLock<Scene>,
+    simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     // Make sure entities that have manually created voxel object and physics
     // context get a model transform component with the center of mass offset
     setup!(
         {
-            let voxel_object_manager = voxel_object_manager.read();
+            let scene = scene.oread();
+            let voxel_object_manager = scene.voxel_object_manager().oread();
         },
         components,
         |voxel_object_id: &VoxelObjectID,
@@ -55,8 +58,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_box: &VoxelBox,
@@ -80,8 +84,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_sphere: &VoxelSphere,
@@ -105,8 +110,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
@@ -130,8 +136,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePattern,
@@ -155,8 +162,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_box: &VoxelBox,
@@ -180,8 +188,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_sphere: &VoxelSphere,
@@ -205,8 +214,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
@@ -230,8 +240,9 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
         |voxel_noise_pattern: &VoxelGradientNoisePattern,
@@ -255,9 +266,11 @@ pub fn setup_voxel_objects_for_new_entities(
 
     setup!(
         {
-            let resource_manager = resource_manager.read();
-            let mut rigid_body_manager = rigid_body_manager.write();
-            let mut voxel_object_manager = voxel_object_manager.write();
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
         |voxel_object_id: &VoxelObjectID,
@@ -283,16 +296,15 @@ pub fn setup_voxel_objects_for_new_entities(
 }
 
 pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
-    voxel_object_manager: &RwLock<VoxelObjectManager>,
-    model_instance_manager: &RwLock<ModelInstanceManager>,
-    scene_graph: &RwLock<SceneGraph>,
+    scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
         {
-            let voxel_object_manager = voxel_object_manager.read();
-            let mut model_instance_manager = model_instance_manager.write();
-            let mut scene_graph = scene_graph.write();
+            let scene = scene.oread();
+            let voxel_object_manager = scene.voxel_object_manager().oread();
+            let mut model_instance_manager = scene.model_instance_manager().owrite();
+            let mut scene_graph = scene.scene_graph().owrite();
         },
         components,
         |voxel_object_id: &VoxelObjectID,
@@ -319,4 +331,15 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
         },
         ![SceneGraphModelInstanceNodeHandle]
     )
+}
+
+pub fn cleanup_voxel_object_for_removed_entity(
+    scene: &RwLock<Scene>,
+    entity: &impact_ecs::world::EntityEntry<'_>,
+) {
+    if let Some(voxel_object_id) = entity.get_component::<VoxelObjectID>() {
+        let scene = scene.oread();
+        let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+        voxel_object_manager.remove_voxel_object(*voxel_object_id.access());
+    }
 }

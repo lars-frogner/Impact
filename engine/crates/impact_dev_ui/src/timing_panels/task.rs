@@ -4,6 +4,7 @@ use egui_extras::{Column, TableBuilder};
 use impact::{
     egui::{Context, TextStyle, TextWrapMode},
     engine::Engine,
+    lock_order::OrderedRwLock,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -54,7 +55,7 @@ impl TaskTimingPanel {
                         });
                     })
                     .body(|mut body| {
-                        for (id, duration) in &engine.metrics().last_task_execution_times {
+                        for (id, duration) in &engine.metrics().oread().last_task_execution_times {
                             body.row(row_height, |mut row| {
                                 row.col(|ui| {
                                     ui.label(id.string());

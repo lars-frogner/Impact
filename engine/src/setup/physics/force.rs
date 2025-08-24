@@ -1,14 +1,12 @@
 //! Setup of forces for new entities.
 
-use crate::resource::ResourceManager;
+use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager};
 use anyhow::{Result, anyhow};
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ModelTransform;
 use impact_mesh::TriangleMeshID;
 use impact_physics::{
-    anchor::AnchorManager,
     force::{
-        ForceGeneratorManager,
         constant_acceleration::ConstantAccelerationGeneratorID,
         detailed_drag::DetailedDragForceGeneratorID,
         local_force::LocalForceGeneratorID,
@@ -23,14 +21,14 @@ use impact_physics::{
 use parking_lot::RwLock;
 
 pub fn setup_forces_for_new_entities(
-    anchor_manager: &RwLock<AnchorManager>,
-    force_generator_manager: &RwLock<ForceGeneratorManager>,
     resource_manager: &RwLock<ResourceManager>,
+    simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write();
+            let simulator = simulator.oread();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID,
@@ -46,8 +44,9 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut anchor_manager = anchor_manager.write();
-            let mut force_generator_manager = force_generator_manager.write();
+            let simulator = simulator.oread();
+            let mut anchor_manager = simulator.anchor_manager().owrite();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
         |rigid_body_id: &DynamicRigidBodyID,
@@ -66,8 +65,9 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut anchor_manager = anchor_manager.write();
-            let mut force_generator_manager = force_generator_manager.write();
+            let simulator = simulator.oread();
+            let mut anchor_manager = simulator.anchor_manager().owrite();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
         |properties: &DynamicDynamicSpringForceProperties,
@@ -84,8 +84,9 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut anchor_manager = anchor_manager.write();
-            let mut force_generator_manager = force_generator_manager.write();
+            let simulator = simulator.oread();
+            let mut anchor_manager = simulator.anchor_manager().owrite();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
         |properties: &DynamicKinematicSpringForceProperties,
@@ -102,8 +103,9 @@ pub fn setup_forces_for_new_entities(
 
     setup!(
         {
-            let mut force_generator_manager = force_generator_manager.write();
-            let resource_manager = resource_manager.read();
+            let resource_manager = resource_manager.oread();
+            let simulator = simulator.oread();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
         |drag_properties: &DetailedDragProperties,
@@ -131,4 +133,46 @@ pub fn setup_forces_for_new_entities(
     )?;
 
     Ok(())
+}
+
+pub fn remove_force_generators_for_entity(
+    simulator: &RwLock<PhysicsSimulator>,
+    entity: &EntityEntry<'_>,
+) {
+    if let Some(generator_id) = entity.get_component::<ConstantAccelerationGeneratorID>() {
+        let simulator = simulator.oread();
+        let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        force_generator_manager
+            .constant_accelerations_mut()
+            .remove_generator(*generator_id.access());
+    }
+    if let Some(generator_id) = entity.get_component::<LocalForceGeneratorID>() {
+        let simulator = simulator.oread();
+        let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        force_generator_manager
+            .local_forces_mut()
+            .remove_generator(*generator_id.access());
+    }
+    if let Some(generator_id) = entity.get_component::<DynamicDynamicSpringForceGeneratorID>() {
+        let simulator = simulator.oread();
+        let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        force_generator_manager
+            .dynamic_dynamic_spring_forces_mut()
+            .remove_generator(*generator_id.access());
+    }
+    if let Some(generator_id) = entity.get_component::<DynamicKinematicSpringForceGeneratorID>() {
+        let simulator = simulator.oread();
+        let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        force_generator_manager
+            .dynamic_kinematic_spring_forces_mut()
+            .remove_generator(*generator_id.access());
+    }
+    if let Some(generator_id) = entity.get_component::<DetailedDragForceGeneratorID>() {
+        let simulator = simulator.oread();
+        let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        force_generator_manager
+            .detailed_drag_forces_mut()
+            .generators_mut()
+            .remove_generator(*generator_id.access());
+    }
 }

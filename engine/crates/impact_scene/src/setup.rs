@@ -13,7 +13,6 @@ use impact_model::transform::{
     InstanceModelLightTransform, InstanceModelViewTransformWithPrevious,
 };
 use nalgebra::{Isometry3, Similarity3};
-use parking_lot::RwLock;
 use tinyvec::TinyVec;
 
 /// A parent entity.
@@ -29,7 +28,7 @@ pub struct Parent {
     pub entity_id: impact_ecs::world::EntityID,
 }
 
-/// The entity has a group node in the [`SceneGraph`](crate::graph::SceneGraph).
+/// The entity has a group node in the [`SceneGraph`].
 ///
 /// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 /// purpose is to aid in constructing a `SceneGraphGroupNodeHandle` component
@@ -40,8 +39,7 @@ pub struct Parent {
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
 pub struct SceneGraphGroup;
 
-/// The entity should never be frustum culled in the
-/// [`SceneGraph`](crate::graph::SceneGraph).
+/// The entity should never be frustum culled in the [`SceneGraph`].
 ///
 /// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 /// purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`
@@ -175,25 +173,10 @@ pub fn setup_scene_graph_model_instance_node(
 }
 
 pub fn remove_scene_graph_model_instance_node(
-    model_instance_manager: &RwLock<ModelInstanceManager>,
-    scene_graph: &RwLock<SceneGraph>,
+    model_instance_manager: &mut ModelInstanceManager,
+    scene_graph: &mut SceneGraph,
     model_instance_node: &SceneGraphModelInstanceNodeHandle,
 ) {
-    let model_id = scene_graph
-        .write()
-        .remove_model_instance_node(model_instance_node.id);
-    model_instance_manager
-        .write()
-        .unregister_instance(&model_id);
-}
-
-#[cfg(feature = "ecs")]
-pub fn remove_scene_graph_model_instance_node_for_entity(
-    model_instance_manager: &RwLock<ModelInstanceManager>,
-    scene_graph: &RwLock<SceneGraph>,
-    entity: &impact_ecs::world::EntityEntry<'_>,
-) {
-    if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeHandle>() {
-        remove_scene_graph_model_instance_node(model_instance_manager, scene_graph, node.access());
-    }
+    let model_id = scene_graph.remove_model_instance_node(model_instance_node.id);
+    model_instance_manager.unregister_instance(&model_id);
 }
