@@ -6,7 +6,7 @@ LOG_LEVEL=${1:-info}
 
 OUTPUT_DIR=$OUTPUT_DIR \
 RUST_ALLOCATOR=jemalloc \
-HEAP_PROFILING=1 \
+PROFILING=1 \
 roc build.roc
 
 RUST_LOG="$LOG_LEVEL,calloop=error,naga=error,wgpu_core=error,wgpu_hal=error" \

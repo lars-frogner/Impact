@@ -5,7 +5,7 @@ OUTPUT_DIR=./dist/release
 LOG_LEVEL=${1:-info}
 
 OUTPUT_DIR=$OUTPUT_DIR \
-HEAP_PROFILING=1 \
+PROFILING=1 \
 VALGRIND=1 \
 roc build.roc
 
