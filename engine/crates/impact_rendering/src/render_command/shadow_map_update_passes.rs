@@ -3,7 +3,7 @@
 use crate::{
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::{
         omnidirectional_light_shadow_map::OmnidirectionalLightShadowMapShaderTemplate,
         unidirectional_light_shadow_map::UnidirectionalLightShadowMapShaderTemplate,
@@ -21,7 +21,6 @@ use impact_light::{
     gpu_resource::LightGPUResources,
     shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
 };
-use impact_material::MaterialTextureBindingLocations;
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, gpu_resource::InstanceFeatureGPUBuffer,
@@ -115,18 +114,13 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        self.sync_models_with_render_resources(resource_registries, gpu_resources);
+        self.sync_models_with_render_resources(gpu_resources);
         self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
     }
 
-    fn sync_models_with_render_resources(
-        &mut self,
-        resource_registries: &impl BasicResourceRegistries,
-        gpu_resources: &impl BasicGPUResources,
-    ) {
+    fn sync_models_with_render_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
         fn has_features(buffers: &[InstanceFeatureGPUBuffer]) -> bool {
@@ -151,17 +145,13 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             if !has_features(instance_feature_buffers) {
                 continue;
             }
-            let Some(material) = resource_registries.material().get(model_id.material_id()) else {
+            let Some(material) = gpu_resources.material().get(model_id.material_id()) else {
                 continue;
             };
-            let Some(material_template) = resource_registries
-                .material_template()
-                .get(material.template_id)
-            else {
-                continue;
-            };
-            if let MaterialTextureBindingLocations::Physical(_) =
-                material_template.texture_binding_locations
+            if material.is_physical()
+                && gpu_resources
+                    .material_template()
+                    .contains(material.template_id)
             {
                 self.models.insert(*model_id);
             }
@@ -245,7 +235,6 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
     pub fn record<R>(
         &self,
-        light_manager: &LightManager,
         gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
@@ -278,16 +267,14 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let mut pass_count = 0;
         let mut draw_call_count = 0;
 
-        for (light_idx, (&light_id, shadow_map_texture)) in light_gpu_resources
-            .shadowable_omnidirectional_light_ids()
+        for (light_idx, (omnidirectional_light, shadow_map_texture)) in light_gpu_resources
+            .shadowable_omnidirectional_light_metadata()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
-            let omnidirectional_light = light_manager.shadowable_omnidirectional_light(light_id);
-
             if omnidirectional_light
-                .flags()
+                .flags
                 .contains(LightFlags::IS_DISABLED)
             {
                 continue;
@@ -304,8 +291,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 // Offset the light's buffer range ID with the face index to get the index for
                 // the range of transforms for the specific cubemap face
                 let instance_range_id =
-                    impact_scene::light::light_id_to_instance_feature_buffer_range_id(light_id)
-                        + cubemap_face.as_idx_u32();
+                    impact_scene::light::light_id_to_instance_feature_buffer_range_id(
+                        omnidirectional_light.id,
+                    ) + cubemap_face.as_idx_u32();
 
                 if shadow_mapping_enabled {
                     record_additional_commands_before_face_update(
@@ -483,18 +471,13 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) -> Result<()> {
-        self.sync_models_with_render_resources(resource_registries, gpu_resources);
+        self.sync_models_with_render_resources(gpu_resources);
         self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
     }
 
-    fn sync_models_with_render_resources(
-        &mut self,
-        resource_registries: &impl BasicResourceRegistries,
-        gpu_resources: &impl BasicGPUResources,
-    ) {
+    fn sync_models_with_render_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
         fn has_features(buffers: &[InstanceFeatureGPUBuffer]) -> bool {
@@ -519,17 +502,13 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             if !has_features(instance_feature_buffers) {
                 continue;
             }
-            let Some(material) = resource_registries.material().get(model_id.material_id()) else {
+            let Some(material) = gpu_resources.material().get(model_id.material_id()) else {
                 continue;
             };
-            let Some(material_template) = resource_registries
-                .material_template()
-                .get(material.template_id)
-            else {
-                continue;
-            };
-            if let MaterialTextureBindingLocations::Physical(_) =
-                material_template.texture_binding_locations
+            if material.is_physical()
+                && gpu_resources
+                    .material_template()
+                    .contains(material.template_id)
             {
                 self.models.insert(*model_id);
             }
@@ -625,7 +604,6 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
     pub fn record<R>(
         &self,
-        light_manager: &LightManager,
         gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
@@ -658,18 +636,13 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let mut pass_count = 0;
         let mut draw_call_count = 0;
 
-        for (light_idx, (&light_id, shadow_map_texture)) in light_gpu_resources
-            .shadowable_unidirectional_light_ids()
+        for (light_idx, (unidirectional_light, shadow_map_texture)) in light_gpu_resources
+            .shadowable_unidirectional_light_metadata()
             .iter()
             .zip(shadow_map_textures)
             .enumerate()
         {
-            let unidirectional_light = light_manager.shadowable_unidirectional_light(light_id);
-
-            if unidirectional_light
-                .flags()
-                .contains(LightFlags::IS_DISABLED)
-            {
+            if unidirectional_light.flags.contains(LightFlags::IS_DISABLED) {
                 continue;
             }
 
@@ -681,8 +654,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 // Offset the light's buffer range ID with the cascade index to get the index
                 // for the range of transforms for the specific cascade
                 let instance_range_id =
-                    impact_scene::light::light_id_to_instance_feature_buffer_range_id(light_id)
-                        + cascade_idx;
+                    impact_scene::light::light_id_to_instance_feature_buffer_range_id(
+                        unidirectional_light.id,
+                    ) + cascade_idx;
 
                 let cascade_frustum = unidirectional_light
                     .create_light_space_orthographic_obb_for_cascade(cascade_idx);

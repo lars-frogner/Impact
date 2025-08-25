@@ -145,7 +145,7 @@ impl DynamicRangeCompressionRenderCommands {
             ToneMappingMethod::ACES => {
                 self.aces_tone_mapping_pass.record(
                     rendering_surface,
-                    surface_texture_view,
+                    Some(surface_texture_view),
                     gpu_resources,
                     render_attachment_texture_manager,
                     gpu_resource_group_manager,
@@ -158,7 +158,7 @@ impl DynamicRangeCompressionRenderCommands {
             ToneMappingMethod::KhronosPBRNeutral => {
                 self.khronos_pbr_neutral_tone_mapping_pass.record(
                     rendering_surface,
-                    surface_texture_view,
+                    Some(surface_texture_view),
                     gpu_resources,
                     render_attachment_texture_manager,
                     gpu_resource_group_manager,
@@ -171,7 +171,7 @@ impl DynamicRangeCompressionRenderCommands {
             ToneMappingMethod::None => {
                 self.no_tone_mapping_pass.record(
                     rendering_surface,
-                    surface_texture_view,
+                    Some(surface_texture_view),
                     gpu_resources,
                     render_attachment_texture_manager,
                     gpu_resource_group_manager,

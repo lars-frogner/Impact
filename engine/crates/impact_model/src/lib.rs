@@ -1418,6 +1418,13 @@ impl InstanceFeatureBufferRangeMap {
     pub const INITIAL_RANGE_ID: InstanceFeatureBufferRangeID =
         InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
 
+    pub fn empty() -> Self {
+        Self {
+            range_start_indices: Vec::new(),
+            range_id_index_map: HashMap::default(),
+        }
+    }
+
     fn from_manager(manager: &InstanceFeatureBufferRangeManager) -> Self {
         let range_start_indices =
             manager.range_start_indices[..manager.range_id_index_mapper.len()].to_vec();

@@ -18,11 +18,12 @@ pub mod voxel_types;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::inertia::VoxelObjectInertialPropertyManager;
-use gpu_resource::{VoxelObjectGPUBufferMap, VoxelObjectGPUBuffers};
+use gpu_resource::VoxelObjectGPUResources;
 use impact_containers::HashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
-use impact_model::{ModelInstanceManager, impl_InstanceFeature};
+use impact_model::impl_InstanceFeature;
 use impact_physics::rigid_body::DynamicRigidBodyID;
+use impact_scene::model::ModelInstanceManager;
 use mesh::MeshedChunkedVoxelObject;
 use roc_integration::roc;
 use std::{
@@ -482,47 +483,29 @@ impl VoxelObjectManager {
         }
     }
 
-    /// Performs any required updates for keeping the voxel object GPU buffers
+    /// Performs any required updates for keeping the voxel object GPU resources
     /// in sync with the voxel object data.
     ///
-    /// GPU buffers whose source data no longer exists will be removed, and
-    /// missing GPU buffers for new source data will be created.
-    pub fn sync_voxel_object_gpu_buffers(
+    /// GPU resources whose source data no longer exists will be removed, and
+    /// missing GPU resources for new source data will be created.
+    pub fn sync_voxel_object_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        voxel_object_buffer_map: &mut VoxelObjectGPUBufferMap,
+        model_instance_manager: &ModelInstanceManager,
+        voxel_object_gpu_resources: &mut VoxelObjectGPUResources,
     ) {
-        for (voxel_object_id, voxel_object) in &mut self.voxel_objects {
-            voxel_object_buffer_map
-                .buffers
-                .entry(*voxel_object_id)
-                .and_modify(|buffers| {
-                    buffers.sync_with_voxel_object(
-                        graphics_device,
-                        staging_belt,
-                        command_encoder,
-                        voxel_object,
-                        bind_group_layout_registry,
-                    );
-                })
-                .or_insert_with(|| {
-                    VoxelObjectGPUBuffers::for_voxel_object(
-                        graphics_device,
-                        staging_belt,
-                        command_encoder,
-                        *voxel_object_id,
-                        voxel_object,
-                        bind_group_layout_registry,
-                    )
-                });
-        }
+        voxel_object_gpu_resources.sync_buffers_with_manager(
+            graphics_device,
+            staging_belt,
+            command_encoder,
+            bind_group_layout_registry,
+            self,
+        );
 
-        voxel_object_buffer_map
-            .buffers
-            .retain(|id, _| self.voxel_objects.contains_key(id));
+        voxel_object_gpu_resources.sync_visible_objects(model_instance_manager);
     }
 
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {
@@ -558,7 +541,7 @@ impl Default for VoxelConfig {
 }
 
 pub fn register_voxel_feature_types<MID: Copy + Eq + Hash>(
-    model_instance_manager: &mut ModelInstanceManager<MID>,
+    model_instance_manager: &mut impact_model::ModelInstanceManager<MID>,
 ) {
     model_instance_manager.register_feature_type::<VoxelObjectID>();
 }

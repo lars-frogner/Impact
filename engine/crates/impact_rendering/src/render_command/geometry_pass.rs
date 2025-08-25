@@ -9,7 +9,7 @@ use crate::{
     postprocessing::Postprocessor,
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
     surface::RenderingSurface,
 };
@@ -23,7 +23,7 @@ use impact_gpu::{
     shader::{ShaderManager, template::SpecificShaderTemplate},
     wgpu,
 };
-use impact_material::Material;
+use impact_material::{Material, gpu_resource::GPUMaterialTemplate};
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use impact_scene::model::ModelID;
@@ -117,7 +117,6 @@ impl GeometryPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Result<()> {
@@ -157,7 +156,6 @@ impl GeometryPass {
         self.add_models(
             graphics_device,
             shader_manager,
-            resource_registries,
             gpu_resources,
             bind_group_layout_registry,
             &added_models,
@@ -168,7 +166,6 @@ impl GeometryPass {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         models: impl IntoIterator<Item = &'a ModelID>,
@@ -179,16 +176,16 @@ impl GeometryPass {
         );
 
         for model_id in models {
-            let Some(material) = resource_registries.material().get(model_id.material_id()) else {
+            let Some(material) = gpu_resources.material().get(model_id.material_id()) else {
                 continue;
             };
-            let Some(material_template) = resource_registries
-                .material_template()
-                .get(material.template_id)
+            let Some(material_template) =
+                gpu_resources.material_template().get(material.template_id)
             else {
                 continue;
             };
-            let Some(input) = ModelGeometryShaderInput::for_material_template(material_template)
+            let Some(input) =
+                ModelGeometryShaderInput::for_material_template(&material_template.template)
             else {
                 continue;
             };
@@ -210,10 +207,11 @@ impl GeometryPass {
                     let mut bind_group_layouts = vec![&camera_bind_group_layout];
 
                     if let Some(bind_group_layout) = gpu_resources
-                        .material_template_bind_group_layout()
+                        .material_template()
                         .get(material.template_id)
+                        .and_then(GPUMaterialTemplate::bind_group_layout)
                     {
-                        bind_group_layouts.push(&bind_group_layout.bind_group_layout);
+                        bind_group_layouts.push(bind_group_layout);
                     }
 
                     let pipeline_layout = render_command::create_render_pipeline_layout(
@@ -227,7 +225,6 @@ impl GeometryPass {
                     );
 
                     let vertex_buffer_layouts = Self::create_vertex_buffer_layouts(
-                        resource_registries,
                         gpu_resources,
                         model_id,
                         vertex_attributes,
@@ -288,7 +285,6 @@ impl GeometryPass {
     }
 
     fn create_vertex_buffer_layouts(
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         model_id: &ModelID,
         vertex_attributes: VertexAttributeSet,
@@ -302,7 +298,7 @@ impl GeometryPass {
 
         layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap());
 
-        if let Some(material_property_values_feature_type_id) = resource_registries
+        if let Some(material_property_values_feature_type_id) = gpu_resources
             .material()
             .get(model_id.material_id())
             .and_then(|material| {
@@ -436,7 +432,6 @@ impl GeometryPass {
     pub fn record<'a>(
         &self,
         rendering_surface: &RenderingSurface,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
@@ -501,14 +496,12 @@ impl GeometryPass {
                     continue;
                 }
 
-                let material = resource_registries.material().get(model_id.material_id());
+                let material = gpu_resources.material().get(model_id.material_id());
 
                 if let Some(material_texture_bind_group) = material
                     .and_then(Material::texture_group_id_if_non_empty)
                     .and_then(|texture_group_id| {
-                        gpu_resources
-                            .material_texture_bind_group()
-                            .get(texture_group_id)
+                        gpu_resources.material_texture_group().get(texture_group_id)
                     })
                 {
                     render_pass.set_bind_group(1, &material_texture_bind_group.bind_group, &[]);

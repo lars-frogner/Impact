@@ -4,7 +4,7 @@ use impact_camera::gpu_resource::CameraGPUResource;
 use impact_light::gpu_resource::LightGPUResources;
 use impact_material::{
     MaterialRegistry, MaterialTemplateRegistry, MaterialTextureGroupRegistry,
-    gpu_resource::{MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap},
+    gpu_resource::{GPUMaterialMap, GPUMaterialTemplateMap, GPUMaterialTextureGroupMap},
 };
 use impact_mesh::{
     LineSegmentMeshRegistry, TriangleMeshRegistry,
@@ -63,11 +63,14 @@ pub trait BasicGPUResources {
     /// Returns the map of lookup table bind groups.
     fn lookup_table_bind_group(&self) -> &LookupTableBindGroupMap;
 
-    /// Returns the map of material template bind group layouts.
-    fn material_template_bind_group_layout(&self) -> &MaterialTemplateBindGroupLayoutMap;
+    /// Returns the map of materials.
+    fn material(&self) -> &GPUMaterialMap;
 
-    /// Returns the map of material texture bind groups.
-    fn material_texture_bind_group(&self) -> &MaterialTextureBindGroupMap;
+    /// Returns the map of material templates.
+    fn material_template(&self) -> &GPUMaterialTemplateMap;
+
+    /// Returns the map of material texture groups.
+    fn material_texture_group(&self) -> &GPUMaterialTextureGroupMap;
 
     /// Returns the map of model instance GPU buffers.
     fn model_instance_buffer(&self) -> &ModelInstanceGPUBufferMap;

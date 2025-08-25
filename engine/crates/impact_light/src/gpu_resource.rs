@@ -1,13 +1,15 @@
 //! Buffering of light source data for rendering.
 
 use crate::{
-    AmbientLight, AmbientLightID, LightManager, MAX_SHADOW_MAP_CASCADES, OmnidirectionalLight,
-    OmnidirectionalLightID, ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
+    AmbientLight, AmbientLightID, LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES,
+    MAX_SHADOW_MAP_CASCADES_USIZE, OmnidirectionalLight, OmnidirectionalLightID,
+    ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalLight,
     UnidirectionalLightID,
-    shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
+    shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
 };
 use impact_containers::CollectionChange;
+use impact_geometry::{AxisAlignedBox, CubeMapper, Frustum, OrientedBox};
 use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
@@ -18,19 +20,21 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::ConstStringHash64;
+use nalgebra::{Scale3, Translation3};
 use std::{fmt, hash::Hash};
 
 /// Contains all GPU resources for light sources, including uniform buffers and
 /// shadow maps, with associated bind groups.
 #[derive(Debug)]
 pub struct LightGPUResources {
-    ambient_light_gpu_buffer: UniformGPUBufferWithLightIDs<AmbientLightID>,
-    omnidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs<OmnidirectionalLightID>,
+    ambient_light_gpu_buffer: UniformGPUBufferWithLightMetadata<AmbientLightID>,
+    omnidirectional_light_gpu_buffer:
+        UniformGPUBufferWithLightMetadata<OmnidirectionalLightMetadata>,
     shadowable_omnidirectional_light_gpu_buffer:
-        UniformGPUBufferWithLightIDs<ShadowableOmnidirectionalLightID>,
-    unidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs<UnidirectionalLightID>,
+        UniformGPUBufferWithLightMetadata<ShadowableOmnidirectionalLightMetadata>,
+    unidirectional_light_gpu_buffer: UniformGPUBufferWithLightMetadata<UnidirectionalLightMetadata>,
     shadowable_unidirectional_light_gpu_buffer:
-        UniformGPUBufferWithLightIDs<ShadowableUnidirectionalLightID>,
+        UniformGPUBufferWithLightMetadata<ShadowableUnidirectionalLightMetadata>,
     ambient_light_bind_group: wgpu::BindGroup,
     omnidirectional_light_bind_group: wgpu::BindGroup,
     shadowable_omnidirectional_light_bind_group: wgpu::BindGroup,
@@ -58,9 +62,50 @@ pub struct UnidirectionalLightShadowMapManager {
 }
 
 #[derive(Debug)]
-struct UniformGPUBufferWithLightIDs<ID> {
+struct UniformGPUBufferWithLightMetadata<M> {
     uniform_gpu_buffer: MultiUniformGPUBuffer,
-    light_ids: Vec<ID>,
+    light_metadata: Vec<M>,
+}
+
+trait LightMetadata {
+    type ID: Copy + Eq + Hash + fmt::Debug;
+    type Source: UniformBufferable;
+
+    fn from_source(source: &Self::Source, id: Self::ID) -> Self;
+}
+
+#[derive(Debug)]
+pub struct OmnidirectionalLightMetadata {
+    pub id: OmnidirectionalLightID,
+    pub flags: LightFlags,
+}
+
+#[derive(Clone, Debug)]
+pub struct ShadowableOmnidirectionalLightMetadata {
+    pub id: ShadowableOmnidirectionalLightID,
+    pub flags: LightFlags,
+    near_distance: f32,
+    far_distance: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct UnidirectionalLightMetadata {
+    pub id: UnidirectionalLightID,
+    pub flags: LightFlags,
+}
+
+#[derive(Clone, Debug)]
+pub struct ShadowableUnidirectionalLightMetadata {
+    pub id: ShadowableUnidirectionalLightID,
+    pub flags: LightFlags,
+    orthographic_transforms:
+        [PackedOrthographicTranslationAndScaling; MAX_SHADOW_MAP_CASCADES_USIZE],
+}
+
+#[derive(Clone, Debug)]
+struct PackedOrthographicTranslationAndScaling {
+    translation: Translation3<f32>,
+    scaling: Scale3<f32>,
 }
 
 impl LightGPUResources {
@@ -101,29 +146,30 @@ impl LightGPUResources {
         light_manager: &LightManager,
         shadow_mapping_config: &ShadowMappingConfig,
     ) -> Self {
-        let ambient_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
+        let ambient_light_gpu_buffer = UniformGPUBufferWithLightMetadata::for_uniform_buffer(
             graphics_device,
             light_manager.ambient_light_buffer(),
             Self::AMBIENT_LIGHT_VISIBILITY,
         );
-        let omnidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
-            graphics_device,
-            light_manager.omnidirectional_light_buffer(),
-            Self::OMNIDIRECTIONAL_LIGHT_VISIBILITY,
-        );
+        let omnidirectional_light_gpu_buffer =
+            UniformGPUBufferWithLightMetadata::for_uniform_buffer(
+                graphics_device,
+                light_manager.omnidirectional_light_buffer(),
+                Self::OMNIDIRECTIONAL_LIGHT_VISIBILITY,
+            );
         let shadowable_omnidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightIDs::for_uniform_buffer(
+            UniformGPUBufferWithLightMetadata::for_uniform_buffer(
                 graphics_device,
                 light_manager.shadowable_omnidirectional_light_buffer(),
                 Self::SHADOWABLE_OMNIDIRECTIONAL_LIGHT_VISIBILITY,
             );
-        let unidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
+        let unidirectional_light_gpu_buffer = UniformGPUBufferWithLightMetadata::for_uniform_buffer(
             graphics_device,
             light_manager.unidirectional_light_buffer(),
             Self::UNIDIRECTIONAL_LIGHT_VISIBILITY,
         );
         let shadowable_unidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightIDs::for_uniform_buffer(
+            UniformGPUBufferWithLightMetadata::for_uniform_buffer(
                 graphics_device,
                 light_manager.shadowable_unidirectional_light_buffer(),
                 Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_VISIBILITY,
@@ -188,15 +234,13 @@ impl LightGPUResources {
         let omnidirectional_light_shadow_map_manager = OmnidirectionalLightShadowMapManager::new(
             graphics_device,
             shadow_mapping_config,
-            shadowable_omnidirectional_light_gpu_buffer
-                .light_ids()
-                .len(),
+            shadowable_omnidirectional_light_gpu_buffer.len(),
         );
 
         let unidirectional_light_shadow_map_manager = UnidirectionalLightShadowMapManager::new(
             graphics_device,
             shadow_mapping_config,
-            shadowable_unidirectional_light_gpu_buffer.light_ids().len(),
+            shadowable_unidirectional_light_gpu_buffer.len(),
         );
 
         Self {
@@ -218,32 +262,39 @@ impl LightGPUResources {
     /// Returns the slice of IDs of all the [`AmbientLight`]s currently residing
     /// in the ambient light GPU buffer.
     pub fn ambient_light_ids(&self) -> &[AmbientLightID] {
-        self.ambient_light_gpu_buffer.light_ids()
+        self.ambient_light_gpu_buffer.light_metadata()
     }
 
-    /// Returns the slice of IDs of all the [`OmnidirectionalLight`]s currently
-    /// residing in the omnidirectional light GPU buffer.
-    pub fn omnidirectional_light_ids(&self) -> &[OmnidirectionalLightID] {
-        self.omnidirectional_light_gpu_buffer.light_ids()
+    /// Returns the slice of metadata for all the [`OmnidirectionalLight`]s
+    /// currently residing in the omnidirectional light GPU buffer.
+    pub fn omnidirectional_light_metadata(&self) -> &[OmnidirectionalLightMetadata] {
+        self.omnidirectional_light_gpu_buffer.light_metadata()
     }
 
-    /// Returns the slice of IDs of all the [`ShadowableOmnidirectionalLight`]s
-    /// currently residing in the shadowable omnidirectional light GPU
-    /// buffer.
-    pub fn shadowable_omnidirectional_light_ids(&self) -> &[ShadowableOmnidirectionalLightID] {
-        self.shadowable_omnidirectional_light_gpu_buffer.light_ids()
+    /// Returns the slice of metadata for all the
+    /// [`ShadowableOmnidirectionalLight`]s currently residing in the shadowable
+    /// omnidirectional light GPU buffer.
+    pub fn shadowable_omnidirectional_light_metadata(
+        &self,
+    ) -> &[ShadowableOmnidirectionalLightMetadata] {
+        self.shadowable_omnidirectional_light_gpu_buffer
+            .light_metadata()
     }
 
-    /// Returns the slice of IDs of all the [`UnidirectionalLight`]s currently
-    /// residing in the unidirectional light GPU buffer.
-    pub fn unidirectional_light_ids(&self) -> &[UnidirectionalLightID] {
-        self.unidirectional_light_gpu_buffer.light_ids()
-    }
-
-    /// Returns the slice of IDs of all the [`ShadowableUnidirectionalLight`]s
+    /// Returns the slice of metadata for all the [`UnidirectionalLight`]s
     /// currently residing in the unidirectional light GPU buffer.
-    pub fn shadowable_unidirectional_light_ids(&self) -> &[ShadowableUnidirectionalLightID] {
-        self.shadowable_unidirectional_light_gpu_buffer.light_ids()
+    pub fn unidirectional_light_metadata(&self) -> &[UnidirectionalLightMetadata] {
+        self.unidirectional_light_gpu_buffer.light_metadata()
+    }
+
+    /// Returns the slice of metadata for all the
+    /// [`ShadowableUnidirectionalLight`]s currently residing in the
+    /// unidirectional light GPU buffer.
+    pub fn shadowable_unidirectional_light_metadata(
+        &self,
+    ) -> &[ShadowableUnidirectionalLightMetadata] {
+        self.shadowable_unidirectional_light_gpu_buffer
+            .light_metadata()
     }
 
     /// Returns a reference to the bind group for the ambient light uniform
@@ -290,9 +341,19 @@ impl LightGPUResources {
         &self.unidirectional_light_shadow_map_manager
     }
 
+    /// Returns the current length of the ambient light uniform buffer.
+    pub fn ambient_light_count(&self) -> usize {
+        self.ambient_light_gpu_buffer.len()
+    }
+
     /// Returns the current capacity of the ambient light uniform buffer.
     pub fn max_ambient_light_count(&self) -> usize {
         self.ambient_light_gpu_buffer.buffer().max_uniform_count()
+    }
+
+    /// Returns the current length of the omnidirectional light uniform buffer.
+    pub fn omnidirectional_light_count(&self) -> usize {
+        self.omnidirectional_light_gpu_buffer.len()
     }
 
     /// Returns the current capacity of the omnidirectional light uniform
@@ -303,6 +364,12 @@ impl LightGPUResources {
             .max_uniform_count()
     }
 
+    /// Returns the current length of the shadowable omnidirectional light
+    /// uniform buffer.
+    pub fn shadowable_omnidirectional_light_count(&self) -> usize {
+        self.shadowable_omnidirectional_light_gpu_buffer.len()
+    }
+
     /// Returns the current capacity of the shadowable omnidirectional light
     /// uniform buffer.
     pub fn max_shadowable_omnidirectional_light_count(&self) -> usize {
@@ -311,11 +378,22 @@ impl LightGPUResources {
             .max_uniform_count()
     }
 
+    /// Returns the current length of the unidirectional light uniform buffer.
+    pub fn unidirectional_light_count(&self) -> usize {
+        self.unidirectional_light_gpu_buffer.len()
+    }
+
     /// Returns the current capacity of the unidirectional light uniform buffer.
     pub fn max_unidirectional_light_count(&self) -> usize {
         self.unidirectional_light_gpu_buffer
             .buffer()
             .max_uniform_count()
+    }
+
+    /// Returns the current length of the shadowable unidirectional light
+    /// uniform buffer.
+    pub fn shadowable_unidirectional_light_count(&self) -> usize {
+        self.shadowable_unidirectional_light_gpu_buffer.len()
     }
 
     /// Returns the current capacity of the shadowable unidirectional light
@@ -457,9 +535,7 @@ impl LightGPUResources {
             self.omnidirectional_light_shadow_map_manager
                 .create_new_textures_if_required(
                     graphics_device,
-                    self.shadowable_omnidirectional_light_gpu_buffer
-                        .light_ids()
-                        .len(),
+                    self.shadowable_omnidirectional_light_gpu_buffer.len(),
                 );
         }
 
@@ -467,9 +543,7 @@ impl LightGPUResources {
             self.unidirectional_light_shadow_map_manager
                 .create_new_textures_if_required(
                     graphics_device,
-                    self.shadowable_unidirectional_light_gpu_buffer
-                        .light_ids()
-                        .len(),
+                    self.shadowable_unidirectional_light_gpu_buffer.len(),
                 );
         }
     }
@@ -604,9 +678,9 @@ impl LightGPUResources {
         })
     }
 
-    fn create_light_bind_group<ID: Copy + Eq + Hash + fmt::Debug>(
+    fn create_light_bind_group<M: LightMetadata>(
         device: &wgpu::Device,
-        light_gpu_buffer: &UniformGPUBufferWithLightIDs<ID>,
+        light_gpu_buffer: &UniformGPUBufferWithLightMetadata<M>,
         layout: &wgpu::BindGroupLayout,
         label: &str,
     ) -> wgpu::BindGroup {
@@ -750,55 +824,49 @@ impl UnidirectionalLightShadowMapManager {
     }
 }
 
-impl<ID> UniformGPUBufferWithLightIDs<ID>
-where
-    ID: Copy + Eq + Hash + fmt::Debug,
-{
-    /// Creates a new uniform GPU buffer together with a list of light IDs
-    /// initialized from the given uniform buffer.
-    fn for_uniform_buffer<U>(
+impl<M: LightMetadata> UniformGPUBufferWithLightMetadata<M> {
+    /// Creates a new uniform GPU buffer together with a metadata about each
+    /// light, initialized from the given uniform buffer of light sources.
+    fn for_uniform_buffer(
         graphics_device: &GraphicsDevice,
-        uniform_buffer: &UniformBuffer<ID, U>,
+        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
         visibility: wgpu::ShaderStages,
-    ) -> Self
-    where
-        U: UniformBufferable,
-    {
+    ) -> Self {
+        let mut light_metadata = Vec::new();
+        Self::copy_metadata_from_uniform_buffer(&mut light_metadata, uniform_buffer);
         Self {
             uniform_gpu_buffer: MultiUniformGPUBuffer::for_uniform_buffer(
                 graphics_device,
                 uniform_buffer,
                 visibility,
             ),
-            light_ids: uniform_buffer.valid_uniform_ids().to_vec(),
+            light_metadata,
         }
+    }
+
+    fn len(&self) -> usize {
+        self.light_metadata.len()
     }
 
     fn buffer(&self) -> &MultiUniformGPUBuffer {
         &self.uniform_gpu_buffer
     }
 
-    fn light_ids(&self) -> &[ID] {
-        &self.light_ids
+    fn light_metadata(&self) -> &[M] {
+        &self.light_metadata
     }
 
-    fn transfer_uniforms_to_gpu_buffer<U>(
+    fn transfer_uniforms_to_gpu_buffer(
         &mut self,
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
-        uniform_buffer: &UniformBuffer<ID, U>,
-    ) -> UniformTransferResult
-    where
-        U: UniformBufferable,
-    {
+        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
+    ) -> UniformTransferResult {
         match uniform_buffer.change() {
-            CollectionChange::Count => {
-                self.light_ids = uniform_buffer.valid_uniform_ids().to_vec();
-            }
-            CollectionChange::Contents => {
-                self.light_ids
-                    .copy_from_slice(uniform_buffer.valid_uniform_ids());
+            CollectionChange::Count | CollectionChange::Contents => {
+                self.light_metadata.clear();
+                Self::copy_metadata_from_uniform_buffer(&mut self.light_metadata, uniform_buffer);
             }
             CollectionChange::None => {}
         }
@@ -809,6 +877,20 @@ where
             command_encoder,
             uniform_buffer,
         )
+    }
+
+    fn copy_metadata_from_uniform_buffer(
+        light_metadata: &mut Vec<M>,
+        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
+    ) {
+        let sources = uniform_buffer.valid_uniforms();
+        let ids = uniform_buffer.valid_uniform_ids();
+
+        light_metadata.reserve(sources.len());
+
+        for (source, id) in sources.iter().zip(ids) {
+            light_metadata.push(M::from_source(source, *id));
+        }
     }
 }
 
@@ -871,3 +953,107 @@ impl UniformBufferable for ShadowableUnidirectionalLight {
     }
 }
 assert_uniform_valid!(ShadowableUnidirectionalLight);
+
+impl LightMetadata for AmbientLightID {
+    type ID = Self;
+    type Source = AmbientLight;
+
+    fn from_source(_source: &Self::Source, id: Self::ID) -> Self {
+        id
+    }
+}
+
+impl LightMetadata for OmnidirectionalLightMetadata {
+    type ID = OmnidirectionalLightID;
+    type Source = OmnidirectionalLight;
+
+    fn from_source(source: &Self::Source, id: Self::ID) -> Self {
+        Self {
+            id,
+            flags: source.flags(),
+        }
+    }
+}
+
+impl ShadowableOmnidirectionalLightMetadata {
+    /// Computes the frustum for the given positive z cubemap face in light
+    /// space.
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum<f32> {
+        CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
+    }
+}
+
+impl LightMetadata for ShadowableOmnidirectionalLightMetadata {
+    type ID = ShadowableOmnidirectionalLightID;
+    type Source = ShadowableOmnidirectionalLight;
+
+    fn from_source(source: &Self::Source, id: Self::ID) -> Self {
+        Self {
+            id,
+            near_distance: source.near_distance(),
+            far_distance: source.far_distance(),
+            flags: source.flags(),
+        }
+    }
+}
+
+impl LightMetadata for UnidirectionalLightMetadata {
+    type ID = UnidirectionalLightID;
+    type Source = UnidirectionalLight;
+
+    fn from_source(source: &Self::Source, id: Self::ID) -> Self {
+        Self {
+            id,
+            flags: source.flags(),
+        }
+    }
+}
+
+impl ShadowableUnidirectionalLightMetadata {
+    /// Creates an axis-aligned bounding box in the light's reference frame
+    /// containing all models that may cast visible shadows into the given
+    /// cascade.
+    pub fn create_light_space_orthographic_aabb_for_cascade(
+        &self,
+        cascade_idx: CascadeIdx,
+    ) -> AxisAlignedBox<f32> {
+        self.orthographic_transforms[cascade_idx as usize].compute_aabb()
+    }
+
+    /// Creates an oriented bounding box in the light's reference frame
+    /// containing all models that may cast visible shadows into the given
+    /// cascade.
+    pub fn create_light_space_orthographic_obb_for_cascade(
+        &self,
+        cascade_idx: CascadeIdx,
+    ) -> OrientedBox<f32> {
+        OrientedBox::from_axis_aligned_box(
+            &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
+        )
+    }
+}
+
+impl LightMetadata for ShadowableUnidirectionalLightMetadata {
+    type ID = ShadowableUnidirectionalLightID;
+    type Source = ShadowableUnidirectionalLight;
+
+    fn from_source(source: &Self::Source, id: Self::ID) -> Self {
+        let orthographic_transforms = source.orthographic_transforms.map(|transform| {
+            PackedOrthographicTranslationAndScaling {
+                translation: transform.translation,
+                scaling: transform.scaling,
+            }
+        });
+        Self {
+            id,
+            orthographic_transforms,
+            flags: source.flags(),
+        }
+    }
+}
+
+impl PackedOrthographicTranslationAndScaling {
+    fn compute_aabb(&self) -> AxisAlignedBox<f32> {
+        crate::compute_orthographic_transform_aabb(&self.translation, &self.scaling)
+    }
+}

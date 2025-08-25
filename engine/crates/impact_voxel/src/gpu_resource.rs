@@ -1,7 +1,7 @@
 //! Rendering resources for voxel objects.
 
 use crate::{
-    VoxelObjectID,
+    VoxelObjectID, VoxelObjectManager,
     mesh::{
         ChunkSubmesh, CullingFrustum, MeshedChunkedVoxelObject, VoxelMeshIndex,
         VoxelMeshIndexMaterials, VoxelMeshModifications, VoxelMeshVertexNormalVector,
@@ -29,8 +29,12 @@ use impact_mesh::gpu_resource::{
     MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
     new_vertex_gpu_buffer_with_spare_capacity_and_encoded_initialization,
 };
+use impact_model::{
+    InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
+    transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
+};
 use impact_rendering::push_constant::BasicPushConstantVariant;
-use impact_scene::model::ModelID;
+use impact_scene::model::{ModelID, ModelInstanceManager};
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::{borrow::Cow, mem, ops::Range, sync::LazyLock};
 
@@ -46,8 +50,8 @@ pub trait VoxelGPUResources {
     /// not been initialized.
     fn voxel_materials(&self) -> Option<&VoxelMaterialGPUResources>;
 
-    /// Returns the map of voxel object GPU buffers.
-    fn voxel_object_buffer(&self) -> &VoxelObjectGPUBufferMap;
+    /// Returns the GPU resources for voxel objects.
+    fn voxel_objects(&self) -> &VoxelObjectGPUResources;
 }
 
 /// GPU resources for all voxel materials.
@@ -58,10 +62,15 @@ pub struct VoxelMaterialGPUResources {
     bind_group: wgpu::BindGroup,
 }
 
-/// Map of GPU buffers for each voxel object.
+/// GPU resources for voxel objects.
 #[derive(Debug)]
-pub struct VoxelObjectGPUBufferMap {
-    pub(crate) buffers: HashMap<VoxelObjectID, VoxelObjectGPUBuffers>,
+pub struct VoxelObjectGPUResources {
+    visible_object_ids: Vec<VoxelObjectID>,
+    visible_object_model_view_transforms: Vec<InstanceModelViewTransformWithPrevious>,
+    visible_object_model_light_transforms: Vec<InstanceModelLightTransform>,
+    id_ranges: InstanceFeatureBufferRangeMap,
+    model_light_transform_ranges: InstanceFeatureBufferRangeMap,
+    buffers: HashMap<VoxelObjectID, VoxelObjectGPUBuffers>,
 }
 
 /// GPU buffers for a [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject).
@@ -110,39 +119,80 @@ impl VoxelMaterialGPUResources {
         ConstStringHash64::new("VoxelMaterialResources");
 }
 
-impl VoxelObjectGPUBufferMap {
+impl VoxelObjectGPUResources {
     pub fn new() -> Self {
         Self {
+            visible_object_ids: Vec::new(),
+            visible_object_model_view_transforms: Vec::new(),
+            visible_object_model_light_transforms: Vec::new(),
+            id_ranges: InstanceFeatureBufferRangeMap::empty(),
+            model_light_transform_ranges: InstanceFeatureBufferRangeMap::empty(),
             buffers: HashMap::default(),
         }
     }
 
-    /// Whether there are no voxel objects in the map.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    /// Whether there are currently any voxel objects (visible or otherwise).
+    pub fn has_voxel_objects(&self) -> bool {
+        !self.buffers.is_empty()
     }
 
-    /// Returns the number of voxel objects in the map.
-    pub fn len(&self) -> usize {
+    /// Returns the current number of voxel objects (visible or otherwise).
+    pub fn voxel_object_count(&self) -> usize {
         self.buffers.len()
     }
 
-    /// Whether GPU buffers exist for the given voxel object.
-    pub fn contains(&self, voxel_object_id: VoxelObjectID) -> bool {
-        self.buffers.contains_key(&voxel_object_id)
+    /// Whether there are currently visible voxel objects.
+    pub fn has_visible_voxel_objects(&self) -> bool {
+        self.visible_voxel_object_count() > 0
     }
 
-    /// Returns an iterator over all voxel object IDs in the map.
-    pub fn voxel_object_ids(&self) -> impl Iterator<Item = VoxelObjectID> {
-        self.buffers.keys().copied()
+    /// Returns the number of currently visible voxel objects.
+    pub fn visible_voxel_object_count(&self) -> usize {
+        self.visible_object_ids.len()
     }
 
-    /// Returns an iterator over all voxel object IDs in the map and their
-    /// associated buffers.
-    pub fn iter(&self) -> impl Iterator<Item = (VoxelObjectID, &VoxelObjectGPUBuffers)> {
-        self.buffers
-            .iter()
-            .map(|(voxel_object_id, buffer)| (*voxel_object_id, buffer))
+    /// Returns the IDs of the currently visible voxel objects in the initial
+    /// instance range.
+    pub fn visible_voxel_object_ids_in_initial_range(&self) -> &[VoxelObjectID] {
+        self.visible_voxel_object_ids_in_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+    }
+
+    /// Returns the IDs of the currently visible voxel objects in the specified
+    /// instance range.
+    pub fn visible_voxel_object_ids_in_range(
+        &self,
+        instance_range_id: InstanceFeatureBufferRangeID,
+    ) -> &[VoxelObjectID] {
+        let range = self
+            .id_ranges
+            .get_range(instance_range_id, self.visible_object_ids.len() as u32);
+        &self.visible_object_ids[range.start as usize..range.end as usize]
+    }
+
+    /// Returns the model-light transforms of the currently visible voxel
+    /// objects in the specified instance range, as well as the range itself.
+    pub fn visible_object_model_light_transforms_in_range(
+        &self,
+        instance_range_id: InstanceFeatureBufferRangeID,
+    ) -> (&[InstanceModelLightTransform], Range<u32>) {
+        let range = self.model_light_transform_ranges.get_range(
+            instance_range_id,
+            self.visible_object_model_light_transforms.len() as u32,
+        );
+        let transforms =
+            &self.visible_object_model_light_transforms[range.start as usize..range.end as usize];
+        (transforms, range)
+    }
+
+    /// Returns the model-view transforms of all currently visible voxel
+    /// objects, as well as their range in the instance feature buffer.
+    pub fn visible_object_model_view_transforms(
+        &self,
+    ) -> (&[InstanceModelViewTransformWithPrevious], Range<u32>) {
+        (
+            &self.visible_object_model_view_transforms,
+            0..self.visible_object_model_view_transforms.len() as u32,
+        )
     }
 
     /// Returns the GPU buffers for the given voxel object identifier if the
@@ -153,9 +203,100 @@ impl VoxelObjectGPUBufferMap {
     ) -> Option<&VoxelObjectGPUBuffers> {
         self.buffers.get(&voxel_object_id)
     }
+
+    /// Performs any required updates for keeping the voxel object GPU resources
+    /// in sync with the voxel object data.
+    ///
+    /// GPU resources whose source data no longer exists will be removed, and
+    /// missing GPU resources for new source data will be created.
+    pub fn sync_buffers_with_manager(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+        voxel_object_manager: &mut VoxelObjectManager,
+    ) {
+        for (voxel_object_id, voxel_object) in voxel_object_manager.voxel_objects_mut() {
+            self.buffers
+                .entry(*voxel_object_id)
+                .and_modify(|buffers| {
+                    buffers.sync_with_voxel_object(
+                        graphics_device,
+                        staging_belt,
+                        command_encoder,
+                        voxel_object,
+                        bind_group_layout_registry,
+                    );
+                })
+                .or_insert_with(|| {
+                    VoxelObjectGPUBuffers::for_voxel_object(
+                        graphics_device,
+                        staging_belt,
+                        command_encoder,
+                        *voxel_object_id,
+                        voxel_object,
+                        bind_group_layout_registry,
+                    )
+                });
+        }
+
+        // TODO: reuse orphaned buffers
+        self.buffers
+            .retain(|id, _| voxel_object_manager.has_voxel_object(*id));
+    }
+
+    /// Updates the lists of properties for the visible voxel objects based on
+    /// the currently buffered voxel object instances in the model instance
+    /// manager.
+    pub fn sync_visible_objects(&mut self, model_instance_manager: &ModelInstanceManager) {
+        if self.buffers.is_empty() {
+            return;
+        }
+
+        let instance_buffer = model_instance_manager
+            .get_model_instance_buffer(&VOXEL_MODEL_ID)
+            .expect("Missing model instance buffer for voxel objects");
+
+        let id_buffer = instance_buffer
+            .get_feature_buffer(VoxelObjectID::FEATURE_TYPE_ID)
+            .expect("Missing voxel object ID instance feature buffer for voxel objects");
+
+        let model_view_transform_buffer = instance_buffer
+            .get_feature_buffer(InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID)
+            .expect("Missing model view transform instance feature buffer for voxel objects");
+
+        let model_light_transform_buffer = instance_buffer
+            .get_feature_buffer(InstanceModelLightTransform::FEATURE_TYPE_ID)
+            .expect("Missing model light transform instance feature buffer for voxel objects");
+
+        self.visible_object_ids.clear();
+        self.visible_object_ids
+            .extend_from_slice(id_buffer.valid_features());
+
+        self.visible_object_model_view_transforms.clear();
+        self.visible_object_model_view_transforms
+            .extend_from_slice(model_view_transform_buffer.valid_features());
+
+        self.visible_object_model_light_transforms.clear();
+        self.visible_object_model_light_transforms
+            .extend_from_slice(model_light_transform_buffer.valid_features());
+
+        id_buffer.update_range_map(&mut self.id_ranges);
+        model_light_transform_buffer.update_range_map(&mut self.model_light_transform_ranges);
+
+        // We expect there to be no ranges apart from the initial range for the
+        // model view transforms
+        assert_eq!(
+            model_view_transform_buffer
+                .initial_valid_feature_range()
+                .len(),
+            self.visible_object_model_view_transforms.len()
+        );
+    }
 }
 
-impl Default for VoxelObjectGPUBufferMap {
+impl Default for VoxelObjectGPUResources {
     fn default() -> Self {
         Self::new()
     }

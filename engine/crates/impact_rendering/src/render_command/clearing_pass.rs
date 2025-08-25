@@ -14,7 +14,6 @@ use std::borrow::Cow;
 #[derive(Debug)]
 pub struct AttachmentClearingPass {
     attachments: RenderAttachmentQuantitySet,
-    clear_surface: bool,
 }
 
 impl AttachmentClearingPass {
@@ -22,16 +21,12 @@ impl AttachmentClearingPass {
 
     const MAX_ATTACHMENTS_PER_PASS: usize = 8;
 
-    pub fn new(attachments: RenderAttachmentQuantitySet, clear_surface: bool) -> Self {
-        Self {
-            attachments,
-            clear_surface,
-        }
+    pub fn new(attachments: RenderAttachmentQuantitySet) -> Self {
+        Self { attachments }
     }
 
     fn color_attachments<'a, 'b: 'a>(
         &self,
-        surface_texture_view: &'a wgpu::TextureView,
         render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
     ) -> Vec<Option<wgpu::RenderPassColorAttachment<'a>>> {
         let mut color_attachments = Vec::with_capacity(RenderAttachmentQuantity::count());
@@ -50,17 +45,6 @@ impl AttachmentClearingPass {
                     })
                 }),
         );
-
-        if self.clear_surface {
-            color_attachments.push(Some(wgpu::RenderPassColorAttachment {
-                view: surface_texture_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            }));
-        }
 
         color_attachments
     }
@@ -93,13 +77,11 @@ impl AttachmentClearingPass {
 
     pub fn record(
         &self,
-        surface_texture_view: &wgpu::TextureView,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let color_attachments =
-            self.color_attachments(surface_texture_view, render_attachment_texture_manager);
+        let color_attachments = self.color_attachments(render_attachment_texture_manager);
 
         let mut depth_stencil_attachment =
             self.depth_stencil_attachment(render_attachment_texture_manager);

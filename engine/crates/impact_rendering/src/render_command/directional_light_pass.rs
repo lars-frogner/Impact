@@ -344,7 +344,6 @@ impl DirectionalLightPass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        light_manager: &LightManager,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
@@ -354,13 +353,16 @@ impl DirectionalLightPass {
         let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(());
         };
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return Ok(());
+        };
 
-        let n_omnidirectional_lights = light_manager.omnidirectional_lights().len();
+        let n_omnidirectional_lights = light_gpu_resources.omnidirectional_light_count();
         let n_shadowable_omnidirectional_lights =
-            light_manager.shadowable_omnidirectional_lights().len();
-        let n_unidirectional_lights = light_manager.unidirectional_lights().len();
+            light_gpu_resources.shadowable_omnidirectional_light_count();
+        let n_unidirectional_lights = light_gpu_resources.unidirectional_light_count();
         let n_shadowable_unidirectional_lights =
-            light_manager.shadowable_unidirectional_lights().len();
+            light_gpu_resources.shadowable_unidirectional_light_count();
 
         let n_lights = n_omnidirectional_lights
             + n_shadowable_omnidirectional_lights
@@ -370,10 +372,6 @@ impl DirectionalLightPass {
         if n_lights == 0 {
             return Ok(());
         }
-
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
         let color_attachment = self.color_attachment(render_attachment_texture_manager);
 
@@ -441,8 +439,12 @@ impl DirectionalLightPass {
 
             let n_indices = u32::try_from(mesh_gpu_resources.n_indices()).unwrap();
 
-            for (light_idx, light) in light_manager.omnidirectional_lights().iter().enumerate() {
-                if light.flags().contains(LightFlags::IS_DISABLED) {
+            for (light_idx, light) in light_gpu_resources
+                .omnidirectional_light_metadata()
+                .iter()
+                .enumerate()
+            {
+                if light.flags.contains(LightFlags::IS_DISABLED) {
                     continue;
                 }
 
@@ -501,13 +503,13 @@ impl DirectionalLightPass {
                 n_shadowable_omnidirectional_lights
             );
 
-            for (light_idx, (light, shadow_map_texture)) in light_manager
-                .shadowable_omnidirectional_lights()
+            for (light_idx, (light, shadow_map_texture)) in light_gpu_resources
+                .shadowable_omnidirectional_light_metadata()
                 .iter()
                 .zip(omnidirectional_light_shadow_map_textures)
                 .enumerate()
             {
-                if light.flags().contains(LightFlags::IS_DISABLED) {
+                if light.flags.contains(LightFlags::IS_DISABLED) {
                     continue;
                 }
 
@@ -562,8 +564,12 @@ impl DirectionalLightPass {
 
             let n_indices = u32::try_from(mesh_gpu_resources.n_indices()).unwrap();
 
-            for (light_idx, light) in light_manager.unidirectional_lights().iter().enumerate() {
-                if light.flags().contains(LightFlags::IS_DISABLED) {
+            for (light_idx, light) in light_gpu_resources
+                .unidirectional_light_metadata()
+                .iter()
+                .enumerate()
+            {
+                if light.flags.contains(LightFlags::IS_DISABLED) {
                     continue;
                 }
 
@@ -622,13 +628,13 @@ impl DirectionalLightPass {
                 n_shadowable_unidirectional_lights
             );
 
-            for (light_idx, (light, shadow_map_texture)) in light_manager
-                .shadowable_unidirectional_lights()
+            for (light_idx, (light, shadow_map_texture)) in light_gpu_resources
+                .shadowable_unidirectional_light_metadata()
                 .iter()
                 .zip(unidirectional_light_shadow_map_textures)
                 .enumerate()
             {
-                if light.flags().contains(LightFlags::IS_DISABLED) {
+                if light.flags.contains(LightFlags::IS_DISABLED) {
                     continue;
                 }
 

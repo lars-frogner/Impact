@@ -141,15 +141,14 @@ impl Postprocessor {
         })
     }
 
-    /// Records all postprocessing render commands into the given command
-    /// encoder.
+    /// Records all postprocessing render commands that do not write directly
+    /// into the surface texture into the given command encoder.
     ///
     /// # Errors
     /// Returns an error if any of the required GPU resources are missing.
-    pub fn record_commands(
+    pub fn record_commands_before_surface(
         &self,
         rendering_surface: &RenderingSurface,
-        surface_texture_view: &wgpu::TextureView,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
@@ -160,7 +159,6 @@ impl Postprocessor {
     ) -> Result<()> {
         self.ambient_occlusion_commands.record(
             rendering_surface,
-            surface_texture_view,
             gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
@@ -182,7 +180,6 @@ impl Postprocessor {
             )?;
         self.temporal_anti_aliasing_commands.record(
             rendering_surface,
-            surface_texture_view,
             gpu_resources,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
@@ -190,7 +187,25 @@ impl Postprocessor {
             frame_counter,
             timestamp_recorder,
             command_encoder,
-        )?;
+        )
+    }
+
+    /// Records all postprocessing render commands that write directly into the
+    /// surface texture into the given command encoder.
+    ///
+    /// # Errors
+    /// Returns an error if any of the required GPU resources are missing.
+    pub fn record_commands_with_surface(
+        &self,
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        gpu_resources: &impl BasicGPUResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
         self.capturing_camera
             .record_dynamic_range_compression_render_commands(
                 rendering_surface,

@@ -3,14 +3,14 @@
 use impact_camera::gpu_resource::CameraGPUResource;
 use impact_light::gpu_resource::LightGPUResources;
 use impact_material::gpu_resource::{
-    MaterialTemplateBindGroupLayoutMap, MaterialTextureBindGroupMap,
+    GPUMaterialMap, GPUMaterialTemplateMap, GPUMaterialTextureGroupMap,
 };
 use impact_mesh::gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap};
 use impact_rendering::resource::BasicGPUResources;
 use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::gpu_resource::SkyboxGPUResource};
 use impact_texture::gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap};
 use impact_voxel::gpu_resource::{
-    VoxelGPUResources, VoxelMaterialGPUResources, VoxelObjectGPUBufferMap,
+    VoxelGPUResources, VoxelMaterialGPUResources, VoxelObjectGPUResources,
 };
 
 #[derive(Debug)]
@@ -23,11 +23,12 @@ pub struct RenderResourceManager {
     pub textures: TextureMap,
     pub samplers: SamplerMap,
     pub lookup_table_bind_groups: LookupTableBindGroupMap,
-    pub material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap,
-    pub material_texture_bind_groups: MaterialTextureBindGroupMap,
+    pub materials: GPUMaterialMap,
+    pub material_templates: GPUMaterialTemplateMap,
+    pub material_texture_groups: GPUMaterialTextureGroupMap,
     pub model_instance_buffers: ModelInstanceGPUBufferMap,
     pub voxel_materials: Option<VoxelMaterialGPUResources>,
-    pub voxel_object_buffers: VoxelObjectGPUBufferMap,
+    pub voxel_objects: VoxelObjectGPUResources,
 }
 
 impl RenderResourceManager {
@@ -41,11 +42,12 @@ impl RenderResourceManager {
             textures: TextureMap::new(),
             samplers: SamplerMap::new(),
             lookup_table_bind_groups: LookupTableBindGroupMap::new(),
-            material_template_bind_group_layouts: MaterialTemplateBindGroupLayoutMap::new(),
-            material_texture_bind_groups: MaterialTextureBindGroupMap::new(),
+            materials: GPUMaterialMap::new(),
+            material_templates: GPUMaterialTemplateMap::new(),
+            material_texture_groups: GPUMaterialTextureGroupMap::new(),
             model_instance_buffers: ModelInstanceGPUBufferMap::new(),
             voxel_materials: None,
-            voxel_object_buffers: VoxelObjectGPUBufferMap::new(),
+            voxel_objects: VoxelObjectGPUResources::new(),
         }
     }
 }
@@ -89,12 +91,16 @@ impl BasicGPUResources for RenderResourceManager {
         &self.lookup_table_bind_groups
     }
 
-    fn material_template_bind_group_layout(&self) -> &MaterialTemplateBindGroupLayoutMap {
-        &self.material_template_bind_group_layouts
+    fn material(&self) -> &GPUMaterialMap {
+        &self.materials
     }
 
-    fn material_texture_bind_group(&self) -> &MaterialTextureBindGroupMap {
-        &self.material_texture_bind_groups
+    fn material_template(&self) -> &GPUMaterialTemplateMap {
+        &self.material_templates
+    }
+
+    fn material_texture_group(&self) -> &GPUMaterialTextureGroupMap {
+        &self.material_texture_groups
     }
 
     fn model_instance_buffer(&self) -> &ModelInstanceGPUBufferMap {
@@ -107,7 +113,7 @@ impl VoxelGPUResources for RenderResourceManager {
         self.voxel_materials.as_ref()
     }
 
-    fn voxel_object_buffer(&self) -> &VoxelObjectGPUBufferMap {
-        &self.voxel_object_buffers
+    fn voxel_objects(&self) -> &VoxelObjectGPUResources {
+        &self.voxel_objects
     }
 }
