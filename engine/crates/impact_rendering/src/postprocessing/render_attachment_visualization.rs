@@ -123,7 +123,7 @@ impl RenderAttachmentVisualizationPasses {
             let quantity = self.quantity();
             self.passes[&quantity].record(
                 rendering_surface,
-                surface_texture_view,
+                Some(surface_texture_view),
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,

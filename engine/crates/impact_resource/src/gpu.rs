@@ -109,6 +109,11 @@ where
     pub fn get(&self, id: R::ID) -> Option<&GR> {
         self.gpu_resources.get(&id)
     }
+
+    /// Whether the map contains the GPU resource with the given key.
+    pub fn contains(&self, id: R::ID) -> bool {
+        self.gpu_resources.contains_key(&id)
+    }
 }
 
 impl<R: Resource, GR, S> fmt::Debug for GPUResourceMap<R, GR, S>

@@ -1,8 +1,8 @@
 //! GPU resources for materials.
 
 use crate::{
-    MaterialBindGroupTemplate, MaterialTemplate, MaterialTemplateID, MaterialTextureGroup,
-    MaterialTextureGroupID,
+    Material, MaterialBindGroupTemplate, MaterialID, MaterialTemplate, MaterialTemplateID,
+    MaterialTextureGroup, MaterialTextureGroupID,
 };
 use allocator_api2::alloc::Allocator;
 use anyhow::{Result, anyhow};
@@ -10,37 +10,61 @@ use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_resource::gpu::{GPUResource, GPUResourceMap};
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 
-/// Bind group layouts for material templates with textures.
-pub type MaterialTemplateBindGroupLayoutMap =
-    GPUResourceMap<MaterialTemplate, MaterialTemplateBindGroupLayout>;
+/// GPU-synced materials.
+pub type GPUMaterialMap = GPUResourceMap<Material, Material>;
 
-/// Bind groups for material texture groups.
-pub type MaterialTextureBindGroupMap =
-    GPUResourceMap<MaterialTextureGroup, MaterialTextureBindGroup>;
+/// GPU-synced material templates.
+pub type GPUMaterialTemplateMap = GPUResourceMap<MaterialTemplate, GPUMaterialTemplate>;
 
-/// A texture and sampler bind group layout shared across all materials that use
-/// the same [`MaterialTemplate`].
+/// GPU-synced material texture groups.
+pub type GPUMaterialTextureGroupMap = GPUResourceMap<MaterialTextureGroup, GPUMaterialTextureGroup>;
+
+/// A GPU-synchronized material template that may contain a texture and sampler
+/// bind group layout shared across all materials that use the same
+/// [`MaterialTemplate`]. Also contains the `MaterialTemplate`.
 #[derive(Debug)]
-pub struct MaterialTemplateBindGroupLayout {
-    pub bind_group_layout: wgpu::BindGroupLayout,
+pub struct GPUMaterialTemplate {
+    pub template: MaterialTemplate,
+    pub bind_group_layout: Option<wgpu::BindGroupLayout>,
 }
 
 /// A texture and sampler bind group for a [`MaterialTextureGroup`].
 #[derive(Debug)]
-pub struct MaterialTextureBindGroup {
+pub struct GPUMaterialTextureGroup {
     pub bind_group: wgpu::BindGroup,
 }
 
-impl MaterialTemplateBindGroupLayout {
-    /// Creates a bind group layout for a material template. Returns [`None`] if
-    /// the template is for a material using no textures.
+impl<'a> GPUResource<'a, Material> for Material {
+    type GPUContext = ();
+
+    fn create<A>(
+        _scratch: A,
+        _ctx: &(),
+        _id: MaterialID,
+        material: &Material,
+    ) -> Result<Option<Self>>
+    where
+        A: Copy + Allocator,
+    {
+        Ok(Some(material.clone()))
+    }
+
+    fn cleanup(self, _ctx: &(), _id: MaterialID) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl GPUMaterialTemplate {
     pub fn create(
         graphics_device: &GraphicsDevice,
         template: &MaterialTemplate,
         label: &str,
-    ) -> Option<Self> {
+    ) -> Self {
         if template.bind_group_template.is_empty() {
-            return None;
+            return Self {
+                template: template.clone(),
+                bind_group_layout: None,
+            };
         }
 
         let mut bind_group_layout_entries =
@@ -75,11 +99,18 @@ impl MaterialTemplateBindGroupLayout {
                     label: Some(&format!("Material template {label} bind group layout")),
                 });
 
-        Some(Self { bind_group_layout })
+        Self {
+            template: template.clone(),
+            bind_group_layout: Some(bind_group_layout),
+        }
+    }
+
+    pub fn bind_group_layout(&self) -> Option<&wgpu::BindGroupLayout> {
+        self.bind_group_layout.as_ref()
     }
 }
 
-impl<'a> GPUResource<'a, MaterialTemplate> for MaterialTemplateBindGroupLayout {
+impl<'a> GPUResource<'a, MaterialTemplate> for GPUMaterialTemplate {
     type GPUContext = GraphicsDevice;
 
     fn create<A>(
@@ -91,7 +122,11 @@ impl<'a> GPUResource<'a, MaterialTemplate> for MaterialTemplateBindGroupLayout {
     where
         A: Copy + Allocator,
     {
-        Ok(Self::create(graphics_device, template, &id.to_string()))
+        Ok(Some(Self::create(
+            graphics_device,
+            template,
+            &id.to_string(),
+        )))
     }
 
     fn cleanup(self, _graphics_device: &GraphicsDevice, _id: MaterialTemplateID) -> Result<()> {
@@ -99,7 +134,7 @@ impl<'a> GPUResource<'a, MaterialTemplate> for MaterialTemplateBindGroupLayout {
     }
 }
 
-impl MaterialTextureBindGroup {
+impl GPUMaterialTextureGroup {
     /// Creates a bind group from a material texture group.
     ///
     /// Combines the textures and samplers from the texture group with the bind
@@ -115,16 +150,19 @@ impl MaterialTextureBindGroup {
         graphics_device: &GraphicsDevice,
         textures: &TextureMap,
         samplers: &SamplerMap,
-        bind_group_layouts: &MaterialTemplateBindGroupLayoutMap,
+        templates: &GPUMaterialTemplateMap,
         group: &MaterialTextureGroup,
         label: &str,
     ) -> Result<Self> {
-        let bind_group_layout = bind_group_layouts.get(group.template_id).ok_or_else(|| {
-            anyhow!(
-                "Missing template bind group layout {} for material texture group {label}",
-                group.template_id
-            )
-        })?;
+        let bind_group_layout = templates
+            .get(group.template_id)
+            .and_then(GPUMaterialTemplate::bind_group_layout)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing template bind group layout {} for material texture group {label}",
+                    group.template_id
+                )
+            })?;
 
         let mut bind_group_entries = Vec::with_capacity(2 * group.texture_ids.len());
 
@@ -150,7 +188,7 @@ impl MaterialTextureBindGroup {
         let bind_group = graphics_device
             .device()
             .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout.bind_group_layout,
+                layout: bind_group_layout,
                 entries: &bind_group_entries,
                 label: Some(&format!("Material texture group {label} bind group")),
             });
@@ -159,12 +197,12 @@ impl MaterialTextureBindGroup {
     }
 }
 
-impl<'a> GPUResource<'a, MaterialTextureGroup> for MaterialTextureBindGroup {
+impl<'a> GPUResource<'a, MaterialTextureGroup> for GPUMaterialTextureGroup {
     type GPUContext = (
         &'a GraphicsDevice,
         &'a TextureMap,
         &'a SamplerMap,
-        &'a MaterialTemplateBindGroupLayoutMap,
+        &'a GPUMaterialTemplateMap,
     );
 
     fn create<A>(

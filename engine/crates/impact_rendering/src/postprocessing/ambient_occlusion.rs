@@ -167,7 +167,6 @@ impl AmbientOcclusionRenderCommands {
     pub(super) fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        surface_texture_view: &wgpu::TextureView,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
@@ -179,7 +178,7 @@ impl AmbientOcclusionRenderCommands {
         if self.config.enabled {
             self.computation_pass.record(
                 rendering_surface,
-                surface_texture_view,
+                None,
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
@@ -191,7 +190,7 @@ impl AmbientOcclusionRenderCommands {
 
             self.application_pass.record(
                 rendering_surface,
-                surface_texture_view,
+                None,
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,
@@ -203,7 +202,7 @@ impl AmbientOcclusionRenderCommands {
         } else {
             self.disabled_pass.record(
                 rendering_surface,
-                surface_texture_view,
+                None,
                 gpu_resources,
                 render_attachment_texture_manager,
                 gpu_resource_group_manager,

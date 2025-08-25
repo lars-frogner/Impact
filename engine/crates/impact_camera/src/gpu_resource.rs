@@ -39,6 +39,7 @@ const JITTER_BASES: (u64, u64) = (2, 3);
 #[derive(Debug)]
 pub struct CameraGPUResource {
     view_transform: Isometry3<f32>,
+    view_frustum: Frustum<f32>,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
     jitter_enabled: bool,
@@ -86,6 +87,7 @@ impl CameraGPUResource {
         camera: &impl BufferableCamera,
     ) -> Self {
         let view_transform = *camera.view_transform();
+        let view_frustum = camera.camera().view_frustum().clone();
 
         let projection_uniform = CameraProjectionUniform::new(camera);
 
@@ -106,6 +108,7 @@ impl CameraGPUResource {
 
         Self {
             view_transform,
+            view_frustum,
             projection_uniform_gpu_buffer,
             bind_group,
             jitter_enabled: camera.jitter_enabled(),
@@ -123,6 +126,11 @@ impl CameraGPUResource {
         bind_group_layout_registry.get_or_create_layout(Self::LAYOUT_ID.hash(), || {
             Self::create_bind_group_layout(graphics_device.device())
         })
+    }
+
+    /// Returns the frustum representing the view volume of the camera.
+    pub fn view_frustum(&self) -> &Frustum<f32> {
+        &self.view_frustum
     }
 
     /// Returns the bind group for the camera projection uniform.
@@ -145,6 +153,7 @@ impl CameraGPUResource {
         if camera.camera().projection_transform_changed()
             || camera.jitter_enabled() != self.jitter_enabled
         {
+            self.view_frustum = camera.camera().view_frustum().clone();
             self.sync_gpu_buffer(graphics_device, staging_belt, command_encoder, camera);
             camera.camera().reset_projection_change_tracking();
             self.jitter_enabled = camera.jitter_enabled();

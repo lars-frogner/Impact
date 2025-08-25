@@ -642,9 +642,15 @@ define_task!(
             let render_resource_manager = &mut **render_resource_manager;
 
             impact_resource::gpu::sync_immutable_gpu_resources(
+                &(),
+                &resource_manager.materials,
+                &mut render_resource_manager.materials,
+            )?;
+
+            impact_resource::gpu::sync_immutable_gpu_resources(
                 engine.graphics_device(),
                 &resource_manager.material_templates,
-                &mut render_resource_manager.material_template_bind_group_layouts,
+                &mut render_resource_manager.material_templates,
             )?;
 
             impact_resource::gpu::sync_immutable_gpu_resources(
@@ -652,10 +658,10 @@ define_task!(
                     engine.graphics_device(),
                     &render_resource_manager.textures,
                     &render_resource_manager.samplers,
-                    &render_resource_manager.material_template_bind_group_layouts,
+                    &render_resource_manager.material_templates,
                 ),
                 &resource_manager.material_texture_groups,
-                &mut render_resource_manager.material_texture_bind_groups,
+                &mut render_resource_manager.material_texture_groups,
             )?;
 
             Ok(())
@@ -699,22 +705,14 @@ define_task!(
     }
 );
 
-// =============================================================================
-// RENDER PIPELINE EXECUTION
-// =============================================================================
-
 define_task!(
-    /// Executes the [`RenderingSystem::record_commands_and_render_surface`]
-    /// method.
-    [pub] RecordCommandsAndRender,
+    /// Records and submits commands for synchronizing dynamic GPU resources
+    /// (resources that benefit from a staging belt).
+    [pub] SyncDynamicGPUResources,
     depends_on = [
-        SyncMeshGPUResources,
-        SyncTextureGPUResources,
-        SyncMaterialGPUResources,
-        SyncMiscGPUResources,
         SyncSceneCameraViewTransform,
-        SyncVoxelObjectMeshes,
         SyncLightsInStorage,
+        SyncVoxelObjectMeshes,
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
         BufferModelInstancesForRendering,
@@ -723,42 +721,81 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
+        instrument_engine_task!("Synchronizing dynamic GPU resources", engine, {
+            let scene = engine.scene().oread();
+            let scene_camera = scene.scene_camera().oread();
+            let light_manager = scene.light_manager().oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+            let mut model_instance_manager = scene.model_instance_manager().owrite();
+            let mut renderer = engine.renderer().owrite();
 
-        let resource_manager = engine.resource_manager().oread();
-        let scene = engine.scene().oread();
-        let scene_camera = scene.scene_camera().oread();
-        let light_manager = scene.light_manager().oread();
-        let mut voxel_object_manager = scene.voxel_object_manager().owrite();
-        let mut model_instance_manager = scene.model_instance_manager().owrite();
-        let mut renderer = engine.renderer().owrite();
-
-        let command_encoder = instrument_engine_task!("Recording resource synchronization commands", engine, {
-            renderer.record_resource_synchronization_commands(
+            renderer.sync_dynamic_gpu_resources(
                 (**scene_camera).as_ref(),
                 &light_manager,
                 &mut voxel_object_manager,
                 &mut model_instance_manager,
-            )
-        });
+            );
+            Ok(())
+        })
+    }
+);
 
-        drop(voxel_object_manager);
-        let model_instance_manager = model_instance_manager.downgrade();
+// =============================================================================
+// RENDER PIPELINE EXECUTION
+// =============================================================================
 
+define_task!(
+    /// Synchronizes the render commands with the current render resources.
+    [pub] SyncRenderCommands,
+    depends_on = [
+        SyncMeshGPUResources,
+        SyncTextureGPUResources,
+        SyncMaterialGPUResources,
+        SyncMiscGPUResources,
+        SyncDynamicGPUResources
+    ],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
         instrument_engine_task!("Synchronizing render commands", engine, {
-            renderer.synchronize_render_commands(&resource_manager)
+            engine.renderer().owrite().synchronize_render_commands()
+        })
+    }
+);
+
+define_task!(
+    /// Records and submits all render commands (including postprocessing
+    /// commands) that do not write directly into the surface texture.
+    [pub] RenderBeforeSurface,
+    depends_on = [SyncRenderCommands],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Rendering before surface", engine, {
+            engine.renderer().owrite().render_before_surface()
+        })
+    }
+);
+
+define_task!(
+    /// Waits for the next surface texture to be ready, before recording and
+    /// submitting the final render commands that write into the surface
+    /// texture. The surface texture to present (if any) is stored for later
+    /// presentation by calling [`Self::present`].
+    [pub] RenderToSurface,
+    depends_on = [RenderBeforeSurface],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+
+        let mut renderer = engine.renderer().owrite();
+
+        let (surface_texture_view, surface_texture) = instrument_engine_task!("Obtaining surface", engine, {
+            renderer.obtain_surface()
         })?;
 
-        let (surface_texture_view, surface_texture) = instrument_engine_task!("Preparing rendering", engine, {
-            renderer.prepare_rendering()
-        })?;
-
-        instrument_engine_task!("Rendering surface", engine, {
-            renderer.render_surface(
-                &resource_manager,
-                (**scene_camera).as_ref(),
-                &light_manager,
-                &model_instance_manager,
-                command_encoder,
+        instrument_engine_task!("Rendering to surface", engine, {
+            renderer.render_to_surface(
                 surface_texture_view,
                 surface_texture,
                 ctx.user_interface(),
@@ -768,10 +805,10 @@ define_task!(
 );
 
 define_task!(
-    /// Performs updates that use data from the GPU after rendering. This
-    /// involves fetching timestamps and the average incident luminance.
+    /// Performs minor updates that require the rendering into the surface
+    /// texture to be completed.
     [pub] PerformPostRenderingUpdates,
-    depends_on = [RecordCommandsAndRender],
+    depends_on = [RenderToSurface],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -788,7 +825,7 @@ define_task!(
     /// Captures and saves any screenshots or related textures requested through
     /// the [`ScreenCapturer`].
     [pub] SaveRequestedScreenshots,
-    depends_on = [RecordCommandsAndRender],
+    depends_on = [RenderToSurface],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -849,9 +886,12 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncTextureGPUResources)?;
     task_scheduler.register_task(SyncMaterialGPUResources)?;
     task_scheduler.register_task(SyncMiscGPUResources)?;
+    task_scheduler.register_task(SyncDynamicGPUResources)?;
 
     // Render Pipeline Execution
-    task_scheduler.register_task(RecordCommandsAndRender)?;
+    task_scheduler.register_task(SyncRenderCommands)?;
+    task_scheduler.register_task(RenderBeforeSurface)?;
+    task_scheduler.register_task(RenderToSurface)?;
     task_scheduler.register_task(PerformPostRenderingUpdates)?;
     task_scheduler.register_task(SaveRequestedScreenshots)
 }

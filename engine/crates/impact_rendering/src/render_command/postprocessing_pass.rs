@@ -188,7 +188,7 @@ impl PostprocessingRenderPass {
 
     fn color_attachments<'a, 'b: 'a>(
         &self,
-        surface_texture_view: &'b wgpu::TextureView,
+        surface_texture_view: Option<&'b wgpu::TextureView>,
         render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
     ) -> Vec<Option<wgpu::RenderPassColorAttachment<'a>>> {
         let mut color_attachments = Vec::with_capacity(self.color_target_states.len());
@@ -210,7 +210,9 @@ impl PostprocessingRenderPass {
 
         if self.writes_to_surface {
             color_attachments.push(Some(wgpu::RenderPassColorAttachment {
-                view: surface_texture_view,
+                view: surface_texture_view.expect(
+                    "Postprocessing pass that write to surface needs a surface texture view",
+                ),
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -299,7 +301,7 @@ impl PostprocessingRenderPass {
     pub fn record(
         &self,
         rendering_surface: &RenderingSurface,
-        surface_texture_view: &wgpu::TextureView,
+        surface_texture_view: Option<&wgpu::TextureView>,
         gpu_resources: &impl BasicGPUResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,

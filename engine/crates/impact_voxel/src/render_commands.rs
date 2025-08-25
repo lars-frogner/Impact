@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
-use impact_camera::gpu_resource::{BufferableCamera, CameraGPUResource};
+use impact_camera::gpu_resource::CameraGPUResource;
 use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
@@ -24,7 +24,7 @@ use impact_gpu::{
 };
 use impact_mesh::gpu_resource::VertexBufferable;
 use impact_model::{
-    InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeManager,
+    InstanceFeature,
     transform::{
         AsInstanceModelViewTransform, InstanceModelLightTransform, InstanceModelViewTransform,
         InstanceModelViewTransformWithPrevious,
@@ -38,9 +38,8 @@ use impact_rendering::{
     resource::BasicGPUResources,
     surface::RenderingSurface,
 };
-use impact_scene::{camera::SceneCamera, model::ModelInstanceManager};
 use nalgebra::Similarity3;
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Range};
 
 /// GPU commands that should be executed prior to rendering voxel objects.
 #[derive(Debug)]
@@ -113,125 +112,103 @@ impl VoxelRenderCommands {
             .sync_with_config(graphics_device, shader_manager, config);
     }
 
-    pub fn record_before_geometry_pass<R>(
+    pub fn record_before_geometry_pass<GR>(
         &self,
-        scene_camera: Option<&SceneCamera>,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: BasicGPUResources + VoxelGPUResources,
     {
         self.chunk_culling_pass.record_for_geometry_pass(
-            scene_camera,
-            model_instance_manager,
-            render_resources,
+            gpu_resources,
             timestamp_recorder,
             command_encoder,
         )
     }
 
-    pub fn record_to_geometry_pass<R>(
+    pub fn record_to_geometry_pass<GR>(
         &self,
         rendering_surface: &RenderingSurface,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         postprocessor: &Postprocessor,
         frame_counter: u32,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: BasicGPUResources + VoxelGPUResources,
     {
         self.geometry_pipeline.record(
             rendering_surface,
-            model_instance_manager,
-            render_resources,
+            gpu_resources,
             postprocessor,
             frame_counter,
             render_pass,
         )
     }
 
-    pub fn record_before_omnidirectional_light_shadow_cubemap_face_update<R>(
+    pub fn record_before_omnidirectional_light_shadow_cubemap_face_update<GR>(
         &self,
         positive_z_cubemap_face_frustum: &Frustum<f32>,
         instance_range_id: u32,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: VoxelGPUResources,
     {
         self.chunk_culling_pass
             .record_for_shadow_mapping_with_frustum(
                 positive_z_cubemap_face_frustum,
                 instance_range_id,
-                model_instance_manager,
-                render_resources,
+                gpu_resources,
                 timestamp_recorder,
                 command_encoder,
             )
     }
 
-    pub fn record_before_unidirectional_light_shadow_map_cascade_update<R>(
+    pub fn record_before_unidirectional_light_shadow_map_cascade_update<GR>(
         &self,
         cascade_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: VoxelGPUResources,
     {
         self.chunk_culling_pass
             .record_for_shadow_mapping_with_orthographic_frustum(
                 cascade_frustum,
                 instance_range_id,
-                model_instance_manager,
-                render_resources,
+                gpu_resources,
                 timestamp_recorder,
                 command_encoder,
             )
     }
 
-    pub fn record_shadow_map_update<R>(
+    pub fn record_shadow_map_update<GR>(
         instance_range_id: u32,
-        model_instance_manager: &ModelInstanceManager,
-        gpu_resources: &R,
+        gpu_resources: &GR,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: BasicGPUResources + VoxelGPUResources,
     {
-        let voxel_object_buffer_map = gpu_resources.voxel_object_buffer();
-
         // Return early if there are no voxel objects
-        if voxel_object_buffer_map.is_empty() {
+        if !gpu_resources.voxel_objects().has_voxel_objects() {
             return Ok(());
         }
 
-        let voxel_object_instance_buffer = model_instance_manager
-            .get_model_instance_buffer(&VOXEL_MODEL_ID)
-            .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
-
-        let voxel_object_id_buffer = voxel_object_instance_buffer
-            .get_feature_buffer(VoxelObjectID::FEATURE_TYPE_ID)
-            .ok_or_else(|| {
-                anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
-            })?;
-
-        let (_, voxel_object_ids) =
-            voxel_object_id_buffer.range_with_valid_features::<VoxelObjectID>(instance_range_id);
+        let visible_voxel_object_ids = gpu_resources
+            .voxel_objects()
+            .visible_voxel_object_ids_in_range(instance_range_id);
 
         // Return early if no voxel objects fall within the shadow map
-        if voxel_object_ids.is_empty() {
+        if visible_voxel_object_ids.is_empty() {
             return Ok(());
         }
 
@@ -250,8 +227,9 @@ impl VoxelRenderCommands {
                 .valid_buffer_slice(),
         );
 
-        for voxel_object_id in voxel_object_ids {
-            let voxel_object_buffers = voxel_object_buffer_map
+        for voxel_object_id in visible_voxel_object_ids {
+            let voxel_object_buffers = gpu_resources
+                .voxel_objects()
                 .get_voxel_object_buffers(*voxel_object_id)
                 .ok_or_else(|| {
                     anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
@@ -368,31 +346,42 @@ impl VoxelChunkCullingPass {
             );
     }
 
-    fn record_for_geometry_pass<R>(
+    fn record_for_geometry_pass<GR>(
         &self,
-        scene_camera: Option<&SceneCamera>,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: BasicGPUResources + VoxelGPUResources,
     {
-        let Some(scene_camera) = scene_camera else {
+        let Some(camera) = gpu_resources.camera() else {
             return Ok(());
         };
 
-        let frustum = scene_camera.camera().view_frustum();
+        // Return early if there are no voxel objects
+        if !gpu_resources.voxel_objects().has_voxel_objects() {
+            return Ok(());
+        }
 
-        let instance_range_id = InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
+        let frustum = camera.view_frustum();
 
-        self.record::<R, InstanceModelViewTransformWithPrevious>(
-            model_instance_manager,
-            render_resources,
+        let visible_voxel_object_ids = gpu_resources
+            .voxel_objects()
+            .visible_voxel_object_ids_in_initial_range();
+
+        let (visible_voxel_object_to_frustum_transforms, instance_range_for_transforms) =
+            gpu_resources
+                .voxel_objects()
+                .visible_object_model_view_transforms();
+
+        self.record(
+            gpu_resources,
             timestamp_recorder,
             command_encoder,
-            instance_range_id,
+            visible_voxel_object_ids,
+            visible_voxel_object_to_frustum_transforms,
+            instance_range_for_transforms,
             &|frustum_to_voxel_object_transform| {
                 CullingFrustum::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
             },
@@ -402,24 +391,38 @@ impl VoxelChunkCullingPass {
         )
     }
 
-    fn record_for_shadow_mapping_with_frustum<R>(
+    fn record_for_shadow_mapping_with_frustum<GR>(
         &self,
         frustum: &Frustum<f32>,
         instance_range_id: u32,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: VoxelGPUResources,
     {
-        self.record::<R, InstanceModelLightTransform>(
-            model_instance_manager,
-            render_resources,
+        // Return early if there are no voxel objects
+        if !gpu_resources.voxel_objects().has_voxel_objects() {
+            return Ok(());
+        }
+
+        let visible_voxel_object_ids = gpu_resources
+            .voxel_objects()
+            .visible_voxel_object_ids_in_range(instance_range_id);
+
+        let (visible_voxel_object_to_frustum_transforms, instance_range_for_transforms) =
+            gpu_resources
+                .voxel_objects()
+                .visible_object_model_light_transforms_in_range(instance_range_id);
+
+        self.record(
+            gpu_resources,
             timestamp_recorder,
             command_encoder,
-            instance_range_id,
+            visible_voxel_object_ids,
+            visible_voxel_object_to_frustum_transforms,
+            instance_range_for_transforms,
             &|frustum_to_voxel_object_transform| {
                 CullingFrustum::for_transformed_frustum(frustum, frustum_to_voxel_object_transform)
             },
@@ -429,24 +432,38 @@ impl VoxelChunkCullingPass {
         )
     }
 
-    fn record_for_shadow_mapping_with_orthographic_frustum<R>(
+    fn record_for_shadow_mapping_with_orthographic_frustum<GR>(
         &self,
         orthographic_frustum: &OrientedBox<f32>,
         instance_range_id: u32,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: VoxelGPUResources,
     {
-        self.record::<R, InstanceModelLightTransform>(
-            model_instance_manager,
-            render_resources,
+        // Return early if there are no voxel objects
+        if !gpu_resources.voxel_objects().has_voxel_objects() {
+            return Ok(());
+        }
+
+        let visible_voxel_object_ids = gpu_resources
+            .voxel_objects()
+            .visible_voxel_object_ids_in_range(instance_range_id);
+
+        let (visible_voxel_object_to_frustum_transforms, instance_range_for_transforms) =
+            gpu_resources
+                .voxel_objects()
+                .visible_object_model_light_transforms_in_range(instance_range_id);
+
+        self.record(
+            gpu_resources,
             timestamp_recorder,
             command_encoder,
-            instance_range_id,
+            visible_voxel_object_ids,
+            visible_voxel_object_to_frustum_transforms,
+            instance_range_for_transforms,
             &|frustum_to_voxel_object_transform| {
                 CullingFrustum::for_transformed_orthographic_frustum(
                     orthographic_frustum,
@@ -460,51 +477,35 @@ impl VoxelChunkCullingPass {
         )
     }
 
-    fn record<R, F>(
+    fn record<GR, T>(
         &self,
-        model_instance_manager: &ModelInstanceManager,
-        render_resources: &R,
+        gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
-        instance_range_id: InstanceFeatureBufferRangeID,
+        visible_voxel_object_ids: &[VoxelObjectID],
+        visible_voxel_object_to_frustum_transforms: &[T],
+        instance_range_for_transforms: Range<u32>,
         obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<f32>) -> CullingFrustum,
         for_indexed_draw_calls: bool,
         tag: Cow<'static, str>,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
-        F: InstanceFeature + AsInstanceModelViewTransform,
+        GR: VoxelGPUResources,
+        T: AsInstanceModelViewTransform,
     {
-        let voxel_object_buffer_map = render_resources.voxel_object_buffer();
-
-        // Return early if there are no voxel objects
-        if voxel_object_buffer_map.is_empty() {
-            return Ok(());
-        }
-
-        let voxel_object_instance_buffer = model_instance_manager
-            .get_model_instance_buffer(&VOXEL_MODEL_ID)
-            .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
-
-        let voxel_object_id_buffer = voxel_object_instance_buffer
-            .get_feature_buffer(VoxelObjectID::FEATURE_TYPE_ID)
-            .ok_or_else(|| {
-                anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
-            })?;
-
-        let (_, voxel_object_ids) =
-            voxel_object_id_buffer.range_with_valid_features::<VoxelObjectID>(instance_range_id);
+        assert_eq!(
+            visible_voxel_object_ids.len(),
+            visible_voxel_object_to_frustum_transforms.len()
+        );
+        assert_eq!(
+            instance_range_for_transforms.len(),
+            visible_voxel_object_ids.len()
+        );
 
         // Return early if no voxel objects are buffered in the specified range
-        if voxel_object_ids.is_empty() {
+        if visible_voxel_object_ids.is_empty() {
             return Ok(());
         }
-
-        let instance_transform_buffer = voxel_object_instance_buffer
-            .get_feature_buffer(F::FEATURE_TYPE_ID)
-            .ok_or_else(|| {
-                anyhow!("Missing transform instance feature buffer for voxel objects")
-            })?;
 
         let timestamp_writes =
             timestamp_recorder.register_timestamp_writes_for_single_compute_pass(tag);
@@ -520,18 +521,13 @@ impl VoxelChunkCullingPass {
             &self.pipeline_for_non_indexed
         });
 
-        // It's important that we use the instance range associated with the
-        // transforms and not with the voxel object IDs, since these can be
-        // different due to the object ID buffer being used for both rendering
-        // and shadow mapping
-        let (instance_range, voxel_object_to_frustum_transforms) =
-            instance_transform_buffer.range_with_valid_features::<F>(instance_range_id);
-
-        for ((instance_idx, voxel_object_id), voxel_object_to_frustum_transform) in instance_range
-            .zip(voxel_object_ids)
-            .zip(voxel_object_to_frustum_transforms)
+        for ((instance_idx, voxel_object_id), voxel_object_to_frustum_transform) in
+            instance_range_for_transforms
+                .zip(visible_voxel_object_ids)
+                .zip(visible_voxel_object_to_frustum_transforms)
         {
-            let voxel_object_buffers = voxel_object_buffer_map
+            let voxel_object_buffers = gpu_resources
+                .voxel_objects()
                 .get_voxel_object_buffers(*voxel_object_id)
                 .ok_or_else(|| {
                     anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
@@ -569,7 +565,7 @@ impl VoxelChunkCullingPass {
 
         impact_log::trace!(
             "Recorded chunk culling pass for {} voxel objects",
-            voxel_object_buffer_map.len()
+            visible_voxel_object_ids.len()
         );
 
         Ok(())
@@ -749,37 +745,25 @@ impl VoxelGeometryPipeline {
             );
     }
 
-    pub fn record<R>(
+    pub fn record<GR>(
         &self,
         rendering_surface: &RenderingSurface,
-        model_instance_manager: &ModelInstanceManager,
-        gpu_resources: &R,
+        gpu_resources: &GR,
         postprocessor: &Postprocessor,
         frame_counter: u32,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()>
     where
-        R: BasicGPUResources + VoxelGPUResources,
+        GR: BasicGPUResources + VoxelGPUResources,
     {
-        let voxel_object_buffer_map = gpu_resources.voxel_object_buffer();
-
         // Return early if there are no voxel objects
-        if voxel_object_buffer_map.is_empty() {
+        if !gpu_resources.voxel_objects().has_voxel_objects() {
             return Ok(());
         }
 
-        let voxel_object_instance_buffer = model_instance_manager
-            .get_model_instance_buffer(&VOXEL_MODEL_ID)
-            .ok_or_else(|| anyhow!("Missing model instance buffer for voxel objects"))?;
-
-        let voxel_object_id_buffer = voxel_object_instance_buffer
-            .get_feature_buffer(VoxelObjectID::FEATURE_TYPE_ID)
-            .ok_or_else(|| {
-                anyhow!("Missing voxel object ID instance feature buffer for voxel objects")
-            })?;
-
-        let visible_voxel_object_ids =
-            voxel_object_id_buffer.valid_features_in_initial_range::<VoxelObjectID>();
+        let visible_voxel_object_ids = gpu_resources
+            .voxel_objects()
+            .visible_voxel_object_ids_in_initial_range();
 
         // Return early if no voxel objects are visible
         if visible_voxel_object_ids.is_empty() {
@@ -820,7 +804,8 @@ impl VoxelGeometryPipeline {
         );
 
         for voxel_object_id in visible_voxel_object_ids {
-            let voxel_object_buffers = voxel_object_buffer_map
+            let voxel_object_buffers = gpu_resources
+                .voxel_objects()
                 .get_voxel_object_buffers(*voxel_object_id)
                 .ok_or_else(|| {
                     anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
@@ -855,7 +840,7 @@ impl VoxelGeometryPipeline {
 
         impact_log::trace!(
             "Recorded geometry pass for {} voxel objects",
-            voxel_object_buffer_map.len()
+            visible_voxel_object_ids.len()
         );
 
         Ok(())

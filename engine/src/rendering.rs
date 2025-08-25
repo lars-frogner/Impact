@@ -5,8 +5,7 @@ pub mod resource;
 pub mod screen_capture;
 
 use crate::{
-    lock_order::OrderedRwLock, resource::ResourceManager, tasks::RecordCommandsAndRender,
-    ui::UserInterface,
+    lock_order::OrderedRwLock, resource::ResourceManager, tasks::RenderToSurface, ui::UserInterface,
 };
 use anyhow::Result;
 use impact_gpu::{
@@ -238,16 +237,15 @@ impl RenderingSystem {
         }
     }
 
-    /// Creates a command encoder and records commands for synchronizing dynamic
-    /// GPU resources (resources that benefit from a staging belt). Returns the
-    /// command encoder so that it can be passed to [`Self::render_surface`].
-    pub fn record_resource_synchronization_commands(
+    /// Records and submits commands for synchronizing dynamic GPU resources
+    /// (resources that benefit from a staging belt).
+    pub fn sync_dynamic_gpu_resources(
         &mut self,
         scene_camera: Option<&SceneCamera>,
         light_manager: &LightManager,
         voxel_object_manager: &mut VoxelObjectManager,
         model_instance_manager: &mut ModelInstanceManager,
-    ) -> wgpu::CommandEncoder {
+    ) {
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
@@ -274,12 +272,13 @@ impl RenderingSystem {
             &self.shadow_mapping_config,
         );
 
-        voxel_object_manager.sync_voxel_object_gpu_buffers(
+        voxel_object_manager.sync_voxel_object_gpu_resources(
             &self.graphics_device,
             &mut self.staging_belt,
             &mut command_encoder,
             &self.bind_group_layout_registry,
-            &mut render_resource_manager.voxel_object_buffers,
+            model_instance_manager,
+            &mut render_resource_manager.voxel_objects,
         );
 
         // TODO: Most instance feature GPU buffers are also updated every frame
@@ -296,66 +295,86 @@ impl RenderingSystem {
 
         self.staging_belt.finish();
 
-        command_encoder
+        self.graphics_device
+            .queue()
+            .submit(std::iter::once(command_encoder.finish()));
     }
 
     /// Synchronizes the render commands with the current render resources. Must
-    /// be called after [`Self::record_resource_synchronization_commands`].
+    /// be called after [`Self::sync_dynamic_gpu_resources`].
     ///
     /// # Errors
     /// Returns an error if synchronization fails due to missing resources.
-    pub fn synchronize_render_commands(
-        &mut self,
-        resource_manager: &ResourceManager,
-    ) -> Result<()> {
+    pub fn synchronize_render_commands(&mut self) -> Result<()> {
         let render_resource_manager = self.render_resource_manager.oread();
         let mut shader_manager = self.shader_manager.owrite();
         self.render_command_manager.sync_with_render_resources(
             &self.graphics_device,
             &mut shader_manager,
-            resource_manager,
             &**render_resource_manager,
             &self.bind_group_layout_registry,
         )
     }
 
-    /// Performs minor preparations for [`Self::render_surface`], including
-    /// swapping render attachments and obtaining the surface texture view. The
-    /// latter may require the function to wait for the next surface texture to
-    /// be ready. This should be called immediately before
-    /// [`Self::render_surface`].
+    /// Records and submits render commands that do not require the surface
+    /// texture to be available.
     ///
     /// # Errors
-    /// Return an error if obtaining the surface texture fails.
-    pub fn prepare_rendering(
-        &mut self,
-    ) -> Result<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)> {
+    /// Returns an error if recording a render commands fails.
+    pub fn render_before_surface(&mut self) -> Result<()> {
         self.render_attachment_texture_manager
             .owrite()
             .swap_previous_and_current_attachment_variants(&self.graphics_device);
 
-        let (surface_texture_view, surface_texture) = self
-            .rendering_surface
-            .get_texture_view_with_presentable_texture()?;
+        let mut timestamp_recorder = self
+            .timestamp_query_manager
+            .create_timestamp_query_registry();
 
-        Ok((surface_texture_view, surface_texture))
+        let mut command_encoder =
+            Self::create_render_command_encoder(self.graphics_device.device());
+
+        self.render_command_manager.record_before_surface(
+            &self.rendering_surface,
+            &**self.render_resource_manager.oread(),
+            &self.render_attachment_texture_manager.oread(),
+            &self.gpu_resource_group_manager.oread(),
+            &self.storage_gpu_buffer_manager.oread(),
+            &self.postprocessor.oread(),
+            &self.shadow_mapping_config,
+            self.frame_counter,
+            &mut timestamp_recorder,
+            &mut command_encoder,
+        )?;
+
+        timestamp_recorder.finish(&mut command_encoder);
+
+        self.graphics_device
+            .queue()
+            .submit(std::iter::once(command_encoder.finish()));
+
+        Ok(())
     }
 
-    /// Records render commands and submits the command encoder. The surface
-    /// texture to present (if any) is stored for later presentation by calling
-    /// [`Self::present`].
+    /// Obtains a view of the surface texture, along with the
+    /// [`wgpu::SurfaceTexture`] to present after rendering if the surface is
+    /// attached to a window. This function may have to wait for the next
+    /// surface texture from the swap chain to be ready.
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - The surface texture to render to can not be obtained.
-    /// - Recording render commands fails.
-    pub fn render_surface(
+    /// Return an error if obtaining the surface texture fails.
+    pub fn obtain_surface(&mut self) -> Result<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)> {
+        self.rendering_surface
+            .get_texture_view_with_presentable_texture()
+    }
+
+    /// Records and submits the final render commands that write into the
+    /// surface texture. The surface texture to present (if any) is stored for
+    /// later presentation by calling [`Self::present`].
+    ///
+    /// # Errors
+    /// Returns an error if recording a render commands fails.
+    pub fn render_to_surface(
         &mut self,
-        resource_manager: &ResourceManager,
-        scene_camera: Option<&SceneCamera>,
-        light_manager: &LightManager,
-        model_instance_manager: &ModelInstanceManager,
-        mut command_encoder: wgpu::CommandEncoder,
         surface_texture_view: wgpu::TextureView,
         surface_texture: Option<wgpu::SurfaceTexture>,
         user_interface: &dyn UserInterface,
@@ -364,19 +383,16 @@ impl RenderingSystem {
             .timestamp_query_manager
             .create_timestamp_query_registry();
 
-        self.render_command_manager.record(
+        let mut command_encoder =
+            Self::create_render_command_encoder(self.graphics_device.device());
+
+        self.render_command_manager.record_with_surface(
             &self.rendering_surface,
             &surface_texture_view,
-            scene_camera,
-            light_manager,
-            model_instance_manager,
-            resource_manager,
             &**self.render_resource_manager.oread(),
             &self.render_attachment_texture_manager.oread(),
             &self.gpu_resource_group_manager.oread(),
-            &self.storage_gpu_buffer_manager.oread(),
             &self.postprocessor.oread(),
-            &self.shadow_mapping_config,
             self.frame_counter,
             &mut timestamp_recorder,
             &mut command_encoder,
@@ -404,7 +420,7 @@ impl RenderingSystem {
     }
 
     /// Loads the timestamps recorded during rendering. Call after
-    /// [`Self::render_surface`]. This method will wait for the GPU to finish
+    /// [`Self::render_to_surface`]. This method will wait for the GPU to finish
     /// rendering.
     pub fn load_recorded_timing_results(&mut self) -> Result<()> {
         self.timestamp_query_manager
@@ -414,7 +430,7 @@ impl RenderingSystem {
     }
 
     /// Updates the exposure based on the current settings and potentially the
-    /// average incident luminance. Call after [`Self::render_surface`]. This
+    /// average incident luminance. Call after [`Self::render_to_surface`]. This
     /// method will wait for the GPU to finish rendering if it needs the average
     /// incident luminance.
     pub fn update_exposure(&self) -> Result<()> {
@@ -507,11 +523,11 @@ impl RenderingSystem {
     /// Identifies rendering-related errors that need special handling in the
     /// given set of task errors and handles them.
     pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
-        if let Some(render_error) = task_errors.get_error_of(RecordCommandsAndRender.id())
+        if let Some(render_error) = task_errors.get_error_of(RenderToSurface.id())
             && let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref()
         {
             self.handle_surface_lost();
-            task_errors.clear_error_of(RecordCommandsAndRender.id());
+            task_errors.clear_error_of(RenderToSurface.id());
         }
     }
 }

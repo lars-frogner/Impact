@@ -1675,19 +1675,7 @@ impl OrthographicTranslationAndScaling {
     }
 
     fn compute_aabb(&self) -> AxisAlignedBox<f32> {
-        let (orthographic_center, orthographic_half_extents) =
-            OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(
-                &self.translation,
-                &self.scaling,
-            );
-
-        let orthographic_lower_corner = orthographic_center - orthographic_half_extents;
-        let orthographic_upper_corner = orthographic_center + orthographic_half_extents;
-
-        let orthographic_aabb =
-            AxisAlignedBox::new(orthographic_lower_corner, orthographic_upper_corner);
-
-        orthographic_aabb
+        compute_orthographic_transform_aabb(&self.translation, &self.scaling)
     }
 }
 
@@ -1699,4 +1687,23 @@ pub fn compute_luminance_for_uniform_illuminance(illuminance: &Illumninance) -> 
 
 fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> f32 {
     0.2125 * rgb_luminance.x + 0.7154 * rgb_luminance.y + 0.0721 * rgb_luminance.z
+}
+
+fn compute_orthographic_transform_aabb(
+    translation: &Translation3<f32>,
+    scaling: &Scale3<f32>,
+) -> AxisAlignedBox<f32> {
+    let (orthographic_center, orthographic_half_extents) =
+        OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(
+            translation,
+            scaling,
+        );
+
+    let orthographic_lower_corner = orthographic_center - orthographic_half_extents;
+    let orthographic_upper_corner = orthographic_center + orthographic_half_extents;
+
+    let orthographic_aabb =
+        AxisAlignedBox::new(orthographic_lower_corner, orthographic_upper_corner);
+
+    orthographic_aabb
 }

@@ -5,7 +5,7 @@ use crate::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
-    resource::{BasicGPUResources, BasicResourceRegistries},
+    resource::BasicGPUResources,
     shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
     surface::RenderingSurface,
 };
@@ -19,7 +19,7 @@ use impact_gpu::{
     shader::{ShaderManager, template::SpecificShaderTemplate},
     wgpu,
 };
-use impact_material::MaterialTextureBindingLocations;
+use impact_material::Material;
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use impact_scene::model::ModelID;
@@ -120,7 +120,6 @@ impl DepthPrepass {
 
     pub fn sync_with_render_resources_for_non_physical_models(
         &mut self,
-        resource_registries: &impl BasicResourceRegistries,
         gpu_resources: &impl BasicGPUResources,
     ) {
         let model_instance_buffers = gpu_resources.model_instance_buffer();
@@ -132,16 +131,10 @@ impl DepthPrepass {
             if self.models.contains(model_id) {
                 continue;
             }
-            if let Some(material_template) = resource_registries
+            if gpu_resources
                 .material()
                 .get(model_id.material_id())
-                .and_then(|material| {
-                    resource_registries
-                        .material_template()
-                        .get(material.template_id)
-                })
-                && let MaterialTextureBindingLocations::Fixed(_) =
-                    material_template.texture_binding_locations
+                .is_some_and(Material::is_fixed)
             {
                 self.models.insert(*model_id);
             }

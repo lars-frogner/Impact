@@ -257,6 +257,16 @@ impl Material {
             Some(self.texture_group_id)
         }
     }
+
+    /// Whether the material is a fixed material.
+    pub fn is_fixed(&self) -> bool {
+        self.property_values.is_fixed()
+    }
+
+    /// Whether the material is a physical material.
+    pub fn is_physical(&self) -> bool {
+        self.property_values.is_physical()
+    }
 }
 
 impl Resource for Material {
