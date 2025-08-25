@@ -1,7 +1,7 @@
 //! GPU queries.
 
 use crate::{
-    buffer::{self, GPUBuffer, GPUBufferType},
+    buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
 };
 use anyhow::Result;
@@ -16,6 +16,7 @@ pub struct TimestampQueryManager {
     timestamp_result_buffer: GPUBuffer,
     timestamp_pairs: Vec<Cow<'static, str>>,
     last_timing_results: Vec<(Cow<'static, str>, Duration)>,
+    next_batch_start_offset_in_result_buffer: u64,
     enabled: bool,
 }
 
@@ -31,6 +32,7 @@ pub struct TimestampQueryManager {
 #[derive(Debug)]
 pub struct TimestampQueryRegistry<'a> {
     manager: &'a mut TimestampQueryManager,
+    first_timestamp_pair_idx: u32,
 }
 
 impl TimestampQueryManager {
@@ -87,6 +89,7 @@ impl TimestampQueryManager {
             timestamp_result_buffer,
             timestamp_pairs: Vec::new(),
             last_timing_results: Vec::new(),
+            next_batch_start_offset_in_result_buffer: 0,
             enabled,
         }
     }
@@ -107,6 +110,14 @@ impl TimestampQueryManager {
         self.enabled = enabled;
     }
 
+    /// Clears all registered timestamp pairs.
+    pub fn reset(&mut self) {
+        self.query_resolve_buffer.set_n_valid_bytes(0);
+        self.timestamp_result_buffer.set_n_valid_bytes(0);
+        self.timestamp_pairs.clear();
+        self.next_batch_start_offset_in_result_buffer = 0;
+    }
+
     /// Creates a [`TimestampQueryRegistry`] for registering timestamp queries
     /// for timing render and compute passes.
     ///
@@ -118,15 +129,18 @@ impl TimestampQueryManager {
     /// can be computed by calling [`Self::load_recorded_timing_results`], and
     /// retrieved by calling [`Self::last_timing_results`].
     pub fn create_timestamp_query_registry(&mut self) -> TimestampQueryRegistry<'_> {
-        self.timestamp_pairs.clear();
-        TimestampQueryRegistry { manager: self }
+        let first_timestamp_pair_idx = self.timestamp_pairs.len() as u32;
+        TimestampQueryRegistry {
+            manager: self,
+            first_timestamp_pair_idx,
+        }
     }
 
-    /// Loads the timestamps pairs registered in the [`TimestampQueryRegistry`]
-    /// obtained by the last call to [`Self::create_timestamp_query_registry`]
-    /// after they have been recorded on the GPU and computes the duration
-    /// between each timestamp pair. The results can be obtained by calling
-    /// [`Self::last_timing_results`].
+    /// Loads the timestamps pairs registered in all [`TimestampQueryRegistry`]s
+    /// created by [`Self::create_timestamp_query_registry`] since the last time
+    /// [`Self::reset`] was called after they have been recorded on the GPU and
+    /// computes the duration between each timestamp pair. The results can be
+    /// obtained by calling [`Self::last_timing_results`].
     ///
     /// This method must be called after [`wgpu::Queue::submit`] in order for
     /// the recorded timestamps to be available.
@@ -195,28 +209,46 @@ impl TimestampQueryManager {
         &self.last_timing_results
     }
 
-    fn finish_recording(&mut self, command_encoder: &mut wgpu::CommandEncoder) {
-        if !self.enabled || self.timestamp_pairs.is_empty() {
+    fn finish_recording_batch(
+        &mut self,
+        command_encoder: &mut wgpu::CommandEncoder,
+        batch_first_timestamp_pair_idx: u32,
+    ) {
+        if !self.enabled || batch_first_timestamp_pair_idx as usize >= self.timestamp_pairs.len() {
             return;
         }
 
-        let query_range = 0..(2 * self.timestamp_pairs.len() as u32);
+        let batch_timestamp_pair_count =
+            self.timestamp_pairs.len() as u32 - batch_first_timestamp_pair_idx;
+        let batch_query_count = 2 * batch_timestamp_pair_count;
+        let batch_query_range_start = 2 * batch_first_timestamp_pair_idx;
+        let batch_query_range_end = batch_query_range_start + batch_query_count;
 
-        let n_valid_bytes = query_range.end * wgpu::QUERY_SIZE;
-        self.query_resolve_buffer
-            .set_n_valid_bytes(n_valid_bytes as usize);
+        let batch_byte_count = u64::from(batch_query_count) * u64::from(wgpu::QUERY_SIZE);
+
+        let batch_end_offset_in_result_buffer =
+            self.next_batch_start_offset_in_result_buffer + batch_byte_count;
 
         command_encoder.resolve_query_set(
             self.query_set.as_ref().unwrap(),
-            query_range,
+            batch_query_range_start..batch_query_range_end,
             self.query_resolve_buffer.buffer(),
             0,
         );
-        buffer::encode_buffer_to_buffer_copy_command(
-            command_encoder,
-            &self.query_resolve_buffer,
-            &self.timestamp_result_buffer,
+        self.query_resolve_buffer
+            .set_n_valid_bytes(batch_byte_count as usize);
+
+        command_encoder.copy_buffer_to_buffer(
+            self.query_resolve_buffer.buffer(),
+            0,
+            self.timestamp_result_buffer.buffer(),
+            self.next_batch_start_offset_in_result_buffer,
+            batch_byte_count,
         );
+        self.timestamp_result_buffer
+            .set_n_valid_bytes(batch_end_offset_in_result_buffer as usize);
+
+        self.next_batch_start_offset_in_result_buffer = batch_end_offset_in_result_buffer;
     }
 
     fn register_writes_and_get_query_indices(
@@ -361,7 +393,8 @@ impl TimestampQueryRegistry<'_> {
     /// registered timestamp queries and making the recorded timestamps
     /// available.
     pub fn finish(self, command_encoder: &mut wgpu::CommandEncoder) {
-        self.manager.finish_recording(command_encoder);
+        self.manager
+            .finish_recording_batch(command_encoder, self.first_timestamp_pair_idx);
     }
 }
 

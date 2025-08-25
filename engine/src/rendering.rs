@@ -408,7 +408,9 @@ impl RenderingSystem {
     /// rendering.
     pub fn load_recorded_timing_results(&mut self) -> Result<()> {
         self.timestamp_query_manager
-            .load_recorded_timing_results(&self.graphics_device)
+            .load_recorded_timing_results(&self.graphics_device)?;
+        self.timestamp_query_manager.reset();
+        Ok(())
     }
 
     /// Updates the exposure based on the current settings and potentially the
