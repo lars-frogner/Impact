@@ -20,7 +20,8 @@ pub fn run_with_config_at_path(config_path: impl AsRef<Path>) -> Result<()> {
 pub fn run_with_config(config: AppConfig) -> Result<()> {
     env_logger::init();
 
-    let engine_config = EngineConfig::from_ron_file(config.engine_config_path)?;
+    let mut engine_config = EngineConfig::from_ron_file(config.engine_config_path)?;
+    engine_config.screen_capture.output_dir = Some(config.testing.output_dir.clone());
 
     let tester = SnapshotTester::new(config.testing)?;
 

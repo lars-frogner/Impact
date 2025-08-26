@@ -15,7 +15,10 @@ use crate::{
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
     lock_order::OrderedRwLock,
     physics::{PhysicsConfig, PhysicsSimulator},
-    rendering::{RenderingConfig, RenderingSystem, screen_capture::ScreenCapturer},
+    rendering::{
+        RenderingConfig, RenderingSystem,
+        screen_capture::{ScreenCaptureConfig, ScreenCapturer},
+    },
     resource::{ResourceConfig, ResourceManager},
     scene::Scene,
 };
@@ -51,7 +54,7 @@ pub struct Engine {
     app: Arc<dyn Application>,
     graphics_device: Arc<GraphicsDevice>,
     component_metadata_registry: ComponentMetadataRegistry,
-    game_loop_controller: Mutex<GameLoopController>,
+    game_loop_controller: RwLock<GameLoopController>,
     entity_stager: Mutex<EntityStager>,
     ecs_world: RwLock<ECSWorld>,
     resource_manager: RwLock<ResourceManager>,
@@ -80,6 +83,7 @@ pub struct EngineConfig {
     pub controller: ControllerConfig,
     pub gizmo: GizmoConfig,
     pub instrumentation: InstrumentationConfig,
+    pub screen_capture: ScreenCaptureConfig,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -152,7 +156,7 @@ impl Engine {
             app,
             graphics_device,
             component_metadata_registry,
-            game_loop_controller: Mutex::new(game_loop_controller),
+            game_loop_controller: RwLock::new(game_loop_controller),
             entity_stager: Mutex::new(EntityStager::new()),
             ecs_world: RwLock::new(ecs_world),
             resource_manager: RwLock::new(resource_manager),
@@ -163,7 +167,7 @@ impl Engine {
             orientation_controller: orientation_controller.map(Mutex::new),
             gizmo_manager: RwLock::new(gizmo_manager),
             metrics: RwLock::new(EngineMetrics::default()),
-            screen_capturer: ScreenCapturer::new(),
+            screen_capturer: ScreenCapturer::new(config.screen_capture),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
             controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
@@ -188,8 +192,8 @@ impl Engine {
     }
 
     /// Returns a reference to the [`GameLoopController`], guarded by a
-    /// [`Mutex`].
-    pub fn game_loop_controller(&self) -> &Mutex<GameLoopController> {
+    /// [`RwLock`].
+    pub fn game_loop_controller(&self) -> &RwLock<GameLoopController> {
         &self.game_loop_controller
     }
 
@@ -251,31 +255,30 @@ impl Engine {
         &self.task_timer
     }
 
-    /// Captures and saves a screenshot to the specified path, or, if not
-    /// specified, to a timestamped PNG file in the current directory.
-    pub fn capture_screenshot<A>(&self, arena: A, output_path: Option<&Path>) -> Result<()>
-    where
-        A: Copy + Allocator,
-    {
-        self.screen_capturer.request_screenshot_save();
-        self.screen_capturer
-            .save_screenshot_if_requested(arena, self.renderer(), output_path)
-    }
-
     /// Captures and saves any screenshots or related textures requested through
     /// the [`ScreenCapturer`].
     pub fn save_requested_screenshots<A>(&self, arena: A) -> Result<()>
     where
         A: Copy + Allocator,
     {
-        self.screen_capturer
-            .save_screenshot_if_requested(arena, self.renderer(), None)?;
+        let frame_number = self.game_loop_controller.oread().iteration();
 
         self.screen_capturer
-            .save_omnidirectional_light_shadow_maps_if_requested(arena, self.renderer())?;
+            .save_screenshot_if_requested(arena, self.renderer(), frame_number)?;
 
         self.screen_capturer
-            .save_unidirectional_light_shadow_maps_if_requested(arena, self.renderer())
+            .save_omnidirectional_light_shadow_maps_if_requested(
+                arena,
+                self.renderer(),
+                frame_number,
+            )?;
+
+        self.screen_capturer
+            .save_unidirectional_light_shadow_maps_if_requested(
+                arena,
+                self.renderer(),
+                frame_number,
+            )
     }
 
     /// Sets a new size for the rendering surface and updates

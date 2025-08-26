@@ -94,4 +94,7 @@
             sensitivity: 1.0,
         )),
     ),
+    screen_capture: (
+        tagging: FrameNumber,
+    ),
 )

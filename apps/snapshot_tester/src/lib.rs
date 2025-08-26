@@ -13,8 +13,7 @@ use crate::testing::ComparisonOutcome;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
-    bumpalo::Bump,
-    command::{EngineCommand, scene::SceneCommand},
+    command::{EngineCommand, capture::CaptureCommand, scene::SceneCommand},
     engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
@@ -88,9 +87,12 @@ impl SnapshotTester {
     fn run_comparisons(&self) -> Result<()> {
         let mut failing_scenes = Vec::new();
 
-        for &scene in &self.test_scenes {
-            let output_image_path = scene.append_filename(&self.config.output_dir);
+        for (frame_number, &scene) in self.test_scenes.iter().enumerate() {
+            let output_image_path = output_image_path(&self.config.output_dir, frame_number);
             let reference_image_path = scene.append_filename(&self.config.reference_dir);
+
+            let renamed_output_image_path = scene.append_filename(&self.config.output_dir);
+            fs::rename(&output_image_path, &renamed_output_image_path)?;
 
             if !reference_image_path.is_file() {
                 impact_log::info!(
@@ -102,7 +104,7 @@ impl SnapshotTester {
 
             let outcome = testing::run_comparison(
                 scene,
-                &output_image_path,
+                &renamed_output_image_path,
                 &reference_image_path,
                 self.config.min_score_to_pass,
             )?;
@@ -127,48 +129,38 @@ impl Application for SnapshotTester {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
         if self.test_scenes.is_empty() {
             impact_log::info!("No scenes to test, exiting");
-            return engine.execute_command(EngineCommand::Shutdown);
+            engine.enqueue_command(EngineCommand::Shutdown);
+            return Ok(());
         }
 
         *ENGINE.write() = Some(engine.clone());
-
-        let first_scene = self.test_scenes[0];
-
-        // Setup first scene
-        first_scene.prepare_settings(&engine)?;
-        scripting::setup_scene(first_scene)
+        Ok(())
     }
 
-    fn on_game_loop_iteration_completed(
-        &self,
-        arena: &Bump,
-        engine: &Engine,
-        iteration: u64,
-    ) -> Result<()> {
-        let iteration = iteration as usize;
+    fn on_new_frame(&self, engine: &Engine, frame: u64) -> Result<()> {
+        let frame = frame as usize;
 
-        let rendered_scene = self.test_scenes[iteration];
-
-        let output_image_path = rendered_scene.append_filename(&self.config.output_dir);
-
-        // Capture and save screenshot for the scene that was just rendered
-        engine.capture_screenshot(arena, Some(&output_image_path))?;
-
-        // Prepare for next scene
-        engine.execute_command(EngineCommand::Scene(SceneCommand::Clear))?;
-        rendered_scene.restore_settings(engine)?;
-
-        if iteration + 1 == self.test_scenes.len() {
+        if frame == self.test_scenes.len() {
             // All scenes have been rendered
             self.run_comparisons()?;
-            return engine.execute_command(EngineCommand::Shutdown);
+            engine.enqueue_command(EngineCommand::Shutdown);
+            return Ok(());
         }
 
-        let next_scene = self.test_scenes[iteration + 1];
+        if frame > 0 {
+            let rendered_scene = self.test_scenes[frame - 1];
 
-        // Setup next scene
-        next_scene.prepare_settings(engine)?;
-        scripting::setup_scene(next_scene)
+            // Prepare for this frame's scene
+            engine.execute_command(EngineCommand::Scene(SceneCommand::Clear))?;
+            rendered_scene.restore_settings(engine)?;
+        }
+
+        let scene = self.test_scenes[frame];
+
+        // Setup the scene for this frame
+        scene.prepare_settings(engine)?;
+        scripting::setup_scene(scene)?;
+        engine.execute_command(EngineCommand::Capture(CaptureCommand::SaveScreenshot))
     }
 }
 
@@ -199,4 +191,8 @@ impl TestingConfig {
         self.output_dir = root_path.join(&self.output_dir);
         self.reference_dir = root_path.join(&self.reference_dir);
     }
+}
+
+fn output_image_path(dir: &Path, frame_number: usize) -> PathBuf {
+    dir.join(format!("screenshot_{frame_number}.png"))
 }

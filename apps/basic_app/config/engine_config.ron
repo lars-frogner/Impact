@@ -105,6 +105,10 @@
         max_fps: None,
         max_iterations: None,
     ),
+    screen_capture: (
+        output_dir: None,
+        tagging: Timestamp,
+    ),
     user_interface: (
         initially_interactive: true,
     ),
