@@ -40,6 +40,7 @@ pub struct UserInterface {
     render_pass_timing_panel: RenderPassTimingPanel,
     time_overlay: TimeOverlay,
     config: UserInterfaceConfig,
+    screenshot_requested: bool,
 }
 
 /// Configuration parameters for the develompment user interface.
@@ -55,6 +56,7 @@ pub struct UserInterfaceConfig {
     pub show_render_pass_timings: bool,
     pub show_time_overlay: bool,
     pub disable_cursor_capture: bool,
+    pub hide_ui_during_screenshots: bool,
 }
 
 impl UserInterface {
@@ -89,11 +91,23 @@ impl UserInterface {
         command_queue: &UICommandQueue,
     ) -> FullOutput {
         let mut output = ctx.run(input, |ctx| {
+            // Return without adding any output if we requested a screenshot in
+            // the previous frame and should hide the UI
+            if self.screenshot_requested && self.config.hide_ui_during_screenshots {
+                self.screenshot_requested = false;
+                return;
+            }
+
             if self.config.interactive {
                 self.toolbar.run(ctx, &mut self.config, engine);
 
                 if self.config.show_rendering_options {
-                    self.rendering_option_panel.run(ctx, &self.config, engine);
+                    self.rendering_option_panel.run(
+                        ctx,
+                        &mut self.config,
+                        engine,
+                        &mut self.screenshot_requested,
+                    );
                 }
                 if self.config.show_physics_options {
                     self.physics_option_panel.run(ctx, &self.config, engine);
@@ -146,6 +160,7 @@ impl Default for UserInterfaceConfig {
             show_render_pass_timings: false,
             show_time_overlay: true,
             disable_cursor_capture: false,
+            hide_ui_during_screenshots: true,
         }
     }
 }
