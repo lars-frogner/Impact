@@ -2,8 +2,9 @@ use super::{option_checkbox, option_group, option_panel, option_slider, scientif
 use crate::UserInterfaceConfig;
 use impact::{
     command::{
-        AdminCommand, physics::PhysicsCommand, physics::ToSimulationSpeedMultiplier,
-        physics::ToSubstepCount, uils::ToActiveState,
+        AdminCommand,
+        physics::{PhysicsCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
+        uils::ToActiveState,
     },
     egui::{Context, Slider, Ui},
     engine::Engine,
@@ -16,6 +17,10 @@ mod simulation {
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Simulation",
             hover_text: "Whether physics simulation is enabled.",
+        };
+        pub const SINGLE_STEP: LabelAndHoverText = LabelAndHoverText {
+            label: "Single step",
+            hover_text: "Advance the simulation by one time step while keeping it paused.",
         };
         pub const REALTIME: LabelAndHoverText = LabelAndHoverText {
             label: "Real-time",
@@ -97,10 +102,16 @@ mod constraint_solving {
 pub struct PhysicsOptionPanel;
 
 impl PhysicsOptionPanel {
-    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
+    pub fn run(
+        &mut self,
+        ctx: &Context,
+        config: &UserInterfaceConfig,
+        engine: &Engine,
+        single_step_requested: &mut bool,
+    ) {
         option_panel(ctx, config, "physics_option_panel", |ui| {
             option_group(ui, "simulation_options", |ui| {
-                simulation_options(ui, engine);
+                simulation_options(ui, engine, single_step_requested);
             });
             option_group(ui, "constraint_solving_options", |ui| {
                 constraint_solving_options(ui, engine);
@@ -109,13 +120,36 @@ impl PhysicsOptionPanel {
     }
 }
 
-fn simulation_options(ui: &mut Ui, engine: &Engine) {
+fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut bool) {
     let mut simulator_config = engine.simulator_config();
 
-    if option_checkbox(ui, &mut simulator_config.enabled, simulation::docs::ENABLED).changed() {
+    if *single_step_requested {
+        // Just render the checkbox unchecked for this frame
+        let mut checked = false;
+        option_checkbox(ui, &mut checked, simulation::docs::ENABLED);
+    } else if option_checkbox(ui, &mut simulator_config.enabled, simulation::docs::ENABLED)
+        .changed()
+    {
         engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
             ToActiveState::from_enabled(simulator_config.enabled),
         )));
+    }
+
+    // Show single-step button only when simulation is disabled or a single-step
+    // was requested last frame
+    if !simulator_config.enabled || *single_step_requested {
+        ui.label(simulation::docs::SINGLE_STEP.label)
+            .on_hover_cursor(impact::egui::CursorIcon::Help)
+            .on_hover_text(simulation::docs::SINGLE_STEP.hover_text);
+
+        if ui.button("Step").clicked() {
+            // Enable simulation and mark that we requested a single step
+            engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
+                ToActiveState::from_enabled(true),
+            )));
+            *single_step_requested = true;
+        }
+        ui.end_row();
     }
 
     if option_checkbox(
