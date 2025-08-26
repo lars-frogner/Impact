@@ -307,6 +307,7 @@ impl Engine {
             n_substeps: simulator.n_substeps(),
             initial_time_step_duration: simulator.time_step_duration(),
             match_frame_duration: simulator.matches_frame_duration(),
+            max_auto_time_step_duration: simulator.max_auto_time_step_duration(),
         }
     }
 

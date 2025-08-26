@@ -60,6 +60,7 @@
             n_substeps: 1,
             initial_time_step_duration: 0.001,
             match_frame_duration: true,
+            max_auto_time_step_duration: Some(0.05),
             simulation_speed_multiplier_increment_factor: 1.1,
         ),
         rigid_body_force: (
