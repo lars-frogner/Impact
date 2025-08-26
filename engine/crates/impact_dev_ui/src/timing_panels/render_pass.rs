@@ -4,7 +4,6 @@ use egui_extras::{Column, TableBuilder};
 use impact::{
     egui::{Context, TextStyle, TextWrapMode},
     engine::Engine,
-    lock_order::OrderedRwLock,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -30,8 +29,7 @@ impl RenderPassTimingPanel {
             "render_pass_timing_panel",
             default_panel_width,
             |ui| {
-                let renderer = engine.renderer().oread();
-                let timestamp_query_manager = renderer.timestamp_query_manager();
+                let timing_results = engine.render_pass_timing_results();
 
                 let header_height = ui.spacing().interact_size.y;
 
@@ -58,10 +56,10 @@ impl RenderPassTimingPanel {
                         });
                     })
                     .body(|mut body| {
-                        for (tag, duration) in timestamp_query_manager.last_timing_results() {
+                        for (tag, duration) in timing_results {
                             body.row(row_height, |mut row| {
                                 row.col(|ui| {
-                                    ui.label(tag.as_ref());
+                                    ui.label(tag);
                                 });
                                 row.col(|ui| {
                                     ui.scope(|ui| {

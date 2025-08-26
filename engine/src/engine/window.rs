@@ -8,7 +8,7 @@ use anyhow::Result;
 use winit::event::{DeviceEvent, WindowEvent};
 
 impl Engine {
-    pub fn handle_window_event(&self, event: &WindowEvent) -> Result<()> {
+    pub(crate) fn handle_window_event(&self, event: &WindowEvent) -> Result<()> {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(event) = KeyboardEvent::from_winit(event.clone()) {
@@ -28,7 +28,7 @@ impl Engine {
         }
     }
 
-    pub fn handle_device_event(&self, event: &DeviceEvent) -> Result<()> {
+    pub(crate) fn handle_device_event(&self, event: &DeviceEvent) -> Result<()> {
         match event {
             DeviceEvent::MouseMotion { delta } => {
                 self.handle_mouse_motion_event(*delta);

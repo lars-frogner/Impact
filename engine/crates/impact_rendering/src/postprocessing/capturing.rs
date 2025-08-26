@@ -386,6 +386,10 @@ impl CapturingCamera {
         self.dynamic_range_compression_commands.config_mut()
     }
 
+    pub fn settings(&self) -> &CameraSettings {
+        &self.settings
+    }
+
     pub fn settings_mut(&mut self) -> &mut CameraSettings {
         &mut self.settings
     }

@@ -1,10 +1,10 @@
 use super::{LabelAndHoverText, option_checkbox, option_group, option_panel, option_slider};
 use crate::UserInterfaceConfig;
 use impact::{
+    command::{AdminCommand, gizmo::GizmoCommand},
     egui::{Context, Response, Slider, Ui},
     engine::Engine,
-    gizmo::{GizmoManager, GizmoParameters, GizmoType, GizmoVisibility},
-    lock_order::OrderedRwLock,
+    gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
 };
 
 fn gizmo_parameter_options(
@@ -100,22 +100,22 @@ pub struct GizmoOptionPanel;
 
 impl GizmoOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut gizmo_manager = engine.gizmo_manager().owrite();
-
         option_panel(ctx, config, "gizmo_option_panel", |ui| {
             option_group(ui, "gizmo_options", |ui| {
-                gizmo_options(ui, &mut gizmo_manager);
+                gizmo_options(ui, engine);
             });
         });
     }
 }
 
-fn gizmo_options(ui: &mut Ui, gizmo_manager: &mut GizmoManager) {
+fn gizmo_options(ui: &mut Ui, engine: &Engine) {
+    let gizmo_visibilities = engine.gizmo_visibilities();
+    let mut gizmo_parameters = engine.gizmo_parameters();
+
+    let mut parameters_changed = false;
+
     for gizmo in GizmoType::all() {
-        let mut visible = gizmo_manager
-            .visibilities()
-            .get_for(gizmo)
-            .is_visible_for_all();
+        let mut visible = gizmo_visibilities.get_for(gizmo).is_visible_for_all();
 
         if option_checkbox(
             ui,
@@ -127,16 +127,28 @@ fn gizmo_options(ui: &mut Ui, gizmo_manager: &mut GizmoManager) {
         )
         .changed()
         {
-            gizmo_manager.set_visibility_for_gizmo(
-                gizmo,
-                if visible {
-                    GizmoVisibility::VisibleForAll
-                } else {
-                    GizmoVisibility::Hidden
-                },
-            );
+            let visibility = if visible {
+                GizmoVisibility::VisibleForAll
+            } else {
+                GizmoVisibility::Hidden
+            };
+
+            engine.enqueue_admin_command(AdminCommand::Gizmo(GizmoCommand::SetVisibility {
+                gizmo_type: gizmo,
+                visibility,
+            }));
         }
 
-        gizmo_parameter_options(ui, gizmo_manager.parameters_mut(), gizmo);
+        if let Some(response) = gizmo_parameter_options(ui, &mut gizmo_parameters, gizmo)
+            && response.changed()
+        {
+            parameters_changed = true;
+        }
+    }
+
+    if parameters_changed {
+        engine.enqueue_admin_command(AdminCommand::Gizmo(GizmoCommand::SetParameters(
+            gizmo_parameters,
+        )));
     }
 }

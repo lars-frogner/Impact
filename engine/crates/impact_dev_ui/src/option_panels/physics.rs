@@ -1,10 +1,12 @@
 use super::{option_checkbox, option_group, option_panel, option_slider, scientific_formatter};
 use crate::UserInterfaceConfig;
 use impact::{
+    command::{
+        AdminCommand, physics::PhysicsCommand, physics::ToSimulationSpeedMultiplier,
+        physics::ToSubstepCount, uils::ToActiveState,
+    },
     egui::{Context, Slider, Ui},
     engine::Engine,
-    lock_order::OrderedRwLock,
-    physics::PhysicsSimulator,
 };
 
 mod simulation {
@@ -96,95 +98,166 @@ pub struct PhysicsOptionPanel;
 
 impl PhysicsOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut simulator = engine.simulator().owrite();
-
         option_panel(ctx, config, "physics_option_panel", |ui| {
             option_group(ui, "simulation_options", |ui| {
-                simulation_options(ui, &mut simulator);
+                simulation_options(ui, engine);
             });
             option_group(ui, "constraint_solving_options", |ui| {
-                constraint_solving_options(ui, &simulator);
+                constraint_solving_options(ui, engine);
             });
         });
     }
 }
 
-fn simulation_options(ui: &mut Ui, simulator: &mut PhysicsSimulator) {
-    option_checkbox(ui, simulator.enabled_mut(), simulation::docs::ENABLED);
+fn simulation_options(ui: &mut Ui, engine: &Engine) {
+    let mut simulator_config = engine.simulator_config();
 
-    let matches_frame_duration = simulator.matches_frame_duration_mut();
-    option_checkbox(ui, matches_frame_duration, simulation::docs::REALTIME);
+    if option_checkbox(ui, &mut simulator_config.enabled, simulation::docs::ENABLED).changed() {
+        engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
+            ToActiveState::from_enabled(simulator_config.enabled),
+        )));
+    }
 
-    if *matches_frame_duration {
-        option_slider(
+    if option_checkbox(
+        ui,
+        &mut simulator_config.match_frame_duration,
+        simulation::docs::REALTIME,
+    )
+    .changed()
+    {
+        engine.enqueue_admin_command(AdminCommand::Physics(
+            PhysicsCommand::SetMatchFrameDuration(ToActiveState::from_enabled(
+                simulator_config.match_frame_duration,
+            )),
+        ));
+    }
+
+    if simulator_config.match_frame_duration {
+        let mut speed_multiplier = engine.simulation_speed_multiplier();
+        if option_slider(
             ui,
             simulation::docs::SPEED_MULTIPLIER,
-            Slider::new(
-                simulator.simulation_speed_multiplier_mut(),
-                simulation::ranges::SPEED_MULTIPLIER,
-            )
-            .logarithmic(true)
-            .suffix("x"),
-        );
+            Slider::new(&mut speed_multiplier, simulation::ranges::SPEED_MULTIPLIER)
+                .logarithmic(true)
+                .suffix("x"),
+        )
+        .changed()
+        {
+            engine.enqueue_admin_command(AdminCommand::Physics(
+                PhysicsCommand::SetSimulationSpeed(ToSimulationSpeedMultiplier::Specific(
+                    speed_multiplier,
+                )),
+            ));
+        }
     } else {
-        *simulator.simulation_speed_multiplier_mut() = 1.0;
-        option_slider(
+        let mut time_step_duration = engine.time_step_duration();
+        if option_slider(
             ui,
             simulation::docs::TIME_STEP_DURATION,
             Slider::new(
-                simulator.time_step_duration_mut(),
+                &mut time_step_duration,
                 simulation::ranges::TIME_STEP_DURATION,
             )
             .logarithmic(true)
             .suffix(" s")
             .custom_formatter(scientific_formatter),
-        );
+        )
+        .changed()
+        {
+            engine.enqueue_admin_command(AdminCommand::Physics(
+                PhysicsCommand::SetTimeStepDuration(time_step_duration),
+            ));
+        }
     }
 
-    option_slider(
+    if option_slider(
         ui,
         simulation::docs::N_SUBSTEPS,
-        Slider::new(simulator.n_substeps_mut(), simulation::ranges::N_SUBSTEPS),
-    );
+        Slider::new(
+            &mut simulator_config.n_substeps,
+            simulation::ranges::N_SUBSTEPS,
+        ),
+    )
+    .changed()
+    {
+        engine.enqueue_admin_command(AdminCommand::Physics(
+            PhysicsCommand::SetSimulationSubstepCount(ToSubstepCount::Specific(
+                simulator_config.n_substeps,
+            )),
+        ));
+    }
 }
 
-fn constraint_solving_options(ui: &mut Ui, simulator: &PhysicsSimulator) {
-    let mut constraint_manager = simulator.constraint_manager().owrite();
-    let constraint_solver = constraint_manager.solver_mut();
-    let config = constraint_solver.config_mut();
+fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
+    let mut constraint_solver_config = engine.constraint_solver_config();
 
-    option_checkbox(ui, &mut config.enabled, constraint_solving::docs::ENABLED);
+    let mut config_changed = false;
 
-    option_slider(
+    if option_checkbox(
+        ui,
+        &mut constraint_solver_config.enabled,
+        constraint_solving::docs::ENABLED,
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         constraint_solving::docs::N_ITERATIONS,
         Slider::new(
-            &mut config.n_iterations,
+            &mut constraint_solver_config.n_iterations,
             constraint_solving::ranges::N_ITERATIONS,
         ),
-    );
-    option_slider(
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         constraint_solving::docs::OLD_IMPULSE_WEIGHT,
         Slider::new(
-            &mut config.old_impulse_weight,
+            &mut constraint_solver_config.old_impulse_weight,
             constraint_solving::ranges::OLD_IMPULSE_WEIGHT,
         ),
-    );
-    option_slider(
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         constraint_solving::docs::N_POSITIONAL_CORRECTION_ITERATIONS,
         Slider::new(
-            &mut config.n_positional_correction_iterations,
+            &mut constraint_solver_config.n_positional_correction_iterations,
             constraint_solving::ranges::N_POSITIONAL_CORRECTION_ITERATIONS,
         ),
-    );
-    option_slider(
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         constraint_solving::docs::POSITIONAL_CORRECTION_FACTOR,
         Slider::new(
-            &mut config.positional_correction_factor,
+            &mut constraint_solver_config.positional_correction_factor,
             constraint_solving::ranges::POSITIONAL_CORRECTION_FACTOR,
         ),
-    );
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if config_changed {
+        engine.enqueue_admin_command(AdminCommand::Physics(
+            PhysicsCommand::SetConstraintSolverConfig(constraint_solver_config.clone()),
+        ));
+    }
 }

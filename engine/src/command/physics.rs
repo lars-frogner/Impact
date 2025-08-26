@@ -6,14 +6,17 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use impact_physics::{fph, medium::UniformMedium};
+use impact_physics::{constraint::solver::ConstraintSolverConfig, fph, medium::UniformMedium};
 
 #[derive(Clone, Debug)]
 pub enum PhysicsCommand {
     SetSimulation(ToActiveState),
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
+    SetTimeStepDuration(fph),
+    SetMatchFrameDuration(ToActiveState),
     SetMedium(UniformMedium),
+    SetConstraintSolverConfig(ConstraintSolverConfig),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -115,4 +118,27 @@ pub fn set_simulation_speed_and_compensate_controller_movement_speed(
     }
 
     new_multiplier
+}
+
+pub fn set_time_step_duration(simulator: &mut PhysicsSimulator, duration: fph) -> fph {
+    impact_log::info!("Setting time step duration to {duration:?}");
+    *simulator.time_step_duration_mut() = duration;
+    duration
+}
+
+pub fn set_match_frame_duration(
+    simulator: &mut PhysicsSimulator,
+    to: ToActiveState,
+) -> ModifiedActiveState {
+    impact_log::info!("Setting match frame duration to {to:?}");
+    to.set(simulator.matches_frame_duration_mut())
+}
+
+pub fn set_constraint_solver_config(
+    simulator: &mut PhysicsSimulator,
+    config: ConstraintSolverConfig,
+) {
+    impact_log::info!("Setting constraint solver config to {config:?}");
+    let mut constraint_manager = simulator.constraint_manager().owrite();
+    *constraint_manager.solver_mut().config_mut() = config;
 }

@@ -97,7 +97,7 @@ pub struct ECSConfig {
 
 impl Engine {
     /// Creates a new instance of the engine.
-    pub fn new(
+    pub(crate) fn new(
         config: EngineConfig,
         app: Arc<dyn Application>,
         graphics: GraphicsContext,
@@ -187,82 +187,82 @@ impl Engine {
     }
 
     /// Returns a reference to the [`GraphicsDevice`].
-    pub fn graphics_device(&self) -> &GraphicsDevice {
+    pub(crate) fn graphics_device(&self) -> &GraphicsDevice {
         &self.graphics_device
     }
 
     /// Returns a reference to the [`GraphicsDevice`].
-    pub fn component_metadata_registry(&self) -> &ComponentMetadataRegistry {
+    pub(crate) fn component_metadata_registry(&self) -> &ComponentMetadataRegistry {
         &self.component_metadata_registry
     }
 
     /// Returns a reference to the [`GameLoopController`], guarded by a
     /// [`RwLock`].
-    pub fn game_loop_controller(&self) -> &RwLock<GameLoopController> {
+    pub(crate) fn game_loop_controller(&self) -> &RwLock<GameLoopController> {
         &self.game_loop_controller
     }
 
     /// Returns a reference to the [`EntityStager`], guarded by a [`Mutex`].
-    pub fn entity_stager(&self) -> &Mutex<EntityStager> {
+    pub(crate) fn entity_stager(&self) -> &Mutex<EntityStager> {
         &self.entity_stager
     }
 
     /// Returns a reference to the ECS [`World`](impact_ecs::world::World),
     /// guarded by a [`RwLock`].
-    pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
+    pub(crate) fn ecs_world(&self) -> &RwLock<ECSWorld> {
         &self.ecs_world
     }
 
     /// Returns a reference to the [`ResourceManager`], guarded by a [`RwLock`].
-    pub fn resource_manager(&self) -> &RwLock<ResourceManager> {
+    pub(crate) fn resource_manager(&self) -> &RwLock<ResourceManager> {
         &self.resource_manager
     }
 
     /// Returns a reference to the [`Scene`], guarded by a [`RwLock`].
-    pub fn scene(&self) -> &RwLock<Scene> {
+    pub(crate) fn scene(&self) -> &RwLock<Scene> {
         &self.scene
     }
 
     /// Returns a reference to the [`PhysicsSimulator`], guarded by a
     /// [`RwLock`].
-    pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
+    pub(crate) fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
     }
 
     /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
-    pub fn renderer(&self) -> &RwLock<RenderingSystem> {
+    pub(crate) fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
     }
 
     /// Returns a reference to the [`MotionController`], guarded by a [`Mutex`],
     /// or [`None`] if there is no motion controller.
-    pub fn motion_controller(&self) -> Option<&Mutex<Box<dyn MotionController>>> {
+    pub(crate) fn motion_controller(&self) -> Option<&Mutex<Box<dyn MotionController>>> {
         self.motion_controller.as_ref()
     }
 
     /// Returns a reference to the [`GizmoManager`], guarded by a [`RwLock`].
-    pub fn gizmo_manager(&self) -> &RwLock<GizmoManager> {
+    pub(crate) fn gizmo_manager(&self) -> &RwLock<GizmoManager> {
         &self.gizmo_manager
     }
 
     /// Returns the current [`EngineMetrics`], guarded by a [`RwLock`].
-    pub fn metrics(&self) -> &RwLock<EngineMetrics> {
+    pub(crate) fn metrics(&self) -> &RwLock<EngineMetrics> {
         &self.metrics
     }
 
     /// Returns a reference to the [`ScreenCapturer`].
-    pub fn screen_capturer(&self) -> &ScreenCapturer {
+    pub(crate) fn screen_capturer(&self) -> &ScreenCapturer {
         &self.screen_capturer
     }
 
     /// Returns a reference to the [`TaskTimer`].
-    pub fn task_timer(&self) -> &TaskTimer {
+    pub(crate) fn task_timer(&self) -> &TaskTimer {
         &self.task_timer
     }
 
     /// Captures and saves any screenshots or related textures requested through
     /// the [`ScreenCapturer`].
-    pub fn save_requested_screenshots<A>(&self, arena: A) -> Result<()>
+    pub(crate) fn save_requested_screenshots<A>(&self, arena: A) -> Result<()>
     where
         A: Copy + Allocator,
     {
@@ -288,7 +288,7 @@ impl Engine {
 
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
-    pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
+    pub(crate) fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
         let mut renderer = self.renderer().owrite();
 
         renderer.resize_rendering_surface(new_width, new_height);
@@ -302,14 +302,14 @@ impl Engine {
             .handle_aspect_ratio_changed(new_aspect_ratio);
     }
 
-    pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
+    pub(crate) fn update_pixels_per_point(&self, pixels_per_point: f64) {
         self.renderer()
             .owrite()
             .update_pixels_per_point(pixels_per_point);
     }
 
     /// Updates the orientation controller with the given mouse displacement.
-    pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
+    pub(crate) fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
         if !self.controls_enabled() {
             return;
         }
@@ -333,7 +333,7 @@ impl Engine {
     }
 
     /// Updates the orientations and motion of all controlled entities.
-    pub fn update_controlled_entities(&self) {
+    pub(crate) fn update_controlled_entities(&self) {
         if !self.controls_enabled() {
             return;
         }
@@ -373,16 +373,16 @@ impl Engine {
 
     /// Resets the scene, ECS world and physics simulator to the initial empty
     /// state and sets the simulation time to zero.
-    pub fn reset_world(&self) {
+    pub(crate) fn reset_world(&self) {
         self.ecs_world.owrite().remove_all_entities();
         self.scene.oread().clear();
         self.simulator.owrite().reset();
     }
 
-    pub fn set_controls_enabled(&self, enabled: bool) {
-        self.controls_enabled.store(enabled, Ordering::Relaxed);
+    pub(crate) fn set_controls_enabled(&self, enabled: bool) {
+        let were_enabled = self.controls_enabled.swap(enabled, Ordering::Relaxed);
 
-        if !enabled {
+        if were_enabled && !enabled {
             let ecs_world = self.ecs_world.oread();
             let simulator = self.simulator.oread();
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
@@ -412,7 +412,7 @@ impl Engine {
         }
     }
 
-    pub fn gather_metrics_after_completed_frame(&self, smooth_frame_duration: Duration) {
+    pub(crate) fn gather_metrics_after_completed_frame(&self, smooth_frame_duration: Duration) {
         let mut metrics = self.metrics.owrite();
 
         metrics.current_smooth_frame_duration = smooth_frame_duration;
@@ -426,35 +426,27 @@ impl Engine {
         simulator.update_time_step_duration(&smooth_frame_duration);
     }
 
-    pub fn shutdown_requested(&self) -> bool {
+    pub(crate) fn shutdown_requested(&self) -> bool {
         self.shutdown_requested.load(Ordering::Relaxed)
     }
 
-    pub fn request_shutdown(&self) {
+    pub(crate) fn request_shutdown(&self) {
         self.shutdown_requested.store(true, Ordering::Relaxed);
     }
 
-    pub fn execute_command(&self, command: EngineCommand) -> Result<()> {
-        command::execute_engine_command(self, command)
-    }
-
-    pub fn execute_admin_command(&self, command: AdminCommand) -> Result<()> {
-        command::execute_admin_command(self, command)
-    }
-
-    pub fn execute_enqueued_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_commands(&self) -> Result<()> {
         self.command_queue
             .try_execute_commands(|command| command::execute_engine_command(self, command))
     }
 
-    pub fn execute_enqueued_admin_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_admin_commands(&self) -> Result<()> {
         self.admin_command_queue
             .try_execute_commands(|command| command::execute_admin_command(self, command))
     }
 
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
-    pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
+    pub(crate) fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
         self.renderer.oread().handle_task_errors(task_errors);
     }
 

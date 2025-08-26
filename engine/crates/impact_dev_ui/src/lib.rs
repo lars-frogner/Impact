@@ -12,9 +12,12 @@ pub use command::{UICommand, UICommandQueue};
 
 use anyhow::Result;
 use impact::{
+    command::{
+        AdminCommand, controller::ControlCommand, instrumentation::InstrumentationCommand,
+        uils::ToActiveState,
+    },
     egui::{Context, FullOutput, RawInput},
     engine::Engine,
-    lock_order::OrderedRwLock,
     ui,
 };
 use option_panels::{
@@ -63,16 +66,19 @@ impl UserInterface {
     }
 
     pub fn setup(&self, engine: &Engine) {
-        engine.set_controls_enabled(!self.config.interactive);
-
-        engine
-            .task_timer()
-            .set_enabled(self.config.show_time_overlay);
-
-        engine
-            .renderer()
-            .owrite()
-            .set_render_pass_timings_enabled(self.config.show_render_pass_timings);
+        engine.enqueue_admin_command(AdminCommand::Control(ControlCommand::SetControls(
+            ToActiveState::from_enabled(!self.config.interactive),
+        )));
+        engine.enqueue_admin_command(AdminCommand::Instrumentation(
+            InstrumentationCommand::SetTaskTimings(ToActiveState::from_enabled(
+                self.config.show_task_timings,
+            )),
+        ));
+        engine.enqueue_admin_command(AdminCommand::Instrumentation(
+            InstrumentationCommand::SetRenderPassTimings(ToActiveState::from_enabled(
+                self.config.show_render_pass_timings,
+            )),
+        ));
     }
 
     pub fn run(

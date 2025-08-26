@@ -1,6 +1,6 @@
 //! Controller commands.
 
-use crate::{engine::Engine, lock_order::OrderedMutex};
+use crate::{command::uils::ToActiveState, engine::Engine, lock_order::OrderedMutex};
 use impact_controller::motion::{MotionDirection, MotionState};
 use impact_physics::fph;
 use roc_integration::roc;
@@ -15,6 +15,11 @@ pub enum ControllerCommand {
     },
     StopMotion,
     SetMovementSpeed(fph),
+}
+
+#[derive(Clone, Debug)]
+pub enum ControlCommand {
+    SetControls(ToActiveState),
 }
 
 impl PartialEq for ControllerCommand {

@@ -4,10 +4,12 @@ use super::{
 };
 use crate::UserInterfaceConfig;
 use impact::{
+    command::{
+        AdminCommand, rendering::RenderingCommand,
+        rendering::postprocessing::ToRenderAttachmentQuantity, uils::ToActiveState,
+    },
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
-    lock_order::OrderedRwLock,
-    rendering::RenderingSystem,
 };
 use impact_math::{Bounds, UpperExclusiveBounds};
 use impact_rendering::postprocessing::{
@@ -252,138 +254,155 @@ enum ExposureMode {
 
 impl RenderingOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let mut renderer = engine.renderer().owrite();
-
         option_panel(ctx, config, "rendering_option_panel", |ui| {
             option_group(ui, "shadow_mapping_options", |ui| {
-                shadow_mapping_options(ui, &mut renderer);
+                shadow_mapping_options(ui, engine);
             });
             option_group(ui, "ambient_occlusion_options", |ui| {
-                ambient_occlusion_options(ui, &mut renderer);
+                ambient_occlusion_options(ui, engine);
             });
             option_group(ui, "temporal_anti_aliasing_options", |ui| {
-                temporal_anti_aliasing_options(ui, &mut renderer);
+                temporal_anti_aliasing_options(ui, engine);
             });
             option_group(ui, "camera_options", |ui| {
-                camera_options(ui, &mut renderer);
+                camera_options(ui, engine);
             });
             option_group(ui, "bloom_options", |ui| {
-                bloom_options(ui, &mut renderer);
+                bloom_options(ui, engine);
             });
             option_group(ui, "dynamic_range_compression_options", |ui| {
-                dynamic_range_compression_options(ui, &mut renderer);
+                dynamic_range_compression_options(ui, engine);
             });
             option_group(ui, "wireframe_options", |ui| {
-                wireframe_options(ui, &mut renderer);
+                wireframe_options(ui, engine);
             });
             option_group(ui, "render_attachment_options", |ui| {
-                render_attachment_options(ui, &mut renderer);
+                render_attachment_options(ui, engine);
             });
         });
     }
 }
 
-fn shadow_mapping_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    option_checkbox(
-        ui,
-        renderer.shadow_mapping_enabled_mut(),
-        shadow_mapping::docs::ENABLED,
-    );
+fn shadow_mapping_options(ui: &mut Ui, engine: &Engine) {
+    let mut enabled = engine.shadow_mapping_enabled();
+    if option_checkbox(ui, &mut enabled, shadow_mapping::docs::ENABLED).changed() {
+        engine.enqueue_admin_command(AdminCommand::Rendering(RenderingCommand::SetShadowMapping(
+            ToActiveState::from_enabled(enabled),
+        )));
+    }
 }
 
-fn ambient_occlusion_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().owrite();
+fn ambient_occlusion_options(ui: &mut Ui, engine: &Engine) {
+    let mut config = engine.ambient_occlusion_config();
+    let mut config_changed = false;
 
-    let enabled = postprocessor.ambient_occlusion_enabled_mut();
+    if option_checkbox(ui, &mut config.enabled, ambient_occlusion::docs::ENABLED).changed() {
+        config_changed = true;
+    }
 
-    option_checkbox(ui, enabled, ambient_occlusion::docs::ENABLED);
-
-    let mut config = postprocessor.ambient_occlusion_config().clone();
-
-    let sample_count = option_slider(
+    if option_slider(
         ui,
         ambient_occlusion::docs::SAMPLE_COUNT,
         Slider::new(
             &mut config.sample_count,
             ambient_occlusion::ranges::SAMPLE_COUNT,
         ),
-    );
-    let sample_radius = option_slider(
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         ambient_occlusion::docs::SAMPLE_RADIUS,
         Slider::new(
             &mut config.sample_radius,
             ambient_occlusion::ranges::SAMPLE_RADIUS,
         ),
-    );
-    let intensity = option_slider(
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         ambient_occlusion::docs::INTENSITY,
         Slider::new(&mut config.intensity, ambient_occlusion::ranges::INTENSITY),
-    );
-    let contrast = option_slider(
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
+
+    if option_slider(
         ui,
         ambient_occlusion::docs::CONTRAST,
         Slider::new(&mut config.contrast, ambient_occlusion::ranges::CONTRAST),
-    );
-
-    if sample_count.changed()
-        || sample_radius.changed()
-        || intensity.changed()
-        || contrast.changed()
+    )
+    .changed()
     {
-        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+        config_changed = true;
+    }
 
-        postprocessor.set_ambient_occlusion_config(
-            renderer.graphics_device(),
-            &gpu_resource_group_manager,
-            config,
-        );
+    if config_changed {
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingCommand::SetAmbientOcclusionConfig(config),
+        ));
     }
 }
 
-fn temporal_anti_aliasing_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().owrite();
+fn temporal_anti_aliasing_options(ui: &mut Ui, engine: &Engine) {
+    let mut config = engine.temporal_anti_aliasing_config();
+    let mut config_changed = false;
 
-    let enabled = postprocessor.temporal_anti_aliasing_enabled_mut();
+    if option_checkbox(
+        ui,
+        &mut config.enabled,
+        temporal_anti_aliasing::docs::ENABLED,
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
 
-    option_checkbox(ui, enabled, temporal_anti_aliasing::docs::ENABLED);
-
-    let mut config = postprocessor.temporal_anti_aliasing_config().clone();
-
-    let current_frame_weight = option_slider(
+    if option_slider(
         ui,
         temporal_anti_aliasing::docs::CURRENT_FRAME_WEIGHT,
         Slider::new(
             &mut config.current_frame_weight,
             temporal_anti_aliasing::ranges::CURRENT_FRAME_WEIGHT,
         ),
-    );
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
 
-    let variance_clipping_threshold = option_slider(
+    if option_slider(
         ui,
         temporal_anti_aliasing::docs::VARIANCE_CLIPPING_THRESHOLD,
         Slider::new(
             &mut config.variance_clipping_threshold,
             temporal_anti_aliasing::ranges::VARIANCE_CLIPPING_THRESHOLD,
         ),
-    );
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
 
-    if current_frame_weight.changed() || variance_clipping_threshold.changed() {
-        let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
-
-        postprocessor.set_temporal_anti_aliasing_config(
-            renderer.graphics_device(),
-            &gpu_resource_group_manager,
-            config,
-        );
+    if config_changed {
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingCommand::SetTemporalAntiAliasingConfig(config),
+        ));
     }
 }
 
-fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().owrite();
-    let capturing_camera = postprocessor.capturing_camera_mut();
-    let settings = capturing_camera.settings_mut();
+fn camera_options(ui: &mut Ui, engine: &Engine) {
+    let mut settings = engine.camera_settings();
+    let mut avg_luminance_config = engine.average_luminance_computation_config();
 
     let mut exposure_mode = if settings.sensitivity.is_auto() {
         ExposureMode::Automatic
@@ -400,14 +419,20 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
             })
     });
 
-    option_slider(
+    let mut settings_changed = false;
+
+    if option_slider(
         ui,
         camera::docs::MAX_EXPOSURE,
         Slider::new(&mut settings.max_exposure, camera::ranges::MAX_EXPOSURE)
             .logarithmic(true)
             .suffix("/nit")
             .custom_formatter(scientific_formatter),
-    );
+    )
+    .changed()
+    {
+        settings_changed = true;
+    }
 
     match exposure_mode {
         ExposureMode::Automatic => {
@@ -416,21 +441,22 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
                 SensorSensitivity::Manual { .. } => camera::DEFAULT_EV_COMPENSATION,
             };
 
-            option_slider(
+            if option_slider(
                 ui,
                 camera::docs::EV_COMPENSATION,
                 Slider::new(&mut ev_compensation, camera::ranges::EV_COMPENSATION).suffix(" stops"),
-            );
+            )
+            .changed()
+            {
+                settings.sensitivity = SensorSensitivity::Auto { ev_compensation };
+                settings_changed = true;
+            }
 
-            settings.sensitivity = SensorSensitivity::Auto { ev_compensation };
+            let mut min_luminance_value = avg_luminance_config.luminance_bounds.lower();
+            let mut max_luminance_value = avg_luminance_config.luminance_bounds.upper();
+            let mut avg_config_changed = false;
 
-            let mut config = capturing_camera
-                .average_luminance_computation_config()
-                .clone();
-            let mut min_luminance_value = config.luminance_bounds.lower();
-            let mut max_luminance_value = config.luminance_bounds.upper();
-
-            let min_luminance = option_slider(
+            if option_slider(
                 ui,
                 camera::docs::MIN_LUMINANCE,
                 Slider::new(
@@ -440,9 +466,13 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
                 .logarithmic(true)
                 .suffix(" nit")
                 .custom_formatter(scientific_formatter),
-            );
+            )
+            .changed()
+            {
+                avg_config_changed = true;
+            }
 
-            let max_luminance = option_slider(
+            if option_slider(
                 ui,
                 camera::docs::MAX_LUMINANCE,
                 Slider::new(
@@ -452,31 +482,34 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
                 .logarithmic(true)
                 .suffix(" nit")
                 .custom_formatter(scientific_formatter),
-            );
+            )
+            .changed()
+            {
+                avg_config_changed = true;
+            }
 
-            let current_frame_weight = option_slider(
+            if option_slider(
                 ui,
                 camera::docs::CURRENT_FRAME_WEIGHT,
                 Slider::new(
-                    &mut config.current_frame_weight,
+                    &mut avg_luminance_config.current_frame_weight,
                     camera::ranges::CURRENT_FRAME_WEIGHT,
                 ),
-            );
-
-            if min_luminance.changed() || max_luminance.changed() || current_frame_weight.changed()
+            )
+            .changed()
             {
-                config.luminance_bounds = UpperExclusiveBounds::new(
+                avg_config_changed = true;
+            }
+
+            if avg_config_changed {
+                avg_luminance_config.luminance_bounds = UpperExclusiveBounds::new(
                     min_luminance_value,
                     max_luminance_value.max(min_luminance_value.next_up()),
                 );
 
-                let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
-
-                capturing_camera.set_average_luminance_computation_config(
-                    renderer.graphics_device(),
-                    &gpu_resource_group_manager,
-                    config,
-                );
+                engine.enqueue_admin_command(AdminCommand::Rendering(
+                    RenderingCommand::SetAverageLuminanceComputationConfig(avg_luminance_config),
+                ));
             }
         }
         ExposureMode::Manual => {
@@ -485,49 +518,74 @@ fn camera_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
                 SensorSensitivity::Auto { .. } => camera::DEFAULT_ISO,
             };
 
-            option_slider(
+            if option_slider(
                 ui,
                 camera::docs::RELATIVE_APERTURE,
                 Slider::new(
                     &mut settings.relative_aperture,
                     camera::ranges::RELATIVE_APERTURE,
                 ),
-            );
+            )
+            .changed()
+            {
+                settings_changed = true;
+            }
 
+            let mut shutter_changed = false;
             transform_slider_recip(
                 &mut settings.shutter_duration,
                 camera::ranges::SHUTTER_SPEED,
-                |sl| option_slider(ui, camera::docs::SHUTTER_SPEED, sl.suffix("/s")),
+                |sl| {
+                    let response = option_slider(ui, camera::docs::SHUTTER_SPEED, sl.suffix("/s"));
+                    if response.changed() {
+                        shutter_changed = true;
+                    }
+                    response
+                },
             );
+            if shutter_changed {
+                settings_changed = true;
+            }
 
-            option_slider(
+            if option_slider(
                 ui,
                 camera::docs::ISO,
                 Slider::new(&mut iso, camera::ranges::ISO).logarithmic(true),
-            );
-
-            settings.sensitivity = SensorSensitivity::Manual { iso };
+            )
+            .changed()
+            {
+                settings.sensitivity = SensorSensitivity::Manual { iso };
+                settings_changed = true;
+            }
         }
+    }
+
+    if settings_changed {
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingCommand::SetCameraSettings(settings),
+        ));
     }
 }
 
-fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().owrite();
-    let capturing_camera = postprocessor.capturing_camera_mut();
+fn bloom_options(ui: &mut Ui, engine: &Engine) {
+    let mut config = engine.bloom_config();
+    let mut config_changed = false;
 
-    let enabled = capturing_camera.produces_bloom_mut();
+    if option_checkbox(ui, &mut config.enabled, bloom::docs::ENABLED).changed() {
+        config_changed = true;
+    }
 
-    option_checkbox(ui, enabled, bloom::docs::ENABLED);
-
-    let mut config = capturing_camera.bloom_config().clone();
-
-    let n_downsamplings = option_slider(
+    if option_slider(
         ui,
         bloom::docs::N_DOWNSAMPLINGS,
         Slider::new(&mut config.n_downsamplings, bloom::ranges::N_DOWNSAMPLINGS),
-    );
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
 
-    let blur_filter_radius = option_slider(
+    if option_slider(
         ui,
         bloom::docs::BLUR_FILTER_RADIUS,
         Slider::new(
@@ -535,38 +593,35 @@ fn bloom_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
             bloom::ranges::BLUR_FILTER_RADIUS,
         )
         .logarithmic(true),
-    );
+    )
+    .changed()
+    {
+        config_changed = true;
+    }
 
-    let blurred_luminance_weight = option_slider(
+    if option_slider(
         ui,
         bloom::docs::BLURRED_LUMINANCE_WEIGHT,
         Slider::new(
             &mut config.blurred_luminance_weight,
             bloom::ranges::BLURRED_LUMINANCE_WEIGHT,
         ),
-    );
-
-    if n_downsamplings.changed()
-        || blur_filter_radius.changed()
-        || blurred_luminance_weight.changed()
+    )
+    .changed()
     {
-        let mut shader_manager = renderer.shader_manager().owrite();
-        let mut render_attachment_texture_manager =
-            renderer.render_attachment_texture_manager().owrite();
+        config_changed = true;
+    }
 
-        capturing_camera.set_bloom_config(
-            renderer.graphics_device(),
-            &mut shader_manager,
-            &mut render_attachment_texture_manager,
+    if config_changed {
+        engine.enqueue_admin_command(AdminCommand::Rendering(RenderingCommand::SetBloomConfig(
             config,
-        );
+        )));
     }
 }
 
-fn dynamic_range_compression_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().owrite();
-    let capturing_camera = postprocessor.capturing_camera_mut();
-    let config = capturing_camera.dynamic_range_compression_config_mut();
+fn dynamic_range_compression_options(ui: &mut Ui, engine: &Engine) {
+    let mut config = engine.dynamic_range_compression_config();
+    let mut config_changed = false;
 
     labeled_option(
         ui,
@@ -575,37 +630,58 @@ fn dynamic_range_compression_options(ui: &mut Ui, renderer: &mut RenderingSystem
             ComboBox::from_id_salt(dynamic_range_compression::docs::TONE_MAPPING_METHOD.label)
                 .selected_text(format!("{:?}", config.tone_mapping_method))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut config.tone_mapping_method,
-                        ToneMappingMethod::ACES,
-                        "ACES",
-                    );
-                    ui.selectable_value(
-                        &mut config.tone_mapping_method,
-                        ToneMappingMethod::KhronosPBRNeutral,
-                        "KhronosPBRNeutral",
-                    );
-                    ui.selectable_value(
-                        &mut config.tone_mapping_method,
-                        ToneMappingMethod::None,
-                        "None",
-                    );
+                    if ui
+                        .selectable_value(
+                            &mut config.tone_mapping_method,
+                            ToneMappingMethod::ACES,
+                            "ACES",
+                        )
+                        .changed()
+                    {
+                        config_changed = true;
+                    }
+                    if ui
+                        .selectable_value(
+                            &mut config.tone_mapping_method,
+                            ToneMappingMethod::KhronosPBRNeutral,
+                            "KhronosPBRNeutral",
+                        )
+                        .changed()
+                    {
+                        config_changed = true;
+                    }
+                    if ui
+                        .selectable_value(
+                            &mut config.tone_mapping_method,
+                            ToneMappingMethod::None,
+                            "None",
+                        )
+                        .changed()
+                    {
+                        config_changed = true;
+                    }
                 })
         },
     );
-}
 
-fn wireframe_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut enabled = renderer.basic_config().wireframe_mode_on;
-    if option_checkbox(ui, &mut enabled, wireframe::docs::ENABLED).changed() {
-        renderer.set_wireframe_mode_enabled(enabled);
+    if config_changed {
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingCommand::SetDynamicRangeCompressionConfig(config),
+        ));
     }
 }
 
-fn render_attachment_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
-    let mut postprocessor = renderer.postprocessor().owrite();
+fn wireframe_options(ui: &mut Ui, engine: &Engine) {
+    let mut enabled = engine.basic_rendering_config().wireframe_mode_on;
+    if option_checkbox(ui, &mut enabled, wireframe::docs::ENABLED).changed() {
+        engine.enqueue_admin_command(AdminCommand::Rendering(RenderingCommand::SetWireframeMode(
+            ToActiveState::from_enabled(enabled),
+        )));
+    }
+}
 
-    let mut quantity = postprocessor.visualized_render_attachment_quantity();
+fn render_attachment_options(ui: &mut Ui, engine: &Engine) {
+    let mut quantity = engine.visualized_render_attachment_quantity();
     let original_quantity = quantity;
 
     labeled_option(ui, render_attachment::docs::ATTACHMENT, |ui| {
@@ -628,8 +704,19 @@ fn render_attachment_options(ui: &mut Ui, renderer: &mut RenderingSystem) {
     });
 
     if quantity != original_quantity {
-        postprocessor
-            .visualize_render_attachment_quantity(quantity)
-            .unwrap();
+        if let Some(q) = quantity {
+            engine.enqueue_admin_command(AdminCommand::Rendering(
+                RenderingCommand::SetRenderAttachmentVisualization(ToActiveState::Enabled),
+            ));
+            engine.enqueue_admin_command(AdminCommand::Rendering(
+                RenderingCommand::SetVisualizedRenderAttachmentQuantity(
+                    ToRenderAttachmentQuantity::Specific(q),
+                ),
+            ));
+        } else {
+            engine.enqueue_admin_command(AdminCommand::Rendering(
+                RenderingCommand::SetRenderAttachmentVisualization(ToActiveState::Disabled),
+            ));
+        }
     }
 }

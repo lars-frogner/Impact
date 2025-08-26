@@ -53,6 +53,10 @@ impl ToActiveState {
             }
         }
     }
+
+    pub fn enabled(&self) -> bool {
+        *self == Self::Enabled
+    }
 }
 
 impl ActiveState {
