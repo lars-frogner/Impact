@@ -7,8 +7,9 @@ use impact_geometry::CubemapFace;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
 use impact_rendering::{resource::BasicGPUResources, surface::RenderingSurface};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -19,6 +20,21 @@ pub struct ScreenCapturer {
     screenshot_save_requested: AtomicBool,
     omnidirectional_light_shadow_map_save_requested: AtomicBool,
     unidirectional_light_shadow_map_save_requested: AtomicBool,
+    config: ScreenCaptureConfig,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ScreenCaptureConfig {
+    pub output_dir: Option<PathBuf>,
+    pub tagging: CaptureTagging,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CaptureTagging {
+    #[default]
+    Timestamp,
+    FrameNumber,
 }
 
 impl ScreenCapturer {
@@ -27,11 +43,12 @@ impl ScreenCapturer {
     /// # Panics
     /// When a screenshot is captured, a panic will occur if the width times the
     /// number of bytes per pixel is not a multiple of 256.
-    pub fn new() -> Self {
+    pub fn new(config: ScreenCaptureConfig) -> Self {
         Self {
             screenshot_save_requested: AtomicBool::new(false),
             omnidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
             unidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
+            config,
         }
     }
 
@@ -60,13 +77,12 @@ impl ScreenCapturer {
 
     /// Checks if a screenshot capture was scheduled with
     /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
-    /// saves it as a PNG image to the specified output path, or, if not
-    /// specified, as a timestamped PNG file in the current directory.
+    /// saves it as a PNG image at the configured output path.
     pub fn save_screenshot_if_requested<A>(
         &self,
         arena: A,
         renderer: &RwLock<RenderingSystem>,
-        output_path: Option<&Path>,
+        frame_number: u64,
     ) -> Result<()>
     where
         A: Copy + Allocator,
@@ -91,15 +107,9 @@ impl ScreenCapturer {
                 }
             };
 
-            let timestamped_filename = PathBuf::from(format!(
-                "screenshot_{}.png",
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            ));
-
-            let output_path = output_path.unwrap_or(timestamped_filename.as_path());
+            let output_path = self
+                .config
+                .build_output_path(|tag| format!("screenshot_{tag}.png"), frame_number);
 
             impact_texture::io::save_texture_as_png_file(
                 arena,
@@ -117,12 +127,13 @@ impl ScreenCapturer {
 
     /// Checks if a omnidirectional light shadow map capture was scheduled with
     /// [`Self::request_omnidirectional_light_shadow_map_save`], and if so,
-    /// captures the textures and saves them as timestamped PNG files in the
-    /// current directory.
+    /// captures the textures and saves them as timestamped PNG files at the
+    /// configured output paths.
     pub fn save_omnidirectional_light_shadow_maps_if_requested<A>(
         &self,
         arena: A,
         renderer: &RwLock<RenderingSystem>,
+        frame_number: u64,
     ) -> Result<()>
     where
         A: Copy + Allocator,
@@ -142,19 +153,18 @@ impl ScreenCapturer {
                     .enumerate()
                 {
                     for face in CubemapFace::all() {
+                        let output_path = self.config.build_output_path(
+                            |tag| {
+                                format!("omnidirectional_light_{light_idx}_shadow_map_{face:?}_{tag}.png")
+                            },
+                            frame_number,
+                        );
+
                         texture.save_face_as_png_file(
                             arena,
                             renderer.graphics_device(),
                             face,
-                            format!(
-                                "omnidirectional_light_{}_shadow_map_{:?}_{}.png",
-                                light_idx,
-                                face,
-                                SystemTime::now()
-                                    .duration_since(UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs(),
-                            ),
+                            output_path,
                         )?;
                     }
                 }
@@ -169,12 +179,13 @@ impl ScreenCapturer {
 
     /// Checks if a unidirectional light shadow map capture was scheduled with
     /// [`Self::request_unidirectional_light_shadow_map_save`], and if so,
-    /// captures the textures and saves them as timestamped PNG files in the
-    /// current directory.
+    /// captures the textures and saves them as timestamped PNG files at the
+    /// configured output paths.
     pub fn save_unidirectional_light_shadow_maps_if_requested<A>(
         &self,
         arena: A,
         renderer: &RwLock<RenderingSystem>,
+        frame_number: u64,
     ) -> Result<()>
     where
         A: Copy + Allocator,
@@ -194,19 +205,18 @@ impl ScreenCapturer {
                     .enumerate()
                 {
                     for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
+                        let output_path = self.config.build_output_path(
+                            |tag| {
+                                format!("unidirectional_light_{light_idx}_shadow_map_{cascade_idx}_{tag}.png")
+                            },
+                            frame_number,
+                        );
+
                         texture.save_cascade_as_png_file(
                             arena,
                             renderer.graphics_device(),
                             cascade_idx,
-                            format!(
-                                "unidirectional_light_{}_shadow_map_{}_{}.png",
-                                light_idx,
-                                cascade_idx,
-                                SystemTime::now()
-                                    .duration_since(UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs(),
-                            ),
+                            output_path,
                         )?;
                     }
                 }
@@ -222,6 +232,30 @@ impl ScreenCapturer {
 
 impl Default for ScreenCapturer {
     fn default() -> Self {
-        Self::new()
+        Self::new(ScreenCaptureConfig::default())
+    }
+}
+
+impl ScreenCaptureConfig {
+    fn build_output_path(
+        &self,
+        tag_filename: impl FnOnce(u128) -> String,
+        frame_number: u64,
+    ) -> PathBuf {
+        let tag = match self.tagging {
+            CaptureTagging::Timestamp => SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            CaptureTagging::FrameNumber => u128::from(frame_number),
+        };
+
+        let filename = tag_filename(tag);
+
+        if let Some(output_dir) = &self.output_dir {
+            output_dir.join(filename)
+        } else {
+            PathBuf::from(filename)
+        }
     }
 }

@@ -10,10 +10,7 @@ pub mod rendering;
 pub mod scene;
 pub mod uils;
 
-use crate::{
-    engine::Engine,
-    lock_order::{OrderedMutex, OrderedRwLock},
-};
+use crate::{engine::Engine, lock_order::OrderedRwLock};
 use anyhow::Result;
 use capture::CaptureCommand;
 use controller::ControllerCommand;
@@ -163,7 +160,7 @@ pub fn execute_instrumentation_command(
 }
 
 pub fn execute_game_loop_command(engine: &Engine, command: GameLoopCommand) -> Result<()> {
-    let mut game_loop_controller = engine.game_loop_controller().olock();
+    let mut game_loop_controller = engine.game_loop_controller().owrite();
     match command {
         GameLoopCommand::SetGameLoop(to) => game_loop::set_game_loop(&mut game_loop_controller, to),
         GameLoopCommand::PauseAfterSingleIteration => {

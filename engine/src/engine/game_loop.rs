@@ -2,9 +2,8 @@
 
 use super::Engine;
 use crate::{
-    alloc::TaskArenas,
     instrumentation,
-    lock_order::{OrderedMutex, OrderedRwLock},
+    lock_order::OrderedRwLock,
     runtime::tasks::RuntimeTaskScheduler,
     tasks::{PhysicsTag, RenderingTag, UserInterfaceTag},
 };
@@ -15,8 +14,11 @@ use std::time::Instant;
 define_execution_tag_set!(ALL_SYSTEMS, [PhysicsTag, RenderingTag, UserInterfaceTag]);
 
 impl Engine {
-    pub fn perform_game_loop_iteration(&self, task_scheduler: &RuntimeTaskScheduler) -> Result<()> {
-        let mut game_loop_controller = self.game_loop_controller.olock();
+    pub(crate) fn perform_game_loop_iteration(
+        &self,
+        task_scheduler: &RuntimeTaskScheduler,
+    ) -> Result<()> {
+        let game_loop_controller = self.game_loop_controller.oread();
 
         if game_loop_controller.reached_max_iterations() {
             impact_log::info!("Reached max iterations, requesting shutdown");
@@ -28,11 +30,19 @@ impl Engine {
             return Ok(());
         }
 
+        let frame_number = game_loop_controller.iteration();
+
+        drop(game_loop_controller);
+
         let iter_start_time = Instant::now();
+
+        self.app().on_new_frame(self, frame_number)?;
 
         let execution_result = impact_log::with_timing_info_logging!("Game loop iteration"; {
             task_scheduler.execute_and_wait(&ALL_SYSTEMS)
         });
+
+        self.renderer().owrite().present();
 
         if let Err(mut task_errors) = execution_result {
             self.handle_task_errors(&mut task_errors);
@@ -42,18 +52,9 @@ impl Engine {
                 return Err(task_errors.into());
             }
         }
-
-        self.renderer().owrite().present();
-
-        TaskArenas::with(|arena| {
-            self.app().on_game_loop_iteration_completed(
-                arena,
-                self,
-                game_loop_controller.iteration(),
-            )
-        })?;
-
         self.handle_staged_entities()?;
+
+        let mut game_loop_controller = self.game_loop_controller.owrite();
 
         let iter_end_time = game_loop_controller.wait_for_target_frame_duration(iter_start_time);
 

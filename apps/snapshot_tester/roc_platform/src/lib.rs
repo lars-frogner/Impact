@@ -3,7 +3,7 @@ use ffi_utils::define_ffi;
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 define_ffi! {
-    name = ImpactGameFFI,
+    name = AppFFI,
     lib_path_env = "APP_LIB_PATH",
     lib_path_default = "./libapp",
     roc_execute_engine_command => unsafe extern "C" fn(&RocList<u8>) -> RocResult<(), RocStr>,
@@ -16,7 +16,7 @@ define_ffi! {
 pub extern "C" fn roc_fx_execute_engine_command(
     command_bytes: &RocList<u8>,
 ) -> RocResult<(), RocStr> {
-    ImpactGameFFI::call(
+    AppFFI::call(
         |ffi| unsafe { (ffi.roc_execute_engine_command)(command_bytes) },
         to_roc_err,
     )
@@ -27,7 +27,7 @@ pub extern "C" fn roc_fx_create_entity_with_id(
     entity_id: u64,
     component_bytes: &RocList<u8>,
 ) -> RocResult<(), RocStr> {
-    ImpactGameFFI::call(
+    AppFFI::call(
         |ffi| unsafe { (ffi.roc_create_entity_with_id)(entity_id, component_bytes) },
         to_roc_err,
     )
@@ -35,7 +35,7 @@ pub extern "C" fn roc_fx_create_entity_with_id(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResult<u64, RocStr> {
-    ImpactGameFFI::call(
+    AppFFI::call(
         |ffi| unsafe { (ffi.roc_create_entity)(component_bytes) },
         to_roc_err,
     )
@@ -45,7 +45,7 @@ pub extern "C" fn roc_fx_create_entity(component_bytes: &RocList<u8>) -> RocResu
 pub extern "C" fn roc_fx_create_entities(
     component_bytes: &RocList<u8>,
 ) -> RocResult<RocList<u64>, RocStr> {
-    ImpactGameFFI::call(
+    AppFFI::call(
         |ffi| unsafe { (ffi.roc_create_entities)(component_bytes) },
         to_roc_err,
     )

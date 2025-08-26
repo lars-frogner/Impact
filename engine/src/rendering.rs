@@ -233,7 +233,6 @@ impl RenderingSystem {
     pub fn present(&mut self) {
         if let Some(surface_texture) = self.surface_texture_to_present.take() {
             surface_texture.present();
-            self.frame_counter = self.frame_counter.wrapping_add(1);
         }
     }
 
@@ -415,6 +414,7 @@ impl RenderingSystem {
         self.staging_belt.recall();
 
         self.surface_texture_to_present = surface_texture;
+        self.frame_counter = self.frame_counter.wrapping_add(1);
 
         Ok(())
     }
