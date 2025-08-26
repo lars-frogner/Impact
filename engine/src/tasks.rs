@@ -29,6 +29,26 @@ define_execution_tag!(
 );
 
 // =============================================================================
+// COMMANDS
+// =============================================================================
+
+define_task!(
+    /// Executes all the current commands in the command queue.
+    ///
+    /// Since this may change configuration parameters in the engine, this task
+    /// must run before other tasks that may depend on those parameters.
+    [pub] ExecuteEnqueuedCommands,
+    depends_on = [],
+    execute_on = [PhysicsTag, RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Executing enqueued engine commands", engine, {
+            engine.execute_enqueued_commands()
+        })
+    }
+);
+
+// =============================================================================
 // USER INTERFACE
 // =============================================================================
 
@@ -82,7 +102,10 @@ define_task!(
     /// position, orientation and scaling. Also updates any flags for the node
     /// to match the entity's [`SceneEntityFlags`](crate::scene::SceneEntityFlags).
     [pub] SyncSceneObjectTransformsAndFlags,
-    depends_on = [ProcessUserInterface],
+    depends_on = [
+        ExecuteEnqueuedCommands,
+        ProcessUserInterface
+    ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -408,7 +431,10 @@ define_task!(
     /// entities based on which gizmos have been newly configured to be
     /// globally visible or hidden.
     [pub] UpdateVisibilityFlagsForGizmos,
-    depends_on = [ProcessUserInterface],
+    depends_on = [
+        ExecuteEnqueuedCommands,
+        ProcessUserInterface
+    ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -741,6 +767,30 @@ define_task!(
 );
 
 // =============================================================================
+// STAGED ENTITIES
+// =============================================================================
+
+define_task!(
+    /// Creates entities staged for creation and removes entities staged for
+    /// removal.
+    [pub] HandleStagedEntities,
+    depends_on = [
+        SyncMeshGPUResources,
+        SyncTextureGPUResources,
+        SyncMaterialGPUResources,
+        SyncMiscGPUResources,
+        SyncDynamicGPUResources
+    ],
+    execute_on = [PhysicsTag, RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Handling staged entities", engine, {
+            engine.handle_staged_entities()
+        })
+    }
+);
+
+// =============================================================================
 // RENDER PIPELINE EXECUTION
 // =============================================================================
 
@@ -846,6 +896,9 @@ define_task!(
 /// Tasks are registered in functional groups arranged in dependency-consistent
 /// order, making the overall execution flow clear and grouping related tasks.
 pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
+    // Commands
+    task_scheduler.register_task(ExecuteEnqueuedCommands)?;
+
     // User Interface
     task_scheduler.register_task(ProcessUserInterface)?;
 
@@ -887,6 +940,9 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncMaterialGPUResources)?;
     task_scheduler.register_task(SyncMiscGPUResources)?;
     task_scheduler.register_task(SyncDynamicGPUResources)?;
+
+    // Staged entities
+    task_scheduler.register_task(HandleStagedEntities)?;
 
     // Render Pipeline Execution
     task_scheduler.register_task(SyncRenderCommands)?;
