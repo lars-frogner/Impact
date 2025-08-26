@@ -61,6 +61,11 @@ pub struct SimulatorConfig {
     /// If `true`, the time step duration will be updated regularly to match the
     /// frame duration. This gives "real-time" simulation.
     pub match_frame_duration: bool,
+    /// If specified, the time step duration will not be increased automatically
+    /// above this value. This means it will lag behind real-time for
+    /// sufficiently long frame times, but it can prevent the simulation from
+    /// becoming unstable during stuttering.
+    pub max_auto_time_step_duration: Option<fph>,
 }
 
 impl PhysicsSimulator {
@@ -162,6 +167,14 @@ impl PhysicsSimulator {
         &mut self.config.match_frame_duration
     }
 
+    /// If specified, the time step duration will not be increased automatically
+    /// above this value. This means it will lag behind real-time for
+    /// sufficiently long frame times, but it can prevent the simulation from
+    /// becoming unstable during stuttering.
+    pub fn max_auto_time_step_duration(&self) -> Option<fph> {
+        self.config.max_auto_time_step_duration
+    }
+
     /// Returns a reference to the [`RigidBodyManager`], guarded by a
     /// [`RwLock`].
     pub fn rigid_body_manager(&self) -> &RwLock<RigidBodyManager> {
@@ -208,10 +221,17 @@ impl PhysicsSimulator {
     }
 
     /// If configured to do so, sets the time step duration to the given frame
-    /// duration.
+    /// duration, provided it doesn't exceed the configured maximum.
     pub fn update_time_step_duration(&mut self, frame_duration: &Duration) {
         if self.config.enabled && self.config.match_frame_duration {
-            self.set_time_step_duration(frame_duration.as_secs_f64());
+            let new_step_duration = frame_duration.as_secs_f64();
+            if self
+                .config
+                .max_auto_time_step_duration
+                .is_none_or(|max_step_duration| new_step_duration < max_step_duration)
+            {
+                self.set_time_step_duration(new_step_duration);
+            }
         }
     }
 
@@ -311,6 +331,7 @@ impl Default for SimulatorConfig {
             n_substeps: 1,
             initial_time_step_duration: 0.001,
             match_frame_duration: true,
+            max_auto_time_step_duration: None,
         }
     }
 }
