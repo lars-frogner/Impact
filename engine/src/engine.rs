@@ -9,7 +9,7 @@ pub mod window;
 
 use crate::{
     application::Application,
-    command::{self, EngineCommand, queue::CommandQueue},
+    command::{self, AdminCommand, EngineCommand, queue::CommandQueue},
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
@@ -67,6 +67,7 @@ pub struct Engine {
     gizmo_manager: RwLock<GizmoManager>,
     metrics: RwLock<EngineMetrics>,
     command_queue: CommandQueue<EngineCommand>,
+    admin_command_queue: CommandQueue<AdminCommand>,
     screen_capturer: ScreenCapturer,
     task_timer: TaskTimer,
     controls_enabled: AtomicBool,
@@ -170,6 +171,7 @@ impl Engine {
             gizmo_manager: RwLock::new(gizmo_manager),
             metrics: RwLock::new(EngineMetrics::default()),
             command_queue: CommandQueue::new(),
+            admin_command_queue: CommandQueue::new(),
             screen_capturer: ScreenCapturer::new(config.screen_capture),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
             controls_enabled: AtomicBool::new(false),
@@ -436,9 +438,18 @@ impl Engine {
         command::execute_engine_command(self, command)
     }
 
+    pub fn execute_admin_command(&self, command: AdminCommand) -> Result<()> {
+        command::execute_admin_command(self, command)
+    }
+
     pub fn execute_enqueued_commands(&self) -> Result<()> {
         self.command_queue
             .try_execute_commands(|command| command::execute_engine_command(self, command))
+    }
+
+    pub fn execute_enqueued_admin_commands(&self) -> Result<()> {
+        self.admin_command_queue
+            .try_execute_commands(|command| command::execute_admin_command(self, command))
     }
 
     /// Identifies errors that need special handling in the given set of task

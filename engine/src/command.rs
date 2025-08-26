@@ -25,10 +25,14 @@ use scene::SceneCommand;
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EngineCommand {
-    Rendering(RenderingCommand),
-    Physics(PhysicsCommand),
     Scene(SceneCommand),
     Controller(ControllerCommand),
+}
+
+#[derive(Clone, Debug)]
+pub enum AdminCommand {
+    Rendering(RenderingCommand),
+    Physics(PhysicsCommand),
     Capture(CaptureCommand),
     Instrumentation(InstrumentationCommand),
     GameLoop(GameLoopCommand),
@@ -37,14 +41,19 @@ pub enum EngineCommand {
 
 pub fn execute_engine_command(engine: &Engine, command: EngineCommand) -> Result<()> {
     match command {
-        EngineCommand::Rendering(command) => execute_rendering_command(engine, command),
-        EngineCommand::Physics(command) => execute_physics_command(engine, command),
         EngineCommand::Scene(command) => execute_scene_command(engine, command),
         EngineCommand::Controller(command) => execute_control_command(engine, command),
-        EngineCommand::Capture(command) => execute_capture_command(engine, command),
-        EngineCommand::Instrumentation(command) => execute_instrumentation_command(engine, command),
-        EngineCommand::GameLoop(command) => execute_game_loop_command(engine, command),
-        EngineCommand::Shutdown => {
+    }
+}
+
+pub fn execute_admin_command(engine: &Engine, command: AdminCommand) -> Result<()> {
+    match command {
+        AdminCommand::Rendering(command) => execute_rendering_command(engine, command),
+        AdminCommand::Physics(command) => execute_physics_command(engine, command),
+        AdminCommand::Capture(command) => execute_capture_command(engine, command),
+        AdminCommand::Instrumentation(command) => execute_instrumentation_command(engine, command),
+        AdminCommand::GameLoop(command) => execute_game_loop_command(engine, command),
+        AdminCommand::Shutdown => {
             engine.request_shutdown();
             Ok(())
         }

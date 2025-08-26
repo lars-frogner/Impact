@@ -3,7 +3,7 @@
 use anyhow::Result;
 use impact::{
     command::{
-        EngineCommand,
+        AdminCommand,
         rendering::{RenderingCommand, postprocessing::ToToneMappingMethod},
         uils::ToActiveState,
     },
@@ -74,25 +74,25 @@ impl TestScene {
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
-            | Self::SoftCascadedShadowMapping => engine.execute_command(EngineCommand::Rendering(
-                RenderingCommand::SetShadowMapping(ToActiveState::Enabled),
-            )),
-            Self::AmbientOcclusion => engine.execute_command(EngineCommand::Rendering(
+            | Self::SoftCascadedShadowMapping => engine.execute_admin_command(
+                AdminCommand::Rendering(RenderingCommand::SetShadowMapping(ToActiveState::Enabled)),
+            ),
+            Self::AmbientOcclusion => engine.execute_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetAmbientOcclusion(ToActiveState::Enabled),
             )),
-            Self::Bloom => engine.execute_command(EngineCommand::Rendering(
+            Self::Bloom => engine.execute_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetBloom(ToActiveState::Enabled),
             )),
-            Self::ACESToneMapping => engine.execute_command(EngineCommand::Rendering(
+            Self::ACESToneMapping => engine.execute_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                     ToneMappingMethod::ACES,
                 )),
             )),
-            Self::KhronosPBRNeutralToneMapping => engine.execute_command(EngineCommand::Rendering(
-                RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
-                    ToneMappingMethod::KhronosPBRNeutral,
+            Self::KhronosPBRNeutralToneMapping => engine.execute_admin_command(
+                AdminCommand::Rendering(RenderingCommand::SetToneMappingMethod(
+                    ToToneMappingMethod::Specific(ToneMappingMethod::KhronosPBRNeutral),
                 )),
-            )),
+            ),
         }
     }
 
@@ -106,20 +106,23 @@ impl TestScene {
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
-            | Self::SoftCascadedShadowMapping => engine.execute_command(EngineCommand::Rendering(
-                RenderingCommand::SetShadowMapping(ToActiveState::Disabled),
-            )),
-            Self::AmbientOcclusion => engine.execute_command(EngineCommand::Rendering(
+            | Self::SoftCascadedShadowMapping => {
+                engine.execute_admin_command(AdminCommand::Rendering(
+                    RenderingCommand::SetShadowMapping(ToActiveState::Disabled),
+                ))
+            }
+            Self::AmbientOcclusion => engine.execute_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetAmbientOcclusion(ToActiveState::Disabled),
             )),
-            Self::Bloom => engine.execute_command(EngineCommand::Rendering(
+            Self::Bloom => engine.execute_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetBloom(ToActiveState::Disabled),
             )),
-            Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine.execute_command(
-                EngineCommand::Rendering(RenderingCommand::SetToneMappingMethod(
-                    ToToneMappingMethod::Specific(ToneMappingMethod::None),
+            Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine
+                .execute_admin_command(AdminCommand::Rendering(
+                    RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
+                        ToneMappingMethod::None,
+                    )),
                 )),
-            ),
         }
     }
 }

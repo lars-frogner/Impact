@@ -33,7 +33,7 @@ define_execution_tag!(
 // =============================================================================
 
 define_task!(
-    /// Executes all the current commands in the command queue.
+    /// Executes all the current commands in the command queues.
     ///
     /// Since this may change configuration parameters in the engine, this task
     /// must run before other tasks that may depend on those parameters.
@@ -43,6 +43,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Executing enqueued engine commands", engine, {
+            engine.execute_enqueued_admin_commands()?;
             engine.execute_enqueued_commands()
         })
     }

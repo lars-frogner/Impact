@@ -4,11 +4,8 @@ use crate::{
     command::uils::ToActiveState,
     game_loop::{GameLoopController, GameLoopState},
 };
-use roc_integration::roc;
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum GameLoopCommand {
     SetGameLoop(ToActiveState),
     PauseAfterSingleIteration,
