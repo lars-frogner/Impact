@@ -5,8 +5,11 @@ use super::{
 use crate::UserInterfaceConfig;
 use impact::{
     command::{
-        AdminCommand, rendering::RenderingCommand,
-        rendering::postprocessing::ToRenderAttachmentQuantity, uils::ToActiveState,
+        AdminCommand,
+        capture::{CaptureCommand, SaveShadowMapsFor},
+        rendering::RenderingCommand,
+        rendering::postprocessing::ToRenderAttachmentQuantity,
+        uils::ToActiveState,
     },
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
@@ -16,6 +19,21 @@ use impact_rendering::postprocessing::{
     capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
     render_attachment_visualization::RenderAttachmentVisualizationPasses,
 };
+
+mod capture {
+    pub mod docs {
+        pub const SCREENSHOT: &str = "Capture screenshot";
+        pub const SHADOW_CUBEMAP: &str = "Capture shadow cubemaps";
+        pub const CASCADED_SHADOW_MAP: &str = "Capture cascaded shadow maps";
+
+        use crate::option_panels::LabelAndHoverText;
+
+        pub const HIDE_UI_DURING_SCREENSHOTS: LabelAndHoverText = LabelAndHoverText {
+            label: "Hide UI during screenshots",
+            hover_text: "When enabled, the UI will be hidden when capturing screenshots.",
+        };
+    }
+}
 
 mod shadow_mapping {
     pub mod docs {
@@ -253,7 +271,14 @@ enum ExposureMode {
 }
 
 impl RenderingOptionPanel {
-    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
+    pub fn run(
+        &mut self,
+        ctx: &Context,
+        config: &mut UserInterfaceConfig,
+        engine: &Engine,
+        screenshot_requested: &mut bool,
+    ) {
+        let mut hide_ui_during_screenshots = config.hide_ui_during_screenshots;
         option_panel(ctx, config, "rendering_option_panel", |ui| {
             option_group(ui, "shadow_mapping_options", |ui| {
                 shadow_mapping_options(ui, engine);
@@ -264,6 +289,7 @@ impl RenderingOptionPanel {
             option_group(ui, "temporal_anti_aliasing_options", |ui| {
                 temporal_anti_aliasing_options(ui, engine);
             });
+
             option_group(ui, "camera_options", |ui| {
                 camera_options(ui, engine);
             });
@@ -279,7 +305,16 @@ impl RenderingOptionPanel {
             option_group(ui, "render_attachment_options", |ui| {
                 render_attachment_options(ui, engine);
             });
+            option_group(ui, "capture_options", |ui| {
+                capture_options(
+                    ui,
+                    engine,
+                    screenshot_requested,
+                    &mut hide_ui_during_screenshots,
+                );
+            });
         });
+        config.hide_ui_during_screenshots = hide_ui_during_screenshots;
     }
 }
 
@@ -719,4 +754,38 @@ fn render_attachment_options(ui: &mut Ui, engine: &Engine) {
             ));
         }
     }
+}
+
+fn capture_options(
+    ui: &mut Ui,
+    engine: &Engine,
+    screenshot_requested: &mut bool,
+    hide_ui_during_screenshots: &mut bool,
+) {
+    option_checkbox(
+        ui,
+        hide_ui_during_screenshots,
+        capture::docs::HIDE_UI_DURING_SCREENSHOTS,
+    );
+    ui.end_row();
+
+    if ui.button(capture::docs::SCREENSHOT).clicked() {
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveScreenshot));
+        *screenshot_requested = true;
+    }
+    ui.end_row();
+
+    if ui.button(capture::docs::SHADOW_CUBEMAP).clicked() {
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveShadowMaps(
+            SaveShadowMapsFor::OmnidirectionalLight,
+        )));
+    }
+    ui.end_row();
+
+    if ui.button(capture::docs::CASCADED_SHADOW_MAP).clicked() {
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveShadowMaps(
+            SaveShadowMapsFor::UnidirectionalLight,
+        )));
+    }
+    ui.end_row();
 }
