@@ -7,9 +7,14 @@ define_ffi! {
     lib_path_env = "APP_LIB_PATH",
     lib_path_default = "./libapp",
     roc_execute_engine_command => unsafe extern "C" fn(&RocList<u8>) -> RocResult<(), RocStr>,
+    roc_stage_entity_for_creation_with_id => unsafe extern "C" fn(u64, &RocList<u8>) -> RocResult<(), RocStr>,
+    roc_stage_entity_for_creation => unsafe extern "C" fn(&RocList<u8>) -> RocResult<(), RocStr>,
+    roc_stage_entities_for_creation => unsafe extern "C" fn(&RocList<u8>) -> RocResult<(), RocStr>,
+    roc_stage_entity_for_removal => unsafe extern "C" fn(u64) -> RocResult<(), RocStr>,
     roc_create_entity_with_id => unsafe extern "C" fn(u64, &RocList<u8>) -> RocResult<(), RocStr>,
     roc_create_entity => unsafe extern "C" fn(&RocList<u8>) -> RocResult<u64, RocStr>,
     roc_create_entities => unsafe extern "C" fn(&RocList<u8>) -> RocResult<RocList<u64>, RocStr>,
+    roc_remove_entity => unsafe extern "C" fn(u64) -> RocResult<(), RocStr>,
 }
 
 #[unsafe(no_mangle)]
@@ -18,6 +23,45 @@ pub extern "C" fn roc_fx_execute_engine_command(
 ) -> RocResult<(), RocStr> {
     AppFFI::call(
         |ffi| unsafe { (ffi.roc_execute_engine_command)(command_bytes) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_stage_entity_for_creation_with_id(
+    entity_id: u64,
+    component_bytes: &RocList<u8>,
+) -> RocResult<(), RocStr> {
+    AppFFI::call(
+        |ffi| unsafe { (ffi.roc_stage_entity_for_creation_with_id)(entity_id, component_bytes) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_stage_entity_for_creation(
+    component_bytes: &RocList<u8>,
+) -> RocResult<(), RocStr> {
+    AppFFI::call(
+        |ffi| unsafe { (ffi.roc_stage_entity_for_creation)(component_bytes) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_stage_entities_for_creation(
+    component_bytes: &RocList<u8>,
+) -> RocResult<(), RocStr> {
+    AppFFI::call(
+        |ffi| unsafe { (ffi.roc_stage_entities_for_creation)(component_bytes) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_stage_entity_for_removal(entity_id: u64) -> RocResult<(), RocStr> {
+    AppFFI::call(
+        |ffi| unsafe { (ffi.roc_stage_entity_for_removal)(entity_id) },
         to_roc_err,
     )
 }
@@ -47,6 +91,14 @@ pub extern "C" fn roc_fx_create_entities(
 ) -> RocResult<RocList<u64>, RocStr> {
     AppFFI::call(
         |ffi| unsafe { (ffi.roc_create_entities)(component_bytes) },
+        to_roc_err,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_remove_entity(entity_id: u64) -> RocResult<(), RocStr> {
+    AppFFI::call(
+        |ffi| unsafe { (ffi.roc_remove_entity)(entity_id) },
         to_roc_err,
     )
 }

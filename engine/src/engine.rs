@@ -1,5 +1,6 @@
 //! Manager for all systems and data in the engine.
 
+pub mod api;
 pub mod entity;
 pub mod game_loop;
 
@@ -8,7 +9,7 @@ pub mod window;
 
 use crate::{
     application::Application,
-    command::{self, EngineCommand},
+    command::{self, EngineCommand, queue::CommandQueue},
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
@@ -65,6 +66,7 @@ pub struct Engine {
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     gizmo_manager: RwLock<GizmoManager>,
     metrics: RwLock<EngineMetrics>,
+    command_queue: CommandQueue<EngineCommand>,
     screen_capturer: ScreenCapturer,
     task_timer: TaskTimer,
     controls_enabled: AtomicBool,
@@ -167,6 +169,7 @@ impl Engine {
             orientation_controller: orientation_controller.map(Mutex::new),
             gizmo_manager: RwLock::new(gizmo_manager),
             metrics: RwLock::new(EngineMetrics::default()),
+            command_queue: CommandQueue::new(),
             screen_capturer: ScreenCapturer::new(config.screen_capture),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
             controls_enabled: AtomicBool::new(false),
@@ -374,10 +377,6 @@ impl Engine {
         self.simulator.owrite().reset();
     }
 
-    pub fn controls_enabled(&self) -> bool {
-        self.controls_enabled.load(Ordering::Relaxed)
-    }
-
     pub fn set_controls_enabled(&self, enabled: bool) {
         self.controls_enabled.store(enabled, Ordering::Relaxed);
 
@@ -435,6 +434,11 @@ impl Engine {
 
     pub fn execute_command(&self, command: EngineCommand) -> Result<()> {
         command::execute_engine_command(self, command)
+    }
+
+    pub fn execute_enqueued_commands(&self) -> Result<()> {
+        self.command_queue
+            .try_execute_commands(|command| command::execute_engine_command(self, command))
     }
 
     /// Identifies errors that need special handling in the given set of task

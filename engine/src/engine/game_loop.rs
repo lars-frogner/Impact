@@ -52,7 +52,6 @@ impl Engine {
                 return Err(task_errors.into());
             }
         }
-        self.handle_staged_entities()?;
 
         let mut game_loop_controller = self.game_loop_controller.owrite();
 

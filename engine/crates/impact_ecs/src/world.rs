@@ -15,7 +15,7 @@ use std::{
     collections::hash_map::Entry,
     fmt,
     hash::{self, Hash},
-    mem,
+    vec::Drain,
 };
 
 /// Unique ID identifying an entity in the world.
@@ -63,9 +63,17 @@ pub struct EntityEntry<'a> {
 /// Helper for staging entities for later creation or removal.
 #[derive(Debug)]
 pub struct EntityStager {
-    to_create: Vec<EntityToCreate>,
     to_create_with_id: Vec<EntityToCreateWithID>,
+    to_create: Vec<EntityToCreate>,
+    to_create_multiple: Vec<EntitiesToCreate>,
     to_remove: Vec<EntityID>,
+}
+
+/// The components of an entity that has yet to be created under a specific ID.
+#[derive(Debug)]
+pub struct EntityToCreateWithID {
+    pub entity_id: EntityID,
+    pub components: SingleInstance<ArchetypeComponentStorage>,
 }
 
 /// The components of an entity that has yet to be created.
@@ -74,11 +82,11 @@ pub struct EntityToCreate {
     pub components: SingleInstance<ArchetypeComponentStorage>,
 }
 
-/// The components of an entity that has yet to be created under a specific ID.
+/// The components of one or more entities of the same archetype that have yet
+/// to be created.
 #[derive(Debug)]
-pub struct EntityToCreateWithID {
-    pub entity_id: EntityID,
-    pub components: SingleInstance<ArchetypeComponentStorage>,
+pub struct EntitiesToCreate {
+    pub components: ArchetypeComponentStorage,
 }
 
 impl EntityID {
@@ -705,32 +713,11 @@ impl EntityStager {
     /// Creates a new stager with no staged entities.
     pub fn new() -> Self {
         Self {
-            to_create: Vec::new(),
             to_create_with_id: Vec::new(),
+            to_create: Vec::new(),
+            to_create_multiple: Vec::new(),
             to_remove: Vec::new(),
         }
-    }
-
-    /// Stages the entity defined by the given components for later creation.
-    pub fn stage_entity_for_creation<A, E>(
-        &mut self,
-        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
-    ) -> Result<()>
-    where
-        A: ComponentArray,
-        E: Into<anyhow::Error>,
-    {
-        let components = components
-            .try_into()
-            .map_err(E::into)?
-            .into_inner()
-            .into_storage();
-
-        self.to_create.push(EntityToCreate {
-            components: SingleInstance::new(components),
-        });
-
-        Ok(())
     }
 
     /// Stages the entity defined by the given components for later creation
@@ -758,27 +745,73 @@ impl EntityStager {
         Ok(())
     }
 
+    /// Stages the entity defined by the given components for later creation.
+    pub fn stage_entity_for_creation<A, E>(
+        &mut self,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components
+            .try_into()
+            .map_err(E::into)?
+            .into_inner()
+            .into_storage();
+
+        self.to_create.push(EntityToCreate {
+            components: SingleInstance::new(components),
+        });
+
+        Ok(())
+    }
+
+    /// Stages the entities of the same archetype defined by the given
+    /// components for later creation.
+    pub fn stage_entities_for_creation<A, E>(
+        &mut self,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components.try_into().map_err(E::into)?.into_storage();
+
+        self.to_create_multiple
+            .push(EntitiesToCreate { components });
+
+        Ok(())
+    }
+
     /// Stages the entity with the given ID for later removal.
     pub fn stage_entity_for_removal(&mut self, entity_id: EntityID) {
         self.to_remove.push(entity_id);
     }
 
-    /// Returns the lists of entities staged for creation since the last time
-    /// this method was called.
-    pub fn take_entities_to_create(&mut self) -> (Vec<EntityToCreate>, Vec<EntityToCreateWithID>) {
-        let mut entities = Vec::with_capacity(self.to_create.len());
-        let mut entities_with_id = Vec::with_capacity(self.to_create.len());
-        mem::swap(&mut self.to_create, &mut entities);
-        mem::swap(&mut self.to_create_with_id, &mut entities_with_id);
-        (entities, entities_with_id)
+    /// Returns a draining iterator over entities staged for creation with IDs
+    /// since the last time this method was called.
+    pub fn drain_entities_to_create_with_id(&mut self) -> Drain<'_, EntityToCreateWithID> {
+        self.to_create_with_id.drain(..)
     }
 
-    /// Returns the list of entities staged for removal since the last time this
-    /// method was called.
-    pub fn take_entities_to_remove(&mut self) -> Vec<EntityID> {
-        let mut entities = Vec::with_capacity(self.to_remove.len());
-        mem::swap(&mut self.to_remove, &mut entities);
-        entities
+    /// Returns a draining iterator over single entities staged for creation
+    /// since the last time this method was called.
+    pub fn drain_single_entities_to_create(&mut self) -> Drain<'_, EntityToCreate> {
+        self.to_create.drain(..)
+    }
+
+    /// Returns a draining iterator over multi-entities staged for creation
+    /// since the last time this method was called.
+    pub fn drain_multi_entities_to_create(&mut self) -> Drain<'_, EntitiesToCreate> {
+        self.to_create_multiple.drain(..)
+    }
+
+    /// Returns a draining iterator over entities staged for removal since the
+    /// last time this method was called.
+    pub fn drain_entities_to_remove(&mut self) -> Drain<'_, EntityID> {
+        self.to_remove.drain(..)
     }
 }
 
