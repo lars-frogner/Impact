@@ -197,6 +197,11 @@ impl PhysicsSimulator {
         &self.collision_world
     }
 
+    /// Returns a reference to the current simulation medium.
+    pub fn medium(&self) -> &UniformMedium {
+        &self.medium
+    }
+
     /// Sets the given medium for the physics simulation.
     pub fn set_medium(&mut self, medium: UniformMedium) {
         self.medium = medium;

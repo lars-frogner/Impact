@@ -39,7 +39,7 @@ define_task!(
     /// must run before other tasks that may depend on those parameters.
     [pub] ExecuteEnqueuedCommands,
     depends_on = [],
-    execute_on = [PhysicsTag, RenderingTag],
+    execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Executing enqueued engine commands", engine, {
@@ -55,12 +55,8 @@ define_task!(
 
 define_task!(
     /// Handles all UI logic and processes and stores the output.
-    ///
-    /// Since running the UI logic may change configuration parameters in the
-    /// engine, this task must run before other tasks that may depend on those
-    /// parameters.
     [pub] ProcessUserInterface,
-    depends_on = [],
+    depends_on = [ExecuteEnqueuedCommands],
     execute_on = [UserInterfaceTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -103,10 +99,7 @@ define_task!(
     /// position, orientation and scaling. Also updates any flags for the node
     /// to match the entity's [`SceneEntityFlags`](crate::scene::SceneEntityFlags).
     [pub] SyncSceneObjectTransformsAndFlags,
-    depends_on = [
-        ExecuteEnqueuedCommands,
-        ProcessUserInterface
-    ],
+    depends_on = [ExecuteEnqueuedCommands],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -432,10 +425,7 @@ define_task!(
     /// entities based on which gizmos have been newly configured to be
     /// globally visible or hidden.
     [pub] UpdateVisibilityFlagsForGizmos,
-    depends_on = [
-        ExecuteEnqueuedCommands,
-        ProcessUserInterface
-    ],
+    depends_on = [ExecuteEnqueuedCommands],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -699,7 +689,7 @@ define_task!(
 define_task!(
     /// Synchronizes miscellaneous GPU resources.
     [pub] SyncMiscGPUResources,
-    depends_on = [],
+    depends_on = [SyncTextureGPUResources],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();

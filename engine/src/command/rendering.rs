@@ -11,7 +11,16 @@ use crate::{
 use anyhow::Result;
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,
-    postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
+    postprocessing::{
+        ambient_occlusion::AmbientOcclusionConfig,
+        capturing::{
+            CameraSettings,
+            average_luminance::AverageLuminanceComputationConfig,
+            bloom::BloomConfig,
+            dynamic_range_compression::{DynamicRangeCompressionConfig, ToneMappingMethod},
+        },
+        temporal_anti_aliasing::TemporalAntiAliasingConfig,
+    },
 };
 use parking_lot::RwLock;
 use postprocessing::{ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod};
@@ -19,9 +28,15 @@ use postprocessing::{ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod
 #[derive(Clone, Debug)]
 pub enum RenderingCommand {
     SetAmbientOcclusion(ToActiveState),
+    SetAmbientOcclusionConfig(AmbientOcclusionConfig),
     SetTemporalAntiAliasing(ToActiveState),
+    SetTemporalAntiAliasingConfig(TemporalAntiAliasingConfig),
     SetBloom(ToActiveState),
+    SetBloomConfig(BloomConfig),
+    SetCameraSettings(CameraSettings),
+    SetAverageLuminanceComputationConfig(AverageLuminanceComputationConfig),
     SetToneMappingMethod(ToToneMappingMethod),
+    SetDynamicRangeCompressionConfig(DynamicRangeCompressionConfig),
     SetExposure(ToExposure),
     SetRenderAttachmentVisualization(ToActiveState),
     SetVisualizedRenderAttachmentQuantity(ToRenderAttachmentQuantity),
@@ -63,12 +78,84 @@ pub fn set_bloom(renderer: &RenderingSystem, to: ToActiveState) -> ModifiedActiv
     postprocessing::set_bloom(&mut renderer.postprocessor().owrite(), to)
 }
 
+pub fn set_ambient_occlusion_config(renderer: &RenderingSystem, config: AmbientOcclusionConfig) {
+    impact_log::info!("Setting ambient occlusion config to {config:?}");
+    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+    let mut postprocessor = renderer.postprocessor().owrite();
+    postprocessor.set_ambient_occlusion_config(
+        renderer.graphics_device(),
+        &gpu_resource_group_manager,
+        config,
+    );
+}
+
+pub fn set_temporal_anti_aliasing_config(
+    renderer: &RenderingSystem,
+    config: TemporalAntiAliasingConfig,
+) {
+    impact_log::info!("Setting temporal anti-aliasing config to {config:?}");
+    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+    let mut postprocessor = renderer.postprocessor().owrite();
+    postprocessor.set_temporal_anti_aliasing_config(
+        renderer.graphics_device(),
+        &gpu_resource_group_manager,
+        config,
+    );
+}
+
+pub fn set_bloom_config(renderer: &RenderingSystem, config: BloomConfig) {
+    impact_log::info!("Setting bloom config to {config:?}");
+    let mut shader_manager = renderer.shader_manager().owrite();
+    let mut render_attachment_texture_manager =
+        renderer.render_attachment_texture_manager().owrite();
+    let mut postprocessor = renderer.postprocessor().owrite();
+    postprocessor.capturing_camera_mut().set_bloom_config(
+        renderer.graphics_device(),
+        &mut shader_manager,
+        &mut render_attachment_texture_manager,
+        config,
+    );
+}
+
+pub fn set_camera_settings(renderer: &RenderingSystem, settings: CameraSettings) {
+    impact_log::info!("Setting camera settings to {settings:?}");
+    let mut postprocessor = renderer.postprocessor().owrite();
+    *postprocessor.capturing_camera_mut().settings_mut() = settings;
+}
+
+pub fn set_average_luminance_computation_config(
+    renderer: &RenderingSystem,
+    config: AverageLuminanceComputationConfig,
+) {
+    impact_log::info!("Setting average luminance computation config to {config:?}");
+    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+    let mut postprocessor = renderer.postprocessor().owrite();
+    postprocessor
+        .capturing_camera_mut()
+        .set_average_luminance_computation_config(
+            renderer.graphics_device(),
+            &gpu_resource_group_manager,
+            config,
+        );
+}
+
 pub fn set_tone_mapping_method(
     renderer: &RenderingSystem,
     to: ToToneMappingMethod,
 ) -> ToneMappingMethod {
     impact_log::info!("Setting tone mapping method to {to:?}");
     postprocessing::set_tone_mapping_method(&mut renderer.postprocessor().owrite(), to)
+}
+
+pub fn set_dynamic_range_compression_config(
+    renderer: &RenderingSystem,
+    config: DynamicRangeCompressionConfig,
+) {
+    impact_log::info!("Setting dynamic range compression config to {config:?}");
+    let mut postprocessor = renderer.postprocessor().owrite();
+    *postprocessor
+        .capturing_camera_mut()
+        .dynamic_range_compression_config_mut() = config;
 }
 
 pub fn set_exposure(renderer: &RenderingSystem, to: ToExposure) {

@@ -2,7 +2,7 @@
 
 use super::UserInterface;
 use impact::{
-    command::{queue::CommandQueue, uils::ToActiveState},
+    command::{AdminCommand, controller::ControlCommand, queue::CommandQueue, uils::ToActiveState},
     egui::FullOutput,
     engine::Engine,
     ui,
@@ -33,7 +33,11 @@ impl UserInterface {
                     } else if !self.config.disable_cursor_capture {
                         ui::egui::confine_cursor(output);
                     }
-                    engine.set_controls_enabled(!self.config.interactive);
+                    engine.enqueue_admin_command(AdminCommand::Control(
+                        ControlCommand::SetControls(ToActiveState::from_enabled(
+                            !self.config.interactive,
+                        )),
+                    ));
                 }
             }
         });
