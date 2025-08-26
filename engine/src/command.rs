@@ -232,9 +232,6 @@ pub fn execute_game_loop_command(engine: &Engine, command: GameLoopCommand) -> R
     let mut game_loop_controller = engine.game_loop_controller().owrite();
     match command {
         GameLoopCommand::SetGameLoop(to) => game_loop::set_game_loop(&mut game_loop_controller, to),
-        GameLoopCommand::PauseAfterSingleIteration => {
-            game_loop::pause_after_single_iteration(&mut game_loop_controller);
-        }
     }
     Ok(())
 }
