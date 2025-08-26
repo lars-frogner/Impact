@@ -15,19 +15,6 @@ handle_event! = |{ key, state }|
                     KeyD -> set_motion(state, Right)
                     KeyQ -> set_motion(state, Up)
                     KeyE -> set_motion(state, Down)
-                    KeyP -> on_released(state, Engine(GameLoop(SetGameLoop(Opposite))))
-                    _ -> None
-
-            Symbol(symbol_key) ->
-                when symbol_key is
-                    Period -> on_released(state, Engine(GameLoop(PauseAfterSingleIteration)))
-                    _ -> None
-
-            Function(function_key) ->
-                when function_key is
-                    F12 -> on_released(state, Engine(Capture(SaveScreenshot)))
-                    F10 -> on_released(state, Engine(Capture(SaveShadowMaps(OmnidirectionalLight))))
-                    F9 -> on_released(state, Engine(Capture(SaveShadowMaps(UnidirectionalLight))))
                     _ -> None
 
             Control(control_key) ->

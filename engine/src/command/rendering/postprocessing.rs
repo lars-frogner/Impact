@@ -9,18 +9,13 @@ use impact_rendering::{
         capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
     },
 };
-use roc_integration::roc;
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum ToToneMappingMethod {
     Next,
     Specific(ToneMappingMethod),
 }
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum ToExposure {
     DifferentByStops(f32),
@@ -28,9 +23,7 @@ pub enum ToExposure {
     Manual { iso: f32 },
 }
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum ToRenderAttachmentQuantity {
     Next,
     Previous,
@@ -138,16 +131,3 @@ pub fn set_visualized_render_attachment_quantity(
         .render_attachment_visualization_passes_mut()
         .quantity())
 }
-
-impl PartialEq for ToExposure {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Auto { ev_compensation: a }, Self::Auto { ev_compensation: b })
-            | (Self::DifferentByStops(a), Self::DifferentByStops(b))
-            | (Self::Manual { iso: a }, Self::Manual { iso: b }) => a.to_bits() == b.to_bits(),
-            _ => false,
-        }
-    }
-}
-
-impl Eq for ToExposure {}

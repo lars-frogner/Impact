@@ -1,19 +1,14 @@
 //! Commands for screen capture.
 
 use crate::rendering::screen_capture::ScreenCapturer;
-use roc_integration::roc;
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum CaptureCommand {
     SaveScreenshot,
     SaveShadowMaps(SaveShadowMapsFor),
 }
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum SaveShadowMapsFor {
     OmnidirectionalLight,
     UnidirectionalLight,

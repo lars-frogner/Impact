@@ -1,8 +1,8 @@
-# Hash: fecd3c57e43846884b88609417c75362dd8ad6fb31bd3ed487a6e810fa3e7dda
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 694c5115a38a2670c6c5ee7b82e8710b13d346a203cef1fd38fdcaf8e0eb4b8e
+# Generated: 2025-08-26T11:33:16+00:00
 # Rust type: impact_scene::setup::SceneGraphGroup
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 2bc60bf8 (dirty)
 module [
     SceneGraphGroup,
     add,
@@ -15,7 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The entity has a group node in the [`SceneGraph`](crate::graph::SceneGraph).
+## The entity has a group node in the [`SceneGraph`].
 ##
 ## This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 ## purpose is to aid in constructing a `SceneGraphGroupNodeHandle` component

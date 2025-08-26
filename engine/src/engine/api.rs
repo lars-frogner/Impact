@@ -2,7 +2,7 @@
 
 use super::Engine;
 use crate::{
-    command::EngineCommand,
+    command::{AdminCommand, EngineCommand},
     lock_order::{OrderedMutex, OrderedRwLock},
     setup,
 };
@@ -118,6 +118,10 @@ impl Engine {
 
     pub fn enqueue_command(&self, command: EngineCommand) {
         self.command_queue.enqueue_command(command);
+    }
+
+    pub fn enqueue_admin_command(&self, command: AdminCommand) {
+        self.admin_command_queue.enqueue_command(command);
     }
 
     pub fn controls_enabled(&self) -> bool {

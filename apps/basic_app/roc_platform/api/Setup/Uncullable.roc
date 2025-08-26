@@ -1,8 +1,8 @@
-# Hash: f8966d71865a5b373d561f6f363e2d35125f516d2353aebbaf1ac5c416de04e8
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 50207de2b97b99881468bbcf0c18e22d610123a0207035094de559507c05b1bb
+# Generated: 2025-08-26T11:33:16+00:00
 # Rust type: impact_scene::setup::Uncullable
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: 2bc60bf8 (dirty)
 module [
     Uncullable,
     add,
@@ -15,8 +15,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The entity should never be frustum culled in the
-## [`SceneGraph`](crate::graph::SceneGraph).
+## The entity should never be frustum culled in the [`SceneGraph`].
 ##
 ## This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 ## purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`

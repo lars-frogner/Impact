@@ -1,11 +1,8 @@
 //! Commands for instrumentation.
 
 use crate::{command::uils::ToActiveState, instrumentation::timing::TaskTimer};
-use roc_integration::roc;
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum InstrumentationCommand {
     SetTaskTimings(ToActiveState),
 }

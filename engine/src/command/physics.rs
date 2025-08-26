@@ -7,11 +7,8 @@ use crate::{
     physics::PhysicsSimulator,
 };
 use impact_physics::{fph, medium::UniformMedium};
-use roc_integration::roc;
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum PhysicsCommand {
     SetSimulation(ToActiveState),
     SetSimulationSubstepCount(ToSubstepCount),
@@ -19,17 +16,13 @@ pub enum PhysicsCommand {
     SetMedium(UniformMedium),
 }
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum ToSubstepCount {
     HigherBy(u32),
     LowerBy(u32),
     Specific(u32),
 }
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum ToSimulationSpeedMultiplier {
     Higher,

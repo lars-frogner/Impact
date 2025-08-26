@@ -15,11 +15,8 @@ use impact_rendering::{
 };
 use parking_lot::RwLock;
 use postprocessing::{ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod};
-use roc_integration::roc;
 
-#[roc(parents = "Command")]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum RenderingCommand {
     SetAmbientOcclusion(ToActiveState),
     SetTemporalAntiAliasing(ToActiveState),

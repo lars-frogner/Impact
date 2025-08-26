@@ -13,7 +13,7 @@ use crate::testing::ComparisonOutcome;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
-    command::{EngineCommand, capture::CaptureCommand, scene::SceneCommand},
+    command::{AdminCommand, EngineCommand, capture::CaptureCommand, scene::SceneCommand},
     engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
@@ -129,7 +129,7 @@ impl Application for SnapshotTester {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
         if self.test_scenes.is_empty() {
             impact_log::info!("No scenes to test, exiting");
-            engine.enqueue_command(EngineCommand::Shutdown);
+            engine.execute_admin_command(AdminCommand::Shutdown)?;
             return Ok(());
         }
 
@@ -143,7 +143,7 @@ impl Application for SnapshotTester {
         if frame == self.test_scenes.len() {
             // All scenes have been rendered
             self.run_comparisons()?;
-            engine.enqueue_command(EngineCommand::Shutdown);
+            engine.execute_admin_command(AdminCommand::Shutdown)?;
             return Ok(());
         }
 
@@ -160,7 +160,11 @@ impl Application for SnapshotTester {
         // Setup the scene for this frame
         scene.prepare_settings(engine)?;
         scripting::setup_scene(scene)?;
-        engine.execute_command(EngineCommand::Capture(CaptureCommand::SaveScreenshot))
+
+        // Request a capture for this frame
+        engine.execute_admin_command(AdminCommand::Capture(CaptureCommand::SaveScreenshot))?;
+
+        Ok(())
     }
 }
 
