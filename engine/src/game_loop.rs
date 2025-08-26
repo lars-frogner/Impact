@@ -31,7 +31,6 @@ pub enum GameLoopState {
     #[default]
     Running,
     Paused,
-    PauseAfterSingleIteration,
 }
 
 impl GameLoopController {
@@ -74,12 +73,6 @@ impl GameLoopController {
 
     pub fn increment_iteration(&mut self) {
         self.iteration += 1;
-    }
-
-    pub fn update_state_after_iteration(&mut self) {
-        if self.config.state == GameLoopState::PauseAfterSingleIteration {
-            self.config.state = GameLoopState::Paused;
-        }
     }
 
     pub fn set_state(&mut self, state: GameLoopState) {

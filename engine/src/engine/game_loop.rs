@@ -76,7 +76,6 @@ impl Engine {
         );
 
         game_loop_controller.increment_iteration();
-        game_loop_controller.update_state_after_iteration();
 
         Ok(())
     }
