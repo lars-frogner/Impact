@@ -14,7 +14,7 @@ use anyhow::Result;
 use impact::{
     command::{
         AdminCommand, controller::ControlCommand, instrumentation::InstrumentationCommand,
-        uils::ToActiveState,
+        physics::PhysicsCommand, uils::ToActiveState,
     },
     egui::{Context, FullOutput, RawInput},
     engine::Engine,
@@ -41,6 +41,7 @@ pub struct UserInterface {
     time_overlay: TimeOverlay,
     config: UserInterfaceConfig,
     screenshot_requested: bool,
+    single_step_requested: bool,
 }
 
 /// Configuration parameters for the develompment user interface.
@@ -98,6 +99,8 @@ impl UserInterface {
                 return;
             }
 
+            let single_step_was_requested = self.single_step_requested;
+
             if self.config.interactive {
                 self.toolbar.run(ctx, &mut self.config, engine);
 
@@ -110,7 +113,12 @@ impl UserInterface {
                     );
                 }
                 if self.config.show_physics_options {
-                    self.physics_option_panel.run(ctx, &self.config, engine);
+                    self.physics_option_panel.run(
+                        ctx,
+                        &self.config,
+                        engine,
+                        &mut self.single_step_requested,
+                    );
                 }
                 if self.config.show_gizmo_options {
                     self.gizmo_option_panel.run(ctx, &self.config, engine);
@@ -125,6 +133,15 @@ impl UserInterface {
 
             if self.config.show_time_overlay {
                 self.time_overlay.run(ctx, engine);
+            }
+
+            // Re-disable the simulation if we requested a single step in the
+            // previous frame
+            if single_step_was_requested {
+                self.single_step_requested = false;
+                engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
+                    ToActiveState::from_enabled(false),
+                )));
             }
         });
 
