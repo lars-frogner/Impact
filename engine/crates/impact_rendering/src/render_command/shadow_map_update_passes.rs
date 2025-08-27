@@ -115,9 +115,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
-    ) -> Result<()> {
+    ) {
         self.sync_models_with_render_resources(gpu_resources);
-        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
+        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources);
     }
 
     fn sync_models_with_render_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
@@ -163,10 +163,10 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
-    ) -> Result<()> {
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+    ) {
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return;
+        };
 
         let max_light_count = light_gpu_resources.max_shadowable_omnidirectional_light_count();
 
@@ -192,8 +192,6 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             );
             self.max_light_count = max_light_count;
         }
-
-        Ok(())
     }
 
     fn color_target_states() -> Vec<Option<wgpu::ColorTargetState>> {
@@ -253,9 +251,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     where
         R: BasicGPUResources,
     {
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return Ok(());
+        };
 
         let shadow_map_manager = light_gpu_resources.omnidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();
@@ -472,9 +470,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
-    ) -> Result<()> {
+    ) {
         self.sync_models_with_render_resources(gpu_resources);
-        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources)
+        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources);
     }
 
     fn sync_models_with_render_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
@@ -520,10 +518,10 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
-    ) -> Result<()> {
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+    ) {
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return;
+        };
 
         let max_light_count = light_gpu_resources.max_shadowable_unidirectional_light_count();
 
@@ -549,8 +547,6 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             );
             self.max_light_count = max_light_count;
         }
-
-        Ok(())
     }
 
     fn color_target_states() -> Vec<Option<wgpu::ColorTargetState>> {
@@ -622,9 +618,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     where
         R: BasicGPUResources,
     {
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return Ok(());
+        };
 
         let shadow_map_manager = light_gpu_resources.unidirectional_light_shadow_map_manager();
         let shadow_map_textures = shadow_map_manager.textures();

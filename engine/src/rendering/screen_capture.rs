@@ -91,6 +91,8 @@ impl ScreenCapturer {
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
+            impact_log::info!("Saving screenshot of frame {frame_number}");
+
             let renderer = renderer.oread();
 
             let surface_texture = match renderer.rendering_surface() {
@@ -142,6 +144,8 @@ impl ScreenCapturer {
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
+            impact_log::info!("Saving omnidirectional light shadow maps for frame {frame_number}");
+
             let renderer = renderer.oread();
             let render_resource_manager = renderer.render_resource_manager().oread();
 
@@ -194,6 +198,8 @@ impl ScreenCapturer {
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
+            impact_log::info!("Saving unidirectional light shadow maps for frame {frame_number}");
+
             let renderer = renderer.oread();
             let render_resource_manager = renderer.render_resource_manager().oread();
 

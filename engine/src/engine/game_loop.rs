@@ -30,19 +30,11 @@ impl Engine {
             return Ok(());
         }
 
-        let frame_number = game_loop_controller.iteration();
-
         drop(game_loop_controller);
 
         let iter_start_time = Instant::now();
 
-        self.app().on_new_frame(self, frame_number)?;
-
-        let execution_result = impact_log::with_timing_info_logging!("Game loop iteration"; {
-            task_scheduler.execute_and_wait(&ALL_SYSTEMS)
-        });
-
-        self.renderer().owrite().present();
+        let execution_result = task_scheduler.execute_and_wait(&ALL_SYSTEMS);
 
         if let Err(mut task_errors) = execution_result {
             self.handle_task_errors(&mut task_errors);
@@ -63,15 +55,12 @@ impl Engine {
         let smooth_frame_duration = game_loop_controller.compute_smooth_frame_duration();
 
         self.gather_metrics_after_completed_frame(smooth_frame_duration);
+        self.update_simulation_time_step_duration(smooth_frame_duration);
 
         impact_log::info!(
-            "Completed game loop iteration after {:.1} ms (~{} FPS)",
+            "Completed game loop iteration after {:.1} ms (~{} FPS, {:.1} s elapsed)",
             frame_duration.as_secs_f64() * 1e3,
-            instrumentation::frame_duration_to_fps(smooth_frame_duration)
-        );
-
-        impact_log::info!(
-            "Elapsed time: {:.1} s",
+            instrumentation::frame_duration_to_fps(smooth_frame_duration),
             game_loop_controller.elapsed_time().as_secs_f64()
         );
 

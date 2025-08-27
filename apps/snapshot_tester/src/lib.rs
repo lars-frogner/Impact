@@ -13,7 +13,9 @@ use crate::testing::ComparisonOutcome;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
-    command::{AdminCommand, EngineCommand, capture::CaptureCommand, scene::SceneCommand},
+    command::{
+        AdminCommand, SystemCommand, UserCommand, capture::CaptureCommand, scene::SceneCommand,
+    },
     engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
@@ -129,7 +131,7 @@ impl Application for SnapshotTester {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
         if self.test_scenes.is_empty() {
             impact_log::info!("No scenes to test, exiting");
-            engine.execute_admin_command(AdminCommand::Shutdown)?;
+            engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));
             return Ok(());
         }
 
@@ -141,9 +143,8 @@ impl Application for SnapshotTester {
         let frame = frame as usize;
 
         if frame == self.test_scenes.len() {
-            // All scenes have been rendered
-            self.run_comparisons()?;
-            engine.execute_admin_command(AdminCommand::Shutdown)?;
+            // All scenes have been rendered and captured
+            engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));
             return Ok(());
         }
 
@@ -151,20 +152,24 @@ impl Application for SnapshotTester {
             let rendered_scene = self.test_scenes[frame - 1];
 
             // Prepare for this frame's scene
-            engine.execute_command(EngineCommand::Scene(SceneCommand::Clear))?;
-            rendered_scene.restore_settings(engine)?;
+            engine.reset_world();
+            rendered_scene.restore_settings(engine);
         }
 
         let scene = self.test_scenes[frame];
 
         // Setup the scene for this frame
-        scene.prepare_settings(engine)?;
+        scene.prepare_settings(engine);
         scripting::setup_scene(scene)?;
 
         // Request a capture for this frame
-        engine.execute_admin_command(AdminCommand::Capture(CaptureCommand::SaveScreenshot))?;
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveScreenshot));
 
         Ok(())
+    }
+
+    fn on_shutdown(&self) -> Result<()> {
+        self.run_comparisons()
     }
 }
 

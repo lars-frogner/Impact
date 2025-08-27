@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, anyhow};
 use ffi_utils::define_ffi;
 use impact::{
-    command::EngineCommand,
+    command::UserCommand,
     roc_integration::Roc,
     window::input::{key::KeyboardEvent, mouse::MouseButtonEvent},
 };
@@ -51,8 +51,8 @@ pub fn handle_mouse_button_event(event: MouseButtonEvent) -> Result<()> {
     .with_context(|| format!("Failed handling mouse button event {event:?}"))
 }
 
-pub fn command_roundtrip(command: EngineCommand) -> Result<EngineCommand> {
-    let mut bytes = RocList::from_slice(&[0; EngineCommand::SERIALIZED_SIZE]);
+pub fn command_roundtrip(command: UserCommand) -> Result<UserCommand> {
+    let mut bytes = RocList::from_slice(&[0; UserCommand::SERIALIZED_SIZE]);
     command.write_roc_bytes(bytes.as_mut_slice())?;
 
     let returned_bytes = ScriptFFI::call(
@@ -61,7 +61,7 @@ pub fn command_roundtrip(command: EngineCommand) -> Result<EngineCommand> {
     )
     .with_context(|| format!("Failed roundtrip for command {command:?}"))?;
 
-    EngineCommand::from_roc_bytes(returned_bytes.as_slice())
+    UserCommand::from_roc_bytes(returned_bytes.as_slice())
 }
 
 fn from_roc_result<T>(res: RocResult<T, RocStr>) -> Result<T> {
@@ -82,12 +82,12 @@ pub mod fuzzing {
     ) -> Result<()> {
         if verbose {
             println!(
-                "Testing {n_iterations} iterations of `EngineCommand` roundtrip via Roc (seed {seed})"
+                "Testing {n_iterations} iterations of `UserCommand` roundtrip via Roc (seed {seed})"
             );
         }
 
         let mut rng = StdRng::seed_from_u64(seed);
-        let mut byte_buffer = [0; std::mem::size_of::<EngineCommand>()];
+        let mut byte_buffer = [0; std::mem::size_of::<UserCommand>()];
 
         for iteration in 0..n_iterations {
             execute_roundtrip_test(&mut rng, &mut byte_buffer).with_context(|| {
@@ -106,13 +106,13 @@ pub mod fuzzing {
         test_command_roundtrip(command)
     }
 
-    fn generate_command(rng: &mut StdRng, byte_buffer: &mut [u8]) -> Result<EngineCommand> {
+    fn generate_command(rng: &mut StdRng, byte_buffer: &mut [u8]) -> Result<UserCommand> {
         rng.fill(byte_buffer);
-        let command = EngineCommand::arbitrary(&mut Unstructured::new(byte_buffer))?;
+        let command = UserCommand::arbitrary(&mut Unstructured::new(byte_buffer))?;
         Ok(command)
     }
 
-    fn test_command_roundtrip(command: EngineCommand) -> Result<()> {
+    fn test_command_roundtrip(command: UserCommand) -> Result<()> {
         let returned_command = command_roundtrip(command.clone())?;
         if returned_command != command {
             bail!("Roundtrip changed command from `{command:?}` to `{returned_command:?}`");

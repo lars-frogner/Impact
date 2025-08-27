@@ -137,7 +137,7 @@ pub struct ModelInstanceNode {
     feature_ids_for_rendering: FeatureIDSet,
     feature_ids_for_shadow_mapping: FeatureIDSet,
     flags: ModelInstanceFlags,
-    frame_count_when_last_visible: AtomicU32,
+    frame_number_when_last_visible: AtomicU32,
 }
 
 pub type FeatureIDSet = TinyVec<[InstanceFeatureID; 4]>;
@@ -576,7 +576,7 @@ impl SceneGraph {
         material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
         scene_camera: &SceneCamera,
-        current_frame_count: u32,
+        current_frame_number: u32,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
     {
@@ -606,7 +606,7 @@ impl SceneGraph {
                 self.buffer_model_instances_in_group_for_rendering(
                     material_registry,
                     model_instance_manager,
-                    current_frame_count,
+                    current_frame_number,
                     camera_space_view_frustum,
                     group_node,
                     &group_to_camera_transform,
@@ -644,7 +644,7 @@ impl SceneGraph {
                 Self::buffer_model_instance_for_rendering(
                     material_registry,
                     model_instance_manager,
-                    current_frame_count,
+                    current_frame_number,
                     model_instance_node,
                     &model_view_transform,
                 );
@@ -673,7 +673,7 @@ impl SceneGraph {
         &self,
         material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
-        current_frame_count: u32,
+        current_frame_number: u32,
         camera_space_view_frustum: &Frustum<f32>,
         group_node: &GroupNode,
         group_to_camera_transform: &Isometry3<f32>,
@@ -702,7 +702,7 @@ impl SceneGraph {
                 self.buffer_model_instances_in_group_for_rendering(
                     material_registry,
                     model_instance_manager,
-                    current_frame_count,
+                    current_frame_number,
                     camera_space_view_frustum,
                     child_group_node,
                     &child_group_to_camera_transform,
@@ -744,7 +744,7 @@ impl SceneGraph {
                 Self::buffer_model_instance_for_rendering(
                     material_registry,
                     model_instance_manager,
-                    current_frame_count,
+                    current_frame_number,
                     child_model_instance_node,
                     &child_model_view_transform,
                 );
@@ -755,7 +755,7 @@ impl SceneGraph {
     fn buffer_model_instance_for_rendering(
         material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
-        current_frame_count: u32,
+        current_frame_number: u32,
         model_instance_node: &ModelInstanceNode,
         model_view_transform: &Similarity3<f32>,
     ) where
@@ -783,7 +783,7 @@ impl SceneGraph {
                 .buffer(model_instance_manager, model_id);
         }
 
-        model_instance_node.declare_visible_this_frame(current_frame_count);
+        model_instance_node.declare_visible_this_frame(current_frame_number);
     }
 
     /// Goes through all omnidirectional lights in the given light manager and
@@ -1450,7 +1450,7 @@ impl ModelInstanceNode {
             feature_ids_for_rendering,
             feature_ids_for_shadow_mapping,
             flags,
-            frame_count_when_last_visible: AtomicU32::new(0),
+            frame_number_when_last_visible: AtomicU32::new(0),
         }
     }
 
@@ -1495,9 +1495,9 @@ impl ModelInstanceNode {
         self.flags
     }
 
-    /// Returns the frame count when the model instance was last visible.
-    pub fn frame_count_when_last_visible(&self) -> u32 {
-        self.frame_count_when_last_visible.load(Ordering::Relaxed)
+    /// Returns the frame number when the model instance was last visible.
+    pub fn frame_number_when_last_visible(&self) -> u32 {
+        self.frame_number_when_last_visible.load(Ordering::Relaxed)
     }
 
     /// Returns the bounding sphere of the model instance, or [`None`] if it has
@@ -1514,9 +1514,9 @@ impl ModelInstanceNode {
         self.flags = flags;
     }
 
-    fn declare_visible_this_frame(&self, current_frame_count: u32) {
-        self.frame_count_when_last_visible
-            .store(current_frame_count, Ordering::Relaxed);
+    fn declare_visible_this_frame(&self, current_frame_number: u32) {
+        self.frame_number_when_last_visible
+            .store(current_frame_number, Ordering::Relaxed);
     }
 }
 

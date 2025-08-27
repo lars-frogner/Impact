@@ -64,31 +64,31 @@ impl TestScene {
         root.join(format!("{self:?}")).with_extension("png")
     }
 
-    pub fn prepare_settings(&self, engine: &Engine) -> Result<()> {
+    pub fn prepare_settings(&self, engine: &Engine) {
         match self {
             Self::AmbientLight
             | Self::OmnidirectionalLight
             | Self::UnidirectionalLight
             | Self::ShadowableOmnidirectionalLight
-            | Self::ShadowableUnidirectionalLight => Ok(()),
+            | Self::ShadowableUnidirectionalLight => {}
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
-            | Self::SoftCascadedShadowMapping => engine.execute_admin_command(
+            | Self::SoftCascadedShadowMapping => engine.enqueue_admin_command(
                 AdminCommand::Rendering(RenderingCommand::SetShadowMapping(ToActiveState::Enabled)),
             ),
-            Self::AmbientOcclusion => engine.execute_admin_command(AdminCommand::Rendering(
+            Self::AmbientOcclusion => engine.enqueue_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetAmbientOcclusion(ToActiveState::Enabled),
             )),
-            Self::Bloom => engine.execute_admin_command(AdminCommand::Rendering(
+            Self::Bloom => engine.enqueue_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetBloom(ToActiveState::Enabled),
             )),
-            Self::ACESToneMapping => engine.execute_admin_command(AdminCommand::Rendering(
+            Self::ACESToneMapping => engine.enqueue_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                     ToneMappingMethod::ACES,
                 )),
             )),
-            Self::KhronosPBRNeutralToneMapping => engine.execute_admin_command(
+            Self::KhronosPBRNeutralToneMapping => engine.enqueue_admin_command(
                 AdminCommand::Rendering(RenderingCommand::SetToneMappingMethod(
                     ToToneMappingMethod::Specific(ToneMappingMethod::KhronosPBRNeutral),
                 )),
@@ -96,29 +96,29 @@ impl TestScene {
         }
     }
 
-    pub fn restore_settings(&self, engine: &Engine) -> Result<()> {
+    pub fn restore_settings(&self, engine: &Engine) {
         match self {
             Self::AmbientLight
             | Self::OmnidirectionalLight
             | Self::UnidirectionalLight
             | Self::ShadowableOmnidirectionalLight
-            | Self::ShadowableUnidirectionalLight => Ok(()),
+            | Self::ShadowableUnidirectionalLight => {}
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
             | Self::SoftCascadedShadowMapping => {
-                engine.execute_admin_command(AdminCommand::Rendering(
+                engine.enqueue_admin_command(AdminCommand::Rendering(
                     RenderingCommand::SetShadowMapping(ToActiveState::Disabled),
-                ))
+                ));
             }
-            Self::AmbientOcclusion => engine.execute_admin_command(AdminCommand::Rendering(
+            Self::AmbientOcclusion => engine.enqueue_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetAmbientOcclusion(ToActiveState::Disabled),
             )),
-            Self::Bloom => engine.execute_admin_command(AdminCommand::Rendering(
+            Self::Bloom => engine.enqueue_admin_command(AdminCommand::Rendering(
                 RenderingCommand::SetBloom(ToActiveState::Disabled),
             )),
             Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine
-                .execute_admin_command(AdminCommand::Rendering(
+                .enqueue_admin_command(AdminCommand::Rendering(
                     RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                         ToneMappingMethod::None,
                     )),
