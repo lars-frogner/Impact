@@ -203,10 +203,10 @@ impl DirectionalLightPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
-    ) -> Result<()> {
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+    ) {
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return;
+        };
 
         if light_gpu_resources.max_omnidirectional_light_count()
             != self.omnidirectional_light_pipeline.max_light_count
@@ -263,8 +263,6 @@ impl DirectionalLightPass {
                     light_gpu_resources.max_shadowable_unidirectional_light_count(),
                 );
         }
-
-        Ok(())
     }
 
     fn color_target_state(

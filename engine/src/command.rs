@@ -11,7 +11,11 @@ pub mod rendering;
 pub mod scene;
 pub mod uils;
 
-use crate::{command::controller::ControlCommand, engine::Engine, lock_order::OrderedRwLock};
+use crate::{
+    command::{controller::ControlCommand, queue::CommandQueue},
+    engine::Engine,
+    lock_order::OrderedRwLock,
+};
 use anyhow::Result;
 use capture::CaptureCommand;
 use controller::ControllerCommand;
@@ -23,10 +27,10 @@ use rendering::RenderingCommand;
 use roc_integration::roc;
 use scene::SceneCommand;
 
-#[roc(parents = "Command")]
+#[roc(name = "EngineCommand", parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EngineCommand {
+pub enum UserCommand {
     Scene(SceneCommand),
     Controller(ControllerCommand),
 }
@@ -40,13 +44,34 @@ pub enum AdminCommand {
     Instrumentation(InstrumentationCommand),
     GameLoop(GameLoopCommand),
     Gizmo(GizmoCommand),
+    System(SystemCommand),
+}
+
+#[derive(Clone, Debug)]
+pub enum SystemCommand {
     Shutdown,
 }
 
-pub fn execute_engine_command(engine: &Engine, command: EngineCommand) -> Result<()> {
+#[derive(Debug, Default)]
+pub struct EngineCommandQueues {
+    // User commands
+    pub scene: CommandQueue<SceneCommand>,
+    pub controller: CommandQueue<ControllerCommand>,
+    // Admin commands
+    pub rendering: CommandQueue<RenderingCommand>,
+    pub physics: CommandQueue<PhysicsCommand>,
+    pub control: CommandQueue<ControlCommand>,
+    pub capture: CommandQueue<CaptureCommand>,
+    pub instrumentation: CommandQueue<InstrumentationCommand>,
+    pub game_loop: CommandQueue<GameLoopCommand>,
+    pub gizmo: CommandQueue<GizmoCommand>,
+    pub system: CommandQueue<SystemCommand>,
+}
+
+pub fn execute_engine_command(engine: &Engine, command: UserCommand) -> Result<()> {
     match command {
-        EngineCommand::Scene(command) => execute_scene_command(engine, command),
-        EngineCommand::Controller(command) => execute_controller_command(engine, command),
+        UserCommand::Scene(command) => execute_scene_command(engine, command),
+        UserCommand::Controller(command) => execute_controller_command(engine, command),
     }
 }
 
@@ -59,10 +84,7 @@ pub fn execute_admin_command(engine: &Engine, command: AdminCommand) -> Result<(
         AdminCommand::Instrumentation(command) => execute_instrumentation_command(engine, command),
         AdminCommand::GameLoop(command) => execute_game_loop_command(engine, command),
         AdminCommand::Gizmo(command) => execute_gizmo_command(engine, command),
-        AdminCommand::Shutdown => {
-            engine.request_shutdown();
-            Ok(())
-        }
+        AdminCommand::System(command) => execute_system_command(engine, command),
     }
 }
 
@@ -73,9 +95,6 @@ pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<(
         }
         SceneCommand::SetSceneEntityActiveState { entity_id, state } => {
             scene::set_scene_entity_active_state(engine, entity_id, state)?;
-        }
-        SceneCommand::Clear => {
-            scene::clear(engine);
         }
     }
     Ok(())
@@ -186,21 +205,6 @@ pub fn execute_control_command(engine: &Engine, command: ControlCommand) -> Resu
     Ok(())
 }
 
-pub fn execute_gizmo_command(engine: &Engine, command: GizmoCommand) -> Result<()> {
-    match command {
-        GizmoCommand::SetVisibility {
-            gizmo_type,
-            visibility,
-        } => {
-            gizmo::set_gizmo_visibility(engine, gizmo_type, visibility);
-        }
-        GizmoCommand::SetParameters(parameters) => {
-            gizmo::set_gizmo_parameters(engine, parameters);
-        }
-    }
-    Ok(())
-}
-
 pub fn execute_capture_command(engine: &Engine, command: CaptureCommand) -> Result<()> {
     match command {
         CaptureCommand::SaveScreenshot => {
@@ -232,6 +236,28 @@ pub fn execute_game_loop_command(engine: &Engine, command: GameLoopCommand) -> R
     let mut game_loop_controller = engine.game_loop_controller().owrite();
     match command {
         GameLoopCommand::SetGameLoop(to) => game_loop::set_game_loop(&mut game_loop_controller, to),
+    }
+    Ok(())
+}
+
+pub fn execute_gizmo_command(engine: &Engine, command: GizmoCommand) -> Result<()> {
+    match command {
+        GizmoCommand::SetVisibility {
+            gizmo_type,
+            visibility,
+        } => {
+            gizmo::set_gizmo_visibility(engine, gizmo_type, visibility);
+        }
+        GizmoCommand::SetParameters(parameters) => {
+            gizmo::set_gizmo_parameters(engine, parameters);
+        }
+    }
+    Ok(())
+}
+
+pub fn execute_system_command(engine: &Engine, command: SystemCommand) -> Result<()> {
+    match command {
+        SystemCommand::Shutdown => engine.request_shutdown(),
     }
     Ok(())
 }

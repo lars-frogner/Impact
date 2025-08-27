@@ -9,12 +9,12 @@ pub mod window;
 
 use crate::{
     application::Application,
-    command::{self, AdminCommand, EngineCommand, queue::CommandQueue},
+    command::{self, EngineCommandQueues},
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
-    lock_order::OrderedRwLock,
+    lock_order::{OrderedMutex, OrderedRwLock},
     physics::{PhysicsConfig, PhysicsSimulator},
     rendering::{
         RenderingConfig, RenderingSystem,
@@ -66,8 +66,7 @@ pub struct Engine {
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     gizmo_manager: RwLock<GizmoManager>,
     metrics: RwLock<EngineMetrics>,
-    command_queue: CommandQueue<EngineCommand>,
-    admin_command_queue: CommandQueue<AdminCommand>,
+    command_queues: EngineCommandQueues,
     screen_capturer: ScreenCapturer,
     task_timer: TaskTimer,
     controls_enabled: AtomicBool,
@@ -170,8 +169,7 @@ impl Engine {
             orientation_controller: orientation_controller.map(Mutex::new),
             gizmo_manager: RwLock::new(gizmo_manager),
             metrics: RwLock::new(EngineMetrics::default()),
-            command_queue: CommandQueue::new(),
-            admin_command_queue: CommandQueue::new(),
+            command_queues: EngineCommandQueues::default(),
             screen_capturer: ScreenCapturer::new(config.screen_capture),
             task_timer: TaskTimer::new(config.instrumentation.task_timing_enabled),
             controls_enabled: AtomicBool::new(false),
@@ -266,23 +264,29 @@ impl Engine {
     where
         A: Copy + Allocator,
     {
-        let frame_number = self.game_loop_controller.oread().iteration();
+        let current_frame_number = self.game_loop_controller.oread().iteration();
 
-        self.screen_capturer
-            .save_screenshot_if_requested(arena, self.renderer(), frame_number)?;
+        // The screenshot we can save now represents the previous frame
+        let frame_number_for_image = current_frame_number.saturating_sub(1);
+
+        self.screen_capturer.save_screenshot_if_requested(
+            arena,
+            self.renderer(),
+            frame_number_for_image,
+        )?;
 
         self.screen_capturer
             .save_omnidirectional_light_shadow_maps_if_requested(
                 arena,
                 self.renderer(),
-                frame_number,
+                frame_number_for_image,
             )?;
 
         self.screen_capturer
             .save_unidirectional_light_shadow_maps_if_requested(
                 arena,
                 self.renderer(),
-                frame_number,
+                frame_number_for_image,
             )
     }
 
@@ -327,13 +331,13 @@ impl Engine {
                 .surface_dimensions();
 
             orientation_controller
-                .lock()
+                .olock()
                 .update_orientation_change(window_height, mouse_displacement);
         }
     }
 
-    /// Updates the orientations and motion of all controlled entities.
-    pub(crate) fn update_controlled_entities(&self) {
+    /// Updates the motion of all controlled entities.
+    pub(crate) fn update_controlled_entity_motion(&self) {
         if !self.controls_enabled() {
             return;
         }
@@ -347,7 +351,7 @@ impl Engine {
             impact_controller::systems::update_controlled_entity_angular_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
-                orientation_controller.lock().as_mut(),
+                orientation_controller.olock().as_mut(),
                 time_step_duration,
             );
 
@@ -355,7 +359,7 @@ impl Engine {
                 impact_controller::systems::update_controlled_entity_velocities(
                     &ecs_world,
                     &mut rigid_body_manager,
-                    motion_controller.lock().as_ref(),
+                    motion_controller.olock().as_ref(),
                 );
             }
         } else if let Some(motion_controller) = &self.motion_controller {
@@ -366,17 +370,9 @@ impl Engine {
             impact_controller::systems::update_controlled_entity_velocities(
                 &ecs_world,
                 &mut rigid_body_manager,
-                motion_controller.lock().as_ref(),
+                motion_controller.olock().as_ref(),
             );
         }
-    }
-
-    /// Resets the scene, ECS world and physics simulator to the initial empty
-    /// state and sets the simulation time to zero.
-    pub(crate) fn reset_world(&self) {
-        self.ecs_world.owrite().remove_all_entities();
-        self.scene.oread().clear();
-        self.simulator.owrite().reset();
     }
 
     pub(crate) fn set_controls_enabled(&self, enabled: bool) {
@@ -388,7 +384,7 @@ impl Engine {
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
 
             if let Some(motion_controller) = &self.motion_controller {
-                let mut motion_controller = motion_controller.lock();
+                let mut motion_controller = motion_controller.olock();
                 motion_controller.stop();
 
                 impact_controller::systems::update_controlled_entity_velocities(
@@ -399,7 +395,7 @@ impl Engine {
             }
 
             if let Some(orientation_controller) = &self.orientation_controller {
-                let mut orientation_controller = orientation_controller.lock();
+                let mut orientation_controller = orientation_controller.olock();
                 orientation_controller.reset_orientation_change();
 
                 impact_controller::systems::update_controlled_entity_angular_velocities(
@@ -419,9 +415,9 @@ impl Engine {
 
         self.task_timer
             .report_task_execution_times(&mut metrics.last_task_execution_times);
+    }
 
-        drop(metrics);
-
+    pub(crate) fn update_simulation_time_step_duration(&self, smooth_frame_duration: Duration) {
         let mut simulator = self.simulator.owrite();
         simulator.update_time_step_duration(&smooth_frame_duration);
     }
@@ -434,14 +430,64 @@ impl Engine {
         self.shutdown_requested.store(true, Ordering::Relaxed);
     }
 
-    pub(crate) fn execute_enqueued_commands(&self) -> Result<()> {
-        self.command_queue
-            .try_execute_commands(|command| command::execute_engine_command(self, command))
+    pub(crate) fn execute_enqueued_scene_commands(&self) -> Result<()> {
+        self.command_queues
+            .scene
+            .try_execute_commands(|command| command::execute_scene_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_admin_commands(&self) -> Result<()> {
-        self.admin_command_queue
-            .try_execute_commands(|command| command::execute_admin_command(self, command))
+    pub(crate) fn execute_enqueued_controller_commands(&self) -> Result<()> {
+        self.command_queues
+            .controller
+            .try_execute_commands(|command| command::execute_controller_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_rendering_commands(&self) -> Result<()> {
+        self.command_queues
+            .rendering
+            .try_execute_commands(|command| command::execute_rendering_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_physics_commands(&self) -> Result<()> {
+        self.command_queues
+            .physics
+            .try_execute_commands(|command| command::execute_physics_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_control_commands(&self) -> Result<()> {
+        self.command_queues
+            .control
+            .try_execute_commands(|command| command::execute_control_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_capture_commands(&self) -> Result<()> {
+        self.command_queues
+            .capture
+            .try_execute_commands(|command| command::execute_capture_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_instrumentation_commands(&self) -> Result<()> {
+        self.command_queues
+            .instrumentation
+            .try_execute_commands(|command| command::execute_instrumentation_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_game_loop_commands(&self) -> Result<()> {
+        self.command_queues
+            .game_loop
+            .try_execute_commands(|command| command::execute_game_loop_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_gizmo_commands(&self) -> Result<()> {
+        self.command_queues
+            .gizmo
+            .try_execute_commands(|command| command::execute_gizmo_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_system_commands(&self) -> Result<()> {
+        self.command_queues
+            .system
+            .try_execute_commands(|command| command::execute_system_command(self, command))
     }
 
     /// Identifies errors that need special handling in the given set of task

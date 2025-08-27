@@ -50,7 +50,7 @@ pub struct RenderingSystem {
     staging_belt: wgpu::util::StagingBelt,
     render_command_manager: RenderCommandManager,
     timestamp_query_manager: TimestampQueryManager,
-    frame_counter: u32,
+    frame_counter: u64,
     basic_config: BasicRenderingConfig,
     shadow_mapping_config: ShadowMappingConfig,
 }
@@ -141,7 +141,7 @@ impl RenderingSystem {
             staging_belt: wgpu::util::StagingBelt::new(1024 * 1024),
             render_command_manager,
             timestamp_query_manager,
-            frame_counter: 1,
+            frame_counter: 0,
             basic_config: config.basic,
             shadow_mapping_config: config.shadow_mapping,
         })
@@ -211,9 +211,14 @@ impl RenderingSystem {
         &self.timestamp_query_manager
     }
 
-    /// The frame count wraps around after [`u32::MAX`].
-    pub fn current_frame_count(&self) -> u32 {
-        self.frame_counter
+    pub fn is_initial_frame(&self) -> bool {
+        self.frame_counter == 0
+    }
+
+    pub fn mark_initial_frame_over(&mut self) {
+        if self.is_initial_frame() {
+            self.frame_counter = 1;
+        }
     }
 
     pub fn basic_config(&self) -> &BasicRenderingConfig {
@@ -299,8 +304,7 @@ impl RenderingSystem {
             .submit(std::iter::once(command_encoder.finish()));
     }
 
-    /// Synchronizes the render commands with the current render resources. Must
-    /// be called after [`Self::sync_dynamic_gpu_resources`].
+    /// Synchronizes the render commands with the current render resources.
     ///
     /// # Errors
     /// Returns an error if synchronization fails due to missing resources.
@@ -340,7 +344,7 @@ impl RenderingSystem {
             &self.storage_gpu_buffer_manager.oread(),
             &self.postprocessor.oread(),
             &self.shadow_mapping_config,
-            self.frame_counter,
+            self.frame_counter as u32,
             &mut timestamp_recorder,
             &mut command_encoder,
         )?;
@@ -392,7 +396,7 @@ impl RenderingSystem {
             &self.render_attachment_texture_manager.oread(),
             &self.gpu_resource_group_manager.oread(),
             &self.postprocessor.oread(),
-            self.frame_counter,
+            self.frame_counter as u32,
             &mut timestamp_recorder,
             &mut command_encoder,
         )?;

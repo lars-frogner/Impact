@@ -372,7 +372,7 @@ pub fn buffer_transforms_for_gizmos(
 fn buffer_transforms_for_model_instance_gizmos(
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &SceneGraph,
-    current_frame_count: u32,
+    current_frame_number: u32,
     visible_gizmos: GizmoSet,
     model_instance_node_id: ModelInstanceNodeID,
 ) {
@@ -380,7 +380,7 @@ fn buffer_transforms_for_model_instance_gizmos(
         .model_instance_nodes()
         .node(model_instance_node_id);
 
-    if node.frame_count_when_last_visible() != current_frame_count {
+    if node.frame_number_when_last_visible() != current_frame_number {
         return;
     }
 
@@ -930,7 +930,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
     voxel_object_manager: &VoxelObjectManager,
     scene_graph: &SceneGraph,
     parameters: &GizmoParameters,
-    current_frame_count: u32,
+    current_frame_number: u32,
     model_instance_node_id: ModelInstanceNodeID,
     voxel_object_id: VoxelObjectID,
 ) {
@@ -938,7 +938,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
         .model_instance_nodes()
         .node(model_instance_node_id);
 
-    if node.frame_count_when_last_visible() != current_frame_count {
+    if node.frame_number_when_last_visible() != current_frame_number {
         return;
     }
 

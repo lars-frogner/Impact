@@ -15,7 +15,6 @@ pub enum SceneCommand {
         entity_id: EntityID,
         state: ActiveState,
     },
-    Clear,
 }
 
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {
@@ -33,9 +32,4 @@ pub fn set_scene_entity_active_state(
         ActiveState::Enabled => engine.enable_scene_entity(entity_id),
         ActiveState::Disabled => engine.disable_scene_entity(entity_id),
     }
-}
-
-pub fn clear(engine: &Engine) {
-    impact_log::info!("Clearing scene");
-    engine.reset_world();
 }

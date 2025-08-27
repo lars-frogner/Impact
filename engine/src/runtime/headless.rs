@@ -35,6 +35,7 @@ pub fn run_headless(runtime: HeadlessRuntime) -> Result<()> {
 
         if runtime.shutdown_requested() {
             impact_log::info!("Shutting down after request");
+            runtime.engine().app().on_shutdown()?;
             return Ok(());
         }
     }

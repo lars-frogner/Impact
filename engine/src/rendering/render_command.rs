@@ -188,22 +188,22 @@ impl RenderCommandManager {
         )?;
 
         self.omnidirectional_light_shadow_map_update_passes
-            .sync_with_render_resources(graphics_device, shader_manager, gpu_resources)?;
+            .sync_with_render_resources(graphics_device, shader_manager, gpu_resources);
 
         self.unidirectional_light_shadow_map_update_passes
-            .sync_with_render_resources(graphics_device, shader_manager, gpu_resources)?;
+            .sync_with_render_resources(graphics_device, shader_manager, gpu_resources);
 
         self.ambient_light_pass.sync_with_render_resources(
             graphics_device,
             shader_manager,
             gpu_resources,
-        )?;
+        );
 
         self.directional_light_pass.sync_with_render_resources(
             graphics_device,
             shader_manager,
             gpu_resources,
-        )?;
+        );
 
         self.skybox_pass.sync_with_render_resources(
             graphics_device,

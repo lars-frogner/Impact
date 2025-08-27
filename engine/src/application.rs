@@ -11,6 +11,10 @@ pub trait Application: Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
+    fn on_shutdown(&self) -> Result<()> {
+        Ok(())
+    }
+
     #[cfg(feature = "window")]
     fn handle_keyboard_event(&self, event: crate::window::input::key::KeyboardEvent) -> Result<()>;
 

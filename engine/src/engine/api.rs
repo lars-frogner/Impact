@@ -2,7 +2,7 @@
 
 use super::Engine;
 use crate::{
-    command::{self, AdminCommand, EngineCommand},
+    command::{AdminCommand, UserCommand},
     gizmo::{GizmoParameters, GizmoType, GizmoVisibilities, GizmoVisibility},
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::SimulatorConfig,
@@ -132,20 +132,53 @@ impl Engine {
         ecs_world.remove_entity(entity_id)
     }
 
-    pub fn enqueue_command(&self, command: EngineCommand) {
-        self.command_queue.enqueue_command(command);
+    pub fn enqueue_user_command(&self, command: UserCommand) {
+        match command {
+            UserCommand::Scene(command) => {
+                self.command_queues.scene.enqueue_command(command);
+            }
+            UserCommand::Controller(command) => {
+                self.command_queues.controller.enqueue_command(command);
+            }
+        }
     }
 
     pub fn enqueue_admin_command(&self, command: AdminCommand) {
-        self.admin_command_queue.enqueue_command(command);
+        match command {
+            AdminCommand::Rendering(command) => {
+                self.command_queues.rendering.enqueue_command(command);
+            }
+            AdminCommand::Physics(command) => {
+                self.command_queues.physics.enqueue_command(command);
+            }
+            AdminCommand::Control(command) => {
+                self.command_queues.control.enqueue_command(command);
+            }
+            AdminCommand::Capture(command) => {
+                self.command_queues.capture.enqueue_command(command);
+            }
+            AdminCommand::Instrumentation(command) => {
+                self.command_queues.instrumentation.enqueue_command(command);
+            }
+            AdminCommand::GameLoop(command) => {
+                self.command_queues.game_loop.enqueue_command(command);
+            }
+            AdminCommand::Gizmo(command) => {
+                self.command_queues.gizmo.enqueue_command(command);
+            }
+            AdminCommand::System(command) => {
+                self.command_queues.system.enqueue_command(command);
+            }
+        }
     }
 
-    pub fn execute_command(&self, command: EngineCommand) -> Result<()> {
-        command::execute_engine_command(self, command)
-    }
-
-    pub fn execute_admin_command(&self, command: AdminCommand) -> Result<()> {
-        command::execute_admin_command(self, command)
+    /// Resets the scene, ECS world and physics simulator to the initial empty
+    /// state and sets the simulation time to zero.
+    pub fn reset_world(&self) {
+        impact_log::info!("Resetting world");
+        self.ecs_world.owrite().remove_all_entities();
+        self.scene.oread().clear();
+        self.simulator.owrite().reset();
     }
 
     pub fn controls_enabled(&self) -> bool {

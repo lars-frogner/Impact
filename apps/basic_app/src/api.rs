@@ -5,7 +5,7 @@ pub mod ffi;
 use crate::{BasicApp, BasicAppConfig, ENGINE, RunMode};
 use anyhow::{Result, bail};
 use impact::{
-    command::EngineCommand,
+    command::UserCommand,
     engine::Engine,
     impact_ecs::world::EntityID,
     roc_integration::Roc,
@@ -43,9 +43,9 @@ pub fn run_with_config(config: BasicAppConfig) -> Result<()> {
 
 pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
     impact_log::trace!("Executing engine command");
-    let command = EngineCommand::from_roc_bytes(command_bytes)?;
+    let command = UserCommand::from_roc_bytes(command_bytes)?;
     with_engine(|engine| {
-        engine.enqueue_command(command);
+        engine.enqueue_user_command(command);
         Ok(())
     })
 }

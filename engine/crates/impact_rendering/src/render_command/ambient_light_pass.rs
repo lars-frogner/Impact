@@ -128,10 +128,10 @@ impl AmbientLightPass {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
-    ) -> Result<()> {
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+    ) {
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return;
+        };
 
         let max_light_count = light_gpu_resources.max_ambient_light_count();
 
@@ -154,8 +154,6 @@ impl AmbientLightPass {
             );
             self.max_light_count = max_light_count;
         }
-
-        Ok(())
     }
 
     fn color_target_states(
@@ -259,10 +257,9 @@ impl AmbientLightPass {
         let Some(camera_gpu_resources) = gpu_resources.camera() else {
             return Ok(());
         };
-
-        let light_gpu_resources = gpu_resources
-            .light()
-            .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
+        let Some(light_gpu_resources) = gpu_resources.light() else {
+            return Ok(());
+        };
 
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
 

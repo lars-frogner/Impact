@@ -5,7 +5,7 @@ pub mod ffi;
 use crate::{AppConfig, ENGINE, SnapshotTester};
 use anyhow::{Result, bail};
 use impact::{
-    command::EngineCommand,
+    command::UserCommand,
     engine::{Engine, EngineConfig},
     impact_ecs::world::EntityID,
     roc_integration::Roc,
@@ -34,9 +34,9 @@ pub fn run_with_config(config: AppConfig) -> Result<()> {
 }
 
 pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
-    let command = EngineCommand::from_roc_bytes(command_bytes)?;
+    let command = UserCommand::from_roc_bytes(command_bytes)?;
     with_engine(|engine| {
-        engine.enqueue_command(command);
+        engine.enqueue_user_command(command);
         Ok(())
     })
 }

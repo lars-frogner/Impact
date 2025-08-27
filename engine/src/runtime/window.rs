@@ -194,6 +194,9 @@ where
             event_loop.exit();
         } else if runtime.shutdown_requested() {
             impact_log::info!("Shutting down after request");
+            if let Err(error) = runtime.engine().app().on_shutdown() {
+                impact_log::error!("Shutdown error: {error:?}");
+            }
             event_loop.exit();
         }
     }
