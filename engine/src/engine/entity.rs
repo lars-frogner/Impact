@@ -9,6 +9,9 @@ use impact_ecs::{
     world::{EntitiesToCreate, EntityID, EntityToCreate, EntityToCreateWithID},
 };
 use impact_scene::SceneEntityFlags;
+use tinyvec::TinyVec;
+
+type ComponentMetadataList<T> = TinyVec<[T; 16]>;
 
 impl Engine {
     /// Creates entities staged for creation and removes entities staged for
@@ -68,10 +71,14 @@ impl Engine {
     pub(crate) fn extract_component_metadata(
         &self,
         components: &ArchetypeComponentStorage,
-    ) -> (Vec<ComponentID>, Vec<&'static str>, Vec<&'static str>) {
-        let mut setup_component_ids = Vec::with_capacity(components.n_component_types());
-        let mut setup_component_names = Vec::with_capacity(components.n_component_types());
-        let mut standard_component_names = Vec::with_capacity(components.n_component_types());
+    ) -> (
+        ComponentMetadataList<ComponentID>,
+        ComponentMetadataList<&'static str>,
+        ComponentMetadataList<&'static str>,
+    ) {
+        let mut setup_component_ids = TinyVec::with_capacity(components.n_component_types());
+        let mut setup_component_names = TinyVec::with_capacity(components.n_component_types());
+        let mut standard_component_names = TinyVec::with_capacity(components.n_component_types());
 
         for component_id in components.component_ids() {
             let component_metadata = self.component_metadata_registry.metadata(component_id);
