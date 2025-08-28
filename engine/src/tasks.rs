@@ -548,8 +548,8 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing scene camera view transform", engine, {
             let scene = engine.scene().oread();
-            let mut scene_camera = scene.scene_camera().owrite();
-            if let Some(scene_camera) = scene_camera.as_mut() {
+            let mut camera_manager = scene.camera_manager().owrite();
+            if let Some(scene_camera) = camera_manager.active_camera_mut() {
                 let scene_graph = scene.scene_graph().oread();
                 scene_graph.sync_camera_view_transform(scene_camera);
             }
@@ -581,8 +581,8 @@ define_task!(
             let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
             let resource_manager = engine.resource_manager().oread();
             let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
-            if let Some(scene_camera) = (**scene_camera).as_ref() {
+            let camera_manager = scene.camera_manager().oread();
+            if let Some(scene_camera) = camera_manager.active_camera() {
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
                 let scene_graph = scene.scene_graph().oread();
 
@@ -625,14 +625,14 @@ define_task!(
         instrument_engine_task!("Synchronizing lights in storage", engine, {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
+            let view_transform = scene.camera_manager().oread().active_view_transform();
             let mut light_manager = scene.light_manager().owrite();
             let scene_graph = scene.scene_graph().oread();
             impact_scene::systems::sync_lights_in_storage(
                 &ecs_world,
-                &scene_graph,
-                (**scene_camera).as_ref(),
                 &mut light_manager,
+                &scene_graph,
+                &view_transform,
             );
             Ok(())
         })
@@ -664,8 +664,8 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
             let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
-            if let Some(scene_camera) = (**scene_camera).as_ref() {
+            let camera_manager = scene.camera_manager().oread();
+            if let Some(scene_camera) = camera_manager.active_camera() {
                 let mut light_manager = scene.light_manager().owrite();
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
                 let scene_graph = scene.scene_graph().oread();
@@ -705,8 +705,8 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
             let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
-            if let Some(scene_camera) = (**scene_camera).as_ref() {
+            let camera_manager = scene.camera_manager().oread();
+            if let Some(scene_camera) = camera_manager.active_camera() {
                 let mut light_manager = scene.light_manager().owrite();
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
                 let scene_graph = scene.scene_graph().oread();
@@ -778,7 +778,7 @@ define_task!(
             let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
+            let camera_manager = scene.camera_manager().oread();
             let light_manager = scene.light_manager().oread();
             let voxel_object_manager = scene.voxel_object_manager().oread();
             let mut model_instance_manager = scene.model_instance_manager().owrite();
@@ -790,16 +790,16 @@ define_task!(
             let gizmo_manager = engine.gizmo_manager().oread();
 
             gizmo::systems::buffer_transforms_for_gizmos(
-                &ecs_world,
-                &rigid_body_manager,
-                &anchor_manager,
                 &mut model_instance_manager,
-                &gizmo_manager,
-                &collision_world,
+                &ecs_world,
+                &camera_manager,
+                &light_manager,
                 &voxel_object_manager,
                 &scene_graph,
-                &light_manager,
-                (**scene_camera).as_ref(),
+                &rigid_body_manager,
+                &anchor_manager,
+                &collision_world,
+                &gizmo_manager,
                 current_frame_number,
             );
             Ok(())
@@ -1004,14 +1004,14 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing dynamic GPU resources", engine, {
             let scene = engine.scene().oread();
-            let scene_camera = scene.scene_camera().oread();
+            let camera_manager = scene.camera_manager().oread();
             let light_manager = scene.light_manager().oread();
             let mut voxel_object_manager = scene.voxel_object_manager().owrite();
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let mut renderer = engine.renderer().owrite();
 
             renderer.sync_dynamic_gpu_resources(
-                (**scene_camera).as_ref(),
+                &camera_manager,
                 &light_manager,
                 &mut voxel_object_manager,
                 &mut model_instance_manager,

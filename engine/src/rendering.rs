@@ -23,7 +23,7 @@ use impact_rendering::{
     },
     surface::RenderingSurface,
 };
-use impact_scene::{camera::SceneCamera, model::ModelInstanceManager};
+use impact_scene::{camera::CameraManager, model::ModelInstanceManager};
 use impact_scheduling::Task;
 use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::VoxelObjectManager;
@@ -245,7 +245,7 @@ impl RenderingSystem {
     /// (resources that benefit from a staging belt).
     pub fn sync_dynamic_gpu_resources(
         &mut self,
-        scene_camera: Option<&SceneCamera>,
+        camera_manager: &CameraManager,
         light_manager: &LightManager,
         voxel_object_manager: &mut VoxelObjectManager,
         model_instance_manager: &mut ModelInstanceManager,
@@ -255,8 +255,7 @@ impl RenderingSystem {
 
         let mut render_resource_manager = self.render_resource_manager.owrite();
 
-        impact_scene::camera::sync_gpu_resources_for_scene_camera(
-            scene_camera,
+        camera_manager.sync_gpu_resources(
             &self.graphics_device,
             &mut self.staging_belt,
             &mut command_encoder,
@@ -276,7 +275,7 @@ impl RenderingSystem {
             &self.shadow_mapping_config,
         );
 
-        voxel_object_manager.sync_voxel_object_gpu_resources(
+        voxel_object_manager.sync_gpu_resources(
             &self.graphics_device,
             &mut self.staging_belt,
             &mut command_encoder,

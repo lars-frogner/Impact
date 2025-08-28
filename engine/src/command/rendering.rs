@@ -64,11 +64,10 @@ pub fn set_temporal_anti_aliasing(
 
     if state.changed {
         let scene = scene.oread();
-        let mut scene_camera = scene.scene_camera().owrite();
-
-        if let Some(camera) = scene_camera.as_mut() {
-            camera.set_jitter_enabled(state.state.is_enabled());
-        }
+        scene
+            .camera_manager()
+            .owrite()
+            .set_jitter_enabled(state.state.is_enabled());
     }
     state
 }

@@ -3,7 +3,7 @@
 use crate::lock_order::OrderedRwLock;
 use impact_light::LightManager;
 use impact_scene::{
-    camera::SceneCamera,
+    camera::{CameraContext, CameraManager},
     graph::SceneGraph,
     model::{ModelInstanceManager, ModelInstanceManagerState},
     skybox::Skybox,
@@ -15,7 +15,7 @@ use parking_lot::RwLock;
 #[derive(Debug)]
 pub struct Scene {
     skybox: RwLock<Option<Skybox>>,
-    scene_camera: RwLock<Option<SceneCamera>>,
+    camera_manager: RwLock<CameraManager>,
     light_manager: RwLock<LightManager>,
     voxel_object_manager: RwLock<VoxelObjectManager>,
     model_instance_manager: RwLock<ModelInstanceManager>,
@@ -25,11 +25,14 @@ pub struct Scene {
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new(model_instance_manager: ModelInstanceManager) -> Self {
+    pub fn new(
+        camera_context: CameraContext,
+        model_instance_manager: ModelInstanceManager,
+    ) -> Self {
         let initial_model_instance_manager_state = model_instance_manager.record_state();
         Self {
             skybox: RwLock::new(None),
-            scene_camera: RwLock::new(None),
+            camera_manager: RwLock::new(CameraManager::new(camera_context)),
             light_manager: RwLock::new(LightManager::new()),
             voxel_object_manager: RwLock::new(VoxelObjectManager::new()),
             model_instance_manager: RwLock::new(model_instance_manager),
@@ -44,10 +47,9 @@ impl Scene {
         &self.skybox
     }
 
-    /// Returns a reference to the [`SceneCamera`], or [`None`] if no scene
-    /// camera has been set, guarded by a [`RwLock`].
-    pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera>> {
-        &self.scene_camera
+    /// Returns a reference to the [`CameraManager`], guarded by a [`RwLock`].
+    pub fn camera_manager(&self) -> &RwLock<CameraManager> {
+        &self.camera_manager
     }
 
     /// Returns a reference to the [`LightManager`], guarded by a [`RwLock`].
@@ -77,16 +79,16 @@ impl Scene {
     }
 
     pub fn handle_aspect_ratio_changed(&self, new_aspect_ratio: f32) {
-        if let Some(scene_camera) = self.scene_camera().owrite().as_mut() {
-            scene_camera.set_aspect_ratio(new_aspect_ratio);
-        }
+        self.camera_manager
+            .owrite()
+            .set_aspect_ratio(new_aspect_ratio);
     }
 
     /// Resets the scene to the initial empty state.
     pub fn clear(&self) {
         self.skybox.owrite().take();
 
-        self.scene_camera.owrite().take();
+        self.camera_manager.owrite().clear_active_camera();
 
         self.light_manager.owrite().remove_all_lights();
 

@@ -4,7 +4,7 @@ pub mod gizmo;
 pub mod physics;
 pub mod scene;
 
-use crate::{engine::Engine, lock_order::OrderedRwLock, setup::scene::camera::CameraRenderState};
+use crate::engine::Engine;
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 
@@ -29,14 +29,6 @@ pub fn perform_setup_for_new_entities(
         engine.ecs_world(),
         engine.resource_manager(),
         engine.scene(),
-        &mut || {
-            let renderer = engine.renderer().oread();
-            let postprocessor = renderer.postprocessor().oread();
-            CameraRenderState {
-                aspect_ratio: renderer.rendering_surface().surface_aspect_ratio(),
-                jittering_enabled: postprocessor.temporal_anti_aliasing_config().enabled,
-            }
-        },
         components,
     )?;
 
