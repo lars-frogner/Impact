@@ -2,10 +2,8 @@
 
 use crate::{
     SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
-    SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, camera::SceneCamera,
-    graph::SceneGraph,
+    SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, graph::SceneGraph,
 };
-use impact_camera::gpu_resource::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_light::{
@@ -54,14 +52,10 @@ pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph:
 /// every light source in the [`LightManager`].
 pub fn sync_lights_in_storage(
     ecs_world: &ECSWorld,
-    scene_graph: &SceneGraph,
-    scene_camera: Option<&SceneCamera>,
     light_manager: &mut LightManager,
+    scene_graph: &SceneGraph,
+    view_transform: &Isometry3<f32>,
 ) {
-    let view_transform = scene_camera.map_or_else(Isometry3::identity, |scene_camera| {
-        *scene_camera.view_transform()
-    });
-
     query!(
         ecs_world,
         |ambient_light_id: &AmbientLightID, ambient_emission: &AmbientEmission| {
@@ -82,7 +76,7 @@ pub fn sync_lights_in_storage(
             impact_light::setup::sync_omnidirectional_light_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
-                &view_transform,
+                view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
                 (*flags).into(),
@@ -122,7 +116,7 @@ pub fn sync_lights_in_storage(
             impact_light::setup::sync_shadowable_omnidirectional_light_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
-                &view_transform,
+                view_transform,
                 &frame.position.cast(),
                 omnidirectional_emission,
                 (*flags).into(),
@@ -161,7 +155,7 @@ pub fn sync_lights_in_storage(
             impact_light::setup::sync_unidirectional_light_in_storage(
                 light_manager,
                 *unidirectional_light_id,
-                &view_transform,
+                view_transform,
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -199,7 +193,7 @@ pub fn sync_lights_in_storage(
             impact_light::setup::sync_unidirectional_light_with_orientation_in_storage(
                 light_manager,
                 *unidirectional_light_id,
-                &view_transform,
+                view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
                 (*flags).into(),
@@ -238,7 +232,7 @@ pub fn sync_lights_in_storage(
             impact_light::setup::sync_shadowable_unidirectional_light_in_storage(
                 light_manager,
                 *unidirectional_light_id,
-                &view_transform,
+                view_transform,
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -276,7 +270,7 @@ pub fn sync_lights_in_storage(
             impact_light::setup::sync_shadowable_unidirectional_light_with_orientation_in_storage(
                 light_manager,
                 *unidirectional_light_id,
-                &view_transform,
+                view_transform,
                 &frame.orientation.cast(),
                 unidirectional_emission,
                 (*flags).into(),

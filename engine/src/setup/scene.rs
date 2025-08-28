@@ -10,7 +10,6 @@ use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
 use anyhow::{Result, anyhow};
-use camera::CameraRenderState;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     setup,
@@ -56,13 +55,12 @@ pub fn add_new_entities_to_scene_graph(
     ecs_world: &RwLock<ECSWorld>,
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
-    get_render_state: &mut impl FnMut() -> CameraRenderState,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup_scene_graph_parent_nodes_for_new_entities(ecs_world, components)?;
     setup_scene_graph_group_nodes_for_new_entities(scene, components);
 
-    camera::add_camera_to_scene_for_new_entity(scene, get_render_state, components)?;
+    camera::add_camera_to_scene_for_new_entity(scene, components)?;
 
     setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, components)?;
 

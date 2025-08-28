@@ -32,7 +32,7 @@ use impact_ecs::{
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
-use impact_scene::model::ModelInstanceManager;
+use impact_scene::{camera::CameraContext, model::ModelInstanceManager};
 use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
@@ -133,7 +133,11 @@ impl Engine {
         impact_voxel::register_voxel_feature_types(&mut model_instance_manager);
         gizmo::initialize_buffers_for_gizmo_models(&mut model_instance_manager);
 
-        let scene = Scene::new(model_instance_manager);
+        let camera_context = CameraContext {
+            aspect_ratio: graphics.surface.surface_aspect_ratio(),
+            jitter_enabled: config.rendering.temporal_anti_aliasing.enabled,
+        };
+        let scene = Scene::new(camera_context, model_instance_manager);
 
         let graphics_device = Arc::new(graphics.device);
         let rendering_surface = graphics.surface;

@@ -488,7 +488,7 @@ impl VoxelObjectManager {
     ///
     /// GPU resources whose source data no longer exists will be removed, and
     /// missing GPU resources for new source data will be created.
-    pub fn sync_voxel_object_gpu_resources(
+    pub fn sync_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,

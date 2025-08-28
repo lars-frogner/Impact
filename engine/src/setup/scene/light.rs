@@ -1,7 +1,6 @@
 //! Setup of lights for new entities.
 
 use crate::{lock_order::OrderedRwLock, scene::Scene};
-use impact_camera::gpu_resource::BufferableCamera;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ReferenceFrame;
 use impact_light::{
@@ -11,7 +10,6 @@ use impact_light::{
     UnidirectionalLightID, setup,
 };
 use impact_scene::SceneEntityFlags;
-use nalgebra::Isometry3;
 use parking_lot::RwLock;
 
 /// Checks if the entities-to-be with the given components have the right
@@ -56,15 +54,7 @@ fn setup_omnidirectional_lights_for_new_entities(
     setup!(
         {
             let scene = scene.oread();
-
-            let view_transform = scene
-                .scene_camera()
-                .oread()
-                .as_ref()
-                .map_or_else(Isometry3::identity, |scene_camera| {
-                    *scene_camera.view_transform()
-                });
-
+            let view_transform = scene.camera_manager().oread().active_view_transform();
             let mut light_manager = scene.light_manager().owrite();
         },
         components,
@@ -90,15 +80,7 @@ fn setup_omnidirectional_lights_for_new_entities(
     setup!(
         {
             let scene = scene.oread();
-
-            let view_transform = scene
-                .scene_camera()
-                .oread()
-                .as_ref()
-                .map_or_else(Isometry3::identity, |scene_camera| {
-                    *scene_camera.view_transform()
-                });
-
+            let view_transform = scene.camera_manager().oread().active_view_transform();
             let mut light_manager = scene.light_manager().owrite();
         },
         components,
@@ -129,15 +111,7 @@ fn setup_unidirectional_lights_for_new_entities(
     setup!(
         {
             let scene = scene.oread();
-
-            let view_transform = scene
-                .scene_camera()
-                .oread()
-                .as_ref()
-                .map_or_else(Isometry3::identity, |scene_camera| {
-                    *scene_camera.view_transform()
-                });
-
+            let view_transform = scene.camera_manager().oread().active_view_transform();
             let mut light_manager = scene.light_manager().owrite();
         },
         components,
@@ -161,15 +135,7 @@ fn setup_unidirectional_lights_for_new_entities(
     setup!(
         {
             let scene = scene.oread();
-
-            let view_transform = scene
-                .scene_camera()
-                .oread()
-                .as_ref()
-                .map_or_else(Isometry3::identity, |scene_camera| {
-                    *scene_camera.view_transform()
-                });
-
+            let view_transform = scene.camera_manager().oread().active_view_transform();
             let mut light_manager = scene.light_manager().owrite();
         },
         components,

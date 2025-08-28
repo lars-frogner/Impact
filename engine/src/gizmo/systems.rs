@@ -31,7 +31,7 @@ use impact_physics::{
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    camera::SceneCamera,
+    camera::{CameraManager, SceneCamera},
     graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
     model::ModelInstanceManager,
 };
@@ -83,19 +83,19 @@ fn update_visibility_flags_for_gizmo(
 /// appropriately transformed versions of their model-view transforms to the
 /// gizmo's dedicated buffer.
 pub fn buffer_transforms_for_gizmos(
-    ecs_world: &ECSWorld,
-    rigid_body_manager: &RigidBodyManager,
-    anchor_manager: &AnchorManager,
     model_instance_manager: &mut ModelInstanceManager,
-    gizmo_manager: &GizmoManager,
-    collision_world: &CollisionWorld,
+    ecs_world: &ECSWorld,
+    camera_manager: &CameraManager,
+    light_manager: &LightManager,
     voxel_object_manager: &VoxelObjectManager,
     scene_graph: &SceneGraph,
-    light_manager: &LightManager,
-    scene_camera: Option<&SceneCamera>,
+    rigid_body_manager: &RigidBodyManager,
+    anchor_manager: &AnchorManager,
+    collision_world: &CollisionWorld,
+    gizmo_manager: &GizmoManager,
     current_frame_count: u32,
 ) {
-    let Some(scene_camera) = scene_camera else {
+    let Some(scene_camera) = camera_manager.active_camera() else {
         return;
     };
     let camera_position = scene_camera.compute_world_space_position();
