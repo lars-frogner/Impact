@@ -6,7 +6,8 @@ use impact_containers::HashMap;
 use impact_math::Hash64;
 use parking_lot::{Condvar, Mutex};
 use std::{
-    fmt,
+    backtrace::BacktraceStatus,
+    cmp, fmt,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -95,14 +96,17 @@ pub type TaskClosureResult = Result<(), (TaskID, TaskError)>;
 /// [`ThreadPool`].
 pub type TaskError = Error;
 
-/// The information returned from the task closure executed
-/// by worker threads in a [`ThreadPool`].
+/// The information returned from the task closure executed by worker threads in
+/// a [`ThreadPool`].
 #[derive(Debug)]
 pub struct TaskClosureReturnValue {
-    /// The total number of tasks executed by the closure call.
-    pub n_executed_tasks: usize,
-    /// The result of the task closure execution, which should be an
-    /// [`Err`] if any of the tasks executed in the closure failed.
+    /// The total number of tasks completed by the closure call.
+    pub n_completed_tasks: usize,
+    /// The total number of additional task executions produced by the closure
+    /// call.
+    pub n_additional_tasks: usize,
+    /// The result of the task closure execution, which should be an [`Err`] if
+    /// any of the tasks executed in the closure failed.
     pub result: TaskClosureResult,
 }
 
@@ -197,40 +201,30 @@ impl<M> ThreadPool<M> {
         self.communicator.n_workers()
     }
 
-    /// Instructs worker threads in the pool to execute their task.
-    /// The task will be executed with each of the given messages.
-    /// The `n_tasks` argument is the total number of task executions
-    /// that will result from this function call (including executions
-    /// initiated from within the task). This function does not return
-    /// until all expected task executions have been performed. To
-    /// avoid blocking the calling thread, use [`execute`](Self::execute)
-    /// instead.
+    /// Instructs worker threads in the pool to execute their task. The task
+    /// will be executed with each of the given messages. This function does not
+    /// return until all the given task executions as well as all additional
+    /// executions initiated by those tasks have been completed. To avoid
+    /// blocking the calling thread, use [`execute`](Self::execute) instead.
     ///
     /// # Errors
-    /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each
-    /// failed task is returned if any of the executed tasks failed.
-    pub fn execute_and_wait(
-        &self,
-        messages: impl Iterator<Item = M>,
-        n_tasks: usize,
-    ) -> ThreadPoolResult {
-        self.execute(messages, n_tasks);
+    /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each failed
+    /// task is returned if any of the executed tasks failed.
+    pub fn execute_and_wait(&self, messages: impl ExactSizeIterator<Item = M>) -> ThreadPoolResult {
+        self.execute(messages);
         self.wait_until_done()
     }
 
-    /// Instructs worker threads in the pool to execute their task.
-    /// The task will be executed with each of the given messages.
-    /// The `n_tasks` argument is the total number of task executions
-    /// that will result from this function call (including executions
-    /// initiated from within the task). This function returns as soon
-    /// as all the given execution instructions have been sent. To
-    /// wait until all tasks have been completed and obtain any errors
-    /// produced by the executed tasks, call
-    /// [`wait_until_done`](Self::wait_until_done).
-    pub fn execute(&self, messages: impl Iterator<Item = M>, n_tasks: usize) {
+    /// Instructs worker threads in the pool to execute their task. The task
+    /// will be executed with each of the given messages. This function returns
+    /// as soon as all the given execution instructions have been sent. To wait
+    /// until all tasks (including the executions initiated by the given tasks
+    /// executions) have been completed and obtain any errors produced by the
+    /// executed tasks, call [`wait_until_done`](Self::wait_until_done).
+    pub fn execute(&self, messages: impl ExactSizeIterator<Item = M>) {
         self.communicator
             .execution_progress()
-            .add_to_pending_task_count(n_tasks);
+            .add_to_pending_task_count(messages.len());
 
         for message in messages {
             self.communicator
@@ -239,8 +233,8 @@ impl<M> ThreadPool<M> {
         }
     }
 
-    /// Blocks the calling thread and returns as soon as all expected
-    /// task executions have been performed.
+    /// Blocks the calling thread and returns as soon as all task executions
+    /// have been performed.
     ///
     /// # Errors
     /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each
@@ -282,37 +276,34 @@ impl fmt::Display for WorkerID {
 }
 
 impl TaskClosureReturnValue {
-    /// Creates the return value corresponding to a successfully
-    /// executed task.
-    pub fn success() -> Self {
-        Self::for_single_task(Ok(()))
-    }
-
-    /// Creates the return value corresponding to a failed
-    /// execution of the given task with the given error.
-    pub fn failure(task_id: TaskID, error: TaskError) -> Self {
-        Self::for_single_task(Err((task_id, error)))
-    }
-
-    /// Increments the number of executed tasks by one in the
-    /// given return value and returns the incremented version.
-    pub fn with_incremented_task_count(self) -> Self {
-        let Self {
-            n_executed_tasks,
-            result,
-        } = self;
+    /// Creates the return value corresponding to a single successfully
+    /// completed task with the given number of additional tasks produced.
+    pub fn success(n_additional_tasks: usize) -> Self {
         Self {
-            n_executed_tasks: n_executed_tasks + 1,
-            result,
+            n_completed_tasks: 1,
+            n_additional_tasks,
+            result: Ok(()),
         }
     }
 
-    /// Creates the return value corresponding to a single
-    /// executed task with the given result.
-    fn for_single_task(result: TaskClosureResult) -> Self {
+    /// Creates the return value corresponding to a failing completion of the
+    /// given task with the given error. It is assumed that no additional tasks
+    /// where produced.
+    pub fn failure(task_id: TaskID, error: TaskError) -> Self {
         Self {
-            n_executed_tasks: 1,
-            result,
+            n_completed_tasks: 1,
+            n_additional_tasks: 0,
+            result: Err((task_id, error)),
+        }
+    }
+
+    /// Returns a copy of this return value with the given numbers of completed
+    /// and additional tasks added to the pre-existing numbers.
+    pub fn add(self, n_completed_tasks: usize, n_additional_tasks: usize) -> Self {
+        Self {
+            n_completed_tasks: self.n_completed_tasks + n_completed_tasks,
+            n_additional_tasks: self.n_additional_tasks + n_additional_tasks,
+            result: self.result,
         }
     }
 }
@@ -472,8 +463,6 @@ impl ExecutionProgress {
     /// the given number and updates the conditional variable
     /// used for tracking whether there are pending tasks.
     fn add_to_pending_task_count(&self, n_tasks: usize) {
-        impact_log::trace!("Adding {n_tasks} pending tasks");
-
         if n_tasks == 0 {
             return;
         }
@@ -493,9 +482,7 @@ impl ExecutionProgress {
     ///
     /// # Panics
     /// If the count is attempted to be decremented below zero.
-    fn register_executed_tasks(&self, worker_id: WorkerID, n_tasks: usize) {
-        impact_log::trace!("Worker {worker_id} registering {n_tasks} tasks as executed");
-
+    fn register_completed_tasks(&self, n_tasks: usize) {
         if n_tasks == 0 {
             return;
         }
@@ -551,7 +538,7 @@ impl TaskStatus {
     fn fetch_result(&self) -> ThreadPoolResult {
         // Check if a task failed and at the same time reset the
         // flag to `false`
-        if self.some_task_failed.swap(false, Ordering::Relaxed) {
+        if self.some_task_failed.swap(false, Ordering::SeqCst) {
             Err(ThreadPoolTaskErrors::new(
                 // Move the `HashMap` of errors out of the mutex and
                 // replace with an empty one
@@ -563,8 +550,15 @@ impl TaskStatus {
     }
 
     fn register_error(&self, worker_id: WorkerID, task_id: TaskID, error: TaskError) {
-        impact_log::error!("Worker {worker_id} registered error on task {task_id}: {error:#}");
-        self.some_task_failed.store(true, Ordering::Relaxed);
+        impact_log::error!(
+            "Worker {worker_id} registered error on task {task_id}: {error:#}{}",
+            if error.backtrace().status() == BacktraceStatus::Captured {
+                format!("\nBacktrace:\n{}", error.backtrace())
+            } else {
+                String::new()
+            }
+        );
+        self.some_task_failed.store(true, Ordering::SeqCst);
         self.errors_of_failed_tasks.lock().insert(task_id, error);
     }
 }
@@ -587,7 +581,8 @@ impl Worker {
                 match instruction {
                     WorkerInstruction::Execute(message) => {
                         let TaskClosureReturnValue {
-                            n_executed_tasks,
+                            n_completed_tasks,
+                            n_additional_tasks,
                             result,
                         } = execute_tasks(communicator.channel(), message);
 
@@ -597,9 +592,27 @@ impl Worker {
                                 .register_error(worker_id, task_id, error);
                         }
 
-                        communicator
-                            .execution_progress()
-                            .register_executed_tasks(worker_id, n_executed_tasks);
+                        match n_additional_tasks.cmp(&n_completed_tasks) {
+                            cmp::Ordering::Less => {
+                                let n_net_completed_tasks = n_completed_tasks - n_additional_tasks;
+                                impact_log::trace!(
+                                    "Registering {n_net_completed_tasks} tasks as completed by worker {worker_id}"
+                                );
+                                communicator
+                                    .execution_progress()
+                                    .register_completed_tasks(n_net_completed_tasks);
+                            }
+                            cmp::Ordering::Greater => {
+                                let n_net_added_tasks = n_additional_tasks - n_completed_tasks;
+                                impact_log::trace!(
+                                    "Adding {n_net_added_tasks} pending tasks from worker {worker_id}"
+                                );
+                                communicator
+                                    .execution_progress()
+                                    .add_to_pending_task_count(n_net_added_tasks);
+                            }
+                            cmp::Ordering::Equal => {}
+                        }
                     }
                     WorkerInstruction::Terminate => {
                         impact_log::trace!("Worker {worker_id} terminating");
@@ -669,11 +682,9 @@ mod tests {
         comm.execution_progress().add_to_pending_task_count(1);
         assert_eq!(comm.execution_progress().pending_task_count(), 3);
 
-        comm.execution_progress()
-            .register_executed_tasks(WorkerID(0), 2);
+        comm.execution_progress().register_completed_tasks(2);
         assert_eq!(comm.execution_progress().pending_task_count(), 1);
-        comm.execution_progress()
-            .register_executed_tasks(WorkerID(0), 1);
+        comm.execution_progress().register_completed_tasks(1);
         assert_eq!(comm.execution_progress().pending_task_count(), 0);
 
         comm.execution_progress().wait_for_no_pending_tasks(); // Should return
@@ -685,15 +696,14 @@ mod tests {
     fn registering_executed_task_when_none_are_pending_fails() {
         let n_workers = 2;
         let comm = communicator::<NoMessage>(n_workers);
-        comm.execution_progress()
-            .register_executed_tasks(WorkerID(0), 1);
+        comm.execution_progress().register_completed_tasks(1);
     }
 
     #[test]
     fn creating_thread_pool_works() {
         let n_workers = 2;
         let pool =
-            thread_pool::<NoMessage, _>(n_workers, &|_, _| TaskClosureReturnValue::success());
+            thread_pool::<NoMessage, _>(n_workers, &|_, _| TaskClosureReturnValue::success(0));
         assert_eq!(pool.n_workers().get(), n_workers);
     }
 
@@ -705,14 +715,11 @@ mod tests {
             n_workers,
             &|_, (count, incr): (Arc<Mutex<usize>>, usize)| {
                 *count.lock() += incr;
-                TaskClosureReturnValue::success()
+                TaskClosureReturnValue::success(0)
             },
         );
-        pool.execute_and_wait(
-            iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers),
-            n_workers,
-        )
-        .unwrap();
+        pool.execute_and_wait(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers))
+            .unwrap();
         drop(pool);
         assert_eq!(*count.lock(), n_workers * 3);
     }
@@ -732,7 +739,7 @@ mod tests {
             match count.checked_sub(1) {
                 Some(decremented_count) => {
                     *count = decremented_count;
-                    TaskClosureReturnValue::success()
+                    TaskClosureReturnValue::success(0)
                 }
                 None => TaskClosureReturnValue::failure(task_id, anyhow!("Underflow!")),
             }
@@ -743,7 +750,6 @@ mod tests {
                 (Arc::clone(&count), TaskID::from_str("1")),
             ]
             .into_iter(),
-            2,
         );
         assert!(result.is_err());
 
