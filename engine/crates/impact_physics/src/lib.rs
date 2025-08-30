@@ -46,24 +46,16 @@ pub fn perform_physics_step<C: Collidable>(
 
     collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
 
-    if constraint_manager.solver().config().enabled {
-        impact_log::with_timing_info_logging!("Preparing constraints"; {
-            constraint_manager.prepare_constraints(
-                rigid_body_manager,
-                anchor_manager,
-                collision_world,
-                collidable_context,
-            );
-        });
-    }
+    constraint_manager.prepare_constraints(
+        rigid_body_manager,
+        anchor_manager,
+        collision_world,
+        collidable_context,
+    );
 
     rigid_body_manager.advance_dynamic_rigid_body_momenta(step_duration);
 
-    if constraint_manager.solver().config().enabled {
-        impact_log::with_timing_info_logging!("Solving constraints"; {
-            constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
-        });
-    }
+    constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
 
     rigid_body_manager.advance_dynamic_rigid_body_configurations(step_duration);
 

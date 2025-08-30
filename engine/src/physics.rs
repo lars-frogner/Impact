@@ -245,15 +245,9 @@ impl PhysicsSimulator {
         if !self.config.enabled {
             return;
         }
-        impact_log::with_timing_info_logging!(
-            "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
-            self.scaled_time_step_duration(),
-            self.simulation_speed_multiplier,
-            self.n_substeps(); {
-            self.do_advance_simulation(voxel_object_manager);
-        });
+        self.do_advance_simulation(voxel_object_manager);
 
-        impact_log::info!("Simulation time: {:.1}", self.simulation_time);
+        impact_log::debug!("Simulation time: {:.1}", self.simulation_time);
     }
 
     /// Resets the simulator to the initial empty state and sets the simulation

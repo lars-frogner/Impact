@@ -177,6 +177,10 @@ impl ConstraintManager {
         collision_world: &CollisionWorld<C>,
         collidable_context: &C::Context,
     ) {
+        if !self.solver.config().enabled {
+            return;
+        }
+
         // The cached states of the bodies from the previous frame are stale
         // and must be removed. Up-to-date body state will be gathered as
         // required for the constraints of this frame.
@@ -241,6 +245,9 @@ impl ConstraintManager {
         &mut self,
         rigid_body_manager: &mut RigidBodyManager,
     ) {
+        if !self.solver.config().enabled {
+            return;
+        }
         self.solver
             .synchronize_prepared_constrained_body_velocities(rigid_body_manager);
         self.solver.compute_constrained_velocities();
