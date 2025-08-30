@@ -434,7 +434,6 @@ where
         self.thread_pool.execute(
             (0..self.task_ordering().n_dependencyless_tasks())
                 .map(|task_idx| Self::create_message(&self.state, execution_tags, task_idx)),
-            self.task_ordering().n_tasks(),
         );
     }
 
@@ -510,6 +509,8 @@ where
         // immediately
         let first_ready_dependent_task_idx = ready_dependent_task_indices.next();
 
+        let mut n_additional_tasks = 0;
+
         // Schedule each remaining ready task
         for ready_dependent_task_idx in ready_dependent_task_indices {
             impact_log::with_trace_logging!(
@@ -521,6 +522,7 @@ where
                     .task()
                     .id();
                 {
+                    n_additional_tasks += 1;
                     channel.send_execute_instruction(Self::create_message(
                         &state,
                         &execution_tags,
@@ -531,15 +533,16 @@ where
         }
 
         if let Some(ready_dependent_task_idx) = first_ready_dependent_task_idx {
+            n_additional_tasks += 1;
             Self::execute_task_and_schedule_dependencies(
                 channel,
                 (state, execution_tags, ready_dependent_task_idx),
             )
-            // Increment executed task count returned from dependent
-            // task to account for this task
-            .with_incremented_task_count()
+            // Add the counts from this task execution to those returned from
+            // the dependent task
+            .add(1, n_additional_tasks)
         } else {
-            TaskClosureReturnValue::success()
+            TaskClosureReturnValue::success(n_additional_tasks)
         }
     }
 
@@ -582,10 +585,6 @@ impl<S> TaskOrdering<S> {
             tasks,
             n_dependencyless_tasks,
         })
-    }
-
-    fn n_tasks(&self) -> usize {
-        self.tasks.len()
     }
 
     fn n_dependencyless_tasks(&self) -> usize {
@@ -650,7 +649,7 @@ impl<S> TaskOrdering<S> {
                 return idx;
             }
         }
-        0
+        tasks.len()
     }
 }
 
@@ -781,6 +780,71 @@ mod tests {
                 }
             }
         };
+        (name = $task:ident, deps = [$($dep:ty),*], fails) => {
+            #[derive(Debug)]
+            struct $task;
+
+            impl $task {
+                const ID: TaskID = TaskID::from_str(stringify!($task));
+                const EXEC_TAG: ExecutionTag = ExecutionTag::from_str(stringify!($task));
+            }
+
+            impl Task<Arc<TaskRecorder>> for $task
+            {
+                fn id(&self) -> TaskID {
+                    Self::ID
+                }
+
+                fn depends_on(&self) -> &[TaskID] {
+                    &[$(<$dep>::ID),*]
+                }
+
+                fn should_execute(&self, execution_tags: &ExecutionTags) -> bool {
+                    [EXEC_ALL, Self::EXEC_TAG].iter().any(|tag| execution_tags.contains(tag))
+                }
+
+                fn execute(&self, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
+                    unreachable!()
+                }
+
+                fn execute_with_worker(&self, _worker_id: WorkerID, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
+                    anyhow::bail!("{} always fails!", stringify!($task))
+                }
+            }
+        };
+        (name = $task:ident, deps = [$($dep:ty),*], skips) => {
+            #[derive(Debug)]
+            struct $task;
+
+            impl $task {
+                const ID: TaskID = TaskID::from_str(stringify!($task));
+                #[allow(dead_code)]
+                const EXEC_TAG: ExecutionTag = ExecutionTag::from_str(stringify!($task));
+            }
+
+            impl Task<Arc<TaskRecorder>> for $task
+            {
+                fn id(&self) -> TaskID {
+                    Self::ID
+                }
+
+                fn depends_on(&self) -> &[TaskID] {
+                    &[$(<$dep>::ID),*]
+                }
+
+                fn should_execute(&self, _execution_tags: &ExecutionTags) -> bool {
+                    false // Always skip this task
+                }
+
+                fn execute(&self, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
+                    unreachable!()
+                }
+
+                fn execute_with_worker(&self, _worker_id: WorkerID, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
+                    unreachable!("This task should be skipped")
+                }
+            }
+        };
     }
 
     create_task_type!(name = Task1, deps = []);
@@ -791,6 +855,9 @@ mod tests {
     create_task_type!(name = DepDepTask1Task2, deps = [DepTask1, Task2]);
     create_task_type!(name = CircularTask1, deps = [CircularTask2]);
     create_task_type!(name = CircularTask2, deps = [CircularTask1]);
+
+    create_task_type!(name = FailingTask, deps = [], fails);
+    create_task_type!(name = DependentOnFailingTask, deps = [FailingTask]);
 
     type TestTaskScheduler = TaskScheduler<Arc<TaskRecorder>>;
     type TestTaskDependencyGraph = TaskDependencyGraph<Arc<TaskRecorder>>;
@@ -1166,5 +1233,102 @@ mod tests {
     fn completing_too_many_dependencies_of_ordered_task_fails() {
         let ordered_task = TestOrderedTask::new(Arc::new(Task1), iter::empty());
         ordered_task.complete_dependency();
+    }
+
+    #[test]
+    fn failing_single_task_completes_with_error() {
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_task(FailingTask).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+
+        let errors = result.unwrap_err();
+        assert_eq!(errors.n_errors(), 1);
+        assert!(errors.get_error_of(FailingTask::ID).is_some());
+    }
+
+    #[test]
+    fn failing_task_with_single_dependent_completes_with_error() {
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_task(FailingTask).unwrap();
+        scheduler.register_task(DependentOnFailingTask).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+
+        let errors = result.unwrap_err();
+        assert_eq!(errors.n_errors(), 1);
+        assert!(errors.get_error_of(FailingTask::ID).is_some());
+
+        // Verify dependent task was never recorded as executed
+        let task_recorder = scheduler.external_state();
+        let recorded_tasks = task_recorder.get_recorded_task_ids();
+        assert!(!recorded_tasks.contains(&DependentOnFailingTask::ID));
+    }
+
+    #[test]
+    fn mixed_success_and_failure_tasks_complete_correctly() {
+        let mut scheduler = create_scheduler(2);
+        scheduler.register_task(Task1).unwrap(); // This should succeed
+        scheduler.register_task(FailingTask).unwrap(); // This should fail
+        scheduler.register_task(DepTask1).unwrap(); // This depends on Task1 and should succeed
+        scheduler.complete_task_registration().unwrap();
+
+        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+
+        let errors = result.unwrap_err();
+        assert_eq!(errors.n_errors(), 1);
+        assert!(errors.get_error_of(FailingTask::ID).is_some());
+
+        // Successful tasks should have been executed
+        let task_recorder = scheduler.external_state();
+        let recorded_tasks = task_recorder.get_recorded_task_ids();
+        assert!(recorded_tasks.contains(&Task1::ID));
+        assert!(recorded_tasks.contains(&DepTask1::ID));
+        assert!(!recorded_tasks.contains(&FailingTask::ID));
+    }
+
+    #[test]
+    fn failing_task_in_dependency_chain_stops_execution() {
+        // Create a dependency chain: Task1 -> FailingDependentTask -> FinalTask
+        // When the middle task fails, the final task should not execute
+
+        create_task_type!(name = FailingDependentTask, deps = [Task1], fails);
+        create_task_type!(name = FinalTask, deps = [FailingDependentTask]);
+
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_task(Task1).unwrap();
+        scheduler.register_task(FailingDependentTask).unwrap();
+        scheduler.register_task(FinalTask).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+
+        let errors = result.unwrap_err();
+        assert_eq!(errors.n_errors(), 1);
+        assert!(errors.get_error_of(FailingDependentTask::ID).is_some());
+
+        let task_recorder = scheduler.external_state();
+        let recorded_tasks = task_recorder.get_recorded_task_ids();
+        assert!(recorded_tasks.contains(&Task1::ID));
+        assert!(!recorded_tasks.contains(&FinalTask::ID));
+    }
+
+    #[test]
+    fn multiple_failing_tasks_all_report_errors() {
+        create_task_type!(name = FailingTask2, deps = [], fails);
+
+        let mut scheduler = create_scheduler(2);
+        scheduler.register_task(FailingTask).unwrap();
+        scheduler.register_task(FailingTask2).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+
+        let errors = result.unwrap_err();
+        assert_eq!(errors.n_errors(), 2);
+        assert!(errors.get_error_of(FailingTask::ID).is_some());
+        assert!(errors.get_error_of(FailingTask2::ID).is_some());
     }
 }
