@@ -18,8 +18,8 @@ use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     shader::{ShaderManager, template::SpecificShaderTemplate},
+    timestamp_query::TimestampQueryRegistry,
     wgpu,
 };
 use impact_mesh::gpu_resource::VertexBufferable;
@@ -507,7 +507,7 @@ impl VoxelChunkCullingPass {
             return Ok(());
         }
 
-        let timestamp_writes =
+        let (timestamp_writes, _timestamp_span_guard) =
             timestamp_recorder.register_timestamp_writes_for_single_compute_pass(tag);
 
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

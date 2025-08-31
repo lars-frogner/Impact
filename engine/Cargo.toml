@@ -189,11 +189,13 @@ roc_codegen = [
     "roc_integration/roc_codegen",
 ]
 cli = ["dep:clap"]
+criterion = ["profiling", "impact_profiling/criterion"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
 ply = ["impact_mesh/ply"]
-profiling = ["impact_profiling"]
+profiling = ["dep:impact_profiling"]
 obj = ["impact_mesh/obj"]
 unchecked = ["impact_voxel/unchecked"]
+tracy = ["profiling", "impact_profiling/tracy"]
 window = ["dep:winit", "impact_rendering/window"]
 
 [dependencies]

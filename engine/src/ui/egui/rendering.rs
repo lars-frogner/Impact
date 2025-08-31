@@ -1,7 +1,7 @@
 //! Rendering of [`egui`] based user interfaces.
 
 use core::fmt;
-use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, wgpu};
+use impact_gpu::{device::GraphicsDevice, timestamp_query::TimestampQueryRegistry, wgpu};
 use impact_rendering::render_command;
 use impact_rendering::surface::RenderingSurface;
 use std::borrow::Cow;
@@ -62,20 +62,24 @@ impl EguiRenderer {
 
         let color_attachment = Self::color_attachment(surface_texture_view);
 
-        let mut render_pass = render_command::begin_single_render_pass(
+        let (render_pass, timestamp_span_guard) = render_command::begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
             &[Some(color_attachment)],
             None,
             Cow::Borrowed("GUI render pass"),
-        )
-        .forget_lifetime();
+        );
+
+        let mut render_pass = render_pass.forget_lifetime();
 
         self.renderer.render(
             &mut render_pass,
             &input.clipped_primitives,
             &screen_descriptor,
         );
+
+        drop(render_pass);
+        drop(timestamp_span_guard);
 
         for texture_id in &input.textures_delta.free {
             self.renderer.free_texture(texture_id);

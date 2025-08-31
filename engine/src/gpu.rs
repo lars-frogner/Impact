@@ -81,7 +81,9 @@ pub fn connect_to_graphics_device_for_rendering(
             | wgpu::Features::FLOAT32_FILTERABLE
             | wgpu::Features::MULTI_DRAW_INDIRECT
             | wgpu::Features::INDIRECT_FIRST_INSTANCE,
-        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::TIMESTAMP_QUERY,
+        wgpu::Features::POLYGON_MODE_LINE
+            | wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
         wgpu::Limits {
             max_bind_groups: 7,
             max_push_constant_size: 256,

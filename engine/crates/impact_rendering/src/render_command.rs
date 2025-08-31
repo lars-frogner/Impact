@@ -12,7 +12,11 @@ pub mod skybox_pass;
 pub mod storage_buffer_result_copy_command;
 
 use crate::attachment::RenderAttachmentQuantity;
-use impact_gpu::{query::TimestampQueryRegistry, shader::Shader, wgpu};
+use impact_gpu::{
+    shader::Shader,
+    timestamp_query::{TimestampQueryRegistry, external::ExternalGPUSpanGuard},
+    wgpu,
+};
 use std::borrow::Cow;
 
 /// The meaning of a specific value in the stencil buffer.
@@ -207,21 +211,26 @@ pub fn additive_blend_state() -> wgpu::BlendState {
     }
 }
 
+/// Returns the render pass as well as a span guard for timestamp writes. The
+/// span guard should be dropped immediately after the render pass.
+#[track_caller]
 pub fn begin_single_render_pass<'a>(
     command_encoder: &'a mut wgpu::CommandEncoder,
     timestamp_recorder: &mut TimestampQueryRegistry<'_>,
     color_attachments: &[Option<wgpu::RenderPassColorAttachment<'_>>],
     depth_stencil_attachment: Option<wgpu::RenderPassDepthStencilAttachment<'_>>,
     label: Cow<'static, str>,
-) -> wgpu::RenderPass<'a> {
-    let timestamp_writes =
+) -> (wgpu::RenderPass<'a>, ExternalGPUSpanGuard) {
+    let (timestamp_writes, timestamp_span_guard) =
         timestamp_recorder.register_timestamp_writes_for_single_render_pass(label.clone());
 
-    command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+    let render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         color_attachments,
         depth_stencil_attachment,
         timestamp_writes,
         occlusion_query_set: None,
         label: Some(&label),
-    })
+    });
+
+    (render_pass, timestamp_span_guard)
 }

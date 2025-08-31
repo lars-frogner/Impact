@@ -9,9 +9,9 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_gpu::{
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{Shader, ShaderManager, template::SpecificShaderTemplate},
+    timestamp_query::TimestampQueryRegistry,
     wgpu,
 };
 use std::{borrow::Cow, num::NonZeroU32};
@@ -130,7 +130,7 @@ impl ComputePass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        let timestamp_writes = timestamp_recorder
+        let (timestamp_writes, _timestamp_span_guard) = timestamp_recorder
             .register_timestamp_writes_for_single_compute_pass(self.label.clone());
 
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

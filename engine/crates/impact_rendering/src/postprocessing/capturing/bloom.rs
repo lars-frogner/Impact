@@ -26,8 +26,8 @@ use anyhow::{Result, anyhow};
 use approx::abs_diff_ne;
 use impact_gpu::{
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     shader::{ShaderID, ShaderManager},
+    timestamp_query::{TimestampQueryRegistry, external::ExternalGPUSpanGuard},
     wgpu,
 };
 use impact_mesh::VertexAttributeSet;
@@ -304,11 +304,9 @@ impl BloomRenderCommands {
             return Ok(());
         }
 
-        let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
-            .register_timestamp_writes_for_first_and_last_of_render_passes(
-                self.n_downsamplings + self.n_upsamplings + 1,
-                Cow::Borrowed("Bloom passes"),
-            );
+        let mut last_timestamp_writes = None;
+        // Will be dropped after the last RenderPass
+        let mut _timestamp_span_guard = ExternalGPUSpanGuard::None;
 
         let blurred_luminance_texture =
             render_attachment_texture_manager.render_attachment_texture(LuminanceAux);
@@ -336,7 +334,17 @@ impl BloomRenderCommands {
             };
 
             let timestamp_writes = if input_mip_level == 0 {
-                first_timestamp_writes.clone()
+                let ([first_timestamp_writes, last_timestamp_writes_], timestamp_span_guard_) =
+                    timestamp_recorder
+                        .register_timestamp_writes_for_first_and_last_of_render_passes(
+                            self.n_downsamplings + self.n_upsamplings + 1,
+                            Cow::Borrowed("Bloom passes"),
+                        );
+
+                last_timestamp_writes = last_timestamp_writes_;
+                _timestamp_span_guard = timestamp_span_guard_;
+
+                first_timestamp_writes
             } else {
                 None
             };

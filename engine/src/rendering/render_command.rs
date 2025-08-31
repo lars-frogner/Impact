@@ -6,8 +6,8 @@ use anyhow::Result;
 use gizmo_passes::GizmoPasses;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    storage::StorageGPUBufferManager, wgpu,
+    resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    storage::StorageGPUBufferManager, timestamp_query::TimestampQueryRegistry, wgpu,
 };
 use impact_light::shadow_map::ShadowMappingConfig;
 use impact_rendering::{
@@ -260,7 +260,7 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        let mut geometry_pass = self.geometry_pass.record(
+        let (mut geometry_pass, timestamp_span_guard) = self.geometry_pass.record(
             rendering_surface,
             gpu_resources,
             render_attachment_texture_manager,
@@ -282,6 +282,7 @@ impl RenderCommandManager {
             )?;
         }
         drop(geometry_pass);
+        drop(timestamp_span_guard);
 
         self.omnidirectional_light_shadow_map_update_passes.record(
             gpu_resources,

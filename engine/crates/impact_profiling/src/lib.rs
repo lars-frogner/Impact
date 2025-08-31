@@ -1,7 +1,10 @@
 //! Utilities for performance profiling.
 
-pub mod criterion;
 pub mod profile;
+pub mod tracy;
+
+#[cfg(feature = "criterion")]
+pub mod criterion;
 
 use std::{
     hint::black_box,

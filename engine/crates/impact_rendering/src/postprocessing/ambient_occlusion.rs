@@ -19,9 +19,9 @@ use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
     shader::ShaderManager,
+    timestamp_query::TimestampQueryRegistry,
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };

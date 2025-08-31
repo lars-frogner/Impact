@@ -22,10 +22,10 @@ use capturing::{CapturingCamera, CapturingCameraConfig};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{ShaderManager, template::SpecificShaderTemplate},
     storage::StorageGPUBufferManager,
+    timestamp_query::TimestampQueryRegistry,
     wgpu,
 };
 use render_attachment_visualization::RenderAttachmentVisualizationPasses;

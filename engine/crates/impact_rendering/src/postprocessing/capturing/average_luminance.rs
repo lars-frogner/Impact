@@ -17,10 +17,10 @@ use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
     assert_uniform_valid,
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
     shader::ShaderManager,
     storage::{StorageBufferID, StorageGPUBuffer, StorageGPUBufferManager},
+    timestamp_query::TimestampQueryRegistry,
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };

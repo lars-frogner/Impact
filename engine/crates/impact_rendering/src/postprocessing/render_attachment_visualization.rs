@@ -12,8 +12,8 @@ use anyhow::{Result, anyhow};
 use impact_containers::HashMap;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    wgpu,
+    resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    timestamp_query::TimestampQueryRegistry, wgpu,
 };
 use std::borrow::Cow;
 

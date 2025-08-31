@@ -16,8 +16,8 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, shader::ShaderManager,
+    timestamp_query::TimestampQueryRegistry, wgpu,
 };
 use impact_light::{LightManager, gpu_resource::LightGPUResources};
 use impact_mesh::{VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
@@ -266,7 +266,7 @@ impl AmbientLightPass {
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = begin_single_render_pass(
+        let (mut render_pass, _timestamp_span_guard) = begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
             &color_attachments,
