@@ -1,6 +1,6 @@
-use impact::profiling::benchmarks::chunked_voxel_object;
+use impact::benchmark::benchmarks::chunked_voxel_object;
 use impact_profiling::{
-    criterion::{self, Criterion},
+    benchmark::criterion::{self, Criterion},
     define_criterion_target,
 };
 use impact_voxel::{

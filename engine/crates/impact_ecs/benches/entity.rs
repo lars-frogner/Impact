@@ -1,5 +1,5 @@
-use impact_ecs::profiling::benchmarks::entity;
-use impact_profiling::{criterion, define_criterion_target};
+use impact_ecs::benchmark::benchmarks::entity;
+use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(entity, create_single_entity_single_comp);
 define_criterion_target!(entity, create_single_entity_multiple_comps);

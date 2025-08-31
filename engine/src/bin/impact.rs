@@ -26,12 +26,12 @@ mod main {
             #[arg(short, long)]
             force_overwrite: bool,
         },
-        #[cfg(feature = "profiling")]
-        /// Run a profiling target
-        Profile {
-            /// Profiling target to run
+        #[cfg(feature = "benchmark")]
+        /// Run a benchmarking target
+        Benchmark {
+            /// Benchmarking target to run
             #[arg(short, long, value_enum)]
-            target: impact::profiling::profile::Target,
+            target: impact::benchmark::Target,
 
             /// Number of seconds to run the target for (it will always be run at least
             /// once)
@@ -43,9 +43,9 @@ mod main {
             #[arg(long, default_value_t = 0.0)]
             delay: f64,
         },
-        #[cfg(not(feature = "profiling"))]
-        /// Run a profiling target (requires the `profiling` feature)
-        Profile,
+        #[cfg(not(feature = "benchmark"))]
+        /// Run a benchmarking target (requires the `benchmark` feature)
+        Benchmark,
     }
 
     pub fn main() -> Result<()> {
@@ -62,19 +62,19 @@ mod main {
                 let config = EngineConfig::default();
                 impact_io::write_ron_file(&config, output_path)
             }
-            #[cfg(feature = "profiling")]
-            Command::Profile {
+            #[cfg(feature = "benchmark")]
+            Command::Benchmark {
                 target,
                 duration,
                 delay,
             } => {
-                impact::profiling::profile::profile(target, duration, delay);
+                impact::benchmark::benchmark(target, duration, delay);
                 Ok(())
             }
-            #[cfg(not(feature = "profiling"))]
-            Command::Profile => {
+            #[cfg(not(feature = "benchmark"))]
+            Command::Benchmark => {
                 anyhow::bail!(
-                    "The `profile` subcommand requires the `profiling` feature to be enabled."
+                    "The `benchmark` subcommand requires the `benchmark` feature to be enabled."
                 )
             }
         }

@@ -1,8 +1,8 @@
-//! Utilities for initiating profiling.
+pub mod benchmarks;
 
 impact_profiling::define_target_enum! {
     Target,
-    crate::profiling::benchmarks,
+    crate::benchmark::benchmarks,
     entity => {
         create_single_entity_single_comp,
         create_single_entity_multiple_comps,
@@ -25,6 +25,10 @@ impact_profiling::define_target_enum! {
     }
 }
 
-pub fn profile(target: Target, duration: f64, delay: f64) {
-    impact_profiling::profile::profile(|profiler| target.execute(profiler), duration, delay);
+pub fn benchmark(target: Target, duration: f64, delay: f64) {
+    impact_profiling::benchmark::benchmark(
+        |benchmarker| target.execute(benchmarker),
+        duration,
+        delay,
+    );
 }

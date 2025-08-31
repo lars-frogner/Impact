@@ -6,7 +6,7 @@ while [[ $1 != '--' ]]; do
   shift
 done
 shift # Ignore "--"
-profileargs=("$@") # What's left goes to profile
+benchmarkargs=("$@") # What's left goes to benchmark
 
-cargo build --release --features "cli,profiling,unchecked" --bin impact
-sudo perf stat "${perfargs[@]}" --delay 400 --detailed ./target/release/impact profile "${profileargs[@]}" --delay 0.5
+cargo build --release --features "cli,benchmark,unchecked" --bin impact
+sudo perf stat "${perfargs[@]}" --delay 400 --detailed ./target/release/impact benchmark "${benchmarkargs[@]}" --delay 0.5

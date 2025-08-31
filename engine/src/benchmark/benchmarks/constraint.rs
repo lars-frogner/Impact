@@ -15,10 +15,10 @@ use impact_physics::{
     quantities::{Motion, Position, Velocity},
     rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
 };
-use impact_profiling::Profiler;
+use impact_profiling::benchmark::Benchmarker;
 use nalgebra::point;
 
-pub fn prepare_contacts(profiler: impl Profiler) {
+pub fn prepare_contacts(benchmarker: impl Benchmarker) {
     let mut rigid_body_manager = RigidBodyManager::new();
     let mut collision_world = CollisionWorld::new();
 
@@ -44,7 +44,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
 
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig::default());
 
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         constraint_manager.prepare_specific_contacts_only(
             &rigid_body_manager,
             contacts
@@ -54,7 +54,7 @@ pub fn prepare_contacts(profiler: impl Profiler) {
     });
 }
 
-pub fn solve_contact_velocities(profiler: impl Profiler) {
+pub fn solve_contact_velocities(benchmarker: impl Benchmarker) {
     let mut rigid_body_manager = RigidBodyManager::new();
     let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
@@ -72,14 +72,14 @@ pub fn solve_contact_velocities(profiler: impl Profiler) {
         &(),
     );
 
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let mut solver = constraint_manager.solver().clone();
         solver.compute_constrained_velocities();
         solver
     });
 }
 
-pub fn correct_contact_configurations(profiler: impl Profiler) {
+pub fn correct_contact_configurations(benchmarker: impl Benchmarker) {
     let mut rigid_body_manager = RigidBodyManager::new();
     let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
@@ -97,7 +97,7 @@ pub fn correct_contact_configurations(profiler: impl Profiler) {
         &(),
     );
 
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let mut solver = constraint_manager.solver().clone();
         solver.compute_corrected_configurations();
         solver
