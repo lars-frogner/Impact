@@ -16,9 +16,9 @@ use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{Shader, ShaderManager},
+    timestamp_query::TimestampQueryRegistry,
     wgpu,
 };
 use impact_mesh::{self, VertexAttributeSet, VertexPosition, gpu_resource::VertexBufferable};
@@ -316,7 +316,7 @@ impl PostprocessingRenderPass {
         let depth_stencil_attachment =
             self.depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = begin_single_render_pass(
+        let (mut render_pass, _timestamp_span_guard) = begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
             &color_attachments,

@@ -8,7 +8,7 @@ use crate::{
     window::Window,
 };
 use anyhow::Result;
-use impact_gpu::{device::GraphicsDevice, query::TimestampQueryRegistry, wgpu};
+use impact_gpu::{device::GraphicsDevice, timestamp_query::TimestampQueryRegistry, wgpu};
 use impact_rendering::surface::RenderingSurface;
 use parking_lot::Mutex;
 use rendering::{EguiRenderer, EguiRenderingInput};

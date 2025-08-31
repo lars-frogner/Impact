@@ -7,11 +7,20 @@ pub mod screen_capture;
 use crate::{
     lock_order::OrderedRwLock, resource::ResourceManager, tasks::RenderToSurface, ui::UserInterface,
 };
+use allocator_api2::alloc::Allocator;
 use anyhow::Result;
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryManager, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    storage::StorageGPUBufferManager, texture::mipmap::MipmapperGenerator, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry,
+    device::GraphicsDevice,
+    resource_group::GPUResourceGroupManager,
+    shader::ShaderManager,
+    storage::StorageGPUBufferManager,
+    texture::mipmap::MipmapperGenerator,
+    timestamp_query::{
+        TimestampQueryManager,
+        external::{ExternalGPUProfiler, TracyGPUProfiler},
+    },
+    wgpu,
 };
 use impact_light::{LightManager, shadow_map::ShadowMappingConfig};
 use impact_rendering::{
@@ -120,11 +129,17 @@ impl RenderingSystem {
             &bind_group_layout_registry,
         )?;
 
-        let timestamp_query_manager = TimestampQueryManager::new(
+        let mut timestamp_query_manager = TimestampQueryManager::new(
             &graphics_device,
             NonZeroU32::new(128).unwrap(),
             config.basic.timings_enabled,
         );
+
+        timestamp_query_manager.set_external_profiler(if cfg!(feature = "tracy") {
+            ExternalGPUProfiler::Tracy(TracyGPUProfiler::new(&graphics_device, Some("Rendering"))?)
+        } else {
+            ExternalGPUProfiler::None
+        });
 
         Ok(Self {
             graphics_device,
@@ -425,9 +440,9 @@ impl RenderingSystem {
     /// Loads the timestamps recorded during rendering. Call after
     /// [`Self::render_to_surface`]. This method will wait for the GPU to finish
     /// rendering.
-    pub fn load_recorded_timing_results(&mut self) -> Result<()> {
+    pub fn load_recorded_timing_results<A: Allocator>(&mut self, arena: A) -> Result<()> {
         self.timestamp_query_manager
-            .load_recorded_timing_results(&self.graphics_device)?;
+            .load_recorded_timing_results(arena, &self.graphics_device)?;
         self.timestamp_query_manager.reset();
         Ok(())
     }

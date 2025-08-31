@@ -8,11 +8,11 @@ pub mod buffer;
 pub mod device;
 pub mod indirect;
 pub mod push_constant;
-pub mod query;
 pub mod resource_group;
 pub mod shader;
 pub mod storage;
 pub mod texture;
+pub mod timestamp_query;
 pub mod uniform;
 pub mod vertex_attribute_ranges;
 

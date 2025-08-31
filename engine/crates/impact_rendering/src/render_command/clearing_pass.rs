@@ -7,7 +7,7 @@ use crate::{
     render_command::{StencilValue, begin_single_render_pass},
 };
 use anyhow::Result;
-use impact_gpu::{query::TimestampQueryRegistry, wgpu};
+use impact_gpu::{timestamp_query::TimestampQueryRegistry, wgpu};
 use std::borrow::Cow;
 
 /// Pass for clearing the render attachments.

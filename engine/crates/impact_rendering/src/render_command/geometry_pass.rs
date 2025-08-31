@@ -19,8 +19,8 @@ use impact_containers::{HashMap, HashSet};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
-    query::TimestampQueryRegistry,
     shader::{ShaderManager, template::SpecificShaderTemplate},
+    timestamp_query::{TimestampQueryRegistry, external::ExternalGPUSpanGuard},
     wgpu,
 };
 use impact_material::{Material, gpu_resource::GPUMaterialTemplate};
@@ -438,9 +438,9 @@ impl GeometryPass {
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &'a mut wgpu::CommandEncoder,
-    ) -> Result<Option<wgpu::RenderPass<'a>>> {
+    ) -> Result<(Option<wgpu::RenderPass<'a>>, ExternalGPUSpanGuard)> {
         let Some(camera_gpu_resources) = gpu_resources.camera() else {
-            return Ok(None);
+            return Ok((None, ExternalGPUSpanGuard::None));
         };
 
         let color_attachments = self.create_color_attachments(render_attachment_texture_manager);
@@ -448,7 +448,7 @@ impl GeometryPass {
         let depth_stencil_attachment =
             Self::create_depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = begin_single_render_pass(
+        let (mut render_pass, timestamp_span_guard) = begin_single_render_pass(
             command_encoder,
             timestamp_recorder,
             &color_attachments,
@@ -585,6 +585,6 @@ impl GeometryPass {
             n_models
         );
 
-        Ok(Some(render_pass))
+        Ok((Some(render_pass), timestamp_span_guard))
     }
 }

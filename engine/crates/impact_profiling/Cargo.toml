@@ -5,8 +5,18 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
+[features]
+criterion = ["dep:criterion"]
+tracy = ["dep:tracy-client"]
+
 [dependencies]
-criterion = "0.6"
+criterion = { version = "0.6", optional = true }
+tracy-client = { version = "0.18.2", optional = true, default-features = false, features = [
+    "enable",
+    "ondemand",
+    "only-localhost",
+    "sampling",
+] } # Compatible with Tracy v0.12.2
 
 [lints]
 workspace = true

@@ -11,8 +11,8 @@ use crate::{
 use anyhow::Result;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, resource_group::GPUResourceGroupManager, shader::ShaderManager,
-    wgpu,
+    resource_group::GPUResourceGroupManager, shader::ShaderManager,
+    timestamp_query::TimestampQueryRegistry, wgpu,
 };
 use roc_integration::roc;
 use std::{borrow::Cow, fmt::Display};

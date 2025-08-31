@@ -10,6 +10,7 @@ build = "build.rs"
 [features]
 arbitrary = ["dep:arbitrary"]
 serde = ["dep:serde"]
+tracy = ["impact_profiling/tracy"]
 
 [dependencies]
 aho-corasick = "1.1"
@@ -20,6 +21,7 @@ bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
+impact_profiling = { path = "../impact_profiling" }
 naga = { version = "25.0", features = ["wgsl-out"] }
 ordered-float = "5.0"
 parking_lot = { workspace = true }

@@ -115,6 +115,7 @@ fuzzing = [
 ]
 jemalloc = ["impact/jemalloc"]
 roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
+tracy = ["impact/tracy"]
 
 [dependencies]
 anyhow = "1.0"

@@ -13,8 +13,8 @@ use anyhow::{Result, anyhow};
 use impact_containers::HashSet;
 use impact_geometry::{CubemapFace, Frustum, OrientedBox};
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
-    query::TimestampQueryRegistry, shader::ShaderManager, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, shader::ShaderManager,
+    timestamp_query::TimestampQueryRegistry, wgpu,
 };
 use impact_light::{
     LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES,
@@ -306,7 +306,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                 let color_attachments = Self::color_attachments(shadow_cubemap_face_texture_view);
 
-                let mut render_pass = begin_single_render_pass(
+                let (mut render_pass, _span_guard) = begin_single_render_pass(
                     command_encoder,
                     timestamp_recorder,
                     &color_attachments,
@@ -670,7 +670,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                 let color_attachments = Self::color_attachments(shadow_map_cascade_texture_view);
 
-                let mut render_pass = begin_single_render_pass(
+                let (mut render_pass, _timestamp_span_guard) = begin_single_render_pass(
                     command_encoder,
                     timestamp_recorder,
                     &color_attachments,

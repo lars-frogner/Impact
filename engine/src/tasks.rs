@@ -141,7 +141,9 @@ define_task!(
                 return Ok(());
             }
 
-            renderer.load_recorded_timing_results()?;
+            TaskArenas::with(|arena| {
+                renderer.load_recorded_timing_results(arena)
+            })?;
 
             renderer.downgrade().update_exposure()
         })

@@ -1,10 +1,14 @@
-//! GPU queries.
+//! GPU timestamp queries.
+
+pub mod external;
 
 use crate::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
 };
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::Result;
+use external::{ExternalGPUProfiler, ExternalGPUSpanGuard};
 use std::{borrow::Cow, iter, num::NonZeroU32, time::Duration};
 
 /// Helper for performing timestamp GPU queries.
@@ -17,6 +21,7 @@ pub struct TimestampQueryManager {
     timestamp_pairs: Vec<Cow<'static, str>>,
     last_timing_results: Vec<(Cow<'static, str>, Duration)>,
     next_batch_start_offset_in_result_buffer: u64,
+    external_profiler: ExternalGPUProfiler,
     enabled: bool,
 }
 
@@ -90,6 +95,7 @@ impl TimestampQueryManager {
             timestamp_pairs: Vec::new(),
             last_timing_results: Vec::new(),
             next_batch_start_offset_in_result_buffer: 0,
+            external_profiler: ExternalGPUProfiler::None,
             enabled,
         }
     }
@@ -108,6 +114,11 @@ impl TimestampQueryManager {
             "Timestamp queries are not supported by the current graphics device"
         );
         self.enabled = enabled;
+    }
+
+    /// Sets the given external GPU profiler to feeds recorded timestamps to.
+    pub fn set_external_profiler(&mut self, external_profiler: ExternalGPUProfiler) {
+        self.external_profiler = external_profiler;
     }
 
     /// Clears all registered timestamp pairs.
@@ -148,7 +159,11 @@ impl TimestampQueryManager {
     /// # Errors
     /// Returns an error if the recorded timestamps could not be read from the
     /// GPU buffer.
-    pub fn load_recorded_timing_results(&mut self, graphics_device: &GraphicsDevice) -> Result<()> {
+    pub fn load_recorded_timing_results<A: Allocator>(
+        &mut self,
+        arena: A,
+        graphics_device: &GraphicsDevice,
+    ) -> Result<()> {
         self.last_timing_results.clear();
 
         if self.timestamp_pairs.is_empty() {
@@ -161,7 +176,8 @@ impl TimestampQueryManager {
         let timestamps = self.timestamp_result_buffer.map_and_process_buffer_bytes(
             graphics_device,
             |bytes| {
-                let mut timestamps = vec![0_u64; 2 * self.timestamp_pairs.len()];
+                let mut timestamps = AVec::new_in(arena);
+                timestamps.resize(2 * self.timestamp_pairs.len(), 0_u64);
                 let timestamp_bytes = bytemuck::cast_slice_mut(&mut timestamps);
                 timestamp_bytes.copy_from_slice(bytes);
                 timestamps
@@ -196,6 +212,8 @@ impl TimestampQueryManager {
             Cow::Borrowed("Start to end"),
             Duration::from_nanos(start_to_end_duration_nanos.round() as u64),
         ));
+
+        self.external_profiler.load_spans(&timestamps);
 
         Ok(())
     }
@@ -251,19 +269,26 @@ impl TimestampQueryManager {
         self.next_batch_start_offset_in_result_buffer = batch_end_offset_in_result_buffer;
     }
 
+    #[track_caller]
     fn register_writes_and_get_query_indices(
         &mut self,
         tag: Cow<'static, str>,
-    ) -> Option<(u32, u32)> {
+    ) -> (Option<(u32, u32)>, ExternalGPUSpanGuard) {
         if !self.enabled {
-            return None;
+            return (None, ExternalGPUSpanGuard::None);
         }
 
         let idx = self.next_timestamp_pair_idx_if_valid();
 
+        let (start_idx, end_idx) = (2 * idx, 2 * idx + 1);
+
+        let span_guard = self
+            .external_profiler
+            .add_span(tag.as_ref(), start_idx, end_idx);
+
         self.timestamp_pairs.push(tag);
 
-        Some((2 * idx, 2 * idx + 1))
+        (Some((start_idx, end_idx)), span_guard)
     }
 
     fn next_timestamp_pair_idx_if_valid(&self) -> u32 {
@@ -285,16 +310,23 @@ impl TimestampQueryRegistry<'_> {
     /// Registers a pair of timestamp writes for a render pass, one at the
     /// beginning of the pass and one at the end. Returns the `timestamp_writes`
     /// parameter to use in the [`wgpu::RenderPassDescriptor`] for the pass.
+    #[track_caller]
     pub fn register_timestamp_writes_for_single_render_pass(
         &mut self,
         tag: Cow<'static, str>,
-    ) -> Option<wgpu::RenderPassTimestampWrites<'_>> {
-        let (start_idx, end_idx) = self.manager.register_writes_and_get_query_indices(tag)?;
-        Some(wgpu::RenderPassTimestampWrites {
-            query_set: self.manager.query_set.as_ref().unwrap(),
-            beginning_of_pass_write_index: Some(start_idx),
-            end_of_pass_write_index: Some(end_idx),
-        })
+    ) -> (
+        Option<wgpu::RenderPassTimestampWrites<'_>>,
+        ExternalGPUSpanGuard,
+    ) {
+        let (indices, span_guard) = self.manager.register_writes_and_get_query_indices(tag);
+        (
+            indices.map(|(start_idx, end_idx)| wgpu::RenderPassTimestampWrites {
+                query_set: self.manager.query_set.as_ref().unwrap(),
+                beginning_of_pass_write_index: Some(start_idx),
+                end_of_pass_write_index: Some(end_idx),
+            }),
+            span_guard,
+        )
     }
 
     /// Registers a pair of timestamp writes for a sequence of the given number
@@ -305,50 +337,64 @@ impl TimestampQueryRegistry<'_> {
     ///
     /// # Panics
     /// If `n_passes` is zero.
+    #[track_caller]
     pub fn register_timestamp_writes_for_first_and_last_of_render_passes(
         &mut self,
         n_passes: usize,
         tag: Cow<'static, str>,
-    ) -> [Option<wgpu::RenderPassTimestampWrites<'_>>; 2] {
+    ) -> (
+        [Option<wgpu::RenderPassTimestampWrites<'_>>; 2],
+        ExternalGPUSpanGuard,
+    ) {
         assert!(n_passes > 0);
-        if let Some((start_idx, end_idx)) = self.manager.register_writes_and_get_query_indices(tag)
-        {
+        let (indices, span_guard) = self.manager.register_writes_and_get_query_indices(tag);
+        if let Some((start_idx, end_idx)) = indices {
             let (end_of_first_pass_write_index, end_of_last_pass_write_index) = if n_passes == 1 {
                 (Some(end_idx), None)
             } else {
                 (None, Some(end_idx))
             };
             let query_set = self.manager.query_set.as_ref().unwrap();
-            [
-                Some(wgpu::RenderPassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index: Some(start_idx),
-                    end_of_pass_write_index: end_of_first_pass_write_index,
-                }),
-                Some(wgpu::RenderPassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index: None,
-                    end_of_pass_write_index: end_of_last_pass_write_index,
-                }),
-            ]
+            (
+                [
+                    Some(wgpu::RenderPassTimestampWrites {
+                        query_set,
+                        beginning_of_pass_write_index: Some(start_idx),
+                        end_of_pass_write_index: end_of_first_pass_write_index,
+                    }),
+                    Some(wgpu::RenderPassTimestampWrites {
+                        query_set,
+                        beginning_of_pass_write_index: None,
+                        end_of_pass_write_index: end_of_last_pass_write_index,
+                    }),
+                ],
+                span_guard,
+            )
         } else {
-            [None, None]
+            ([None, None], span_guard)
         }
     }
 
     /// Registers a pair of timestamp writes for a compute pass, one at the
     /// beginning of the pass and one at the end. Returns the `timestamp_writes`
     /// parameter to use in the [`wgpu::ComputePassDescriptor`] for the pass.
+    #[track_caller]
     pub fn register_timestamp_writes_for_single_compute_pass(
         &mut self,
         tag: Cow<'static, str>,
-    ) -> Option<wgpu::ComputePassTimestampWrites<'_>> {
-        let (start_idx, end_idx) = self.manager.register_writes_and_get_query_indices(tag)?;
-        Some(wgpu::ComputePassTimestampWrites {
-            query_set: self.manager.query_set.as_ref().unwrap(),
-            beginning_of_pass_write_index: Some(start_idx),
-            end_of_pass_write_index: Some(end_idx),
-        })
+    ) -> (
+        Option<wgpu::ComputePassTimestampWrites<'_>>,
+        ExternalGPUSpanGuard,
+    ) {
+        let (indices, span_guard) = self.manager.register_writes_and_get_query_indices(tag);
+        (
+            indices.map(|(start_idx, end_idx)| wgpu::ComputePassTimestampWrites {
+                query_set: self.manager.query_set.as_ref().unwrap(),
+                beginning_of_pass_write_index: Some(start_idx),
+                end_of_pass_write_index: Some(end_idx),
+            }),
+            span_guard,
+        )
     }
 
     /// Registers a pair of timestamp writes for a sequence of the given number
@@ -359,33 +405,40 @@ impl TimestampQueryRegistry<'_> {
     ///
     /// # Panics
     /// If `n_passes` is zero.
+    #[track_caller]
     pub fn register_timestamp_writes_for_first_and_last_of_compute_passes(
         &mut self,
         n_passes: usize,
         tag: Cow<'static, str>,
-    ) -> [Option<wgpu::ComputePassTimestampWrites<'_>>; 2] {
-        if let Some((start_idx, end_idx)) = self.manager.register_writes_and_get_query_indices(tag)
-        {
+    ) -> (
+        [Option<wgpu::ComputePassTimestampWrites<'_>>; 2],
+        ExternalGPUSpanGuard,
+    ) {
+        let (indices, span_guard) = self.manager.register_writes_and_get_query_indices(tag);
+        if let Some((start_idx, end_idx)) = indices {
             let (end_of_first_pass_write_index, end_of_last_pass_write_index) = if n_passes == 1 {
                 (Some(end_idx), None)
             } else {
                 (None, Some(end_idx))
             };
             let query_set = self.manager.query_set.as_ref().unwrap();
-            [
-                Some(wgpu::ComputePassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index: Some(start_idx),
-                    end_of_pass_write_index: end_of_first_pass_write_index,
-                }),
-                Some(wgpu::ComputePassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index: None,
-                    end_of_pass_write_index: end_of_last_pass_write_index,
-                }),
-            ]
+            (
+                [
+                    Some(wgpu::ComputePassTimestampWrites {
+                        query_set,
+                        beginning_of_pass_write_index: Some(start_idx),
+                        end_of_pass_write_index: end_of_first_pass_write_index,
+                    }),
+                    Some(wgpu::ComputePassTimestampWrites {
+                        query_set,
+                        beginning_of_pass_write_index: None,
+                        end_of_pass_write_index: end_of_last_pass_write_index,
+                    }),
+                ],
+                span_guard,
+            )
         } else {
-            [None, None]
+            ([None, None], span_guard)
         }
     }
 
@@ -450,4 +503,61 @@ pub fn print_timing_results(timings: &[(Cow<'_, str>, Duration)]) {
             width = longest_tag_len
         );
     }
+}
+
+// Obtains the current timestamp in terms of ticks on the GPU.
+fn obtain_current_gpu_timestamp(graphics_device: &GraphicsDevice) -> Result<u64> {
+    assert!(graphics_device.supports_features(wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS));
+
+    let query_resolve_buffer = GPUBuffer::new_query_buffer(
+        graphics_device,
+        NonZeroU32::new(1).unwrap(),
+        Cow::Borrowed("Timestamp for calibration"),
+    );
+
+    let timestamp_result_buffer = GPUBuffer::new_result_buffer(
+        graphics_device,
+        query_resolve_buffer.buffer_size(),
+        Cow::Borrowed("Timestamp for calibration"),
+    );
+
+    let query_set = graphics_device
+        .device()
+        .create_query_set(&wgpu::QuerySetDescriptor {
+            label: Some("Query set for timestamp calibration"),
+            count: 1,
+            ty: wgpu::QueryType::Timestamp,
+        });
+
+    let mut command_encoder =
+        graphics_device
+            .device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Command encoder for timestamp calibration"),
+            });
+
+    command_encoder.write_timestamp(&query_set, 0);
+
+    command_encoder.resolve_query_set(&query_set, 0..1, query_resolve_buffer.buffer(), 0);
+    query_resolve_buffer.set_n_valid_bytes(query_resolve_buffer.buffer_size());
+
+    command_encoder.copy_buffer_to_buffer(
+        query_resolve_buffer.buffer(),
+        0,
+        timestamp_result_buffer.buffer(),
+        0,
+        query_resolve_buffer.buffer_size() as u64,
+    );
+    timestamp_result_buffer.set_n_valid_bytes(query_resolve_buffer.buffer_size());
+
+    graphics_device.queue().submit([command_encoder.finish()]);
+
+    let timestamp =
+        timestamp_result_buffer.map_and_process_buffer_bytes(graphics_device, |bytes| {
+            let mut bytes_arr = [0; 8];
+            bytes_arr.copy_from_slice(bytes);
+            u64::from_le_bytes(bytes_arr)
+        })?;
+
+    Ok(timestamp)
 }
