@@ -2,18 +2,18 @@ use super::{
     F32_TRIPLE, F32_TUPLE, F32TripleComp, F64_TRIPLE, F64_TUPLE, ZeroSized, populate_world,
 };
 use crate::world::World;
-use impact_profiling::Profiler;
+use impact_profiling::benchmark::Benchmarker;
 
-pub fn create_single_entity_single_comp(profiler: impl Profiler) {
-    profiler.profile(&mut || {
+pub fn create_single_entity_single_comp(benchmarker: impl Benchmarker) {
+    benchmarker.benchmark(&mut || {
         let mut world = World::default();
         world.create_entity(&F32_TRIPLE).unwrap();
         world
     });
 }
 
-pub fn create_single_entity_multiple_comps(profiler: impl Profiler) {
-    profiler.profile(&mut || {
+pub fn create_single_entity_multiple_comps(benchmarker: impl Benchmarker) {
+    benchmarker.benchmark(&mut || {
         let mut world = World::default();
         world
             .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
@@ -22,8 +22,8 @@ pub fn create_single_entity_multiple_comps(profiler: impl Profiler) {
     });
 }
 
-pub fn create_multiple_identical_entities(profiler: impl Profiler) {
-    profiler.profile(&mut || {
+pub fn create_multiple_identical_entities(benchmarker: impl Benchmarker) {
+    benchmarker.benchmark(&mut || {
         let mut world = World::default();
         world
             .create_entities((
@@ -37,8 +37,8 @@ pub fn create_multiple_identical_entities(profiler: impl Profiler) {
     });
 }
 
-pub fn create_multiple_different_entities(profiler: impl Profiler) {
-    profiler.profile(&mut || {
+pub fn create_multiple_different_entities(benchmarker: impl Benchmarker) {
+    benchmarker.benchmark(&mut || {
         let mut world = World::default();
         world.create_entity(&ZeroSized).unwrap();
         world.create_entity(&F32_TUPLE).unwrap();
@@ -60,33 +60,33 @@ pub fn create_multiple_different_entities(profiler: impl Profiler) {
     });
 }
 
-pub fn get_only_entity(profiler: impl Profiler) {
+pub fn get_only_entity(benchmarker: impl Benchmarker) {
     let mut world = World::default();
     let entity_id = world
         .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
         .unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let entry = world.entity(entity_id);
         entry.n_components()
     });
 }
 
-pub fn get_one_of_many_different_entities(profiler: impl Profiler) {
+pub fn get_one_of_many_different_entities(benchmarker: impl Benchmarker) {
     let mut world = World::default();
     let entities = populate_world(&mut world);
     let entity = entities[21];
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let entry = world.entity(entity);
         entry.n_components()
     });
 }
 
-pub fn get_component_of_only_entity(profiler: impl Profiler) {
+pub fn get_component_of_only_entity(benchmarker: impl Benchmarker) {
     let mut world = World::default();
     let entity_id = world
         .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
         .unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let entry = world.entity(entity_id);
         let comp_entry = entry.component::<F32TripleComp>();
         let comp = comp_entry.access();
@@ -94,11 +94,11 @@ pub fn get_component_of_only_entity(profiler: impl Profiler) {
     });
 }
 
-pub fn get_component_of_one_of_many_different_entities(profiler: impl Profiler) {
+pub fn get_component_of_one_of_many_different_entities(benchmarker: impl Benchmarker) {
     let mut world = World::default();
     let entities = populate_world(&mut world);
     let entity = entities[21];
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let entry = world.entity(entity);
         let comp_entry = entry.component::<F32TripleComp>();
         let comp = comp_entry.access();
@@ -106,12 +106,12 @@ pub fn get_component_of_one_of_many_different_entities(profiler: impl Profiler) 
     });
 }
 
-pub fn modify_component_of_only_entity(profiler: impl Profiler) {
+pub fn modify_component_of_only_entity(benchmarker: impl Benchmarker) {
     let mut world = World::default();
     let entity_id = world
         .create_entity((&F32_TUPLE, &F64_TUPLE, &F32_TRIPLE, &F64_TRIPLE))
         .unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let entry = world.entity(entity_id);
         let mut comp_entry = entry.component_mut::<F32TripleComp>();
         let comp = comp_entry.access();
@@ -120,11 +120,11 @@ pub fn modify_component_of_only_entity(profiler: impl Profiler) {
     });
 }
 
-pub fn modify_component_of_one_of_many_different_entities(profiler: impl Profiler) {
+pub fn modify_component_of_one_of_many_different_entities(benchmarker: impl Benchmarker) {
     let mut world = World::default();
     let entities = populate_world(&mut world);
     let entity = entities[21];
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let entry = world.entity(entity);
         let mut comp_entry = entry.component_mut::<F32TripleComp>();
         let comp = comp_entry.access();

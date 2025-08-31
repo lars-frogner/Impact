@@ -2,7 +2,7 @@
 
 use impact_geometry::{Plane, Sphere};
 use impact_physics::quantities::Position;
-use impact_profiling::Profiler;
+use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     collidable,
@@ -15,30 +15,30 @@ use impact_voxel::{
 use nalgebra::{Isometry3, Translation, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::hint::black_box;
 
-pub fn construction(profiler: impl Profiler) {
+pub fn construction(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         BoxSDFGenerator::new([200.0; 3]),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
-    profiler
-        .profile(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap());
+    benchmarker
+        .benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap());
 }
 
-pub fn update_internal_adjacencies_for_all_chunks(profiler: impl Profiler) {
+pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.update_internal_adjacencies_for_all_chunks();
     });
     black_box(object);
 }
 
-pub fn update_connected_regions_for_all_chunks(profiler: impl Profiler) {
+pub fn update_connected_regions_for_all_chunks(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
@@ -46,13 +46,13 @@ pub fn update_connected_regions_for_all_chunks(profiler: impl Profiler) {
     );
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
     object.update_internal_adjacencies_for_all_chunks();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.update_local_connected_regions_for_all_chunks();
     });
     black_box(object);
 }
 
-pub fn update_all_chunk_boundary_adjacencies(profiler: impl Profiler) {
+pub fn update_all_chunk_boundary_adjacencies(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
@@ -61,13 +61,13 @@ pub fn update_all_chunk_boundary_adjacencies(profiler: impl Profiler) {
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
     object.update_internal_adjacencies_for_all_chunks();
     object.update_local_connected_regions_for_all_chunks();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.update_all_chunk_boundary_adjacencies();
     });
     black_box(object);
 }
 
-pub fn resolve_connected_regions_between_all_chunks(profiler: impl Profiler) {
+pub fn resolve_connected_regions_between_all_chunks(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
@@ -77,39 +77,39 @@ pub fn resolve_connected_regions_between_all_chunks(profiler: impl Profiler) {
     object.update_internal_adjacencies_for_all_chunks();
     object.update_local_connected_regions_for_all_chunks();
     object.update_all_chunk_boundary_adjacencies();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.resolve_connected_regions_between_all_chunks();
     });
     black_box(object);
 }
 
-pub fn update_occupied_voxel_ranges(profiler: impl Profiler) {
+pub fn update_occupied_voxel_ranges(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.update_occupied_voxel_ranges();
     });
     black_box(object);
 }
 
-pub fn compute_all_derived_state(profiler: impl Profiler) {
+pub fn compute_all_derived_state(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.compute_all_derived_state();
     });
     black_box(object);
 }
 
-pub fn initialize_inertial_properties(profiler: impl Profiler) {
+pub fn initialize_inertial_properties(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
@@ -117,22 +117,22 @@ pub fn initialize_inertial_properties(profiler: impl Profiler) {
     );
     let voxel_type_densities = [1.0; 256];
     let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities)
     });
 }
 
-pub fn create_mesh(profiler: impl Profiler) {
+pub fn create_mesh(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SphereSDFGenerator::new(100.0),
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
-    profiler.profile(&mut || ChunkedVoxelObjectMesh::create(&object));
+    benchmarker.benchmark(&mut || ChunkedVoxelObjectMesh::create(&object));
 }
 
-pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(profiler: impl Profiler) {
+pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let plane_displacement = 0.4 * object_radius;
     let generator = SDFVoxelGenerator::new(
@@ -145,7 +145,7 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(profiler: impl P
         UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
         plane_displacement,
     );
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
             &plane,
             &mut |indices, position, voxel| {
@@ -155,7 +155,7 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(profiler: impl P
     });
 }
 
-pub fn obtain_surface_voxels_within_sphere(profiler: impl Profiler) {
+pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = SDFVoxelGenerator::new(
@@ -169,7 +169,7 @@ pub fn obtain_surface_voxels_within_sphere(profiler: impl Profiler) {
             - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
         sphere_radius,
     );
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.for_each_surface_voxel_maybe_intersecting_sphere(
             &sphere,
             &mut |indices, position, voxel| {
@@ -179,7 +179,7 @@ pub fn obtain_surface_voxels_within_sphere(profiler: impl Profiler) {
     });
 }
 
-pub fn modify_voxels_within_sphere(profiler: impl Profiler) {
+pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = SDFVoxelGenerator::new(
@@ -193,14 +193,14 @@ pub fn modify_voxels_within_sphere(profiler: impl Profiler) {
             - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
         sphere_radius,
     );
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
             black_box((indices, position, voxel));
         });
     });
 }
 
-pub fn split_off_disconnected_region(profiler: impl Profiler) {
+pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SDFUnion::new(
@@ -212,10 +212,12 @@ pub fn split_off_disconnected_region(profiler: impl Profiler) {
         SameVoxelTypeGenerator::new(VoxelType::default()),
     );
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
-    profiler.profile(&mut || object.clone().split_off_any_disconnected_region().unwrap());
+    benchmarker.benchmark(&mut || object.clone().split_off_any_disconnected_region().unwrap());
 }
 
-pub fn split_off_disconnected_region_with_inertial_property_transfer(profiler: impl Profiler) {
+pub fn split_off_disconnected_region_with_inertial_property_transfer(
+    benchmarker: impl Benchmarker,
+) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         SDFUnion::new(
@@ -230,7 +232,7 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(profiler: i
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     let inertial_property_manager =
         VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         let mut inertial_property_manager = inertial_property_manager.clone();
         let mut disconnected_inertial_property_manager =
             VoxelObjectInertialPropertyManager::zeroed();
@@ -253,7 +255,7 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(profiler: i
     });
 }
 
-pub fn update_mesh(profiler: impl Profiler) {
+pub fn update_mesh(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = SDFVoxelGenerator::new(
@@ -270,7 +272,7 @@ pub fn update_mesh(profiler: impl Profiler) {
         sphere_radius,
     );
 
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
             black_box((indices, position, voxel));
         });
@@ -279,7 +281,7 @@ pub fn update_mesh(profiler: impl Profiler) {
     });
 }
 
-pub fn obtain_sphere_voxel_object_contacts(profiler: impl Profiler) {
+pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = SDFVoxelGenerator::new(
@@ -296,7 +298,7 @@ pub fn obtain_sphere_voxel_object_contacts(profiler: impl Profiler) {
         ),
         UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
     );
-    profiler.profile(&mut || {
+    benchmarker.benchmark(&mut || {
         collidable::for_each_sphere_voxel_object_contact(
             &object,
             &transform_to_object_space,

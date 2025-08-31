@@ -14,12 +14,12 @@ mod main {
 
     #[derive(Debug, Subcommand)]
     enum Command {
-        #[cfg(feature = "profiling")]
-        /// Run a profiling target
-        Profile {
-            /// Profiling target to run
+        #[cfg(feature = "benchmark")]
+        /// Run a benchmarking target
+        Benchmark {
+            /// Benchmarking target to run
             #[arg(short, long, value_enum)]
-            target: impact_ecs::profiling::profile::Target,
+            target: impact_ecs::benchmark::Target,
 
             /// Number of seconds to run the target for (it will always be run at least
             /// once)
@@ -31,28 +31,28 @@ mod main {
             #[arg(long, default_value_t = 0.0)]
             delay: f64,
         },
-        #[cfg(not(feature = "profiling"))]
-        /// Run a profiling target (requires the `profiling` feature)
-        Profile,
+        #[cfg(not(feature = "benchmark"))]
+        /// Run a benchmarking target (requires the `benchmark` feature)
+        Benchmark,
     }
 
     pub fn main() -> Result<()> {
         let cli = Cli::parse();
 
         match cli.command {
-            #[cfg(feature = "profiling")]
-            Command::Profile {
+            #[cfg(feature = "benchmark")]
+            Command::Benchmark {
                 target,
                 duration,
                 delay,
             } => {
-                impact_ecs::profiling::profile::profile(target, duration, delay);
+                impact_ecs::benchmark::benchmark(target, duration, delay);
                 Ok(())
             }
-            #[cfg(not(feature = "profiling"))]
-            Command::Profile => {
+            #[cfg(not(feature = "benchmark"))]
+            Command::Benchmark => {
                 anyhow::bail!(
-                    "The `profile` subcommand requires the `profiling` feature to be enabled."
+                    "The `benchmark` subcommand requires the `benchmark` feature to be enabled."
                 )
             }
         }

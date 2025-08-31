@@ -189,13 +189,13 @@ roc_codegen = [
     "roc_integration/roc_codegen",
 ]
 cli = ["dep:clap"]
-criterion = ["profiling", "impact_profiling/criterion"]
+criterion = ["benchmark", "impact_profiling/criterion"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
 ply = ["impact_mesh/ply"]
-profiling = ["dep:impact_profiling"]
+benchmark = []
 obj = ["impact_mesh/obj"]
 unchecked = ["impact_voxel/unchecked"]
-tracy = ["profiling", "impact_profiling/tracy"]
+tracy = ["impact_profiling/tracy"]
 window = ["dep:winit", "impact_rendering/window"]
 
 [dependencies]
@@ -234,7 +234,7 @@ impact_physics = { path = "crates/impact_physics", features = [
     "ecs",
     "serde",
 ] }
-impact_profiling = { path = "crates/impact_profiling", optional = true }
+impact_profiling = { path = "crates/impact_profiling" }
 impact_rendering = { path = "crates/impact_rendering", features = ["serde"] }
 impact_resource = { path = "crates/impact_resource" }
 impact_scene = { path = "crates/impact_scene", features = ["ecs"] }

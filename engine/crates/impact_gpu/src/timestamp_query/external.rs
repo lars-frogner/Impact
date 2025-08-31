@@ -27,12 +27,12 @@ pub enum ExternalGPUSpanGuard {
 
 /// Helper for uploading GPU timestamps to a Tracy server.
 pub struct TracyGPUProfiler {
-    ctx: impact_profiling::tracy::GpuContext,
+    ctx: impact_profiling::instrumentation::tracy::GpuContext,
     spans: Arc<Mutex<Vec<TracyGPUSpan>>>,
 }
 
 struct TracyGPUSpan {
-    span: impact_profiling::tracy::GpuSpan,
+    span: impact_profiling::instrumentation::tracy::GpuSpan,
     start_idx: u32,
     end_idx: u32,
 }
@@ -67,7 +67,7 @@ impl ExternalGPUProfiler {
 
 impl TracyGPUProfiler {
     pub fn new(graphics_device: &GraphicsDevice, name: Option<&str>) -> Result<Self> {
-        use impact_profiling::tracy;
+        use impact_profiling::instrumentation::tracy;
 
         if !graphics_device.supports_features(wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS) {
             bail!(

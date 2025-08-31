@@ -27,8 +27,8 @@ pub mod ui;
 #[cfg(feature = "window")]
 pub mod window;
 
-#[cfg(feature = "profiling")]
-pub mod profiling;
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 
 pub use impact_camera;
 pub use impact_containers;

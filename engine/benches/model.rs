@@ -1,5 +1,5 @@
-use impact::profiling::benchmarks::model;
-use impact_profiling::{criterion, define_criterion_target};
+use impact::benchmark::benchmarks::model;
+use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(model, add_feature_to_dynamic_instance_buffer_from_storage);
 define_criterion_target!(

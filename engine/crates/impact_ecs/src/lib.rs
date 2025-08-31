@@ -8,8 +8,8 @@ pub mod component;
 pub mod metadata;
 pub mod world;
 
-#[cfg(feature = "profiling")]
-pub mod profiling;
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 
 /// Derive macro generating an impl of the trait
 /// [`Component`](component::Component).

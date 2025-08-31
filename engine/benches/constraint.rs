@@ -1,5 +1,5 @@
-use impact::profiling::benchmarks::constraint;
-use impact_profiling::{criterion, define_criterion_target};
+use impact::benchmark::benchmarks::constraint;
+use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(constraint, prepare_contacts);
 define_criterion_target!(constraint, solve_contact_velocities);
