@@ -4,6 +4,7 @@ use anyhow::Error;
 use crossbeam_channel::{Receiver, Sender};
 use impact_containers::HashMap;
 use impact_math::Hash64;
+use impact_profiling::instrumentation;
 use parking_lot::{Condvar, Mutex};
 use std::{
     backtrace::BacktraceStatus,
@@ -574,6 +575,8 @@ impl Worker {
         let handle = thread::spawn(move || {
             let worker_id = communicator.channel().owning_worker_id();
             impact_log::trace!("Worker {worker_id} spawned");
+
+            instrumentation::set_thread_name(&format!("Worker {worker_id}"));
 
             loop {
                 let instruction = communicator.channel().wait_for_next_instruction();

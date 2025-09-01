@@ -34,6 +34,8 @@ impl Engine {
 
         let iter_start_time = Instant::now();
 
+        impact_profiling::instrumentation::frame_mark();
+
         let execution_result = task_scheduler.execute_and_wait(&ALL_SYSTEMS);
 
         if let Err(mut task_errors) = execution_result {

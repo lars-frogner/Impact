@@ -12,6 +12,7 @@ use crate::{
     ui::{NoUserInterface, UserInterface},
 };
 use anyhow::Result;
+use impact_profiling::instrumentation;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -40,6 +41,9 @@ where
     UI: UserInterface + 'static,
 {
     pub fn new(engine: Engine, user_interface: UI, config: RuntimeConfig) -> Result<Self> {
+        instrumentation::initialize();
+        instrumentation::set_thread_name("Main");
+
         let engine = Arc::new(engine);
         let user_interface = Arc::new(user_interface);
 
