@@ -1,5 +1,5 @@
 #[cfg(feature = "tracy")]
-pub use tracy_client::{Client, GpuContext, GpuContextType, GpuSpan, frame_mark, set_thread_name};
+pub use tracy_client::{Client, GpuContext, GpuContextType, GpuSpan, frame_mark, span};
 
 #[cfg(not(feature = "tracy"))]
 pub use no_tracy::*;
@@ -32,6 +32,14 @@ pub mod no_tracy {
         pub fn start() -> Self {
             Self
         }
+
+        #[inline(always)]
+        pub fn running() -> Option<Self> {
+            Some(Self)
+        }
+
+        #[inline(always)]
+        pub fn set_thread_name(&self, _name: &str) {}
 
         #[inline(always)]
         pub fn new_gpu_context(
@@ -71,9 +79,4 @@ pub mod no_tracy {
 
     #[inline(always)]
     pub fn frame_mark() {}
-
-    #[macro_export]
-    macro_rules! set_thread_name {
-        ($name:expr) => {};
-    }
 }
