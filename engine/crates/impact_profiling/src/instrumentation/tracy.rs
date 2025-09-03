@@ -1,5 +1,5 @@
 #[cfg(feature = "tracy")]
-pub use tracy_client::{Client, GpuContext, GpuContextType, GpuSpan, frame_mark, span};
+pub use tracy_client::{Client, GpuContext, GpuContextType, GpuSpan};
 
 #[cfg(not(feature = "tracy"))]
 pub use no_tracy::*;
@@ -28,20 +28,20 @@ pub mod no_tracy {
     pub struct GpuSpan;
 
     impl Client {
-        #[inline(always)]
+        #[inline]
         pub fn start() -> Self {
             Self
         }
 
-        #[inline(always)]
+        #[inline]
         pub fn running() -> Option<Self> {
             Some(Self)
         }
 
-        #[inline(always)]
+        #[inline]
         pub fn set_thread_name(&self, _name: &str) {}
 
-        #[inline(always)]
+        #[inline]
         pub fn new_gpu_context(
             &self,
             _name: Option<&str>,
@@ -54,7 +54,7 @@ pub mod no_tracy {
     }
 
     impl GpuContext {
-        #[inline(always)]
+        #[inline]
         pub fn span_alloc(
             &self,
             _name: &str,
@@ -67,16 +67,13 @@ pub mod no_tracy {
     }
 
     impl GpuSpan {
-        #[inline(always)]
+        #[inline]
         pub fn end_zone(&mut self) {}
 
-        #[inline(always)]
+        #[inline]
         pub fn upload_timestamp_start(&self, _: i64) {}
 
-        #[inline(always)]
+        #[inline]
         pub fn upload_timestamp_end(&self, _: i64) {}
     }
-
-    #[inline(always)]
-    pub fn frame_mark() {}
 }
