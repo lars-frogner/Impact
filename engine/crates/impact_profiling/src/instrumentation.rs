@@ -1,6 +1,8 @@
 pub mod tracy;
 
 #[cfg(not(feature = "tracy"))]
+pub use crate::span;
+#[cfg(not(feature = "tracy"))]
 pub use no_op_impl::*;
 
 #[cfg(feature = "tracy")]
@@ -14,26 +16,27 @@ mod no_op_impl {
     #[inline]
     pub fn set_thread_name(_name: &str) {}
 
+    #[inline]
+    pub fn frame_mark() {}
+
     #[macro_export]
     macro_rules! span {
-        ($name: expr) => {};
+        ($name: expr) => {{}};
     }
 }
 
 #[cfg(feature = "tracy")]
 mod tracy_impl {
-    pub use super::tracy::{frame_mark, span};
-
-    use super::tracy;
+    pub use tracy_client::{frame_mark, span};
 
     #[inline]
     pub fn initialize() {
-        tracy::Client::start();
+        tracy_client::Client::start();
     }
 
     #[inline]
     pub fn set_thread_name(name: &str) {
-        tracy::Client::running()
+        tracy_client::Client::running()
             .expect("Tracy client not running")
             .set_thread_name(name);
     }
