@@ -13,9 +13,7 @@ use crate::testing::ComparisonOutcome;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
-    command::{
-        AdminCommand, SystemCommand, UserCommand, capture::CaptureCommand, scene::SceneCommand,
-    },
+    command::{AdminCommand, SystemCommand, capture::CaptureCommand},
     engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},

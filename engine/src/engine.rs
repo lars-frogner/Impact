@@ -317,6 +317,7 @@ impl Engine {
     }
 
     /// Updates the orientation controller with the given mouse displacement.
+    #[cfg(feature = "window")]
     pub(crate) fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
         if !self.controls_enabled() {
             return;
