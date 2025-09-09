@@ -11,6 +11,8 @@ use anyhow::{Result, bail};
 pub mod no_tracy {
     #![allow(clippy::result_unit_err)]
 
+    use anyhow::{Result, bail};
+
     #[derive(Debug)]
     pub struct Client;
 
