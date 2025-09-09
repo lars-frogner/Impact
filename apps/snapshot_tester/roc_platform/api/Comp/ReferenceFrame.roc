@@ -1,8 +1,8 @@
-# Hash: 71f0e091253da07e255faeacccf072e9b31c345e9609b2ad98563d210b90cf88
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 80e115de7420ae6bdaa757145bc9011be764043d3cfbc65c5c78bf907cb8d410
+# Generated: 2025-09-09T13:54:16+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: e1316b1f (dirty)
 module [
     ReferenceFrame,
     new,
@@ -26,9 +26,7 @@ import core.Builtin
 import core.Point3
 import core.UnitQuaternion
 
-## A reference frame defined an origin position, an orientation and a scale
-## factor, as well as an internal offset for displacing the origin within
-## the reference frame.
+## A reference frame defined by an origin position and an orientation.
 ReferenceFrame : {
     ## The coordinates of the origin of the entity's reference frame measured
     ## in the parent space.
