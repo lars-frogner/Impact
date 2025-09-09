@@ -28,15 +28,6 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> Mold
             _ -> Ld
 
-    allocator =
-        when Env.var!("ALLOCATOR") is
-            Ok(str) if !(Str.is_empty(str)) ->
-                when str is
-                    "jemalloc" -> JemallocAllocator
-                    _ -> SystemAllocator
-
-            _ -> SystemAllocator
-
     roc_debug_mode =
         when Env.var!("ROC_DEBUG") is
             Ok(str) if !(Str.is_empty(str)) -> Debug
@@ -81,7 +72,7 @@ main! = |_args|
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, backend, linker, allocator, rust_debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(app_dir, backend, linker, rust_debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
 
     copy_app_lib!(app_dir, rust_debug_mode, os_and_arch)?
 
@@ -136,9 +127,9 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [SystemAllocator, JemallocAllocator], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Profiling, NoProfiling], [Tracy, NoTracy], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(allocator)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(profiling_mode)}, ${Inspect.to_str(tracy_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Profiling, NoProfiling], [Tracy, NoTracy], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
+cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(profiling_mode)}, ${Inspect.to_str(tracy_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
 
     target_triple = get_target_triple(os_and_arch)
 
@@ -153,11 +144,6 @@ cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, 
         when backend is
             LLVM -> []
             Cranelift -> ["-Zcodegen-backend"]
-
-    allocator_args =
-        when allocator is
-            SystemAllocator -> []
-            JemallocAllocator -> ["--features", "jemalloc"]
 
     debug_args =
         when debug_mode is
@@ -218,7 +204,6 @@ cargo_build_app! = |app_dir, backend, linker, allocator, debug_mode, asan_mode, 
         |> List.append("build")
         |> List.concat(base_args)
         |> List.concat(backend_args)
-        |> List.concat(allocator_args)
         |> List.concat(debug_args)
         |> List.concat(tracy_args)
         |> List.concat(fuzzing_args),

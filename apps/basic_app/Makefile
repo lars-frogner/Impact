@@ -17,7 +17,7 @@ endef
 .PHONY: all clean help
 .PHONY: init-build build build-debug build-debug-cl build-debug-asan
 .PHONY: run run-debug run-roc-debug run-debug-asan run-debug-cl
-.PHONY: profile-perf profile-tracy profile-heaptrack profile-dhat profile-jemalloc
+.PHONY: profile-perf profile-tracy profile-heaptrack profile-dhat
 .PHONY: fuzz
 .PHONY: generate-roc clean-roc
 
@@ -58,9 +58,6 @@ dist/heaptrack/$(APP_NAME): build_script
 
 dist/dhat/$(APP_NAME): build_script
 	OUTPUT_DIR=./dist/dhat PROFILING=1 VALGRIND=1 ./build_script
-
-dist/jemalloc/$(APP_NAME): build_script
-	OUTPUT_DIR=./dist/jemalloc RUST_ALLOCATOR=jemalloc PROFILING=1 ./build_script
 
 dist/fuzz/$(APP_NAME): build_script
 	OUTPUT_DIR=./dist/fuzz RUST_DEBUG=1 ASAN=1 FUZZING=1 ./build_script
@@ -114,11 +111,6 @@ profile-heaptrack: dist/heaptrack/$(APP_NAME)
 profile-dhat: dist/dhat/$(APP_NAME)
 	RUST_LOG="$(RUST_LOG_NORMAL)" RUST_BACKTRACE=1 valgrind --tool=dhat --num-callers=500 ./dist/dhat/$(APP_NAME) run -c $(CONFIG_FILE)
 
-profile-jemalloc: dist/jemalloc/$(APP_NAME)
-	RUST_LOG="$(RUST_LOG_NORMAL)" \
-	_RJEM_MALLOC_CONF=prof:true,prof_active:true,lg_prof_sample:0,prof_final:true,prof_leak:true,prof_accum:true \
-	./dist/jemalloc/$(APP_NAME) run -c $(CONFIG_FILE)
-
 # Fuzzing
 fuzz: dist/fuzz/$(APP_NAME)
 	LD_PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/13/libasan.so \
@@ -164,7 +156,6 @@ help:
 	@echo "  profile-tracy     - Build and run with Tracy profiling"
 	@echo "  profile-heaptrack - Build and run with heaptrack profiling"
 	@echo "  profile-dhat      - Build and run with DHAT profiling"
-	@echo "  profile-jemalloc  - Build and run with jemalloc profiling"
 	@echo ""
 	@echo "Fuzzing:"
 	@echo "  fuzz              - Run a fuzz target (use ARGS= to pass arguments)"
