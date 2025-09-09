@@ -41,7 +41,7 @@ use std::{
 ///     &|_channel, (count, incr): (Arc<Mutex<usize>>, usize)| {
 ///         *count.lock() += incr;
 ///         // The closure must return a `TaskClosureReturnValue`
-///         TaskClosureReturnValue::success()
+///         TaskClosureReturnValue::success(0)
 ///     }
 /// );
 ///
@@ -54,8 +54,8 @@ use std::{
 /// // a reference to the shared count and the increment
 /// let messages = iter::repeat_with(|| (Arc::clone(&count), incr)).take(n_tasks);
 ///
-/// // Execute the tasks and wait until all `n_tasks` are completed
-/// pool.execute_and_wait(messages, n_tasks).unwrap();
+/// // Execute the tasks and wait until all tasks are completed
+/// pool.execute_and_wait(messages).unwrap();
 ///
 /// assert_eq!(*count.lock(), n_workers * incr);
 /// ```
