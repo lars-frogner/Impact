@@ -4,11 +4,12 @@ pub use tracy_client::{Client, GpuContext, GpuContextType, GpuSpan};
 #[cfg(not(feature = "tracy"))]
 pub use no_tracy::*;
 
+#[allow(unused_imports)]
+use anyhow::{Result, bail};
+
 #[cfg(not(feature = "tracy"))]
 pub mod no_tracy {
     #![allow(clippy::result_unit_err)]
-
-    use anyhow::{Result, bail};
 
     #[derive(Debug)]
     pub struct Client;
