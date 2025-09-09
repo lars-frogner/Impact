@@ -6,9 +6,7 @@ use nalgebra::{Isometry3, Point3, Translation3, UnitQuaternion};
 use roc_integration::roc;
 
 define_component_type! {
-    /// A reference frame defined an origin position, an orientation and a scale
-    /// factor, as well as an internal offset for displacing the origin within
-    /// the reference frame.
+    /// A reference frame defined by an origin position and an orientation.
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
