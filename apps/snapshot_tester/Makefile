@@ -29,47 +29,36 @@ build_script: build.roc
 # Convenience target for init-build
 init-build: build_script
 
-# Build targets with dependencies
-dist/release/$(APP_NAME): build_script
+# Building
+build: build_script
 	OUTPUT_DIR=./dist/release ./build_script
 
-dist/debug/$(APP_NAME): build_script
+build-debug: build_script
 	OUTPUT_DIR=./dist/debug ROC_DEBUG=1 RUST_DEBUG=1 ./build_script
 
-dist/roc_debug/$(APP_NAME): build_script
+build-roc-debug: build_script
 	OUTPUT_DIR=./dist/roc_debug ROC_DEBUG=1 ./build_script
 
-dist/debug_asan/$(APP_NAME): build_script
-	OUTPUT_DIR=./dist/debug_asan ROC_DEBUG=1 RUST_DEBUG=1 ASAN=1 ./build_script
-
-dist/debug_cranelift/$(APP_NAME): build_script
+build-debug-cl: build_script
 	OUTPUT_DIR=./dist/debug_cranelift CRANELIFT=1 ROC_DEBUG=1 RUST_DEBUG=1 ./build_script
 
-# Building
-build: dist/release/$(APP_NAME)
-
-build-debug: dist/debug/$(APP_NAME)
-
-build-roc-debug: dist/roc_debug/$(APP_NAME)
-
-build-debug-cl: dist/debug_cranelift/$(APP_NAME)
-
-build-debug-asan: dist/debug_asan/$(APP_NAME)
+build-debug-asan: build_script
+	OUTPUT_DIR=./dist/debug_asan ROC_DEBUG=1 RUST_DEBUG=1 ASAN=1 ./build_script
 
 # Running
-run: dist/release/$(APP_NAME)
+run: build
 	RUST_LOG="$(RUST_LOG_NORMAL)" ./dist/release/$(APP_NAME) run -c $(CONFIG_FILE)
 
-run-debug: dist/debug/$(APP_NAME)
+run-debug: build-debug
 	RUST_LOG="$(RUST_LOG_NORMAL)" RUST_BACKTRACE=1 ./dist/debug/$(APP_NAME) run -c $(CONFIG_FILE)
 
-run-roc-debug: dist/roc_debug/$(APP_NAME)
+run-roc-debug: build-roc-debug
 	RUST_LOG="$(RUST_LOG_NORMAL)" RUST_BACKTRACE=1 ./dist/roc_debug/$(APP_NAME) run -c $(CONFIG_FILE)
 
-run-debug-cl: dist/debug_cranelift/$(APP_NAME)
+run-debug-cl: build-debug-cl
 	RUST_LOG="$(RUST_LOG_NORMAL)" RUST_BACKTRACE=1 ./dist/debug_cranelift/$(APP_NAME) run -c $(CONFIG_FILE)
 
-run-debug-asan: dist/debug_asan/$(APP_NAME)
+run-debug-asan: build-debug-asan
 	LD_PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/13/libasan.so \
 	ASAN_OPTIONS="detect_leaks=1:halt_on_error=1:allocator_may_return_null=1:detect_deadlocks=1:detect_stack_use_after_return=1" \
 	RUST_LOG="$(RUST_LOG_NORMAL)" \
