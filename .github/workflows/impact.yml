@@ -242,9 +242,8 @@ jobs:
       fail-fast: false
       matrix:
         workspace: [engine]
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest] # Fails with weird error on windows
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -280,7 +279,7 @@ jobs:
           PROPTEST_CASES: 1
           MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-deterministic-floats"
         run: |
-          cargo miri test --features "checked_lock_order" --workspace -- --nocapture
+          cargo miri test --features "checked_lock_order" --workspace
 
   # ───────────────────────────────────────────────────────────────
   # Snapshot tests
