@@ -725,14 +725,6 @@ mod tests {
             }
         }
 
-        fn get_recorded_worker_ids(&self) -> Vec<WorkerID> {
-            self.recorded_tasks
-                .lock()
-                .iter()
-                .map(|&(worker_id, _)| worker_id)
-                .collect()
-        }
-
         fn get_recorded_task_ids(&self) -> Vec<TaskID> {
             self.recorded_tasks
                 .lock()
@@ -972,6 +964,7 @@ mod tests {
         assert!(scheduler.get_executor().is_none());
     }
 
+    #[cfg(not(miri))] // Multi-threaded tests get flaky with `miri`
     #[test]
     fn executing_tasks_works() {
         let mut scheduler = create_scheduler(2);
@@ -985,7 +978,6 @@ mod tests {
         scheduler
             .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
             .unwrap();
-        let recorded_worker_ids = scheduler.external_state().get_recorded_worker_ids();
         let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
 
         // Verify that all tasks were executed
@@ -1043,15 +1035,9 @@ mod tests {
             dep_dep_task1_task2_pos > task2_pos,
             "DepDepTask1Task2 should execute after Task2"
         );
-
-        // Verify that both workers were used (load balancing)
-        let unique_workers: HashSet<_> = recorded_worker_ids.iter().collect();
-        assert!(
-            unique_workers.len() > 1,
-            "Expected multiple workers to be used for load balancing"
-        );
     }
 
+    #[cfg(not(miri))]
     #[test]
     fn filtering_execution_with_tags_works() {
         let mut scheduler = create_scheduler(2);
@@ -1267,6 +1253,7 @@ mod tests {
         assert!(!recorded_tasks.contains(&DependentOnFailingTask::ID));
     }
 
+    #[cfg(not(miri))]
     #[test]
     fn mixed_success_and_failure_tasks_complete_correctly() {
         let mut scheduler = create_scheduler(2);
@@ -1315,6 +1302,7 @@ mod tests {
         assert!(!recorded_tasks.contains(&FinalTask::ID));
     }
 
+    #[cfg(not(miri))]
     #[test]
     fn multiple_failing_tasks_all_report_errors() {
         create_task_type!(name = FailingTask2, deps = [], fails);

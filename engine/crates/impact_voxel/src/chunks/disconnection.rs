@@ -2795,7 +2795,8 @@ pub mod fuzzing {
     }
 }
 
-#[cfg(all(test, not(miri)))]
+#[cfg(not(miri))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{

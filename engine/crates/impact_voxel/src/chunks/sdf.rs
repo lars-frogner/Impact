@@ -522,7 +522,8 @@ impl ChunkedVoxelObject {
     }
 }
 
-#[cfg(all(test, not(miri)))]
+#[cfg(not(miri))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::chunks::tests::OffsetBoxVoxelGenerator;
