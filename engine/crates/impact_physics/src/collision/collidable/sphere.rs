@@ -104,12 +104,9 @@ pub fn determine_sphere_sphere_contact_geometry(
 ) -> Option<ContactGeometry> {
     let center_displacement = sphere_a.center() - sphere_b.center();
     let squared_center_distance = center_displacement.norm_squared();
+    let max_center_distance = sphere_a.radius() + sphere_b.radius();
 
-    if squared_center_distance
-        > sphere_a.radius_squared()
-            + sphere_b.radius_squared()
-            + 2.0 * sphere_a.radius() * sphere_b.radius()
-    {
+    if squared_center_distance > max_center_distance.powi(2) {
         return None;
     }
 
