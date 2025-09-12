@@ -254,7 +254,7 @@ impl Texture {
                 texel_description.n_bytes(),
                 byte_buffer.len()
             )
-        } else if (texel_description.n_bytes() * texture_size.width) % 256 != 0 {
+        } else if !(texel_description.n_bytes() * texture_size.width).is_multiple_of(256) {
             bail!(
                 "Texture {} row size ({} bytes) is not a multiple of 256 bytes",
                 label,
