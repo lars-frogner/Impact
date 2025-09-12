@@ -423,7 +423,7 @@ mod tests {
     ];
 
     fn has_alignment_of(bytes: &[u8], alignment: Alignment) -> bool {
-        (bytes.as_ptr() as usize) % <Alignment as Into<usize>>::into(alignment) == 0
+        (bytes.as_ptr() as usize).is_multiple_of(<Alignment as Into<usize>>::into(alignment))
     }
 
     #[test]
