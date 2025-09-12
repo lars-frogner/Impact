@@ -285,6 +285,11 @@ impl PhysicsSimulator {
             );
             self.simulation_time += substep_duration;
         }
+
+        // Sync the collidables so that they are up to date for later tasks in
+        // the frame (currently, this is only required for making collidable
+        // gizmos not lag by one frame)
+        collision_world.synchronize_collidables_with_rigid_bodies(&rigid_body_manager);
     }
 
     fn compute_substep_duration(&self) -> fph {
