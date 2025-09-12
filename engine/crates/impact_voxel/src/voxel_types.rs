@@ -563,7 +563,7 @@ fn create_identity_normal_image(texture_resolution: NonZeroU32) -> Image {
         pixel_format: PixelFormat::Rgba8,
     };
 
-    let pixel = [0, 0, 255, 255];
+    let pixel = [128, 128, 255, 255]; // Corresponds to normal vector (0.0, 0.0, 1.0)
 
     let mut data = AVec::with_capacity(pixel.len() * pixel_count);
 
