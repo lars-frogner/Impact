@@ -10,7 +10,7 @@ use crate::{
 };
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Capsule, OrientedBox, Plane, Sphere};
-use nalgebra::{self as na, Isometry3, Point3, point, vector};
+use nalgebra::{self as na, Isometry3, Point3, point};
 use std::{array, ops::Range};
 
 pub type VoxelRanges = [Range<usize>; 3];
@@ -629,11 +629,7 @@ impl ChunkedVoxelObject {
         // `compute_box_intersection_bounds` returns the second bounds relative
         // to the center of box B, but we need it relative to the lower corner
         let intersection_aabb_in_b =
-            intersection_aabb_in_b_relative_to_center.translated(&vector![
-                object_b_obb_in_a.half_width(),
-                object_b_obb_in_a.half_height(),
-                object_b_obb_in_a.half_depth()
-            ]);
+            intersection_aabb_in_b_relative_to_center.translated(&object_b_obb.center().coords);
 
         let intersection_voxel_ranges_in_a = voxel_ranges_touching_aab(
             object_a.occupied_voxel_ranges.clone(),
