@@ -135,7 +135,7 @@ impl ContactID {
         Self((u64::from(a) << 32) | u64::from(b))
     }
 
-    pub fn from_two_u32_and_three_indices(a: u32, b: u32, indices: [usize; 3]) -> Self {
+    pub fn from_two_u32_and_n_indices<const N: usize>(a: u32, b: u32, indices: [usize; N]) -> Self {
         let mut id = Self::from_two_u32(a, b).0;
         for index in indices {
             // Mix in indices

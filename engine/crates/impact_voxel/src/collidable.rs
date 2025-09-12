@@ -195,15 +195,15 @@ impl VoxelObjectCollidable {
         origin_offset: Vector3<f32>,
         transform_to_world_space: Isometry3<fph>,
     ) -> Self {
+        let transform_from_object_to_world_space = transform_to_world_space
+            * Isometry3::from_parts(
+                Translation3::from(-origin_offset.cast()),
+                UnitQuaternion::identity(),
+            );
         Self {
             object_id,
             response_params,
-            transform_to_object_space: (transform_to_world_space
-                * Isometry3::from_parts(
-                    Translation3::from(-origin_offset.cast()),
-                    UnitQuaternion::identity(),
-                ))
-            .inverse(),
+            transform_to_object_space: transform_from_object_to_world_space.inverse(),
         }
     }
 
@@ -217,13 +217,150 @@ impl VoxelObjectCollidable {
 }
 
 fn generate_voxel_object_voxel_object_contact_manifold(
-    _voxel_object_manager: &VoxelObjectManager,
-    _voxel_object_a: &VoxelObjectCollidable,
-    _voxel_object_b: &VoxelObjectCollidable,
-    _voxel_object_a_collidable_id: CollidableID,
-    _voxel_object_b_collidable_id: CollidableID,
-    _contact_manifold: &mut ContactManifold,
+    voxel_object_manager: &VoxelObjectManager,
+    voxel_object_a: &VoxelObjectCollidable,
+    voxel_object_b: &VoxelObjectCollidable,
+    voxel_object_a_collidable_id: CollidableID,
+    voxel_object_b_collidable_id: CollidableID,
+    contact_manifold: &mut ContactManifold,
 ) {
+    let VoxelObjectCollidable {
+        object_id: object_a_id,
+        response_params: response_params_a,
+        transform_to_object_space: transform_from_world_to_a,
+    } = voxel_object_a;
+
+    let VoxelObjectCollidable {
+        object_id: object_b_id,
+        response_params: response_params_b,
+        transform_to_object_space: transform_from_world_to_b,
+    } = voxel_object_b;
+
+    let Some(object_a) = voxel_object_manager.get_voxel_object(*object_a_id) else {
+        return;
+    };
+    let Some(object_b) = voxel_object_manager.get_voxel_object(*object_b_id) else {
+        return;
+    };
+
+    let response_params = ContactResponseParameters::combined(response_params_a, response_params_b);
+
+    for_each_voxel_object_voxel_object_contact(
+        object_a.object(),
+        object_b.object(),
+        transform_from_world_to_a,
+        transform_from_world_to_b,
+        &mut |[i_a, j_a, k_a], [i_b, j_b, k_b], geometry| {
+            let id = contact_id_from_collidable_ids_and_indices(
+                voxel_object_a_collidable_id,
+                voxel_object_b_collidable_id,
+                [i_a, j_a, k_a, i_b, j_b, k_b],
+            );
+
+            contact_manifold.add_contact(ContactWithID {
+                id,
+                contact: Contact {
+                    geometry,
+                    response_params,
+                },
+            });
+        },
+    );
+}
+
+pub fn for_each_voxel_object_voxel_object_contact(
+    voxel_object_a: &ChunkedVoxelObject,
+    voxel_object_b: &ChunkedVoxelObject,
+    transform_from_world_to_a: &Isometry3<fph>,
+    transform_from_world_to_b: &Isometry3<fph>,
+    f: &mut impl FnMut([usize; 3], [usize; 3], ContactGeometry),
+) {
+    let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverse();
+
+    let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
+        ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
+            voxel_object_a,
+            voxel_object_b,
+            &transform_from_b_to_a,
+        )
+    else {
+        return;
+    };
+
+    let voxel_radius_a = 0.5 * voxel_object_a.voxel_extent();
+    let voxel_radius_b = 0.5 * voxel_object_b.voxel_extent();
+
+    let max_center_distance = voxel_radius_a + voxel_radius_b;
+    let max_squared_center_distance = max_center_distance.powi(2);
+
+    voxel_object_a.for_each_surface_voxel_in_voxel_ranges(
+        intersection_voxel_ranges_in_a,
+        &mut |[i_a, j_a, k_a], _, placement_a| {
+            let voxel_a_center_in_object_space =
+                voxel_object_a.voxel_center_position_from_object_voxel_indices(i_a, j_a, k_a);
+
+            let voxel_a_center =
+                transform_from_world_to_a.inverse_transform_point(&voxel_a_center_in_object_space);
+
+            voxel_object_b.for_each_surface_voxel_in_voxel_ranges(
+                intersection_voxel_ranges_in_b.clone(),
+                &mut |[i_b, j_b, k_b], _, placement_b| {
+                    if !matches!(
+                        (placement_a, placement_b),
+                        // Corner voxels in A can be in contact with any surface voxel in B
+                        (
+                            VoxelSurfacePlacement::Corner,
+                            VoxelSurfacePlacement::Corner
+                                | VoxelSurfacePlacement::Edge
+                                | VoxelSurfacePlacement::Face,
+                        )
+                        // Edge voxels in A can be in contact with corner or edge voxels in B
+                        | (
+                            VoxelSurfacePlacement::Edge,
+                            VoxelSurfacePlacement::Corner | VoxelSurfacePlacement::Edge,
+                        )
+                        // Face voxels in A can be in contact with corner voxels in B
+                        | (VoxelSurfacePlacement::Face, VoxelSurfacePlacement::Corner)
+                    ) {
+                        return;
+                    }
+
+                    let voxel_b_center_in_object_space = voxel_object_b
+                        .voxel_center_position_from_object_voxel_indices(i_b, j_b, k_b);
+
+                    let voxel_b_center = transform_from_world_to_b
+                        .inverse_transform_point(&voxel_b_center_in_object_space);
+
+                    let center_displacement = voxel_a_center - voxel_b_center;
+                    let squared_center_distance = center_displacement.norm_squared();
+
+                    if squared_center_distance > max_squared_center_distance {
+                        return;
+                    }
+
+                    let center_distance = squared_center_distance.sqrt();
+
+                    let surface_normal = if center_distance > 1e-8 {
+                        UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+                    } else {
+                        Vector3::z_axis()
+                    };
+
+                    let position = voxel_b_center + surface_normal.scale(voxel_radius_b);
+
+                    let penetration_depth = fph::max(0.0, max_center_distance - center_distance);
+
+                    let contact_geometry = ContactGeometry {
+                        position,
+                        surface_normal,
+                        penetration_depth,
+                    };
+
+                    f([i_a, j_a, k_a], [i_b, j_b, k_b], contact_geometry);
+                },
+            );
+        },
+    );
 }
 
 fn generate_sphere_voxel_object_contact_manifold(
@@ -240,12 +377,12 @@ fn generate_sphere_voxel_object_contact_manifold(
         transform_to_object_space,
     } = voxel_object;
 
-    let response_params =
-        ContactResponseParameters::combined(response_params, sphere.response_params());
-
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
         return;
     };
+
+    let response_params =
+        ContactResponseParameters::combined(response_params, sphere.response_params());
 
     for_each_sphere_voxel_object_contact(
         voxel_object.object(),
@@ -279,9 +416,8 @@ pub fn for_each_sphere_voxel_object_contact(
 
     let sphere_in_object_space = sphere.translated_and_rotated(transform_to_object_space);
 
-    let max_squared_center_distance =
-        sphere.radius_squared() + voxel_radius.powi(2) + 2.0 * sphere.radius() * voxel_radius;
-    let radius_sum = sphere.radius() + voxel_radius;
+    let max_center_distance = sphere.radius() + voxel_radius;
+    let max_squared_center_distance = max_center_distance.powi(2);
 
     voxel_object.for_each_surface_voxel_maybe_intersecting_sphere(
         &sphere_in_object_space,
@@ -309,7 +445,7 @@ pub fn for_each_sphere_voxel_object_contact(
 
             let position = voxel_center + surface_normal.scale(voxel_radius);
 
-            let penetration_depth = fph::max(0.0, radius_sum - center_distance);
+            let penetration_depth = fph::max(0.0, max_center_distance - center_distance);
 
             let contact_geometry = ContactGeometry {
                 position,
@@ -336,12 +472,12 @@ fn generate_voxel_object_plane_contact_manifold(
         transform_to_object_space,
     } = voxel_object;
 
-    let response_params =
-        ContactResponseParameters::combined(response_params, plane.response_params());
-
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
         return;
     };
+
+    let response_params =
+        ContactResponseParameters::combined(response_params, plane.response_params());
 
     for_each_voxel_object_plane_contact(
         voxel_object.object(),
