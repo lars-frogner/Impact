@@ -282,14 +282,14 @@ required-features = ["cli"]
 [[bench]]
 name = "model"
 harness = false
-required-features = ["profiling"]
+required-features = ["criterion"]
 
 [[bench]]
 name = "voxel"
 harness = false
-required-features = ["profiling"]
+required-features = ["criterion"]
 
 [[bench]]
 name = "constraint"
 harness = false
-required-features = ["profiling"]
+required-features = ["criterion"]
