@@ -9,6 +9,7 @@ license = { workspace = true }
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 atomic_enum = "0.3"
 bytemuck = { workspace = true }
