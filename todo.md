@@ -4,9 +4,7 @@
 
 - Add some form of dependency tracking for resource registries to automatically evict unused resources.
 
-## Architecture
-
-- Centralize assignment of binding locations?
+- Instead of loading resources directly from files, create a database for processed resources. Importing assets into the resource database is done offline. At runtime, the engine only loads from the resource database.
 
 ## Graphics
 
@@ -16,23 +14,21 @@
 
 - Create general-purpose debug rendering API invokable from anywhere.
 
+- Centralize assignment of binding locations?
+
 ## Physics
 
 - Support disabling rigid bodies.
-
-- Implement sphere-based voxel collision detection.
 
 - Add more constraints.
 
 - Implement Voronoi fracturing.
 
+- Implement N-body gravity simulation using multipole expansion for the gravitational field of extended objects and a Barnes-Hut tree as acceleration structure.
+
 ## Math
 
 - Replace `nalgebra` with custom library powered by `glam`.
-
-## Scheduling
-
-- Support inverse dependencies (specify in a task declaration that it runs before another task).
 
 ## Performance
 
@@ -42,13 +38,13 @@
 
 - Consider using `wgpu::TextureFormat::Rg11b10Float` for appropriate attachments.
 
-- Define consistent locking order for all lock-protected resources under `Engine` to avoid deadlocks in parallel `Tasks` (with optional run-time verification to identify violations).
-
 - Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
 
 - Consider using Welzl's algorithm to compute better bounding spheres.
 
 - Investigate where arena allocation could be beneficial.
+
+- Add acceleration structure for broad phase collision detection.
 
 ## ECS
 
@@ -69,3 +65,5 @@
 - Fix black square flashes due to bloom filter propagating NaNs.
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
+
+- Investigate flakyness of the `executing_tasks_works` test.
