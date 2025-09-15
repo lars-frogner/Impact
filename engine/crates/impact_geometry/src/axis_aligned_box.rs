@@ -122,19 +122,9 @@ impl<F: Float> AxisAlignedBox<F> {
         na::center(self.lower_corner(), self.upper_corner())
     }
 
-    /// Returns the extent of the box along the x-axis (the width).
-    pub fn extent_x(&self) -> F {
-        self.upper_corner().x - self.lower_corner().x
-    }
-
-    /// Returns the extent of the box along the y-axis (the height).
-    pub fn extent_y(&self) -> F {
-        self.upper_corner().y - self.lower_corner().y
-    }
-
-    /// Returns the extent of the box along the z-axis (the depth).
-    pub fn extent_z(&self) -> F {
-        self.upper_corner().z - self.lower_corner().z
+    /// Returns the extents of the box along the three axes.
+    pub fn extents(&self) -> Vector3<F> {
+        self.upper_corner() - self.lower_corner()
     }
 
     /// Returns an array with all the eight corners of the box. The corners are
@@ -226,7 +216,7 @@ impl<F: Float> AxisAlignedBox<F> {
     /// Computes the axis-aligned bounding box enclosing only the volume
     /// enclosed by both this and the given bounding box, or [`None`] if the two
     /// boxes do not overlap.
-    pub fn union_with(&self, other: &Self) -> Option<Self> {
+    pub fn compute_overlap_with(&self, other: &Self) -> Option<Self> {
         let lower_corner = self.lower_corner().sup(other.lower_corner());
         let upper_corner = self.upper_corner().inf(other.upper_corner());
 
@@ -247,6 +237,17 @@ impl<F: Float> AxisAlignedBox<F> {
             self.lower_corner().coords.scale(scale).into(),
             self.upper_corner().coords.scale(scale).into(),
         )
+    }
+
+    /// Computes the axis-aligned box resulting from scaling the extents of this
+    /// box relative to its center with the given uniform scale factor.
+    pub fn scaled_about_center(&self, scale: F) -> Self {
+        let center = self.center();
+
+        let scaled_half_extents =
+            (self.upper_corner() - self.lower_corner()).scale(F::ONE_HALF * scale.abs());
+
+        Self::new(center - scaled_half_extents, center + scaled_half_extents)
     }
 
     /// Computes the axis-aligned box resulting from translating this box with
