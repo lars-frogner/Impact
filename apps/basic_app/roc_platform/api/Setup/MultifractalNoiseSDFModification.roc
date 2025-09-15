@@ -1,8 +1,8 @@
-# Hash: adddbf02e6bfd49b9e2060943c635c9b4aa097ad1dc5ebacb4c0fb617fbab9bf
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: d1cc65580a2e3cf126d333939072c764662bbb4bb6af77a78fa5990da7d4908d
+# Generated: 2025-09-14T20:34:17+00:00
 # Rust type: impact_voxel::setup::MultifractalNoiseSDFModification
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: aa40a05d (dirty)
 module [
     MultifractalNoiseSDFModification,
     new,
@@ -16,20 +16,19 @@ module [
 import Entity
 import Entity.Arg
 import core.Builtin
-import core.NativeNum
 
 ## A modification of a voxel signed distance field based on multifractal
 ## noise.
 MultifractalNoiseSDFModification : {
-    octaves : NativeNum.Usize,
-    frequency : F64,
-    lacunarity : F64,
-    persistence : F64,
-    amplitude : F64,
-    seed : U64,
+    octaves : U32,
+    frequency : F32,
+    lacunarity : F32,
+    persistence : F32,
+    amplitude : F32,
+    seed : U32,
 }
 
-new : NativeNum.Usize, F64, F64, F64, F64, U64 -> MultifractalNoiseSDFModification
+new : U32, F32, F32, F32, F32, U32 -> MultifractalNoiseSDFModification
 new = |octaves, frequency, lacunarity, persistence, amplitude, seed|
     {
         octaves,
@@ -40,7 +39,7 @@ new = |octaves, frequency, lacunarity, persistence, amplitude, seed|
         seed,
     }
 
-add_new : Entity.Data, NativeNum.Usize, F64, F64, F64, F64, U64 -> Entity.Data
+add_new : Entity.Data, U32, F32, F32, F32, F32, U32 -> Entity.Data
 add_new = |entity_data, octaves, frequency, lacunarity, persistence, amplitude, seed|
     add(entity_data, new(octaves, frequency, lacunarity, persistence, amplitude, seed))
 
@@ -68,8 +67,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, MultifractalNoiseSDFModification -> List U8
 write_packet = |bytes, val|
     type_id = 5074781755057218298
-    size = 48
-    alignment = 8
+    size = 24
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -80,8 +79,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List MultifractalNoiseSDFModification -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 5074781755057218298
-    size = 48
-    alignment = 8
+    size = 24
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -101,13 +100,13 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, MultifractalNoiseSDFModification -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(48)
-    |> NativeNum.write_bytes_usize(value.octaves)
-    |> Builtin.write_bytes_f64(value.frequency)
-    |> Builtin.write_bytes_f64(value.lacunarity)
-    |> Builtin.write_bytes_f64(value.persistence)
-    |> Builtin.write_bytes_f64(value.amplitude)
-    |> Builtin.write_bytes_u64(value.seed)
+    |> List.reserve(24)
+    |> Builtin.write_bytes_u32(value.octaves)
+    |> Builtin.write_bytes_f32(value.frequency)
+    |> Builtin.write_bytes_f32(value.lacunarity)
+    |> Builtin.write_bytes_f32(value.persistence)
+    |> Builtin.write_bytes_f32(value.amplitude)
+    |> Builtin.write_bytes_u32(value.seed)
 
 ## Deserializes a value of [MultifractalNoiseSDFModification] from its bytes in the
 ## representation used by the engine.
@@ -115,18 +114,18 @@ from_bytes : List U8 -> Result MultifractalNoiseSDFModification _
 from_bytes = |bytes|
     Ok(
         {
-            octaves: bytes |> List.sublist({ start: 0, len: 8 }) |> NativeNum.from_bytes_usize?,
-            frequency: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            lacunarity: bytes |> List.sublist({ start: 16, len: 8 }) |> Builtin.from_bytes_f64?,
-            persistence: bytes |> List.sublist({ start: 24, len: 8 }) |> Builtin.from_bytes_f64?,
-            amplitude: bytes |> List.sublist({ start: 32, len: 8 }) |> Builtin.from_bytes_f64?,
-            seed: bytes |> List.sublist({ start: 40, len: 8 }) |> Builtin.from_bytes_u64?,
+            octaves: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
+            frequency: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
+            lacunarity: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
+            persistence: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
+            amplitude: bytes |> List.sublist({ start: 16, len: 4 }) |> Builtin.from_bytes_f32?,
+            seed: bytes |> List.sublist({ start: 20, len: 4 }) |> Builtin.from_bytes_u32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 48 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

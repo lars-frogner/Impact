@@ -1,8 +1,8 @@
-# Hash: 2a35171ecaae57ff919ca1effa4b94b84c15d2b041aae30e4088d6fd96fcb818
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: cf65a740ce3680a54decd4def5722fb1945694248f6c765832d0a77553da9c54
+# Generated: 2025-09-14T20:34:43+00:00
 # Rust type: impact_voxel::setup::VoxelSphereUnion
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: aa40a05d (dirty)
 module [
     VoxelSphereUnion,
     new,
@@ -22,16 +22,16 @@ import core.Vector3
 ## union of two spheres.
 VoxelSphereUnion : {
     ## The extent of a single voxel.
-    voxel_extent : F64,
+    voxel_extent : F32,
     ## The number of voxels along the radius of the first sphere.
-    radius_1 : F64,
+    radius_1 : F32,
     ## The number of voxels along the radius of the second sphere.
-    radius_2 : F64,
+    radius_2 : F32,
     ## The offset in number of voxels in each dimension between the centers of
     ## the two spheres.
-    center_offsets : Vector3.Vector3 Binary64,
+    center_offsets : Vector3.Vector3 Binary32,
     ## The smoothness of the union operation.
-    smoothness : F64,
+    smoothness : F32,
 }
 
 ## Defines a sphere union with the given smoothness of the spheres with the
@@ -40,7 +40,7 @@ VoxelSphereUnion : {
 ## # Panics
 ## - If the voxel extent is negative.
 ## - If either of the radii is zero or negative.
-new : F64, F64, F64, Vector3.Vector3 Binary64, F64 -> VoxelSphereUnion
+new : F32, F32, F32, Vector3.Vector3 Binary32, F32 -> VoxelSphereUnion
 new = |voxel_extent, radius_1, radius_2, center_offsets, smoothness|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect voxel_extent > 0.0
@@ -61,7 +61,7 @@ new = |voxel_extent, radius_1, radius_2, center_offsets, smoothness|
 ## - If the voxel extent is negative.
 ## - If either of the radii is zero or negative.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F64, F64, F64, Vector3.Vector3 Binary64, F64 -> Entity.Data
+add_new : Entity.Data, F32, F32, F32, Vector3.Vector3 Binary32, F32 -> Entity.Data
 add_new = |entity_data, voxel_extent, radius_1, radius_2, center_offsets, smoothness|
     add(entity_data, new(voxel_extent, radius_1, radius_2, center_offsets, smoothness))
 
@@ -89,8 +89,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, VoxelSphereUnion -> List U8
 write_packet = |bytes, val|
     type_id = 10023429030278991225
-    size = 56
-    alignment = 8
+    size = 28
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -101,8 +101,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelSphereUnion -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 10023429030278991225
-    size = 56
-    alignment = 8
+    size = 28
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -122,12 +122,12 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelSphereUnion -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(56)
-    |> Builtin.write_bytes_f64(value.voxel_extent)
-    |> Builtin.write_bytes_f64(value.radius_1)
-    |> Builtin.write_bytes_f64(value.radius_2)
-    |> Vector3.write_bytes_64(value.center_offsets)
-    |> Builtin.write_bytes_f64(value.smoothness)
+    |> List.reserve(28)
+    |> Builtin.write_bytes_f32(value.voxel_extent)
+    |> Builtin.write_bytes_f32(value.radius_1)
+    |> Builtin.write_bytes_f32(value.radius_2)
+    |> Vector3.write_bytes_32(value.center_offsets)
+    |> Builtin.write_bytes_f32(value.smoothness)
 
 ## Deserializes a value of [VoxelSphereUnion] from its bytes in the
 ## representation used by the engine.
@@ -135,17 +135,17 @@ from_bytes : List U8 -> Result VoxelSphereUnion _
 from_bytes = |bytes|
     Ok(
         {
-            voxel_extent: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            radius_1: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            radius_2: bytes |> List.sublist({ start: 16, len: 8 }) |> Builtin.from_bytes_f64?,
-            center_offsets: bytes |> List.sublist({ start: 24, len: 24 }) |> Vector3.from_bytes_64?,
-            smoothness: bytes |> List.sublist({ start: 48, len: 8 }) |> Builtin.from_bytes_f64?,
+            voxel_extent: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            radius_1: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
+            radius_2: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
+            center_offsets: bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes_32?,
+            smoothness: bytes |> List.sublist({ start: 24, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 56 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 28 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

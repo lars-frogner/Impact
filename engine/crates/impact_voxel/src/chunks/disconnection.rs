@@ -2715,21 +2715,18 @@ fn add_adjacent_connection_for_region(
 pub mod fuzzing {
     use super::*;
     use crate::{
-        chunks::inertia::VoxelObjectInertialPropertyManager,
-        generation::fuzzing::ArbitrarySDFVoxelGenerator,
+        chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
 
-    pub fn fuzz_test_voxel_object_connected_regions(generator: ArbitrarySDFVoxelGenerator) {
+    pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
             object.validate_region_count();
         }
     }
 
-    pub fn fuzz_test_voxel_object_split_off_disconnected_region(
-        generator: ArbitrarySDFVoxelGenerator,
-    ) {
+    pub fn fuzz_test_voxel_object_split_off_disconnected_region(generator: SDFVoxelGenerator) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let voxel_type_densities = vec![1.0; 256];
 
@@ -2801,8 +2798,8 @@ mod tests {
     use super::*;
     use crate::{
         generation::{
-            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFUnion, SDFVoxelGenerator,
-            SameVoxelTypeGenerator, SphereSDFGenerator,
+            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFGeneratorBuilder, SDFVoxelGenerator,
+            SameVoxelTypeGenerator,
         },
         voxel_types::VoxelType,
     };
@@ -2811,8 +2808,8 @@ mod tests {
     fn connected_region_count_is_correct_for_single_voxel() {
         let generator = SDFVoxelGenerator::new(
             1.0,
-            BoxSDFGenerator::new([1.0; 3]),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            BoxSDFGenerator::new([1.0; 3]).into(),
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_region_count();
@@ -2827,8 +2824,9 @@ mod tests {
                 0.224581,
                 0.250592,
                 2880154539,
-            ),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            )
+            .into(),
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         object.validate_region_count();
@@ -2836,15 +2834,17 @@ mod tests {
 
     #[test]
     fn should_split_off_disconnected_sphere() {
+        let mut builder = SDFGeneratorBuilder::new();
+        let sphere_1_id = builder.add_sphere(25.0);
+        let sphere_2_id = builder.add_sphere(25.0);
+        let sphere_2_id = builder.add_translation(sphere_2_id, vector![60.0, 0.0, 0.0]);
+        builder.add_union(sphere_1_id, sphere_2_id, 1.0);
+        let sdf_generator = builder.build().unwrap();
+
         let generator = SDFVoxelGenerator::new(
             1.0,
-            SDFUnion::new(
-                SphereSDFGenerator::new(25.0),
-                SphereSDFGenerator::new(25.0),
-                [60.0, 0.0, 0.0],
-                1.0,
-            ),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            sdf_generator,
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
         assert!(object.split_off_any_disconnected_region().is_some());

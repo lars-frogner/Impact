@@ -1,11 +1,16 @@
 //! Generation of spatial voxel distributions.
 
 use crate::{Voxel, VoxelSignedDistance, voxel_types::VoxelType};
+use allocator_api2::{
+    alloc::{Allocator, Global},
+    vec::Vec as AVec,
+};
+use anyhow::{Result, anyhow, bail};
+use impact_geometry::{AxisAlignedBox, OrientedBox};
 use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3, point, vector};
 use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
-use std::array;
-use twox_hash::XxHash64;
+use twox_hash::XxHash32;
 
 /// Represents a voxel generator that provides a voxel type given the voxel
 /// indices.
@@ -23,7 +28,17 @@ pub trait VoxelGenerator {
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
 }
 
-/// Represents a signed distance field generator.
+/// Generator for a voxel object from a signed distance field.
+#[derive(Clone, Debug)]
+pub struct SDFVoxelGenerator {
+    voxel_extent: f64,
+    grid_shape: [usize; 3],
+    grid_center: Point3<f32>,
+    sdf_generator: SDFGenerator,
+    voxel_type_generator: VoxelTypeGenerator,
+}
+
+/// A signed distance field generator.
 ///
 /// # Note
 /// We might not actually want a real signed distance field, because it is hard
@@ -31,95 +46,154 @@ pub trait VoxelGenerator {
 /// surface. Instead, it might be better to embrace it as a signed field that
 /// has correct distances only close to the surface, as this is what we
 /// typically care about.
-pub trait SDFGenerator {
-    /// Returns the extents of the domain around the center where the signed
-    /// distance field can be negative, in voxel grid coordinates.
-    fn domain_extents(&self) -> [f64; 3];
-
-    // Computes the signed distance at the given displacement in voxel grid
-    // coordinates from the center of the field.
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64;
-}
-
-pub trait VoxelTypeGenerator {
-    fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType;
-}
-
-/// Generator for a voxel object from a signed distance field.
 #[derive(Clone, Debug)]
-pub struct SDFVoxelGenerator<SD, VT> {
-    voxel_extent: f64,
-    grid_shape: [usize; 3],
-    grid_center: Point3<f64>,
-    sdf_generator: SD,
-    voxel_type_generator: VT,
+pub struct SDFGenerator {
+    /// Nodes in reverse depth-first order. The last node is the root.
+    nodes: Vec<SDFGeneratorNode>,
+    domain_extents: [f32; 3],
 }
 
-/// Wrapper for a signed distance field generator that adds a multifractal noise
-/// term to the output signed distance.
-///
-/// Note that the resulting field will in general not contain correct distances,
-/// so this is best used only for minor perturbations.
 #[derive(Clone, Debug)]
-pub struct MultifractalNoiseSDFModifier<SD> {
-    noise: HybridMulti<Simplex>,
-    amplitude: f64,
-    sdf_generator: SD,
+pub struct SDFGeneratorBuilder {
+    nodes: Vec<SDFGeneratorNode>,
+    root_node_id: SDFNodeID,
 }
 
-/// Wrapper for a signed distance field generator that performs a stochastic
-/// multiscale modification of the output signed distance around the surface.
-/// This is done by superimposing a field representing a grid of spheres with
-/// randomized radii, which is unioned with the original field aroud the
-/// surface. This is repeated for each octave with successively smaller and more
-/// numerous spheres.
-///
-/// See <https://iquilezles.org/articles/fbmsdf/> for more information.
-///
-/// The output will be a valid signed distance field.
-#[derive(Clone, Debug)]
-pub struct MultiscaleSphereSDFModifier<SD> {
-    octaves: usize,
-    frequency: f64,
-    persistence: f64,
-    inflation: f64,
-    smoothness: f64,
-    seed: u64,
-    sdf_generator: SD,
-}
+pub type SDFNodeID = u32;
 
-/// Wrapper over two signed distance field generators that outputs the smooth
-/// union of the two SDFs.
 #[derive(Clone, Debug)]
-pub struct SDFUnion<SD1, SD2> {
-    smoothness: f64,
-    domain_extents: [f64; 3],
-    displacement_from_center_to_center_1: Vector3<f64>,
-    displacement_from_center_to_center_2: Vector3<f64>,
-    sdf_generator_1: SD1,
-    sdf_generator_2: SD2,
+enum SDFGeneratorNode {
+    // Primitives
+    Box(BoxSDFGenerator),
+    Sphere(SphereSDFGenerator),
+    GradientNoise(GradientNoiseSDFGenerator),
+
+    // Transforms
+    Translation(SDFTranslation),
+    Rotation(SDFRotation),
+    Scaling(SDFScaling),
+
+    // Modifiers
+    MultifractalNoise(MultifractalNoiseSDFModifier),
+    MultiscaleSphere(MultiscaleSphereSDFModifier),
+
+    // Binary operations
+    Union(SDFUnion),
+    Subtraction(SDFSubtraction),
+    Intersection(SDFIntersection),
 }
 
 /// Generator for a signed distance field representing a box.
 #[derive(Clone, Debug)]
 pub struct BoxSDFGenerator {
-    half_extents: Vector3<f64>,
+    half_extents: Vector3<f32>,
 }
 
 /// Generator for a signed distance field representing a sphere.
 #[derive(Clone, Debug)]
 pub struct SphereSDFGenerator {
-    radius: f64,
+    radius: f32,
 }
 
 /// Generator for a signed "distance" field obtained by thresholding a gradient
 /// noise pattern.
 #[derive(Clone, Debug)]
 pub struct GradientNoiseSDFGenerator {
-    extents: [f64; 3],
-    noise_frequency: f64,
-    noise_threshold: f64,
+    half_extents: Vector3<f32>,
+    noise_frequency: f32,
+    noise_threshold: f32,
     noise: Simplex,
+}
+
+#[derive(Clone, Debug)]
+struct SDFTranslation {
+    child_id: SDFNodeID,
+    translation: Vector3<f32>,
+}
+
+#[derive(Clone, Debug)]
+struct SDFRotation {
+    child_id: SDFNodeID,
+    rotation: UnitQuaternion<f32>,
+}
+
+#[derive(Clone, Debug)]
+struct SDFScaling {
+    child_id: SDFNodeID,
+    scaling: f32,
+}
+
+#[derive(Clone, Debug)]
+struct SDFUnion {
+    child_1_id: SDFNodeID,
+    child_2_id: SDFNodeID,
+    smoothness: f32,
+}
+
+#[derive(Clone, Debug)]
+struct SDFSubtraction {
+    child_1_id: SDFNodeID,
+    child_2_id: SDFNodeID,
+    smoothness: f32,
+}
+
+#[derive(Clone, Debug)]
+struct SDFIntersection {
+    child_1_id: SDFNodeID,
+    child_2_id: SDFNodeID,
+    smoothness: f32,
+}
+
+/// Modifier for a signed distance field that adds a multifractal noise term to
+/// the signed distance.
+///
+/// Note that the resulting field will in general not contain correct distances,
+/// so this is best used only for minor perturbations.
+#[derive(Clone, Debug)]
+struct MultifractalNoiseSDFModifier {
+    child_id: SDFNodeID,
+    noise: HybridMulti<Simplex>,
+    amplitude: f32,
+}
+
+/// Modifier for a signed distance field that performs a stochastic multiscale
+/// modification of the signed distance around the surface. This is done by
+/// superimposing a field representing a grid of spheres with randomized radii,
+/// which is unioned with the original field aroud the surface. This is repeated
+/// for each octave with successively smaller and more numerous spheres.
+///
+/// See <https://iquilezles.org/articles/fbmsdf/> for more information.
+///
+/// The output will be a valid signed distance field.
+#[derive(Clone, Debug)]
+struct MultiscaleSphereSDFModifier {
+    child_id: SDFNodeID,
+    octaves: u32,
+    frequency: f32,
+    persistence: f32,
+    inflation: f32,
+    smoothness: f32,
+    seed: u32,
+}
+
+#[derive(Clone, Debug)]
+enum BuildOperation {
+    VisitChildren(SDFNodeID),
+    Process(SDFNodeID),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NodeBuildState {
+    Unvisited,
+    ChildrenBeingVisited,
+    DomainDetermined,
+}
+
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug)]
+pub enum VoxelTypeGenerator {
+    Same(SameVoxelTypeGenerator),
+    GradientNoise(GradientNoiseVoxelTypeGenerator),
 }
 
 /// Voxel type generator that always returns the same voxel type.
@@ -139,13 +213,14 @@ pub struct GradientNoiseVoxelTypeGenerator {
     noise: Simplex,
 }
 
-impl<SD, VT> SDFVoxelGenerator<SD, VT>
-where
-    SD: SDFGenerator,
-{
+impl SDFVoxelGenerator {
     /// Creates a new voxel generator using the given signed distance field
     /// and voxel type generators.
-    pub fn new(voxel_extent: f64, sdf_generator: SD, voxel_type_generator: VT) -> Self {
+    pub fn new(
+        voxel_extent: f64,
+        sdf_generator: SDFGenerator,
+        voxel_type_generator: VoxelTypeGenerator,
+    ) -> Self {
         assert!(voxel_extent > 0.0);
 
         let sdf_domain_extents = sdf_generator.domain_extents();
@@ -158,7 +233,7 @@ where
         // The center here is offset by half a grid cell relative to the coordinates
         // in the voxel object to account for the fact that we want to evaluate the
         // SDF at the center of each voxel
-        let grid_center = Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f64));
+        let grid_center = Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f32));
 
         Self {
             voxel_extent,
@@ -170,11 +245,7 @@ where
     }
 }
 
-impl<SD, VT> VoxelGenerator for SDFVoxelGenerator<SD, VT>
-where
-    SD: SDFGenerator,
-    VT: VoxelTypeGenerator,
-{
+impl VoxelGenerator for SDFVoxelGenerator {
     fn voxel_extent(&self) -> f64 {
         self.voxel_extent
     }
@@ -184,11 +255,11 @@ where
     }
 
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-        let displacement_from_center = point![i as f64, j as f64, k as f64] - self.grid_center;
+        let displacement_from_center = point![i as f32, j as f32, k as f32] - self.grid_center;
 
         let signed_distance = VoxelSignedDistance::from_f32(
             self.sdf_generator
-                .compute_signed_distance(&displacement_from_center) as f32,
+                .compute_signed_distance(&displacement_from_center),
         );
 
         if signed_distance.is_negative() {
@@ -200,58 +271,649 @@ where
     }
 }
 
-impl<SD> MultifractalNoiseSDFModifier<SD> {
-    pub fn new(
-        sdf_generator: SD,
-        octaves: usize,
-        frequency: f64,
-        lacunarity: f64,
-        persistence: f64,
-        amplitude: f64,
-        seed: u32,
-    ) -> Self {
-        let noise = HybridMulti::new(seed)
-            .set_octaves(octaves)
-            .set_frequency(frequency)
-            .set_lacunarity(lacunarity)
-            .set_persistence(persistence);
+impl SDFGenerator {
+    const MAX_PRIMITIVES: usize = 16;
+
+    fn new<A>(arena: A, nodes: Vec<SDFGeneratorNode>, root_node_id: SDFNodeID) -> Result<Self>
+    where
+        A: Allocator + Copy,
+    {
+        let mut ordered_nodes = Vec::with_capacity(nodes.len());
+
+        let mut domains = AVec::new_in(arena);
+        domains.resize(nodes.len(), zero_domain());
+
+        let mut states = AVec::new_in(arena);
+        states.resize(nodes.len(), NodeBuildState::Unvisited);
+
+        let mut operation_stack = AVec::with_capacity_in(3 * nodes.len(), arena);
+
+        operation_stack.push(BuildOperation::VisitChildren(root_node_id));
+
+        while let Some(operation) = operation_stack.pop() {
+            match operation {
+                BuildOperation::VisitChildren(node_id) => {
+                    let node_idx = node_id as usize;
+
+                    let state = states
+                        .get_mut(node_idx)
+                        .ok_or_else(|| anyhow!("Missing SDF node {node_id}"))?;
+
+                    operation_stack.push(BuildOperation::Process(node_id));
+
+                    match *state {
+                        NodeBuildState::DomainDetermined => {
+                            // Domain already determined via a different parent
+                        }
+                        NodeBuildState::ChildrenBeingVisited => {
+                            // We got back to the same node while visiting its children
+                            bail!("Detected cycle in SDF generator node graph")
+                        }
+                        NodeBuildState::Unvisited => {
+                            *state = NodeBuildState::ChildrenBeingVisited;
+
+                            match &nodes[node_idx] {
+                                SDFGeneratorNode::Box(_)
+                                | SDFGeneratorNode::Sphere(_)
+                                | SDFGeneratorNode::GradientNoise(_) => {}
+                                SDFGeneratorNode::Translation(SDFTranslation {
+                                    child_id, ..
+                                })
+                                | SDFGeneratorNode::Rotation(SDFRotation { child_id, .. })
+                                | SDFGeneratorNode::Scaling(SDFScaling { child_id, .. })
+                                | SDFGeneratorNode::MultifractalNoise(
+                                    MultifractalNoiseSDFModifier { child_id, .. },
+                                )
+                                | SDFGeneratorNode::MultiscaleSphere(
+                                    MultiscaleSphereSDFModifier { child_id, .. },
+                                ) => {
+                                    operation_stack.push(BuildOperation::VisitChildren(*child_id));
+                                }
+                                SDFGeneratorNode::Union(SDFUnion {
+                                    child_1_id,
+                                    child_2_id,
+                                    ..
+                                })
+                                | SDFGeneratorNode::Subtraction(SDFSubtraction {
+                                    child_1_id,
+                                    child_2_id,
+                                    ..
+                                })
+                                | SDFGeneratorNode::Intersection(SDFIntersection {
+                                    child_1_id,
+                                    child_2_id,
+                                    ..
+                                }) => {
+                                    operation_stack
+                                        .push(BuildOperation::VisitChildren(*child_1_id));
+                                    operation_stack
+                                        .push(BuildOperation::VisitChildren(*child_2_id));
+                                }
+                            }
+                        }
+                    }
+                }
+                BuildOperation::Process(node_id) => {
+                    let node_idx = node_id as usize;
+                    let node = &nodes[node_idx];
+                    let state = &mut states[node_idx];
+
+                    ordered_nodes.push(node.clone());
+
+                    if *state != NodeBuildState::DomainDetermined {
+                        *state = NodeBuildState::DomainDetermined;
+
+                        match node {
+                            SDFGeneratorNode::Box(box_generator) => {
+                                domains[node_idx] = box_generator.domain_bounds();
+                            }
+                            SDFGeneratorNode::Sphere(sphere_generator) => {
+                                domains[node_idx] = sphere_generator.domain_bounds();
+                            }
+                            SDFGeneratorNode::GradientNoise(gradient_noise_generator) => {
+                                domains[node_idx] = gradient_noise_generator.domain_bounds();
+                            }
+                            &SDFGeneratorNode::Translation(SDFTranslation {
+                                child_id,
+                                translation,
+                            }) => {
+                                let child_domain = &domains[child_id as usize];
+                                domains[node_idx] = child_domain.translated(&translation);
+                            }
+                            &SDFGeneratorNode::Rotation(SDFRotation { child_id, rotation }) => {
+                                let child_domain = &domains[child_id as usize];
+                                let domain_ob = OrientedBox::from_axis_aligned_box(child_domain)
+                                    .rotated(&rotation);
+                                domains[node_idx] = AxisAlignedBox::aabb_for_point_array(
+                                    &domain_ob.compute_corners(),
+                                );
+                            }
+                            &SDFGeneratorNode::Scaling(SDFScaling { child_id, scaling }) => {
+                                let child_domain = &domains[child_id as usize];
+                                domains[node_idx] = child_domain.scaled_about_center(scaling);
+                            }
+                            SDFGeneratorNode::MultifractalNoise(MultifractalNoiseSDFModifier {
+                                child_id,
+                                amplitude,
+                                ..
+                            }) => {
+                                let child_domain = &domains[*child_id as usize];
+                                domains[node_idx] = pad_domain(child_domain.clone(), *amplitude);
+                            }
+                            SDFGeneratorNode::MultiscaleSphere(
+                                modifier @ MultiscaleSphereSDFModifier { child_id, .. },
+                            ) => {
+                                let child_domain = &domains[*child_id as usize];
+                                domains[node_idx] =
+                                    pad_domain(child_domain.clone(), modifier.max_scale());
+                            }
+                            &SDFGeneratorNode::Union(SDFUnion {
+                                child_1_id,
+                                child_2_id,
+                                smoothness,
+                            }) => {
+                                let child_1_domain = &domains[child_1_id as usize];
+                                let child_2_domain = &domains[child_2_id as usize];
+                                let domain =
+                                    AxisAlignedBox::aabb_from_pair(child_1_domain, child_2_domain);
+                                domains[node_idx] =
+                                    pad_domain(domain, domain_padding_for_smoothness(smoothness));
+                            }
+                            &SDFGeneratorNode::Subtraction(SDFSubtraction {
+                                child_1_id,
+                                child_2_id: _,
+                                smoothness,
+                            }) => {
+                                let selected_child_domain = &domains[child_1_id as usize];
+                                domains[node_idx] = pad_domain(
+                                    selected_child_domain.clone(),
+                                    domain_padding_for_smoothness(smoothness),
+                                );
+                            }
+                            &SDFGeneratorNode::Intersection(SDFIntersection {
+                                child_1_id,
+                                child_2_id,
+                                smoothness,
+                            }) => {
+                                let child_1_domain = &domains[child_1_id as usize];
+                                let child_2_domain = &domains[child_2_id as usize];
+                                domains[node_idx] = if let Some(domain) =
+                                    child_1_domain.compute_overlap_with(child_2_domain)
+                                {
+                                    pad_domain(domain, domain_padding_for_smoothness(smoothness))
+                                } else {
+                                    zero_domain()
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let domain = &domains[root_node_id as usize];
+
+        let domain_extents = domain.extents().into();
+
+        Ok(Self {
+            nodes: ordered_nodes,
+            domain_extents,
+        })
+    }
+
+    /// Returns the extents of the domain around the center where the signed
+    /// distance field can be negative, in voxel grid coordinates.
+    pub fn domain_extents(&self) -> [f32; 3] {
+        self.domain_extents
+    }
+
+    // Computes the signed distance at the given displacement in voxel grid
+    // coordinates from the center of the field.
+    #[inline]
+    pub fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+        let mut displacements_for_primitives = [Vector3::zeros(); Self::MAX_PRIMITIVES];
+        let mut branch_idx: usize = 0;
+
+        displacements_for_primitives[branch_idx] = *displacement_from_center;
+
+        for node in self.nodes.iter().rev() {
+            match node {
+                SDFGeneratorNode::Union(_)
+                | SDFGeneratorNode::Subtraction(_)
+                | SDFGeneratorNode::Intersection(_) => {
+                    // Duplicate current displacement for the second child branch
+                    displacements_for_primitives[branch_idx + 1] =
+                        displacements_for_primitives[branch_idx];
+                }
+                SDFGeneratorNode::Translation(SDFTranslation { translation, .. }) => {
+                    displacements_for_primitives[branch_idx] -= translation;
+                }
+                SDFGeneratorNode::Rotation(SDFRotation { rotation, .. }) => {
+                    let displacement = &mut displacements_for_primitives[branch_idx];
+                    *displacement = rotation.inverse_transform_vector(displacement);
+                }
+                SDFGeneratorNode::Scaling(SDFScaling { scaling, .. }) => {
+                    displacements_for_primitives[branch_idx].unscale_mut(*scaling);
+                }
+                SDFGeneratorNode::Box(_)
+                | SDFGeneratorNode::Sphere(_)
+                | SDFGeneratorNode::GradientNoise(_) => {
+                    branch_idx += 1;
+                }
+                SDFGeneratorNode::MultifractalNoise(_) | SDFGeneratorNode::MultiscaleSphere(_) => {}
+            }
+        }
+
+        let mut signed_distance_stack = [0.0_f32; Self::MAX_PRIMITIVES];
+        let mut primitive_index_stack = [0_usize; Self::MAX_PRIMITIVES];
+        let mut stack_top: usize = 0;
+
+        for node in &self.nodes {
+            match node {
+                SDFGeneratorNode::Box(box_generator) => {
+                    debug_assert!(branch_idx > 0);
+                    branch_idx -= 1;
+
+                    let displacement = &displacements_for_primitives[branch_idx];
+
+                    signed_distance_stack[stack_top] =
+                        box_generator.compute_signed_distance(displacement);
+                    primitive_index_stack[stack_top] = branch_idx;
+
+                    stack_top += 1;
+                }
+                SDFGeneratorNode::Sphere(sphere_generator) => {
+                    debug_assert!(branch_idx > 0);
+                    branch_idx -= 1;
+
+                    let displacement = &displacements_for_primitives[branch_idx];
+
+                    signed_distance_stack[stack_top] =
+                        sphere_generator.compute_signed_distance(displacement);
+                    primitive_index_stack[stack_top] = branch_idx;
+
+                    stack_top += 1;
+                }
+                SDFGeneratorNode::GradientNoise(gradient_noise_generator) => {
+                    debug_assert!(branch_idx > 0);
+                    branch_idx -= 1;
+
+                    let displacement = &displacements_for_primitives[branch_idx];
+
+                    signed_distance_stack[stack_top] =
+                        gradient_noise_generator.compute_signed_distance(displacement);
+                    primitive_index_stack[stack_top] = branch_idx;
+
+                    stack_top += 1;
+                }
+                SDFGeneratorNode::Translation(_) | SDFGeneratorNode::Rotation(_) => {}
+                SDFGeneratorNode::Scaling(SDFScaling { scaling, .. }) => {
+                    debug_assert!(stack_top >= 1);
+                    signed_distance_stack[stack_top - 1] *= scaling;
+                }
+                SDFGeneratorNode::MultifractalNoise(modifier) => {
+                    let primitive_index = primitive_index_stack[stack_top - 1];
+                    let displacement = &displacements_for_primitives[primitive_index];
+                    let perturbation = modifier.compute_signed_distance_perturbation(displacement);
+                    signed_distance_stack[stack_top - 1] += perturbation;
+                }
+                SDFGeneratorNode::MultiscaleSphere(modifier) => {
+                    let primitive_index = primitive_index_stack[stack_top - 1];
+                    let displacement = &displacements_for_primitives[primitive_index];
+                    let signed_distance = &mut signed_distance_stack[stack_top - 1];
+                    *signed_distance =
+                        modifier.modify_signed_distance(displacement, *signed_distance);
+                }
+                &SDFGeneratorNode::Union(SDFUnion { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    let distance_1 = signed_distance_stack[stack_top - 2];
+                    let distance_2 = signed_distance_stack[stack_top - 1];
+                    stack_top -= 1;
+                    signed_distance_stack[stack_top - 1] =
+                        sdf_union(distance_1, distance_2, smoothness);
+                    // primitive_index_stack[stack_top - 1] already holds a valid displacement index
+                }
+                &SDFGeneratorNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    let distance_1 = signed_distance_stack[stack_top - 2];
+                    let distance_2 = signed_distance_stack[stack_top - 1];
+                    stack_top -= 1;
+                    signed_distance_stack[stack_top - 1] =
+                        sdf_subtraction(distance_1, distance_2, smoothness);
+                }
+                &SDFGeneratorNode::Intersection(SDFIntersection { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    let distance_1 = signed_distance_stack[stack_top - 2];
+                    let distance_2 = signed_distance_stack[stack_top - 1];
+                    stack_top -= 1;
+                    signed_distance_stack[stack_top - 1] =
+                        sdf_intersection(distance_1, distance_2, smoothness);
+                }
+            }
+        }
+
+        assert_eq!(stack_top, 1);
+
+        signed_distance_stack[0]
+    }
+}
+
+impl From<BoxSDFGenerator> for SDFGenerator {
+    fn from(generator: BoxSDFGenerator) -> Self {
+        Self::new(Global, vec![SDFGeneratorNode::Box(generator)], 0).unwrap()
+    }
+}
+
+impl From<SphereSDFGenerator> for SDFGenerator {
+    fn from(generator: SphereSDFGenerator) -> Self {
+        Self::new(Global, vec![SDFGeneratorNode::Sphere(generator)], 0).unwrap()
+    }
+}
+
+impl From<GradientNoiseSDFGenerator> for SDFGenerator {
+    fn from(generator: GradientNoiseSDFGenerator) -> Self {
+        Self::new(Global, vec![SDFGeneratorNode::GradientNoise(generator)], 0).unwrap()
+    }
+}
+
+impl SDFGeneratorBuilder {
+    pub fn new() -> Self {
         Self {
+            nodes: Vec::new(),
+            root_node_id: 0,
+        }
+    }
+
+    pub fn build(self) -> Result<SDFGenerator> {
+        self.build_with_arena(Global)
+    }
+
+    pub fn build_with_arena<A>(self, arena: A) -> Result<SDFGenerator>
+    where
+        A: Allocator + Copy,
+    {
+        if self.nodes.is_empty() {
+            bail!("Tried to build SDF generator from empty builder");
+        }
+        SDFGenerator::new(arena, self.nodes, self.root_node_id)
+    }
+
+    pub fn add_box(&mut self, extents: [f32; 3]) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Box(BoxSDFGenerator::new(extents)))
+    }
+
+    pub fn add_sphere(&mut self, radius: f32) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Sphere(SphereSDFGenerator::new(radius)))
+    }
+
+    pub fn add_gradient_noise(
+        &mut self,
+        extents: [f32; 3],
+        noise_frequency: f32,
+        noise_threshold: f32,
+        seed: u32,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::GradientNoise(
+            GradientNoiseSDFGenerator::new(extents, noise_frequency, noise_threshold, seed),
+        ))
+    }
+
+    pub fn add_translation(&mut self, child_id: SDFNodeID, translation: Vector3<f32>) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Translation(SDFTranslation {
+            child_id,
+            translation,
+        }))
+    }
+
+    pub fn add_rotation(
+        &mut self,
+        child_id: SDFNodeID,
+        rotation: UnitQuaternion<f32>,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Rotation(SDFRotation {
+            child_id,
+            rotation,
+        }))
+    }
+
+    pub fn add_scaling(&mut self, child_id: SDFNodeID, scaling: f32) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Scaling(SDFScaling::new(
+            child_id, scaling,
+        )))
+    }
+
+    pub fn add_multifractal_noise(
+        &mut self,
+        child_id: SDFNodeID,
+        octaves: u32,
+        frequency: f32,
+        lacunarity: f32,
+        persistence: f32,
+        amplitude: f32,
+        seed: u32,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::MultifractalNoise(
+            MultifractalNoiseSDFModifier::new(
+                child_id,
+                octaves,
+                frequency,
+                lacunarity,
+                persistence,
+                amplitude,
+                seed,
+            ),
+        ))
+    }
+
+    pub fn add_multiscale_sphere(
+        &mut self,
+        child_id: SDFNodeID,
+        octaves: u32,
+        max_scale: f32,
+        persistence: f32,
+        inflation: f32,
+        smoothness: f32,
+        seed: u32,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::MultiscaleSphere(
+            MultiscaleSphereSDFModifier::new(
+                child_id,
+                octaves,
+                max_scale,
+                persistence,
+                inflation,
+                smoothness,
+                seed,
+            ),
+        ))
+    }
+
+    pub fn add_union(
+        &mut self,
+        child_1_id: SDFNodeID,
+        child_2_id: SDFNodeID,
+        smoothness: f32,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Union(SDFUnion::new(
+            child_1_id, child_2_id, smoothness,
+        )))
+    }
+
+    pub fn add_subtraction(
+        &mut self,
+        child_1_id: SDFNodeID,
+        child_2_id: SDFNodeID,
+        smoothness: f32,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Subtraction(SDFSubtraction::new(
+            child_1_id, child_2_id, smoothness,
+        )))
+    }
+
+    pub fn add_intersection(
+        &mut self,
+        child_1_id: SDFNodeID,
+        child_2_id: SDFNodeID,
+        smoothness: f32,
+    ) -> SDFNodeID {
+        self.add_node_and_set_to_root(SDFGeneratorNode::Intersection(SDFIntersection::new(
+            child_1_id, child_2_id, smoothness,
+        )))
+    }
+
+    fn add_node_and_set_to_root(&mut self, node: SDFGeneratorNode) -> SDFNodeID {
+        let node_id = self.nodes.len().try_into().unwrap();
+        self.nodes.push(node);
+        self.root_node_id = node_id;
+        node_id
+    }
+}
+
+impl Default for SDFGeneratorBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BoxSDFGenerator {
+    /// Creates a new generator for a box with the given extents (in voxels).
+    pub fn new(extents: [f32; 3]) -> Self {
+        assert!(extents.iter().copied().all(f32::is_sign_positive));
+        let half_extents = 0.5 * Vector3::from(extents);
+        Self { half_extents }
+    }
+
+    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+        AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+        let q = displacement_from_center.abs() - self.half_extents;
+        q.sup(&Vector3::zeros()).magnitude() + f32::min(q.max(), 0.0)
+    }
+}
+
+impl SphereSDFGenerator {
+    /// Creates a new generator for a sphere with the given radius (in voxels).
+    pub fn new(radius: f32) -> Self {
+        assert!(radius >= 0.0);
+        Self { radius }
+    }
+
+    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+        AxisAlignedBox::new([-self.radius; 3].into(), [self.radius; 3].into())
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+        displacement_from_center.magnitude() - self.radius
+    }
+}
+
+impl GradientNoiseSDFGenerator {
+    /// Creates a new generator for a gradient noise voxel pattern with the
+    /// given extents (in voxels), noise frequency, noise threshold and seed.
+    pub fn new(extents: [f32; 3], noise_frequency: f32, noise_threshold: f32, seed: u32) -> Self {
+        assert!(extents.iter().copied().all(f32::is_sign_positive));
+        let half_extents = 0.5 * Vector3::from(extents);
+        let noise = Simplex::new(seed);
+        Self {
+            half_extents,
+            noise_frequency,
+            noise_threshold,
             noise,
-            amplitude,
-            sdf_generator,
+        }
+    }
+
+    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+        AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
+    }
+
+    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+        let noise_point: [f64; 3] = (self.noise_frequency * displacement_from_center)
+            .cast()
+            .into();
+        let noise_value = self.noise.get(noise_point);
+        self.noise_threshold - noise_value as f32
+    }
+}
+
+impl SDFScaling {
+    fn new(child_id: SDFNodeID, scaling: f32) -> Self {
+        assert!(scaling > 0.0);
+        Self { child_id, scaling }
+    }
+}
+
+impl SDFUnion {
+    fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
+        assert!(smoothness >= 0.0);
+        Self {
+            child_1_id,
+            child_2_id,
+            smoothness,
         }
     }
 }
 
-impl<SD> SDFGenerator for MultifractalNoiseSDFModifier<SD>
-where
-    SD: SDFGenerator,
-{
-    fn domain_extents(&self) -> [f64; 3] {
-        self.sdf_generator.domain_extents()
-    }
-
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-        let signed_distance = self
-            .sdf_generator
-            .compute_signed_distance(displacement_from_center);
-
-        let noise_point: [f64; 3] = (*displacement_from_center).into();
-        let perturbation = self.amplitude * self.noise.get(noise_point);
-
-        signed_distance + perturbation
+impl SDFSubtraction {
+    fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
+        assert!(smoothness >= 0.0);
+        Self {
+            child_1_id,
+            child_2_id,
+            smoothness,
+        }
     }
 }
 
-impl<SD> MultiscaleSphereSDFModifier<SD> {
-    pub fn new(
-        sdf_generator: SD,
-        octaves: usize,
-        max_scale: f64,
-        persistence: f64,
-        inflation: f64,
-        smoothness: f64,
-        seed: u64,
+impl SDFIntersection {
+    fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
+        assert!(smoothness >= 0.0);
+        Self {
+            child_1_id,
+            child_2_id,
+            smoothness,
+        }
+    }
+}
+
+impl MultifractalNoiseSDFModifier {
+    fn new(
+        child_id: SDFNodeID,
+        octaves: u32,
+        frequency: f32,
+        lacunarity: f32,
+        persistence: f32,
+        amplitude: f32,
+        seed: u32,
+    ) -> Self {
+        let noise = HybridMulti::new(seed)
+            .set_octaves(octaves as usize)
+            .set_frequency(frequency.into())
+            .set_lacunarity(lacunarity.into())
+            .set_persistence(persistence.into());
+        Self {
+            child_id,
+            noise,
+            amplitude,
+        }
+    }
+
+    fn compute_signed_distance_perturbation(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+        let noise_point: [f64; 3] = displacement_from_center.cast().into();
+        self.amplitude * self.noise.get(noise_point) as f32
+    }
+}
+
+impl MultiscaleSphereSDFModifier {
+    fn new(
+        child_id: SDFNodeID,
+        octaves: u32,
+        max_scale: f32,
+        persistence: f32,
+        inflation: f32,
+        smoothness: f32,
+        seed: u32,
     ) -> Self {
         let frequency = 0.5 / max_scale;
 
@@ -260,24 +922,25 @@ impl<SD> MultiscaleSphereSDFModifier<SD> {
         let smoothness = max_scale * smoothness;
 
         Self {
+            child_id,
             octaves,
             frequency,
             persistence,
             inflation,
             smoothness,
             seed,
-            sdf_generator,
         }
     }
 
-    fn modify_signed_distance(&self, position: &Vector3<f64>, signed_distance: f64) -> f64 {
+    fn max_scale(&self) -> f32 {
+        0.5 / self.frequency
+    }
+
+    fn modify_signed_distance(&self, position: &Vector3<f32>, signed_distance: f32) -> f32 {
         /// Rotates with an angle of `2 * pi / golden_ratio` around the axis
         /// `[1, 1, 1]` (to break up the regular grid pattern).
-        const ROTATION: UnitQuaternion<f64> = UnitQuaternion::new_unchecked(Quaternion::new(
-            0.5381091707820528,
-            0.5381091707820528,
-            0.5381091707820528,
-            -0.36237489008036256,
+        const ROTATION: UnitQuaternion<f32> = UnitQuaternion::new_unchecked(Quaternion::new(
+            -0.3623749, 0.5381091, 0.5381091, 0.5381091,
         ));
 
         let mut parent_distance = signed_distance;
@@ -306,7 +969,7 @@ impl<SD> MultiscaleSphereSDFModifier<SD> {
         parent_distance
     }
 
-    fn evaluate_sphere_grid_sdf(&self, position: &Vector3<f64>) -> f64 {
+    fn evaluate_sphere_grid_sdf(&self, position: &Vector3<f32>) -> f32 {
         const CORNER_OFFSETS: [Vector3<i32>; 8] = [
             vector![0, 0, 0],
             vector![0, 0, 1],
@@ -337,9 +1000,9 @@ impl<SD> MultiscaleSphereSDFModifier<SD> {
     fn evaluate_corner_sphere_sdf(
         &self,
         grid_cell_indices: &Vector3<i32>,
-        offset_in_grid_cell: &Vector3<f64>,
+        offset_in_grid_cell: &Vector3<f32>,
         corner_offsets: &Vector3<i32>,
-    ) -> f64 {
+    ) -> f32 {
         let sphere_radius = self.corner_sphere_radius(grid_cell_indices, corner_offsets);
         let distance_to_sphere_center = (offset_in_grid_cell - corner_offsets.cast()).magnitude();
         distance_to_sphere_center - sphere_radius
@@ -350,183 +1013,41 @@ impl<SD> MultiscaleSphereSDFModifier<SD> {
         &self,
         grid_cell_indices: &Vector3<i32>,
         corner_offsets: &Vector3<i32>,
-    ) -> f64 {
+    ) -> f32 {
         // The maximum radius is half the extent of a grid cell, i.e. 0.5
-        const HASH_TO_RADIUS: f64 = 0.5 / u64::MAX as f64;
-        let hash = XxHash64::oneshot(
+        const HASH_TO_RADIUS: f32 = 0.5 / u32::MAX as f32;
+        let hash = XxHash32::oneshot(
             self.seed,
             bytemuck::bytes_of(&(grid_cell_indices + corner_offsets)),
         );
-        HASH_TO_RADIUS * hash as f64
+        HASH_TO_RADIUS * hash as f32
     }
 }
 
-impl<SD> SDFGenerator for MultiscaleSphereSDFModifier<SD>
-where
-    SD: SDFGenerator,
-{
-    fn domain_extents(&self) -> [f64; 3] {
-        self.sdf_generator
-            .domain_extents()
-            .map(|extent| extent + 5.0 * self.inflation)
-    }
-
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-        let signed_distance = self
-            .sdf_generator
-            .compute_signed_distance(displacement_from_center);
-
-        self.modify_signed_distance(displacement_from_center, signed_distance)
-    }
-}
-
-impl<SD1, SD2> SDFUnion<SD1, SD2>
-where
-    SD1: SDFGenerator,
-    SD2: SDFGenerator,
-{
-    /// Creates a new smooth union wrapper over the given signed distance field
-    /// generators, assuming that the centers of the two field domains are
-    /// offset by the given offset (in voxels).
-    pub fn new(
-        sdf_generator_1: SD1,
-        sdf_generator_2: SD2,
-        center_offsets: [f64; 3],
-        smoothness: f64,
-    ) -> Self {
-        let domain_extents_1 = sdf_generator_1.domain_extents();
-        let domain_extents_2 = sdf_generator_2.domain_extents();
-
-        let lower_corner_offsets: [_; 3] = array::from_fn(|dim| {
-            center_offsets[dim] + 0.5 * (domain_extents_1[dim] - domain_extents_2[dim])
-        });
-
-        let lower_corner: [_; 3] = array::from_fn(|dim| f64::min(0.0, lower_corner_offsets[dim]));
-
-        let domain_extents = array::from_fn(|dim| {
-            domain_extents_1[dim].max(domain_extents_2[dim] + lower_corner_offsets[dim])
-                - lower_corner[dim]
-        });
-
-        let displacement_from_center_to_center_1 =
-            array::from_fn(|dim| 0.5 * (domain_extents_1[dim] - domain_extents[dim])).into();
-
-        let displacement_from_center_to_center_2 = array::from_fn(|dim| {
-            lower_corner_offsets[dim] + 0.5 * (domain_extents_2[dim] - domain_extents[dim])
-        })
-        .into();
-
-        Self {
-            smoothness,
-            domain_extents,
-            displacement_from_center_to_center_1,
-            displacement_from_center_to_center_2,
-            sdf_generator_1,
-            sdf_generator_2,
+impl VoxelTypeGenerator {
+    fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+        match self {
+            Self::Same(SameVoxelTypeGenerator { voxel_type }) => *voxel_type,
+            Self::GradientNoise(generator) => generator.voxel_type_at_indices(i, j, k),
         }
     }
 }
 
-impl<SD1, SD2> SDFGenerator for SDFUnion<SD1, SD2>
-where
-    SD1: SDFGenerator,
-    SD2: SDFGenerator,
-{
-    fn domain_extents(&self) -> [f64; 3] {
-        self.domain_extents
-    }
-
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-        let displacement_from_center_1 =
-            displacement_from_center + self.displacement_from_center_to_center_1;
-        let displacement_from_center_2 =
-            displacement_from_center + self.displacement_from_center_to_center_2;
-
-        let signed_distance_1 = self
-            .sdf_generator_1
-            .compute_signed_distance(&displacement_from_center_1);
-        let signed_distance_2 = self
-            .sdf_generator_2
-            .compute_signed_distance(&displacement_from_center_2);
-
-        smooth_sdf_union(signed_distance_1, signed_distance_2, self.smoothness)
+impl From<SameVoxelTypeGenerator> for VoxelTypeGenerator {
+    fn from(generator: SameVoxelTypeGenerator) -> Self {
+        Self::Same(generator)
     }
 }
 
-impl BoxSDFGenerator {
-    /// Creates a new generator for a box with the given extents (in voxels).
-    pub fn new(extents: [f64; 3]) -> Self {
-        assert!(extents.iter().copied().all(f64::is_sign_positive));
-        let half_extents = 0.5 * Vector3::from(extents);
-        Self { half_extents }
-    }
-}
-
-impl SDFGenerator for BoxSDFGenerator {
-    fn domain_extents(&self) -> [f64; 3] {
-        (2.0 * self.half_extents).into()
-    }
-
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-        let q = displacement_from_center.abs() - self.half_extents;
-        q.sup(&Vector3::zeros()).magnitude() + f64::min(q.max(), 0.0)
-    }
-}
-
-impl SphereSDFGenerator {
-    /// Creates a new generator for a sphere with the given radius (in voxels).
-    pub fn new(radius: f64) -> Self {
-        assert!(radius >= 0.0);
-        Self { radius }
-    }
-}
-
-impl SDFGenerator for SphereSDFGenerator {
-    fn domain_extents(&self) -> [f64; 3] {
-        [2.0 * self.radius; 3]
-    }
-
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-        displacement_from_center.magnitude() - self.radius
-    }
-}
-
-impl GradientNoiseSDFGenerator {
-    /// Creates a new generator for a gradient noise voxel pattern with the
-    /// given extents (in voxels), noise frequency, noise threshold and seed.
-    pub fn new(extents: [f64; 3], noise_frequency: f64, noise_threshold: f64, seed: u32) -> Self {
-        assert!(extents.iter().copied().all(f64::is_sign_positive));
-        let noise = Simplex::new(seed);
-        Self {
-            extents,
-            noise_frequency,
-            noise_threshold,
-            noise,
-        }
-    }
-}
-
-impl SDFGenerator for GradientNoiseSDFGenerator {
-    fn domain_extents(&self) -> [f64; 3] {
-        self.extents
-    }
-
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-        let noise_point: [f64; 3] = (self.noise_frequency * displacement_from_center).into();
-        let noise_value = self.noise.get(noise_point);
-        self.noise_threshold - noise_value
+impl From<GradientNoiseVoxelTypeGenerator> for VoxelTypeGenerator {
+    fn from(generator: GradientNoiseVoxelTypeGenerator) -> Self {
+        Self::GradientNoise(generator)
     }
 }
 
 impl SameVoxelTypeGenerator {
     pub fn new(voxel_type: VoxelType) -> Self {
         Self { voxel_type }
-    }
-}
-
-impl VoxelTypeGenerator for SameVoxelTypeGenerator {
-    fn voxel_type_at_indices(&self, _i: usize, _j: usize, _k: usize) -> VoxelType {
-        self.voxel_type
     }
 }
 
@@ -550,9 +1071,7 @@ impl GradientNoiseVoxelTypeGenerator {
             noise,
         }
     }
-}
 
-impl VoxelTypeGenerator for GradientNoiseVoxelTypeGenerator {
     fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
         let x = i as f64 * self.noise_frequency;
         let y = j as f64 * self.noise_frequency;
@@ -572,23 +1091,65 @@ impl VoxelTypeGenerator for GradientNoiseVoxelTypeGenerator {
     }
 }
 
-fn smooth_sdf_union(distance_1: f64, distance_2: f64, smoothness: f64) -> f64 {
+fn zero_domain() -> AxisAlignedBox<f32> {
+    AxisAlignedBox::new(Point3::origin(), Point3::origin())
+}
+
+fn pad_domain(domain: AxisAlignedBox<f32>, padding: f32) -> AxisAlignedBox<f32> {
+    if padding == 0.0 {
+        return domain;
+    }
+    let padding = Vector3::repeat(padding);
+    AxisAlignedBox::new(
+        domain.lower_corner() - padding,
+        domain.upper_corner() + padding,
+    )
+}
+
+fn domain_padding_for_smoothness(smoothness: f32) -> f32 {
+    0.25 * smoothness
+}
+
+fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
+    if smoothness == 0.0 {
+        f32::min(distance_1, distance_2)
+    } else {
+        smooth_sdf_union(distance_1, distance_2, smoothness)
+    }
+}
+
+fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
+    if smoothness == 0.0 {
+        f32::max(distance_1, -distance_2)
+    } else {
+        smooth_sdf_subtraction(distance_1, distance_2, smoothness)
+    }
+}
+
+fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
+    if smoothness == 0.0 {
+        f32::max(distance_1, distance_2)
+    } else {
+        smooth_sdf_intersection(distance_1, distance_2, smoothness)
+    }
+}
+
+fn smooth_sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     let h = (0.5 + 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
     mix(distance_2, distance_1, h) - smoothness * h * (1.0 - h)
 }
 
-#[allow(dead_code)]
-fn smooth_sdf_subtraction(distance_1: f64, distance_2: f64, smoothness: f64) -> f64 {
+fn smooth_sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     let h = (0.5 - 0.5 * (distance_2 + distance_1) / smoothness).clamp(0.0, 1.0);
     mix(distance_2, -distance_1, h) + smoothness * h * (1.0 - h)
 }
 
-fn smooth_sdf_intersection(distance_1: f64, distance_2: f64, smoothness: f64) -> f64 {
+fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     let h = (0.5 - 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
     mix(distance_2, distance_1, h) + smoothness * h * (1.0 - h)
 }
 
-fn mix(a: f64, b: f64, factor: f64) -> f64 {
+fn mix(a: f32, b: f32, factor: f32) -> f32 {
     (1.0 - factor) * a + factor * b
 }
 
@@ -596,74 +1157,23 @@ fn mix(a: f64, b: f64, factor: f64) -> f64 {
 pub mod fuzzing {
     use super::*;
     use crate::voxel_types::VoxelTypeRegistry;
+    use allocator_api2::alloc::Global;
     use arbitrary::{Arbitrary, MaxRecursionReached, Result, Unstructured, size_hint};
     use std::mem;
 
-    #[allow(clippy::large_enum_variant)]
-    #[derive(Clone, Debug, Arbitrary)]
-    pub enum ArbitraryVoxelTypeGenerator {
-        Same(SameVoxelTypeGenerator),
-        GradientNoise(GradientNoiseVoxelTypeGenerator),
-    }
+    const MAX_SIZE: usize = 200;
 
-    #[allow(clippy::large_enum_variant)]
     #[derive(Clone, Debug, Arbitrary)]
-    pub enum ArbitrarySDFGenerator {
+    enum ArbitrarySDFGeneratorNode {
         Box(BoxSDFGenerator),
         Sphere(SphereSDFGenerator),
         GradientNoise(GradientNoiseSDFGenerator),
     }
 
-    pub type ArbitrarySDFVoxelGenerator =
-        SDFVoxelGenerator<ArbitrarySDFGenerator, ArbitraryVoxelTypeGenerator>;
-
-    const MAX_SIZE: usize = 200;
-
-    impl VoxelTypeGenerator for ArbitraryVoxelTypeGenerator {
-        fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
-            match self {
-                ArbitraryVoxelTypeGenerator::Same(generator) => {
-                    generator.voxel_type_at_indices(i, j, k)
-                }
-                ArbitraryVoxelTypeGenerator::GradientNoise(generator) => {
-                    generator.voxel_type_at_indices(i, j, k)
-                }
-            }
-        }
-    }
-
-    impl SDFGenerator for ArbitrarySDFGenerator {
-        fn domain_extents(&self) -> [f64; 3] {
-            match self {
-                ArbitrarySDFGenerator::Box(generator) => generator.domain_extents(),
-                ArbitrarySDFGenerator::Sphere(generator) => generator.domain_extents(),
-                ArbitrarySDFGenerator::GradientNoise(generator) => generator.domain_extents(),
-            }
-        }
-
-        fn compute_signed_distance(&self, displacement_from_center: &Vector3<f64>) -> f64 {
-            match self {
-                ArbitrarySDFGenerator::Box(generator) => {
-                    generator.compute_signed_distance(displacement_from_center)
-                }
-                ArbitrarySDFGenerator::Sphere(generator) => {
-                    generator.compute_signed_distance(displacement_from_center)
-                }
-                ArbitrarySDFGenerator::GradientNoise(generator) => {
-                    generator.compute_signed_distance(displacement_from_center)
-                }
-            }
-        }
-    }
-
-    impl<'a, SD, VT> Arbitrary<'a> for SDFVoxelGenerator<SD, VT>
-    where
-        SD: SDFGenerator + Arbitrary<'a>,
-        VT: VoxelTypeGenerator + Arbitrary<'a>,
-    {
+    impl<'a> Arbitrary<'a> for SDFVoxelGenerator {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let voxel_extent = 10.0 * arbitrary_norm_f64(u)?.max(1e-6);
-            let sdf_generator: SD = u.arbitrary()?;
+            let sdf_generator = u.arbitrary()?;
             let voxel_type_generator = u.arbitrary()?;
             Ok(Self::new(voxel_extent, sdf_generator, voxel_type_generator))
         }
@@ -676,21 +1186,38 @@ pub mod fuzzing {
             size_hint::try_recursion_guard(depth, |depth| {
                 Ok(size_hint::and_all(&[
                     (mem::size_of::<i32>(), Some(mem::size_of::<i32>())),
-                    SD::size_hint(depth),
-                    VT::size_hint(depth),
+                    SDFGenerator::size_hint(depth),
+                    VoxelTypeGenerator::size_hint(depth),
                 ]))
             })
+        }
+    }
+
+    impl Arbitrary<'_> for SDFGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let primitive = match u.arbitrary()? {
+                ArbitrarySDFGeneratorNode::Box(generator) => SDFGeneratorNode::Box(generator),
+                ArbitrarySDFGeneratorNode::Sphere(generator) => SDFGeneratorNode::Sphere(generator),
+                ArbitrarySDFGeneratorNode::GradientNoise(generator) => {
+                    SDFGeneratorNode::GradientNoise(generator)
+                }
+            };
+            Ok(Self::new(Global, vec![primitive], 0).unwrap())
+        }
+
+        fn size_hint(depth: usize) -> (usize, Option<usize>) {
+            ArbitrarySDFGeneratorNode::size_hint(depth)
         }
     }
 
     impl Arbitrary<'_> for BoxSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let extent_x =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
             let extent_y =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
             let extent_z =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
             Ok(Self::new([extent_x, extent_y, extent_z]))
         }
 
@@ -702,8 +1229,8 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for SphereSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let radius = u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE / 2 - 1) as f64
-                + arbitrary_norm_f64(u)?;
+            let radius = u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE / 2 - 1) as f32
+                + arbitrary_norm_f32(u)?;
             Ok(Self::new(radius))
         }
 
@@ -716,13 +1243,13 @@ pub mod fuzzing {
     impl Arbitrary<'_> for GradientNoiseSDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let extent_x =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
             let extent_y =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
             let extent_z =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f64 + arbitrary_norm_f64(u)?;
-            let noise_frequency = 0.15 * arbitrary_norm_f64(u)?;
-            let noise_threshold = arbitrary_norm_f64(u)?;
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
+            let noise_frequency = 0.15 * arbitrary_norm_f32(u)?;
+            let noise_threshold = arbitrary_norm_f32(u)?;
             let seed = u.arbitrary()?;
             Ok(Self::new(
                 [extent_x, extent_y, extent_z],
@@ -779,5 +1306,9 @@ pub mod fuzzing {
 
     fn arbitrary_norm_f64(u: &mut Unstructured<'_>) -> Result<f64> {
         Ok(f64::from(u.int_in_range(0..=1000000)?) / 1000000.0)
+    }
+
+    fn arbitrary_norm_f32(u: &mut Unstructured<'_>) -> Result<f32> {
+        arbitrary_norm_f64(u).map(|value| value as f32)
     }
 }

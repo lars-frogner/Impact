@@ -4,9 +4,8 @@ use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
-        BoxSDFGenerator, GradientNoiseSDFGenerator, GradientNoiseVoxelTypeGenerator,
-        MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFGenerator, SDFUnion,
-        SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator, VoxelTypeGenerator,
+        GradientNoiseVoxelTypeGenerator, SDFGeneratorBuilder, SDFNodeID, SameVoxelTypeGenerator,
+        VoxelGenerator,
     },
     gpu_resource::VOXEL_MODEL_ID,
     mesh::MeshedChunkedVoxelObject,
@@ -51,28 +50,11 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct GradientNoiseVoxelTypes {
-        n_voxel_types: usize,
+        n_voxel_types: u32,
         voxel_type_name_hashes: [Hash32; GradientNoiseVoxelTypes::VOXEL_TYPE_ARRAY_SIZE],
-        noise_frequency: f64,
-        voxel_type_frequency: f64,
-        pub seed: u64,
-    }
-}
-
-define_setup_type! {
-    target = VoxelObjectID;
-    /// A modification to a voxel signed distance field based on unions with a
-    /// multiscale sphere grid (<https://iquilezles.org/articles/fbmsdf>/).
-    #[roc(parents = "Setup")]
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct MultiscaleSphereSDFModification {
-        pub octaves: usize,
-        pub max_scale: f64,
-        pub persistence: f64,
-        pub inflation: f64,
-        pub smoothness: f64,
-        pub seed: u64,
+        noise_frequency: f32,
+        voxel_type_frequency: f32,
+        pub seed: u32,
     }
 }
 
@@ -84,12 +66,29 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct MultifractalNoiseSDFModification {
-        pub octaves: usize,
-        pub frequency: f64,
-        pub lacunarity: f64,
-        pub persistence: f64,
-        pub amplitude: f64,
-        pub seed: u64,
+        pub octaves: u32,
+        pub frequency: f32,
+        pub lacunarity: f32,
+        pub persistence: f32,
+        pub amplitude: f32,
+        pub seed: u32,
+    }
+}
+
+define_setup_type! {
+    target = VoxelObjectID;
+    /// A modification to a voxel signed distance field based on unions with a
+    /// multiscale sphere grid (<https://iquilezles.org/articles/fbmsdf>/).
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct MultiscaleSphereSDFModification {
+        pub octaves: u32,
+        pub max_scale: f32,
+        pub persistence: f32,
+        pub inflation: f32,
+        pub smoothness: f32,
+        pub seed: u32,
     }
 }
 
@@ -101,13 +100,13 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelBox {
         /// The extent of a single voxel.
-        pub voxel_extent: f64,
+        pub voxel_extent: f32,
         /// The number of voxels along the box in the x-direction.
-        pub extent_x: f64,
+        pub extent_x: f32,
         /// The number of voxels along the box in the y-direction.
-        pub extent_y: f64,
+        pub extent_y: f32,
         /// The number of voxels along the box in the z-direction.
-        pub extent_z: f64,
+        pub extent_z: f32,
     }
 }
 
@@ -119,9 +118,9 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelSphere {
         /// The extent of a single voxel.
-        pub voxel_extent: f64,
+        pub voxel_extent: f32,
         /// The number of voxels along the radius of the sphere.
-        pub radius: f64,
+        pub radius: f32,
     }
 }
 
@@ -134,16 +133,16 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelSphereUnion {
         /// The extent of a single voxel.
-        pub voxel_extent: f64,
+        pub voxel_extent: f32,
         /// The number of voxels along the radius of the first sphere.
-        pub radius_1: f64,
+        pub radius_1: f32,
         /// The number of voxels along the radius of the second sphere.
-        pub radius_2: f64,
+        pub radius_2: f32,
         /// The offset in number of voxels in each dimension between the centers of
         /// the two spheres.
-        pub center_offsets: Vector3<f64>,
+        pub center_offsets: Vector3<f32>,
         /// The smoothness of the union operation.
-        pub smoothness: f64,
+        pub smoothness: f32,
     }
 }
 
@@ -155,19 +154,19 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelGradientNoisePattern {
         /// The extent of a single voxel.
-        pub voxel_extent: f64,
+        pub voxel_extent: f32,
         /// The maximum number of voxels in the x-direction.
-        pub extent_x: f64,
+        pub extent_x: f32,
         /// The maximum number of voxels in the y-direction.
-        pub extent_y: f64,
+        pub extent_y: f32,
         /// The maximum number of voxels in the z-direction.
-        pub extent_z: f64,
+        pub extent_z: f32,
         /// The spatial frequency of the noise pattern.
-        pub noise_frequency: f64,
+        pub noise_frequency: f32,
         /// The threshold noise value for generating a voxel.
-        pub noise_threshold: f64,
+        pub noise_threshold: f32,
         /// The seed for the noise pattern.
-        pub seed: u64,
+        pub seed: u32,
     }
 }
 
@@ -179,30 +178,6 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct DynamicVoxels;
-}
-
-/// Template for the voxel types of a voxel object.
-#[derive(Clone, Debug)]
-pub enum VoxelObjectVoxelTypes {
-    Same(SameVoxelType),
-    GradientNoise(Box<GradientNoiseVoxelTypes>),
-}
-
-/// Template for the shape of a voxel object.
-#[derive(Clone, Debug)]
-pub enum VoxelObjectShape {
-    Box(VoxelBox),
-    Sphere(VoxelSphere),
-    SphereUnion(VoxelSphereUnion),
-    GradientNoisePattern(VoxelGradientNoisePattern),
-}
-
-/// A modification to the signed distance field of a voxel object.
-#[derive(Copy, Clone, Debug)]
-pub enum VoxelObjectSDFModification {
-    None,
-    MultiscaleSphere(MultiscaleSphereSDFModification),
-    MultifractalNoise(MultifractalNoiseSDFModification),
 }
 
 #[roc]
@@ -219,9 +194,18 @@ impl SameVoxelType {
             .voxel_type_for_name_hash(self.voxel_type_name_hash)
             .ok_or_else(|| anyhow!("Missing voxel type for name in `SameVoxelType`"))
     }
+
+    pub fn create_generator(
+        &self,
+        voxel_type_registry: &VoxelTypeRegistry,
+    ) -> Result<SameVoxelTypeGenerator> {
+        Ok(SameVoxelTypeGenerator::new(
+            self.voxel_type(voxel_type_registry)?,
+        ))
+    }
 }
 
-#[roc]
+#[roc(dependencies=[usize])]
 impl GradientNoiseVoxelTypes {
     #[roc(expr = "256")]
     const VOXEL_TYPE_ARRAY_SIZE: usize = VoxelTypeRegistry::max_n_voxel_types().next_power_of_two();
@@ -238,7 +222,7 @@ impl GradientNoiseVoxelTypes {
         List.repeat(Hashing.hash_str_32(""), padding_len),
     )
     {
-        n_voxel_types,
+        n_voxel_types: Num.to_u32(n_voxel_types),
         voxel_type_name_hashes,
         noise_frequency,
         voxel_type_frequency,
@@ -247,9 +231,9 @@ impl GradientNoiseVoxelTypes {
     "#)]
     pub fn new(
         voxel_type_names: &[&str],
-        noise_frequency: f64,
-        voxel_type_frequency: f64,
-        seed: u64,
+        noise_frequency: f32,
+        voxel_type_frequency: f32,
+        seed: u32,
     ) -> Self {
         let n_voxel_types = voxel_type_names.len();
         assert!(n_voxel_types > 0);
@@ -261,7 +245,7 @@ impl GradientNoiseVoxelTypes {
         }
 
         Self {
-            n_voxel_types,
+            n_voxel_types: n_voxel_types as u32,
             voxel_type_name_hashes,
             noise_frequency,
             voxel_type_frequency,
@@ -270,8 +254,8 @@ impl GradientNoiseVoxelTypes {
     }
 
     pub fn voxel_types(&self, voxel_type_registry: &VoxelTypeRegistry) -> Result<Vec<VoxelType>> {
-        let mut voxel_types = Vec::with_capacity(self.n_voxel_types);
-        for (idx, &name_hash) in self.voxel_type_name_hashes[..self.n_voxel_types]
+        let mut voxel_types = Vec::with_capacity(self.n_voxel_types as usize);
+        for (idx, &name_hash) in self.voxel_type_name_hashes[..self.n_voxel_types as usize]
             .iter()
             .enumerate()
         {
@@ -289,16 +273,28 @@ impl GradientNoiseVoxelTypes {
         Ok(voxel_types)
     }
 
-    pub fn noise_frequency(&self) -> f64 {
+    pub fn noise_frequency(&self) -> f32 {
         self.noise_frequency
     }
 
-    pub fn voxel_type_frequency(&self) -> f64 {
+    pub fn voxel_type_frequency(&self) -> f32 {
         self.voxel_type_frequency
     }
 
-    pub fn seed(&self) -> u64 {
+    pub fn seed(&self) -> u32 {
         self.seed
+    }
+
+    pub fn create_generator(
+        &self,
+        voxel_type_registry: &VoxelTypeRegistry,
+    ) -> Result<GradientNoiseVoxelTypeGenerator> {
+        Ok(GradientNoiseVoxelTypeGenerator::new(
+            self.voxel_types(voxel_type_registry)?,
+            f64::from(self.noise_frequency),
+            f64::from(self.voxel_type_frequency),
+            self.seed,
+        ))
     }
 }
 
@@ -314,12 +310,12 @@ impl MultiscaleSphereSDFModification {
         seed,
     }"#)]
     pub fn new(
-        octaves: usize,
-        max_scale: f64,
-        persistence: f64,
-        inflation: f64,
-        smoothness: f64,
-        seed: u64,
+        octaves: u32,
+        max_scale: f32,
+        persistence: f32,
+        inflation: f32,
+        smoothness: f32,
+        seed: u32,
     ) -> Self {
         Self {
             octaves,
@@ -329,18 +325,6 @@ impl MultiscaleSphereSDFModification {
             smoothness,
             seed,
         }
-    }
-
-    fn apply<SD: SDFGenerator>(&self, sdf_generator: SD) -> MultiscaleSphereSDFModifier<SD> {
-        MultiscaleSphereSDFModifier::new(
-            sdf_generator,
-            self.octaves,
-            self.max_scale,
-            self.persistence,
-            self.inflation,
-            self.smoothness,
-            self.seed,
-        )
     }
 }
 
@@ -356,12 +340,12 @@ impl MultifractalNoiseSDFModification {
         seed,
     }"#)]
     pub fn new(
-        octaves: usize,
-        frequency: f64,
-        lacunarity: f64,
-        persistence: f64,
-        amplitude: f64,
-        seed: u64,
+        octaves: u32,
+        frequency: f32,
+        lacunarity: f32,
+        persistence: f32,
+        amplitude: f32,
+        seed: u32,
     ) -> Self {
         Self {
             octaves,
@@ -371,18 +355,6 @@ impl MultifractalNoiseSDFModification {
             amplitude,
             seed,
         }
-    }
-
-    fn apply<SD: SDFGenerator>(&self, sdf_generator: SD) -> MultifractalNoiseSDFModifier<SD> {
-        MultifractalNoiseSDFModifier::new(
-            sdf_generator,
-            self.octaves,
-            self.frequency,
-            self.lacunarity,
-            self.persistence,
-            self.amplitude,
-            u32::try_from(self.seed).unwrap(),
-        )
     }
 }
 
@@ -406,7 +378,7 @@ impl VoxelBox {
         extent_y,
         extent_z,
     }"#)]
-    pub fn new(voxel_extent: f64, extent_x: f64, extent_y: f64, extent_z: f64) -> Self {
+    pub fn new(voxel_extent: f32, extent_x: f32, extent_y: f32, extent_z: f32) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(extent_x >= 0.0);
         assert!(extent_y >= 0.0);
@@ -419,12 +391,16 @@ impl VoxelBox {
         }
     }
 
-    pub fn extents_in_voxels(&self) -> [f64; 3] {
+    pub fn voxel_extent(&self) -> f64 {
+        f64::from(self.voxel_extent)
+    }
+
+    pub fn extents_in_voxels(&self) -> [f32; 3] {
         [self.extent_x, self.extent_y, self.extent_z]
     }
 
-    fn generator(&self) -> BoxSDFGenerator {
-        BoxSDFGenerator::new(self.extents_in_voxels())
+    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
+        builder.add_box(self.extents_in_voxels())
     }
 }
 
@@ -444,7 +420,7 @@ impl VoxelSphere {
         voxel_extent,
         radius,
     }"#)]
-    pub fn new(voxel_extent: f64, radius: f64) -> Self {
+    pub fn new(voxel_extent: f32, radius: f32) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(radius >= 0.0);
         Self {
@@ -453,12 +429,16 @@ impl VoxelSphere {
         }
     }
 
-    pub fn radius_in_voxels(&self) -> f64 {
+    pub fn voxel_extent(&self) -> f64 {
+        f64::from(self.voxel_extent)
+    }
+
+    pub fn radius_in_voxels(&self) -> f32 {
         self.radius
     }
 
-    fn generator(&self) -> SphereSDFGenerator {
-        SphereSDFGenerator::new(self.radius_in_voxels())
+    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
+        builder.add_sphere(self.radius_in_voxels())
     }
 }
 
@@ -483,11 +463,11 @@ impl VoxelSphereUnion {
         smoothness,
     }"#)]
     pub fn new(
-        voxel_extent: f64,
-        radius_1: f64,
-        radius_2: f64,
-        center_offsets: Vector3<f64>,
-        smoothness: f64,
+        voxel_extent: f32,
+        radius_1: f32,
+        radius_2: f32,
+        center_offsets: Vector3<f32>,
+        smoothness: f32,
     ) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(radius_1 >= 0.0);
@@ -501,23 +481,23 @@ impl VoxelSphereUnion {
         }
     }
 
-    pub fn radius_1_in_voxels(&self) -> f64 {
+    pub fn voxel_extent(&self) -> f64 {
+        f64::from(self.voxel_extent)
+    }
+
+    pub fn radius_1_in_voxels(&self) -> f32 {
         self.radius_1
     }
 
-    pub fn radius_2_in_voxels(&self) -> f64 {
+    pub fn radius_2_in_voxels(&self) -> f32 {
         self.radius_2
     }
 
-    fn generator(&self) -> SDFUnion<SphereSDFGenerator, SphereSDFGenerator> {
-        let sdf_generator_1 = SphereSDFGenerator::new(self.radius_1_in_voxels());
-        let sdf_generator_2 = SphereSDFGenerator::new(self.radius_2_in_voxels());
-        SDFUnion::new(
-            sdf_generator_1,
-            sdf_generator_2,
-            self.center_offsets.into(),
-            self.smoothness,
-        )
+    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
+        let sphere_1_id = builder.add_sphere(self.radius_1_in_voxels());
+        let sphere_2_id = builder.add_sphere(self.radius_2_in_voxels());
+        let sphere_2_id = builder.add_translation(sphere_2_id, self.center_offsets);
+        builder.add_union(sphere_1_id, sphere_2_id, self.smoothness)
     }
 }
 
@@ -542,13 +522,13 @@ impl VoxelGradientNoisePattern {
         seed,
     }"#)]
     pub fn new(
-        voxel_extent: f64,
-        extent_x: f64,
-        extent_y: f64,
-        extent_z: f64,
-        noise_frequency: f64,
-        noise_threshold: f64,
-        seed: u64,
+        voxel_extent: f32,
+        extent_x: f32,
+        extent_y: f32,
+        extent_z: f32,
+        noise_frequency: f32,
+        noise_threshold: f32,
+        seed: u32,
     ) -> Self {
         assert!(voxel_extent > 0.0);
         assert!(extent_x >= 0.0);
@@ -565,54 +545,77 @@ impl VoxelGradientNoisePattern {
         }
     }
 
-    pub fn extents_in_voxels(&self) -> [f64; 3] {
+    pub fn voxel_extent(&self) -> f64 {
+        f64::from(self.voxel_extent)
+    }
+
+    pub fn extents_in_voxels(&self) -> [f32; 3] {
         [self.extent_x, self.extent_y, self.extent_z]
     }
 
-    fn generator(&self) -> GradientNoiseSDFGenerator {
-        GradientNoiseSDFGenerator::new(
+    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
+        builder.add_gradient_noise(
             self.extents_in_voxels(),
             self.noise_frequency,
             self.noise_threshold,
-            u32::try_from(self.seed).unwrap(),
+            self.seed,
         )
     }
 }
 
-const MAX_MODIFICATIONS: usize = 2;
-
-pub fn gather_modifications(
+pub fn apply_modifications(
+    builder: &mut SDFGeneratorBuilder,
+    mut node_id: SDFNodeID,
     multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
     multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
-) -> [VoxelObjectSDFModification; MAX_MODIFICATIONS] {
-    let mut modifications = [VoxelObjectSDFModification::None; MAX_MODIFICATIONS];
-    let mut idx = 0;
-
-    if let Some(modification) = multiscale_sphere_modification {
-        modifications[idx] = VoxelObjectSDFModification::MultiscaleSphere(*modification);
-        idx += 1;
+) {
+    if let Some(&MultiscaleSphereSDFModification {
+        octaves,
+        max_scale,
+        persistence,
+        inflation,
+        smoothness,
+        seed,
+    }) = multiscale_sphere_modification
+    {
+        node_id = builder.add_multiscale_sphere(
+            node_id,
+            octaves,
+            max_scale,
+            persistence,
+            inflation,
+            smoothness,
+            seed,
+        );
     }
 
-    if let Some(modification) = multifractal_noise_modification {
-        modifications[idx] = VoxelObjectSDFModification::MultifractalNoise(*modification);
+    if let Some(&MultifractalNoiseSDFModification {
+        octaves,
+        frequency,
+        lacunarity,
+        persistence,
+        amplitude,
+        seed,
+    }) = multifractal_noise_modification
+    {
+        builder.add_multifractal_noise(
+            node_id,
+            octaves,
+            frequency,
+            lacunarity,
+            persistence,
+            amplitude,
+            seed,
+        );
     }
-
-    modifications
 }
 
 pub fn setup_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_types: VoxelObjectVoxelTypes,
-    shape: VoxelObjectShape,
-    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
+    generator: &impl VoxelGenerator,
 ) -> Result<VoxelObjectID> {
-    let voxel_object = generate_voxel_object_with_types_shape_and_modifications(
-        voxel_type_registry,
-        voxel_types,
-        shape,
-        sdf_modifications,
-    )?;
+    let voxel_object = ChunkedVoxelObject::generate(generator)
+        .ok_or_else(|| anyhow!("Tried to generate empty voxel object"))?;
 
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
 
@@ -736,131 +739,6 @@ pub fn create_model_instance_node_for_voxel_object(
     ))
 }
 
-fn generate_voxel_object_with_types_shape_and_modifications(
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_types: VoxelObjectVoxelTypes,
-    shape: VoxelObjectShape,
-    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
-) -> Result<ChunkedVoxelObject> {
-    match voxel_types {
-        VoxelObjectVoxelTypes::Same(voxel_types) => {
-            let voxel_type_generator =
-                SameVoxelTypeGenerator::new(voxel_types.voxel_type(voxel_type_registry)?);
-            generate_voxel_object_with_shape_and_modifications(
-                voxel_type_generator,
-                shape,
-                sdf_modifications,
-            )
-        }
-        VoxelObjectVoxelTypes::GradientNoise(voxel_types) => {
-            let voxel_type_generator = gradient_noise_voxel_type_generator_from_component(
-                voxel_type_registry,
-                &voxel_types,
-            )?;
-            generate_voxel_object_with_shape_and_modifications(
-                voxel_type_generator,
-                shape,
-                sdf_modifications,
-            )
-        }
-    }
-    .ok_or_else(|| anyhow!("Tried to generate object for empty voxel shape"))
-}
-
-fn generate_voxel_object_with_shape_and_modifications(
-    voxel_type_generator: impl VoxelTypeGenerator,
-    shape: VoxelObjectShape,
-    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
-) -> Option<ChunkedVoxelObject> {
-    match shape {
-        VoxelObjectShape::Box(shape) => generate_voxel_object_with_modifications(
-            voxel_type_generator,
-            shape.voxel_extent,
-            shape.generator(),
-            sdf_modifications,
-        ),
-        VoxelObjectShape::Sphere(shape) => generate_voxel_object_with_modifications(
-            voxel_type_generator,
-            shape.voxel_extent,
-            shape.generator(),
-            sdf_modifications,
-        ),
-        VoxelObjectShape::SphereUnion(shape) => generate_voxel_object_with_modifications(
-            voxel_type_generator,
-            shape.voxel_extent,
-            shape.generator(),
-            sdf_modifications,
-        ),
-        VoxelObjectShape::GradientNoisePattern(shape) => generate_voxel_object_with_modifications(
-            voxel_type_generator,
-            shape.voxel_extent,
-            shape.generator(),
-            sdf_modifications,
-        ),
-    }
-}
-
-fn generate_voxel_object_with_modifications(
-    voxel_type_generator: impl VoxelTypeGenerator,
-    voxel_extent: f64,
-    sdf_generator: impl SDFGenerator,
-    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
-) -> Option<ChunkedVoxelObject> {
-    match &sdf_modifications[0] {
-        VoxelObjectSDFModification::None => {
-            generate_voxel_object(voxel_type_generator, voxel_extent, sdf_generator)
-        }
-        VoxelObjectSDFModification::MultiscaleSphere(modification) => {
-            generate_voxel_object_with_modifications_2(
-                voxel_type_generator,
-                voxel_extent,
-                modification.apply(sdf_generator),
-                sdf_modifications,
-            )
-        }
-        VoxelObjectSDFModification::MultifractalNoise(modification) => {
-            generate_voxel_object_with_modifications_2(
-                voxel_type_generator,
-                voxel_extent,
-                modification.apply(sdf_generator),
-                sdf_modifications,
-            )
-        }
-    }
-}
-
-fn generate_voxel_object_with_modifications_2(
-    voxel_type_generator: impl VoxelTypeGenerator,
-    voxel_extent: f64,
-    sdf_generator: impl SDFGenerator,
-    sdf_modifications: &[VoxelObjectSDFModification; MAX_MODIFICATIONS],
-) -> Option<ChunkedVoxelObject> {
-    match &sdf_modifications[1] {
-        VoxelObjectSDFModification::None => {
-            generate_voxel_object(voxel_type_generator, voxel_extent, sdf_generator)
-        }
-        VoxelObjectSDFModification::MultiscaleSphere(modification) => generate_voxel_object(
-            voxel_type_generator,
-            voxel_extent,
-            modification.apply(sdf_generator),
-        ),
-        VoxelObjectSDFModification::MultifractalNoise(modification) => generate_voxel_object(
-            voxel_type_generator,
-            voxel_extent,
-            modification.apply(sdf_generator),
-        ),
-    }
-}
-
-fn generate_voxel_object(
-    voxel_type_generator: impl VoxelTypeGenerator,
-    voxel_extent: f64,
-    sdf_generator: impl SDFGenerator,
-) -> Option<ChunkedVoxelObject> {
-    let generator = SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator);
-    ChunkedVoxelObject::generate(&generator)
-}
-
 fn setup_rigid_body_for_new_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
     inertial_properties: InertialProperties,
@@ -888,16 +766,4 @@ fn setup_rigid_body_for_new_voxel_object(
     );
 
     Ok((rigid_body_id, model_transform, frame, motion))
-}
-
-fn gradient_noise_voxel_type_generator_from_component(
-    voxel_type_registry: &VoxelTypeRegistry,
-    voxel_types: &GradientNoiseVoxelTypes,
-) -> Result<GradientNoiseVoxelTypeGenerator> {
-    Ok(GradientNoiseVoxelTypeGenerator::new(
-        voxel_types.voxel_types(voxel_type_registry)?,
-        voxel_types.noise_frequency(),
-        voxel_types.voxel_type_frequency(),
-        u32::try_from(voxel_types.seed()).unwrap(),
-    ))
 }

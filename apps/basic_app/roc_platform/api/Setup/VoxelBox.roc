@@ -1,8 +1,8 @@
-# Hash: a7b9bd5c82adb1f10194282bea29d6ac05d50fc9bd796520b097896fad6c5f7a
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 5a661d032c1fe204945462a7b0cb0dfb439df5efbab195c6c71d889e3628b5b1
+# Generated: 2025-09-14T20:34:17+00:00
 # Rust type: impact_voxel::setup::VoxelBox
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: aa40a05d (dirty)
 module [
     VoxelBox,
     new,
@@ -21,13 +21,13 @@ import core.Builtin
 ## An object made of voxels in a box configuration.
 VoxelBox : {
     ## The extent of a single voxel.
-    voxel_extent : F64,
+    voxel_extent : F32,
     ## The number of voxels along the box in the x-direction.
-    extent_x : F64,
+    extent_x : F32,
     ## The number of voxels along the box in the y-direction.
-    extent_y : F64,
+    extent_y : F32,
     ## The number of voxels along the box in the z-direction.
-    extent_z : F64,
+    extent_z : F32,
 }
 
 ## Defines a box with the given voxel extent and number of voxels in each
@@ -36,7 +36,7 @@ VoxelBox : {
 ## # Panics
 ## - If the voxel extent is negative.
 ## - If either of the extents is zero or negative.
-new : F64, F64, F64, F64 -> VoxelBox
+new : F32, F32, F32, F32 -> VoxelBox
 new = |voxel_extent, extent_x, extent_y, extent_z|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect voxel_extent > 0.0
@@ -57,7 +57,7 @@ new = |voxel_extent, extent_x, extent_y, extent_z|
 ## - If the voxel extent is negative.
 ## - If either of the extents is zero or negative.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F64, F64, F64, F64 -> Entity.Data
+add_new : Entity.Data, F32, F32, F32, F32 -> Entity.Data
 add_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
     add(entity_data, new(voxel_extent, extent_x, extent_y, extent_z))
 
@@ -69,7 +69,7 @@ add_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
 ## - If either of the extents is zero or negative.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
 add_multiple_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
     add_multiple(
         entity_data,
@@ -104,8 +104,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, VoxelBox -> List U8
 write_packet = |bytes, val|
     type_id = 11759487956506158112
-    size = 32
-    alignment = 8
+    size = 16
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -116,8 +116,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelBox -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 11759487956506158112
-    size = 32
-    alignment = 8
+    size = 16
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -137,11 +137,11 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelBox -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(32)
-    |> Builtin.write_bytes_f64(value.voxel_extent)
-    |> Builtin.write_bytes_f64(value.extent_x)
-    |> Builtin.write_bytes_f64(value.extent_y)
-    |> Builtin.write_bytes_f64(value.extent_z)
+    |> List.reserve(16)
+    |> Builtin.write_bytes_f32(value.voxel_extent)
+    |> Builtin.write_bytes_f32(value.extent_x)
+    |> Builtin.write_bytes_f32(value.extent_y)
+    |> Builtin.write_bytes_f32(value.extent_z)
 
 ## Deserializes a value of [VoxelBox] from its bytes in the
 ## representation used by the engine.
@@ -149,16 +149,16 @@ from_bytes : List U8 -> Result VoxelBox _
 from_bytes = |bytes|
     Ok(
         {
-            voxel_extent: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            extent_x: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            extent_y: bytes |> List.sublist({ start: 16, len: 8 }) |> Builtin.from_bytes_f64?,
-            extent_z: bytes |> List.sublist({ start: 24, len: 8 }) |> Builtin.from_bytes_f64?,
+            voxel_extent: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            extent_x: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
+            extent_y: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
+            extent_z: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

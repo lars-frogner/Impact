@@ -768,8 +768,7 @@ fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedB
 pub mod fuzzing {
     use super::*;
     use crate::{
-        chunks::inertia::VoxelObjectInertialPropertyManager,
-        generation::fuzzing::ArbitrarySDFVoxelGenerator,
+        chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
     };
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
@@ -846,7 +845,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane(
-        (generator, plane): (ArbitrarySDFVoxelGenerator, ArbitraryPlane),
+        (generator, plane): (SDFVoxelGenerator, ArbitraryPlane),
     ) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
             let mut indices_of_touched_voxels = HashSet::default();
@@ -881,7 +880,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_sphere(
-        (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
+        (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
     ) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
             let mut indices_of_touched_voxels = HashSet::default();
@@ -910,7 +909,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_voxels_within_sphere(
-        (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
+        (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let mut indices_of_inside_voxels = HashSet::default();
@@ -939,7 +938,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_voxels_within_capsule(
-        (generator, capsule): (ArbitrarySDFVoxelGenerator, ArbitraryCapsule),
+        (generator, capsule): (SDFVoxelGenerator, ArbitraryCapsule),
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let mut indices_of_inside_voxels = HashSet::default();
@@ -971,7 +970,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_absorbing_voxels_within_sphere(
-        (generator, sphere): (ArbitrarySDFVoxelGenerator, ArbitrarySphere),
+        (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let voxel_type_densities = vec![1.0; 256];
@@ -1015,7 +1014,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_absorbing_voxels_within_capsule(
-        (generator, capsule): (ArbitrarySDFVoxelGenerator, ArbitraryCapsule),
+        (generator, capsule): (SDFVoxelGenerator, ArbitraryCapsule),
     ) {
         if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
             let voxel_type_densities = vec![1.0; 256];
@@ -1080,8 +1079,8 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            SphereSDFGenerator::new(object_radius as f32).into(),
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
 
@@ -1127,8 +1126,8 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            SphereSDFGenerator::new(object_radius as f32).into(),
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
 
@@ -1166,8 +1165,8 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            SphereSDFGenerator::new(object_radius as f32).into(),
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
 
@@ -1207,8 +1206,8 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
+            SphereSDFGenerator::new(object_radius as f32).into(),
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
 

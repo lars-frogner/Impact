@@ -2495,9 +2495,9 @@ fn extract_slice_segments_mut<T>(
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
-    use crate::generation::fuzzing::ArbitrarySDFVoxelGenerator;
+    use crate::generation::SDFVoxelGenerator;
 
-    pub fn fuzz_test_voxel_object_generation(generator: ArbitrarySDFVoxelGenerator) {
+    pub fn fuzz_test_voxel_object_generation(generator: SDFVoxelGenerator) {
         if let Some(object) = ChunkedVoxelObject::generate(&generator) {
             object.validate_occupied_voxel_ranges();
             object.validate_adjacencies();
