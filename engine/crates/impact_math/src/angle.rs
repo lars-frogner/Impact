@@ -94,14 +94,12 @@ impl<F: Float> Angle<F> for Radians<F> {
     }
 }
 
-#[allow(clippy::fallible_impl_from)]
 impl<F: Float> From<Radians<F>> for Degrees<F> {
     fn from(rad: Radians<F>) -> Self {
         Self(rad.value() * F::from_f64(180.0).unwrap() * <F as Float>::FRAC_1_PI)
     }
 }
 
-#[allow(clippy::fallible_impl_from)]
 impl<F: Float> From<Degrees<F>> for Radians<F> {
     fn from(deg: Degrees<F>) -> Self {
         Self(deg.value() * <F as Float>::PI / F::from_f64(180.0).unwrap())
