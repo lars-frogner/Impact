@@ -13,8 +13,8 @@ use std::hint::black_box;
 pub fn clone_object(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        SphereSDFGenerator::new(100.0),
-        SameVoxelTypeGenerator::new(VoxelType::default()),
+        SphereSDFGenerator::new(100.0).into(),
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     c.bench_function("clone_object", |b| {
@@ -27,8 +27,8 @@ pub fn clone_object(c: &mut Criterion) {
 pub fn get_each_voxel(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        SphereSDFGenerator::new(100.0),
-        SameVoxelTypeGenerator::new(VoxelType::default()),
+        SphereSDFGenerator::new(100.0).into(),
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
     let ranges = object.occupied_voxel_ranges();
@@ -48,8 +48,8 @@ pub fn get_each_voxel(c: &mut Criterion) {
 pub fn for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        SphereSDFGenerator::new(100.0),
-        SameVoxelTypeGenerator::new(VoxelType::default()),
+        SphereSDFGenerator::new(100.0).into(),
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     c.bench_function("for_each_exposed_chunk_with_sdf", |b| {
@@ -66,7 +66,13 @@ pub fn for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
     });
 }
 
-define_criterion_target!(chunked_voxel_object, construction);
+define_criterion_target!(chunked_voxel_object, generate_box);
+define_criterion_target!(chunked_voxel_object, generate_sphere_union);
+define_criterion_target!(chunked_voxel_object, generate_complex_object);
+define_criterion_target!(
+    chunked_voxel_object,
+    generate_object_with_multifractal_noise
+);
 define_criterion_target!(
     chunked_voxel_object,
     update_internal_adjacencies_for_all_chunks
@@ -102,7 +108,10 @@ criterion::criterion_group!(
     name = benches;
     config = criterion::config();
     targets =
-        construction,
+        generate_box,
+        generate_sphere_union,
+        generate_complex_object,
+        generate_object_with_multifractal_noise,
         clone_object,
         update_internal_adjacencies_for_all_chunks,
         update_connected_regions_for_all_chunks,

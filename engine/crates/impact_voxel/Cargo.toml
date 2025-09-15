@@ -63,7 +63,7 @@ roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 tinyvec = { workspace = true }
 twox-hash = { version = "2.1", default-features = false, features = [
-    "xxhash64",
+    "xxhash32",
 ] }
 
 [lints]

@@ -1,8 +1,8 @@
-# Hash: 8394c9081c4b6b1534ee935b53380bdda4274ac36f11bc007a0d66471f11a04c
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 8e7eb0a647e0ebde2bca52992cdf874c1f2e4540fa70b7fa044453eb0296fad6
+# Generated: 2025-09-14T20:34:17+00:00
 # Rust type: impact_voxel::setup::MultiscaleSphereSDFModification
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: aa40a05d (dirty)
 module [
     MultiscaleSphereSDFModification,
     new,
@@ -16,20 +16,19 @@ module [
 import Entity
 import Entity.Arg
 import core.Builtin
-import core.NativeNum
 
 ## A modification to a voxel signed distance field based on unions with a
 ## multiscale sphere grid (<https://iquilezles.org/articles/fbmsdf>/).
 MultiscaleSphereSDFModification : {
-    octaves : NativeNum.Usize,
-    max_scale : F64,
-    persistence : F64,
-    inflation : F64,
-    smoothness : F64,
-    seed : U64,
+    octaves : U32,
+    max_scale : F32,
+    persistence : F32,
+    inflation : F32,
+    smoothness : F32,
+    seed : U32,
 }
 
-new : NativeNum.Usize, F64, F64, F64, F64, U64 -> MultiscaleSphereSDFModification
+new : U32, F32, F32, F32, F32, U32 -> MultiscaleSphereSDFModification
 new = |octaves, max_scale, persistence, inflation, smoothness, seed|
     {
         octaves,
@@ -40,7 +39,7 @@ new = |octaves, max_scale, persistence, inflation, smoothness, seed|
         seed,
     }
 
-add_new : Entity.Data, NativeNum.Usize, F64, F64, F64, F64, U64 -> Entity.Data
+add_new : Entity.Data, U32, F32, F32, F32, F32, U32 -> Entity.Data
 add_new = |entity_data, octaves, max_scale, persistence, inflation, smoothness, seed|
     add(entity_data, new(octaves, max_scale, persistence, inflation, smoothness, seed))
 
@@ -68,8 +67,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, MultiscaleSphereSDFModification -> List U8
 write_packet = |bytes, val|
     type_id = 1066675320843307296
-    size = 48
-    alignment = 8
+    size = 24
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -80,8 +79,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List MultiscaleSphereSDFModification -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 1066675320843307296
-    size = 48
-    alignment = 8
+    size = 24
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -101,13 +100,13 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, MultiscaleSphereSDFModification -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(48)
-    |> NativeNum.write_bytes_usize(value.octaves)
-    |> Builtin.write_bytes_f64(value.max_scale)
-    |> Builtin.write_bytes_f64(value.persistence)
-    |> Builtin.write_bytes_f64(value.inflation)
-    |> Builtin.write_bytes_f64(value.smoothness)
-    |> Builtin.write_bytes_u64(value.seed)
+    |> List.reserve(24)
+    |> Builtin.write_bytes_u32(value.octaves)
+    |> Builtin.write_bytes_f32(value.max_scale)
+    |> Builtin.write_bytes_f32(value.persistence)
+    |> Builtin.write_bytes_f32(value.inflation)
+    |> Builtin.write_bytes_f32(value.smoothness)
+    |> Builtin.write_bytes_u32(value.seed)
 
 ## Deserializes a value of [MultiscaleSphereSDFModification] from its bytes in the
 ## representation used by the engine.
@@ -115,18 +114,18 @@ from_bytes : List U8 -> Result MultiscaleSphereSDFModification _
 from_bytes = |bytes|
     Ok(
         {
-            octaves: bytes |> List.sublist({ start: 0, len: 8 }) |> NativeNum.from_bytes_usize?,
-            max_scale: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            persistence: bytes |> List.sublist({ start: 16, len: 8 }) |> Builtin.from_bytes_f64?,
-            inflation: bytes |> List.sublist({ start: 24, len: 8 }) |> Builtin.from_bytes_f64?,
-            smoothness: bytes |> List.sublist({ start: 32, len: 8 }) |> Builtin.from_bytes_f64?,
-            seed: bytes |> List.sublist({ start: 40, len: 8 }) |> Builtin.from_bytes_u64?,
+            octaves: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
+            max_scale: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
+            persistence: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
+            inflation: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
+            smoothness: bytes |> List.sublist({ start: 16, len: 4 }) |> Builtin.from_bytes_f32?,
+            seed: bytes |> List.sublist({ start: 20, len: 4 }) |> Builtin.from_bytes_u32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 48 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

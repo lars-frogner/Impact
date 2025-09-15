@@ -1,8 +1,8 @@
-# Hash: cdec801d35ecf8114773015ece13c07d6c5c76c2471698c53290f29a4b4c072b
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 8bb36145b11cc4f68f100388cf2a480dacb4cbddc657061ffbfa660e505aebca
+# Generated: 2025-09-14T20:34:17+00:00
 # Rust type: impact_voxel::setup::VoxelSphere
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: aa40a05d (dirty)
 module [
     VoxelSphere,
     new,
@@ -21,9 +21,9 @@ import core.Builtin
 ## An object made of voxels in a spherical configuration.
 VoxelSphere : {
     ## The extent of a single voxel.
-    voxel_extent : F64,
+    voxel_extent : F32,
     ## The number of voxels along the radius of the sphere.
-    radius : F64,
+    radius : F32,
 }
 
 ## Defines a sphere with the given voxel extent and number of voxels across
@@ -32,7 +32,7 @@ VoxelSphere : {
 ## # Panics
 ## - If the voxel extent is negative.
 ## - If the radius zero or negative.
-new : F64, F64 -> VoxelSphere
+new : F32, F32 -> VoxelSphere
 new = |voxel_extent, radius|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect voxel_extent > 0.0
@@ -49,7 +49,7 @@ new = |voxel_extent, radius|
 ## - If the voxel extent is negative.
 ## - If the radius zero or negative.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F64, F64 -> Entity.Data
+add_new : Entity.Data, F32, F32 -> Entity.Data
 add_new = |entity_data, voxel_extent, radius|
     add(entity_data, new(voxel_extent, radius))
 
@@ -61,7 +61,7 @@ add_new = |entity_data, voxel_extent, radius|
 ## - If the radius zero or negative.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
 add_multiple_new = |entity_data, voxel_extent, radius|
     add_multiple(
         entity_data,
@@ -96,8 +96,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, VoxelSphere -> List U8
 write_packet = |bytes, val|
     type_id = 10802133982048297802
-    size = 16
-    alignment = 8
+    size = 8
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -108,8 +108,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelSphere -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 10802133982048297802
-    size = 16
-    alignment = 8
+    size = 8
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -129,9 +129,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelSphere -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(16)
-    |> Builtin.write_bytes_f64(value.voxel_extent)
-    |> Builtin.write_bytes_f64(value.radius)
+    |> List.reserve(8)
+    |> Builtin.write_bytes_f32(value.voxel_extent)
+    |> Builtin.write_bytes_f32(value.radius)
 
 ## Deserializes a value of [VoxelSphere] from its bytes in the
 ## representation used by the engine.
@@ -139,14 +139,14 @@ from_bytes : List U8 -> Result VoxelSphere _
 from_bytes = |bytes|
     Ok(
         {
-            voxel_extent: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            radius: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
+            voxel_extent: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            radius: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

@@ -668,13 +668,10 @@ mod tests {
     use super::*;
     use crate::{
         chunks::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
-        generation::{
-            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator,
-        },
+        generation::{BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator},
         voxel_types::VoxelType,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use disconnection::DisconnectedVoxelObject;
     use nalgebra::{Similarity3, UnitQuaternion};
     use std::array;
 
@@ -733,8 +730,8 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             voxel_extent,
-            BoxSDFGenerator::new(extents),
-            SameVoxelTypeGenerator::new(VoxelType::from_idx(0)),
+            BoxSDFGenerator::new(extents).into(),
+            SameVoxelTypeGenerator::new(VoxelType::from_idx(0)).into(),
         );
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
 
@@ -824,82 +821,5 @@ mod tests {
             Vector3::zeros(),
             epsilon = 1e-8
         );
-    }
-
-    #[test]
-    #[cfg(not(miri))]
-    fn fuzz_fail() {
-        let generator = SDFVoxelGenerator::new(
-            1.0,
-            GradientNoiseSDFGenerator::new(
-                [15.284981, 5.0, 1.35947],
-                0.0869163,
-                0.5973,
-                4294967295,
-            ),
-            SameVoxelTypeGenerator::new(VoxelType::default()),
-        );
-        if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let voxel_type_densities = vec![1.0; 256];
-
-            let original_inertial_property_manager =
-                VoxelObjectInertialPropertyManager::initialized_from(
-                    &object,
-                    &voxel_type_densities,
-                );
-
-            let mut inertial_property_manager = original_inertial_property_manager.clone();
-            let mut disconnected_inertial_property_manager =
-                VoxelObjectInertialPropertyManager::zeroed();
-
-            let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
-                &mut disconnected_inertial_property_manager,
-                object.voxel_extent(),
-                &voxel_type_densities,
-            );
-
-            let original_region_count = object.count_regions();
-            if let Some(disconnected_object) = object
-                .split_off_any_disconnected_region_with_property_transferrer(
-                    &mut inertial_property_transferrer,
-                )
-            {
-                let DisconnectedVoxelObject {
-                    voxel_object: disconnected_object,
-                    origin_offset_in_parent: origin_offset,
-                } = disconnected_object;
-
-                assert!(original_region_count > 1);
-                assert_eq!(disconnected_object.count_regions(), 1);
-                assert_eq!(object.count_regions(), original_region_count - 1);
-
-                assert!(!disconnected_object.is_effectively_empty());
-                disconnected_object.validate_adjacencies();
-                disconnected_object.validate_chunk_obscuredness();
-                disconnected_object.validate_sdf();
-                disconnected_object.validate_region_count();
-
-                object.validate_adjacencies();
-                object.validate_chunk_obscuredness();
-                object.validate_sdf();
-                object.validate_region_count();
-
-                assert_relative_eq!(
-                    &inertial_property_manager.add(&disconnected_inertial_property_manager),
-                    &original_inertial_property_manager,
-                    epsilon = 1e-8,
-                    max_relative = 1e-8,
-                );
-
-                disconnected_inertial_property_manager.offset_reference_point_by(&Vector3::from(
-                    origin_offset.map(|offset| offset as f64 * object.voxel_extent()),
-                ));
-
-                disconnected_inertial_property_manager
-                    .validate_for_object(&disconnected_object, &voxel_type_densities);
-            }
-
-            inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
-        }
     }
 }

@@ -1,8 +1,8 @@
-# Hash: 6661dc4de39360a25b92ac4ee9a76a52316dedb5e9ac6a1fe1ef5989c50847bd
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 7207e42d524439a805a0e6617bc85176c3cde0cd2c119450b31c06a9b76e5090
+# Generated: 2025-09-14T20:40:56+00:00
 # Rust type: impact_voxel::setup::GradientNoiseVoxelTypes
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: aa40a05d (dirty)
 module [
     GradientNoiseVoxelTypes,
     voxel_type_array_size,
@@ -23,17 +23,17 @@ import core.NativeNum
 
 ## A set of voxel types distributed according to a gradient noise pattern.
 GradientNoiseVoxelTypes : {
-    n_voxel_types : NativeNum.Usize,
+    n_voxel_types : U32,
     voxel_type_name_hashes : List Hashing.Hash32,
-    noise_frequency : F64,
-    voxel_type_frequency : F64,
-    seed : U64,
+    noise_frequency : F32,
+    voxel_type_frequency : F32,
+    seed : U32,
 }
 
 voxel_type_array_size : NativeNum.Usize
 voxel_type_array_size = 256
 
-new : List Str, F64, F64, U64 -> GradientNoiseVoxelTypes
+new : List Str, F32, F32, U32 -> GradientNoiseVoxelTypes
 new = |voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     n_voxel_types = List.len(voxel_type_names)
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
@@ -46,18 +46,18 @@ new = |voxel_type_names, noise_frequency, voxel_type_frequency, seed|
         List.repeat(Hashing.hash_str_32(""), padding_len),
     )
     {
-        n_voxel_types,
+        n_voxel_types: Num.to_u32(n_voxel_types),
         voxel_type_name_hashes,
         noise_frequency,
         voxel_type_frequency,
         seed,
     }
 
-add_new : Entity.Data, List Str, F64, F64, U64 -> Entity.Data
+add_new : Entity.Data, List Str, F32, F32, U32 -> Entity.Data
 add_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     add(entity_data, new(voxel_type_names, noise_frequency, voxel_type_frequency, seed))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (List Str), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (U64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (List Str), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
 add_multiple_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     add_multiple(
         entity_data,
@@ -92,8 +92,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, GradientNoiseVoxelTypes -> List U8
 write_packet = |bytes, val|
     type_id = 14805917472837037976
-    size = 1056
-    alignment = 8
+    size = 1040
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -104,8 +104,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List GradientNoiseVoxelTypes -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 14805917472837037976
-    size = 1056
-    alignment = 8
+    size = 1040
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -125,12 +125,12 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, GradientNoiseVoxelTypes -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(1056)
-    |> NativeNum.write_bytes_usize(value.n_voxel_types)
+    |> List.reserve(1040)
+    |> Builtin.write_bytes_u32(value.n_voxel_types)
     |> (|bts, values| values |> List.walk(bts, |b, val| b |> Hashing.write_bytes_hash_32(val)))(value.voxel_type_name_hashes)
-    |> Builtin.write_bytes_f64(value.noise_frequency)
-    |> Builtin.write_bytes_f64(value.voxel_type_frequency)
-    |> Builtin.write_bytes_u64(value.seed)
+    |> Builtin.write_bytes_f32(value.noise_frequency)
+    |> Builtin.write_bytes_f32(value.voxel_type_frequency)
+    |> Builtin.write_bytes_u32(value.seed)
 
 ## Deserializes a value of [GradientNoiseVoxelTypes] from its bytes in the
 ## representation used by the engine.
@@ -138,20 +138,20 @@ from_bytes : List U8 -> Result GradientNoiseVoxelTypes _
 from_bytes = |bytes|
     Ok(
         {
-            n_voxel_types: bytes |> List.sublist({ start: 0, len: 8 }) |> NativeNum.from_bytes_usize?,
+            n_voxel_types: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
             voxel_type_name_hashes: bytes
-            |> List.sublist({ start: 8, len: 1024 })
+            |> List.sublist({ start: 4, len: 1024 })
             |> List.chunks_of(4)
             |> List.map_try(|bts| Hashing.from_bytes_hash_32(bts))?,
-            noise_frequency: bytes |> List.sublist({ start: 1032, len: 8 }) |> Builtin.from_bytes_f64?,
-            voxel_type_frequency: bytes |> List.sublist({ start: 1040, len: 8 }) |> Builtin.from_bytes_f64?,
-            seed: bytes |> List.sublist({ start: 1048, len: 8 }) |> Builtin.from_bytes_u64?,
+            noise_frequency: bytes |> List.sublist({ start: 1028, len: 4 }) |> Builtin.from_bytes_f32?,
+            voxel_type_frequency: bytes |> List.sublist({ start: 1032, len: 4 }) |> Builtin.from_bytes_f32?,
+            seed: bytes |> List.sublist({ start: 1036, len: 4 }) |> Builtin.from_bytes_u32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 1056 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 1040 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
