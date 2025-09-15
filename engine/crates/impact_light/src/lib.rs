@@ -1600,7 +1600,7 @@ impl ShadowableUnidirectionalLight {
             // Constrain limits using either the view frustum or the bounding
             // volume, depending on which gives the snuggest fit
             let aabb_for_visible_models =
-                bounding_sphere_aabb.union_with(&light_space_view_frustum_aabb);
+                bounding_sphere_aabb.compute_overlap_with(&light_space_view_frustum_aabb);
 
             if let Some(aabb_for_visible_models) = aabb_for_visible_models {
                 let visible_models_aabb_lower_corner = aabb_for_visible_models.lower_corner();

@@ -829,7 +829,7 @@ impl SceneGraph {
 
                 let camera_space_aabb_for_visible_models = camera_space_bounding_sphere
                     .compute_aabb()
-                    .union_with(&camera_space_view_frustum.compute_aabb());
+                    .compute_overlap_with(&camera_space_view_frustum.compute_aabb());
 
                 omnidirectional_light.orient_and_scale_cubemap_for_shadow_casting_models(
                     &camera_space_bounding_sphere,
