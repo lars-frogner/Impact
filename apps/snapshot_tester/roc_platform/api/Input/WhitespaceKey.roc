@@ -1,51 +1,50 @@
-# Hash: 2a3acd34988e8d48bb96c7049b57bb3a7f9eb014ac3e85d408239054f9937d5b
-# Generated: 2025-09-19T18:59:31+00:00
-# Rust type: impact::input::mouse::MouseButton
+# Hash: 93cf77e5490074a1398be60badfae98f3b6f988bf24588b0492d9cdab836e311
+# Generated: 2025-09-19T14:54:30+00:00
+# Rust type: impact::input::key::WhitespaceKey
 # Type category: Inline
-# Commit: ff568180 (dirty)
+# Commit: fc08276f (dirty)
 module [
-    MouseButton,
+    WhitespaceKey,
     write_bytes,
     from_bytes,
 ]
 
-## A button on a mouse.
-MouseButton : [
-    Left,
-    Right,
-    Middle,
+WhitespaceKey : [
+    Space,
+    Tab,
+    Enter,
 ]
 
-## Serializes a value of [MouseButton] into the binary representation
+## Serializes a value of [WhitespaceKey] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, MouseButton -> List U8
+write_bytes : List U8, WhitespaceKey -> List U8
 write_bytes = |bytes, value|
     when value is
-        Left ->
+        Space ->
             bytes
             |> List.reserve(1)
             |> List.append(0)
 
-        Right ->
+        Tab ->
             bytes
             |> List.reserve(1)
             |> List.append(1)
 
-        Middle ->
+        Enter ->
             bytes
             |> List.reserve(1)
             |> List.append(2)
 
-## Deserializes a value of [MouseButton] from its bytes in the
+## Deserializes a value of [WhitespaceKey] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result MouseButton _
+from_bytes : List U8 -> Result WhitespaceKey _
 from_bytes = |bytes|
     if List.len(bytes) != 1 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
-            [0, ..] -> Ok(Left)
-            [1, ..] -> Ok(Right)
-            [2, ..] -> Ok(Middle)
+            [0, ..] -> Ok(Space)
+            [1, ..] -> Ok(Tab)
+            [2, ..] -> Ok(Enter)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

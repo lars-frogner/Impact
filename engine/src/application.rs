@@ -1,6 +1,12 @@
 //! Interfacing with the application using the engine.
 
-use crate::engine::Engine;
+use crate::{
+    engine::Engine,
+    input::{
+        key::KeyboardEvent,
+        mouse::{MouseButtonEvent, MouseDragEvent},
+    },
+};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -15,14 +21,17 @@ pub trait Application: Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
-    #[cfg(feature = "window")]
-    fn handle_keyboard_event(&self, event: crate::window::input::key::KeyboardEvent) -> Result<()>;
+    fn handle_keyboard_event(&self, _event: KeyboardEvent) -> Result<()> {
+        Ok(())
+    }
 
-    #[cfg(feature = "window")]
-    fn handle_mouse_button_event(
-        &self,
-        event: crate::window::input::mouse::MouseButtonEvent,
-    ) -> Result<()>;
+    fn handle_mouse_button_event(&self, _event: MouseButtonEvent) -> Result<()> {
+        Ok(())
+    }
+
+    fn handle_mouse_drag_event(&self, _event: MouseDragEvent) -> Result<()> {
+        Ok(())
+    }
 
     #[cfg(feature = "egui")]
     fn run_egui_ui(

@@ -3,10 +3,16 @@
 use crate::declare_lockable_resource;
 
 // ============================================================================
-// GAME LOOP (0-19)
+// GAME LOOP (0-9)
 // ============================================================================
 
-declare_lockable_resource!(crate::game_loop::GameLoopController, 10);
+declare_lockable_resource!(crate::game_loop::GameLoopController, 0);
+
+// ============================================================================
+// INPUT MANAGER (10-19)
+// ============================================================================
+
+declare_lockable_resource!(crate::input::InputManager, 10);
 
 // ============================================================================
 // ECS (20-49)

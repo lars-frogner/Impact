@@ -13,6 +13,10 @@ use crate::{
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
+    input::{
+        InputConfig, InputEvent, InputManager,
+        mouse::{MouseDragEvent, MouseMotionEvent},
+    },
     instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::{PhysicsConfig, PhysicsSimulator},
@@ -56,6 +60,7 @@ pub struct Engine {
     graphics_device: Arc<GraphicsDevice>,
     component_metadata_registry: ComponentMetadataRegistry,
     game_loop_controller: RwLock<GameLoopController>,
+    input_manager: Mutex<InputManager>,
     entity_stager: Mutex<EntityStager>,
     ecs_world: RwLock<ECSWorld>,
     resource_manager: RwLock<ResourceManager>,
@@ -77,6 +82,7 @@ pub struct Engine {
 #[serde(default)]
 pub struct EngineConfig {
     pub game_loop: GameLoopConfig,
+    pub input: InputConfig,
     pub ecs: ECSConfig,
     pub resources: ResourceConfig,
     pub voxel: VoxelConfig,
@@ -158,11 +164,14 @@ impl Engine {
 
         let game_loop_controller = GameLoopController::new(config.game_loop);
 
+        let input_manager = InputManager::new(config.input);
+
         let engine = Self {
             app,
             graphics_device,
             component_metadata_registry,
             game_loop_controller: RwLock::new(game_loop_controller),
+            input_manager: Mutex::new(input_manager),
             entity_stager: Mutex::new(EntityStager::new()),
             ecs_world: RwLock::new(ecs_world),
             resource_manager: RwLock::new(resource_manager),
@@ -316,28 +325,44 @@ impl Engine {
             .update_pixels_per_point(pixels_per_point);
     }
 
-    /// Updates the orientation controller with the given mouse displacement.
-    #[cfg(feature = "window")]
-    pub(crate) fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
+    pub(crate) fn handle_queued_input_events(&self) -> Result<()> {
+        let mut input_manager = self.input_manager.olock();
+        let input_manager = &mut **input_manager;
+        for event in input_manager.event_queue.drain(..) {
+            match event {
+                InputEvent::Keyboard(event) => {
+                    self.app().handle_keyboard_event(event)?;
+                }
+                InputEvent::MouseButton(event) => {
+                    input_manager.state.record_mouse_button_event(event);
+                    self.app().handle_mouse_button_event(event)?;
+                }
+                InputEvent::MouseMotion(MouseMotionEvent { delta_x, delta_y }) => {
+                    self.update_orientation_controller(delta_x, delta_y);
+                    self.app().handle_mouse_drag_event(MouseDragEvent {
+                        delta_x,
+                        delta_y,
+                        pressed: input_manager.state.pressed_mouse_buttons,
+                    })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Updates the orientation controller with the given angular mouse
+    /// displacement.
+    pub(crate) fn update_orientation_controller(&self, delta_x: f64, delta_y: f64) {
         if !self.controls_enabled() {
             return;
         }
         if let Some(orientation_controller) = &self.orientation_controller {
             impact_log::trace!(
-                "Updating orientation controller by mouse delta ({}, {})",
-                mouse_displacement.0,
-                mouse_displacement.1
+                "Updating orientation controller by angular mouse deltas ({delta_x}, {delta_y})",
             );
-
-            let (_, window_height) = self
-                .renderer
-                .oread()
-                .rendering_surface()
-                .surface_dimensions();
-
             orientation_controller
                 .olock()
-                .update_orientation_change(window_height, mouse_displacement);
+                .update_orientation_change(delta_x, delta_y);
         }
     }
 

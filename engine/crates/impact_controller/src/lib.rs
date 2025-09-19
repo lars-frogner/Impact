@@ -19,7 +19,6 @@ use motion::{
 use orientation::{
     CameraOrientationController, OrientationControllerConfig, RollFreeCameraOrientationController,
 };
-use std::num::NonZeroU32;
 
 /// Represents controllers that are used for controlling
 /// the movement of entities.
@@ -59,9 +58,6 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 /// Represents controllers that are used for controlling
 /// the orientation of entities.
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
-    /// Returns the sensitivity of the controller.
-    fn sensitivity(&self) -> f64;
-
     /// Modifies the given orientation of a controlled entity so that the
     /// current changes in orientation are applied to it.
     fn update_orientation(&self, orientation: &mut Orientation);
@@ -70,23 +66,14 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
     /// [`reset_orientation_change`](Self::reset_orientation_change).
     fn orientation_has_changed(&self) -> bool;
 
-    /// Determines and registers the change in orientation of the
-    /// controlled entity based on the given displacement of the mouse.
-    fn update_orientation_change(
-        &mut self,
-        window_height: NonZeroU32,
-        mouse_displacement: (f64, f64),
-    );
+    /// Determines and registers the change in orientation of the controlled
+    /// entity based on the given angular displacement of the mouse, expressed
+    /// in radians across the field of view.
+    fn update_orientation_change(&mut self, delta_x: f64, delta_y: f64);
 
     /// Resets the change in orientation accumulated by
     /// [`update_orientation_change`](Self::update_orientation_change).
     fn reset_orientation_change(&mut self);
-
-    /// Sets the given sensitivity for the controller.
-    ///
-    /// # Panics
-    /// If the given sensitivity does not exceed zero.
-    fn set_sensitivity(&mut self, sensitivity: f64);
 }
 
 #[cfg_attr(
@@ -131,15 +118,9 @@ pub fn create_controllers(
 
     let orientation_controller: Option<Box<dyn OrientationController>> = match orientation_config {
         OrientationControllerConfig::None => None,
-        OrientationControllerConfig::Camera(camera_orientation_controller_config) => {
-            Some(Box::new(CameraOrientationController::new(
-                camera_orientation_controller_config,
-            )))
-        }
-        OrientationControllerConfig::RollFreeCamera(camera_orientation_controller_config) => {
-            Some(Box::new(RollFreeCameraOrientationController::new(
-                camera_orientation_controller_config,
-            )))
+        OrientationControllerConfig::Camera => Some(Box::new(CameraOrientationController::new())),
+        OrientationControllerConfig::RollFreeCamera => {
+            Some(Box::new(RollFreeCameraOrientationController::new()))
         }
     };
 

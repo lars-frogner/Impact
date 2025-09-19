@@ -18,6 +18,9 @@ pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
     /// Returns the projection transform used by the camera.
     fn projection_transform(&self) -> &Projective3<F>;
 
+    /// Returns the vertical field of view angle in radians.
+    fn vertical_field_of_view(&self) -> Radians<F>;
+
     /// Returns the frustum representing the view volume of the
     /// camera.
     fn view_frustum(&self) -> &Frustum<F>;
@@ -86,11 +89,6 @@ impl<F: Float> PerspectiveCamera<F> {
         }
     }
 
-    /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<F> {
-        self.perspective_transform.vertical_field_of_view()
-    }
-
     /// Returns the near distance of the camera.
     pub fn near_distance(&self) -> F {
         self.perspective_transform.near_distance()
@@ -125,6 +123,10 @@ impl<F: Float> PerspectiveCamera<F> {
 impl<F: Float> Camera<F> for PerspectiveCamera<F> {
     fn projection_transform(&self) -> &Projective3<F> {
         self.perspective_transform.as_projective()
+    }
+
+    fn vertical_field_of_view(&self) -> Radians<F> {
+        self.perspective_transform.vertical_field_of_view()
     }
 
     fn view_frustum(&self) -> &Frustum<F> {
@@ -180,11 +182,6 @@ impl<F: Float> OrthographicCamera<F> {
         }
     }
 
-    /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<F> {
-        self.vertical_field_of_view
-    }
-
     /// Returns the near distance of the camera.
     pub fn near_distance(&self) -> F {
         self.near_and_far_distance.lower()
@@ -225,6 +222,10 @@ impl<F: Float> OrthographicCamera<F> {
 impl<F: Float> Camera<F> for OrthographicCamera<F> {
     fn projection_transform(&self) -> &Projective3<F> {
         self.orthographic_transform.as_projective()
+    }
+
+    fn vertical_field_of_view(&self) -> Radians<F> {
+        self.vertical_field_of_view
     }
 
     fn view_frustum(&self) -> &Frustum<F> {

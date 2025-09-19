@@ -1,8 +1,8 @@
 # Hash: be8324e7455bbb58ee1f72890d6f1b418b37fddb95c09acc1b330bcebb2573a4
-# Generated: 2025-07-27T14:52:58+00:00
-# Rust type: impact::window::input::key::LockKey
+# Generated: 2025-09-19T18:59:31+00:00
+# Rust type: impact::input::key::LockKey
 # Type category: Inline
-# Commit: 397d36d3 (dirty)
+# Commit: ff568180 (dirty)
 module [
     LockKey,
     write_bytes,

@@ -1,51 +1,50 @@
-# Hash: 2a3acd34988e8d48bb96c7049b57bb3a7f9eb014ac3e85d408239054f9937d5b
-# Generated: 2025-09-19T18:59:31+00:00
-# Rust type: impact::input::mouse::MouseButton
+# Hash: 3f9fa523717532c390fcd6b06d6a1af14690788d762e2e6aa620501d3c4b89fa
+# Generated: 2025-09-19T14:54:30+00:00
+# Rust type: impact::input::key::ControlKey
 # Type category: Inline
-# Commit: ff568180 (dirty)
+# Commit: fc08276f (dirty)
 module [
-    MouseButton,
+    ControlKey,
     write_bytes,
     from_bytes,
 ]
 
-## A button on a mouse.
-MouseButton : [
-    Left,
-    Right,
-    Middle,
+ControlKey : [
+    Escape,
+    Backspace,
+    Delete,
 ]
 
-## Serializes a value of [MouseButton] into the binary representation
+## Serializes a value of [ControlKey] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, MouseButton -> List U8
+write_bytes : List U8, ControlKey -> List U8
 write_bytes = |bytes, value|
     when value is
-        Left ->
+        Escape ->
             bytes
             |> List.reserve(1)
             |> List.append(0)
 
-        Right ->
+        Backspace ->
             bytes
             |> List.reserve(1)
             |> List.append(1)
 
-        Middle ->
+        Delete ->
             bytes
             |> List.reserve(1)
             |> List.append(2)
 
-## Deserializes a value of [MouseButton] from its bytes in the
+## Deserializes a value of [ControlKey] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result MouseButton _
+from_bytes : List U8 -> Result ControlKey _
 from_bytes = |bytes|
     if List.len(bytes) != 1 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
-            [0, ..] -> Ok(Left)
-            [1, ..] -> Ok(Right)
-            [2, ..] -> Ok(Middle)
+            [0, ..] -> Ok(Escape)
+            [1, ..] -> Ok(Backspace)
+            [2, ..] -> Ok(Delete)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

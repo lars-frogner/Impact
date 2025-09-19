@@ -14,7 +14,6 @@ use crate::gizmo::{
     },
 };
 use approx::abs_diff_ne;
-use impact_camera::gpu_resource::BufferableCamera;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_light::{

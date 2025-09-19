@@ -97,14 +97,14 @@
             movement_speed: 8.0,
             vertical_control: true,
         )),
-        orientation: RollFreeCamera((
-            vertical_field_of_view: (70.0),
-            sensitivity: 1.0,
-        )),
+        orientation: RollFreeCamera,
     ),
     game_loop: (
         max_fps: None,
         max_iterations: None,
+    ),
+    input: (
+        mouse_sensitivity: 1.0,
     ),
     screen_capture: (
         output_dir: None,
