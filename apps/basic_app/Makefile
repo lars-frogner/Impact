@@ -116,7 +116,7 @@ clean-roc:
 
 # Cleanup
 clean:
-	rm -rf build_script lib/ dist/
+	rm -rf build_script lib/ dist/ roc_platform/build roc_platform/lib/
 
 clean-profiling:
 	rm -rf perf.data profile.perf dhat.out.* heaptrack.*.zst

@@ -75,7 +75,7 @@ clean-roc:
 
 # Cleanup
 clean:
-	rm -rf build_script lib/ dist/
+	rm -rf build_script lib/ dist/ roc_platform/build roc_platform/lib/
 
 # Help
 help:
