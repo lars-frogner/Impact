@@ -30,7 +30,7 @@ pub(super) fn generate_module(
     let mut optional_exports = OptionalExports::new();
     let mut optional_imports = OptionalImports::new(package_name);
 
-    write_type_declaration(&mut module_body, type_map, &ty.ty)?;
+    write_type_declaration(&mut module_body, &mut optional_exports, type_map, &ty.ty)?;
 
     write_associated_constants(
         &mut module_body,
@@ -55,9 +55,9 @@ pub(super) fn generate_module(
         ty,
     )?;
 
-    write_write_bytes_function(&mut module_body, type_map, ty)?;
+    write_write_bytes_function(&mut module_body, &mut optional_imports, type_map, ty)?;
 
-    write_from_bytes_function(&mut module_body, type_map, ty)?;
+    write_from_bytes_function(&mut module_body, &mut optional_imports, type_map, ty)?;
 
     write_roundtrip_test(&mut module_body, ty)?;
 
@@ -94,6 +94,13 @@ pub struct OptionalExports {
 pub struct OptionalImports {
     current_package_name: String,
     import_paths: HashSet<String>,
+}
+
+enum BitflagsTypeSizeInBytes {
+    One,
+    Two,
+    Four,
+    Eight,
 }
 
 impl OptionalExports {
@@ -211,7 +218,7 @@ fn determine_imports(
     }
 
     match &ty.ty.composition {
-        ir::TypeComposition::Primitive(_) => {}
+        ir::TypeComposition::Primitive(_) | ir::TypeComposition::Bitflags(_) => {}
         ir::TypeComposition::Struct { fields, .. } => {
             add_imports_for_fields(&mut import_paths, package_name, type_map, fields);
         }
@@ -272,6 +279,7 @@ fn add_imports_for_fields<const N: usize>(
 
 fn write_type_declaration(
     roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::Type,
 ) -> Result<()> {
@@ -317,6 +325,10 @@ fn write_type_declaration(
                 roc_code.push('\n');
             }
             roc_code.push_str("]\n\n");
+            Ok(())
+        }
+        ir::TypeComposition::Bitflags(bitflags) => {
+            write_bitflags_type_declaration(roc_code, optional_exports, type_map, ty, bitflags)?;
             Ok(())
         }
     }
@@ -851,7 +863,7 @@ fn write_component_functions(
     optional_imports.add("pf", "Entity.Arg");
     optional_imports.add("core", "Builtin");
 
-    let alignment = ty.alignment_as_pod_struct().ok_or_else(|| {
+    let alignment = ty.alignment_as_pod_type().ok_or_else(|| {
         anyhow!(
             "\
             Component type {} is not registered as POD: \
@@ -953,8 +965,151 @@ fn write_component_functions(
     Ok(())
 }
 
+fn write_bitflags_type_declaration<const N: usize>(
+    roc_code: &mut String,
+    optional_exports: &mut OptionalExports,
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::Type,
+    bitflags: &ir::Bitflags<N>,
+) -> Result<()> {
+    let type_name = ty.name;
+
+    let backing_type = match obtain_bitflags_type_size(type_map, ty)? {
+        BitflagsTypeSizeInBytes::One => "U8",
+        BitflagsTypeSizeInBytes::Two => "U16",
+        BitflagsTypeSizeInBytes::Four => "U32",
+        BitflagsTypeSizeInBytes::Eight => "U64",
+    };
+
+    // Write the opaque type definition
+    writeln!(roc_code, "{type_name} := {backing_type} implements [Eq]\n")?;
+
+    // Write empty constant
+    writeln!(roc_code, "empty = @{type_name}(0)\n")?;
+    optional_exports.add("empty");
+
+    // Write individual flag constants
+    for flag in &bitflags.0 {
+        let flag_name = flag.name.to_ascii_lowercase();
+        writeln!(
+            roc_code,
+            "{flag_name} = @{type_name}(Num.shift_left_by(1, {flag_bit}))\n",
+            flag_bit = flag.bit
+        )?;
+        optional_exports.add(flag_name);
+    }
+
+    // Write utility functions
+    write!(
+        roc_code,
+        "## Returns the raw bitflags as an unsigned integer\n\
+        bits = |@{type_name}(flags)|\n    \
+            flags\n\
+        \n\
+        ## Whether any set bits in the second flags value are also set in the first\n\
+        ## flags value.\n\
+        intersects = |@{type_name}(a), @{type_name}(b)|\n    \
+            Num.bitwise_and(a, b) != 0\n\
+        \n\
+        ## Whether all set bits in the second flags value are also set in the first\n\
+        ## flags value.\n\
+        contains = |@{type_name}(a), @{type_name}(b)|\n    \
+            Num.bitwise_and(a, b) == b\n\
+        \n\
+        ## The bitwise or (|) of the bits in two flags values.\n\
+        union = |@{type_name}(a), @{type_name}(b)|\n    \
+            @{type_name}(Num.bitwise_or(a, b))\n\
+        \n\
+        ## The bitwise and (&) of the bits in two flags values.\n\
+        intersection = |@{type_name}(a), @{type_name}(b)|\n    \
+            @{type_name}(Num.bitwise_and(a, b))\n\
+        \n\
+        ## The intersection of the first flags value with the complement of the second\n\
+        ## flags value (&!).\n\
+        difference = |@{type_name}(a), @{type_name}(b)|\n    \
+            @{type_name}(Num.bitwise_and(a, Num.bitwise_not(b)))\n\
+        \n"
+    )?;
+
+    // Add utility function exports
+    optional_exports.add("intersects");
+    optional_exports.add("contains");
+    optional_exports.add("union");
+    optional_exports.add("intersection");
+    optional_exports.add("difference");
+
+    Ok(())
+}
+
+fn write_bitflags_from_bytes_function(
+    roc_code: &mut String,
+    optional_imports: &mut OptionalImports,
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::Type,
+) -> Result<()> {
+    let from_function = match obtain_bitflags_type_size(type_map, ty)? {
+        BitflagsTypeSizeInBytes::One => "from_bytes_u8",
+        BitflagsTypeSizeInBytes::Two => "from_bytes_u16",
+        BitflagsTypeSizeInBytes::Four => "from_bytes_u32",
+        BitflagsTypeSizeInBytes::Eight => "from_bytes_u64",
+    };
+
+    writeln!(
+        roc_code,
+        "    Builtin.{from_function}(bytes) |> Result.map_ok(@{type_name})",
+        type_name = ty.name
+    )?;
+
+    optional_imports.add("core", "Builtin");
+
+    Ok(())
+}
+
+fn write_bitflags_write_bytes_function(
+    roc_code: &mut String,
+    optional_imports: &mut OptionalImports,
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::Type,
+) -> Result<()> {
+    let write_function = match obtain_bitflags_type_size(type_map, ty)? {
+        BitflagsTypeSizeInBytes::One => "write_bytes_u8",
+        BitflagsTypeSizeInBytes::Two => "write_bytes_u16",
+        BitflagsTypeSizeInBytes::Four => "write_bytes_u32",
+        BitflagsTypeSizeInBytes::Eight => "write_bytes_u64",
+    };
+
+    writeln!(roc_code, "    Builtin.{write_function}(bytes, bits(value))")?;
+
+    optional_imports.add("core", "Builtin");
+
+    Ok(())
+}
+
+fn obtain_bitflags_type_size(
+    type_map: &HashMap<RocTypeID, RegisteredType>,
+    ty: &ir::Type,
+) -> Result<BitflagsTypeSizeInBytes> {
+    let registered_type = type_map
+        .get(&ty.id)
+        .ok_or_else(|| anyhow!("Bitflags type {} is not registered", ty.name))?;
+
+    Ok(match registered_type.serialized_size {
+        1 => BitflagsTypeSizeInBytes::One,
+        2 => BitflagsTypeSizeInBytes::Two,
+        4 => BitflagsTypeSizeInBytes::Four,
+        8 => BitflagsTypeSizeInBytes::Eight,
+        size => {
+            return Err(anyhow!(
+                "Unsupported size {size} for bitflags type {} (must be 1, 2, 4 or 8 bytes)",
+                ty.name
+            ));
+        }
+    })
+}
+
 fn write_write_bytes_function(
     roc_code: &mut String,
+    optional_imports: &mut OptionalImports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
 ) -> Result<()> {
@@ -1075,6 +1230,9 @@ fn write_write_bytes_function(
                 }
             }
         }
+        ir::TypeComposition::Bitflags(_) => {
+            write_bitflags_write_bytes_function(roc_code, optional_imports, type_map, &ty.ty)?;
+        }
         ir::TypeComposition::Primitive(_) => {
             unreachable!()
         }
@@ -1150,6 +1308,7 @@ fn write_calls_to_write_bytes<const N: usize>(
 
 fn write_from_bytes_function(
     roc_code: &mut String,
+    optional_imports: &mut OptionalImports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
 ) -> Result<()> {
@@ -1264,6 +1423,9 @@ fn write_from_bytes_function(
                 [discr, ..] -> Err(InvalidDiscriminant(discr))\n\
                 ",
             );
+        }
+        ir::TypeComposition::Bitflags(_) => {
+            write_bitflags_from_bytes_function(roc_code, optional_imports, type_map, &ty.ty)?;
         }
         ir::TypeComposition::Primitive(_) => {
             unreachable!()
@@ -1395,7 +1557,9 @@ fn write_calls_to_from_bytes<const N: usize>(
 fn write_roundtrip_test(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
     match &ty.ty.composition {
         ir::TypeComposition::Primitive(_) => Ok(()),
-        ir::TypeComposition::Struct { .. } => write_roundtrip_test_for_struct(roc_code, ty),
+        ir::TypeComposition::Struct { .. } | ir::TypeComposition::Bitflags(_) => {
+            write_roundtrip_test_for_simple_type(roc_code, ty)
+        }
         ir::TypeComposition::Enum(_) => {
             // Creating valid roundtrip tests for enums is not trivial since
             // there could be illegal values at any byte position in the input
@@ -1406,13 +1570,13 @@ fn write_roundtrip_test(roc_code: &mut String, ty: &RegisteredType) -> Result<()
     }
 }
 
-fn write_roundtrip_test_for_struct(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
+fn write_roundtrip_test_for_simple_type(roc_code: &mut String, ty: &RegisteredType) -> Result<()> {
     writeln!(
         roc_code,
         "\n\
         test_roundtrip : {{}} -> Result {{}} _\n\
         test_roundtrip = |{{}}|\n    \
-            bytes = List.range({{ start: At 0, end: Length {} }}) |> List.map(|b| Num.to_u8(b))\n    \
+            bytes = List.range({{ start: At 0, end: Length {size} }}) |> List.map(|b| Num.to_u8(b))\n    \
             decoded = from_bytes(bytes)?\n    \
             encoded = write_bytes([], decoded)\n    \
             if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then\n        \
@@ -1424,7 +1588,7 @@ fn write_roundtrip_test_for_struct(roc_code: &mut String, ty: &RegisteredType) -
             result = test_roundtrip({{}})\n    \
             result |> Result.is_ok\
         ",
-        ty.serialized_size,
+        size = ty.serialized_size,
     )?;
     Ok(())
 }

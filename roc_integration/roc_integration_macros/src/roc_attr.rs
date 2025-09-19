@@ -1,9 +1,9 @@
 //! Attribute macro for Roc code generation.
 
 use crate::{
-    AssociatedConstantAttributeArgs, AssociatedFunctionAttributeArgs, ImplAttributeArgs,
-    MAX_DEPENDENCIES, MAX_ENUM_VARIANT_FIELDS, MAX_ENUM_VARIANTS, MAX_FUNCTION_ARGS,
-    MAX_STRUCT_FIELDS, TypeAttributeArgs, TypeCategory,
+    AssociatedConstantAttributeArgs, AssociatedFunctionAttributeArgs, Bitflag, Bitflags,
+    ImplAttributeArgs, MAX_BITFLAGS, MAX_DEPENDENCIES, MAX_ENUM_VARIANT_FIELDS, MAX_ENUM_VARIANTS,
+    MAX_FUNCTION_ARGS, MAX_STRUCT_FIELDS, TypeAttributeArgs, TypeCategory,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
@@ -18,6 +18,7 @@ struct ResolvedAttributeArgs {
     module_name: String,
     type_name: String,
     function_postfix: Option<String>,
+    flags: Option<Bitflags>,
 }
 
 pub(super) fn apply_type_attribute(
@@ -178,6 +179,7 @@ fn resolve_type_attribute_args(
         module_name,
         type_name,
         function_postfix,
+        flags,
     }: TypeAttributeArgs,
     input: &syn::DeriveInput,
 ) -> ResolvedAttributeArgs {
@@ -197,6 +199,7 @@ fn resolve_type_attribute_args(
         module_name,
         type_name,
         function_postfix,
+        flags,
     }
 }
 
@@ -249,7 +252,10 @@ fn generate_roc_pod_impl(
     crate_root: &TokenStream,
     type_category: TypeCategory,
 ) -> TokenStream {
-    if matches!(type_category, TypeCategory::Primitive | TypeCategory::Pod) {
+    if matches!(
+        type_category,
+        TypeCategory::Primitive | TypeCategory::Pod | TypeCategory::Bitflags
+    ) {
         // This impl ensures that we get an error if the type doesn't implement `Pod`
         quote! {
             impl #crate_root::RocPod for #rust_type_name {}
@@ -281,7 +287,10 @@ fn generate_size_expr(
     crate_root: &TokenStream,
     type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
-    if matches!(type_category, TypeCategory::Primitive | TypeCategory::Pod) {
+    if matches!(
+        type_category,
+        TypeCategory::Primitive | TypeCategory::Pod | TypeCategory::Bitflags
+    ) {
         // Their serialized size of POD types will always match their
         // in-memory size
         let type_name = &input.ident;
@@ -389,7 +398,7 @@ fn generate_roc_trait_method_impls(
     type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
-    if let TypeCategory::Primitive | TypeCategory::Pod = type_category {
+    if let TypeCategory::Primitive | TypeCategory::Pod | TypeCategory::Bitflags = type_category {
         Ok(generate_roc_trait_method_impls_for_pod_type(
             type_name, crate_root,
         ))
@@ -744,8 +753,13 @@ fn generate_registered_type_submit(
     let flags = generate_type_flags(crate_root, args.type_category);
     let docstring = extract_and_process_docstring(&input.attrs);
     let type_name = &args.type_name;
-    let composition =
-        generate_type_composition(input, crate_root, args.type_category, static_assertions)?;
+    let composition = generate_type_composition(
+        input,
+        crate_root,
+        args.type_category,
+        args.flags.as_ref(),
+        static_assertions,
+    )?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         inventory::submit! {
@@ -857,8 +871,8 @@ fn generate_associated_function_submit(
 
 fn generate_type_flags(crate_root: &TokenStream, type_category: TypeCategory) -> TokenStream {
     match type_category {
-        // All primitives are required to be POD
-        TypeCategory::Primitive | TypeCategory::Pod => {
+        // All primitives and bitflags are required to be POD
+        TypeCategory::Primitive | TypeCategory::Pod | TypeCategory::Bitflags => {
             quote! { #crate_root::RegisteredTypeFlags::IS_POD }
         }
         TypeCategory::Inline => {
@@ -871,6 +885,7 @@ fn generate_type_composition(
     input: &syn::DeriveInput,
     crate_root: &TokenStream,
     type_category: TypeCategory,
+    flags: Option<&Bitflags>,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
     if type_category == TypeCategory::Primitive {
@@ -880,6 +895,20 @@ fn generate_type_composition(
                     precision: #crate_root::ir::PrimitivePrecision::PrecisionIrrelevant,
                }
             )
+        });
+    }
+    if type_category == TypeCategory::Bitflags {
+        let flags = flags.ok_or_else(|| {
+            syn::Error::new_spanned(
+                input,
+                "bitflags types require 'flags' argument with flag declarations",
+            )
+        })?;
+
+        let flags = generate_bitflags(crate_root, flags, MAX_BITFLAGS)?;
+
+        return Ok(quote! {
+            #crate_root::ir::TypeComposition::Bitflags(#flags)
         });
     }
     match &input.data {
@@ -906,6 +935,29 @@ fn generate_type_composition(
             "the `roc` attribute does not support unions",
         )),
     }
+}
+
+fn generate_bitflags(
+    crate_root: &TokenStream,
+    flags: &Bitflags,
+    max_flags: usize,
+) -> syn::Result<TokenStream> {
+    let constants = flags
+        .flags
+        .iter()
+        .map(|Bitflag { name, bit }| {
+            quote! {
+                Some(#crate_root::ir::Bitflag {
+                    name: #name,
+                    bit: #bit,
+                })
+            }
+        })
+        .chain(iter::repeat_n(quote! {None}, max_flags - flags.flags.len()));
+
+    Ok(quote! {
+        #crate_root::ir::Bitflags(#crate_root::utils::StaticList([#(#constants),*]))
+    })
 }
 
 fn generate_fields(

@@ -18,7 +18,7 @@
 /// `roc_codegen` and the `roc_codegen` feature is active for the
 /// `roc_integration` crate.
 ///
-/// Three categories of types can be annotated with `roc`, and the requested
+/// Four categories of types can be annotated with `roc`, and the requested
 /// category can be specified as an argument to the macro:
 /// `#[roc(category = "<category>")]`. The available categories are:
 ///
@@ -28,6 +28,14 @@
 ///   specified and the type derives `Pod`. Types of this category can only
 ///   contain other `roc`-annotated types with the `primitive` or `pod`
 ///   category, as well as arrays of such types.
+///
+/// - `bitflags`: The type represents a set of bitflags. It must be POD and 1,
+///   2, 4 or 8 bytes in size. In Roc, it will be represented as an opaque
+///   unsigned integer. The name and representing bit of each flag must be
+///   declared in an argument named `flags`, like so:
+///   `#[roc(category = "bitflags", flags=[FLAG_A=0, FLAG_B=1, FLAG_C=2])]`.
+///   The integer specifies which bit (from the left) should be one when the
+///   flag is set.
 ///
 /// - `inline`: This category is more flexible than `pod`, as it also supports
 ///   enums and types with padding. However, the type is not allowed to contain
@@ -267,14 +275,17 @@ mod inner {
             )
         }
 
-        /// The alignment of this type if it is a POD struct.
-        pub fn alignment_as_pod_struct(&self) -> Option<usize> {
-            if let ir::TypeComposition::Struct { alignment, .. } = &self.ty.composition
-                && self.flags.contains(RegisteredTypeFlags::IS_POD)
-            {
-                return Some(*alignment);
+        /// The alignment of this type if it is POD.
+        pub fn alignment_as_pod_type(&self) -> Option<usize> {
+            match &self.ty.composition {
+                ir::TypeComposition::Struct { alignment, .. }
+                    if self.flags.contains(RegisteredTypeFlags::IS_POD) =>
+                {
+                    Some(*alignment)
+                }
+                ir::TypeComposition::Bitflags(_) => Some(self.serialized_size),
+                _ => None,
             }
-            None
         }
 
         /// Returns the fully qualified path for the Roc import statement required
@@ -357,6 +368,7 @@ mod inner {
                     ..
                 } => Cow::Borrowed("tuple struct"),
                 ir::TypeComposition::Enum(_) => Cow::Borrowed("enum"),
+                ir::TypeComposition::Bitflags(_) => Cow::Borrowed("bitflags"),
             }
         }
 

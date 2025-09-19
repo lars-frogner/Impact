@@ -8,6 +8,7 @@ use crate::{RocTypeID, utils::StaticList};
 pub const MAX_ENUM_VARIANTS: usize = 32;
 pub const MAX_ENUM_VARIANT_FIELDS: usize = 4;
 pub const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;
+pub const MAX_BITFLAGS: usize = 64;
 
 pub const MAX_FUNCTION_ARGS: usize = 16;
 
@@ -82,6 +83,8 @@ pub enum TypeComposition {
         fields: TypeFields<MAX_STRUCT_FIELDS>,
     },
     Enum(TypeVariants<MAX_ENUM_VARIANTS, MAX_ENUM_VARIANT_FIELDS>),
+    /// Bitflags types with named bit constants.
+    Bitflags(Bitflags<MAX_BITFLAGS>),
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +120,10 @@ pub enum TypeFields<const N_FIELDS: usize> {
 pub struct TypeVariants<const N_VARIANTS: usize, const N_FIELDS: usize>(
     pub StaticList<TypeVariant<N_FIELDS>, N_VARIANTS>,
 );
+
+/// A list of bitflags constants.
+#[derive(Clone, Debug)]
+pub struct Bitflags<const N_FLAGS: usize>(pub StaticList<Bitflag, N_FLAGS>);
 
 /// An enum variant.
 #[derive(Clone, Debug)]
@@ -154,6 +161,15 @@ pub struct UnnamedTypeField {
 pub enum FieldType {
     Single { type_id: RocTypeID },
     Array { elem_type_id: RocTypeID, len: usize },
+}
+
+/// A single named bitflags constant.
+#[derive(Clone, Debug)]
+pub struct Bitflag {
+    /// The name of the flag.
+    pub name: &'static str,
+    /// The bit representing this flag.
+    pub bit: u32,
 }
 
 /// The type of an associated constant.
