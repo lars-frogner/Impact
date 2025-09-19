@@ -89,10 +89,7 @@
             movement_speed: 8.0,
             vertical_control: true,
         )),
-        orientation: RollFreeCamera((
-            vertical_field_of_view: (70.0),
-            sensitivity: 1.0,
-        )),
+        orientation: RollFreeCamera,
     ),
     screen_capture: (
         tagging: FrameNumber,

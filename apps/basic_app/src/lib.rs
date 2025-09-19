@@ -14,11 +14,12 @@ use impact::{
     egui,
     engine::{Engine, EngineConfig},
     impact_io,
-    runtime::RuntimeConfig,
-    window::{
-        WindowConfig,
-        input::{key::KeyboardEvent, mouse::MouseButtonEvent},
+    input::{
+        key::KeyboardEvent,
+        mouse::{MouseButtonEvent, MouseDragEvent},
     },
+    runtime::RuntimeConfig,
+    window::WindowConfig,
 };
 use impact_dev_ui::{UserInterface, UserInterfaceConfig};
 use parking_lot::RwLock;
@@ -80,6 +81,11 @@ impl Application for BasicApp {
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
         impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
+    }
+
+    fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
+        impact_log::trace!("Handling mouse drag event {event:?}");
+        scripting::handle_mouse_drag_event(event)
     }
 
     fn run_egui_ui(

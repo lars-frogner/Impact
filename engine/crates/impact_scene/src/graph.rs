@@ -8,7 +8,6 @@ use crate::{
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_camera::gpu_resource::BufferableCamera;
 use impact_containers::{HashMap, SlotKey, SlotMap};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{

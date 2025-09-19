@@ -12,6 +12,7 @@ pub mod ffi;
 pub mod game_loop;
 pub mod gizmo;
 pub mod gpu;
+pub mod input;
 pub mod instrumentation;
 pub mod lock_order;
 pub mod physics;

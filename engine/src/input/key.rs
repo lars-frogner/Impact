@@ -1,7 +1,6 @@
 //! Keyboard input.
 
 use roc_integration::roc;
-use winit::{event, keyboard};
 
 /// A press or release of a keyboard key.
 #[roc(parents = "Input")]
@@ -195,8 +194,9 @@ impl KeyboardEvent {
     /// Returns a `KeyboardEvent` corresponding to the given `winit`
     /// `KeyEvent`, or [`None`] if the `KeyEvent` has no analogous
     /// `KeyboardEvent`.
-    pub fn from_winit(event: event::KeyEvent) -> Option<Self> {
-        let keyboard::PhysicalKey::Code(code) = event.physical_key else {
+    #[cfg(feature = "window")]
+    pub fn from_winit(event: winit::event::KeyEvent) -> Option<Self> {
+        let winit::keyboard::PhysicalKey::Code(code) = event.physical_key else {
             return None;
         };
         let key = KeyboardKey::from_winit(code)?;
@@ -209,9 +209,10 @@ impl KeyboardKey {
     /// Returns the `KeyboardKey` corresponding to the given `winit` `KeyCode`,
     /// or [`None`] if the `KeyCode` is not supported.
     #[allow(clippy::enum_glob_use)]
-    pub fn from_winit(code: keyboard::KeyCode) -> Option<Self> {
+    #[cfg(feature = "window")]
+    pub fn from_winit(code: winit::keyboard::KeyCode) -> Option<Self> {
         use KeyboardKey::*;
-        use keyboard::KeyCode::*;
+        use winit::keyboard::KeyCode::*;
 
         Some(match code {
             KeyA => Letter(LetterKey::KeyA),
@@ -330,11 +331,12 @@ impl KeyboardKey {
     }
 }
 
-impl From<event::ElementState> for KeyState {
-    fn from(state: event::ElementState) -> Self {
+#[cfg(feature = "window")]
+impl From<winit::event::ElementState> for KeyState {
+    fn from(state: winit::event::ElementState) -> Self {
         match state {
-            event::ElementState::Pressed => Self::Pressed,
-            event::ElementState::Released => Self::Released,
+            winit::event::ElementState::Pressed => Self::Pressed,
+            winit::event::ElementState::Released => Self::Released,
         }
     }
 }

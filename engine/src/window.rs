@@ -1,7 +1,5 @@
 //! Window management.
 
-pub mod input;
-
 use anyhow::Result;
 use impact_gpu::wgpu;
 use impact_rendering::surface::window::SurfaceWindow;

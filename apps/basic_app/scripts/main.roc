@@ -4,6 +4,7 @@ app [callbacks] {
 }
 
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
+import pf.Input.MouseDragEvent exposing [MouseDragEvent]
 import InputHandling.Keyboard as KeyboardInput
 import Scenes.Asteroid
 
@@ -11,9 +12,14 @@ callbacks = {
     setup_scene!: Scenes.Asteroid.setup!,
     handle_keyboard_event!: KeyboardInput.handle_event!,
     handle_mouse_button_event!,
+    handle_mouse_drag_event!,
 }
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
 handle_mouse_button_event! = |event|
     Scenes.Asteroid.handle_mouse_button_event!(event)
 # Ok({})
+
+handle_mouse_drag_event! : MouseDragEvent => Result {} Str
+handle_mouse_drag_event! = |event|
+    Ok({})

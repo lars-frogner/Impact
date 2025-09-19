@@ -160,6 +160,21 @@ impl SceneCamera {
         }
     }
 
+    /// Returns a reference to the underlying [`Camera`].
+    pub fn camera(&self) -> &dyn Camera<f32> {
+        self.camera.as_ref()
+    }
+
+    /// Returns a reference to the camera's view transform.
+    pub fn view_transform(&self) -> &Isometry3<f32> {
+        &self.view_transform
+    }
+
+    /// Returns whether jittering is enabled for the camera.
+    pub fn jitter_enabled(&self) -> bool {
+        self.jitter_enabled
+    }
+
     /// Returns the ID of the [`CameraNode`](crate::graph::CameraNode)
     /// for the camera in the [`SceneGraph`](crate::graph::SceneGraph).
     pub fn scene_graph_node_id(&self) -> CameraNodeID {
@@ -189,14 +204,14 @@ impl SceneCamera {
 
 impl BufferableCamera for SceneCamera {
     fn camera(&self) -> &dyn Camera<f32> {
-        self.camera.as_ref()
+        self.camera()
     }
 
     fn view_transform(&self) -> &Isometry3<f32> {
-        &self.view_transform
+        self.view_transform()
     }
 
     fn jitter_enabled(&self) -> bool {
-        self.jitter_enabled
+        self.jitter_enabled()
     }
 }

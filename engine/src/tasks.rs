@@ -46,6 +46,19 @@ define_task!(
     }
 );
 
+define_task!(
+    /// Handles all queued input events.
+    [pub] HandleInputEvents,
+    depends_on = [],
+    execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Handling input events", engine, {
+            engine.handle_queued_input_events()
+        })
+    }
+);
+
 // =============================================================================
 // RENDERING (using synchronized GPU resources from the previous frame)
 // =============================================================================
@@ -201,7 +214,7 @@ define_task!(
     /// Since this may change configuration parameters in the engine, this task
     /// must run before other tasks that may depend on those parameters.
     [pub] ApplyEngineCommands,
-    depends_on = [CallApp],
+    depends_on = [CallApp, HandleInputEvents],
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
@@ -224,6 +237,7 @@ define_task!(
     [pub] ApplyRenderCommands,
     depends_on = [
         CallApp,
+        HandleInputEvents,
         // We must wait for the rendering of the previous frame to be completed
         // before we touch the rendering configuration or request a frame
         // capture.
@@ -268,6 +282,7 @@ define_task!(
     [pub] HandleStagedEntities,
     depends_on = [
         CallApp,
+        HandleInputEvents,
         ApplyEngineCommands
     ],
     execute_on = [PhysicsTag, RenderingTag],
@@ -864,6 +879,7 @@ define_task!(
         // The application may create or remove entities, which can affect mesh
         // resources. Same for staged entities.
         CallApp,
+        HandleInputEvents,
         HandleStagedEntities
     ],
     execute_on = [RenderingTag],
@@ -898,6 +914,7 @@ define_task!(
         // The application may create or remove entities, which can affect
         // material resources. Same for staged entities.
         CallApp,
+        HandleInputEvents,
         HandleStagedEntities,
         // Some materials need access to the current textures.
         SyncTextureGPUResources
@@ -1100,6 +1117,7 @@ define_task!(
 pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<()> {
     // APP CALLBACK
     task_scheduler.register_task(CallApp)?;
+    task_scheduler.register_task(HandleInputEvents)?;
 
     // RENDERING (using synchronized GPU resources from the previous frame)
     task_scheduler.register_task(SyncRenderCommands)?;

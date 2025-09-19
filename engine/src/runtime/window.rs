@@ -35,12 +35,12 @@ pub struct WindowRuntimeHandler<UI> {
 type RuntimeCreator<UI> = Box<dyn FnOnce(Window) -> Result<Runtime<UI>>>;
 
 impl<UI> Runtime<UI> {
-    fn handle_window_event_for_engine(&self, event: &WindowEvent) -> Result<()> {
-        self.engine().handle_window_event(event)
+    fn queue_winit_window_event(&self, event: &WindowEvent) {
+        self.engine().queue_winit_window_event(event);
     }
 
-    fn handle_device_event_for_engine(&self, event: &DeviceEvent) -> Result<()> {
-        self.engine().handle_device_event(event)
+    fn queue_winit_device_event(&self, event: &DeviceEvent) {
+        self.engine().queue_winit_device_event(event);
     }
 }
 
@@ -192,10 +192,9 @@ where
             _ => {}
         }
 
-        if let Err(error) = runtime.handle_window_event_for_engine(&event) {
-            impact_log::error!("Window event handling error: {error:?}");
-            event_loop.exit();
-        } else if runtime.shutdown_requested() {
+        runtime.queue_winit_window_event(&event);
+
+        if runtime.shutdown_requested() {
             impact_log::info!("Shutting down after request");
             if let Err(error) = runtime.engine().app().on_shutdown() {
                 impact_log::error!("Shutdown error: {error:?}");
@@ -206,7 +205,7 @@ where
 
     fn device_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        _event_loop: &ActiveEventLoop,
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
@@ -216,10 +215,7 @@ where
 
         runtime.handle_device_event_for_ui(&event);
 
-        if let Err(error) = runtime.handle_device_event_for_engine(&event) {
-            impact_log::error!("Device event handling error: {error:?}");
-            event_loop.exit();
-        }
+        runtime.queue_winit_device_event(&event);
     }
 }
 
