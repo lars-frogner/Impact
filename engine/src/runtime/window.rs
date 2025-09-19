@@ -170,7 +170,10 @@ where
                 }
             }
             // Exit if user requests close
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested => {
+                impact_log::info!("Window requested to close");
+                runtime.engine().request_shutdown();
+            }
             // Resize rendering surface when window is resized
             WindowEvent::Resized(new_size) => {
                 if new_size.width == 0 || new_size.height == 0 {
