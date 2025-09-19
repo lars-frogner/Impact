@@ -9,7 +9,7 @@ use proc_macro::TokenStream;
 use proc_macro_crate::{self, FoundCrate};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 /// Attribute macro for annotating Rust types and associated methods that
 /// should be available in Roc.
@@ -28,7 +28,7 @@ use std::str::FromStr;
 /// `roc_codegen` and the `roc_codegen` feature is active for the
 /// `roc_integration` crate.
 ///
-/// Three categories of types can be annotated with `roc`, and the requested
+/// Four categories of types can be annotated with `roc`, and the requested
 /// category can be specified as an argument to the macro:
 /// `#[roc(category = "<category>")]`. The available categories are:
 ///
@@ -38,6 +38,14 @@ use std::str::FromStr;
 ///   type derives `Pod`. Types of this category can only
 ///   contain other `roc`-annotated types with the `primitive` or `pod`
 ///   category, as well as arrays of such types.
+///
+/// - `bitflags`: The type represents a set of bitflags. It must be POD and 1,
+///   2, 4 or 8 bytes in size. In Roc, it will be represented as an opaque
+///   unsigned integer. The name and representing bit of each flag must be
+///   declared in an argument named `flags`, like so:
+///   `#[roc(category = "bitflags", flags=[FLAG_A=0, FLAG_B=1, FLAG_C=2])]`.
+///   The integer specifies which bit (from the left) should be one when the
+///   flag is set.
 ///
 /// - `inline`: This category is more flexible than `pod`, as it also supports
 ///   enums and types with padding. However, the type is not allowed to contain
@@ -152,6 +160,7 @@ pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
 const MAX_ENUM_VARIANTS: usize = 32;
 const MAX_ENUM_VARIANT_FIELDS: usize = 4;
 const MAX_STRUCT_FIELDS: usize = MAX_ENUM_VARIANTS * MAX_ENUM_VARIANT_FIELDS;
+const MAX_BITFLAGS: usize = 64;
 
 const MAX_FUNCTION_ARGS: usize = 16;
 
@@ -165,6 +174,12 @@ struct TypeAttributeArgs {
     module_name: Option<String>,
     type_name: Option<String>,
     function_postfix: Option<String>,
+    flags: Option<Bitflags>,
+}
+
+enum TypeAttributeArg {
+    String(KeyStringValueArg),
+    KeyedIntList(KeyKeyedIntListValueArg),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -172,6 +187,20 @@ enum TypeCategory {
     Primitive,
     Pod,
     Inline,
+    Bitflags,
+}
+
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
+#[derive(Clone, Debug, Default)]
+struct Bitflags {
+    flags: Vec<Bitflag>,
+}
+
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
+#[derive(Clone, Debug, Default)]
+struct Bitflag {
+    name: String,
+    bit: u32,
 }
 
 #[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
@@ -200,11 +229,24 @@ struct KeyStringValueArg {
     value: syn::LitStr,
 }
 
+struct KeyIntValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    value: syn::LitInt,
+}
+
 struct KeyTypeListValueArg {
     key: syn::Ident,
     _eq_token: syn::Token![=],
     _bracket_token: syn::token::Bracket,
     types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
+}
+
+struct KeyKeyedIntListValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    _bracket_token: syn::token::Bracket,
+    values: syn::punctuated::Punctuated<KeyIntValueArg, syn::Token![,]>,
 }
 
 const CRATE_NAME: &str = "roc_integration";
@@ -239,6 +281,7 @@ impl syn::parse::Parse for TypeAttributeArgs {
         let mut module_name = None;
         let mut type_name = None;
         let mut function_postfix = None;
+        let mut flags = None;
 
         if input.is_empty() {
             return Ok(Self {
@@ -248,98 +291,185 @@ impl syn::parse::Parse for TypeAttributeArgs {
                 module_name,
                 type_name,
                 function_postfix,
+                flags,
             });
         }
 
         let args =
-            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+            syn::punctuated::Punctuated::<TypeAttributeArg, syn::token::Comma>::parse_terminated(
                 input,
             )?;
 
         for arg in args {
-            match arg.key.to_string().as_str() {
-                "category" => {
-                    let value = arg.value.value();
+            match arg {
+                TypeAttributeArg::String(arg) => match arg.key.to_string().as_str() {
+                    "category" => {
+                        let value = arg.value.value();
 
-                    let cat = if value == "primitive" {
-                        TypeCategory::Primitive
-                    } else if value == "pod" {
-                        TypeCategory::Pod
-                    } else if value == "inline" {
-                        TypeCategory::Inline
-                    } else {
+                        let cat = if value == "primitive" {
+                            TypeCategory::Primitive
+                        } else if value == "pod" {
+                            TypeCategory::Pod
+                        } else if value == "inline" {
+                            TypeCategory::Inline
+                        } else if value == "bitflags" {
+                            TypeCategory::Bitflags
+                        } else {
+                            return Err(syn::Error::new_spanned(
+                                arg.value,
+                                format!(
+                                    "invalid category `{value}`, must be one of `pod`, `inline`, `primitive`, `bitflags`"
+                                ),
+                            ));
+                        };
+
+                        if category.replace(cat).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `category`",
+                            ));
+                        }
+                    }
+                    "package" => {
+                        if package_name.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `package`",
+                            ));
+                        }
+                    }
+                    "parents" => {
+                        if parent_modules.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `parents`",
+                            ));
+                        }
+                    }
+                    "module" => {
+                        if module_name.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `module`",
+                            ));
+                        }
+                    }
+                    "name" => {
+                        if type_name.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `name`",
+                            ));
+                        }
+                    }
+                    "postfix" => {
+                        if function_postfix.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `postfix`",
+                            ));
+                        }
+                    }
+                    other => {
                         return Err(syn::Error::new_spanned(
-                            arg.value,
+                            arg.key,
                             format!(
-                                "invalid category `{value}`, must be one of `pod`, `inline`, `primitive`"
+                                "invalid argument `{other}`, must be one of \
+                                 `category`, `package`, `parents`, `module`, `name`, `postfix`, `flags`"
                             ),
                         ));
-                    };
-
-                    if category.replace(cat).is_some() {
+                    }
+                },
+                TypeAttributeArg::KeyedIntList(args) => match args.key.to_string().as_str() {
+                    "flags" => {
+                        if flags.replace(Bitflags::from_args(&args)?).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                args.key,
+                                "repeated argument `flags`",
+                            ));
+                        }
+                    }
+                    other => {
                         return Err(syn::Error::new_spanned(
-                            arg.key,
-                            "repeated argument `category`",
+                            args.key,
+                            format!(
+                                "invalid argument `{other}`, must be one of \
+                                 `category`, `package`, `parents`, `module`, `name`, `postfix`, `flags`"
+                            ),
                         ));
                     }
-                }
-                "package" => {
-                    if package_name.replace(arg.value.value()).is_some() {
-                        return Err(syn::Error::new_spanned(
-                            arg.key,
-                            "repeated argument `package`",
-                        ));
-                    }
-                }
-                "parents" => {
-                    if parent_modules.replace(arg.value.value()).is_some() {
-                        return Err(syn::Error::new_spanned(
-                            arg.key,
-                            "repeated argument `parents`",
-                        ));
-                    }
-                }
-                "module" => {
-                    if module_name.replace(arg.value.value()).is_some() {
-                        return Err(syn::Error::new_spanned(
-                            arg.key,
-                            "repeated argument `module`",
-                        ));
-                    }
-                }
-                "name" => {
-                    if type_name.replace(arg.value.value()).is_some() {
-                        return Err(syn::Error::new_spanned(arg.key, "repeated argument `name`"));
-                    }
-                }
-                "postfix" => {
-                    if function_postfix.replace(arg.value.value()).is_some() {
-                        return Err(syn::Error::new_spanned(
-                            arg.key,
-                            "repeated argument `postfix`",
-                        ));
-                    }
-                }
-                other => {
-                    return Err(syn::Error::new_spanned(
-                        arg.key,
-                        format!(
-                            "invalid argument `{other}`, must be one of \
-                                 `category`, `package`, `parents`, `module`, `name`, `postfix`"
-                        ),
-                    ));
-                }
+                },
             }
         }
 
-        Ok(Self {
+        Ok(TypeAttributeArgs {
             category,
             package_name,
             parent_modules,
             module_name,
             type_name,
             function_postfix,
+            flags,
         })
+    }
+}
+
+impl syn::parse::Parse for TypeAttributeArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let ahead = input.fork();
+        let _key: syn::Ident = ahead.parse()?;
+        let _eq: syn::Token![=] = ahead.parse()?;
+        if ahead.peek(syn::token::Bracket) {
+            Ok(Self::KeyedIntList(input.parse()?))
+        } else {
+            Ok(Self::String(input.parse()?))
+        }
+    }
+}
+
+impl Bitflags {
+    fn from_args(args: &KeyKeyedIntListValueArg) -> syn::Result<Self> {
+        let mut names = HashSet::with_capacity(args.values.len());
+        let mut bits = 0_u64;
+
+        let flags = args
+            .values
+            .iter()
+            .map(|KeyIntValueArg { key, value, .. }| {
+                let name = key.to_string();
+                if !names.insert(name.clone()) {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        format!("duplicate bitflag name `{name}`"),
+                    ));
+                }
+
+                let bit: u32 = value.base10_parse()?;
+                if bit >= 64 {
+                    return Err(syn::Error::new(value.span(), "bit must be smaller than 64"));
+                }
+
+                let next_bits = bits | 1 << bit;
+                if next_bits == bits {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        format!("duplicate bit {bit}"),
+                    ));
+                }
+                bits = next_bits;
+
+                Ok(Bitflag { name, bit })
+            })
+            .collect::<syn::Result<Vec<_>>>()?;
+
+        if flags.len() > MAX_BITFLAGS {
+            return Err(syn::Error::new(
+                args.key.span(),
+                format!("too many bitflags ({}/{})", flags.len(), MAX_BITFLAGS),
+            ));
+        }
+
+        Ok(Self { flags })
     }
 }
 
@@ -478,6 +608,16 @@ impl syn::parse::Parse for KeyStringValueArg {
     }
 }
 
+impl syn::parse::Parse for KeyIntValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            value: input.parse()?,
+        })
+    }
+}
+
 impl syn::parse::Parse for KeyTypeListValueArg {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         let content;
@@ -486,6 +626,18 @@ impl syn::parse::Parse for KeyTypeListValueArg {
             _eq_token: input.parse()?,
             _bracket_token: syn::bracketed!(content in input),
             types: content.parse_terminated(syn::Type::parse, syn::Token![,])?,
+        })
+    }
+}
+
+impl syn::parse::Parse for KeyKeyedIntListValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            _bracket_token: syn::bracketed!(content in input),
+            values: content.parse_terminated(KeyIntValueArg::parse, syn::Token![,])?,
         })
     }
 }

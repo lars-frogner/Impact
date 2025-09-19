@@ -30,7 +30,7 @@ bitflags! {
             new entity that has a model, light or rigid body."
         )
     )]
-    #[roc(parents="Comp", category="primitive")] // <- Not auto-generated, so keep Roc code synced
+    #[roc(parents="Comp", category="bitflags", flags=[IS_DISABLED=0, CASTS_NO_SHADOWS=1])]
     #[repr(transparent)]
     #[cfg_attr(feature = "ecs", derive(impact_ecs::Component))]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
