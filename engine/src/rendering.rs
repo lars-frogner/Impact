@@ -66,16 +66,12 @@ pub struct RenderingSystem {
 
 /// Rendering configuration options.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RenderingConfig {
-    #[serde(default)]
     pub basic: BasicRenderingConfig,
-    #[serde(default)]
     pub shadow_mapping: ShadowMappingConfig,
-    #[serde(default)]
     pub ambient_occlusion: AmbientOcclusionConfig,
-    #[serde(default)]
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
-    #[serde(default)]
     pub capturing_camera: CapturingCameraConfig,
 }
 

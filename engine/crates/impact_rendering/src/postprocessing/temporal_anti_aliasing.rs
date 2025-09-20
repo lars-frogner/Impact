@@ -28,7 +28,11 @@ use impact_math::{ConstStringHash64, hash64};
 use std::borrow::Cow;
 
 /// Configuration options for temporal anti-aliasing.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct TemporalAntiAliasingConfig {
     /// Whether temporal anti-aliasing is enabled.

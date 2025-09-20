@@ -8,6 +8,7 @@ use timing::TaskExecutionTimes;
 
 /// Configuration for engine instrumentation features.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct InstrumentationConfig {
     /// Whether to enable timing measurements for tasks.
     pub task_timing_enabled: bool,

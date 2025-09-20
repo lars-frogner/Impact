@@ -34,7 +34,11 @@ use impact_mesh::VertexAttributeSet;
 use std::{borrow::Cow, num::NonZeroU32};
 
 /// Configuration options for bloom.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct BloomConfig {
     /// Whether bloom is enabled.

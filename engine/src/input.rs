@@ -16,6 +16,7 @@ pub struct InputManager {
 
 /// Configuration options for input handling.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct InputConfig {
     /// The factor by which to scale the raw mouse motion deltas to obtain pixel
     /// deltas.
