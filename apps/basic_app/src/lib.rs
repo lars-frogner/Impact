@@ -16,7 +16,7 @@ use impact::{
     impact_io,
     input::{
         key::KeyboardEvent,
-        mouse::{MouseButtonEvent, MouseDragEvent},
+        mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
     },
     runtime::RuntimeConfig,
     window::WindowConfig,
@@ -86,6 +86,11 @@ impl Application for BasicApp {
     fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
         impact_log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
+    }
+
+    fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
+        impact_log::trace!("Handling mouse scroll event {event:?}");
+        scripting::handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(

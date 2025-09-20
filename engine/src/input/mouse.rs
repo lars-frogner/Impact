@@ -30,6 +30,15 @@ pub struct MouseDragEvent {
     pub pressed: MouseButtonSet,
 }
 
+/// A delta movement of the mouse wheel, expressed in pixels scaled by the
+/// global scroll sensitivity factor.
+#[roc(parents = "Input")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MouseScrollEvent {
+    pub delta_x: f64,
+    pub delta_y: f64,
+}
+
 /// A button on a mouse.
 #[roc(parents = "Input")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

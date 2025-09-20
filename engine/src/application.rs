@@ -4,7 +4,7 @@ use crate::{
     engine::Engine,
     input::{
         key::KeyboardEvent,
-        mouse::{MouseButtonEvent, MouseDragEvent},
+        mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
     },
 };
 use anyhow::Result;
@@ -30,6 +30,10 @@ pub trait Application: Send + Sync + std::fmt::Debug {
     }
 
     fn handle_mouse_drag_event(&self, _event: MouseDragEvent) -> Result<()> {
+        Ok(())
+    }
+
+    fn handle_mouse_scroll_event(&self, _event: MouseScrollEvent) -> Result<()> {
         Ok(())
     }
 

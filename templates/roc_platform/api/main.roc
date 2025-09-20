@@ -5,6 +5,7 @@ platform "impact"
             handle_keyboard_event! : KeyboardEvent => Result {} Str,
             handle_mouse_button_event! : MouseButtonEvent => Result {} Str,
             handle_mouse_drag_event! : MouseDragEvent => Result {} Str,
+            handle_mouse_scroll_event! : MouseScrollEvent => Result {} Str,
         }
     }
     exposes [
@@ -34,6 +35,7 @@ platform "impact"
         handle_keyboard_event_extern!,
         handle_mouse_button_event_extern!,
         handle_mouse_drag_event_extern!,
+        handle_mouse_scroll_event_extern!,
         command_roundtrip_extern!,
     ]
 
@@ -41,6 +43,7 @@ import Command.EngineCommand as EngineCommand
 import Input.KeyboardEvent as KeyboardEvent exposing [KeyboardEvent]
 import Input.MouseButtonEvent as MouseButtonEvent exposing [MouseButtonEvent]
 import Input.MouseDragEvent as MouseDragEvent exposing [MouseDragEvent]
+import Input.MouseScrollEvent as MouseScrollEvent exposing [MouseScrollEvent]
 
 setup_scene_extern! : I32 => Result {} Str
 setup_scene_extern! = |_|
@@ -60,6 +63,11 @@ handle_mouse_drag_event_extern! : List U8 => Result {} Str
 handle_mouse_drag_event_extern! = |bytes|
     event = MouseDragEvent.from_bytes(bytes) |> map_err_to_str?
     callbacks.handle_mouse_drag_event!(event)
+
+handle_mouse_scroll_event_extern! : List U8 => Result {} Str
+handle_mouse_scroll_event_extern! = |bytes|
+    event = MouseScrollEvent.from_bytes(bytes) |> map_err_to_str?
+    callbacks.handle_mouse_scroll_event!(event)
 
 command_roundtrip_extern! : List U8 => Result (List U8) Str
 command_roundtrip_extern! = |bytes|
