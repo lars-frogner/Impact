@@ -56,9 +56,9 @@ setup! : {} => Result {} Str
 setup! = |_|
     Command.execute!(Engine(Scene(SetSkybox(skybox))))?
 
-    Entity.create_with_id!(entity_ids.player, player)?
-    Entity.create_with_id!(entity_ids.sun_light, sun_light)?
-    Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
+    Entity.create_with_id!(player, entity_ids.player)?
+    Entity.create_with_id!(sun_light, entity_ids.sun_light)?
+    Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
 
     sphere_radius = 0.5
     n_y = 0
@@ -80,7 +80,7 @@ setup! = |_|
 
     voxel_extent = 0.25
     box_size = 6.0
-    Entity.create_with_id!(entity_ids.voxel_box, voxel_box(voxel_extent, box_size, room_extent))?
+    Entity.create_with_id!(voxel_box(voxel_extent, box_size, room_extent), entity_ids.voxel_box)?
 
     Ok({})
 

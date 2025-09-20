@@ -60,21 +60,21 @@ setup! : {} => Result {} Str
 setup! = |_|
     Command.execute!(Engine(Scene(SetSkybox(skybox))))?
 
-    Entity.create_with_id!(entity_ids.player, player)?
-    Entity.create_with_id!(entity_ids.dragon, dragon)?
-    Entity.create_with_id!(entity_ids.pole, pole)?
-    Entity.create_with_id!(entity_ids.abstract_object, abstract_object)?
-    Entity.create_with_id!(entity_ids.abstract_pyramid, abstract_pyramid)?
-    Entity.create_with_id!(entity_ids.box, box)?
-    Entity.create_with_id!(entity_ids.sphere, sphere)?
-    Entity.create_with_id!(entity_ids.abstract_cube, abstract_cube)?
-    Entity.create_with_id!(entity_ids.floor, floor)?
-    Entity.create_with_id!(entity_ids.upper_x_wall, upper_x_wall)?
-    Entity.create_with_id!(entity_ids.lower_x_wall, lower_x_wall)?
-    Entity.create_with_id!(entity_ids.upper_z_wall, upper_z_wall)?
-    Entity.create_with_id!(entity_ids.bulb_light, bulb_light)?
-    Entity.create_with_id!(entity_ids.sun_light, sun_light)?
-    Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
+    Entity.create_with_id!(player, entity_ids.player)?
+    Entity.create_with_id!(dragon, entity_ids.dragon)?
+    Entity.create_with_id!(pole, entity_ids.pole)?
+    Entity.create_with_id!(abstract_object, entity_ids.abstract_object)?
+    Entity.create_with_id!(abstract_pyramid, entity_ids.abstract_pyramid)?
+    Entity.create_with_id!(box, entity_ids.box)?
+    Entity.create_with_id!(sphere, entity_ids.sphere)?
+    Entity.create_with_id!(abstract_cube, entity_ids.abstract_cube)?
+    Entity.create_with_id!(floor, entity_ids.floor)?
+    Entity.create_with_id!(upper_x_wall, entity_ids.upper_x_wall)?
+    Entity.create_with_id!(lower_x_wall, entity_ids.lower_x_wall)?
+    Entity.create_with_id!(upper_z_wall, entity_ids.upper_z_wall)?
+    Entity.create_with_id!(bulb_light, entity_ids.bulb_light)?
+    Entity.create_with_id!(sun_light, entity_ids.sun_light)?
+    Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
 
     Ok({})
 

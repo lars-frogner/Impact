@@ -107,8 +107,8 @@ find_component_bytes_from_cursor = |bytes, target_component_id, cursor|
     else
         Err(ComponentMissing)
 
-stage_for_creation_with_id! : Id, ComponentData => Result {} Str
-stage_for_creation_with_id! = |@Id(ident), @ComponentData(bytes)|
+stage_for_creation_with_id! : ComponentData, Id => Result {} Str
+stage_for_creation_with_id! = |@ComponentData(bytes), @Id(ident)|
     Platform.stage_entity_for_creation_with_id!(ident, bytes)
 
 stage_for_creation! : ComponentData => Result {} Str
@@ -119,16 +119,16 @@ stage_multiple_for_creation! : MultiComponentData => Result {} Str
 stage_multiple_for_creation! = |@MultiComponentData { bytes }|
     Platform.stage_entities_for_creation!(bytes)
 
-stage_for_update! : Id, ComponentData => Result {} Str
-stage_for_update! = |@Id(ident), @ComponentData(bytes)|
+stage_for_update! : ComponentData, Id => Result {} Str
+stage_for_update! = |@ComponentData(bytes), @Id(ident)|
     Platform.stage_entity_for_update!(ident, bytes)
 
 stage_for_removal! : Id => Result {} Str
 stage_for_removal! = |@Id(ident)|
     Platform.stage_entity_for_removal!(ident)
 
-create_with_id! : Id, ComponentData => Result {} Str
-create_with_id! = |@Id(ident), @ComponentData(bytes)|
+create_with_id! : ComponentData, Id => Result {} Str
+create_with_id! = |@ComponentData(bytes), @Id(ident)|
     Platform.create_entity_with_id!(ident, bytes)
 
 create! : ComponentData => Result Id Str
@@ -139,8 +139,8 @@ create_multiple! : MultiComponentData => Result (List Id) Str
 create_multiple! = |@MultiComponentData { bytes }|
     Ok(Platform.create_entities!(bytes)? |> List.map(@Id))
 
-update! : Id, ComponentData => Result {} Str
-update! = |@Id(ident), @ComponentData(bytes)|
+update! : ComponentData, Id => Result {} Str
+update! = |@ComponentData(bytes), @Id(ident)|
     Platform.update_entity!(ident, bytes)
 
 remove! : Id => Result {} Str

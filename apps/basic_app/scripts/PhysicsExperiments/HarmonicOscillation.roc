@@ -80,9 +80,9 @@ create_entities! = |position, mass, spring_constant, amplitude|
             80.0,
         )
 
-    Entity.create_with_id!(entity_ids.attachment_point, attachment_point)?
-    Entity.create_with_id!(entity_ids.dynamic_body, dynamic_body)?
-    Entity.create_with_id!(entity_ids.kinematic_body, kinematic_body)?
+    Entity.create_with_id!(attachment_point, entity_ids.attachment_point)?
+    Entity.create_with_id!(dynamic_body, entity_ids.dynamic_body)?
+    Entity.create_with_id!(kinematic_body, entity_ids.kinematic_body)?
 
     dynamic_body_id = dbg Comp.DynamicRigidBodyID.get_for_entity!(entity_ids.dynamic_body)?
     attachment_point_body_id = dbg Comp.KinematicRigidBodyID.get_for_entity!(entity_ids.attachment_point)?
@@ -98,6 +98,6 @@ create_entities! = |position, mass, spring_constant, amplitude|
             Physics.Spring.standard(spring_constant, 0, amplitude + 0.5),
         )
 
-    Entity.create_with_id!(entity_ids.spring, spring)?
+    Entity.create_with_id!(spring, entity_ids.spring)?
 
     Ok({})

@@ -63,7 +63,7 @@ create_entities! = |position|
         )
         |> Setup.UniformColor.add((0.7, 0.1, 0.1))
 
-    Entity.create_with_id!(entity_ids.cone_with_drag, cone_with_drag)?
-    Entity.create_with_id!(entity_ids.cone_without_drag, cone_without_drag)?
+    Entity.create_with_id!(cone_with_drag, entity_ids.cone_with_drag)?
+    Entity.create_with_id!(cone_without_drag, entity_ids.cone_without_drag)?
 
     Ok({})

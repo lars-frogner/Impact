@@ -81,8 +81,8 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
             ),
         )
 
-    Entity.create_with_id!(entity_ids.major_axis_body, major_axis_body)?
-    Entity.create_with_id!(entity_ids.intermediate_axis_body, intermediate_axis_body)?
-    Entity.create_with_id!(entity_ids.minor_axis_body, minor_axis_body)?
+    Entity.create_with_id!(major_axis_body, entity_ids.major_axis_body)?
+    Entity.create_with_id!(intermediate_axis_body, entity_ids.intermediate_axis_body)?
+    Entity.create_with_id!(minor_axis_body, entity_ids.minor_axis_body)?
 
     Ok({})
