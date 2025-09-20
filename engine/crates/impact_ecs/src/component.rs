@@ -1,5 +1,6 @@
 //! Representation and storage of ECS components.
 
+use anyhow::{Result, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{AlignedByteVec, Alignment};
@@ -404,6 +405,30 @@ impl ComponentStorage {
     }
 
     /// Returns the component at the given index as a separate single-instance
+    /// view.
+    ///
+    /// # Note
+    /// `idx` refers to the whole component, not its byte boundary.
+    ///
+    /// # Panics
+    /// If `idx` is outside the bounds of the storage.
+    pub fn component_as_view(&self, idx: usize) -> SingleInstance<ComponentView<'_>> {
+        if self.component_size == 0 {
+            return ComponentView::new_for_single_zero_sized_instance(self.component_id);
+        }
+
+        let component_start = idx.checked_mul(self.component_size).unwrap();
+        let component_bytes = &self.bytes[component_start..component_start + self.component_size];
+
+        ComponentView::new_for_single_instance(
+            self.component_id,
+            self.component_size,
+            self.bytes.alignment(),
+            component_bytes,
+        )
+    }
+
+    /// Returns the component at the given index as a separate single-instance
     /// storage.
     ///
     /// # Note
@@ -423,6 +448,41 @@ impl ComponentStorage {
             self.component_id,
             AlignedByteVec::copied_from_slice(self.bytes.alignment(), component_bytes),
         )
+    }
+
+    /// Copies the bytes from the given single-instance component view into the
+    /// component instance at the given index.
+    ///
+    /// # Note
+    /// `idx` refers to the whole component, not its byte boundary.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The component is not of the component type the storage was initialized with.
+    /// - `idx` is outside the bounds of the storage.
+    pub fn set_component_bytes(
+        &mut self,
+        idx: usize,
+        component: SingleInstance<ComponentView<'_>>,
+    ) -> Result<()> {
+        if component.component_id() != self.component_id {
+            bail!("Tried to use component storage with invalid component type");
+        }
+
+        if self.component_size == 0 {
+            return Ok(());
+        }
+
+        let component_start = idx.checked_mul(self.component_size).unwrap();
+        let component_end = component_start + self.component_size;
+
+        if component_end > self.bytes.len() {
+            bail!("Component index {idx} outside component storage bounds");
+        }
+
+        self.bytes[component_start..component_end].copy_from_slice(component.bytes);
+
+        Ok(())
     }
 
     /// Appends the given component to the end of the storage.
@@ -635,6 +695,10 @@ impl<'a> ComponentView<'a> {
             component_align,
             bytes,
         ))
+    }
+
+    fn new_for_single_zero_sized_instance(component_id: ComponentID) -> SingleInstance<Self> {
+        Self::new_for_single_instance(component_id, 0, Alignment::new(1), &[])
     }
 
     fn validate_component<C: Component>(&self) {
@@ -1223,6 +1287,77 @@ mod tests {
     }
 
     #[test]
+    fn component_as_view_for_single_component_works() {
+        let view = ComponentStorage::from_view(&RECT_1);
+        let component_view = view.component_as_view(0);
+
+        assert_eq!(component_view.component_count(), 1);
+        assert_eq!(component_view.component_size(), mem::size_of::<Rectangle>());
+        assert_eq!(
+            component_view.component_bytes(),
+            (&RECT_1).component_bytes()
+        );
+    }
+
+    #[test]
+    fn component_as_view_for_multiple_components_works() {
+        let mut view = ComponentStorage::from_view(&RECT_1);
+        view.push(&RECT_2);
+        view.push(&RECT_3);
+
+        let first_component = view.component_as_view(0);
+        let second_component = view.component_as_view(1);
+        let third_component = view.component_as_view(2);
+
+        assert_eq!(
+            first_component.component_bytes(),
+            (&RECT_1).component_bytes()
+        );
+        assert_eq!(
+            second_component.component_bytes(),
+            (&RECT_2).component_bytes()
+        );
+        assert_eq!(
+            third_component.component_bytes(),
+            (&RECT_3).component_bytes()
+        );
+
+        // Each component view should have exactly one component
+        assert_eq!(first_component.component_count(), 1);
+        assert_eq!(second_component.component_count(), 1);
+        assert_eq!(third_component.component_count(), 1);
+    }
+
+    #[test]
+    fn component_as_view_for_zero_sized_component_works() {
+        let mut view = ComponentStorage::from_view(&Marked);
+        view.push(&Marked);
+
+        let first_component = view.component_as_view(0);
+        let second_component = view.component_as_view(1);
+
+        assert_eq!(first_component.component_count(), 1);
+        assert_eq!(first_component.component_size(), 0);
+
+        assert_eq!(second_component.component_count(), 1);
+        assert_eq!(second_component.component_size(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn component_as_view_with_invalid_index_panics() {
+        let view = ComponentStorage::from_view(&RECT_1);
+        view.component_as_view(1); // Index 1 is out of bounds for single component
+    }
+
+    #[test]
+    #[should_panic]
+    fn component_as_view_with_invalid_index_on_empty_view_panics() {
+        let view = ComponentStorage::with_capacity::<Rectangle>(0);
+        view.component_as_view(0); // Index 0 is out of bounds for empty storage
+    }
+
+    #[test]
     fn component_as_storage_for_single_component_works() {
         let storage = ComponentStorage::from_view(&RECT_1);
         let component_storage = storage.component_as_storage(0);
@@ -1284,5 +1419,71 @@ mod tests {
     fn component_as_storage_with_invalid_index_on_empty_storage_panics() {
         let storage = ComponentStorage::with_capacity::<Rectangle>(0);
         storage.component_as_storage(0); // Index 0 is out of bounds for empty storage
+    }
+
+    #[test]
+    fn setting_component_bytes_with_single_component_storage_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+
+        let new_component = (&RECT_2).single_instance_view();
+        storage.set_component_bytes(0, new_component).unwrap();
+
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
+    }
+
+    #[test]
+    fn setting_component_bytes_with_multi_component_storage_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.push(&RECT_2);
+
+        let new_component = (&RECT_3).single_instance_view();
+        storage.set_component_bytes(0, new_component).unwrap();
+
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_3, RECT_2]);
+    }
+
+    #[test]
+    fn setting_zero_sized_component_bytes_works() {
+        let mut storage = ComponentStorage::from_view(&Marked);
+        storage.push(&Marked);
+
+        let new_component = (&Marked).single_instance_view();
+        storage.set_component_bytes(1, new_component).unwrap();
+
+        assert_eq!(storage.component_count(), 2);
+        assert_eq!(storage.size(), 0);
+    }
+
+    #[test]
+    fn setting_component_bytes_with_wrong_component_type_fails() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        let byte_component = (&Byte(42)).single_instance_view();
+
+        let result = storage.set_component_bytes(0, byte_component);
+        assert!(result.is_err());
+
+        // Original component should be unchanged
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_1]);
+    }
+
+    #[test]
+    fn setting_component_bytes_with_invalid_index_fails() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        let new_component = (&RECT_2).single_instance_view();
+
+        let result = storage.set_component_bytes(1, new_component);
+        assert!(result.is_err());
+
+        // Original component should be unchanged
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_1]);
+    }
+
+    #[test]
+    fn setting_component_bytes_on_empty_storage_fails() {
+        let mut storage = ComponentStorage::with_capacity::<Rectangle>(0);
+        let new_component = (&RECT_1).single_instance_view();
+
+        let result = storage.set_component_bytes(0, new_component);
+        assert!(result.is_err());
     }
 }

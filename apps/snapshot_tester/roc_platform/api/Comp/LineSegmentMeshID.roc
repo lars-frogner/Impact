@@ -1,8 +1,8 @@
-# Hash: d0981a9d9cd7b13aa74cde565d7ce37cb592e7990608a431bcb3cf940f725e9d
-# Generated: 2025-08-01T06:54:20+00:00
+# Hash: 4dddd537fd8b1e3c51efb564b4ad1220a00f209b03d016438c57d976cbdca519
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_mesh::line_segment::LineSegmentMeshID
 # Type category: Component
-# Commit: 5cd592d6 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     LineSegmentMeshID,
     from_name,
@@ -10,6 +10,10 @@ module [
     add_multiple_from_name,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -67,6 +71,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in LineSegmentMeshID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [LineSegmentMeshID] component.
+component_id = 4013351534594806892
+
+## Adds the ID of the [LineSegmentMeshID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result LineSegmentMeshID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No LineSegmentMeshID component in data"
+                Decode(decode_err) -> "Failed to decode LineSegmentMeshID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result LineSegmentMeshID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, LineSegmentMeshID -> List U8
 write_packet = |bytes, val|

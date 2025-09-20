@@ -11,14 +11,15 @@ import pf.Setup.BoxMesh
 import pf.Setup.HarmonicOscillatorTrajectory
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
+import pf.Comp.DynamicRigidBodyID
+import pf.Comp.KinematicRigidBodyID
 import pf.Setup.SphereMesh
 import pf.Setup.UniformColor
-import pf.Setup.DynamicDynamicSpringForceGenerator
+import pf.Setup.DynamicKinematicSpringForceProperties
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
 import pf.Physics.Spring
-import pf.Physics.SpringForce
 import Scenes.Blank
 
 entity_ids = {
@@ -46,6 +47,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         |> Setup.SphereMesh.add_new(15)
         |> Comp.ModelTransform.add_with_scale(0.2)
         |> Comp.ReferenceFrame.add_unoriented(attachment_position)
+        |> Comp.Motion.add_stationary
         |> Setup.UniformColor.add((0.8, 0.1, 0.1))
 
     dynamic_body =
@@ -58,19 +60,6 @@ create_entities! = |position, mass, spring_constant, amplitude|
         |> Setup.UniformSpecularReflectance.add_in_range_of(
             Setup.UniformSpecularReflectance.plastic,
             80.0,
-        )
-
-    spring =
-        Entity.new
-        |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
-        |> Setup.DynamicDynamicSpringForceGenerator.add_new(
-            entity_ids.attachment_point,
-            entity_ids.dynamic_body,
-            Physics.SpringForce.new(
-                Physics.Spring.standard(spring_constant, 0, amplitude + 0.5),
-                Point3.origin,
-                Point3.origin,
-            ),
         )
 
     kinematic_body =
@@ -93,7 +82,22 @@ create_entities! = |position, mass, spring_constant, amplitude|
 
     Entity.create_with_id!(entity_ids.attachment_point, attachment_point)?
     Entity.create_with_id!(entity_ids.dynamic_body, dynamic_body)?
-    Entity.create_with_id!(entity_ids.spring, spring)?
     Entity.create_with_id!(entity_ids.kinematic_body, kinematic_body)?
+
+    dynamic_body_id = dbg Comp.DynamicRigidBodyID.get_for_entity!(entity_ids.dynamic_body)?
+    attachment_point_body_id = dbg Comp.KinematicRigidBodyID.get_for_entity!(entity_ids.attachment_point)?
+
+    spring =
+        Entity.new
+        |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
+        |> Setup.DynamicKinematicSpringForceProperties.add_new(
+            dynamic_body_id,
+            Point3.origin,
+            attachment_point_body_id,
+            Point3.origin,
+            Physics.Spring.standard(spring_constant, 0, amplitude + 0.5),
+        )
+
+    Entity.create_with_id!(entity_ids.spring, spring)?
 
     Ok({})

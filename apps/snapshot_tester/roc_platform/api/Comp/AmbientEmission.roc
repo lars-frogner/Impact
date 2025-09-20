@@ -1,8 +1,8 @@
-# Hash: 9a3134c00172a8e0ad08f6c29a87dd899f5f40baedce4df639a174b893659049
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: c4f506fabc190f338cf8c974dd427eb2b507eb589b8927441ac15c00a4a7b9c6
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_light::AmbientEmission
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     AmbientEmission,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -77,6 +81,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in AmbientEmission.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [AmbientEmission] component.
+component_id = 643851755473699111
+
+## Adds the ID of the [AmbientEmission] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result AmbientEmission Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No AmbientEmission component in data"
+                Decode(decode_err) -> "Failed to decode AmbientEmission component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result AmbientEmission Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, AmbientEmission -> List U8
 write_packet = |bytes, val|

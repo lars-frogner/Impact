@@ -1,8 +1,8 @@
-# Hash: 9c470716c0d0d7aa4984f4b8073886bd00a721c87b363276d1667d0ec998a23a
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 5d526c38ce769ecfe0e9d6cad368f345f8af0c9e99a6ebf9eb214cec59484a5d
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_scene::SceneGraphCameraNodeHandle
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     SceneGraphCameraNodeHandle,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -74,6 +78,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in SceneGraphCameraNodeHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [SceneGraphCameraNodeHandle] component.
+component_id = 309634192042192233
+
+## Adds the ID of the [SceneGraphCameraNodeHandle] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result SceneGraphCameraNodeHandle Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No SceneGraphCameraNodeHandle component in data"
+                Decode(decode_err) -> "Failed to decode SceneGraphCameraNodeHandle component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result SceneGraphCameraNodeHandle Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, SceneGraphCameraNodeHandle -> List U8
 write_packet = |bytes, val|

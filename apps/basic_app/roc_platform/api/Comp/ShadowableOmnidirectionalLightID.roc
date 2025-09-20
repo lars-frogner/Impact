@@ -1,12 +1,16 @@
-# Hash: f5cee2d3721517c8071d5bb194ceee37a09e537a445dbdc77c6afa247fd3ac4e
-# Generated: 2025-08-03T19:37:47+00:00
+# Hash: f489b0c299054e93311a054ae08506e41990874c01671f2e21113091f1aa0bc2
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalLightID
 # Type category: Component
-# Commit: 1379dde5 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     ShadowableOmnidirectionalLightID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in ShadowableOmnidirectionalLightID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [ShadowableOmnidirectionalLightID] component.
+component_id = 6311373763488335268
+
+## Adds the ID of the [ShadowableOmnidirectionalLightID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result ShadowableOmnidirectionalLightID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No ShadowableOmnidirectionalLightID component in data"
+                Decode(decode_err) -> "Failed to decode ShadowableOmnidirectionalLightID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result ShadowableOmnidirectionalLightID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, ShadowableOmnidirectionalLightID -> List U8
 write_packet = |bytes, val|

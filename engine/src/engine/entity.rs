@@ -6,7 +6,7 @@ use anyhow::Result;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentCategory, ComponentID},
-    world::{EntitiesToCreate, EntityID, EntityToCreate, EntityToCreateWithID},
+    world::{EntitiesToCreate, EntityID, EntityToCreate, EntityToCreateWithID, EntityToUpdate},
 };
 use impact_scene::SceneEntityFlags;
 use tinyvec::TinyVec;
@@ -33,6 +33,14 @@ impl Engine {
 
         for EntitiesToCreate { components } in entity_stager.drain_multi_entities_to_create() {
             self.create_entities(components)?;
+        }
+
+        for EntityToUpdate {
+            entity_id,
+            components,
+        } in entity_stager.drain_entities_to_update()
+        {
+            self.update_entity(entity_id, components)?;
         }
 
         for entity_id in entity_stager.drain_entities_to_remove() {

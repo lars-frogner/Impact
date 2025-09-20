@@ -1,12 +1,16 @@
-# Hash: 9b49ed254138008d1ca5fb528fa777074bc8b0059768efe43f01bb9d162a18f4
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: b13695702793dcbd4599ced8893d90e3b83adae3bb81dbb4b6411a2daa0dab72
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_physics::driven_motion::orbit::OrbitalTrajectoryDriverID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     OrbitalTrajectoryDriverID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in OrbitalTrajectoryDriverID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [OrbitalTrajectoryDriverID] component.
+component_id = 6213536347007071245
+
+## Adds the ID of the [OrbitalTrajectoryDriverID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result OrbitalTrajectoryDriverID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No OrbitalTrajectoryDriverID component in data"
+                Decode(decode_err) -> "Failed to decode OrbitalTrajectoryDriverID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result OrbitalTrajectoryDriverID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, OrbitalTrajectoryDriverID -> List U8
 write_packet = |bytes, val|

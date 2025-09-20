@@ -1,8 +1,8 @@
-# Hash: 6c3d4641ad54d3d9c37bc4e958330a28da6f25bcc68b1ece9740a34de9b2b0ca
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: a5c8246d5e36a1400e0c9e4d2011164dd84351a0854bbff14f2221271b59ee58
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_scene::SceneGraphParentNodeHandle
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     SceneGraphParentNodeHandle,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -74,6 +78,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in SceneGraphParentNodeHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [SceneGraphParentNodeHandle] component.
+component_id = 17542722866500004650
+
+## Adds the ID of the [SceneGraphParentNodeHandle] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result SceneGraphParentNodeHandle Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No SceneGraphParentNodeHandle component in data"
+                Decode(decode_err) -> "Failed to decode SceneGraphParentNodeHandle component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result SceneGraphParentNodeHandle Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, SceneGraphParentNodeHandle -> List U8
 write_packet = |bytes, val|

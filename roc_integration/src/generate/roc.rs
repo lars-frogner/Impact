@@ -859,6 +859,13 @@ fn write_component_functions(
     optional_exports.add("add");
     optional_exports.add("add_multiple");
 
+    if ty.is_standard_component() {
+        optional_exports.add("component_id");
+        optional_exports.add("add_component_id");
+        optional_exports.add("read");
+        optional_exports.add("get_for_entity!");
+    }
+
     optional_imports.add("pf", "Entity");
     optional_imports.add("pf", "Entity.Arg");
     optional_imports.add("core", "Builtin");
@@ -919,6 +926,39 @@ fn write_component_functions(
                         \"Got ${{Inspect.to_str(new_count)}} values in {name}.add_multiple, expected ${{Inspect.to_str(orig_count)}}\",\n    \
                 )\n\
             ",
+            name = ty.ty.name,
+        )?;
+    }
+
+    if ty.is_standard_component() {
+        writeln!(
+            roc_code,
+            "\
+            ## The ID of the [{name}] component.\n\
+            component_id = {type_id}\n\
+            \n\
+            ## Adds the ID of the [{name}] component to the component list.\n\
+            add_component_id : Entity.ComponentIds -> Entity.ComponentIds\n\
+            add_component_id = |component_ids|\n    \
+                component_ids |> Entity.append_component_id(component_id)\n\
+            \n\
+            ## Reads the component from the given entity data. \n\
+            read : Entity.Data -> Result {name} Str\n\
+            read = |data|\n    \
+                Entity.read_component(data, component_id, from_bytes)\n    \
+                |> Result.map_err(\n        \
+                    |err|\n            \
+                        when err is\n                \
+                            ComponentMissing -> \"No {name} component in data\"\n                \
+                            Decode(decode_err) -> \"Failed to decode {name} component: ${{Inspect.to_str(decode_err)}}\",\n    \
+                )\n\
+            \n\
+            ## Fetches the value of this component for the given entity.\n\
+            get_for_entity! : Entity.Id => Result {name} Str\n\
+            get_for_entity! = |entity_id|\n    \
+                Entity.get_component!(entity_id, component_id)? |> read\n\
+            ",
+            type_id = ty.ty.id.as_u64(),
             name = ty.ty.name,
         )?;
     }
@@ -1002,7 +1042,7 @@ fn write_bitflags_type_declaration<const N: usize>(
     // Write utility functions
     write!(
         roc_code,
-        "## Returns the raw bitflags as an unsigned integer\n\
+        "## Returns the raw bitflags as an unsigned integer.\n\
         bits = |@{type_name}(flags)|\n    \
             flags\n\
         \n\

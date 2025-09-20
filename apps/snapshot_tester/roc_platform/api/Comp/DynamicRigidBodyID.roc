@@ -1,12 +1,16 @@
-# Hash: 7c385976edab6a0bd4933c3b3e77dc75e21f5c06fd2058aa3dff9ba24c4a64af
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 071d518f276d9498c4e2b4a799435ab1d617ab6f8a52447c8951479ae1a040b0
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_physics::rigid_body::DynamicRigidBodyID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     DynamicRigidBodyID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in DynamicRigidBodyID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [DynamicRigidBodyID] component.
+component_id = 17768570623467453064
+
+## Adds the ID of the [DynamicRigidBodyID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result DynamicRigidBodyID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No DynamicRigidBodyID component in data"
+                Decode(decode_err) -> "Failed to decode DynamicRigidBodyID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result DynamicRigidBodyID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, DynamicRigidBodyID -> List U8
 write_packet = |bytes, val|

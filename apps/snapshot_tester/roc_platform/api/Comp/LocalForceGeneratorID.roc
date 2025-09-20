@@ -1,12 +1,16 @@
-# Hash: 7112acf0d10b07f4f9b0736d499b509f763e65a319acbbb9064e02d154744113
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 68b63b70dbc08e9fc449997aca2997810b95bd3fb0f93e1ac8bdb3f1f251b8ae
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_physics::force::local_force::LocalForceGeneratorID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     LocalForceGeneratorID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in LocalForceGeneratorID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [LocalForceGeneratorID] component.
+component_id = 3780406390512170371
+
+## Adds the ID of the [LocalForceGeneratorID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result LocalForceGeneratorID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No LocalForceGeneratorID component in data"
+                Decode(decode_err) -> "Failed to decode LocalForceGeneratorID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result LocalForceGeneratorID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, LocalForceGeneratorID -> List U8
 write_packet = |bytes, val|

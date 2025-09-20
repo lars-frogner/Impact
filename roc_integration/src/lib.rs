@@ -243,11 +243,15 @@ mod inner {
         #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
         pub struct RegisteredTypeFlags: u8 {
             /// Whether the type is Plain Old Data (POD).
-            const IS_POD       = 1 << 0;
+            const IS_POD             = 1 << 0;
             /// Whether the type is an ECS component. Note that this flag is
             /// determined at generation time (by comparing against registered
             /// components), not at compile/derive time.
-            const IS_COMPONENT = 1 << 1;
+            const IS_COMPONENT       = 1 << 1;
+            /// Whether the type is an ECS setup component. Note that this flag
+            /// is determined at generation time (by comparing against
+            /// registered components), not at compile/derive time.
+            const IS_SETUP_COMPONENT = 1 << 2;
         }
     }
 
@@ -260,6 +264,16 @@ mod inner {
         /// Whether this type is an ECS component.
         pub fn is_component(&self) -> bool {
             self.flags.contains(RegisteredTypeFlags::IS_COMPONENT)
+        }
+
+        /// Whether this type is an ECS setup component.
+        pub fn is_setup_component(&self) -> bool {
+            self.flags.contains(RegisteredTypeFlags::IS_SETUP_COMPONENT)
+        }
+
+        /// Whether this type is a standard (non-setup) ECS component.
+        pub fn is_standard_component(&self) -> bool {
+            self.is_component() && !self.is_setup_component()
         }
 
         /// Whether the type is a primitive type.

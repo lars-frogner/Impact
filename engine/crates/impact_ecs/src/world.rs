@@ -3,7 +3,8 @@
 use super::{
     archetype::{
         Archetype, ArchetypeComponentStorage, ArchetypeComponents, ArchetypeID, ArchetypeTable,
-        ComponentStorageEntry, ComponentStorageEntryMut, SingleInstanceArchetypeComponentStorage,
+        ComponentStorageBytesEntry, ComponentStorageBytesEntryMut, ComponentStorageEntry,
+        ComponentStorageEntryMut, SingleInstanceArchetypeComponentStorage,
     },
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
@@ -60,12 +61,13 @@ pub struct EntityEntry<'a> {
     table: RwLockReadGuard<'a, ArchetypeTable>,
 }
 
-/// Helper for staging entities for later creation or removal.
+/// Helper for staging entities for later creation, update or removal.
 #[derive(Debug)]
 pub struct EntityStager {
     to_create_with_id: Vec<EntityToCreateWithID>,
     to_create: Vec<EntityToCreate>,
     to_create_multiple: Vec<EntitiesToCreate>,
+    to_update: Vec<EntityToUpdate>,
     to_remove: Vec<EntityID>,
 }
 
@@ -87,6 +89,13 @@ pub struct EntityToCreate {
 #[derive(Debug)]
 pub struct EntitiesToCreate {
     pub components: ArchetypeComponentStorage,
+}
+
+/// The updated components of an existing entity.
+#[derive(Debug)]
+pub struct EntityToUpdate {
+    pub entity_id: EntityID,
+    pub components: Vec<SingleInstance<ComponentStorage>>,
 }
 
 impl EntityID {
@@ -700,6 +709,40 @@ impl<'a> EntityEntry<'a> {
             .expect("Requested invalid component")
     }
 
+    /// Returns a reference to the bytes of the component with the given
+    /// [`ComponentID`]. If the entity does not have this component, [`None`] is
+    /// returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageBytesEntry`]
+    /// that holds a read lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
+    pub fn get_component_bytes(
+        &self,
+        component_id: ComponentID,
+    ) -> Option<ComponentStorageBytesEntry<'_>> {
+        self.table
+            .get_component_bytes_for_entity(self.entity_id, component_id)
+    }
+
+    /// Returns a mutable reference to the bytes of the component with the
+    /// given [`ComponentID`]. If the entity does not have this component,
+    /// [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageBytesEntry`]
+    /// that holds a read lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
+    pub fn get_component_bytes_mut(
+        &self,
+        component_id: ComponentID,
+    ) -> Option<ComponentStorageBytesEntryMut<'_>> {
+        self.table
+            .get_component_bytes_for_entity_mut(self.entity_id, component_id)
+    }
+
     /// Returns a [`SingleInstanceArchetypeComponentStorage`] containing the
     /// cloned data for all the components of the entity.
     pub fn cloned_components(&self) -> SingleInstanceArchetypeComponentStorage {
@@ -716,6 +759,7 @@ impl EntityStager {
             to_create_with_id: Vec::new(),
             to_create: Vec::new(),
             to_create_multiple: Vec::new(),
+            to_update: Vec::new(),
             to_remove: Vec::new(),
         }
     }
@@ -785,6 +829,19 @@ impl EntityStager {
         Ok(())
     }
 
+    /// Stages the entity with the given ID to be updated with the given
+    /// component values.
+    pub fn stage_entity_for_update(
+        &mut self,
+        entity_id: EntityID,
+        components: Vec<SingleInstance<ComponentStorage>>,
+    ) {
+        self.to_update.push(EntityToUpdate {
+            entity_id,
+            components,
+        });
+    }
+
     /// Stages the entity with the given ID for later removal.
     pub fn stage_entity_for_removal(&mut self, entity_id: EntityID) {
         self.to_remove.push(entity_id);
@@ -806,6 +863,12 @@ impl EntityStager {
     /// since the last time this method was called.
     pub fn drain_multi_entities_to_create(&mut self) -> Drain<'_, EntitiesToCreate> {
         self.to_create_multiple.drain(..)
+    }
+
+    /// Returns a draining iterator over entities staged for updating since the
+    /// last time this method was called.
+    pub fn drain_entities_to_update(&mut self) -> Drain<'_, EntityToUpdate> {
+        self.to_update.drain(..)
     }
 
     /// Returns a draining iterator over entities staged for removal since the

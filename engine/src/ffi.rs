@@ -2,7 +2,36 @@
 
 use anyhow::{Result, anyhow};
 use impact_containers::{AlignedByteVec, Alignment};
-use impact_ecs::component::{ComponentID, ComponentStorage, SingleInstance};
+use impact_ecs::component::{
+    ComponentArray, ComponentID, ComponentSlice, ComponentStorage, SingleInstance,
+};
+
+/// The layout of the output bytes is a component structure of the following
+/// form:
+/// ```ignore
+/// {
+///     component_id: u64,
+///     component_size: u64,
+///     alignment: u64,
+///     component_bytes: [u8; component_size],
+/// }
+/// ```
+pub fn serialize_component_for_entity(
+    component: SingleInstance<impl ComponentArray>,
+    serialized_bytes: &mut Vec<u8>,
+) {
+    let component_id = component.component_id().as_u64();
+    let component_size = component.component_size() as u64;
+    let alignment = component.component_align().get() as u64;
+    let component_bytes = component.view().component_bytes();
+
+    serialized_bytes.reserve(3 * 8 + component_bytes.len());
+
+    serialized_bytes.extend_from_slice(&component_id.to_le_bytes());
+    serialized_bytes.extend_from_slice(&component_size.to_le_bytes());
+    serialized_bytes.extend_from_slice(&alignment.to_le_bytes());
+    serialized_bytes.extend_from_slice(component_bytes);
+}
 
 /// The expected layout is a packed sequence of component structures of the
 /// following form:
