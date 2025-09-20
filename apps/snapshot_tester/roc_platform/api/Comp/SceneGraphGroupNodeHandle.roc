@@ -1,8 +1,8 @@
-# Hash: 4abba7bd3bb2398a8fd6d6ff4236b6afe4df513819c50ae594d1eb8494476d6c
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 1bc50bb527586f0464766366e67e12c2ad14d20c235ef0fcf5c2f0d95ee2366a
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_scene::SceneGraphGroupNodeHandle
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     SceneGraphGroupNodeHandle,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -102,6 +103,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result SceneGraphGroupNodeHandle Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : SceneGraphGroupNodeHandle, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, SceneGraphGroupNodeHandle -> List U8
 write_packet = |bytes, val|

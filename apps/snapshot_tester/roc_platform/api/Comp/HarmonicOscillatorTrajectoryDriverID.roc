@@ -1,8 +1,8 @@
-# Hash: 412f25dd7b8622bd89a43362631b7144ea5ef558aadd54efe3f9117cd62e21c5
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 2e4061fd26fddf0b3da38ddaee4e4dfc1f4b800367e68b3840db11e8423b20f8
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectoryDriverID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     HarmonicOscillatorTrajectoryDriverID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result HarmonicOscillatorTrajectoryDriverID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : HarmonicOscillatorTrajectoryDriverID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, HarmonicOscillatorTrajectoryDriverID -> List U8
 write_packet = |bytes, val|

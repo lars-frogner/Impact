@@ -1,8 +1,8 @@
-# Hash: 00771b3e05673640c149889e1d548e13857217941823aafc517c272a2ac8522a
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 9fc677e974dc1c07fc9d4533e398974076748765f48921517ef1ac5292fb00fb
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_controller::orientation::ControlledAngularVelocity
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ControlledAngularVelocity,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -94,6 +95,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ControlledAngularVelocity Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ControlledAngularVelocity, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ControlledAngularVelocity -> List U8
 write_packet = |bytes, val|

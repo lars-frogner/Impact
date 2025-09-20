@@ -1,8 +1,8 @@
-# Hash: 1df54261337a2c751c178e22dba671c4eb8950ff90e08c68af7f5c2bdcecd909
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: b21c9866ace4b50d0522fc02ffc2afc4bb55eb00b5c561ad8da20fd036b53895
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_physics::force::detailed_drag::DetailedDragForceGeneratorID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     DetailedDragForceGeneratorID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result DetailedDragForceGeneratorID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : DetailedDragForceGeneratorID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, DetailedDragForceGeneratorID -> List U8
 write_packet = |bytes, val|

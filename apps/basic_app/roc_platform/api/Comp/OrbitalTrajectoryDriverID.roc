@@ -1,8 +1,8 @@
-# Hash: 5f3951c4be181f332f9b0949c41ea677b4d89783ddaec07b8bf6812ac4e48475
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 089861b27375e39356b01267df3742423d6da408ceadd41907d8c282e60bf92a
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_physics::driven_motion::orbit::OrbitalTrajectoryDriverID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     OrbitalTrajectoryDriverID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result OrbitalTrajectoryDriverID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : OrbitalTrajectoryDriverID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, OrbitalTrajectoryDriverID -> List U8
 write_packet = |bytes, val|

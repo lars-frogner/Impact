@@ -864,6 +864,7 @@ fn write_component_functions(
         optional_exports.add("add_component_id");
         optional_exports.add("read");
         optional_exports.add("get_for_entity!");
+        optional_exports.add("set_for_entity!");
     }
 
     optional_imports.add("pf", "Entity");
@@ -957,6 +958,12 @@ fn write_component_functions(
             get_for_entity! : Entity.Id => Result {name} Str\n\
             get_for_entity! = |entity_id|\n    \
                 Entity.get_component!(entity_id, component_id)? |> read\n\
+            \n\
+            ## Sets the value of this component for the given entity to the\n\
+            ## specified value.\n\
+            set_for_entity! : {name}, Entity.Id => Result {{}} Str\n\
+            set_for_entity! = |value, entity_id|\n    \
+                Entity.new_component_data |> add(value) |> Entity.update!(entity_id)\n\
             ",
             type_id = ty.ty.id.as_u64(),
             name = ty.ty.name,

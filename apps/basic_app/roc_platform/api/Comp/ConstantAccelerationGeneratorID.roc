@@ -1,8 +1,8 @@
-# Hash: c4f97b3e913bd9aa3143456679dc8d868374cbac2bb753c3b78de9d519bd7a0e
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 2227366697080902b2fe1f44ce276020726577ae66f64a074981cc52c2da88eb
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_physics::force::constant_acceleration::ConstantAccelerationGeneratorID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ConstantAccelerationGeneratorID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ConstantAccelerationGeneratorID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ConstantAccelerationGeneratorID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ConstantAccelerationGeneratorID -> List U8
 write_packet = |bytes, val|

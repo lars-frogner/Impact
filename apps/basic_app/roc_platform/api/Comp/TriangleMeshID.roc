@@ -1,8 +1,8 @@
-# Hash: 02b451ee0e1b1d1bdab2b59b32157b5021976dd429dea493bfce65eeb91a9eac
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 6092e40e4391b8fc025673454a06bef3a846814cb4fee8109758604c7b1a8ee5
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_mesh::triangle::TriangleMeshID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     TriangleMeshID,
     from_name,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -95,6 +96,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result TriangleMeshID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : TriangleMeshID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, TriangleMeshID -> List U8
 write_packet = |bytes, val|

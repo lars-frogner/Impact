@@ -1,8 +1,8 @@
-# Hash: 200a2d8ecd6827c98dd3828c45a5db59e64bbe52196ed406425485bb3917cc1c
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: ee398359351f9ee6763e61efefa8d0bba15c8e444c297aa4d860319eba1c465a
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -120,6 +121,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result VoxelAbsorbingSphere Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : VoxelAbsorbingSphere, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, VoxelAbsorbingSphere -> List U8
 write_packet = |bytes, val|

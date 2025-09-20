@@ -1,8 +1,8 @@
-# Hash: d2add544063a54060d0d5cc7db69292af96134acfc2284f10a07bff6a712bbc8
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 4a368570f0488dd158cf13eb8950799d91fead5e254498016053223657e02963
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_physics::collision::CollidableID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     CollidableID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result CollidableID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : CollidableID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, CollidableID -> List U8
 write_packet = |bytes, val|

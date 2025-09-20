@@ -1,8 +1,8 @@
-# Hash: 7a93cd2a8ee58a9690e99221ed83175046bd92696f8621ef75a6b1b9ceb4952e
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 422efaa63f979322aedb7bd2c788890154866648358eef92ca7b934493f51995
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_light::UnidirectionalLightID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     UnidirectionalLightID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result UnidirectionalLightID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : UnidirectionalLightID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, UnidirectionalLightID -> List U8
 write_packet = |bytes, val|

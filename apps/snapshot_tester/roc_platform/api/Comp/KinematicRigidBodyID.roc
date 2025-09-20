@@ -1,8 +1,8 @@
-# Hash: b5ecedd263f7d55b224b57db7dead8c0be1b504fac8f22289480d20c80043565
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 16a14075a8102b3113a8fa9938b3fd66f30e3c24f3a04fc5ceb24011abe3c320
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBodyID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     KinematicRigidBodyID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result KinematicRigidBodyID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : KinematicRigidBodyID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, KinematicRigidBodyID -> List U8
 write_packet = |bytes, val|

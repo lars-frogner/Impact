@@ -1,8 +1,8 @@
-# Hash: 7b3954d1f3a210bd566330c38976e53fddece412159f794181fdc54a98fbd625
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: d1f03760ec9baead0871f52b43d37c33d8bee04a0261758627484af71e2bbffc
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_scene::SceneGraphCameraNodeHandle
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     SceneGraphCameraNodeHandle,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -102,6 +103,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result SceneGraphCameraNodeHandle Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : SceneGraphCameraNodeHandle, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, SceneGraphCameraNodeHandle -> List U8
 write_packet = |bytes, val|
