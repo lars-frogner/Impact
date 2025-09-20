@@ -1,8 +1,8 @@
-# Hash: 050f1b65ec6e9bb4005566282dfeeec728af328f6c410a56cdfe9ce065ecb785
-# Generated: 2025-09-19T18:59:31+00:00
+# Hash: bbbb525c64e29092fddb9f9f40912132b4ff280fc0dae00581fd50cd62b1c4dd
+# Generated: 2025-09-20T08:50:15+00:00
 # Rust type: impact::input::mouse::MouseButtonSet
 # Type category: POD
-# Commit: ff568180 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     MouseButtonSet,
     empty,
@@ -31,7 +31,7 @@ right = @MouseButtonSet(Num.shift_left_by(1, 1))
 
 middle = @MouseButtonSet(Num.shift_left_by(1, 2))
 
-## Returns the raw bitflags as an unsigned integer
+## Returns the raw bitflags as an unsigned integer.
 bits = |@MouseButtonSet(flags)|
     flags
 

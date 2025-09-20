@@ -1,8 +1,8 @@
-# Hash: 01c2c752474b469d7812addad94dfdf106ea518c1038c7dcf59250f0468e5325
-# Generated: 2025-09-19T14:54:30+00:00
+# Hash: 846bd9acc7a1e427e1fdd792b0c503556d3c862176fe535c02e74f98a839cd2f
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_scene::SceneEntityFlags
 # Type category: Component
-# Commit: fc08276f (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     SceneEntityFlags,
     empty,
@@ -15,6 +15,10 @@ module [
     difference,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -33,7 +37,7 @@ is_disabled = @SceneEntityFlags(Num.shift_left_by(1, 0))
 
 casts_no_shadows = @SceneEntityFlags(Num.shift_left_by(1, 1))
 
-## Returns the raw bitflags as an unsigned integer
+## Returns the raw bitflags as an unsigned integer.
 bits = |@SceneEntityFlags(flags)|
     flags
 
@@ -80,6 +84,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in SceneEntityFlags.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [SceneEntityFlags] component.
+component_id = 6120273427405117318
+
+## Adds the ID of the [SceneEntityFlags] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result SceneEntityFlags Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No SceneEntityFlags component in data"
+                Decode(decode_err) -> "Failed to decode SceneEntityFlags component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result SceneEntityFlags Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, SceneEntityFlags -> List U8
 write_packet = |bytes, val|

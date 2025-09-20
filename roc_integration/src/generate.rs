@@ -94,8 +94,16 @@ struct ModulePath {
     parts: Vec<String>,
 }
 
-pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>) -> Result<()> {
-    let type_map = gather_type_map(inventory::iter::<RegisteredType>(), component_type_ids)?;
+pub fn list_types(
+    options: ListOptions,
+    component_type_ids: &HashSet<RocTypeID>,
+    setup_component_type_ids: &HashSet<RocTypeID>,
+) -> Result<()> {
+    let type_map = gather_type_map(
+        inventory::iter::<RegisteredType>(),
+        component_type_ids,
+        setup_component_type_ids,
+    )?;
 
     let mut type_description_list = Vec::with_capacity(type_map.len());
 
@@ -175,7 +183,11 @@ pub fn list_types(options: ListOptions, component_type_ids: &HashSet<RocTypeID>)
 }
 
 pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
-    let type_map = gather_type_map(inventory::iter::<RegisteredType>(), &HashSet::default())?;
+    let type_map = gather_type_map(
+        inventory::iter::<RegisteredType>(),
+        &HashSet::default(),
+        &HashSet::default(),
+    )?;
     let associated_constant_map =
         gather_associated_constant_map(inventory::iter::<ir::AssociatedConstant>());
     let associated_function_map =
@@ -243,6 +255,7 @@ pub fn generate_roc(
     options: GenerateOptions,
     roc_options: RocGenerateOptions,
     component_type_ids: &HashSet<RocTypeID>,
+    setup_component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<()> {
     let target_dir = target_dir.as_ref().canonicalize()?;
 
@@ -278,6 +291,7 @@ pub fn generate_roc(
         associated_constant_iter,
         associated_function_iter,
         component_type_ids,
+        setup_component_type_ids,
     )?;
 
     let mut unchanged = Vec::new();
@@ -376,10 +390,11 @@ fn generate_roc_modules<'a, 'b>(
     associated_constant_iter: impl IntoIterator<Item = &'b ir::AssociatedConstant>,
     associated_function_iter: impl IntoIterator<Item = &'b ir::AssociatedFunction>,
     component_type_ids: &HashSet<RocTypeID>,
+    setup_component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<Vec<(Module, PathBuf)>> {
     let timestamp = obtain_timestamp();
 
-    let type_map = gather_type_map(type_iter, component_type_ids)?;
+    let type_map = gather_type_map(type_iter, component_type_ids, setup_component_type_ids)?;
     let associated_dependencies_map =
         gather_associated_dependencies_map(associated_dependencies_iter);
     let associated_constant_map = gather_associated_constant_map(associated_constant_iter);
@@ -438,6 +453,7 @@ fn generate_roc_modules<'a, 'b>(
 fn gather_type_map<'a>(
     type_iter: impl IntoIterator<Item = &'a RegisteredType>,
     component_type_ids: &HashSet<RocTypeID>,
+    setup_component_type_ids: &HashSet<RocTypeID>,
 ) -> Result<HashMap<RocTypeID, RegisteredType>> {
     let mut type_map = HashMap::default();
 
@@ -445,6 +461,9 @@ fn gather_type_map<'a>(
         let mut ty = ty.clone();
         if component_type_ids.contains(&ty.ty.id) {
             ty.flags |= RegisteredTypeFlags::IS_COMPONENT;
+        }
+        if setup_component_type_ids.contains(&ty.ty.id) {
+            ty.flags |= RegisteredTypeFlags::IS_SETUP_COMPONENT;
         }
         if let Some(existing) = type_map.insert(ty.ty.id, ty.clone()) {
             bail!(

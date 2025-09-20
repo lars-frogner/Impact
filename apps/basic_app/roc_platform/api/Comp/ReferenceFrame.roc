@@ -1,8 +1,8 @@
-# Hash: 80e115de7420ae6bdaa757145bc9011be764043d3cfbc65c5c78bf907cb8d410
-# Generated: 2025-09-09T12:19:57+00:00
+# Hash: 1bd9671d8724a6bd657a627d1a7b99ba7801b678fdaf001dc98954c798e31e0b
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: e1316b1f (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     ReferenceFrame,
     new,
@@ -16,6 +16,10 @@ module [
     add_multiple_unlocated,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -136,6 +140,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in ReferenceFrame.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [ReferenceFrame] component.
+component_id = 13511111226856695413
+
+## Adds the ID of the [ReferenceFrame] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result ReferenceFrame Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No ReferenceFrame component in data"
+                Decode(decode_err) -> "Failed to decode ReferenceFrame component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result ReferenceFrame Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, ReferenceFrame -> List U8
 write_packet = |bytes, val|

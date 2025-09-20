@@ -1,12 +1,16 @@
-# Hash: 6bc151b5ab3fdf06512d85dc8cd4895d3750f4e2fe2cfa11d93a1e22c9c540d3
-# Generated: 2025-08-03T19:37:47+00:00
+# Hash: 1c9bb1b73de21e45c351f8c7e6c8a8b862049d37f322e58cc0d3b627bb0a454d
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_voxel::VoxelObjectID
 # Type category: Component
-# Commit: 1379dde5 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     VoxelObjectID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -40,6 +44,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in VoxelObjectID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [VoxelObjectID] component.
+component_id = 392054848412647766
+
+## Adds the ID of the [VoxelObjectID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result VoxelObjectID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No VoxelObjectID component in data"
+                Decode(decode_err) -> "Failed to decode VoxelObjectID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result VoxelObjectID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, VoxelObjectID -> List U8
 write_packet = |bytes, val|

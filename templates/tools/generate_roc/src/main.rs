@@ -78,8 +78,9 @@ fn main() -> Result<()> {
                 categories,
                 show_type_ids,
             };
-            let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
-            generate::list_types(options, &component_type_ids)?;
+            let (component_type_ids, setup_component_type_ids) =
+                target_crate::gather_roc_type_ids_for_all_components();
+            generate::list_types(options, &component_type_ids, &setup_component_type_ids)?;
         }
         Command::ListAssociatedItems { types } => {
             generate::list_associated_items(types)?;
@@ -95,8 +96,15 @@ fn main() -> Result<()> {
                 package_name,
                 only_modules: only,
             };
-            let component_type_ids = target_crate::gather_roc_type_ids_for_all_components();
-            generate::generate_roc(target_dir, options, roc_options, &component_type_ids)?;
+            let (component_type_ids, setup_component_type_ids) =
+                target_crate::gather_roc_type_ids_for_all_components();
+            generate::generate_roc(
+                target_dir,
+                options,
+                roc_options,
+                &component_type_ids,
+                &setup_component_type_ids,
+            )?;
         }
         Command::Clean {
             verbose,

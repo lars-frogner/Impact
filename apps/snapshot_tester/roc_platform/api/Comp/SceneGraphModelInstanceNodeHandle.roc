@@ -1,8 +1,8 @@
-# Hash: 953381528246e45be3211234128a1e56e788ae30fba59a73293088e53d925cc2
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 497808548d9204a732386716328154337c1884e9d65e35d2f5b435ccced97028
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_scene::SceneGraphModelInstanceNodeHandle
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     SceneGraphModelInstanceNodeHandle,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -74,6 +78,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in SceneGraphModelInstanceNodeHandle.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [SceneGraphModelInstanceNodeHandle] component.
+component_id = 10488504241303494120
+
+## Adds the ID of the [SceneGraphModelInstanceNodeHandle] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result SceneGraphModelInstanceNodeHandle Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No SceneGraphModelInstanceNodeHandle component in data"
+                Decode(decode_err) -> "Failed to decode SceneGraphModelInstanceNodeHandle component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result SceneGraphModelInstanceNodeHandle Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, SceneGraphModelInstanceNodeHandle -> List U8
 write_packet = |bytes, val|

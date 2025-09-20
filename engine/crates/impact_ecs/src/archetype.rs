@@ -228,6 +228,22 @@ pub struct ComponentStorageEntryMut<'a, C> {
     _phantom: PhantomData<C>,
 }
 
+/// Immutable reference to the entry for the bytes of a specific component
+/// instance in a [`ComponentStorage`]
+#[derive(Debug)]
+pub struct ComponentStorageBytesEntry<'a> {
+    entity_idx: usize,
+    storage: RwLockReadGuard<'a, ComponentStorage>,
+}
+
+/// Mutable reference to the entry for the bytes of a specific component
+/// instance in a [`ComponentStorage`]
+#[derive(Debug)]
+pub struct ComponentStorageBytesEntryMut<'a> {
+    entity_idx: usize,
+    storage: RwLockWriteGuard<'a, ComponentStorage>,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum InclusionResult {
     Added,
@@ -274,6 +290,11 @@ impl Archetype {
     /// Returns the unique ID defining this archetype.
     pub fn id(&self) -> ArchetypeID {
         self.id
+    }
+
+    /// Returns the IDs of the components in the archetype.
+    pub fn component_ids(&self) -> &[ComponentID] {
+        &self.component_ids
     }
 
     /// Returns the number of component making up the
@@ -1142,6 +1163,52 @@ impl ArchetypeTable {
         ))
     }
 
+    /// Returns a reference to the bytes of the component with the given
+    /// [`ComponentID`] belonging to the entity with the given [`EntityID`]. If
+    /// the entity is not present in the table or if it does not have the
+    /// specified component, [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageBytesEntry`]
+    /// that holds a read lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
+    pub fn get_component_bytes_for_entity(
+        &self,
+        entity_id: EntityID,
+        component_id: ComponentID,
+    ) -> Option<ComponentStorageBytesEntry<'_>> {
+        let component_idx = *self.component_index_map.get(&component_id)?;
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
+        Some(ComponentStorageBytesEntry::new(
+            self.component_storages[component_idx].read(),
+            entity_idx,
+        ))
+    }
+
+    /// Returns a mutable reference to the bytes of the component with the given
+    /// [`ComponentID`] belonging to the entity with the given [`EntityID`]. If
+    /// the entity is not present in the table or if it does not have the
+    /// specified component, [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageBytesEntryMut`]
+    /// that holds a write lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
+    pub fn get_component_bytes_for_entity_mut(
+        &self,
+        entity_id: EntityID,
+        component_id: ComponentID,
+    ) -> Option<ComponentStorageBytesEntryMut<'_>> {
+        let component_idx = *self.component_index_map.get(&component_id)?;
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
+        Some(ComponentStorageBytesEntryMut::new(
+            self.component_storages[component_idx].write(),
+            entity_idx,
+        ))
+    }
+
     /// Returns a [`SingleInstanceArchetypeComponentStorage`] containing the
     /// cloned data for all the components of the entity with the given ID, or
     /// [`None`] if the entity is not present in the table.
@@ -1446,6 +1513,44 @@ where
     /// Returns a mutable reference to the component instance.
     pub fn access(&mut self) -> &mut C {
         &mut self.storage.slice_mut::<C>()[self.entity_idx]
+    }
+}
+
+impl<'a> ComponentStorageBytesEntry<'a> {
+    fn new(storage: RwLockReadGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
+        assert!(entity_idx < storage.component_count());
+        Self {
+            entity_idx,
+            storage,
+        }
+    }
+
+    /// Returns a view of the component instance.
+    pub fn access(&self) -> SingleInstance<ComponentView<'_>> {
+        self.storage.component_as_view(self.entity_idx)
+    }
+}
+
+impl<'a> ComponentStorageBytesEntryMut<'a> {
+    fn new(storage: RwLockWriteGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
+        assert!(entity_idx < storage.component_count());
+        Self {
+            entity_idx,
+            storage,
+        }
+    }
+
+    /// Returns a view of the component instance.
+    pub fn access(&self) -> SingleInstance<ComponentView<'_>> {
+        self.storage.component_as_view(self.entity_idx)
+    }
+
+    /// Sets the component bytes to those contained in the given single-instance
+    /// component view.
+    pub fn set(&mut self, component: SingleInstance<ComponentView<'_>>) {
+        self.storage
+            .set_component_bytes(self.entity_idx, component)
+            .expect("Tried to set absent component type");
     }
 }
 

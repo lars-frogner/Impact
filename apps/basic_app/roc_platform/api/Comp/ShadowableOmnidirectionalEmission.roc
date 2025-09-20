@@ -1,8 +1,8 @@
-# Hash: bfbee28cea6da98ccb283270f45c5e267373b02112ac80e4c6de6a2d5e48145b
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 40b566487f2b36ac8e7bc672dac41032aff89f5b0d1fd5f2c49a0999a6a26b7c
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalEmission
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     ShadowableOmnidirectionalEmission,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -83,6 +87,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in ShadowableOmnidirectionalEmission.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [ShadowableOmnidirectionalEmission] component.
+component_id = 6126578492634658920
+
+## Adds the ID of the [ShadowableOmnidirectionalEmission] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result ShadowableOmnidirectionalEmission Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No ShadowableOmnidirectionalEmission component in data"
+                Decode(decode_err) -> "Failed to decode ShadowableOmnidirectionalEmission component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result ShadowableOmnidirectionalEmission Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, ShadowableOmnidirectionalEmission -> List U8
 write_packet = |bytes, val|

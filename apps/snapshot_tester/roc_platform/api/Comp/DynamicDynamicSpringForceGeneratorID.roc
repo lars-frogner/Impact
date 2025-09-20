@@ -1,12 +1,16 @@
-# Hash: bb462940224770208c51ae39e0e5aecb5bb34a3353c4c1310b1697ce613a9896
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 5da7750b693d447d7e4b5a2c2adfebc381d536e152d88938861a524b4b58752a
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_physics::force::spring_force::DynamicDynamicSpringForceGeneratorID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     DynamicDynamicSpringForceGeneratorID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in DynamicDynamicSpringForceGeneratorID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [DynamicDynamicSpringForceGeneratorID] component.
+component_id = 879730974256575039
+
+## Adds the ID of the [DynamicDynamicSpringForceGeneratorID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result DynamicDynamicSpringForceGeneratorID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No DynamicDynamicSpringForceGeneratorID component in data"
+                Decode(decode_err) -> "Failed to decode DynamicDynamicSpringForceGeneratorID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result DynamicDynamicSpringForceGeneratorID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, DynamicDynamicSpringForceGeneratorID -> List U8
 write_packet = |bytes, val|

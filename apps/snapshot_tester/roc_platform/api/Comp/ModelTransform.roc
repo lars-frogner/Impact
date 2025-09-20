@@ -1,8 +1,8 @@
-# Hash: 2aaa9570395a47a5039dcb51b32bc6d26c82b155ffa8aec14bdd9bbcfc4e489b
-# Generated: 2025-08-15T19:14:52+00:00
+# Hash: 6969623f19d3e8c2cea48a1012a36f0bc3be90ad18439b5e84c39399437c2b12
+# Generated: 2025-09-20T11:58:54+00:00
 # Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
-# Commit: e6f6ed4f (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     ModelTransform,
     identity,
@@ -19,6 +19,10 @@ module [
     add_multiple_with_offset_and_scale,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -170,6 +174,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in ModelTransform.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [ModelTransform] component.
+component_id = 6181645024584197525
+
+## Adds the ID of the [ModelTransform] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result ModelTransform Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No ModelTransform component in data"
+                Decode(decode_err) -> "Failed to decode ModelTransform component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result ModelTransform Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, ModelTransform -> List U8
 write_packet = |bytes, val|

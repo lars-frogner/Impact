@@ -8,10 +8,13 @@ use crate::{
     physics::SimulatorConfig,
     setup,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use impact_ecs::{
     archetype::ArchetypeComponents,
-    component::{ComponentArray, SingleInstance},
+    component::{
+        ComponentArray, ComponentID, ComponentInstance, ComponentStorage, ComponentView,
+        SingleInstance,
+    },
     world::EntityID,
 };
 use impact_physics::{constraint::solver::ConstraintSolverConfig, fph};
@@ -71,6 +74,16 @@ impl Engine {
             .stage_entities_for_creation(components)
     }
 
+    pub fn stage_entity_for_update(
+        &self,
+        entity_id: EntityID,
+        components: Vec<SingleInstance<ComponentStorage>>,
+    ) {
+        self.entity_stager
+            .olock()
+            .stage_entity_for_update(entity_id, components);
+    }
+
     pub fn stage_entity_for_removal(&self, entity_id: EntityID) {
         self.entity_stager
             .olock()
@@ -126,10 +139,80 @@ impl Engine {
         self.ecs_world.owrite().create_entities(components)
     }
 
+    pub fn update_entity<A>(
+        &self,
+        entity_id: EntityID,
+        components: impl IntoIterator<Item = SingleInstance<A>>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+    {
+        let ecs_world = self.ecs_world.oread();
+
+        let entity = ecs_world
+            .get_entity(entity_id)
+            .ok_or_else(|| anyhow!("Entity with ID {entity_id} not present"))?;
+
+        for component in components {
+            entity
+                .get_component_bytes_mut(component.component_id())
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Entity with ID {entity_id} has no component with ID {}",
+                        component.component_id().as_u64()
+                    )
+                })?
+                .set(component.single_instance_view());
+        }
+
+        Ok(())
+    }
+
     pub fn remove_entity(&self, entity_id: EntityID) -> Result<()> {
         let mut ecs_world = self.ecs_world.owrite();
         setup::perform_cleanup_for_removed_entity(self, &ecs_world.entity(entity_id))?;
         ecs_world.remove_entity(entity_id)
+    }
+
+    pub fn for_entity_components<I>(
+        &self,
+        entity_id: EntityID,
+        only_component_ids: impl IntoIterator<Item = ComponentID, IntoIter = I>,
+        f: &mut impl FnMut(SingleInstance<ComponentView<'_>>),
+    ) -> Result<()>
+    where
+        I: ExactSizeIterator<Item = ComponentID>,
+    {
+        let only_component_ids = only_component_ids.into_iter();
+
+        let ecs_world = self.ecs_world.oread();
+
+        let entity = ecs_world
+            .get_entity(entity_id)
+            .ok_or_else(|| anyhow!("Entity with ID {entity_id} not present"))?;
+
+        let get_component = |component_id| {
+            entity.get_component_bytes(component_id).ok_or_else(|| {
+                anyhow!(
+                    "Entity with ID {entity_id} has no component with ID {}",
+                    component_id.as_u64()
+                )
+            })
+        };
+
+        if only_component_ids.len() == 0 {
+            for component_id in entity.archetype().component_ids().iter().copied() {
+                let component = get_component(component_id)?;
+                f(component.access());
+            }
+        } else {
+            for component_id in only_component_ids {
+                let component = get_component(component_id)?;
+                f(component.access());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn enqueue_user_command(&self, command: UserCommand) {

@@ -1,12 +1,16 @@
-# Hash: 116e6321fdc4fc111dfc2908f1deec75fd5da1383416dcf2095fb50dd63d454a
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 301875a9bba46d77bcf15f9be8ad5865cf50d6b72b2b04b0c195e347c78cef78
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBodyID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     KinematicRigidBodyID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in KinematicRigidBodyID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [KinematicRigidBodyID] component.
+component_id = 17748225200078506464
+
+## Adds the ID of the [KinematicRigidBodyID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result KinematicRigidBodyID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No KinematicRigidBodyID component in data"
+                Decode(decode_err) -> "Failed to decode KinematicRigidBodyID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result KinematicRigidBodyID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, KinematicRigidBodyID -> List U8
 write_packet = |bytes, val|

@@ -1,8 +1,8 @@
-# Hash: b2f9f70a11e69e942ad4d6f5732bc0578c6c784ed7fbfd2a0c2f73e0d9059d45
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: b96f810b501145a2732777c51aa046528da613c73946c4856c69d92ef5a4bb8f
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -92,6 +96,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in VoxelAbsorbingSphere.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [VoxelAbsorbingSphere] component.
+component_id = 13800759532896143647
+
+## Adds the ID of the [VoxelAbsorbingSphere] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result VoxelAbsorbingSphere Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No VoxelAbsorbingSphere component in data"
+                Decode(decode_err) -> "Failed to decode VoxelAbsorbingSphere component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result VoxelAbsorbingSphere Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, VoxelAbsorbingSphere -> List U8
 write_packet = |bytes, val|

@@ -1,12 +1,16 @@
-# Hash: fbbb202c239c8ec0f48f2d7b017ac52fb90a0cb4cf4d1ef27ac86157349ec365
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 9a4537e83c49c5798644179dd11ca6c21161b958b78d080f73dadf64e5d8420b
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotationDriverID
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     ConstantRotationDriverID,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -38,6 +42,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in ConstantRotationDriverID.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [ConstantRotationDriverID] component.
+component_id = 678619391738733864
+
+## Adds the ID of the [ConstantRotationDriverID] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result ConstantRotationDriverID Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No ConstantRotationDriverID component in data"
+                Decode(decode_err) -> "Failed to decode ConstantRotationDriverID component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result ConstantRotationDriverID Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, ConstantRotationDriverID -> List U8
 write_packet = |bytes, val|

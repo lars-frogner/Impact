@@ -1,8 +1,8 @@
-# Hash: a672ed410d0b7ca74b062e1936b68e944e891bc30673d05a82ffcf1a92738fbe
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 92b7e1eb1f07abd41819d003fe94f983449746a1757aba4febafd5343c3ab5d3
+# Generated: 2025-09-20T11:57:44+00:00
 # Rust type: impact_controller::orientation::ControlledAngularVelocity
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: ac7f80d7 (dirty)
 module [
     ControlledAngularVelocity,
     new,
@@ -10,6 +10,10 @@ module [
     add_multiple_new,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
+    read,
+    get_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +70,30 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in ControlledAngularVelocity.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
+
+## The ID of the [ControlledAngularVelocity] component.
+component_id = 15898146010921466381
+
+## Adds the ID of the [ControlledAngularVelocity] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+## Reads the component from the given entity data. 
+read : Entity.Data -> Result ControlledAngularVelocity Str
+read = |data|
+    Entity.read_component(data, component_id, from_bytes)
+    |> Result.map_err(
+        |err|
+            when err is
+                ComponentMissing -> "No ControlledAngularVelocity component in data"
+                Decode(decode_err) -> "Failed to decode ControlledAngularVelocity component: ${Inspect.to_str(decode_err)}",
+    )
+
+## Fetches the value of this component for the given entity.
+get_for_entity! : Entity.Id => Result ControlledAngularVelocity Str
+get_for_entity! = |entity_id|
+    Entity.get_component!(entity_id, component_id)? |> read
 
 write_packet : List U8, ControlledAngularVelocity -> List U8
 write_packet = |bytes, val|
