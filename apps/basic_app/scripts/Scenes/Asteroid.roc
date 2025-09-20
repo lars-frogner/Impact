@@ -65,15 +65,15 @@ setup! : {} => Result {} Str
 setup! = |_|
     # Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox, 2e3)))))?
 
-    Entity.create_with_id!(entity_ids.player, player)?
-    Entity.create_with_id!(entity_ids.camera, camera)?
-    Entity.create_with_id!(entity_ids.laser, laser)?
-    Entity.create_with_id!(entity_ids.absorbing_sphere, absorbing_sphere)?
-    Entity.create_with_id!(entity_ids.ground, ground)?
-    Entity.create_with_id!(entity_ids.asteroid, asteroid)?
-    Entity.create_with_id!(entity_ids.ambient_light, ambient_light)?
-    Entity.create_with_id!(entity_ids.omnidirectional_light, omnidirectional_light)?
-    Entity.create_with_id!(entity_ids.unidirectional_light, unidirectional_light)?
+    Entity.create_with_id!(player, entity_ids.player)?
+    Entity.create_with_id!(camera, entity_ids.camera)?
+    Entity.create_with_id!(laser, entity_ids.laser)?
+    Entity.create_with_id!(absorbing_sphere, entity_ids.absorbing_sphere)?
+    Entity.create_with_id!(ground, entity_ids.ground)?
+    Entity.create_with_id!(asteroid, entity_ids.asteroid)?
+    Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
+    Entity.create_with_id!(omnidirectional_light, entity_ids.omnidirectional_light)?
+    Entity.create_with_id!(unidirectional_light, entity_ids.unidirectional_light)?
 
     Ok({})
 
