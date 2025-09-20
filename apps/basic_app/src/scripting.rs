@@ -6,7 +6,7 @@ use impact::{
     command::UserCommand,
     input::{
         key::KeyboardEvent,
-        mouse::{MouseButtonEvent, MouseDragEvent},
+        mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
     },
     roc_integration::Roc,
 };
@@ -20,6 +20,7 @@ define_ffi! {
     roc__handle_keyboard_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
     roc__handle_mouse_button_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
     roc__handle_mouse_drag_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
+    roc__handle_mouse_scroll_event_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<(), RocStr>,
     roc__command_roundtrip_extern_1_exposed => unsafe extern "C" fn(RocList<u8>) -> RocResult<RocList<u8>, RocStr>,
 }
 
@@ -66,6 +67,19 @@ pub fn handle_mouse_drag_event(event: MouseDragEvent) -> Result<()> {
         |error| Err(anyhow!("{:#}", error)),
     )
     .with_context(|| format!("Failed handling mouse drag event {event:?}"))
+}
+
+pub fn handle_mouse_scroll_event(event: MouseScrollEvent) -> Result<()> {
+    let mut bytes = RocList::from_slice(&[0; MouseScrollEvent::SERIALIZED_SIZE]);
+    event.write_roc_bytes(bytes.as_mut_slice())?;
+
+    ScriptFFI::call(
+        |ffi| {
+            from_roc_result(unsafe { (ffi.roc__handle_mouse_scroll_event_extern_1_exposed)(bytes) })
+        },
+        |error| Err(anyhow!("{:#}", error)),
+    )
+    .with_context(|| format!("Failed handling mouse scroll event {event:?}"))
 }
 
 pub fn command_roundtrip(command: UserCommand) -> Result<UserCommand> {

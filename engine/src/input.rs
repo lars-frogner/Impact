@@ -4,7 +4,9 @@ pub mod key;
 pub mod mouse;
 
 use key::KeyboardEvent;
-use mouse::{MouseButtonEvent, MouseButtonSet, MouseButtonState, MouseMotionEvent};
+use mouse::{
+    MouseButtonEvent, MouseButtonSet, MouseButtonState, MouseMotionEvent, MouseScrollEvent,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default)]
@@ -21,6 +23,12 @@ pub struct InputConfig {
     /// The factor by which to scale the raw mouse motion deltas to obtain pixel
     /// deltas.
     pub mouse_sensitivity: f64,
+    /// The factor by which to scale line deltas from the mouse wheel to obtain
+    /// pixel deltas.
+    pub pixels_per_scroll_line: f64,
+    /// The factor by which to scale pixel deltas from the mouse wheel to obtain
+    /// the deltas used by the engine.
+    pub scroll_sensitivity: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -28,6 +36,7 @@ pub enum InputEvent {
     Keyboard(KeyboardEvent),
     MouseButton(MouseButtonEvent),
     MouseMotion(MouseMotionEvent),
+    MouseScroll(MouseScrollEvent),
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +62,8 @@ impl Default for InputConfig {
     fn default() -> Self {
         Self {
             mouse_sensitivity: 1.0,
+            pixels_per_scroll_line: 20.0,
+            scroll_sensitivity: 1.0,
         }
     }
 }

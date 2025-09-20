@@ -345,6 +345,9 @@ impl Engine {
                         pressed: input_manager.state.pressed_mouse_buttons,
                     })?;
                 }
+                InputEvent::MouseScroll(event) => {
+                    self.app().handle_mouse_scroll_event(event)?;
+                }
             }
         }
         Ok(())
