@@ -1,8 +1,8 @@
-# Hash: 40b566487f2b36ac8e7bc672dac41032aff89f5b0d1fd5f2c49a0999a6a26b7c
-# Generated: 2025-09-20T11:58:54+00:00
+# Hash: ef2cb1d4946be943378cce4839f31f3036f71cf10b38c75c29e3e2ef8a9b0a0b
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalEmission
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ShadowableOmnidirectionalEmission,
     new,
@@ -48,7 +48,7 @@ new = |luminous_intensity, source_extent|
 ## Creates a new shadowable omnidirectional emission component with
 ## the given luminous intensity (in candela) and source extent.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Vector3.Vector3 Binary32, F32 -> Entity.Data
+add_new : Entity.ComponentData, Vector3.Vector3 Binary32, F32 -> Entity.ComponentData
 add_new = |entity_data, luminous_intensity, source_extent|
     add(entity_data, new(luminous_intensity, source_extent))
 
@@ -56,7 +56,7 @@ add_new = |entity_data, luminous_intensity, source_extent|
 ## the given luminous intensity (in candela) and source extent.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, luminous_intensity, source_extent|
     add_multiple(
         entity_data,
@@ -70,7 +70,7 @@ add_multiple_new = |entity_data, luminous_intensity, source_extent|
 ## Adds a value of the [ShadowableOmnidirectionalEmission] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ShadowableOmnidirectionalEmission -> Entity.Data
+add : Entity.ComponentData, ShadowableOmnidirectionalEmission -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -79,7 +79,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ShadowableOmnidirectionalEmission) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ShadowableOmnidirectionalEmission) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -97,7 +97,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result ShadowableOmnidirectionalEmission Str
+read : Entity.ComponentData -> Result ShadowableOmnidirectionalEmission Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

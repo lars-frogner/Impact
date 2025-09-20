@@ -1,8 +1,8 @@
-# Hash: bd7306c3e3fe70c088600f60264b35a40bb203adb11324b7bdd6bf2cc89dea29
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: c9723995a9659d9914e09242a940f4c1704ba130e09ed9f482c8480a19a47bdb
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_mesh::setup::SphereMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     SphereMesh,
     new,
@@ -33,14 +33,14 @@ new = |n_rings|
 
 ## Defines a sphere mesh with the given number of rings.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, U32 -> Entity.Data
+add_new : Entity.ComponentData, U32 -> Entity.ComponentData
 add_new = |entity_data, n_rings|
     add(entity_data, new(n_rings))
 
 ## Defines a sphere mesh with the given number of rings.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (U32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, n_rings|
     add_multiple(
         entity_data,
@@ -54,7 +54,7 @@ add_multiple_new = |entity_data, n_rings|
 ## Adds a value of the [SphereMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, SphereMesh -> Entity.Data
+add : Entity.ComponentData, SphereMesh -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -63,7 +63,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (SphereMesh) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (SphereMesh) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

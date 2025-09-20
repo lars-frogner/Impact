@@ -1,8 +1,8 @@
-# Hash: c00f6db2f9c8c63cf96883e12d6d29d39af73c752f2e39b5ce731e09ee2c2069
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 301c0809083a5bce9b1929903dbbf7bf63359988978c195b29a1b490fdb5415b
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_material::setup::physical::UniformRoughness
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     UniformRoughness,
     add,
@@ -22,7 +22,7 @@ UniformRoughness : F32
 ## Adds a value of the [UniformRoughness] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, UniformRoughness -> Entity.Data
+add : Entity.ComponentData, UniformRoughness -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -31,7 +31,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformRoughness) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (UniformRoughness) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

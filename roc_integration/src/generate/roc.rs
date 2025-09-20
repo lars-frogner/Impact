@@ -507,12 +507,12 @@ pub(super) fn write_associated_constant(
                 roc_code,
                 "\n\
                 {docstring}\
-                add_{name} : Entity.Data -> Entity.Data\n\
+                add_{name} : Entity.ComponentData -> Entity.ComponentData\n\
                 add_{name} = |entity_data|\n    \
                     add(entity_data)\n\
                 \n\
                 {docstring_multi}\
-                add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                add_multiple_{name} : Entity.MultiComponentData -> Entity.MultiComponentData\n\
                 add_multiple_{name} = |entity_data|\n    \
                     add_multiple(entity_data)\n\
                 "
@@ -522,12 +522,12 @@ pub(super) fn write_associated_constant(
                 roc_code,
                 "\n\
                 {docstring}\
-                add_{name} : Entity.Data -> Entity.Data\n\
+                add_{name} : Entity.ComponentData -> Entity.ComponentData\n\
                 add_{name} = |entity_data|\n    \
                     add(entity_data, {name})\n\
                 \n\
                 {docstring_multi}\
-                add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                add_multiple_{name} : Entity.MultiComponentData -> Entity.MultiComponentData\n\
                 add_multiple_{name} = |entity_data|\n    \
                     res = add_multiple(\n        \
                         entity_data,\n        \
@@ -688,12 +688,12 @@ pub(super) fn write_associated_function(
                     roc_code,
                     "\n\
                     {docstring}\
-                    add_{name} : Entity.Data -> Entity.Data\n\
+                    add_{name} : Entity.ComponentData -> Entity.ComponentData\n\
                     add_{name} = |entity_data|\n    \
                         add(entity_data)\n\
                     \n\
                     {docstring_multi}\
-                    add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                    add_multiple_{name} : Entity.MultiComponentData -> Entity.MultiComponentData\n\
                     add_multiple_{name} = |entity_data|\n    \
                         add_multiple(entity_data)\
                     "
@@ -703,12 +703,12 @@ pub(super) fn write_associated_function(
                     roc_code,
                     "\n\
                     {docstring}\
-                    add_{name} : Entity.Data -> Entity.Data\n\
+                    add_{name} : Entity.ComponentData -> Entity.ComponentData\n\
                     add_{name} = |entity_data|\n    \
                         add(entity_data, {name}({{}}))\n\
                     \n\
                     {docstring_multi}\
-                    add_multiple_{name} : Entity.MultiData -> Entity.MultiData\n\
+                    add_multiple_{name} : Entity.MultiComponentData -> Entity.MultiComponentData\n\
                     add_multiple_{name} = |entity_data|\n    \
                         res = add_multiple(\n        \
                             entity_data,\n        \
@@ -726,7 +726,7 @@ pub(super) fn write_associated_function(
                 roc_code,
                 "\n\
                 {docstring}\
-                add_{name} : Entity.Data, {arg_types} -> Entity.Data\n\
+                add_{name} : Entity.ComponentData, {arg_types} -> Entity.ComponentData\n\
                 add_{name} = |entity_data, {arg_names}|\n    \
                     add(entity_data, {name}({arg_names}))\
                 "
@@ -740,7 +740,7 @@ pub(super) fn write_associated_function(
                     roc_code,
                     "\n\
                     {docstring_multi}\
-                    add_multiple_{name} : Entity.MultiData, {wrapped_arg_types} -> Result Entity.MultiData Str\n\
+                    add_multiple_{name} : Entity.MultiComponentData, {wrapped_arg_types} -> Result Entity.MultiComponentData Str\n\
                     add_multiple_{name} = |entity_data, {arg_names}|\n    \
                         add_multiple(\n        \
                             entity_data,\n        \
@@ -886,12 +886,12 @@ fn write_component_functions(
             roc_code,
             "\
             ## Adds the [{name}] component to an entity's data.\n\
-            add : Entity.Data -> Entity.Data\n\
+            add : Entity.ComponentData -> Entity.ComponentData\n\
             add = |entity_data|\n    \
                 entity_data |> Entity.append_component(write_packet, {{}})\n\
             \n\
             ## Adds the [{name}] component to each entity's data.\n\
-            add_multiple : Entity.MultiData -> Entity.MultiData\n\
+            add_multiple : Entity.MultiComponentData -> Entity.MultiComponentData\n\
             add_multiple = |entity_data|\n    \
                 res = entity_data\n        \
                     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({{}}), Entity.multi_count(entity_data)))\n    \
@@ -908,7 +908,7 @@ fn write_component_functions(
             ## Adds a value of the [{name}] component to an entity's data.\n\
             ## Note that an entity never should have more than a single value of\n\
             ## the same component type.\n\
-            add : Entity.Data, {name} -> Entity.Data\n\
+            add : Entity.ComponentData, {name} -> Entity.ComponentData\n\
             add = |entity_data, comp_value|\n    \
                 entity_data |> Entity.append_component(write_packet, comp_value)\n\
             \n\
@@ -917,7 +917,7 @@ fn write_component_functions(
             ## Note that the number of values should match the number of entities\n\
             ## in the set and that an entity never should have more than a single\n\
             ## value of the same component type.\n\
-            add_multiple : Entity.MultiData, Entity.Arg.Broadcasted ({name}) -> Result Entity.MultiData Str\n\
+            add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted ({name}) -> Result Entity.MultiComponentData Str\n\
             add_multiple = |entity_data, comp_values|\n    \
                 entity_data\n    \
                 |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))\n    \
@@ -943,7 +943,7 @@ fn write_component_functions(
                 component_ids |> Entity.append_component_id(component_id)\n\
             \n\
             ## Reads the component from the given entity data. \n\
-            read : Entity.Data -> Result {name} Str\n\
+            read : Entity.ComponentData -> Result {name} Str\n\
             read = |data|\n    \
                 Entity.read_component(data, component_id, from_bytes)\n    \
                 |> Result.map_err(\n        \

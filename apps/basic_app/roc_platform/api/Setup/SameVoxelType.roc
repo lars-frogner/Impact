@@ -1,8 +1,8 @@
-# Hash: 5088632bd385e6bf0ad54d608ed7d65a5577d297f56f07cd64cba2499e1afff9
-# Generated: 2025-08-17T11:00:44+00:00
+# Hash: a41f2c05458083f58e662d2f85553b2705d03c8873afbcea65ab47bce823623f
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::setup::SameVoxelType
 # Type category: Component
-# Commit: 37a8c9de (dirty)
+# Commit: f9b55709 (dirty)
 module [
     SameVoxelType,
     new,
@@ -28,11 +28,11 @@ new : Str -> SameVoxelType
 new = |voxel_type_name|
     { voxel_type_name_hash: Hashing.hash_str_32(voxel_type_name) }
 
-add_new : Entity.Data, Str -> Entity.Data
+add_new : Entity.ComponentData, Str -> Entity.ComponentData
 add_new = |entity_data, voxel_type_name|
     add(entity_data, new(voxel_type_name))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Str) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Str) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, voxel_type_name|
     add_multiple(
         entity_data,
@@ -46,7 +46,7 @@ add_multiple_new = |entity_data, voxel_type_name|
 ## Adds a value of the [SameVoxelType] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, SameVoxelType -> Entity.Data
+add : Entity.ComponentData, SameVoxelType -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -55,7 +55,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (SameVoxelType) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (SameVoxelType) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

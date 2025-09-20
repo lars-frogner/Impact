@@ -1,8 +1,8 @@
-# Hash: 92b7e1eb1f07abd41819d003fe94f983449746a1757aba4febafd5343c3ab5d3
-# Generated: 2025-09-20T11:57:44+00:00
+# Hash: 00771b3e05673640c149889e1d548e13857217941823aafc517c272a2ac8522a
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_controller::orientation::ControlledAngularVelocity
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ControlledAngularVelocity,
     new,
@@ -33,14 +33,14 @@ new = |{}|
 
 ## Creates a new controlled angular velocity.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data -> Entity.Data
+add_new : Entity.ComponentData -> Entity.ComponentData
 add_new = |entity_data|
     add(entity_data, new({}))
 
 ## Creates a new controlled angular velocity.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData -> Entity.MultiData
+add_multiple_new : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_new = |entity_data|
     res = add_multiple(
         entity_data,
@@ -53,7 +53,7 @@ add_multiple_new = |entity_data|
 ## Adds a value of the [ControlledAngularVelocity] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ControlledAngularVelocity -> Entity.Data
+add : Entity.ComponentData, ControlledAngularVelocity -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -62,7 +62,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ControlledAngularVelocity) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ControlledAngularVelocity) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -80,7 +80,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result ControlledAngularVelocity Str
+read : Entity.ComponentData -> Result ControlledAngularVelocity Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

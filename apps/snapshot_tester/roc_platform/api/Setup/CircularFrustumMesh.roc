@@ -1,8 +1,8 @@
-# Hash: 57519c3bfe84ec3feaa682832e0deb14808632891ff7b3f29481aa956b12bd35
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 183540b020209eef4fb8541a346c1464f711d400704195079cd769721ea46eb1
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_mesh::setup::CircularFrustumMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     CircularFrustumMesh,
     new,
@@ -46,7 +46,7 @@ new = |length, bottom_diameter, top_diameter, n_circumference_vertices|
 ## Defines a circular frustum mesh with the given length, bottom and top
 ## diameter and number of circumeference vertices.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, length, bottom_diameter, top_diameter, n_circumference_vertices|
     add(entity_data, new(length, bottom_diameter, top_diameter, n_circumference_vertices))
 
@@ -54,7 +54,7 @@ add_new = |entity_data, length, bottom_diameter, top_diameter, n_circumference_v
 ## diameter and number of circumeference vertices.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, length, bottom_diameter, top_diameter, n_circumference_vertices|
     add_multiple(
         entity_data,
@@ -68,7 +68,7 @@ add_multiple_new = |entity_data, length, bottom_diameter, top_diameter, n_circum
 ## Adds a value of the [CircularFrustumMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, CircularFrustumMesh -> Entity.Data
+add : Entity.ComponentData, CircularFrustumMesh -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -77,7 +77,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (CircularFrustumMesh) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (CircularFrustumMesh) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

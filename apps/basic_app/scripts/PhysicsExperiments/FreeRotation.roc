@@ -33,7 +33,7 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
     angular_velocity_perturbation = angular_speed * angular_velocity_perturbation_fraction
 
     body_base =
-        Entity.new
+        Entity.new_component_data
         |> Setup.BoxMesh.add_new(3, 2, 1, Outside)
         |> Setup.DynamicRigidBodySubstance.add({ mass_density: 1 / 6 })
         |> Setup.UniformColor.add((0.1, 0.1, 0.7))

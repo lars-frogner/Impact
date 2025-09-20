@@ -1,8 +1,8 @@
-# Hash: 8e7eb0a647e0ebde2bca52992cdf874c1f2e4540fa70b7fa044453eb0296fad6
-# Generated: 2025-09-14T20:34:17+00:00
+# Hash: 2a6600ea338929777748cee700d76a52060e1fe2af2a0739e9ba8b5ac2b501ef
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::setup::MultiscaleSphereSDFModification
 # Type category: Component
-# Commit: aa40a05d (dirty)
+# Commit: f9b55709 (dirty)
 module [
     MultiscaleSphereSDFModification,
     new,
@@ -39,14 +39,14 @@ new = |octaves, max_scale, persistence, inflation, smoothness, seed|
         seed,
     }
 
-add_new : Entity.Data, U32, F32, F32, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, U32, F32, F32, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, octaves, max_scale, persistence, inflation, smoothness, seed|
     add(entity_data, new(octaves, max_scale, persistence, inflation, smoothness, seed))
 
 ## Adds a value of the [MultiscaleSphereSDFModification] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, MultiscaleSphereSDFModification -> Entity.Data
+add : Entity.ComponentData, MultiscaleSphereSDFModification -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -55,7 +55,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (MultiscaleSphereSDFModification) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (MultiscaleSphereSDFModification) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

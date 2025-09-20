@@ -1,8 +1,8 @@
-# Hash: 15e1141d476a1a99e20bc0d4b45484ecf2216f4f9f3d801078c8223b1a4c47a3
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: e57b390a0911fe91db023e0631b6976e52c03b738f62066746c5b187a1e3c7b7
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_mesh::setup::ConeMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ConeMesh,
     new,
@@ -39,7 +39,7 @@ new = |length, max_diameter, n_circumference_vertices|
 ## Defines a cone mesh with the given length, maximum diameter and number
 ## of circumeference vertices.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, length, max_diameter, n_circumference_vertices|
     add(entity_data, new(length, max_diameter, n_circumference_vertices))
 
@@ -47,7 +47,7 @@ add_new = |entity_data, length, max_diameter, n_circumference_vertices|
 ## of circumeference vertices.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, length, max_diameter, n_circumference_vertices|
     add_multiple(
         entity_data,
@@ -61,7 +61,7 @@ add_multiple_new = |entity_data, length, max_diameter, n_circumference_vertices|
 ## Adds a value of the [ConeMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ConeMesh -> Entity.Data
+add : Entity.ComponentData, ConeMesh -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -70,7 +70,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ConeMesh) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ConeMesh) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

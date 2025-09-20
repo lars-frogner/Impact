@@ -1,8 +1,8 @@
-# Hash: c0a72af4b7cb45ad3ecaa1d20a73e283fc0f5a7d7603e22802342cbcd37b81cd
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 06f1399a10bff0ffd08afa98d55e2ef79f689cbea7eacf1ca1955ce2287a6276
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::UniformEmissiveLuminance
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     UniformEmissiveLuminance,
     add,
@@ -24,7 +24,7 @@ UniformEmissiveLuminance : F32
 ## Adds a value of the [UniformEmissiveLuminance] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, UniformEmissiveLuminance -> Entity.Data
+add : Entity.ComponentData, UniformEmissiveLuminance -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -33,7 +33,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformEmissiveLuminance) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (UniformEmissiveLuminance) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

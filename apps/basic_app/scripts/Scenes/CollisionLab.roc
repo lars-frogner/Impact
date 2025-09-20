@@ -87,7 +87,7 @@ setup! = |_|
 skybox = Skybox.new(TextureID.from_name("space_skybox"), 1e5)
 
 player =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0, 0, -16),
         UnitQuaternion.from_axis_angle(y_axis, Num.pi),
@@ -98,7 +98,7 @@ player =
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 sun_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(200000),
         UnitVector3.from((0, -1, 0)),
@@ -106,7 +106,7 @@ sun_light =
     )
 
 ambient_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
 
 create_texture_ids = |texture_name| {
@@ -127,7 +127,7 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
     positions = ListUtil.cartprod3(xs, ys, zs)
 
     _ =
-        Entity.new_multi(List.len(positions))
+        Entity.new_multi_component_data(List.len(positions))
         |> Setup.SphereMesh.add_multiple_new(
             Same(100),
         )?
@@ -190,7 +190,7 @@ create_room! = |extent, angular_speed, texture_ids|
         |> List.map(|(axis, angle)| UnitQuaternion.from_axis_angle(axis, angle))
 
     wall_ids =
-        Entity.new_multi(List.len(wall_orientations))
+        Entity.new_multi_component_data(List.len(wall_orientations))
         |> Setup.RectangleMesh.add_multiple_unit_square
         |> Comp.ModelTransform.add_multiple_with_offset_and_scale(
             Same((0, offset, 0)),
@@ -254,7 +254,7 @@ create_room! = |extent, angular_speed, texture_ids|
         |> List.join
 
     _ =
-        Entity.new_multi(List.len(wall_ids_for_lights))
+        Entity.new_multi_component_data(List.len(wall_ids_for_lights))
         |> Setup.Parent.add_multiple_new(
             All(wall_ids_for_lights),
         )?
@@ -273,7 +273,7 @@ create_room! = |extent, angular_speed, texture_ids|
     Ok({})
 
 voxel_box = |voxel_extent, box_size, room_extent|
-    Entity.new
+    Entity.new_component_data
     |> Setup.VoxelBox.add_new(voxel_extent, box_size, box_size, box_size)
     |> Setup.SameVoxelType.add_new("Metal")
     |> Comp.ReferenceFrame.add_unoriented(

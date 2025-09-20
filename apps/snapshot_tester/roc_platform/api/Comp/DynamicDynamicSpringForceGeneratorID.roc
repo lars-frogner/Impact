@@ -1,8 +1,8 @@
-# Hash: 5da7750b693d447d7e4b5a2c2adfebc381d536e152d88938861a524b4b58752a
-# Generated: 2025-09-20T11:58:54+00:00
+# Hash: 339c61f58af2f0abdb39af6f26116de8401cd9b5dddfb6206c3aa91f28da37ae
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::force::spring_force::DynamicDynamicSpringForceGeneratorID
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     DynamicDynamicSpringForceGeneratorID,
     add,
@@ -25,7 +25,7 @@ DynamicDynamicSpringForceGeneratorID : U64
 ## Adds a value of the [DynamicDynamicSpringForceGeneratorID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, DynamicDynamicSpringForceGeneratorID -> Entity.Data
+add : Entity.ComponentData, DynamicDynamicSpringForceGeneratorID -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -34,7 +34,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (DynamicDynamicSpringForceGeneratorID) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (DynamicDynamicSpringForceGeneratorID) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -52,7 +52,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result DynamicDynamicSpringForceGeneratorID Str
+read : Entity.ComponentData -> Result DynamicDynamicSpringForceGeneratorID Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

@@ -1,8 +1,8 @@
-# Hash: e93a41e43129350149a0af7535456eddad0583243935ef4680df93544c9f037e
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: ac1c189c27e10a77fc0a82a27d15dbeb5ca54cf76771afbb18fb17aa35a94a02
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectory
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ConstantAccelerationTrajectory,
     new,
@@ -47,14 +47,14 @@ new = |initial_time, initial_position, initial_velocity, acceleration|
 
 ## Creates a new constant acceleration trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64 -> Entity.Data
+add_new : Entity.ComponentData, F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64 -> Entity.ComponentData
 add_new = |entity_data, initial_time, initial_position, initial_velocity, acceleration|
     add(entity_data, new(initial_time, initial_position, initial_velocity, acceleration))
 
 ## Creates a new constant acceleration trajectory with the given properties.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, initial_time, initial_position, initial_velocity, acceleration|
     add_multiple(
         entity_data,
@@ -79,7 +79,7 @@ with_constant_velocity = |initial_time, initial_position, velocity|
 ## Creates a new constant velocity trajectory (no acceleration) with the
 ## given properties.
 ## Adds the component to the given entity's data.
-add_with_constant_velocity : Entity.Data, F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64 -> Entity.Data
+add_with_constant_velocity : Entity.ComponentData, F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64 -> Entity.ComponentData
 add_with_constant_velocity = |entity_data, initial_time, initial_position, velocity|
     add(entity_data, with_constant_velocity(initial_time, initial_position, velocity))
 
@@ -87,7 +87,7 @@ add_with_constant_velocity = |entity_data, initial_time, initial_position, veloc
 ## given properties.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_with_constant_velocity : Entity.MultiData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiData Str
+add_multiple_with_constant_velocity : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiComponentData Str
 add_multiple_with_constant_velocity = |entity_data, initial_time, initial_position, velocity|
     add_multiple(
         entity_data,
@@ -101,7 +101,7 @@ add_multiple_with_constant_velocity = |entity_data, initial_time, initial_positi
 ## Adds a value of the [ConstantAccelerationTrajectory] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ConstantAccelerationTrajectory -> Entity.Data
+add : Entity.ComponentData, ConstantAccelerationTrajectory -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -110,7 +110,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ConstantAccelerationTrajectory) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ConstantAccelerationTrajectory) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

@@ -1,8 +1,8 @@
-# Hash: d6b27f3ab7871143edd0804a879a6fdeefad5c2e2bf28549a72da602c8467342
-# Generated: 2025-08-01T06:51:20+00:00
+# Hash: 4522f9f0b0298eace2cf26a097c7711330f0df3b702690c06d02427c2209a9f9
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::ParallaxMap
 # Type category: Component
-# Commit: 5cd592d6
+# Commit: f9b55709 (dirty)
 module [
     ParallaxMap,
     new,
@@ -31,11 +31,11 @@ new : Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> ParallaxMap
 new = |height_map_texture_id, displacement_scale, uv_per_distance|
     { height_map_texture_id, displacement_scale, uv_per_distance }
 
-add_new : Entity.Data, Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> Entity.Data
+add_new : Entity.ComponentData, Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> Entity.ComponentData
 add_new = |entity_data, height_map_texture_id, displacement_scale, uv_per_distance|
     add(entity_data, new(height_map_texture_id, displacement_scale, uv_per_distance))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Vector2.Vector2 Binary32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Vector2.Vector2 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, height_map_texture_id, displacement_scale, uv_per_distance|
     add_multiple(
         entity_data,
@@ -49,7 +49,7 @@ add_multiple_new = |entity_data, height_map_texture_id, displacement_scale, uv_p
 ## Adds a value of the [ParallaxMap] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ParallaxMap -> Entity.Data
+add : Entity.ComponentData, ParallaxMap -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -58,7 +58,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ParallaxMap) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ParallaxMap) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

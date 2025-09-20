@@ -48,7 +48,7 @@ setup! = |_|
 skybox = Texture.TextureID.from_name("space_skybox")
 
 player =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
@@ -59,7 +59,7 @@ player =
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 ground =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(1000)
     |> Setup.PlanarCollidable.add_new(
@@ -72,11 +72,11 @@ ground =
     |> Setup.UniformRoughness.add(0.5)
 
 ambient_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
 
 unidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(200000),
         UnitVector3.from((0.0, -1.0, 0.0)),

@@ -1,8 +1,8 @@
-# Hash: 5b4b89716482643600267e148b9d6bb06affdc65fbe0cda43c15fbd414940fa9
-# Generated: 2025-08-01T06:51:20+00:00
+# Hash: 255ba73de6a60e02deac7c52d05b6d086b08e3d7230cea2d304d2641f39850fc
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::fixed::FixedTexture
 # Type category: Component
-# Commit: 5cd592d6
+# Commit: f9b55709 (dirty)
 module [
     FixedTexture,
     add,
@@ -22,7 +22,7 @@ FixedTexture : Texture.TextureID.TextureID
 ## Adds a value of the [FixedTexture] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, FixedTexture -> Entity.Data
+add : Entity.ComponentData, FixedTexture -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -31,7 +31,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (FixedTexture) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (FixedTexture) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

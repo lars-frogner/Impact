@@ -1,8 +1,8 @@
-# Hash: d5ff3de91eec99b58b6c7d186dc04a9bc972fbc27e0c30c7e37be74c9948d424
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 039be90834b6694894a165ebf5878a01f38b8255f3a23377ce79f399bd94a4ba
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_mesh::setup::ScreenFillingQuadMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ScreenFillingQuadMesh,
     new,
@@ -28,24 +28,24 @@ new = |{}|
 
 ## Creates a new screen-filling quad mesh.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data -> Entity.Data
+add_new : Entity.ComponentData -> Entity.ComponentData
 add_new = |entity_data|
     add(entity_data)
 
 ## Creates a new screen-filling quad mesh.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData -> Entity.MultiData
+add_multiple_new : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_new = |entity_data|
     add_multiple(entity_data)
 
 ## Adds the [ScreenFillingQuadMesh] component to an entity's data.
-add : Entity.Data -> Entity.Data
+add : Entity.ComponentData -> Entity.ComponentData
 add = |entity_data|
     entity_data |> Entity.append_component(write_packet, {})
 
 ## Adds the [ScreenFillingQuadMesh] component to each entity's data.
-add_multiple : Entity.MultiData -> Entity.MultiData
+add_multiple : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple = |entity_data|
     res = entity_data
         |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({}), Entity.multi_count(entity_data)))

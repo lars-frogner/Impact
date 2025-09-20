@@ -1,8 +1,8 @@
-# Hash: 560715f1218a9cd78958e79687826922aa94deed4ef586f8cb18dd73ec5fdc5d
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 192c71bc09fdfb1ff5d6ddb2b2e80e34b8f009d08fe3b0ab6c56c41ad23c71bf
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectory
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     CircularTrajectory,
     new,
@@ -51,14 +51,14 @@ new = |initial_time, orientation, center_position, radius, period|
 
 ## Creates a new circular trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F64, UnitQuaternion.UnitQuaternion Binary64, Point3.Point3 Binary64, F64, F64 -> Entity.Data
+add_new : Entity.ComponentData, F64, UnitQuaternion.UnitQuaternion Binary64, Point3.Point3 Binary64, F64, F64 -> Entity.ComponentData
 add_new = |entity_data, initial_time, orientation, center_position, radius, period|
     add(entity_data, new(initial_time, orientation, center_position, radius, period))
 
 ## Adds a value of the [CircularTrajectory] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, CircularTrajectory -> Entity.Data
+add : Entity.ComponentData, CircularTrajectory -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -67,7 +67,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (CircularTrajectory) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (CircularTrajectory) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

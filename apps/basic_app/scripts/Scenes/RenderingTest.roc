@@ -81,7 +81,7 @@ setup! = |_|
 skybox = Skybox.new(Texture.TextureID.from_name("ocean_skybox"), 1e5)
 
 player =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
@@ -92,7 +92,7 @@ player =
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 dragon =
-    Entity.new
+    Entity.new_component_data
     |> Comp.TriangleMeshID.add_from_name("dragon")
     |> Comp.ModelTransform.add_with_scale(0.06)
     |> Comp.ReferenceFrame.add_new(
@@ -107,7 +107,7 @@ dragon =
     |> Setup.UniformRoughness.add(0.4)
 
 pole =
-    Entity.new
+    Entity.new_component_data
     |> Setup.CylinderMesh.add_new(8.0, 0.6, 100)
     |> Comp.ReferenceFrame.add_unoriented((7.0, 0.0, 5.0))
     |> Setup.UniformColor.add_iron
@@ -116,7 +116,7 @@ pole =
     |> Setup.UniformRoughness.add(0.5)
 
 abstract_object =
-    Entity.new
+    Entity.new_component_data
     |> Comp.TriangleMeshID.add_from_name("abstract_object")
     |> Comp.ModelTransform.add_with_scale(0.02)
     |> Comp.ReferenceFrame.add_unoriented((7.0, 9.7, 5.0))
@@ -132,7 +132,7 @@ abstract_object =
     |> Setup.UniformRoughness.add(0.35)
 
 abstract_pyramid =
-    Entity.new
+    Entity.new_component_data
     |> Comp.TriangleMeshID.add_from_name("abstract_pyramid")
     |> Comp.ModelTransform.add_with_scale(0.035)
     |> Comp.ReferenceFrame.add_unoriented((-1.0, 11.0, 9.0))
@@ -146,7 +146,7 @@ abstract_pyramid =
     |> Setup.UniformRoughness.add(0.95)
 
 box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(2.0)
     |> Comp.ReferenceFrame.add_unoriented((-9.0, 1.0, 5.0))
@@ -158,7 +158,7 @@ box =
     |> Setup.UniformRoughness.add(0.55)
 
 sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(100)
     |> Comp.ModelTransform.add_with_scale(4.0)
     |> Comp.ReferenceFrame.add_unoriented((-9.0, 4.0, 5.0))
@@ -170,7 +170,7 @@ sphere =
     |> Setup.UniformRoughness.add(0.7)
 
 abstract_cube =
-    Entity.new
+    Entity.new_component_data
     |> Comp.TriangleMeshID.add_from_name("abstract_cube")
     |> Comp.ModelTransform.add_with_scale(0.016)
     |> Comp.ReferenceFrame.add_unoriented((-9.0, 7.8, 5.0))
@@ -186,7 +186,7 @@ abstract_cube =
     |> Setup.UniformRoughness.add(0.4)
 
 floor =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Setup.PlanarTextureProjection.add_for_rectangle(Setup.RectangleMesh.unit_square, 2, 2)
     |> Comp.ModelTransform.add_with_scale(50)
@@ -200,7 +200,7 @@ floor =
     |> Setup.NormalMap.add(Texture.TextureID.from_name("wood_floor_normal_texture"))
 
 wall_base =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Setup.PlanarTextureProjection.add_for_rectangle(Setup.RectangleMesh.unit_square, 2, 2)
     |> Setup.TexturedColor.add(Texture.TextureID.from_name("bricks_color_texture"))
@@ -235,7 +235,7 @@ upper_z_wall =
     )
 
 bulb_light =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(25)
     |> Comp.ModelTransform.add_with_scale(0.7)
     |> Comp.ReferenceFrame.add_unoriented((0.0, 17.0, 2.0))
@@ -247,7 +247,7 @@ bulb_light =
     )
 
 sun_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(10000),
         UnitVector3.from((0.6, -0.3, 1.0)),
@@ -255,5 +255,5 @@ sun_light =
     )
 
 ambient_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.AmbientEmission.add_new(Vector3.same(1000.0))

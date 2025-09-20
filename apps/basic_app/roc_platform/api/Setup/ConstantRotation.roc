@@ -1,8 +1,8 @@
-# Hash: 757d3a7b07ca7bd352a60b88bdb7d7fbd1a356bb84d4d01caab1b3957e438766
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: bdcab076dd3f2ef6079789684b5d19930b42e1752d91060e42dc3ee3c991f15f
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotation
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ConstantRotation,
     new,
@@ -44,7 +44,7 @@ new = |initial_time, initial_orientation, angular_velocity|
 ## Creates a new constant rotation defined by the given initial time and
 ## orientation and angular velocity.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F64, UnitQuaternion.UnitQuaternion Binary64, Physics.AngularVelocity.AngularVelocity -> Entity.Data
+add_new : Entity.ComponentData, F64, UnitQuaternion.UnitQuaternion Binary64, Physics.AngularVelocity.AngularVelocity -> Entity.ComponentData
 add_new = |entity_data, initial_time, initial_orientation, angular_velocity|
     add(entity_data, new(initial_time, initial_orientation, angular_velocity))
 
@@ -52,7 +52,7 @@ add_new = |entity_data, initial_time, initial_orientation, angular_velocity|
 ## orientation and angular velocity.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, initial_time, initial_orientation, angular_velocity|
     add_multiple(
         entity_data,
@@ -66,7 +66,7 @@ add_multiple_new = |entity_data, initial_time, initial_orientation, angular_velo
 ## Adds a value of the [ConstantRotation] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ConstantRotation -> Entity.Data
+add : Entity.ComponentData, ConstantRotation -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -75,7 +75,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ConstantRotation) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ConstantRotation) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

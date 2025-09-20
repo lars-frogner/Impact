@@ -1,8 +1,8 @@
-# Hash: df442850a801e813a8fb7f04ae42b77d49e5abd93564a9dd9471d5d7d1acfddc
-# Generated: 2025-08-01T06:51:20+00:00
+# Hash: e83d4304ee8477dce53111d516df988bd26641439d206a1577fd3006a9080819
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::NormalMap
 # Type category: Component
-# Commit: 5cd592d6
+# Commit: f9b55709 (dirty)
 module [
     NormalMap,
     add,
@@ -22,7 +22,7 @@ NormalMap : Texture.TextureID.TextureID
 ## Adds a value of the [NormalMap] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, NormalMap -> Entity.Data
+add : Entity.ComponentData, NormalMap -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -31,7 +31,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (NormalMap) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (NormalMap) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

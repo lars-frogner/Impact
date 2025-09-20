@@ -1,8 +1,8 @@
-# Hash: c4f506fabc190f338cf8c974dd427eb2b507eb589b8927441ac15c00a4a7b9c6
-# Generated: 2025-09-20T11:57:44+00:00
+# Hash: 2216bd7d5e1f819b04f2fb173e506afc2d752e0259f82e62787b6ddfc68f83f1
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_light::AmbientEmission
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     AmbientEmission,
     new,
@@ -42,7 +42,7 @@ new = |illuminance|
 ## Creates a new ambient light emission component with the given
 ## illuminance (in lux).
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Vector3.Vector3 Binary32 -> Entity.Data
+add_new : Entity.ComponentData, Vector3.Vector3 Binary32 -> Entity.ComponentData
 add_new = |entity_data, illuminance|
     add(entity_data, new(illuminance))
 
@@ -50,7 +50,7 @@ add_new = |entity_data, illuminance|
 ## illuminance (in lux).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, illuminance|
     add_multiple(
         entity_data,
@@ -64,7 +64,7 @@ add_multiple_new = |entity_data, illuminance|
 ## Adds a value of the [AmbientEmission] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, AmbientEmission -> Entity.Data
+add : Entity.ComponentData, AmbientEmission -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -73,7 +73,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (AmbientEmission) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (AmbientEmission) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -91,7 +91,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result AmbientEmission Str
+read : Entity.ComponentData -> Result AmbientEmission Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

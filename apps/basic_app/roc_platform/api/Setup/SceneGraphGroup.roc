@@ -1,8 +1,8 @@
-# Hash: 694c5115a38a2670c6c5ee7b82e8710b13d346a203cef1fd38fdcaf8e0eb4b8e
-# Generated: 2025-08-26T11:33:16+00:00
+# Hash: 1841a46f8e8d636706b231e75ab359f71d6dbe23b925b216960de1264d55dea3
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_scene::setup::SceneGraphGroup
 # Type category: Component
-# Commit: 2bc60bf8 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     SceneGraphGroup,
     add,
@@ -23,12 +23,12 @@ import core.Builtin
 SceneGraphGroup : {}
 
 ## Adds the [SceneGraphGroup] component to an entity's data.
-add : Entity.Data -> Entity.Data
+add : Entity.ComponentData -> Entity.ComponentData
 add = |entity_data|
     entity_data |> Entity.append_component(write_packet, {})
 
 ## Adds the [SceneGraphGroup] component to each entity's data.
-add_multiple : Entity.MultiData -> Entity.MultiData
+add_multiple : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple = |entity_data|
     res = entity_data
         |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({}), Entity.multi_count(entity_data)))

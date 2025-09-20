@@ -1,8 +1,8 @@
-# Hash: 947d3e41f654c10aa7b926c35e6f3b893a5ea077e1bd39826c0e60927a78a374
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: de671cf84a173720b6f9adf2d8e65aae332c52d78e7f152dc1a182f403f39940
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::fixed::FixedColor
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     FixedColor,
     add,
@@ -22,7 +22,7 @@ FixedColor : Vector3.Vector3 Binary32
 ## Adds a value of the [FixedColor] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, FixedColor -> Entity.Data
+add : Entity.ComponentData, FixedColor -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -31,7 +31,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (FixedColor) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (FixedColor) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

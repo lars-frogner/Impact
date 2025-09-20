@@ -1,8 +1,8 @@
-# Hash: 07bb93995ec2039b3958680a3d86892feaf2097a3406540b06ab0cb475a925a2
-# Generated: 2025-09-20T11:57:44+00:00
+# Hash: d39f07dde04501a6ce26722fdbdeb37c9cfefd6c9c5f4acece51251dfb19cc8b
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingCapsule
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,
@@ -66,7 +66,7 @@ new = |offset_to_segment_start, segment_vector, radius, rate|
 ## the entity, as well as the given maximum absorption rate (at the central
 ## line segment).
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64, F64, F64 -> Entity.Data
+add_new : Entity.ComponentData, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64, F64, F64 -> Entity.ComponentData
 add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
     add(entity_data, new(offset_to_segment_start, segment_vector, radius, rate))
 
@@ -77,7 +77,7 @@ add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
 ## line segment).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
     add_multiple(
         entity_data,
@@ -91,7 +91,7 @@ add_multiple_new = |entity_data, offset_to_segment_start, segment_vector, radius
 ## Adds a value of the [VoxelAbsorbingCapsule] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, VoxelAbsorbingCapsule -> Entity.Data
+add : Entity.ComponentData, VoxelAbsorbingCapsule -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -100,7 +100,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelAbsorbingCapsule) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (VoxelAbsorbingCapsule) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -118,7 +118,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result VoxelAbsorbingCapsule Str
+read : Entity.ComponentData -> Result VoxelAbsorbingCapsule Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

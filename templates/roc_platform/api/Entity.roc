@@ -1,12 +1,12 @@
 module [
     Id,
-    Data,
-    MultiData,
+    ComponentData,
+    MultiComponentData,
     ComponentIds,
     ReadComponentErr,
     id,
-    new,
-    new_multi,
+    new_component_data,
+    new_multi_component_data,
     new_component_ids,
     multi_count,
     append_component,
@@ -36,9 +36,9 @@ import Platform
 
 Id := U64 implements [Eq]
 
-Data := List U8
+ComponentData := List U8
 
-MultiData := { count : U64, bytes : List U8 }
+MultiComponentData := { count : U64, bytes : List U8 }
 
 ComponentIds := List U64
 
@@ -51,27 +51,27 @@ id : Str -> Id
 id = |string|
     @Id(Hashing.hash_str_64(string) |> Hashing.unwrap_u64)
 
-new = @Data([])
+new_component_data = @ComponentData([])
 
-new_multi : U64 -> MultiData
-new_multi = |count|
-    @MultiData { count, bytes: [] }
+new_multi_component_data : U64 -> MultiComponentData
+new_multi_component_data = |count|
+    @MultiComponentData { count, bytes: [] }
 
 new_component_ids = @ComponentIds([])
 
-multi_count : MultiData -> U64
-multi_count = |@MultiData { count }|
+multi_count : MultiComponentData -> U64
+multi_count = |@MultiComponentData { count }|
     count
 
-append_component : Data, (List U8, a -> List U8), a -> Data
-append_component = |@Data(bytes), encode, value|
-    @Data(bytes |> encode(value))
+append_component : ComponentData, (List U8, a -> List U8), a -> ComponentData
+append_component = |@ComponentData(bytes), encode, value|
+    @ComponentData(bytes |> encode(value))
 
-append_components : MultiData, (List U8, List a -> List U8), List a -> Result MultiData [CountMismatch U64 U64]
-append_components = |@MultiData { count, bytes }, encode, values|
+append_components : MultiComponentData, (List U8, List a -> List U8), List a -> Result MultiComponentData [CountMismatch U64 U64]
+append_components = |@MultiComponentData { count, bytes }, encode, values|
     value_count = List.len(values)
     if value_count == count then
-        Ok(@MultiData { count, bytes: bytes |> encode(values) })
+        Ok(@MultiComponentData { count, bytes: bytes |> encode(values) })
     else
         Err(CountMismatch(value_count, count))
 
@@ -79,13 +79,13 @@ append_component_id : ComponentIds, U64 -> ComponentIds
 append_component_id = |@ComponentIds(component_ids), component_id|
     @ComponentIds(component_ids |> List.append(component_id))
 
-read_component : Data, U64, (List U8 -> Result a Builtin.DecodeErr) -> Result a ReadComponentErr
+read_component : ComponentData, U64, (List U8 -> Result a Builtin.DecodeErr) -> Result a ReadComponentErr
 read_component = |data, component_id, decode|
     bytes = find_component_bytes(data, component_id)?
     decode(bytes) |> Result.map_err(Decode)
 
-find_component_bytes : Data, U64 -> Result (List U8) ReadComponentErr
-find_component_bytes = |@Data(bytes), component_id|
+find_component_bytes : ComponentData, U64 -> Result (List U8) ReadComponentErr
+find_component_bytes = |@ComponentData(bytes), component_id|
     find_component_bytes_from_cursor(bytes, component_id, 0)
 
 find_component_bytes_from_cursor : List U8, U64, U64 -> Result (List U8) ReadComponentErr
@@ -107,57 +107,57 @@ find_component_bytes_from_cursor = |bytes, target_component_id, cursor|
     else
         Err(ComponentMissing)
 
-stage_for_creation_with_id! : Id, Data => Result {} Str
-stage_for_creation_with_id! = |@Id(ident), @Data(bytes)|
+stage_for_creation_with_id! : Id, ComponentData => Result {} Str
+stage_for_creation_with_id! = |@Id(ident), @ComponentData(bytes)|
     Platform.stage_entity_for_creation_with_id!(ident, bytes)
 
-stage_for_creation! : Data => Result {} Str
-stage_for_creation! = |@Data(bytes)|
+stage_for_creation! : ComponentData => Result {} Str
+stage_for_creation! = |@ComponentData(bytes)|
     Platform.stage_entity_for_creation!(bytes)
 
-stage_multiple_for_creation! : MultiData => Result {} Str
-stage_multiple_for_creation! = |@MultiData { bytes }|
+stage_multiple_for_creation! : MultiComponentData => Result {} Str
+stage_multiple_for_creation! = |@MultiComponentData { bytes }|
     Platform.stage_entities_for_creation!(bytes)
 
-stage_for_update! : Id, Data => Result {} Str
-stage_for_update! = |@Id(ident), @Data(bytes)|
+stage_for_update! : Id, ComponentData => Result {} Str
+stage_for_update! = |@Id(ident), @ComponentData(bytes)|
     Platform.stage_entity_for_update!(ident, bytes)
 
 stage_for_removal! : Id => Result {} Str
 stage_for_removal! = |@Id(ident)|
     Platform.stage_entity_for_removal!(ident)
 
-create_with_id! : Id, Data => Result {} Str
-create_with_id! = |@Id(ident), @Data(bytes)|
+create_with_id! : Id, ComponentData => Result {} Str
+create_with_id! = |@Id(ident), @ComponentData(bytes)|
     Platform.create_entity_with_id!(ident, bytes)
 
-create! : Data => Result Id Str
-create! = |@Data(bytes)|
+create! : ComponentData => Result Id Str
+create! = |@ComponentData(bytes)|
     Platform.create_entity!(bytes) |> Result.map_ok(@Id)
 
-create_multiple! : MultiData => Result (List Id) Str
-create_multiple! = |@MultiData { bytes }|
+create_multiple! : MultiComponentData => Result (List Id) Str
+create_multiple! = |@MultiComponentData { bytes }|
     Ok(Platform.create_entities!(bytes)? |> List.map(@Id))
 
-update! : Id, Data => Result {} Str
-update! = |@Id(ident), @Data(bytes)|
+update! : Id, ComponentData => Result {} Str
+update! = |@Id(ident), @ComponentData(bytes)|
     Platform.update_entity!(ident, bytes)
 
 remove! : Id => Result {} Str
 remove! = |@Id(ident)|
     Platform.remove_entity!(ident)
 
-get_component! : Id, U64 => Result Data Str
+get_component! : Id, U64 => Result ComponentData Str
 get_component! = |@Id(ident), component_id|
-    Platform.read_entity_components!(ident, [component_id]) |> Result.map_ok(@Data)
+    Platform.read_entity_components!(ident, [component_id]) |> Result.map_ok(@ComponentData)
 
-get_components! : Id, ComponentIds => Result Data Str
+get_components! : Id, ComponentIds => Result ComponentData Str
 get_components! = |@Id(ident), @ComponentIds(component_ids)|
-    Platform.read_entity_components!(ident, component_ids) |> Result.map_ok(@Data)
+    Platform.read_entity_components!(ident, component_ids) |> Result.map_ok(@ComponentData)
 
-get_all_components! : Id => Result Data Str
+get_all_components! : Id => Result ComponentData Str
 get_all_components! = |@Id(ident)|
-    Platform.read_entity_components!(ident, []) |> Result.map_ok(@Data)
+    Platform.read_entity_components!(ident, []) |> Result.map_ok(@ComponentData)
 
 write_bytes_id : List U8, Id -> List U8
 write_bytes_id = |bytes, @Id(ident)|
