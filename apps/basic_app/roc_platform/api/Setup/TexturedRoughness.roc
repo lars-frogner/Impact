@@ -1,8 +1,8 @@
-# Hash: e01036cf79fdfb7a2c34672a7e010c92bfdce683d6dd605075eef3445929c32d
-# Generated: 2025-08-01T06:51:20+00:00
+# Hash: cd9b468e2f1ddf787ae8e26495b8dc468cf463173091f1926991770dea3ccc1a
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::TexturedRoughness
 # Type category: Component
-# Commit: 5cd592d6
+# Commit: f9b55709 (dirty)
 module [
     TexturedRoughness,
     unscaled,
@@ -30,11 +30,11 @@ unscaled : Texture.TextureID.TextureID -> TexturedRoughness
 unscaled = |texture_id|
     { texture_id, scale_factor: 1.0 }
 
-add_unscaled : Entity.Data, Texture.TextureID.TextureID -> Entity.Data
+add_unscaled : Entity.ComponentData, Texture.TextureID.TextureID -> Entity.ComponentData
 add_unscaled = |entity_data, texture_id|
     add(entity_data, unscaled(texture_id))
 
-add_multiple_unscaled : Entity.MultiData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID) -> Result Entity.MultiData Str
+add_multiple_unscaled : Entity.MultiComponentData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID) -> Result Entity.MultiComponentData Str
 add_multiple_unscaled = |entity_data, texture_id|
     add_multiple(
         entity_data,
@@ -48,7 +48,7 @@ add_multiple_unscaled = |entity_data, texture_id|
 ## Adds a value of the [TexturedRoughness] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, TexturedRoughness -> Entity.Data
+add : Entity.ComponentData, TexturedRoughness -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -57,7 +57,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (TexturedRoughness) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (TexturedRoughness) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

@@ -1,8 +1,8 @@
-# Hash: cab3393331fbca08918a7f73a95644809492571fe99c1d82bf65ebc169ffbbb6
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: f347cf80ca0871d484981ed298e910af0485aed805826ce6ed4f881fafd2ba17
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::UniformSpecularReflectance
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     UniformSpecularReflectance,
     metal,
@@ -40,11 +40,11 @@ UniformSpecularReflectance : F32
 metal : UniformSpecularReflectance
 metal = 1.0
 
-add_metal : Entity.Data -> Entity.Data
+add_metal : Entity.ComponentData -> Entity.ComponentData
 add_metal = |entity_data|
     add(entity_data, metal)
 
-add_multiple_metal : Entity.MultiData -> Entity.MultiData
+add_multiple_metal : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_metal = |entity_data|
     res = add_multiple(
         entity_data,
@@ -58,11 +58,11 @@ add_multiple_metal = |entity_data|
 water : UniformSpecularReflectance
 water = 0.02
 
-add_water : Entity.Data -> Entity.Data
+add_water : Entity.ComponentData -> Entity.ComponentData
 add_water = |entity_data|
     add(entity_data, water)
 
-add_multiple_water : Entity.MultiData -> Entity.MultiData
+add_multiple_water : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_water = |entity_data|
     res = add_multiple(
         entity_data,
@@ -76,11 +76,11 @@ add_multiple_water = |entity_data|
 skin : UniformSpecularReflectance
 skin = 0.028
 
-add_skin : Entity.Data -> Entity.Data
+add_skin : Entity.ComponentData -> Entity.ComponentData
 add_skin = |entity_data|
     add(entity_data, skin)
 
-add_multiple_skin : Entity.MultiData -> Entity.MultiData
+add_multiple_skin : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_skin = |entity_data|
     res = add_multiple(
         entity_data,
@@ -110,11 +110,11 @@ in_range_of : (F32, F32), F32 -> UniformSpecularReflectance
 in_range_of = |range, percentage|
     range.0 + 0.01 * percentage * (range.1 - range.0)
 
-add_in_range_of : Entity.Data, (F32, F32), F32 -> Entity.Data
+add_in_range_of : Entity.ComponentData, (F32, F32), F32 -> Entity.ComponentData
 add_in_range_of = |entity_data, range, percentage|
     add(entity_data, in_range_of(range, percentage))
 
-add_multiple_in_range_of : Entity.MultiData, Entity.Arg.Broadcasted ((F32, F32)), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_in_range_of : Entity.MultiComponentData, Entity.Arg.Broadcasted ((F32, F32)), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_in_range_of = |entity_data, range, percentage|
     add_multiple(
         entity_data,
@@ -128,7 +128,7 @@ add_multiple_in_range_of = |entity_data, range, percentage|
 ## Adds a value of the [UniformSpecularReflectance] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, UniformSpecularReflectance -> Entity.Data
+add : Entity.ComponentData, UniformSpecularReflectance -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -137,7 +137,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformSpecularReflectance) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (UniformSpecularReflectance) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

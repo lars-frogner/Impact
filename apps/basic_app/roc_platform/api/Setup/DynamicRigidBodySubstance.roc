@@ -1,8 +1,8 @@
-# Hash: cface5ca626f692fe0ec9558e9fcb1537040a30d3df6ddce236b49dd497b40e3
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: f479ba0f1250b69859c482e62a00e971b4c11005aa9cef6b5d66d5e9acb8d5bb
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_physics::rigid_body::setup::DynamicRigidBodySubstance
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     DynamicRigidBodySubstance,
     add,
@@ -23,7 +23,7 @@ DynamicRigidBodySubstance : {
 ## Adds a value of the [DynamicRigidBodySubstance] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, DynamicRigidBodySubstance -> Entity.Data
+add : Entity.ComponentData, DynamicRigidBodySubstance -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -32,7 +32,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (DynamicRigidBodySubstance) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (DynamicRigidBodySubstance) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

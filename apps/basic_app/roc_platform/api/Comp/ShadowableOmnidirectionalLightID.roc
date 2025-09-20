@@ -1,8 +1,8 @@
-# Hash: f489b0c299054e93311a054ae08506e41990874c01671f2e21113091f1aa0bc2
-# Generated: 2025-09-20T11:57:44+00:00
+# Hash: 1a8b1c01755d5778a93814c908ec3e6d5f2faaf2aeb3fc28f3fa10b3e366108c
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalLightID
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ShadowableOmnidirectionalLightID,
     add,
@@ -25,7 +25,7 @@ ShadowableOmnidirectionalLightID : U32
 ## Adds a value of the [ShadowableOmnidirectionalLightID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ShadowableOmnidirectionalLightID -> Entity.Data
+add : Entity.ComponentData, ShadowableOmnidirectionalLightID -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -34,7 +34,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ShadowableOmnidirectionalLightID) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ShadowableOmnidirectionalLightID) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -52,7 +52,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result ShadowableOmnidirectionalLightID Str
+read : Entity.ComponentData -> Result ShadowableOmnidirectionalLightID Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

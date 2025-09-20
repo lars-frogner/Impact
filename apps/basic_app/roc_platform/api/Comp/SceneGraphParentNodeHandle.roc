@@ -1,8 +1,8 @@
-# Hash: a5c8246d5e36a1400e0c9e4d2011164dd84351a0854bbff14f2221271b59ee58
-# Generated: 2025-09-20T11:57:44+00:00
+# Hash: 5567a87285f945e655bb430d7f1c3ac9ecf7fc34012c1db59c94a35a1603491d
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_scene::SceneGraphParentNodeHandle
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     SceneGraphParentNodeHandle,
     new,
@@ -39,7 +39,7 @@ new = |parent_node_id|
 ## Creates a new handle to the parent
 ## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Scene.GroupNodeID.GroupNodeID -> Entity.Data
+add_new : Entity.ComponentData, Scene.GroupNodeID.GroupNodeID -> Entity.ComponentData
 add_new = |entity_data, parent_node_id|
     add(entity_data, new(parent_node_id))
 
@@ -47,7 +47,7 @@ add_new = |entity_data, parent_node_id|
 ## [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Scene.GroupNodeID.GroupNodeID) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Scene.GroupNodeID.GroupNodeID) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, parent_node_id|
     add_multiple(
         entity_data,
@@ -61,7 +61,7 @@ add_multiple_new = |entity_data, parent_node_id|
 ## Adds a value of the [SceneGraphParentNodeHandle] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, SceneGraphParentNodeHandle -> Entity.Data
+add : Entity.ComponentData, SceneGraphParentNodeHandle -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -70,7 +70,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (SceneGraphParentNodeHandle) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (SceneGraphParentNodeHandle) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -88,7 +88,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result SceneGraphParentNodeHandle Str
+read : Entity.ComponentData -> Result SceneGraphParentNodeHandle Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

@@ -1,8 +1,8 @@
-# Hash: cf65a740ce3680a54decd4def5722fb1945694248f6c765832d0a77553da9c54
-# Generated: 2025-09-14T20:34:43+00:00
+# Hash: 8d587cc8afc635486e42b1fb5723d6d929c82cdc3deac481e9b1e52093ad2215
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_voxel::setup::VoxelSphereUnion
 # Type category: Component
-# Commit: aa40a05d (dirty)
+# Commit: f9b55709 (dirty)
 module [
     VoxelSphereUnion,
     new,
@@ -61,14 +61,14 @@ new = |voxel_extent, radius_1, radius_2, center_offsets, smoothness|
 ## - If the voxel extent is negative.
 ## - If either of the radii is zero or negative.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, F32, Vector3.Vector3 Binary32, F32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, F32, Vector3.Vector3 Binary32, F32 -> Entity.ComponentData
 add_new = |entity_data, voxel_extent, radius_1, radius_2, center_offsets, smoothness|
     add(entity_data, new(voxel_extent, radius_1, radius_2, center_offsets, smoothness))
 
 ## Adds a value of the [VoxelSphereUnion] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, VoxelSphereUnion -> Entity.Data
+add : Entity.ComponentData, VoxelSphereUnion -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -77,7 +77,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelSphereUnion) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (VoxelSphereUnion) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

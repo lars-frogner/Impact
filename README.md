@@ -94,7 +94,7 @@ The following Roc snippets show the scripting API in action.
 Here is how the laser beam in the video above was created in the script's `setup_scene!` callback.
 
 ```roc
-Entity.new
+Entity.new_component_data
     |> Setup.Parent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
@@ -129,7 +129,7 @@ Command.execute!(Engine(Scene(SetSceneEntityActiveState({ entity_id, state }))))
 Here is an example of how entities can be created in batch (these are the red balls in one of the screenshots).
 
 ```roc
-Entity.new_multi(List.len(positions))
+Entity.new_multi_component_data(List.len(positions))
     |> Setup.SphereMesh.add_multiple_new(
         Same(100),
     )?

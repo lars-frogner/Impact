@@ -1,8 +1,8 @@
-# Hash: 071d518f276d9498c4e2b4a799435ab1d617ab6f8a52447c8951479ae1a040b0
-# Generated: 2025-09-20T11:58:54+00:00
+# Hash: 4f0021ab2cb1ea110a6747ee4affa4c758eb156f0169180e02e0ac8769bc0fe0
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::rigid_body::DynamicRigidBodyID
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     DynamicRigidBodyID,
     add,
@@ -25,7 +25,7 @@ DynamicRigidBodyID : U64
 ## Adds a value of the [DynamicRigidBodyID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, DynamicRigidBodyID -> Entity.Data
+add : Entity.ComponentData, DynamicRigidBodyID -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -34,7 +34,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (DynamicRigidBodyID) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (DynamicRigidBodyID) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -52,7 +52,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result DynamicRigidBodyID Str
+read : Entity.ComponentData -> Result DynamicRigidBodyID Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

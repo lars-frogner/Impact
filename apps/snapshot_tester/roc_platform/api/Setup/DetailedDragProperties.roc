@@ -1,8 +1,8 @@
-# Hash: 9cfbdbf06a8e5fe19d84e5b11957c5b57dbac75ff6bfdd6d2c6d8a0ff67c1103
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 29846aaea8b68905a760f2cbfa3f5477037a88dca5c3ef825fdd45e36c5efe3a
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::force::detailed_drag::setup::DetailedDragProperties
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     DetailedDragProperties,
     new,
@@ -28,11 +28,11 @@ new : F64 -> DetailedDragProperties
 new = |drag_coefficient|
     { drag_coefficient }
 
-add_new : Entity.Data, F64 -> Entity.Data
+add_new : Entity.ComponentData, F64 -> Entity.ComponentData
 add_new = |entity_data, drag_coefficient|
     add(entity_data, new(drag_coefficient))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, drag_coefficient|
     add_multiple(
         entity_data,
@@ -46,7 +46,7 @@ add_multiple_new = |entity_data, drag_coefficient|
 ## Adds a value of the [DetailedDragProperties] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, DetailedDragProperties -> Entity.Data
+add : Entity.ComponentData, DetailedDragProperties -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -55,7 +55,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (DetailedDragProperties) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (DetailedDragProperties) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

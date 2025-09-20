@@ -1,8 +1,8 @@
-# Hash: 45c14c840e69e0a0b56ef4de6787dc7ded968cbd353daa5bfb07c1261826b19e
-# Generated: 2025-08-03T19:37:47+00:00
+# Hash: ad23b7b7fcb26c0b99fa69b9b72cdd814b30f9a52d7c87a7e916e4f201bc22a7
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::setup::DynamicVoxels
 # Type category: Component
-# Commit: 1379dde5 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     DynamicVoxels,
     add,
@@ -20,12 +20,12 @@ import core.Builtin
 DynamicVoxels : {}
 
 ## Adds the [DynamicVoxels] component to an entity's data.
-add : Entity.Data -> Entity.Data
+add : Entity.ComponentData -> Entity.ComponentData
 add = |entity_data|
     entity_data |> Entity.append_component(write_packet, {})
 
 ## Adds the [DynamicVoxels] component to each entity's data.
-add_multiple : Entity.MultiData -> Entity.MultiData
+add_multiple : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple = |entity_data|
     res = entity_data
         |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({}), Entity.multi_count(entity_data)))

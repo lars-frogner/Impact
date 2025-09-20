@@ -1,8 +1,8 @@
-# Hash: 50207de2b97b99881468bbcf0c18e22d610123a0207035094de559507c05b1bb
-# Generated: 2025-08-26T11:33:16+00:00
+# Hash: 93a332c23d014ecd82a94e9ee14ecde18abc373c8ec6227e23e6c2728c5c3391
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_scene::setup::Uncullable
 # Type category: Component
-# Commit: 2bc60bf8 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     Uncullable,
     add,
@@ -23,12 +23,12 @@ import core.Builtin
 Uncullable : {}
 
 ## Adds the [Uncullable] component to an entity's data.
-add : Entity.Data -> Entity.Data
+add : Entity.ComponentData -> Entity.ComponentData
 add = |entity_data|
     entity_data |> Entity.append_component(write_packet, {})
 
 ## Adds the [Uncullable] component to each entity's data.
-add_multiple : Entity.MultiData -> Entity.MultiData
+add_multiple : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple = |entity_data|
     res = entity_data
         |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({}), Entity.multi_count(entity_data)))

@@ -1,8 +1,8 @@
-# Hash: 4549d84c48053686392b3236f55993a1f36df252b3a676e4856d3ba71f901bb8
-# Generated: 2025-08-01T06:51:20+00:00
+# Hash: 7e7584639c70606d124eddd32013a715ae908c5e2dd614fb489007daa7e146a7
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::TexturedEmissiveLuminance
 # Type category: Component
-# Commit: 5cd592d6
+# Commit: f9b55709 (dirty)
 module [
     TexturedEmissiveLuminance,
     unscaled,
@@ -32,11 +32,11 @@ unscaled : Texture.TextureID.TextureID -> TexturedEmissiveLuminance
 unscaled = |texture_id|
     { texture_id, scale_factor: 1.0 }
 
-add_unscaled : Entity.Data, Texture.TextureID.TextureID -> Entity.Data
+add_unscaled : Entity.ComponentData, Texture.TextureID.TextureID -> Entity.ComponentData
 add_unscaled = |entity_data, texture_id|
     add(entity_data, unscaled(texture_id))
 
-add_multiple_unscaled : Entity.MultiData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID) -> Result Entity.MultiData Str
+add_multiple_unscaled : Entity.MultiComponentData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID) -> Result Entity.MultiComponentData Str
 add_multiple_unscaled = |entity_data, texture_id|
     add_multiple(
         entity_data,
@@ -50,7 +50,7 @@ add_multiple_unscaled = |entity_data, texture_id|
 ## Adds a value of the [TexturedEmissiveLuminance] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, TexturedEmissiveLuminance -> Entity.Data
+add : Entity.ComponentData, TexturedEmissiveLuminance -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -59,7 +59,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (TexturedEmissiveLuminance) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (TexturedEmissiveLuminance) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

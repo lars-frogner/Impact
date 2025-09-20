@@ -43,7 +43,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
     reference_position = Point3.displace(attachment_position, (-2.0, (-amplitude) - 0.5, 0.0))
 
     attachment_point =
-        Entity.new
+        Entity.new_component_data
         |> Setup.SphereMesh.add_new(15)
         |> Comp.ModelTransform.add_with_scale(0.2)
         |> Comp.ReferenceFrame.add_unoriented(attachment_position)
@@ -51,7 +51,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         |> Setup.UniformColor.add((0.8, 0.1, 0.1))
 
     dynamic_body =
-        Entity.new
+        Entity.new_component_data
         |> Setup.BoxMesh.add_unit_cube
         |> Setup.DynamicRigidBodySubstance.add({ mass_density: mass })
         |> Comp.ReferenceFrame.add_unoriented(mass_position)
@@ -63,7 +63,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         )
 
     kinematic_body =
-        Entity.new
+        Entity.new_component_data
         |> Setup.BoxMesh.add_unit_cube
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.Motion.add_stationary
@@ -88,7 +88,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
     attachment_point_body_id = dbg Comp.KinematicRigidBodyID.get_for_entity!(entity_ids.attachment_point)?
 
     spring =
-        Entity.new
+        Entity.new_component_data
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Setup.DynamicKinematicSpringForceProperties.add_new(
             dynamic_body_id,

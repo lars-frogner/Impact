@@ -1,8 +1,8 @@
-# Hash: 2aadd6fa0051b76a1b6258144d3071e38d9a50f69928ef3018ca14719b46b359
-# Generated: 2025-09-20T11:58:54+00:00
+# Hash: d2add544063a54060d0d5cc7db69292af96134acfc2284f10a07bff6a712bbc8
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::collision::CollidableID
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     CollidableID,
     add,
@@ -25,7 +25,7 @@ CollidableID : U32
 ## Adds a value of the [CollidableID] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, CollidableID -> Entity.Data
+add : Entity.ComponentData, CollidableID -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -34,7 +34,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (CollidableID) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (CollidableID) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -52,7 +52,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result CollidableID Str
+read : Entity.ComponentData -> Result CollidableID Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

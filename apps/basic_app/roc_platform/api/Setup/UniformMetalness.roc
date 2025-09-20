@@ -1,8 +1,8 @@
-# Hash: 14ca8a7ec90e3c45e6997a64be98e9541d36cbcbd4ce7d2d601b3d920014af41
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: c47d1dc25dc99a8a6b65b17ca6735db59ee217f4a20a8899f262975bcd9574db
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_material::setup::physical::UniformMetalness
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     UniformMetalness,
     dielectric,
@@ -40,11 +40,11 @@ UniformMetalness : F32
 dielectric : UniformMetalness
 dielectric = 0.0
 
-add_dielectric : Entity.Data -> Entity.Data
+add_dielectric : Entity.ComponentData -> Entity.ComponentData
 add_dielectric = |entity_data|
     add(entity_data, dielectric)
 
-add_multiple_dielectric : Entity.MultiData -> Entity.MultiData
+add_multiple_dielectric : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_dielectric = |entity_data|
     res = add_multiple(
         entity_data,
@@ -58,11 +58,11 @@ add_multiple_dielectric = |entity_data|
 metal : UniformMetalness
 metal = 1.0
 
-add_metal : Entity.Data -> Entity.Data
+add_metal : Entity.ComponentData -> Entity.ComponentData
 add_metal = |entity_data|
     add(entity_data, metal)
 
-add_multiple_metal : Entity.MultiData -> Entity.MultiData
+add_multiple_metal : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_metal = |entity_data|
     res = add_multiple(
         entity_data,
@@ -76,7 +76,7 @@ add_multiple_metal = |entity_data|
 ## Adds a value of the [UniformMetalness] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, UniformMetalness -> Entity.Data
+add : Entity.ComponentData, UniformMetalness -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -85,7 +85,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformMetalness) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (UniformMetalness) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

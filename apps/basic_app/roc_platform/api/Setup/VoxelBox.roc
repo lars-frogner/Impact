@@ -1,8 +1,8 @@
-# Hash: 5a661d032c1fe204945462a7b0cb0dfb439df5efbab195c6c71d889e3628b5b1
-# Generated: 2025-09-14T20:34:17+00:00
+# Hash: ecf676758b53d3f7976ccc57c6dc03aff267fb64f8dcc09eeeacd0c970dbd782
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::setup::VoxelBox
 # Type category: Component
-# Commit: aa40a05d (dirty)
+# Commit: f9b55709 (dirty)
 module [
     VoxelBox,
     new,
@@ -57,7 +57,7 @@ new = |voxel_extent, extent_x, extent_y, extent_z|
 ## - If the voxel extent is negative.
 ## - If either of the extents is zero or negative.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, F32, F32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
     add(entity_data, new(voxel_extent, extent_x, extent_y, extent_z))
 
@@ -69,7 +69,7 @@ add_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
 ## - If either of the extents is zero or negative.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
     add_multiple(
         entity_data,
@@ -83,7 +83,7 @@ add_multiple_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z|
 ## Adds a value of the [VoxelBox] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, VoxelBox -> Entity.Data
+add : Entity.ComponentData, VoxelBox -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -92,7 +92,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelBox) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (VoxelBox) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

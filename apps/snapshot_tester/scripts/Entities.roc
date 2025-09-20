@@ -57,7 +57,7 @@ import pf.Comp.UnidirectionalEmission
 # **** Camera ****
 
 camera =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
@@ -65,7 +65,7 @@ camera =
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(50), 0.01, 1000)
 
 tilted_camera =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 0),
         UnitQuaternion.mul(
@@ -78,11 +78,11 @@ tilted_camera =
 # **** Lights ****
 
 ambient_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.AmbientEmission.add_new(Vector3.same(3e3))
 
 omnidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
     |> Comp.OmnidirectionalEmission.add_new(
         Vector3.same(1e4),
@@ -90,7 +90,7 @@ omnidirectional_light =
     )
 
 unidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.UnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, 0.0, 1.0)),
@@ -98,7 +98,7 @@ unidirectional_light =
     )
 
 shadowable_omnidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
     |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(1e4),
@@ -106,7 +106,7 @@ shadowable_omnidirectional_light =
     )
 
 shadowable_unidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, 0.0, 1.0)),
@@ -128,40 +128,40 @@ sphere_rings = 15
 sphere_height = 0.5
 
 diffuse_box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(box_scale)
     |> Comp.ReferenceFrame.add_unoriented((1 + hspacing, box_height - vspacing + voffset, dist))
     |> add_diffuse
 
 plastic_box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(box_scale)
     |> Comp.ReferenceFrame.add_unoriented((0, box_height - vspacing + voffset, dist))
     |> add_plastic
 
 metallic_box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(box_scale)
     |> Comp.ReferenceFrame.add_unoriented((-1 - hspacing, box_height - vspacing + voffset, dist))
     |> add_metallic
 
 diffuse_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ReferenceFrame.add_unoriented((1 + hspacing, sphere_height + vspacing + voffset, dist))
     |> add_diffuse
 
 plastic_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ReferenceFrame.add_unoriented((0, sphere_height + vspacing + voffset, dist))
     |> add_plastic
 
 metallic_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ReferenceFrame.add_unoriented((-1 - hspacing, sphere_height + vspacing + voffset, dist))
     |> add_metallic
@@ -189,7 +189,7 @@ add_metallic = |entity|
 # **** Bloom ****
 
 emissive_square =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 1.5),
@@ -199,7 +199,7 @@ emissive_square =
     |> Setup.UniformEmissiveLuminance.add(1e6)
 
 obscuring_square =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(0.5)
     |> Comp.ReferenceFrame.add_new(
@@ -216,14 +216,14 @@ ao_box_hshift = 0.6
 ao_sphere_scale = 1.2
 
 ambient_occlusion_ground =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(10.0)
     |> Comp.ReferenceFrame.add_unoriented((0, ao_ground_height, 5))
     |> add_metallic
 
 ambient_occlusion_box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(ao_box_scale)
     |> Comp.ReferenceFrame.add_new(
@@ -233,7 +233,7 @@ ambient_occlusion_box =
     |> add_diffuse
 
 ambient_occlusion_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ModelTransform.add_with_scale(ao_sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented(
@@ -249,7 +249,7 @@ scm_sphere_scale = 0.8
 scm_box_scale = 0.6
 
 shadow_cube_mapping_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, scm_ground_height + 1.8, scm_dist))
     |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(1e4),
@@ -257,7 +257,7 @@ shadow_cube_mapping_light =
     )
 
 shadow_cube_mapping_soft_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, scm_ground_height + 1.8, scm_dist))
     |> Comp.ShadowableOmnidirectionalEmission.add_new(
         Vector3.same(1e4),
@@ -265,14 +265,14 @@ shadow_cube_mapping_soft_light =
     )
 
 shadow_cube_mapping_ground =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(2 * scm_dist)
     |> Comp.ReferenceFrame.add_unoriented((0, scm_ground_height, scm_dist))
     |> add_diffuse
 
 shadow_cube_mapping_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ModelTransform.add_with_scale(scm_sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented(
@@ -281,13 +281,13 @@ shadow_cube_mapping_sphere =
     |> add_plastic
 
 shadow_cube_mapping_cylinder =
-    Entity.new
+    Entity.new_component_data
     |> Setup.CylinderMesh.add_new(1.5, 0.2, 15)
     |> Comp.ReferenceFrame.add_unoriented((-0.4, scm_ground_height, scm_dist + 0.6))
     |> add_plastic
 
 shadow_cube_mapping_box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(csm_box_scale)
     |> Comp.ReferenceFrame.add_unoriented(
@@ -302,7 +302,7 @@ csm_sphere_scale = 1.0
 csm_box_scale = 0.8
 
 cascaded_shadow_mapping_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, -0.08, 1.0)),
@@ -310,7 +310,7 @@ cascaded_shadow_mapping_light =
     )
 
 cascaded_shadow_mapping_soft_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(3e3),
         UnitVector3.from((0.0, -0.08, 1.0)),
@@ -318,14 +318,14 @@ cascaded_shadow_mapping_soft_light =
     )
 
 cascaded_shadow_mapping_ground =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(20.0)
     |> Comp.ReferenceFrame.add_unoriented((0, csm_ground_height, 10))
     |> add_diffuse
 
 cascaded_shadow_mapping_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ModelTransform.add_with_scale(csm_sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented(
@@ -334,13 +334,13 @@ cascaded_shadow_mapping_sphere =
     |> add_plastic
 
 cascaded_shadow_mapping_cylinder =
-    Entity.new
+    Entity.new_component_data
     |> Setup.CylinderMesh.add_new(1.5, 0.2, 15)
     |> Comp.ReferenceFrame.add_unoriented((-1.0, csm_ground_height, 2.0))
     |> add_plastic
 
 cascaded_shadow_mapping_box =
-    Entity.new
+    Entity.new_component_data
     |> Setup.BoxMesh.add_unit_cube
     |> Comp.ModelTransform.add_with_scale(csm_box_scale)
     |> Comp.ReferenceFrame.add_unoriented(

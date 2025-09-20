@@ -1,8 +1,8 @@
-# Hash: 8d0155222b67df39908a6166b53d811c30fddf6dda9d1d8d393be1e5545839c4
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 4c48e31511da92a5ec1ed92624e0b067da81fd2863174c16bea3de7293b06ee1
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::collision::setup::SphericalCollidable
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     SphericalCollidable,
     new,
@@ -40,11 +40,11 @@ new = |kind, sphere, response_params|
         response_params,
     }
 
-add_new : Entity.Data, Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary64, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.Data
+add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary64, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
 add_new = |entity_data, kind, sphere, response_params|
     add(entity_data, new(kind, sphere, response_params))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Sphere.Sphere Binary64), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Sphere.Sphere Binary64), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, kind, sphere, response_params|
     add_multiple(
         entity_data,
@@ -58,7 +58,7 @@ add_multiple_new = |entity_data, kind, sphere, response_params|
 ## Adds a value of the [SphericalCollidable] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, SphericalCollidable -> Entity.Data
+add : Entity.ComponentData, SphericalCollidable -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -67,7 +67,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (SphericalCollidable) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (SphericalCollidable) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

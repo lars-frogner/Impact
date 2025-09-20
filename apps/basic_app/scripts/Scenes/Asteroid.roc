@@ -97,7 +97,7 @@ handle_mouse_button_event! = |{ button, state }|
 skybox = Texture.TextureID.from_name("space_skybox")
 
 player =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 0.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
@@ -108,12 +108,12 @@ player =
     |> Setup.SceneGraphGroup.add
 
 camera =
-    Entity.new
+    Entity.new_component_data
     |> Setup.Parent.add_new(entity_ids.player)
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 laser =
-    Entity.new
+    Entity.new_component_data
     |> Setup.Parent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
@@ -131,7 +131,7 @@ laser =
     )
 
 absorbing_sphere =
-    Entity.new
+    Entity.new_component_data
     |> Setup.Parent.add_new(entity_ids.player)
     |> Comp.ModelTransform.add_with_scale(0.1)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, -3))
@@ -143,7 +143,7 @@ absorbing_sphere =
     |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
 ground =
-    Entity.new
+    Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(500)
     |> Comp.ReferenceFrame.add_unoriented((0, -20, 0))
@@ -158,7 +158,7 @@ ground =
     )
 
 asteroid =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 30))
     |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
     # |> Setup.VoxelBox.add_new(0.25, 31, 15, 15)
@@ -175,11 +175,11 @@ asteroid =
     |> Setup.LocalForce.add_new((0.1, 0.1, 0.1), (4, 4, 4))
 
 ambient_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.AmbientEmission.add_new(Vector3.same(1000))
 
 omnidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Setup.SphereMesh.add_new(25)
     |> Comp.ModelTransform.add_with_scale(0.7)
     |> Comp.ReferenceFrame.add_unoriented((0, 15, 2))
@@ -191,7 +191,7 @@ omnidirectional_light =
     )
 
 unidirectional_light =
-    Entity.new
+    Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(20000),
         UnitVector3.from((0.0, -1.0, 0.0)),

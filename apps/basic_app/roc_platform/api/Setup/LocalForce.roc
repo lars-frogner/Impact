@@ -1,8 +1,8 @@
-# Hash: a8ff5b4b598471ce89f9d928f147ec704430fb33c133428af0f710e014c23101
-# Generated: 2025-08-15T19:06:44+00:00
+# Hash: 9683260111abc724cf59e5768552317117d458fbf3fb67144c329f8ce49ffb4e
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_physics::force::local_force::LocalForce
 # Type category: Component
-# Commit: e6f6ed4f (dirty)
+# Commit: f9b55709 (dirty)
 module [
     LocalForce,
     new,
@@ -33,11 +33,11 @@ new : Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> LocalForce
 new = |force, point|
     { force, point }
 
-add_new : Entity.Data, Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> Entity.Data
+add_new : Entity.ComponentData, Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> Entity.ComponentData
 add_new = |entity_data, force, point|
     add(entity_data, new(force, point))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, force, point|
     add_multiple(
         entity_data,
@@ -51,7 +51,7 @@ add_multiple_new = |entity_data, force, point|
 ## Adds a value of the [LocalForce] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, LocalForce -> Entity.Data
+add : Entity.ComponentData, LocalForce -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -60,7 +60,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (LocalForce) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (LocalForce) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

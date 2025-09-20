@@ -1,8 +1,8 @@
-# Hash: 7207e42d524439a805a0e6617bc85176c3cde0cd2c119450b31c06a9b76e5090
-# Generated: 2025-09-14T20:40:56+00:00
+# Hash: 2790c16d8b3a2c486f641f026b7c8cd5afc9e46ddce7cda4cfa388130bf7ec44
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::setup::GradientNoiseVoxelTypes
 # Type category: Component
-# Commit: aa40a05d (dirty)
+# Commit: f9b55709 (dirty)
 module [
     GradientNoiseVoxelTypes,
     voxel_type_array_size,
@@ -53,11 +53,11 @@ new = |voxel_type_names, noise_frequency, voxel_type_frequency, seed|
         seed,
     }
 
-add_new : Entity.Data, List Str, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, List Str, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     add(entity_data, new(voxel_type_names, noise_frequency, voxel_type_frequency, seed))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (List Str), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (List Str), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_frequency, seed|
     add_multiple(
         entity_data,
@@ -71,7 +71,7 @@ add_multiple_new = |entity_data, voxel_type_names, noise_frequency, voxel_type_f
 ## Adds a value of the [GradientNoiseVoxelTypes] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, GradientNoiseVoxelTypes -> Entity.Data
+add : Entity.ComponentData, GradientNoiseVoxelTypes -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -80,7 +80,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (GradientNoiseVoxelTypes) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (GradientNoiseVoxelTypes) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

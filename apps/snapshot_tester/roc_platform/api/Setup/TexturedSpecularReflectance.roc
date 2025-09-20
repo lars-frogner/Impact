@@ -1,8 +1,8 @@
-# Hash: 393aa1af02a111bd59cfc52a32eba3829efe961a3d51d196ea1f60c3d55d85fd
-# Generated: 2025-08-01T06:54:20+00:00
+# Hash: 81793904c3ebcc6492bdd942525ecf1734211bd72723cb5f860009b9cc706e36
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_material::setup::physical::TexturedSpecularReflectance
 # Type category: Component
-# Commit: 5cd592d6 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     TexturedSpecularReflectance,
     unscaled,
@@ -31,11 +31,11 @@ unscaled : Texture.TextureID.TextureID -> TexturedSpecularReflectance
 unscaled = |texture_id|
     { texture_id, scale_factor: 1.0 }
 
-add_unscaled : Entity.Data, Texture.TextureID.TextureID -> Entity.Data
+add_unscaled : Entity.ComponentData, Texture.TextureID.TextureID -> Entity.ComponentData
 add_unscaled = |entity_data, texture_id|
     add(entity_data, unscaled(texture_id))
 
-add_multiple_unscaled : Entity.MultiData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID) -> Result Entity.MultiData Str
+add_multiple_unscaled : Entity.MultiComponentData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID) -> Result Entity.MultiComponentData Str
 add_multiple_unscaled = |entity_data, texture_id|
     add_multiple(
         entity_data,
@@ -49,7 +49,7 @@ add_multiple_unscaled = |entity_data, texture_id|
 ## Adds a value of the [TexturedSpecularReflectance] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, TexturedSpecularReflectance -> Entity.Data
+add : Entity.ComponentData, TexturedSpecularReflectance -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -58,7 +58,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (TexturedSpecularReflectance) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (TexturedSpecularReflectance) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

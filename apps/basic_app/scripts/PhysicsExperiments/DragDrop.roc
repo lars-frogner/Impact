@@ -36,7 +36,7 @@ set_medium! = |_|
 
 create_entities! = |position|
     cone_base =
-        Entity.new
+        Entity.new_component_data
         |> Setup.ConeMesh.add_new(2, 1, 100)
         |> Setup.DynamicRigidBodySubstance.add({ mass_density: 10 })
         |> Comp.Motion.add_stationary

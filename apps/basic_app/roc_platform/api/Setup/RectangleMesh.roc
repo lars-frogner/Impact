@@ -1,8 +1,8 @@
-# Hash: 0b7d697aee56d4e3a304fa9ac32f6c52ff61abcbae136dd4b9cbb8da0897bd79
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 68e27af99b9ba5a52015225eac204d7cf245d965629c9897c73f1b47233f1710
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_mesh::setup::RectangleMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     RectangleMesh,
     unit_square,
@@ -33,11 +33,11 @@ RectangleMesh : {
 unit_square : RectangleMesh
 unit_square = { extent_x: 1.0, extent_z: 1.0 }
 
-add_unit_square : Entity.Data -> Entity.Data
+add_unit_square : Entity.ComponentData -> Entity.ComponentData
 add_unit_square = |entity_data|
     add(entity_data, unit_square)
 
-add_multiple_unit_square : Entity.MultiData -> Entity.MultiData
+add_multiple_unit_square : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_unit_square = |entity_data|
     res = add_multiple(
         entity_data,
@@ -55,14 +55,14 @@ new = |extent_x, extent_z|
 
 ## Defines a a rectangle mesh with the given horizontal extents.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, extent_x, extent_z|
     add(entity_data, new(extent_x, extent_z))
 
 ## Defines a a rectangle mesh with the given horizontal extents.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, extent_x, extent_z|
     add_multiple(
         entity_data,
@@ -76,7 +76,7 @@ add_multiple_new = |entity_data, extent_x, extent_z|
 ## Adds a value of the [RectangleMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, RectangleMesh -> Entity.Data
+add : Entity.ComponentData, RectangleMesh -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -85,7 +85,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (RectangleMesh) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (RectangleMesh) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

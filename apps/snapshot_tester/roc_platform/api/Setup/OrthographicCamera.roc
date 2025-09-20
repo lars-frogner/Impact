@@ -1,8 +1,8 @@
-# Hash: 0ba96cbe19a2eeeedf893731ade22f2c55c2139e9f2a388e4e2ddbf72fcecae5
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 3226a53c380bdae2728bca0c1ca727054734ef738480e68b24e1f2b6af66b60f
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_camera::setup::OrthographicCamera
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     OrthographicCamera,
     new,
@@ -53,7 +53,7 @@ new = |vertical_field_of_view, near_distance, far_distance|
 ## If the field of view or the near distance does not exceed zero, or if
 ## the far distance does not exceed the near distance.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Radians.Radians Binary32, F32, F32 -> Entity.Data
+add_new : Entity.ComponentData, Radians.Radians Binary32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
     add(entity_data, new(vertical_field_of_view, near_distance, far_distance))
 
@@ -66,7 +66,7 @@ add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
 ## the far distance does not exceed the near distance.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Radians.Radians Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Radians.Radians Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
     add_multiple(
         entity_data,
@@ -80,7 +80,7 @@ add_multiple_new = |entity_data, vertical_field_of_view, near_distance, far_dist
 ## Adds a value of the [OrthographicCamera] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, OrthographicCamera -> Entity.Data
+add : Entity.ComponentData, OrthographicCamera -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -89,7 +89,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (OrthographicCamera) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (OrthographicCamera) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

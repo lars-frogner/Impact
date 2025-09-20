@@ -1,8 +1,8 @@
-# Hash: 1398c2a53b105215378f29a0b2456d0bb0495562a133c1adec6acdc3aed8e841
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: be265e2b64b3687ad6953faafa9d6fd86f26754ae7ce0e5fcc118a509af950b3
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_voxel::collidable::setup::VoxelCollidable
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     VoxelCollidable,
     new,
@@ -37,11 +37,11 @@ new = |kind, response_params|
         response_params,
     }
 
-add_new : Entity.Data, Physics.CollidableKind.CollidableKind, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.Data
+add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
 add_new = |entity_data, kind, response_params|
     add(entity_data, new(kind, response_params))
 
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, kind, response_params|
     add_multiple(
         entity_data,
@@ -55,7 +55,7 @@ add_multiple_new = |entity_data, kind, response_params|
 ## Adds a value of the [VoxelCollidable] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, VoxelCollidable -> Entity.Data
+add : Entity.ComponentData, VoxelCollidable -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -64,7 +64,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelCollidable) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (VoxelCollidable) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

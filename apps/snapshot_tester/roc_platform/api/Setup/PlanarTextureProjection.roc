@@ -1,8 +1,8 @@
-# Hash: 4ce5d818ae1c671a705f8caed703f9dfe4f4b781f2cbb67b8724e6ad2926eb68
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 5aaa193c8f9118bf6cc6c5f953e13cbad7010cb5a41f3196f90945aa11a05720
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_mesh::setup::PlanarTextureProjection
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     PlanarTextureProjection,
     new,
@@ -50,7 +50,7 @@ new = |origin, u_vector, v_vector|
 ## texture coordinates will increase. The texture coordinates will be zero
 ## at the origin and unity at the tip of the respective u- or v-vector.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> Entity.Data
+add_new : Entity.ComponentData, Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> Entity.ComponentData
 add_new = |entity_data, origin, u_vector, v_vector|
     add(entity_data, new(origin, u_vector, v_vector))
 
@@ -60,7 +60,7 @@ add_new = |entity_data, origin, u_vector, v_vector|
 ## at the origin and unity at the tip of the respective u- or v-vector.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, origin, u_vector, v_vector|
     add_multiple(
         entity_data,
@@ -91,7 +91,7 @@ for_rectangle = |rectangle, n_repeats_u, n_repeats_v|
 ## aligned with the x-axis and the V-axis will be aligned with the negative
 ## z-axis.
 ## Adds the component to the given entity's data.
-add_for_rectangle : Entity.Data, Setup.RectangleMesh.RectangleMesh, F32, F32 -> Entity.Data
+add_for_rectangle : Entity.ComponentData, Setup.RectangleMesh.RectangleMesh, F32, F32 -> Entity.ComponentData
 add_for_rectangle = |entity_data, rectangle, n_repeats_u, n_repeats_v|
     add(entity_data, for_rectangle(rectangle, n_repeats_u, n_repeats_v))
 
@@ -103,7 +103,7 @@ add_for_rectangle = |entity_data, rectangle, n_repeats_u, n_repeats_v|
 ## z-axis.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_for_rectangle : Entity.MultiData, Entity.Arg.Broadcasted (Setup.RectangleMesh.RectangleMesh), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiData Str
+add_multiple_for_rectangle : Entity.MultiComponentData, Entity.Arg.Broadcasted (Setup.RectangleMesh.RectangleMesh), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_for_rectangle = |entity_data, rectangle, n_repeats_u, n_repeats_v|
     add_multiple(
         entity_data,
@@ -117,7 +117,7 @@ add_multiple_for_rectangle = |entity_data, rectangle, n_repeats_u, n_repeats_v|
 ## Adds a value of the [PlanarTextureProjection] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, PlanarTextureProjection -> Entity.Data
+add : Entity.ComponentData, PlanarTextureProjection -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -126,7 +126,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (PlanarTextureProjection) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (PlanarTextureProjection) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

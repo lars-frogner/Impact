@@ -1,8 +1,8 @@
-# Hash: efa8888ebf4fe61a52b5ecbb9f20e68964b548d145cd81987723f7706a94fa78
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 852d4522a7e1375447f78ea75b6825994100f5f27a8a14c6a00c68cc7a708019
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_mesh::setup::BoxMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     BoxMesh,
     unit_cube,
@@ -39,11 +39,11 @@ BoxMesh : {
 unit_cube : BoxMesh
 unit_cube = { extent_x: 1.0, extent_y: 1.0, extent_z: 1.0, front_faces_on_outside: 1 }
 
-add_unit_cube : Entity.Data -> Entity.Data
+add_unit_cube : Entity.ComponentData -> Entity.ComponentData
 add_unit_cube = |entity_data|
     add(entity_data, unit_cube)
 
-add_multiple_unit_cube : Entity.MultiData -> Entity.MultiData
+add_multiple_unit_cube : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_unit_cube = |entity_data|
     res = add_multiple(
         entity_data,
@@ -57,11 +57,11 @@ add_multiple_unit_cube = |entity_data|
 skybox : BoxMesh
 skybox = { extent_x: 1.0, extent_y: 1.0, extent_z: 1.0, front_faces_on_outside: 0 }
 
-add_skybox : Entity.Data -> Entity.Data
+add_skybox : Entity.ComponentData -> Entity.ComponentData
 add_skybox = |entity_data|
     add(entity_data, skybox)
 
-add_multiple_skybox : Entity.MultiData -> Entity.MultiData
+add_multiple_skybox : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_skybox = |entity_data|
     res = add_multiple(
         entity_data,
@@ -88,14 +88,14 @@ new = |extent_x, extent_y, extent_z, front_face_side|
 
 ## Defines a box mesh with the given extents.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, F32, Mesh.FrontFaceSide.FrontFaceSide -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, F32, Mesh.FrontFaceSide.FrontFaceSide -> Entity.ComponentData
 add_new = |entity_data, extent_x, extent_y, extent_z, front_face_side|
     add(entity_data, new(extent_x, extent_y, extent_z, front_face_side))
 
 ## Defines a box mesh with the given extents.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (Mesh.FrontFaceSide.FrontFaceSide) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (Mesh.FrontFaceSide.FrontFaceSide) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, extent_x, extent_y, extent_z, front_face_side|
     add_multiple(
         entity_data,
@@ -109,7 +109,7 @@ add_multiple_new = |entity_data, extent_x, extent_y, extent_z, front_face_side|
 ## Adds a value of the [BoxMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, BoxMesh -> Entity.Data
+add : Entity.ComponentData, BoxMesh -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -118,7 +118,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (BoxMesh) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (BoxMesh) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

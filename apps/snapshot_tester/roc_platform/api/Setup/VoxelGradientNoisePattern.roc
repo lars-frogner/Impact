@@ -1,8 +1,8 @@
-# Hash: d91edfa31c8932c5f848e46eeeeb2927f78b2f1e13326ab5e3ec1e4c00e1e032
-# Generated: 2025-09-14T20:34:43+00:00
+# Hash: f18e9108bdea972f57bf8d33f93af45ae59740c3bf045460bec38b660215cb76
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_voxel::setup::VoxelGradientNoisePattern
 # Type category: Component
-# Commit: aa40a05d (dirty)
+# Commit: f9b55709 (dirty)
 module [
     VoxelGradientNoisePattern,
     new,
@@ -59,14 +59,14 @@ new = |voxel_extent, extent_x, extent_y, extent_z, noise_frequency, noise_thresh
 ## voxels in each direction, spatial noise frequency, noise threshold and
 ## seed.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, F32, F32, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, F32, F32, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, voxel_extent, extent_x, extent_y, extent_z, noise_frequency, noise_threshold, seed|
     add(entity_data, new(voxel_extent, extent_x, extent_y, extent_z, noise_frequency, noise_threshold, seed))
 
 ## Adds a value of the [VoxelGradientNoisePattern] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, VoxelGradientNoisePattern -> Entity.Data
+add : Entity.ComponentData, VoxelGradientNoisePattern -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -75,7 +75,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (VoxelGradientNoisePattern) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (VoxelGradientNoisePattern) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

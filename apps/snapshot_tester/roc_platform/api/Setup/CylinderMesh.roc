@@ -1,8 +1,8 @@
-# Hash: fcbeaaebcc6d9f6da99f56796dc91f8d7b0bb58147438b4c7fd799ef4ff4f27b
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 14593534ca83209e2f9a60f44865505afc6abd4561a1efb31fa8edca2ddf389c
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_mesh::setup::CylinderMesh
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     CylinderMesh,
     new,
@@ -39,7 +39,7 @@ new = |length, diameter, n_circumference_vertices|
 ## Defines a cylinder mesh with the given length, diameter and number of
 ## circumeference vertices.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, length, diameter, n_circumference_vertices|
     add(entity_data, new(length, diameter, n_circumference_vertices))
 
@@ -47,7 +47,7 @@ add_new = |entity_data, length, diameter, n_circumference_vertices|
 ## circumeference vertices.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, length, diameter, n_circumference_vertices|
     add_multiple(
         entity_data,
@@ -61,7 +61,7 @@ add_multiple_new = |entity_data, length, diameter, n_circumference_vertices|
 ## Adds a value of the [CylinderMesh] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, CylinderMesh -> Entity.Data
+add : Entity.ComponentData, CylinderMesh -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -70,7 +70,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (CylinderMesh) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (CylinderMesh) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

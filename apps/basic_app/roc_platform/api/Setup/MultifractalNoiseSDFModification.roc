@@ -1,8 +1,8 @@
-# Hash: d1cc65580a2e3cf126d333939072c764662bbb4bb6af77a78fa5990da7d4908d
-# Generated: 2025-09-14T20:34:17+00:00
+# Hash: 50c89ef03dbbeaac76496a066f8535a907f5aac0b40e6116f375cd45c7a8fab2
+# Generated: 2025-09-20T12:39:41+00:00
 # Rust type: impact_voxel::setup::MultifractalNoiseSDFModification
 # Type category: Component
-# Commit: aa40a05d (dirty)
+# Commit: f9b55709 (dirty)
 module [
     MultifractalNoiseSDFModification,
     new,
@@ -39,14 +39,14 @@ new = |octaves, frequency, lacunarity, persistence, amplitude, seed|
         seed,
     }
 
-add_new : Entity.Data, U32, F32, F32, F32, F32, U32 -> Entity.Data
+add_new : Entity.ComponentData, U32, F32, F32, F32, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, octaves, frequency, lacunarity, persistence, amplitude, seed|
     add(entity_data, new(octaves, frequency, lacunarity, persistence, amplitude, seed))
 
 ## Adds a value of the [MultifractalNoiseSDFModification] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, MultifractalNoiseSDFModification -> Entity.Data
+add : Entity.ComponentData, MultifractalNoiseSDFModification -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -55,7 +55,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (MultifractalNoiseSDFModification) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (MultifractalNoiseSDFModification) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

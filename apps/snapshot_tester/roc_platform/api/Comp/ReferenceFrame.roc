@@ -1,8 +1,8 @@
-# Hash: 1bd9671d8724a6bd657a627d1a7b99ba7801b678fdaf001dc98954c798e31e0b
-# Generated: 2025-09-20T11:58:54+00:00
+# Hash: 06a91f80c96de672d793fa2d792b07b4cb3993587f22efe4f4c7909958f8657d
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: ac7f80d7 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     ReferenceFrame,
     new,
@@ -46,14 +46,14 @@ new = |position, orientation|
 
 ## Creates a new reference frame with the given position and orientation.
 ## Adds the component to the given entity's data.
-add_new : Entity.Data, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
+add_new : Entity.ComponentData, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.ComponentData
 add_new = |entity_data, position, orientation|
     add(entity_data, new(position, orientation))
 
 ## Creates a new reference frame with the given position and orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, position, orientation|
     add_multiple(
         entity_data,
@@ -73,7 +73,7 @@ unoriented = |position|
 ## Creates a new reference frame with the given position and the identity
 ## orientation.
 ## Adds the component to the given entity's data.
-add_unoriented : Entity.Data, Point3.Point3 Binary64 -> Entity.Data
+add_unoriented : Entity.ComponentData, Point3.Point3 Binary64 -> Entity.ComponentData
 add_unoriented = |entity_data, position|
     add(entity_data, unoriented(position))
 
@@ -81,7 +81,7 @@ add_unoriented = |entity_data, position|
 ## orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_unoriented : Entity.MultiData, Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiData Str
+add_multiple_unoriented : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiComponentData Str
 add_multiple_unoriented = |entity_data, position|
     add_multiple(
         entity_data,
@@ -101,7 +101,7 @@ unlocated = |orientation|
 ## Creates a new reference frame with the given orientation, located at the
 ## origin.
 ## Adds the component to the given entity's data.
-add_unlocated : Entity.Data, UnitQuaternion.UnitQuaternion Binary64 -> Entity.Data
+add_unlocated : Entity.ComponentData, UnitQuaternion.UnitQuaternion Binary64 -> Entity.ComponentData
 add_unlocated = |entity_data, orientation|
     add(entity_data, unlocated(orientation))
 
@@ -109,7 +109,7 @@ add_unlocated = |entity_data, orientation|
 ## origin.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_unlocated : Entity.MultiData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiData Str
+add_multiple_unlocated : Entity.MultiComponentData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiComponentData Str
 add_multiple_unlocated = |entity_data, orientation|
     add_multiple(
         entity_data,
@@ -123,7 +123,7 @@ add_multiple_unlocated = |entity_data, orientation|
 ## Adds a value of the [ReferenceFrame] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, ReferenceFrame -> Entity.Data
+add : Entity.ComponentData, ReferenceFrame -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -132,7 +132,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (ReferenceFrame) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (ReferenceFrame) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
@@ -150,7 +150,7 @@ add_component_id = |component_ids|
     component_ids |> Entity.append_component_id(component_id)
 
 ## Reads the component from the given entity data. 
-read : Entity.Data -> Result ReferenceFrame Str
+read : Entity.ComponentData -> Result ReferenceFrame Str
 read = |data|
     Entity.read_component(data, component_id, from_bytes)
     |> Result.map_err(

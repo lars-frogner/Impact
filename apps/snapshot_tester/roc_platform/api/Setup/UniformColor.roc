@@ -1,8 +1,8 @@
-# Hash: 79cdc619304a612c32beb8d6567c4908ce885276c1bf1dafeee44a72d64ba2b0
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: a2317e69f2320b5922ccc56bea3cbc845c81e478c576030ea7236f5f27dd5314
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_material::setup::physical::UniformColor
 # Type category: Component
-# Commit: 397d36d3 (dirty)
+# Commit: f9b55709 (dirty)
 module [
     UniformColor,
     iron,
@@ -48,11 +48,11 @@ UniformColor : Vector3.Vector3 Binary32
 iron : UniformColor
 iron = (0.562, 0.565, 0.578)
 
-add_iron : Entity.Data -> Entity.Data
+add_iron : Entity.ComponentData -> Entity.ComponentData
 add_iron = |entity_data|
     add(entity_data, iron)
 
-add_multiple_iron : Entity.MultiData -> Entity.MultiData
+add_multiple_iron : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_iron = |entity_data|
     res = add_multiple(
         entity_data,
@@ -66,11 +66,11 @@ add_multiple_iron = |entity_data|
 copper : UniformColor
 copper = (0.955, 0.638, 0.538)
 
-add_copper : Entity.Data -> Entity.Data
+add_copper : Entity.ComponentData -> Entity.ComponentData
 add_copper = |entity_data|
     add(entity_data, copper)
 
-add_multiple_copper : Entity.MultiData -> Entity.MultiData
+add_multiple_copper : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_copper = |entity_data|
     res = add_multiple(
         entity_data,
@@ -84,11 +84,11 @@ add_multiple_copper = |entity_data|
 brass : UniformColor
 brass = (0.910, 0.778, 0.423)
 
-add_brass : Entity.Data -> Entity.Data
+add_brass : Entity.ComponentData -> Entity.ComponentData
 add_brass = |entity_data|
     add(entity_data, brass)
 
-add_multiple_brass : Entity.MultiData -> Entity.MultiData
+add_multiple_brass : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_brass = |entity_data|
     res = add_multiple(
         entity_data,
@@ -102,11 +102,11 @@ add_multiple_brass = |entity_data|
 gold : UniformColor
 gold = (1.000, 0.782, 0.344)
 
-add_gold : Entity.Data -> Entity.Data
+add_gold : Entity.ComponentData -> Entity.ComponentData
 add_gold = |entity_data|
     add(entity_data, gold)
 
-add_multiple_gold : Entity.MultiData -> Entity.MultiData
+add_multiple_gold : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_gold = |entity_data|
     res = add_multiple(
         entity_data,
@@ -120,11 +120,11 @@ add_multiple_gold = |entity_data|
 aluminum : UniformColor
 aluminum = (0.913, 0.922, 0.924)
 
-add_aluminum : Entity.Data -> Entity.Data
+add_aluminum : Entity.ComponentData -> Entity.ComponentData
 add_aluminum = |entity_data|
     add(entity_data, aluminum)
 
-add_multiple_aluminum : Entity.MultiData -> Entity.MultiData
+add_multiple_aluminum : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_aluminum = |entity_data|
     res = add_multiple(
         entity_data,
@@ -138,11 +138,11 @@ add_multiple_aluminum = |entity_data|
 silver : UniformColor
 silver = (0.972, 0.960, 0.915)
 
-add_silver : Entity.Data -> Entity.Data
+add_silver : Entity.ComponentData -> Entity.ComponentData
 add_silver = |entity_data|
     add(entity_data, silver)
 
-add_multiple_silver : Entity.MultiData -> Entity.MultiData
+add_multiple_silver : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple_silver = |entity_data|
     res = add_multiple(
         entity_data,
@@ -156,7 +156,7 @@ add_multiple_silver = |entity_data|
 ## Adds a value of the [UniformColor] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, UniformColor -> Entity.Data
+add : Entity.ComponentData, UniformColor -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -165,7 +165,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (UniformColor) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (UniformColor) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))

@@ -1,8 +1,8 @@
-# Hash: 5df5021d4c00e419120e21bd765c3ba354638c6d32e5588e23362803b6d34e9e
-# Generated: 2025-08-15T19:14:52+00:00
+# Hash: 5428175c6d0d2dec98480c51287dc33aab918b53572275cfc99f46a8155854eb
+# Generated: 2025-09-20T12:42:00+00:00
 # Rust type: impact_physics::force::spring_force::DynamicKinematicSpringForceProperties
 # Type category: Component
-# Commit: e6f6ed4f (dirty)
+# Commit: f9b55709 (dirty)
 module [
     DynamicKinematicSpringForceProperties,
     new,
@@ -41,14 +41,14 @@ new : Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3 Binary64, Comp.K
 new = |rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring|
     { rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }
 
-add_new : Entity.Data, Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3 Binary64, Comp.KinematicRigidBodyID.KinematicRigidBodyID, Point3.Point3 Binary64, Physics.Spring.Spring -> Entity.Data
+add_new : Entity.ComponentData, Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3 Binary64, Comp.KinematicRigidBodyID.KinematicRigidBodyID, Point3.Point3 Binary64, Physics.Spring.Spring -> Entity.ComponentData
 add_new = |entity_data, rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring|
     add(entity_data, new(rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring))
 
 ## Adds a value of the [DynamicKinematicSpringForceProperties] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.Data, DynamicKinematicSpringForceProperties -> Entity.Data
+add : Entity.ComponentData, DynamicKinematicSpringForceProperties -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
@@ -57,7 +57,7 @@ add = |entity_data, comp_value|
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiData, Entity.Arg.Broadcasted (DynamicKinematicSpringForceProperties) -> Result Entity.MultiData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (DynamicKinematicSpringForceProperties) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
