@@ -1525,7 +1525,7 @@ impl ShadowableUnidirectionalLight {
         );
 
         let far_distance = f32::max(
-            near_distance + f32::EPSILON,
+            near_distance.next_up(),
             f32::min(
                 camera_space_view_frustum.far_distance(),
                 -(camera_space_bounding_sphere.center().z - camera_space_bounding_sphere.radius()),
@@ -1543,6 +1543,11 @@ impl ShadowableUnidirectionalLight {
         let mut exponential_distance = near_distance;
         let mut linear_distance = near_distance;
 
+        self.near_partition_depth =
+            camera_space_view_frustum.convert_view_distance_to_linear_depth(near_distance);
+
+        let mut previous_partition_depth = self.near_partition_depth;
+
         for partition_depth in &mut self.partition_depths {
             exponential_distance *= distance_ratio;
             linear_distance += distance_difference;
@@ -1550,14 +1555,17 @@ impl ShadowableUnidirectionalLight {
             let distance = EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT * exponential_distance
                 + (1.0 - EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT) * linear_distance;
 
-            *partition_depth =
-                camera_space_view_frustum.convert_view_distance_to_linear_depth(distance);
+            *partition_depth = f32::max(
+                previous_partition_depth.next_up(),
+                camera_space_view_frustum.convert_view_distance_to_linear_depth(distance),
+            );
+            previous_partition_depth = *partition_depth;
         }
 
-        self.near_partition_depth =
-            camera_space_view_frustum.convert_view_distance_to_linear_depth(near_distance);
-        self.far_partition_depth =
-            camera_space_view_frustum.convert_view_distance_to_linear_depth(far_distance);
+        self.far_partition_depth = f32::max(
+            previous_partition_depth.next_up(),
+            camera_space_view_frustum.convert_view_distance_to_linear_depth(far_distance),
+        );
     }
 
     /// Updates the light's orthographic transforms so that all objects in the
