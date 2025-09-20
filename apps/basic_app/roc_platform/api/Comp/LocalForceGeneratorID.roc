@@ -1,8 +1,8 @@
-# Hash: d131a7db41bcc9e38807ee38886328b8ecb2e5a5f8869f3b4da714410895ba46
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 5a3f30577ecbbee564ba3df92baef28bab16c4f7c6150f78b83dd69f5541dde0
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_physics::force::local_force::LocalForceGeneratorID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     LocalForceGeneratorID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result LocalForceGeneratorID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : LocalForceGeneratorID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, LocalForceGeneratorID -> List U8
 write_packet = |bytes, val|

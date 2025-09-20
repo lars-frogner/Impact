@@ -1,8 +1,8 @@
-# Hash: 1416acb3520618eb7c448a3d71e391ed232a556b37ab41a11761aa084b6976c9
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: a328358ab59d5a821120b3f60b24edcbb72d18d48b1b9f006686ea15b25b7307
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotationDriverID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ConstantRotationDriverID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ConstantRotationDriverID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ConstantRotationDriverID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ConstantRotationDriverID -> List U8
 write_packet = |bytes, val|

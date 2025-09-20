@@ -1,8 +1,8 @@
-# Hash: 1a8b1c01755d5778a93814c908ec3e6d5f2faaf2aeb3fc28f3fa10b3e366108c
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 17c26a3446b85634bb1bbae8ad680d5e67cae51ebdd02279cc3102d8ad9fc3ba
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalLightID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ShadowableOmnidirectionalLightID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ShadowableOmnidirectionalLightID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ShadowableOmnidirectionalLightID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ShadowableOmnidirectionalLightID -> List U8
 write_packet = |bytes, val|

@@ -1,8 +1,8 @@
-# Hash: aa013f0879039b28ce1ea5249622711738df42bf2a4aec92ca310e938f2fd9bb
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: ba78825ef485aa7de8e422ffbcc94c2aacb938f6c829fd43bd16a5f14316da0a
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_material::MaterialID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     MaterialID,
     from_name,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -95,6 +96,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result MaterialID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : MaterialID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, MaterialID -> List U8
 write_packet = |bytes, val|

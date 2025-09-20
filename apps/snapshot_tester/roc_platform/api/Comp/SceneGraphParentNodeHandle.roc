@@ -1,8 +1,8 @@
-# Hash: 5567a87285f945e655bb430d7f1c3ac9ecf7fc34012c1db59c94a35a1603491d
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 0c921252cf208d882ebb0a701baa064bbae3d3ae8fbb5fa358e9b3309f74f983
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_scene::SceneGraphParentNodeHandle
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     SceneGraphParentNodeHandle,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -102,6 +103,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result SceneGraphParentNodeHandle Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : SceneGraphParentNodeHandle, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, SceneGraphParentNodeHandle -> List U8
 write_packet = |bytes, val|

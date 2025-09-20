@@ -1,8 +1,8 @@
-# Hash: 9d52822734cdc789c5f5867d7e6911071e5969249fc44fc1d3b9de80960498e4
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: ab49b7dc939af5869c2e71fd9b1bc829f39585afd3f97895c043114e1d27f8e0
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectoryDriverID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ConstantAccelerationTrajectoryDriverID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ConstantAccelerationTrajectoryDriverID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ConstantAccelerationTrajectoryDriverID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ConstantAccelerationTrajectoryDriverID -> List U8
 write_packet = |bytes, val|

@@ -1,8 +1,8 @@
-# Hash: 166a31e389e25dede3f7f4e6dfaa11e34019bb0d5a77e2c897134f7133ad95af
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: c9e67b6f527acac2e7015d854f6f235709b2bc9075dccdd9da122241e5af8b55
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_physics::quantities::Motion
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     Motion,
     new,
@@ -23,6 +23,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -179,6 +180,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result Motion Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : Motion, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, Motion -> List U8
 write_packet = |bytes, val|

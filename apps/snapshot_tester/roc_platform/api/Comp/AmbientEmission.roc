@@ -1,8 +1,8 @@
-# Hash: 2216bd7d5e1f819b04f2fb173e506afc2d752e0259f82e62787b6ddfc68f83f1
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 43e35e85b48da62e51253500ed095d7775d0095ff4b9c38a5ee39cc3b6b53f87
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_light::AmbientEmission
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     AmbientEmission,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -105,6 +106,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result AmbientEmission Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : AmbientEmission, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, AmbientEmission -> List U8
 write_packet = |bytes, val|

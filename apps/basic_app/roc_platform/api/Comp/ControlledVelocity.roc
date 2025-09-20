@@ -1,8 +1,8 @@
-# Hash: b83d9590939dcb5493a486059fa64f3e77b79e6f67ece9a3ca8a00efeecc54e0
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 3b3e3ad931e0d7d43099609e15a8be9ed0a89d1ca03cf162560ec203257dba7c
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_controller::motion::ControlledVelocity
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ControlledVelocity,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -94,6 +95,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ControlledVelocity Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ControlledVelocity, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ControlledVelocity -> List U8
 write_packet = |bytes, val|

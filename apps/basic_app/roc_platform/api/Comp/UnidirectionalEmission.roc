@@ -1,8 +1,8 @@
-# Hash: 11f38062427c217e8935c49fbf3224cd8ea6bd1a096e78cd78f32cfd55fe30f2
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: a7c176ea8faee37c4f94166a8409225e6e7cc863e1ae83ba749e9d0969dd51b4
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_light::UnidirectionalEmission
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     UnidirectionalEmission,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -116,6 +117,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result UnidirectionalEmission Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : UnidirectionalEmission, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, UnidirectionalEmission -> List U8
 write_packet = |bytes, val|

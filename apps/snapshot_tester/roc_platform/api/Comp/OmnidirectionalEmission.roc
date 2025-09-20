@@ -1,8 +1,8 @@
-# Hash: 9cc5726f214a87338cc47ccd3f821dbb197a7eed99962b528656eda3e0de0882
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 3b2fac1d1510afa233bfe853a9214b9492c988cc38ac057a2c5ff6f7a080321a
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_light::OmnidirectionalEmission
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     OmnidirectionalEmission,
     new,
@@ -14,6 +14,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -112,6 +113,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result OmnidirectionalEmission Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : OmnidirectionalEmission, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, OmnidirectionalEmission -> List U8
 write_packet = |bytes, val|

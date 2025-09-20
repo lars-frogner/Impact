@@ -1,8 +1,8 @@
-# Hash: 69cb97408e5c1708f4f368a78909977ae0a57f84407029a4cfddf697cd31bfbf
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: c36d7728d7a2bffc3ffc9796efa175f6b6f683bf5a4afb524de8b1fc4812fa42
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_voxel::VoxelObjectID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     VoxelObjectID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -68,6 +69,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result VoxelObjectID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : VoxelObjectID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, VoxelObjectID -> List U8
 write_packet = |bytes, val|

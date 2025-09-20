@@ -1,8 +1,8 @@
-# Hash: fa11451b764a466c26686e0dec05ffa2c12d2bff04b12dc51d6d082cddcca6d1
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: d46b4bc6d14c2ef64e9c6e7676c3ca3b2ae7e55e1a384fce9772461c2a8901d2
+# Generated: 2025-09-20T15:21:45+00:00
 # Rust type: impact_physics::force::spring_force::DynamicKinematicSpringForceGeneratorID
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     DynamicKinematicSpringForceGeneratorID,
     add,
@@ -11,6 +11,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -66,6 +67,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result DynamicKinematicSpringForceGeneratorID Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : DynamicKinematicSpringForceGeneratorID, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, DynamicKinematicSpringForceGeneratorID -> List U8
 write_packet = |bytes, val|

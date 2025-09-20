@@ -1,8 +1,8 @@
-# Hash: 06a91f80c96de672d793fa2d792b07b4cb3993587f22efe4f4c7909958f8657d
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 23bfa8b3833e413f34978a3ae751d8be21b4ecd192492911a17b97571fb5bcc5
+# Generated: 2025-09-20T15:20:25+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4065e65 (dirty)
 module [
     ReferenceFrame,
     new,
@@ -20,6 +20,7 @@ module [
     add_component_id,
     read,
     get_for_entity!,
+    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -164,6 +165,12 @@ read = |data|
 get_for_entity! : Entity.Id => Result ReferenceFrame Str
 get_for_entity! = |entity_id|
     Entity.get_component!(entity_id, component_id)? |> read
+
+## Sets the value of this component for the given entity to the
+## specified value.
+set_for_entity! : ReferenceFrame, Entity.Id => Result {} Str
+set_for_entity! = |value, entity_id|
+    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, ReferenceFrame -> List U8
 write_packet = |bytes, val|
