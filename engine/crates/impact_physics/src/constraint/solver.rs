@@ -35,7 +35,11 @@ pub struct ConstraintSolver {
 }
 
 /// Configuration parameters for the [`ConstraintSolver`].
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct ConstraintSolverConfig {
     /// Whether constraints will be solved.

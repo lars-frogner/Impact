@@ -42,7 +42,11 @@ pub struct CapturingCameraConfig {
 }
 
 /// Capturing settings for a camera.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct CameraSettings {
     /// The relative aperture of the camera, which is the ratio of the focal

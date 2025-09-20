@@ -18,7 +18,11 @@ use roc_integration::roc;
 use std::{borrow::Cow, fmt::Display};
 
 /// Configuration options for dynamic range compression.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug, Default)]
 pub struct DynamicRangeCompressionConfig {
     /// The method to use for tone mapping.

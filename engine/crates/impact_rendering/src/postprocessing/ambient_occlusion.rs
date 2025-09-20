@@ -34,7 +34,11 @@ use std::borrow::Cow;
 pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 16;
 
 /// Configuration options for ambient occlusion.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct AmbientOcclusionConfig {
     /// Whether ambient occlusion is enabled.

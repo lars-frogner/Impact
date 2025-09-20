@@ -122,6 +122,7 @@ pub struct VoxelObjectPhysicsContext {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
+#[serde(default)]
 pub struct VoxelConfig {
     pub texture_resolution: NonZeroU32,
     /// Path to the RON file containing the specification of each voxel type.

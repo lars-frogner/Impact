@@ -7,7 +7,11 @@ use impact_gpu::{device::GraphicsDevice, wgpu};
 use std::path::Path;
 
 /// Configuration options for shadow mapping.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
 pub struct ShadowMappingConfig {
     /// Whether shadow mapping is enabled.

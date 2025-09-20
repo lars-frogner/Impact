@@ -14,6 +14,7 @@ use impact_physics::{
 use impact_voxel::{VoxelObjectManager, collidable::CollisionWorld};
 use num_traits::cast::FromPrimitive;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use std::{path::Path, time::Duration};
 
 /// The manager of the physics simulation.
@@ -33,9 +34,8 @@ pub struct PhysicsSimulator {
 }
 
 /// Configuration parameters for physics.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
-#[derive(Clone, Debug, Default)]
 pub struct PhysicsConfig {
     /// Configuration parameters for the physics simulation.
     pub simulator: SimulatorConfig,
@@ -48,7 +48,8 @@ pub struct PhysicsConfig {
 }
 
 /// Configuration parameters for the physics simulation.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SimulatorConfig {
     /// Whether physics simulation is enabled. Disabling the simulation will not
     /// prevent controlled entities from moving.
