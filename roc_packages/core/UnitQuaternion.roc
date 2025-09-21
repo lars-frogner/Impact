@@ -11,6 +11,7 @@ module [
     norm,
     normalize,
     rotate_vector,
+    to_rotation_matrix,
     write_bytes_32,
     write_bytes_64,
     from_bytes_32,
@@ -21,6 +22,7 @@ import Radians exposing [Radians]
 import UnitVector3 exposing [UnitVector3]
 import Vector3 exposing [Vector3]
 import Vector4
+import Matrix3 exposing [Matrix3]
 
 UnitQuaternion a : (Frac a, Frac a, Frac a, Frac a)
 
@@ -79,6 +81,22 @@ rotate_vector = |quat, vec|
     vec
     |> Vector3.add(Vector3.scale(tmp, real))
     |> Vector3.add(Vector3.cross(imag, tmp))
+
+to_rotation_matrix : UnitQuaternion a -> Matrix3 a
+to_rotation_matrix = |(x, y, z, w)|
+    x2 = 2 * x * x
+    y2 = 2 * y * y
+    z2 = 2 * z * z
+    xy = 2 * x * y
+    xz = 2 * x * z
+    yz = 2 * y * z
+    wx = 2 * w * x
+    wy = 2 * w * y
+    wz = 2 * w * z
+    col1 = (1 - (y2 + z2), (xy + wz), (xz - wy))
+    col2 = ((xy - wz), 1 - (x2 + z2), (yz + wx))
+    col3 = ((xz + wy), (yz - wx), 1 - (x2 + y2))
+    (col1, col2, col3)
 
 write_bytes_32 = Vector4.write_bytes_32
 write_bytes_64 = Vector4.write_bytes_64
