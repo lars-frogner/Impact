@@ -6,6 +6,8 @@ module [
     map,
     map2,
     displace,
+    distance,
+    distance_squared,
     is_approx_eq,
     write_bytes_32,
     write_bytes_64,
@@ -25,6 +27,14 @@ origin = (0.0, 0.0, 0.0)
 displace : Point3 a, Vector3 a -> Point3 a
 displace = |point, displacement|
     Vector3.add(point, displacement)
+
+distance_squared : Point3 a, Point3 a -> Frac a
+distance_squared = |point_a, point_b|
+    Vector3.norm_squared(Vector3.sub(point_b, point_a))
+
+distance : Point3 a, Point3 a -> Frac a
+distance = |point_a, point_b|
+    Vector3.norm(Vector3.sub(point_b, point_a))
 
 map = Vector3.map
 map2 = Vector3.map2

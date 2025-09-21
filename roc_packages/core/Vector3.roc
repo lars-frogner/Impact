@@ -14,6 +14,7 @@ module [
     dot,
     norm_squared,
     norm,
+    normalize,
     cross,
     is_approx_eq,
     write_bytes_32,
@@ -57,6 +58,8 @@ dot = |a, b| map2(a, b, Num.mul) |> reduce(Num.add)
 
 norm_squared = |vec| dot(vec, vec)
 norm = |vec| vec |> norm_squared |> Num.sqrt
+
+normalize = |vec| vec |> unscale(norm(vec))
 
 cross = |(ax, ay, az), (bx, by, bz)|
     (
