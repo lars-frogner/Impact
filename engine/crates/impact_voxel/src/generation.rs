@@ -1,6 +1,6 @@
 //! Generation of spatial voxel distributions.
 
-use crate::{Voxel, VoxelSignedDistance, voxel_types::VoxelType};
+use crate::{Voxel, VoxelSignedDistance, chunks::CHUNK_SIZE, voxel_types::VoxelType};
 use allocator_api2::{
     alloc::{Allocator, Global},
     vec::Vec as AVec,
@@ -33,7 +33,7 @@ pub trait VoxelGenerator {
 pub struct SDFVoxelGenerator {
     voxel_extent: f64,
     grid_shape: [usize; 3],
-    grid_center: Point3<f32>,
+    shifted_grid_center: Point3<f32>,
     sdf_generator: SDFGenerator,
     voxel_type_generator: VoxelTypeGenerator,
 }
@@ -225,20 +225,34 @@ impl SDFVoxelGenerator {
 
         let sdf_domain_extents = sdf_generator.domain_extents();
 
-        // Make room for a 1-voxel border of empty voxels around the object to so that
-        // the surface nets meshing algorithm can correctly interpolate distances at the
-        // boundaries
-        let grid_shape = sdf_domain_extents.map(|extent| extent.ceil() as usize + 2);
+        // Make room for a border of empty voxels around the object to so that
+        // the surface nets meshing algorithm can correctly interpolate
+        // distances at the boundaries
+        let grid_shape = sdf_domain_extents.map(|extent| {
+            let extent = extent.ceil() as usize;
+            if extent % CHUNK_SIZE != CHUNK_SIZE - 1 {
+                // Add a one-voxel border on each side
+                extent + 2
+            } else {
+                // Adding a one-voxel border would add an extra chunk and cause
+                // the non-padded domain to end exactly on the boundary to that
+                // chunk. Since the extra chunk would be empty, it would be
+                // ignored when evaluating the SDF, so the padding would not
+                // have any effect. To avoid this, we increase the padding so
+                // that the non-padded domain extends into the added chunk.
+                extent + 4
+            }
+        });
 
         // The center here is offset by half a grid cell relative to the coordinates
         // in the voxel object to account for the fact that we want to evaluate the
         // SDF at the center of each voxel
-        let grid_center = Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f32));
+        let shifted_grid_center = Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f32));
 
         Self {
             voxel_extent,
             grid_shape,
-            grid_center,
+            shifted_grid_center,
             sdf_generator,
             voxel_type_generator,
         }
@@ -255,7 +269,8 @@ impl VoxelGenerator for SDFVoxelGenerator {
     }
 
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-        let displacement_from_center = point![i as f32, j as f32, k as f32] - self.grid_center;
+        let displacement_from_center =
+            point![i as f32, j as f32, k as f32] - self.shifted_grid_center;
 
         let signed_distance = VoxelSignedDistance::from_f32(
             self.sdf_generator
