@@ -5,7 +5,8 @@ pub mod mouse;
 
 use key::KeyboardEvent;
 use mouse::{
-    MouseButtonEvent, MouseButtonSet, MouseButtonState, MouseMotionEvent, MouseScrollEvent,
+    CursorDirection, MouseButtonEvent, MouseButtonSet, MouseButtonState, MouseMotionEvent,
+    MouseScrollEvent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,11 +38,13 @@ pub enum InputEvent {
     MouseButton(MouseButtonEvent),
     MouseMotion(MouseMotionEvent),
     MouseScroll(MouseScrollEvent),
+    CursorMoved(CursorDirection),
 }
 
 #[derive(Clone, Debug)]
 pub struct InputState {
     pub pressed_mouse_buttons: MouseButtonSet,
+    pub cursor_direction: CursorDirection,
 }
 
 impl InputManager {
@@ -72,6 +75,10 @@ impl InputState {
     pub fn new() -> Self {
         Self {
             pressed_mouse_buttons: MouseButtonSet::empty(),
+            cursor_direction: CursorDirection {
+                ang_x: 0.0,
+                ang_y: 0.0,
+            },
         }
     }
 
@@ -87,6 +94,10 @@ impl InputState {
                 self.pressed_mouse_buttons.remove(button.into());
             }
         }
+    }
+
+    pub fn record_cursor_moved_event(&mut self, cursor_direction: CursorDirection) {
+        self.cursor_direction = cursor_direction;
     }
 }
 

@@ -5,11 +5,12 @@ use crate::{
     input::{
         InputEvent,
         key::KeyboardEvent,
-        mouse::{MouseButtonEvent, MouseMotionEvent, MouseScrollEvent},
+        mouse::{CursorDirection, MouseButtonEvent, MouseMotionEvent, MouseScrollEvent},
     },
     lock_order::{OrderedMutex, OrderedRwLock},
 };
-use impact_math::Angle;
+use impact_math::{Angle, Radians};
+use std::num::NonZeroU32;
 use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
 
 impl Engine {
@@ -52,6 +53,21 @@ impl Engine {
                     delta_y,
                 }));
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                let Some(vertical_field_of_view) = self.current_vertical_field_of_view() else {
+                    return;
+                };
+                let (window_width, window_height) = self.current_window_dimensions();
+                let radians_per_pixel = radians_per_pixel(vertical_field_of_view, window_height);
+
+                let ang_x = (position.x - 0.5 * f64::from(window_width.get())) * radians_per_pixel;
+                let ang_y =
+                    -(position.y - 0.5 * f64::from(window_height.get())) * radians_per_pixel;
+
+                self.input_manager
+                    .olock()
+                    .queue_event(InputEvent::CursorMoved(CursorDirection { ang_x, ang_y }));
+            }
             _ => {}
         }
     }
@@ -61,36 +77,43 @@ impl Engine {
             delta: (raw_delta_x, raw_delta_y),
         } = event
         {
-            let Some(radians_per_pixel) = self.get_current_radians_per_pixel() else {
+            let Some(vertical_field_of_view) = self.current_vertical_field_of_view() else {
                 return;
             };
+            let (_, window_height) = self.current_window_dimensions();
+            let radians_per_pixel = radians_per_pixel(vertical_field_of_view, window_height);
+
             let mut input_manager = self.input_manager.olock();
             let sensitivity = input_manager.config.mouse_sensitivity;
-            let delta_x = raw_delta_x * sensitivity * radians_per_pixel;
-            let delta_y = raw_delta_y * sensitivity * radians_per_pixel;
+            let ang_delta_x = raw_delta_x * sensitivity * radians_per_pixel;
+            let ang_delta_y = -raw_delta_y * sensitivity * radians_per_pixel;
             input_manager.queue_event(InputEvent::MouseMotion(MouseMotionEvent {
-                delta_x,
-                delta_y,
+                ang_delta_x,
+                ang_delta_y,
             }));
         }
     }
 
-    pub(crate) fn get_current_radians_per_pixel(&self) -> Option<f64> {
-        let vertical_field_of_view = self
-            .scene()
-            .oread()
-            .camera_manager()
-            .oread()
-            .active_camera()?
-            .camera()
-            .vertical_field_of_view();
+    fn current_vertical_field_of_view(&self) -> Option<Radians<f32>> {
+        Some(
+            self.scene()
+                .oread()
+                .camera_manager()
+                .oread()
+                .active_camera()?
+                .camera()
+                .vertical_field_of_view(),
+        )
+    }
 
-        let (_, window_height) = self
-            .renderer
+    fn current_window_dimensions(&self) -> (NonZeroU32, NonZeroU32) {
+        self.renderer
             .oread()
             .rendering_surface()
-            .surface_dimensions();
-
-        Some(f64::from(vertical_field_of_view.radians()) / f64::from(window_height.get()))
+            .surface_dimensions()
     }
+}
+
+fn radians_per_pixel(vertical_field_of_view: Radians<f32>, window_height: NonZeroU32) -> f64 {
+    f64::from(vertical_field_of_view.radians()) / f64::from(window_height.get())
 }
