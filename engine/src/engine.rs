@@ -337,16 +337,23 @@ impl Engine {
                     input_manager.state.record_mouse_button_event(event);
                     self.app().handle_mouse_button_event(event)?;
                 }
-                InputEvent::MouseMotion(MouseMotionEvent { delta_x, delta_y }) => {
-                    self.update_orientation_controller(delta_x, delta_y);
+                InputEvent::MouseMotion(MouseMotionEvent {
+                    ang_delta_x,
+                    ang_delta_y,
+                }) => {
+                    self.update_orientation_controller(ang_delta_x, ang_delta_y);
                     self.app().handle_mouse_drag_event(MouseDragEvent {
-                        delta_x,
-                        delta_y,
+                        ang_delta_x,
+                        ang_delta_y,
                         pressed: input_manager.state.pressed_mouse_buttons,
+                        cursor: input_manager.state.cursor_direction,
                     })?;
                 }
                 InputEvent::MouseScroll(event) => {
                     self.app().handle_mouse_scroll_event(event)?;
+                }
+                InputEvent::CursorMoved(event) => {
+                    input_manager.state.record_cursor_moved_event(event);
                 }
             }
         }

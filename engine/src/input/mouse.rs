@@ -13,20 +13,23 @@ pub struct MouseButtonEvent {
 }
 
 /// A delta movement of the mouse, expressed in radians across the field of
-/// view.
+/// view. Positive `y`-delta is towards the top of the window.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MouseMotionEvent {
-    pub delta_x: f64,
-    pub delta_y: f64,
+    pub ang_delta_x: f64,
+    pub ang_delta_y: f64,
 }
 
 /// A delta movement of the mouse, expressed in radians across the field of
-/// view, as well as the set of mouse buttons currently pressed.
+/// view. Positive `y`-delta is towards the top of the window. The current
+/// camera-space direction of the cursor as well as the set of mouse buttons
+/// currently pressed are included for context.
 #[roc(parents = "Input")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MouseDragEvent {
-    pub delta_x: f64,
-    pub delta_y: f64,
+    pub ang_delta_x: f64,
+    pub ang_delta_y: f64,
+    pub cursor: CursorDirection,
     pub pressed: MouseButtonSet,
 }
 
@@ -37,6 +40,17 @@ pub struct MouseDragEvent {
 pub struct MouseScrollEvent {
     pub delta_x: f64,
     pub delta_y: f64,
+}
+
+/// The direction the cursor is pointing in camera space relative to the camera
+/// looking direction, expressed in radians along the horizontal and vertical
+/// axes of the window. The values are bounded by the horizontal and vertical
+/// field of view of the camera.
+#[roc(parents = "Input")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CursorDirection {
+    pub ang_x: f64,
+    pub ang_y: f64,
 }
 
 /// A button on a mouse.

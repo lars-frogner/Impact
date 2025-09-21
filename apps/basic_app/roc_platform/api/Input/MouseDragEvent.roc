@@ -1,22 +1,26 @@
-# Hash: 1397c0f29d3e9190f6d7554b962018e1ea8663e3ec4b91cd91b49a091aedfdaf
-# Generated: 2025-09-19T18:59:31+00:00
+# Hash: 69f0811ee44ca8332bf47cc6c2d55e1d8c31a4c64084f82c221871f35947cf8b
+# Generated: 2025-09-21T09:37:27+00:00
 # Rust type: impact::input::mouse::MouseDragEvent
 # Type category: Inline
-# Commit: ff568180 (dirty)
+# Commit: 5fdd98b9 (dirty)
 module [
     MouseDragEvent,
     write_bytes,
     from_bytes,
 ]
 
+import Input.CursorDirection
 import Input.MouseButtonSet
 import core.Builtin
 
 ## A delta movement of the mouse, expressed in radians across the field of
-## view, as well as the set of mouse buttons currently pressed.
+## view. Positive `y`-delta is towards the top of the window. The current
+## camera-space direction of the cursor as well as the set of mouse buttons
+## currently pressed are included for context.
 MouseDragEvent : {
-    delta_x : F64,
-    delta_y : F64,
+    ang_delta_x : F64,
+    ang_delta_y : F64,
+    cursor : Input.CursorDirection.CursorDirection,
     pressed : Input.MouseButtonSet.MouseButtonSet,
 }
 
@@ -25,9 +29,10 @@ MouseDragEvent : {
 write_bytes : List U8, MouseDragEvent -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(17)
-    |> Builtin.write_bytes_f64(value.delta_x)
-    |> Builtin.write_bytes_f64(value.delta_y)
+    |> List.reserve(33)
+    |> Builtin.write_bytes_f64(value.ang_delta_x)
+    |> Builtin.write_bytes_f64(value.ang_delta_y)
+    |> Input.CursorDirection.write_bytes(value.cursor)
     |> Input.MouseButtonSet.write_bytes(value.pressed)
 
 ## Deserializes a value of [MouseDragEvent] from its bytes in the
@@ -36,15 +41,16 @@ from_bytes : List U8 -> Result MouseDragEvent _
 from_bytes = |bytes|
     Ok(
         {
-            delta_x: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            delta_y: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            pressed: bytes |> List.sublist({ start: 16, len: 1 }) |> Input.MouseButtonSet.from_bytes?,
+            ang_delta_x: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
+            ang_delta_y: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
+            cursor: bytes |> List.sublist({ start: 16, len: 16 }) |> Input.CursorDirection.from_bytes?,
+            pressed: bytes |> List.sublist({ start: 32, len: 1 }) |> Input.MouseButtonSet.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 17 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 33 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

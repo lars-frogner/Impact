@@ -95,8 +95,7 @@ impl OrientationController for CameraOrientationController {
     }
 
     fn update_orientation_change(&mut self, delta_x: f64, delta_y: f64) {
-        self.orientation_change *=
-            compute_pitch_rotation(-delta_y) * compute_yaw_rotation(-delta_x);
+        self.orientation_change *= compute_pitch_rotation(delta_y) * compute_yaw_rotation(-delta_x);
 
         self.orientation_has_changed = true;
     }
@@ -135,7 +134,7 @@ impl OrientationController for RollFreeCameraOrientationController {
 
     fn update_orientation_change(&mut self, delta_x: f64, delta_y: f64) {
         self.yaw_change = compute_yaw_rotation(-delta_x) * self.yaw_change;
-        self.pitch_change *= compute_pitch_rotation(-delta_y);
+        self.pitch_change *= compute_pitch_rotation(delta_y);
         self.orientation_has_changed = true;
     }
 

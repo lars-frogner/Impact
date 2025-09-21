@@ -1,8 +1,8 @@
-# Hash: 45260ff37994c4951a7350e0be03b5d42fa305a11199e2a5392b27507e1b5ee3
-# Generated: 2025-09-20T18:51:03+00:00
+# Hash: 4889169fa692400e5a33d7393c77eaee693141d0530c92b3163fbed7dbc2ca90
+# Generated: 2025-09-20T20:10:37+00:00
 # Rust type: impact::input::mouse::MouseScrollEvent
 # Type category: Inline
-# Commit: 9eb6f040 (dirty)
+# Commit: 5fdd98b9 (dirty)
 module [
     MouseScrollEvent,
     write_bytes,
@@ -11,7 +11,8 @@ module [
 
 import core.Builtin
 
-## A delta movement of the mouse wheel, expressed in pixels.
+## A delta movement of the mouse wheel, expressed in pixels scaled by the
+## global scroll sensitivity factor.
 MouseScrollEvent : {
     delta_x : F64,
     delta_y : F64,
