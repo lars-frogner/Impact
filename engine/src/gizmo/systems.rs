@@ -7,8 +7,10 @@ use crate::gizmo::{
         COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
         COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
         SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+        VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_EMPTY_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
+        VOXEL_CHUNKS_GIZMO_OBSCURABLE_EMPTY_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
     },
@@ -944,29 +946,30 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
 
     let models = GizmoType::VoxelChunks.models();
 
-    let (uniform_chunk_model_id, non_uniform_chunk_model_id) = if parameters.show_interior_chunks {
-        (
-            &models[VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX].model_id,
-            &models[VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX].model_id,
-        )
-    } else {
-        (
-            &models[VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX].model_id,
-            &models[VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX].model_id,
-        )
-    };
+    let (uniform_chunk_model_id, non_uniform_chunk_model_id, empty_chunk_model_id) =
+        if parameters.show_interior_chunks {
+            (
+                &models[VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX].model_id,
+                &models[VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX].model_id,
+                &models[VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_EMPTY_MODEL_IDX].model_id,
+            )
+        } else {
+            (
+                &models[VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX].model_id,
+                &models[VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX].model_id,
+                &models[VOXEL_CHUNKS_GIZMO_OBSCURABLE_EMPTY_MODEL_IDX].model_id,
+            )
+        };
 
     let voxel_extent = voxel_object.object().voxel_extent() as f32;
 
     voxel_object
         .object()
-        .for_each_occupied_chunk(&mut |[chunk_i, chunk_j, chunk_k], chunk| {
+        .for_each_chunk(&mut |[chunk_i, chunk_j, chunk_k], chunk| {
             let model_id = match chunk {
                 VoxelChunk::Uniform(_) => uniform_chunk_model_id,
                 VoxelChunk::NonUniform(_) => non_uniform_chunk_model_id,
-                VoxelChunk::Empty => {
-                    return;
-                }
+                VoxelChunk::Empty => empty_chunk_model_id,
             };
 
             let chunk_offset_in_voxels =
