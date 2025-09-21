@@ -7,8 +7,10 @@ use crate::{
             COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
             COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
             SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_EMPTY_MODEL_IDX,
             VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
             VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
+            VOXEL_CHUNKS_GIZMO_OBSCURABLE_EMPTY_MODEL_IDX,
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
             VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
         },
@@ -182,7 +184,7 @@ impl GizmoType {
                 ] {
                     let uniform_chunk_mesh = TriangleMesh::create_voxel_chunk_cube_with_color(
                         CHUNK_SIZE as f32,
-                        VertexColor::BLUE.with_alpha(0.05),
+                        VertexColor::RED.with_alpha(0.05),
                     );
                     resource_manager
                         .triangle_meshes
@@ -201,6 +203,19 @@ impl GizmoType {
                         self.models()[idx].triangle_mesh_id(),
                         non_uniform_chunk_mesh,
                     );
+                }
+
+                for idx in [
+                    VOXEL_CHUNKS_GIZMO_OBSCURABLE_EMPTY_MODEL_IDX,
+                    VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_EMPTY_MODEL_IDX,
+                ] {
+                    let empty_chunk_mesh = TriangleMesh::create_voxel_chunk_cube_with_color(
+                        CHUNK_SIZE as f32,
+                        VertexColor::BLUE.with_alpha(0.05),
+                    );
+                    resource_manager
+                        .triangle_meshes
+                        .insert(self.models()[idx].triangle_mesh_id(), empty_chunk_mesh);
                 }
             }
             Self::VoxelIntersections => {

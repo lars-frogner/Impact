@@ -102,12 +102,17 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
                     "{} (non-uniform, obscurable)",
                     gizmo.label()
                 )),
+                define_obscurable_triangle_model(format!("{} (empty, obscurable)", gizmo.label())),
                 define_non_obscurable_triangle_model(format!(
                     "{} (uniform, non-obscurable)",
                     gizmo.label()
                 )),
                 define_non_obscurable_triangle_model(format!(
                     "{} (non-uniform, non-obscurable)",
+                    gizmo.label()
+                )),
+                define_non_obscurable_triangle_model(format!(
+                    "{} (empty, non-obscurable)",
                     gizmo.label()
                 )),
             ]
@@ -138,8 +143,10 @@ pub const COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX: usize = 2;
 
 pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 0;
 pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 1;
-pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 2;
-pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 3;
+pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_EMPTY_MODEL_IDX: usize = 2;
+pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 3;
+pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 4;
+pub const VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_EMPTY_MODEL_IDX: usize = 5;
 
 fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
     let (mesh_id, model_id) = create_triangle_mesh_and_model_id(label);

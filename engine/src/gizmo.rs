@@ -205,9 +205,9 @@ pub struct GizmoVisibilities {
     pub phantom_collider: GizmoVisibility,
     /// The visibility of the gizmos showing chunk boundaries for voxel objects.
     ///
-    /// When visible, a semitransparent green (for non-uniform chunks) or blue
-    /// (for uniform chunks) cube is rendered for each non-empty chunk in voxel
-    /// objects, outlining the chunk boundaries.
+    /// When visible, a semitransparent green (for non-uniform chunks), red
+    /// (for uniform chunks) or blue (for empty chunks) cube is rendered for each
+    /// chunk in voxel objects, outlining the chunk boundaries.
     pub voxel_chunks: GizmoVisibility,
     /// The visibility of the gizmos showing voxels intersecting other voxel
     /// objects.
@@ -474,9 +474,9 @@ impl GizmoType {
             }
             Self::VoxelChunks => {
                 "\
-                When enabled, a semitransparent green (for non-uniform chunks) or blue \
-                (for uniform chunks) cube is rendered for each non-empty chunk in voxel \
-                objects, outlining the chunk boundaries."
+                When enabled, a semitransparent green (for non-uniform chunks), red \
+                (for uniform chunks) or blue (for empty chunks) cube is rendered for each \
+                chunk in voxel objects, outlining the chunk boundaries."
             }
             Self::VoxelIntersections => {
                 "\
