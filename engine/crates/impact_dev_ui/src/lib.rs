@@ -16,7 +16,7 @@ use impact::{
         AdminCommand, controller::ControlCommand, instrumentation::InstrumentationCommand,
         physics::PhysicsCommand, uils::ToActiveState,
     },
-    egui::{Context, FullOutput, RawInput},
+    egui::{Context, FullOutput, RawInput, Ui},
     engine::Engine,
     ui,
 };
@@ -60,6 +60,15 @@ pub struct UserInterfaceConfig {
     pub hide_ui_during_screenshots: bool,
 }
 
+pub trait CustomPanels {
+    fn run_toolbar_buttons(&mut self, ui: &mut Ui);
+
+    fn run_panels(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine);
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NoCustomPanels;
+
 impl UserInterface {
     pub fn new(config: UserInterfaceConfig) -> Self {
         Self {
@@ -91,6 +100,17 @@ impl UserInterface {
         engine: &Engine,
         command_queue: &UICommandQueue,
     ) -> FullOutput {
+        self.run_with_custom_panels(ctx, input, engine, command_queue, &mut NoCustomPanels)
+    }
+
+    pub fn run_with_custom_panels(
+        &mut self,
+        ctx: &Context,
+        input: RawInput,
+        engine: &Engine,
+        command_queue: &UICommandQueue,
+        custom_panels: &mut impl CustomPanels,
+    ) -> FullOutput {
         let mut output = ctx.run(input, |ctx| {
             // Return without adding any output if we requested a screenshot in
             // the previous frame and should hide the UI
@@ -102,7 +122,8 @@ impl UserInterface {
             let single_step_was_requested = self.single_step_requested;
 
             if self.config.interactive {
-                self.toolbar.run(ctx, &mut self.config, engine);
+                self.toolbar
+                    .run(ctx, &mut self.config, engine, custom_panels);
 
                 if self.config.show_rendering_options {
                     self.rendering_option_panel.run(
@@ -129,6 +150,7 @@ impl UserInterface {
                 if self.config.show_render_pass_timings {
                     self.render_pass_timing_panel.run(ctx, &self.config, engine);
                 }
+                custom_panels.run_panels(ctx, &self.config, engine);
             }
 
             if self.config.show_time_overlay {
@@ -180,4 +202,10 @@ impl Default for UserInterfaceConfig {
             hide_ui_during_screenshots: true,
         }
     }
+}
+
+impl CustomPanels for NoCustomPanels {
+    fn run_toolbar_buttons(&mut self, _ui: &mut Ui) {}
+
+    fn run_panels(&mut self, _ctx: &Context, _config: &UserInterfaceConfig, _engine: &Engine) {}
 }

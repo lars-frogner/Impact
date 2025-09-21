@@ -1,4 +1,4 @@
-use crate::UserInterfaceConfig;
+use crate::{CustomPanels, UserInterfaceConfig};
 use impact::{
     command::{AdminCommand, instrumentation::InstrumentationCommand, uils::ToActiveState},
     egui::{Context, DragValue, Frame, TopBottomPanel},
@@ -9,7 +9,13 @@ use impact::{
 pub struct Toolbar;
 
 impl Toolbar {
-    pub fn run(&mut self, ctx: &Context, config: &mut UserInterfaceConfig, engine: &Engine) {
+    pub fn run(
+        &mut self,
+        ctx: &Context,
+        config: &mut UserInterfaceConfig,
+        engine: &Engine,
+        custom_panels: &mut impl CustomPanels,
+    ) {
         TopBottomPanel::top("toolbar_panel")
             .frame(Frame {
                 ..Frame::side_top_panel(&ctx.style())
@@ -52,6 +58,8 @@ impl Toolbar {
                     }
 
                     ui.toggle_value(&mut config.show_time_overlay, "Time overlay");
+
+                    custom_panels.run_toolbar_buttons(ui);
                 });
             });
     }
