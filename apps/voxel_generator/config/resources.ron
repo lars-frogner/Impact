@@ -1,0 +1,20 @@
+(
+    triangle_meshes: [],
+    textures: [
+        (
+            id: "space_skybox",
+            source: CubemapImages(
+                right: "../resources/space_skybox/right.png",
+                left: "../resources/space_skybox/left.png",
+                top: "../resources/space_skybox/top.png",
+                bottom: "../resources/space_skybox/bottom.png",
+                front: "../resources/space_skybox/front.png",
+                back: "../resources/space_skybox/back.png",
+            ),
+            texture_config: (
+                color_space: Srgb,
+            ),
+            sampler_config: Some(()),
+        )
+    ]
+)
