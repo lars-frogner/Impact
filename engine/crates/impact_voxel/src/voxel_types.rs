@@ -127,15 +127,16 @@ impl VoxelTypeRegistry {
         sampler_registry: &mut SamplerRegistry,
         voxel_config: crate::VoxelConfig,
     ) -> anyhow::Result<Self> {
-        match voxel_config.voxel_types_path {
-            Some(file_path) => Self::from_voxel_type_ron_file(
-                texture_registry,
-                sampler_registry,
-                voxel_config.texture_resolution,
-                file_path,
-            ),
-            None => Ok(Self::empty()),
-        }
+        let voxel_types = match voxel_config.voxel_types_path {
+            Some(file_path) => VoxelTypeSpecifications::from_ron_file(file_path)?,
+            None => VoxelTypeSpecifications::default(),
+        };
+        Self::create(
+            texture_registry,
+            sampler_registry,
+            voxel_config.texture_resolution,
+            voxel_types,
+        )
     }
 
     /// Reads the RON (Rusty Object Notation) file at the given path and
@@ -496,6 +497,21 @@ impl VoxelTypeSpecifications {
         for specification in &mut self.0 {
             specification.resolve_paths(root_path);
         }
+    }
+}
+
+impl Default for VoxelTypeSpecifications {
+    fn default() -> Self {
+        Self(vec![VoxelTypeSpecification {
+            name: Cow::Borrowed("Default"),
+            mass_density: 1.0,
+            color: VoxelColor::Uniform(vector![0.9, 0.9, 0.9]),
+            specular_reflectance: 0.02,
+            roughness: VoxelRoughness::Uniform(0.5),
+            metalness: 0.0,
+            emissive_luminance: 0.0,
+            normal_map: None,
+        }])
     }
 }
 
