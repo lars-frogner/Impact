@@ -1,8 +1,8 @@
-# Hash: de8ffcaf9ec27211c637a8bf9962417212046e370d8cdf96181930b36f9ef5a4
-# Generated: 2025-08-26T11:33:16+00:00
-# Rust type: impact::command::EngineCommand
+# Hash: 0cdac5076fd29d10d9f02593ae2367a788afb59b8aaaf9b260c07e5d8aff6f3f
+# Generated: 2025-09-24T18:05:42+00:00
+# Rust type: impact::command::UserCommand
 # Type category: Inline
-# Commit: 2bc60bf8 (dirty)
+# Commit: ea3946bf (dirty)
 module [
     EngineCommand,
     write_bytes,
@@ -24,29 +24,29 @@ write_bytes = |bytes, value|
     when value is
         Scene(val) ->
             bytes
-            |> List.reserve(18)
+            |> List.reserve(34)
             |> List.append(0)
             |> Command.SceneCommand.write_bytes(val)
 
         Controller(val) ->
             bytes
-            |> List.reserve(18)
+            |> List.reserve(34)
             |> List.append(1)
             |> Command.ControllerCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 8))
+            |> List.concat(List.repeat(0, 24))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result EngineCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 18 then
+    if List.len(bytes) != 34 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
             [0, .. as data_bytes] ->
                 Ok(
                     Scene(
-                        data_bytes |> List.sublist({ start: 0, len: 17 }) |> Command.SceneCommand.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 33 }) |> Command.SceneCommand.from_bytes?,
                     ),
                 )
 

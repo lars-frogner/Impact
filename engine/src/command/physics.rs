@@ -6,7 +6,7 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use impact_physics::{constraint::solver::ConstraintSolverConfig, fph, medium::UniformMedium};
+use impact_physics::{constraint::solver::ConstraintSolverConfig, fph};
 
 #[derive(Clone, Debug)]
 pub enum PhysicsCommand {
@@ -15,7 +15,6 @@ pub enum PhysicsCommand {
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
     SetTimeStepDuration(fph),
     SetMatchFrameDuration(ToActiveState),
-    SetMedium(UniformMedium),
     SetConstraintSolverConfig(ConstraintSolverConfig),
 }
 
@@ -91,11 +90,6 @@ pub fn set_simulation_speed(
     *simulator.simulation_speed_multiplier_mut() = new_multiplier;
 
     new_multiplier
-}
-
-pub fn set_medium(simulator: &mut PhysicsSimulator, to: UniformMedium) {
-    impact_log::info!("Setting medium to {to:?}");
-    simulator.set_medium(to);
 }
 
 pub fn set_simulation_speed_and_compensate_controller_movement_speed(

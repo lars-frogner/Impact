@@ -93,6 +93,9 @@ pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<(
         SceneCommand::SetSkybox(skybox) => {
             scene::set_skybox(engine, skybox);
         }
+        SceneCommand::SetMedium(medium) => {
+            scene::set_medium(engine, medium);
+        }
         SceneCommand::SetSceneEntityActiveState { entity_id, state } => {
             scene::set_scene_entity_active_state(engine, entity_id, state)?;
         }
@@ -179,9 +182,6 @@ pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Resu
         }
         PhysicsCommand::SetSimulationSpeed(to) => {
             physics::set_simulation_speed_and_compensate_controller_movement_speed(engine, to);
-        }
-        PhysicsCommand::SetMedium(to) => {
-            physics::set_medium(&mut engine.simulator().owrite(), to);
         }
         PhysicsCommand::SetTimeStepDuration(duration) => {
             physics::set_time_step_duration(&mut engine.simulator().owrite(), duration);
