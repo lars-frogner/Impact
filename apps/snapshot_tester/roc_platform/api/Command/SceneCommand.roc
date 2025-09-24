@@ -1,8 +1,8 @@
-# Hash: 8832aff75b4a6b957fc58d0b9913ce09d306b77ece76a2efd3a3b60a6edc7be8
-# Generated: 2025-09-09T13:54:16+00:00
+# Hash: 7a6b8c44ec95c205002e05d47d7affadc0e73c64cf216ff80be68afe43dd3482
+# Generated: 2025-09-24T18:06:45+00:00
 # Rust type: impact::command::scene::SceneCommand
 # Type category: Inline
-# Commit: e1316b1f (dirty)
+# Commit: ea3946bf (dirty)
 module [
     SceneCommand,
     write_bytes,
@@ -11,10 +11,12 @@ module [
 
 import Command.ActiveState
 import Entity
+import Physics.UniformMedium
 import Skybox
 
 SceneCommand : [
     SetSkybox Skybox.Skybox,
+    SetMedium Physics.UniformMedium.UniformMedium,
     SetSceneEntityActiveState {
             entity_id : Entity.Id,
             state : Command.ActiveState.ActiveState,
@@ -28,23 +30,30 @@ write_bytes = |bytes, value|
     when value is
         SetSkybox(val) ->
             bytes
-            |> List.reserve(17)
+            |> List.reserve(33)
             |> List.append(0)
             |> Skybox.write_bytes(val)
+            |> List.concat(List.repeat(0, 16))
+
+        SetMedium(val) ->
+            bytes
+            |> List.reserve(33)
+            |> List.append(1)
+            |> Physics.UniformMedium.write_bytes(val)
 
         SetSceneEntityActiveState { entity_id, state } ->
             bytes
-            |> List.reserve(17)
-            |> List.append(1)
+            |> List.reserve(33)
+            |> List.append(2)
             |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
-            |> List.concat(List.repeat(0, 7))
+            |> List.concat(List.repeat(0, 23))
 
 ## Deserializes a value of [SceneCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result SceneCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 17 then
+    if List.len(bytes) != 33 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -56,6 +65,13 @@ from_bytes = |bytes|
                 )
 
             [1, .. as data_bytes] ->
+                Ok(
+                    SetMedium(
+                        data_bytes |> List.sublist({ start: 0, len: 32 }) |> Physics.UniformMedium.from_bytes?,
+                    ),
+                )
+
+            [2, .. as data_bytes] ->
                 Ok(
                     SetSceneEntityActiveState     {
                         entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
