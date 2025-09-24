@@ -29,7 +29,7 @@ pub fn initialize(lookup_table_dir: &Path) -> Result<LookupTableDeclaration> {
     let table_path = lookup_table_dir.join(NAME).with_extension("bc");
 
     if !table_path.exists() {
-        let table = brdf::create_specular_ggx_reflectance_lookup_tables(1024, 512);
+        let table = brdf::create_specular_ggx_reflectance_lookup_tables(256, 64);
         impact_texture::io::save_lookup_table_to_file(&table, &table_path)?;
     }
 
