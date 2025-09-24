@@ -292,3 +292,8 @@ required-features = ["criterion"]
 name = "constraint"
 harness = false
 required-features = ["criterion"]
+
+[[bench]]
+name = "lookup_table"
+harness = false
+required-features = ["criterion"]

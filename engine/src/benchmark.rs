@@ -29,6 +29,9 @@ impact_profiling::define_target_enum! {
         solve_contact_velocities,
         correct_contact_configurations,
     },
+    lookup_table => {
+        compute_specular_ggx_reflectance,
+    }
 }
 
 pub fn benchmark(target: Target, duration: f64, delay: f64) {
