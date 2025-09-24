@@ -36,6 +36,7 @@ use impact_ecs::{
     world::{EntityID, EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
+use impact_light::LightConfig;
 use impact_scene::{camera::CameraContext, model::ModelInstanceManager};
 use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_thread::ThreadPoolTaskErrors;
@@ -85,6 +86,7 @@ pub struct EngineConfig {
     pub input: InputConfig,
     pub ecs: ECSConfig,
     pub resources: ResourceConfig,
+    pub light: LightConfig,
     pub voxel: VoxelConfig,
     pub physics: PhysicsConfig,
     pub rendering: RenderingConfig,
@@ -143,7 +145,7 @@ impl Engine {
             aspect_ratio: graphics.surface.surface_aspect_ratio(),
             jitter_enabled: config.rendering.temporal_anti_aliasing.enabled,
         };
-        let scene = Scene::new(camera_context, model_instance_manager);
+        let scene = Scene::new(camera_context, config.light, model_instance_manager);
 
         let graphics_device = Arc::new(graphics.device);
         let rendering_surface = graphics.surface;

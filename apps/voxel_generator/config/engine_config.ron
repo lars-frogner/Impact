@@ -86,6 +86,9 @@
             velocity: (0.0, 0.0, 0.0),
         ),
     ),
+    light: (
+        max_omnidirectional_light_reach: 500.0,
+    ),
     voxel: (
         texture_resolution: 256,
         voxel_types_path: Some("default_voxel_type.ron"),
