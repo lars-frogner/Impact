@@ -189,6 +189,7 @@ enum NodeBuildState {
     DomainDetermined,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum VoxelTypeGenerator {
@@ -1178,6 +1179,7 @@ pub mod fuzzing {
 
     const MAX_SIZE: usize = 200;
 
+    #[allow(clippy::large_enum_variant)]
     #[derive(Clone, Debug, Arbitrary)]
     enum ArbitrarySDFGeneratorNode {
         Box(BoxSDFGenerator),
