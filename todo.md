@@ -54,8 +54,6 @@
 
 ## Roc
 
-- Add API for reading component data from script.
-
 - Implement hot reloading of script.
 
 - Support state/context in Roc script.
