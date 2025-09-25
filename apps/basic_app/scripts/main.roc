@@ -7,10 +7,10 @@ import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import pf.Input.MouseDragEvent exposing [MouseDragEvent]
 import pf.Input.MouseScrollEvent exposing [MouseScrollEvent]
 import InputHandling.Keyboard as KeyboardInput
-import Scenes.Asteroid
+import Scenes.VoxelBoxTumbler
 
 callbacks = {
-    setup_scene!: Scenes.Asteroid.setup!,
+    setup_scene!: Scenes.VoxelBoxTumbler.setup!,
     handle_keyboard_event!: KeyboardInput.handle_event!,
     handle_mouse_button_event!,
     handle_mouse_drag_event!,
@@ -19,7 +19,7 @@ callbacks = {
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
 handle_mouse_button_event! = |event|
-    Scenes.Asteroid.handle_mouse_button_event!(event)
+    Scenes.VoxelBoxTumbler.handle_mouse_button_event!(event)
 # Ok({})
 
 handle_mouse_drag_event! : MouseDragEvent => Result {} Str

@@ -8,9 +8,7 @@ import core.Radians
 import core.UnitQuaternion
 import core.UnitVector3
 import core.Vector3
-import pf.Command
 import pf.Entity
-import pf.Skybox
 import pf.Comp.AmbientEmission
 import pf.Comp.ControlledVelocity
 import pf.Comp.ControlledAngularVelocity
@@ -24,7 +22,6 @@ import pf.Setup.UniformColor
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Texture.TextureID
 import pf.Physics.ContactResponseParameters
 
 entity_ids = {
@@ -36,16 +33,12 @@ entity_ids = {
 
 setup! : {} => Result {} Str
 setup! = |_|
-    Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox, 1e5)))))?
-
     Entity.create_with_id!(player, entity_ids.player)?
     Entity.create_with_id!(ground, entity_ids.ground)?
     Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
     Entity.create_with_id!(unidirectional_light, entity_ids.unidirectional_light)?
 
     Ok({})
-
-skybox = Texture.TextureID.from_name("space_skybox")
 
 player =
     Entity.new_component_data

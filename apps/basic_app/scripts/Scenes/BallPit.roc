@@ -11,7 +11,6 @@ import core.Sphere
 import core.UnitQuaternion
 import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
 import core.Vector3
-import pf.Command
 import pf.Comp.AmbientEmission
 import pf.Setup.ConstantRotation
 import pf.Comp.ControlledVelocity
@@ -25,7 +24,6 @@ import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Setup.SameVoxelType
 import pf.Setup.SceneGraphGroup
 import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.SphericalCollidable
@@ -37,54 +35,41 @@ import pf.Setup.ConstantAcceleration
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Setup.VoxelBox
-import pf.Setup.VoxelCollidable
-import pf.Setup.DynamicVoxels
 import pf.Entity
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Texture.TextureID as TextureID
-import pf.Skybox
 
 entity_ids = {
     player: Entity.id("player"),
     sun_light: Entity.id("sun_light"),
     ambient_light: Entity.id("ambient_light"),
-    voxel_box: Entity.id("voxel_box"),
 }
 
 setup! : {} => Result {} Str
 setup! = |_|
-    Command.execute!(Engine(Scene(SetSkybox(skybox))))?
-
     Entity.create_with_id!(player, entity_ids.player)?
     Entity.create_with_id!(sun_light, entity_ids.sun_light)?
     Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
 
     sphere_radius = 0.5
-    n_y = 0
+    n_y = 5
     room_extent = 16.0
     n_spheres_y = 2 * n_y + 1
 
     create_spheres!(
         sphere_radius,
-        (0, n_y, 0),
-        (0, (n_spheres_y - 1) * sphere_radius + 4, 0),
+        (3, n_y, 3),
+        (0, (n_spheres_y - 1) * sphere_radius - 4, 0),
         create_texture_ids("plastic"),
     )?
 
     create_room!(
         room_extent,
-        0,
+        20,
         create_texture_ids("concrete"),
     )?
 
-    voxel_extent = 0.25
-    box_size = 6.0
-    Entity.create_with_id!(voxel_box(voxel_extent, box_size, room_extent), entity_ids.voxel_box)?
-
     Ok({})
-
-skybox = Skybox.new(TextureID.from_name("space_skybox"), 1e5)
 
 player =
     Entity.new_component_data
@@ -100,14 +85,14 @@ player =
 sun_light =
     Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
-        Vector3.same(200000),
+        Vector3.same(20000),
         UnitVector3.from((0, -1, 0)),
         2.0,
     )
 
 ambient_light =
     Entity.new_component_data
-    |> Comp.AmbientEmission.add_new(Vector3.same(2000000))
+    |> Comp.AmbientEmission.add_new(Vector3.same(20000))
 
 create_texture_ids = |texture_name| {
     color: TextureID.from_name("${texture_name}_color_texture"),
@@ -265,27 +250,9 @@ create_room! = |extent, angular_speed, texture_ids|
             All(light_positions),
         )?
         |> Comp.OmnidirectionalEmission.add_multiple_new(
-            Same(Vector3.same(5e7)),
+            Same(Vector3.same(5e6)),
             Same(0.7),
         )?
         |> Entity.create_multiple!?
 
     Ok({})
-
-voxel_box = |voxel_extent, box_size, room_extent|
-    Entity.new_component_data
-    |> Setup.VoxelBox.add_new(voxel_extent, box_size, box_size, box_size)
-    |> Setup.SameVoxelType.add_new("Metal")
-    |> Comp.ReferenceFrame.add_unoriented(
-        (
-            0.0,
-            0.5 * voxel_extent * box_size - 0.5 * room_extent,
-            0.0,
-        ),
-    )
-    # |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(50)))
-    |> Setup.VoxelCollidable.add_new(
-        Static,
-        Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
-    )
-    |> Setup.DynamicVoxels.add
