@@ -74,12 +74,12 @@ setup! = |_|
         voxel_extent,
         box_size,
         (0, n_y, 0),
-        (0, (n_spheres_y - 1) * 0.5 * voxel_extent * box_size - 8, 0),
+        (4, (n_spheres_y - 1) * 0.5 * voxel_extent * box_size - 8, 0),
     )?
 
     create_room!(
         room_extent,
-        10,
+        12,
     )?
 
     Ok({})
@@ -103,10 +103,7 @@ handle_mouse_button_event! = |{ button, state }|
 
 player =
     Entity.new_component_data
-    |> Comp.ReferenceFrame.add_new(
-        (0, 0, -20),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
-    )
+    |> Comp.ReferenceFrame.add_unoriented((0, 0, 20))
     |> Comp.Motion.add_stationary
     |> Comp.ControlledVelocity.add_new
     |> Comp.ControlledAngularVelocity.add_new
@@ -241,7 +238,7 @@ create_room! = |extent, angular_speed|
             Same(Physics.ContactResponseParameters.new(0.2, 0.7, 0.5)),
         )?
         |> Setup.UniformColor.add_multiple(
-            Same((0.9, 0.9, 0.9)),
+            Same((0.2, 0.7, 0.2)),
         )?
         |> Setup.UniformSpecularReflectance.add_multiple(
             Same(0.01),
