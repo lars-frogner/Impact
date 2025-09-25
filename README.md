@@ -32,7 +32,7 @@ The engine uses its own Entity-Component-System (ECS) implementation, which also
 
 ### Scripting
 
-There is currently limited scripting support using the [Roc](https://www.roc-lang.org/) language. Roc is a very young language, but it shows great promise both for standalone applications and, thanks to its [platform](https://www.roc-lang.org/platforms) concept, for being embedded into larger systems. Since it compiles to machine code, it has the potential to be a very performant scripting language. The [How applications work](#how-applications-work) section describes how Roc is embedded into the Impact engine. At the moment, Roc scripts are responsible for scene setup and input handling.
+There is currently limited scripting support using the [Roc](https://www.roc-lang.org/) language. Roc is a very young language, but it shows great promise both for standalone applications and, thanks to its [platform](https://www.roc-lang.org/platforms) concept, for being embedded into larger systems. Since it compiles to machine code, it has the potential to be a very performant scripting language. The [How applications work](#how-applications-work) section describes how Roc is embedded into the Impact engine. At the moment, Roc scripts are mainly responsible for scene setup and input handling.
 
 ### GUI
 
@@ -42,7 +42,6 @@ The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven
 
 - Expanded scripting capabilities.
 - Expanded GUI.
-- General collision detection for voxel objects.
 - Voxel object fracturing.
 - N-body gravity simulation.
 - More options for procedural voxel generation.
@@ -106,8 +105,8 @@ Entity.new_component_data
     |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3, 200)
     |> Comp.SceneEntityFlags.add(
         Comp.SceneEntityFlags.union(
-        Comp.SceneEntityFlags.is_disabled,
-        Comp.SceneEntityFlags.casts_no_shadows,
+          Comp.SceneEntityFlags.is_disabled,
+          Comp.SceneEntityFlags.casts_no_shadows,
         ),
     )
     |> Entity.create_with_id!(entity_ids.laser)?
