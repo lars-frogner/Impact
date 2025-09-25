@@ -10,7 +10,7 @@ use impact::egui::{
 use std::{hash::Hash, ops::RangeInclusive};
 
 #[derive(Debug)]
-struct LabelAndHoverText {
+pub struct LabelAndHoverText {
     label: &'static str,
     hover_text: &'static str,
 }
@@ -19,7 +19,7 @@ const LEFT_MARGIN: f32 = 8.0;
 const RIGHT_MARGIN: f32 = 8.0;
 const SPACING: f32 = 6.0;
 
-fn option_panel(
+pub fn option_panel(
     ctx: &Context,
     config: &UserInterfaceConfig,
     name: impl Into<Id>,
@@ -45,7 +45,7 @@ fn option_panel(
         });
 }
 
-fn option_group(ui: &mut Ui, name: impl Hash, add_contents: impl FnOnce(&mut Ui)) {
+pub fn option_group(ui: &mut Ui, name: impl Hash, add_contents: impl FnOnce(&mut Ui)) {
     with_left_space(ui, LEFT_MARGIN, |ui| {
         ui.spacing_mut().item_spacing.y = SPACING;
         Grid::new(name).show(ui, |ui| {
@@ -55,7 +55,7 @@ fn option_group(ui: &mut Ui, name: impl Hash, add_contents: impl FnOnce(&mut Ui)
     ui.add(Separator::default());
 }
 
-fn option_checkbox(ui: &mut Ui, checked: &mut bool, text: LabelAndHoverText) -> Response {
+pub fn option_checkbox(ui: &mut Ui, checked: &mut bool, text: LabelAndHoverText) -> Response {
     let response = ui
         .checkbox(checked, text.label)
         .on_hover_text(text.hover_text);
@@ -63,11 +63,11 @@ fn option_checkbox(ui: &mut Ui, checked: &mut bool, text: LabelAndHoverText) -> 
     response
 }
 
-fn option_slider(ui: &mut Ui, text: LabelAndHoverText, slider: Slider<'_>) -> Response {
+pub fn option_slider(ui: &mut Ui, text: LabelAndHoverText, slider: Slider<'_>) -> Response {
     labeled_option(ui, text, |ui| ui.add(slider))
 }
 
-fn labeled_option<R>(
+pub fn labeled_option<R>(
     ui: &mut Ui,
     text: LabelAndHoverText,
     add_contents: impl FnOnce(&mut Ui) -> R,
@@ -89,7 +89,7 @@ fn labeled_option<R>(
     response
 }
 
-fn transform_slider_recip<Num: Numeric>(
+pub fn transform_slider_recip<Num: Numeric>(
     untransformed_value: &mut Num,
     transformed_range: RangeInclusive<f64>,
     add_slider: impl FnOnce(Slider<'_>) -> Response,
@@ -103,7 +103,7 @@ fn transform_slider_recip<Num: Numeric>(
     );
 }
 
-fn transform_slider<Num: Numeric>(
+pub fn transform_slider<Num: Numeric>(
     untransformed_value: &mut Num,
     transformed_range: RangeInclusive<f64>,
     add_slider: impl FnOnce(Slider<'_>) -> Response,
@@ -125,7 +125,7 @@ fn with_left_space(ui: &mut Ui, amount: f32, add_contents: impl FnOnce(&mut Ui))
     });
 }
 
-fn scientific_formatter(value: f64, _decimal_range: std::ops::RangeInclusive<usize>) -> String {
+pub fn scientific_formatter(value: f64, _decimal_range: std::ops::RangeInclusive<usize>) -> String {
     if value == 0.0 {
         format!("{value:.2}")
     } else {

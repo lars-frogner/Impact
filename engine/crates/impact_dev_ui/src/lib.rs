@@ -3,7 +3,7 @@
 #![allow(clippy::unused_self)]
 
 mod command;
-mod option_panels;
+pub mod option_panels;
 mod time_overlay;
 mod timing_panels;
 mod toolbar;
