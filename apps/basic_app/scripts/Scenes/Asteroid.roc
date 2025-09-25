@@ -15,7 +15,6 @@ import pf.Skybox
 import pf.Comp.AmbientEmission
 import pf.Setup.CylinderMesh
 import pf.Setup.GradientNoiseVoxelTypes
-import pf.Setup.SameVoxelType
 import pf.Comp.ControlledVelocity
 import pf.Setup.MultifractalNoiseSDFModification
 import pf.Comp.ControlledAngularVelocity
@@ -36,7 +35,6 @@ import pf.Comp.Motion
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
 import pf.Setup.VoxelSphereUnion
-import pf.Setup.VoxelBox
 import pf.Setup.DynamicVoxels
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.MouseButton as MouseButtonInput
@@ -46,7 +44,6 @@ import pf.Comp.SceneEntityFlags
 import pf.Setup.PlanarCollidable
 import pf.Setup.VoxelCollidable
 import pf.Physics.ContactResponseParameters
-import pf.Setup.ConstantAcceleration
 import pf.Setup.LocalForce
 
 entity_ids = {
@@ -63,7 +60,7 @@ entity_ids = {
 
 setup! : {} => Result {} Str
 setup! = |_|
-    # Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox, 2e3)))))?
+    Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox, 2e3)))))?
 
     Entity.create_with_id!(player, entity_ids.player)?
     Entity.create_with_id!(camera, entity_ids.camera)?
