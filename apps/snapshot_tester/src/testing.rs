@@ -1,11 +1,11 @@
 //! Snapshot testing.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use impact::{
     command::{
-        AdminCommand,
-        rendering::{RenderingCommand, postprocessing::ToToneMappingMethod},
+        rendering::{postprocessing::ToToneMappingMethod, RenderingCommand},
         uils::ToActiveState,
+        AdminCommand,
     },
     engine::Engine,
     impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
@@ -139,8 +139,22 @@ pub fn run_comparison(
     reference_image_path: &Path,
     min_score_to_pass: f64,
 ) -> Result<ComparisonOutcome> {
-    let output_image = image::open(output_image_path)?.into_rgb8();
-    let reference_image = image::open(reference_image_path)?.into_rgb8();
+    let output_image = image::open(output_image_path)
+        .with_context(|| {
+            format!(
+                "Failed to open output image {}",
+                output_image_path.display()
+            )
+        })?
+        .into_rgb8();
+    let reference_image = image::open(reference_image_path)
+        .with_context(|| {
+            format!(
+                "Failed to open reference image {}",
+                reference_image_path.display()
+            )
+        })?
+        .into_rgb8();
 
     let result = image_compare::rgb_hybrid_compare(&output_image, &reference_image)?;
 
