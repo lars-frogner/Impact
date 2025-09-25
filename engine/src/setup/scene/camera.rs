@@ -11,8 +11,9 @@ use parking_lot::RwLock;
 
 /// Checks if the entity-to-be with the given components has the required
 /// components for a camera, and if so, adds a node for the camera in the
-/// [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a [`SceneCamera`]
-/// into the `Scene` and adds a [`SceneGraphCameraNodeHandle`] to the entity.
+/// [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
+/// [`SceneCamera`](impact_scene::camera::SceneCamera) into the `Scene` and adds
+/// a [`SceneGraphCameraNodeHandle`] to the entity.
 ///
 /// # Errors
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
@@ -28,8 +29,8 @@ pub fn add_camera_to_scene_for_new_entity(
 /// Checks if the entity-to-be with the given components has the required
 /// components for a perspective camera, and if so, adds a node for the camera
 /// in the [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
-/// [`SceneCamera`] into the `Scene` and adds a [`SceneGraphCameraNodeHandle`]
-/// to the entity.
+/// [`SceneCamera`](impact_scene::camera::SceneCamera) into the `Scene` and adds
+/// a [`SceneGraphCameraNodeHandle`] to the entity.
 ///
 /// # Errors
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
@@ -86,8 +87,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 /// Checks if the entity-to-be with the given components has the required
 /// components for an orthographic camera, and if so, adds a node for the camera
 /// in the [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
-/// [`SceneCamera`] into the `Scene` and adds a [`SceneGraphCameraNodeHandle`]
-/// to the entity.
+/// [`SceneCamera`](impact_scene::camera::SceneCamera) into the `Scene` and adds
+/// a [`SceneGraphCameraNodeHandle`] to the entity.
 ///
 /// # Errors
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
