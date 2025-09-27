@@ -4,20 +4,30 @@ pub mod rendering;
 
 use crate::UserInterfaceConfig;
 use impact::egui::{
-    Align, Color32, Context, CursorIcon, Frame, Grid, Id, Layout, Margin, Response, ScrollArea,
-    Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32, emath::Numeric,
+    Align, Color32, Context, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Response,
+    ScrollArea, Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32,
+    emath::Numeric,
 };
 use std::{hash::Hash, ops::RangeInclusive};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LabelAndHoverText {
-    label: &'static str,
-    hover_text: &'static str,
+    pub label: &'static str,
+    pub hover_text: &'static str,
 }
 
 const LEFT_MARGIN: f32 = 8.0;
 const RIGHT_MARGIN: f32 = 8.0;
 const SPACING: f32 = 6.0;
+
+impl LabelAndHoverText {
+    pub fn label_only(label: &'static str) -> Self {
+        Self {
+            label,
+            hover_text: "",
+        }
+    }
+}
 
 pub fn option_panel(
     ctx: &Context,
@@ -65,6 +75,14 @@ pub fn option_checkbox(ui: &mut Ui, checked: &mut bool, text: LabelAndHoverText)
 
 pub fn option_slider(ui: &mut Ui, text: LabelAndHoverText, slider: Slider<'_>) -> Response {
     labeled_option(ui, text, |ui| ui.add(slider))
+}
+
+pub fn option_drag_value(
+    ui: &mut Ui,
+    text: LabelAndHoverText,
+    drag_value: DragValue<'_>,
+) -> Response {
+    labeled_option(ui, text, |ui| ui.add(drag_value))
 }
 
 pub fn labeled_option<R>(
