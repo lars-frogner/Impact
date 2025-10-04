@@ -13,6 +13,7 @@ use crate::testing::ComparisonOutcome;
 use anyhow::{Result, bail};
 use impact::{
     application::Application,
+    bumpalo::Bump,
     command::{AdminCommand, SystemCommand, capture::CaptureCommand},
     engine::Engine,
     impact_io,
@@ -126,7 +127,7 @@ impl SnapshotTester {
 }
 
 impl Application for SnapshotTester {
-    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
+    fn on_engine_initialized(&self, _arena: &Bump, engine: Arc<Engine>) -> Result<()> {
         if self.test_scenes.is_empty() {
             impact_log::info!("No scenes to test, exiting");
             engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));
@@ -137,7 +138,7 @@ impl Application for SnapshotTester {
         Ok(())
     }
 
-    fn on_new_frame(&self, engine: &Engine, frame: u64) -> Result<()> {
+    fn on_new_frame(&self, _arena: &Bump, engine: &Engine, frame: u64) -> Result<()> {
         let frame = frame as usize;
 
         if frame == self.test_scenes.len() {

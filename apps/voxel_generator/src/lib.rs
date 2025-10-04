@@ -13,6 +13,7 @@ use anyhow::Result;
 use editor::{Editor, EditorConfig};
 use impact::{
     application::Application,
+    bumpalo::Bump,
     egui,
     engine::{Engine, EngineConfig},
     impact_io,
@@ -63,7 +64,7 @@ impl VoxelGenerator {
 }
 
 impl Application for VoxelGenerator {
-    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
+    fn on_engine_initialized(&self, arena: &Bump, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
@@ -74,28 +75,29 @@ impl Application for VoxelGenerator {
         scripting::setup_scene()
     }
 
-    fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
+    fn handle_keyboard_event(&self, _arena: &Bump, event: KeyboardEvent) -> Result<()> {
         impact_log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
-    fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
+    fn handle_mouse_button_event(&self, _arena: &Bump, event: MouseButtonEvent) -> Result<()> {
         impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
-    fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
+    fn handle_mouse_drag_event(&self, _arena: &Bump, event: MouseDragEvent) -> Result<()> {
         impact_log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
     }
 
-    fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
+    fn handle_mouse_scroll_event(&self, _arena: &Bump, event: MouseScrollEvent) -> Result<()> {
         impact_log::trace!("Handling mouse scroll event {event:?}");
         scripting::handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(
         &self,
+        _arena: &Bump,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,

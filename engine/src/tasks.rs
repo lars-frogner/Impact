@@ -41,7 +41,9 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Calling app", engine, {
             let frame_number = engine.game_loop_controller().oread().iteration();
-            engine.app().on_new_frame(engine, frame_number)
+            TaskArenas::with(|arena| {
+                engine.app().on_new_frame(arena, engine, frame_number)
+            })
         })
     }
 );
@@ -54,7 +56,9 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Handling input events", engine, {
-            engine.handle_queued_input_events()
+            TaskArenas::with(|arena| {
+                engine.handle_queued_input_events(arena)
+            })
         })
     }
 );
@@ -267,7 +271,9 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Processing user interface", engine, {
-            ctx.user_interface().process(engine)
+            TaskArenas::with(|arena| {
+                ctx.user_interface().process(arena, engine)
+            })
         })
     }
 );
