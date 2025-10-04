@@ -181,6 +181,21 @@ impl VoxelSignedDistance {
     pub const fn is_negative(self) -> bool {
         self.encoded.is_negative()
     }
+
+    /// Whether the signed distance is maximally inside the object.
+    pub const fn is_maximally_inside(self) -> bool {
+        self.encoded == i8::MIN
+    }
+
+    /// Whether the signed distance is maximally outside the object.
+    pub const fn is_maximally_outside(self) -> bool {
+        self.encoded == i8::MAX
+    }
+
+    /// Whether the signed distance is maximally inside or outside the object.
+    pub const fn is_maximally_inside_or_outside(self) -> bool {
+        self.is_maximally_inside() || self.is_maximally_outside()
+    }
 }
 
 impl From<f32> for VoxelSignedDistance {

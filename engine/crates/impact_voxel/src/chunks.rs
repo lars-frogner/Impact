@@ -1312,7 +1312,10 @@ impl VoxelChunk {
                 for k in range_k.clone() {
                     let voxel = generator.voxel_at_indices(i, j, k);
 
-                    if is_uniform && !voxel.matches_type_and_flags(first_voxel) {
+                    if is_uniform
+                        && (!voxel.matches_type_and_flags(first_voxel)
+                            || !voxel.signed_distance().is_maximally_inside_or_outside())
+                    {
                         is_uniform = false;
                     }
 
