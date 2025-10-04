@@ -204,6 +204,11 @@ impl VoxelObjectGPUResources {
         self.buffers.get(&voxel_object_id)
     }
 
+    /// Removes the GPU buffers for the given voxel object identifier.
+    pub fn remove_voxel_object_buffers(&mut self, voxel_object_id: VoxelObjectID) {
+        self.buffers.remove(&voxel_object_id);
+    }
+
     /// Performs any required updates for keeping the voxel object GPU resources
     /// in sync with the voxel object data.
     ///

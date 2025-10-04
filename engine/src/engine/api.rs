@@ -12,7 +12,7 @@ use anyhow::{Result, anyhow};
 use impact_ecs::{
     archetype::ArchetypeComponents,
     component::{
-        ComponentArray, ComponentID, ComponentInstance, ComponentStorage, ComponentView,
+        Component, ComponentArray, ComponentID, ComponentInstance, ComponentStorage, ComponentView,
         SingleInstance,
     },
     world::EntityID,
@@ -30,6 +30,7 @@ use impact_rendering::{
         temporal_anti_aliasing::TemporalAntiAliasingConfig,
     },
 };
+use impact_voxel::{VoxelObjectID, mesh::MeshedChunkedVoxelObject};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -482,5 +483,91 @@ impl Engine {
     /// Returns whether render pass timings are enabled.
     pub fn render_pass_timings_enabled(&self) -> bool {
         self.renderer().oread().basic_config().timings_enabled
+    }
+
+    pub fn add_voxel_object(&self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
+        self.scene()
+            .oread()
+            .voxel_object_manager()
+            .owrite()
+            .add_voxel_object(voxel_object)
+    }
+
+    pub fn replace_voxel_object(
+        &self,
+        voxel_object_id: VoxelObjectID,
+        voxel_object: MeshedChunkedVoxelObject,
+    ) {
+        if let Some(existing_voxel_object) = self
+            .scene()
+            .oread()
+            .voxel_object_manager()
+            .owrite()
+            .get_voxel_object_mut(voxel_object_id)
+        {
+            *existing_voxel_object = voxel_object;
+        }
+        self.renderer
+            .oread()
+            .render_resource_manager()
+            .owrite()
+            .voxel_objects
+            .remove_voxel_object_buffers(voxel_object_id);
+    }
+
+    pub fn remove_voxel_object(&self, voxel_object_id: VoxelObjectID) {
+        self.scene()
+            .oread()
+            .voxel_object_manager()
+            .owrite()
+            .remove_voxel_object(voxel_object_id);
+    }
+
+    pub fn with_component<C: Component, R>(
+        &self,
+        entity_id: EntityID,
+        f: impl FnOnce(&C) -> Result<R>,
+    ) -> Result<R> {
+        let ecs_world = self.ecs_world.oread();
+
+        let entity_entry = ecs_world
+            .get_entity(entity_id)
+            .ok_or_else(|| anyhow!("Missing entity with ID {:?}", entity_id))?;
+
+        let component_entry = entity_entry.get_component().ok_or_else(|| {
+            anyhow!(
+                "Missing component {:?} for entity with ID {:?}",
+                C::component_id(),
+                entity_id
+            )
+        })?;
+
+        let component: &C = component_entry.access();
+
+        f(component)
+    }
+
+    pub fn with_component_mut<C: Component, R>(
+        &self,
+        entity_id: EntityID,
+        f: impl FnOnce(&mut C) -> Result<R>,
+    ) -> Result<R> {
+        let ecs_world = self.ecs_world.oread();
+
+        let entity_entry = ecs_world
+            .get_entity(entity_id)
+            .ok_or_else(|| anyhow!("Missing entity with ID {:?}", entity_id))?;
+
+        let mut component_entry = entity_entry.get_component_mut().ok_or_else(|| {
+            anyhow!(
+                "Missing component {:?} for entity with ID {:?}",
+                C::component_id(),
+                entity_id
+            )
+        })?;
+
+        let component: &mut C = component_entry.access();
+
+        f(component)
     }
 }
