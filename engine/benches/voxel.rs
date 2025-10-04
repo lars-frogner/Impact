@@ -16,7 +16,7 @@ pub fn clone_object(c: &mut Criterion) {
         SphereSDFGenerator::new(100.0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let object = ChunkedVoxelObject::generate(&generator);
     c.bench_function("clone_object", |b| {
         b.iter(|| {
             black_box(object.clone());
@@ -30,7 +30,7 @@ pub fn get_each_voxel(c: &mut Criterion) {
         SphereSDFGenerator::new(100.0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+    let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     let ranges = object.occupied_voxel_ranges();
     c.bench_function("get_each_voxel", |b| {
         b.iter(|| {
@@ -51,7 +51,7 @@ pub fn for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
         SphereSDFGenerator::new(100.0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let object = ChunkedVoxelObject::generate(&generator);
     c.bench_function("for_each_exposed_chunk_with_sdf", |b| {
         b.iter(|| {
             let mut count = 0;

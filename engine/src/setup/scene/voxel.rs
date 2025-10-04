@@ -89,7 +89,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -126,7 +129,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -163,7 +169,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -200,7 +209,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -237,7 +249,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -274,7 +289,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -311,7 +329,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;
@@ -348,7 +369,10 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(&mut voxel_object_manager, &generator)
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
         },
         ![VoxelObjectID]
     )?;

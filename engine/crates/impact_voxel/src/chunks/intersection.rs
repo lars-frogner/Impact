@@ -847,213 +847,195 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane(
         (generator, plane): (SDFVoxelGenerator, ArbitraryPlane),
     ) {
-        if let Some(object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_touched_voxels = HashSet::default();
+        let object = ChunkedVoxelObject::generate(&generator);
+        let mut indices_of_touched_voxels = HashSet::default();
 
-            object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
-                &plane.0,
-                &mut |indices, voxel, placement| {
-                    assert!(!voxel.is_empty());
-                    assert!(matches!(
-                        voxel.placement(),
-                        Some(VoxelPlacement::Surface(pl)) if pl == placement
-                    ));
-                    let was_absent = indices_of_touched_voxels.insert(indices);
-                    assert!(
-                        was_absent,
-                        "Voxel in negative halfspace of plane found twice: {indices:?}"
-                    );
-                },
-            );
+        object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
+            &plane.0,
+            &mut |indices, voxel, placement| {
+                assert!(!voxel.is_empty());
+                assert!(matches!(
+                    voxel.placement(),
+                    Some(VoxelPlacement::Surface(pl)) if pl == placement
+                ));
+                let was_absent = indices_of_touched_voxels.insert(indices);
+                assert!(
+                    was_absent,
+                    "Voxel in negative halfspace of plane found twice: {indices:?}"
+                );
+            },
+        );
 
-            object.for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
-                &plane.0,
-                &mut |indices, _| {
-                    let was_present = indices_of_touched_voxels.remove(&indices);
-                    assert!(
-                        was_present,
-                        "Voxel in negative halfspace of plane was not found: {indices:?}"
-                    );
-                },
-            );
-        }
+        object.for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
+            &plane.0,
+            &mut |indices, _| {
+                let was_present = indices_of_touched_voxels.remove(&indices);
+                assert!(
+                    was_present,
+                    "Voxel in negative halfspace of plane was not found: {indices:?}"
+                );
+            },
+        );
     }
 
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_sphere(
         (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
     ) {
-        if let Some(object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_touched_voxels = HashSet::default();
+        let object = ChunkedVoxelObject::generate(&generator);
+        let mut indices_of_touched_voxels = HashSet::default();
 
-            object.for_each_surface_voxel_maybe_intersecting_sphere(
-                &sphere.0,
-                &mut |indices, voxel, placement| {
-                    assert!(!voxel.is_empty());
-                    assert!(matches!(
-                        voxel.placement(),
-                        Some(VoxelPlacement::Surface(pl)) if pl == placement
-                    ));
-                    let was_absent = indices_of_touched_voxels.insert(indices);
-                    assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
-                },
-            );
+        object.for_each_surface_voxel_maybe_intersecting_sphere(
+            &sphere.0,
+            &mut |indices, voxel, placement| {
+                assert!(!voxel.is_empty());
+                assert!(matches!(
+                    voxel.placement(),
+                    Some(VoxelPlacement::Surface(pl)) if pl == placement
+                ));
+                let was_absent = indices_of_touched_voxels.insert(indices);
+                assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
+            },
+        );
 
-            object.for_each_surface_voxel_touching_sphere_brute_force(
-                &sphere.0,
-                &mut |indices, _| {
-                    let was_present = indices_of_touched_voxels.remove(&indices);
-                    assert!(was_present, "Voxel in sphere was not found: {indices:?}");
-                },
-            );
-        }
+        object.for_each_surface_voxel_touching_sphere_brute_force(&sphere.0, &mut |indices, _| {
+            let was_present = indices_of_touched_voxels.remove(&indices);
+            assert!(was_present, "Voxel in sphere was not found: {indices:?}");
+        });
     }
 
     pub fn fuzz_test_obtaining_voxels_within_sphere(
         (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
     ) {
-        if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_inside_voxels = HashSet::default();
+        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut indices_of_inside_voxels = HashSet::default();
 
-            object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
-                if !voxel.is_empty() {
-                    let was_absent = indices_of_inside_voxels.insert(indices);
-                    assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
-                }
-            });
-            object.resolve_connected_regions_between_all_chunks();
+        object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
+            if !voxel.is_empty() {
+                let was_absent = indices_of_inside_voxels.insert(indices);
+                assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
+            }
+        });
+        object.resolve_connected_regions_between_all_chunks();
 
-            object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere.0, &mut |indices, _| {
-                let was_present = indices_of_inside_voxels.remove(&indices);
-                assert!(was_present, "Voxel in sphere was not found: {indices:?}");
-            });
+        object.for_each_non_empty_voxel_in_sphere_brute_force(&sphere.0, &mut |indices, _| {
+            let was_present = indices_of_inside_voxels.remove(&indices);
+            assert!(was_present, "Voxel in sphere was not found: {indices:?}");
+        });
 
-            assert!(
-                indices_of_inside_voxels.is_empty(),
-                "Found voxels not inside sphere: {:?}",
-                &indices_of_inside_voxels
-            );
+        assert!(
+            indices_of_inside_voxels.is_empty(),
+            "Found voxels not inside sphere: {:?}",
+            &indices_of_inside_voxels
+        );
 
-            object.validate_region_count();
-        }
+        object.validate_region_count();
     }
 
     pub fn fuzz_test_obtaining_voxels_within_capsule(
         (generator, capsule): (SDFVoxelGenerator, ArbitraryCapsule),
     ) {
-        if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let mut indices_of_inside_voxels = HashSet::default();
+        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut indices_of_inside_voxels = HashSet::default();
 
-            object.modify_voxels_within_capsule(&capsule.0, &mut |indices, _, voxel| {
-                if !voxel.is_empty() {
-                    let was_absent = indices_of_inside_voxels.insert(indices);
-                    assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
-                }
-            });
-            object.resolve_connected_regions_between_all_chunks();
+        object.modify_voxels_within_capsule(&capsule.0, &mut |indices, _, voxel| {
+            if !voxel.is_empty() {
+                let was_absent = indices_of_inside_voxels.insert(indices);
+                assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
+            }
+        });
+        object.resolve_connected_regions_between_all_chunks();
 
-            object.for_each_non_empty_voxel_in_capsule_brute_force(
-                &capsule.0,
-                &mut |indices, _| {
-                    let was_present = indices_of_inside_voxels.remove(&indices);
-                    assert!(was_present, "Voxel in capsule was not found: {indices:?}");
-                },
-            );
+        object.for_each_non_empty_voxel_in_capsule_brute_force(&capsule.0, &mut |indices, _| {
+            let was_present = indices_of_inside_voxels.remove(&indices);
+            assert!(was_present, "Voxel in capsule was not found: {indices:?}");
+        });
 
-            assert!(
-                indices_of_inside_voxels.is_empty(),
-                "Found voxels not inside capsule: {:?}",
-                &indices_of_inside_voxels
-            );
+        assert!(
+            indices_of_inside_voxels.is_empty(),
+            "Found voxels not inside capsule: {:?}",
+            &indices_of_inside_voxels
+        );
 
-            object.validate_region_count();
-        }
+        object.validate_region_count();
     }
 
     pub fn fuzz_test_absorbing_voxels_within_sphere(
         (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
     ) {
-        if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let voxel_type_densities = vec![1.0; 256];
+        let mut object = ChunkedVoxelObject::generate(&generator);
+        let voxel_type_densities = vec![1.0; 256];
 
-            let mut inertial_property_manager =
-                VoxelObjectInertialPropertyManager::initialized_from(
-                    &object,
-                    &voxel_type_densities,
-                );
+        let mut inertial_property_manager =
+            VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
 
-            let mut inertial_property_updater = inertial_property_manager
-                .begin_update(object.voxel_extent(), &voxel_type_densities);
+        let mut inertial_property_updater =
+            inertial_property_manager.begin_update(object.voxel_extent(), &voxel_type_densities);
 
-            object.modify_voxels_within_sphere(
-                &sphere.0,
-                &mut |object_voxel_indices, squared_distance, voxel| {
-                    let was_empty = voxel.is_empty();
+        object.modify_voxels_within_sphere(
+            &sphere.0,
+            &mut |object_voxel_indices, squared_distance, voxel| {
+                let was_empty = voxel.is_empty();
 
-                    let signed_distance_delta =
-                        3.0 * (1.0 - squared_distance * sphere.0.radius_squared().recip());
+                let signed_distance_delta =
+                    3.0 * (1.0 - squared_distance * sphere.0.radius_squared().recip());
 
-                    voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
-                        if !was_empty {
-                            inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
-                        }
-                    });
-                },
-            );
+                voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                    if !was_empty {
+                        inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                    }
+                });
+            },
+        );
 
-            if !object.is_effectively_empty() {
-                object.resolve_connected_regions_between_all_chunks();
+        if !object.is_effectively_empty() {
+            object.resolve_connected_regions_between_all_chunks();
 
-                object.validate_adjacencies();
-                object.validate_chunk_obscuredness();
-                object.validate_sdf();
-                object.validate_region_count();
+            object.validate_adjacencies();
+            object.validate_chunk_obscuredness();
+            object.validate_sdf();
+            object.validate_region_count();
 
-                inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
-            }
+            inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
         }
     }
 
     pub fn fuzz_test_absorbing_voxels_within_capsule(
         (generator, capsule): (SDFVoxelGenerator, ArbitraryCapsule),
     ) {
-        if let Some(mut object) = ChunkedVoxelObject::generate(&generator) {
-            let voxel_type_densities = vec![1.0; 256];
+        let mut object = ChunkedVoxelObject::generate(&generator);
+        let voxel_type_densities = vec![1.0; 256];
 
-            let mut inertial_property_manager =
-                VoxelObjectInertialPropertyManager::initialized_from(
-                    &object,
-                    &voxel_type_densities,
-                );
+        let mut inertial_property_manager =
+            VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
 
-            let mut inertial_property_updater = inertial_property_manager
-                .begin_update(object.voxel_extent(), &voxel_type_densities);
+        let mut inertial_property_updater =
+            inertial_property_manager.begin_update(object.voxel_extent(), &voxel_type_densities);
 
-            object.modify_voxels_within_capsule(
-                &capsule.0,
-                &mut |object_voxel_indices, squared_distance, voxel| {
-                    let was_empty = voxel.is_empty();
+        object.modify_voxels_within_capsule(
+            &capsule.0,
+            &mut |object_voxel_indices, squared_distance, voxel| {
+                let was_empty = voxel.is_empty();
 
-                    let signed_distance_delta =
-                        3.0 * (1.0 - squared_distance * capsule.0.radius().powi(2).recip());
+                let signed_distance_delta =
+                    3.0 * (1.0 - squared_distance * capsule.0.radius().powi(2).recip());
 
-                    voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
-                        if !was_empty {
-                            inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
-                        }
-                    });
-                },
-            );
+                voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                    if !was_empty {
+                        inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                    }
+                });
+            },
+        );
 
-            if !object.is_effectively_empty() {
-                object.resolve_connected_regions_between_all_chunks();
+        if !object.is_effectively_empty() {
+            object.resolve_connected_regions_between_all_chunks();
 
-                object.validate_adjacencies();
-                object.validate_chunk_obscuredness();
-                object.validate_sdf();
-                object.validate_region_count();
+            object.validate_adjacencies();
+            object.validate_chunk_obscuredness();
+            object.validate_sdf();
+            object.validate_region_count();
 
-                inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
-            }
+            inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
         }
     }
 
@@ -1082,7 +1064,7 @@ mod tests {
             SphereSDFGenerator::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
 
         let plane = Plane::new(
             UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
@@ -1129,7 +1111,7 @@ mod tests {
             SphereSDFGenerator::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
             object.compute_aabb::<f64>().center()
@@ -1168,7 +1150,7 @@ mod tests {
             SphereSDFGenerator::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let mut object = ChunkedVoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
             object.compute_aabb::<f64>().center()
@@ -1209,7 +1191,7 @@ mod tests {
             SphereSDFGenerator::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let mut object = ChunkedVoxelObject::generate(&generator);
 
         let capsule = Capsule::new(
             object.compute_aabb::<f64>().center() - capsule_direction.scale(-object_radius),
