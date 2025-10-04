@@ -7,7 +7,7 @@ use allocator_api2::{
 };
 use anyhow::{Result, anyhow, bail};
 use impact_geometry::{AxisAlignedBox, OrientedBox};
-use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3, point, vector};
+use nalgebra::{Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, point, vector};
 use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
 use twox_hash::XxHash32;
@@ -62,7 +62,7 @@ pub struct SDFGeneratorBuilder {
 pub type SDFNodeID = u32;
 
 #[derive(Clone, Debug)]
-enum SDFGeneratorNode {
+pub enum SDFGeneratorNode {
     // Primitives
     Box(BoxSDFGenerator),
     Sphere(SphereSDFGenerator),
@@ -106,42 +106,42 @@ pub struct GradientNoiseSDFGenerator {
 }
 
 #[derive(Clone, Debug)]
-struct SDFTranslation {
-    child_id: SDFNodeID,
-    translation: Vector3<f32>,
+pub struct SDFTranslation {
+    pub child_id: SDFNodeID,
+    pub translation: Vector3<f32>,
 }
 
 #[derive(Clone, Debug)]
-struct SDFRotation {
-    child_id: SDFNodeID,
-    rotation: UnitQuaternion<f32>,
+pub struct SDFRotation {
+    pub child_id: SDFNodeID,
+    pub rotation: UnitQuaternion<f32>,
 }
 
 #[derive(Clone, Debug)]
-struct SDFScaling {
-    child_id: SDFNodeID,
-    scaling: f32,
+pub struct SDFScaling {
+    pub child_id: SDFNodeID,
+    pub scaling: f32,
 }
 
 #[derive(Clone, Debug)]
-struct SDFUnion {
-    child_1_id: SDFNodeID,
-    child_2_id: SDFNodeID,
-    smoothness: f32,
+pub struct SDFUnion {
+    pub child_1_id: SDFNodeID,
+    pub child_2_id: SDFNodeID,
+    pub smoothness: f32,
 }
 
 #[derive(Clone, Debug)]
-struct SDFSubtraction {
-    child_1_id: SDFNodeID,
-    child_2_id: SDFNodeID,
-    smoothness: f32,
+pub struct SDFSubtraction {
+    pub child_1_id: SDFNodeID,
+    pub child_2_id: SDFNodeID,
+    pub smoothness: f32,
 }
 
 #[derive(Clone, Debug)]
-struct SDFIntersection {
-    child_1_id: SDFNodeID,
-    child_2_id: SDFNodeID,
-    smoothness: f32,
+pub struct SDFIntersection {
+    pub child_1_id: SDFNodeID,
+    pub child_2_id: SDFNodeID,
+    pub smoothness: f32,
 }
 
 /// Modifier for a signed distance field that adds a multifractal noise term to
@@ -150,7 +150,7 @@ struct SDFIntersection {
 /// Note that the resulting field will in general not contain correct distances,
 /// so this is best used only for minor perturbations.
 #[derive(Clone, Debug)]
-struct MultifractalNoiseSDFModifier {
+pub struct MultifractalNoiseSDFModifier {
     child_id: SDFNodeID,
     noise: HybridMulti<Simplex>,
     amplitude: f32,
@@ -166,7 +166,7 @@ struct MultifractalNoiseSDFModifier {
 ///
 /// The output will be a valid signed distance field.
 #[derive(Clone, Debug)]
-struct MultiscaleSphereSDFModifier {
+pub struct MultiscaleSphereSDFModifier {
     child_id: SDFNodeID,
     octaves: u32,
     frequency: f32,
@@ -225,6 +225,16 @@ impl SDFVoxelGenerator {
         assert!(voxel_extent > 0.0);
 
         let sdf_domain_extents = sdf_generator.domain_extents();
+
+        if sdf_domain_extents.contains(&0.0) {
+            return Self {
+                voxel_extent,
+                grid_shape: [0; 3],
+                shifted_grid_center: Point3::origin(),
+                sdf_generator,
+                voxel_type_generator,
+            };
+        }
 
         // Make room for a border of empty voxels around the object to so that
         // the surface nets meshing algorithm can correctly interpolate
@@ -289,6 +299,13 @@ impl VoxelGenerator for SDFVoxelGenerator {
 
 impl SDFGenerator {
     const MAX_PRIMITIVES: usize = 16;
+
+    pub fn empty() -> Self {
+        Self {
+            nodes: Vec::new(),
+            domain_extents: [0.0; 3],
+        }
+    }
 
     fn new<A>(arena: A, nodes: Vec<SDFGeneratorNode>, root_node_id: SDFNodeID) -> Result<Self>
     where
@@ -487,6 +504,10 @@ impl SDFGenerator {
     // coordinates from the center of the field.
     #[inline]
     pub fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+        if self.nodes.is_empty() {
+            return VoxelSignedDistance::MAX_F32;
+        }
+
         let mut displacements_for_primitives = [Vector3::zeros(); Self::MAX_PRIMITIVES];
         let mut branch_idx: usize = 0;
 
@@ -611,6 +632,12 @@ impl SDFGenerator {
         assert_eq!(stack_top, 1);
 
         signed_distance_stack[0]
+    }
+}
+
+impl Default for SDFGenerator {
+    fn default() -> Self {
+        Self::empty()
     }
 }
 
@@ -777,7 +804,7 @@ impl SDFGeneratorBuilder {
         )))
     }
 
-    fn add_node_and_set_to_root(&mut self, node: SDFGeneratorNode) -> SDFNodeID {
+    pub fn add_node_and_set_to_root(&mut self, node: SDFGeneratorNode) -> SDFNodeID {
         let node_id = self.nodes.len().try_into().unwrap();
         self.nodes.push(node);
         self.root_node_id = node_id;
@@ -853,15 +880,22 @@ impl GradientNoiseSDFGenerator {
     }
 }
 
+impl SDFRotation {
+    pub fn from_axis_angle(child_id: SDFNodeID, axis: Vector3<f32>, angle: f32) -> Self {
+        let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::new_normalize(axis), angle);
+        Self { child_id, rotation }
+    }
+}
+
 impl SDFScaling {
-    fn new(child_id: SDFNodeID, scaling: f32) -> Self {
+    pub fn new(child_id: SDFNodeID, scaling: f32) -> Self {
         assert!(scaling > 0.0);
         Self { child_id, scaling }
     }
 }
 
 impl SDFUnion {
-    fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
+    pub fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         assert!(smoothness >= 0.0);
         Self {
             child_1_id,
@@ -872,7 +906,7 @@ impl SDFUnion {
 }
 
 impl SDFSubtraction {
-    fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
+    pub fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         assert!(smoothness >= 0.0);
         Self {
             child_1_id,
@@ -883,7 +917,7 @@ impl SDFSubtraction {
 }
 
 impl SDFIntersection {
-    fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
+    pub fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         assert!(smoothness >= 0.0);
         Self {
             child_1_id,
@@ -894,7 +928,7 @@ impl SDFIntersection {
 }
 
 impl MultifractalNoiseSDFModifier {
-    fn new(
+    pub fn new(
         child_id: SDFNodeID,
         octaves: u32,
         frequency: f32,
@@ -922,7 +956,7 @@ impl MultifractalNoiseSDFModifier {
 }
 
 impl MultiscaleSphereSDFModifier {
-    fn new(
+    pub fn new(
         child_id: SDFNodeID,
         octaves: u32,
         max_scale: f32,
