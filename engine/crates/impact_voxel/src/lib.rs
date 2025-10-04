@@ -166,15 +166,15 @@ impl VoxelSignedDistance {
 
     /// Encodes the given `f32` signed distance as a `VoxelSignedDistance`.
     /// The value will be clamped to [`Self::min_f32`] and [`Self::max_f32`].
-    pub fn from_f32(value: f32) -> Self {
+    pub const fn from_f32(value: f32) -> Self {
         // We don't need to clamp the value before casting to `i8` since
         // `as` will do that for us (for Rust 1.45+). `NaN` will result in `0`.
         Self::from_encoded((value * Self::INVERSE_QUANTIZATION_STEP_SIZE) as i8)
     }
 
     /// Decodes the `VoxelSignedDistance` to an `f32` signed distance.
-    pub fn to_f32(self) -> f32 {
-        f32::from(self.encoded) * Self::QUANTIZATION_STEP_SIZE
+    pub const fn to_f32(self) -> f32 {
+        self.encoded as f32 * Self::QUANTIZATION_STEP_SIZE
     }
 
     /// Whether the signed distance is strictly negative.
