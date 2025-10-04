@@ -479,7 +479,9 @@ define_task!(
     /// translational, rotational and scaling parts match the origin offset,
     /// position, orientation and scaling. Also updates any flags for the node
     /// to match the entity's [`SceneEntityFlags`](crate::scene::SceneEntityFlags).
-    [pub] SyncSceneObjectTransformsAndFlags,
+    /// In addition, the bounding spheres of nodes representing voxel objects are
+    /// updated to match the current bounding spheres of the objects.
+    [pub] SyncSceneGraphNodeProperties,
     depends_on = [
         // We want to include the changes due to entity creation and removal.
         HandleStagedEntities,
@@ -489,11 +491,19 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing scene graph node transforms and flags", engine, {
+        instrument_engine_task!("Synchronizing scene graph node properties", engine, {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
+            let voxel_object_manager = scene.voxel_object_manager().oread();
             let mut scene_graph = scene.scene_graph().owrite();
+
             impact_scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
+
+            impact_voxel::interaction::systems::sync_voxel_object_bounding_spheres_in_scene_graph(
+                &ecs_world,
+                &voxel_object_manager,
+                &mut scene_graph,
+            );
             Ok(())
         })
     }
@@ -505,7 +515,7 @@ define_task!(
     [pub] UpdateSceneGroupToWorldTransforms,
     depends_on = [
         // We depend on the updated group-to-parent transforms.
-        SyncSceneObjectTransformsAndFlags
+        SyncSceneGraphNodeProperties
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
@@ -1153,7 +1163,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(ClearModelInstanceBuffers)?;
 
     // SCENE GRAPH, TRANSFORMS AND CULLING (for current frame)
-    task_scheduler.register_task(SyncSceneObjectTransformsAndFlags)?;
+    task_scheduler.register_task(SyncSceneGraphNodeProperties)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
     task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;

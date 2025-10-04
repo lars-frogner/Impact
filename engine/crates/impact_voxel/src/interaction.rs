@@ -22,6 +22,7 @@ use impact_physics::{
     quantities::{AngularVelocity, Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
+use impact_scene::graph::{ModelInstanceNodeID, SceneGraph};
 use nalgebra::{Isometry3, Vector3};
 use tinyvec::TinyVec;
 
@@ -117,6 +118,25 @@ pub fn sync_voxel_object_model_transform_with_inertial_properties(
         .inertial_property_manager
         .derive_center_of_mass()
         .cast();
+}
+
+/// Updates the bounding sphere of a voxel object's model instance node to match
+/// the current bounding sphere of the object.
+pub fn sync_voxel_object_bounding_sphere_in_scene_graph(
+    voxel_object_manager: &VoxelObjectManager,
+    scene_graph: &mut SceneGraph,
+    voxel_object_id: VoxelObjectID,
+    model_instance_node_id: ModelInstanceNodeID,
+    uncullable: bool,
+) {
+    let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
+        return;
+    };
+
+    let bounding_sphere = (!uncullable && voxel_object.object().has_non_empty_voxels())
+        .then(|| voxel_object.object().compute_bounding_sphere());
+
+    scene_graph.set_model_instance_bounding_sphere(model_instance_node_id, bounding_sphere);
 }
 
 fn handle_voxel_object_after_removing_voxels(
