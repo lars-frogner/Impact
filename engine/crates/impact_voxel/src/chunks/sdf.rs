@@ -531,7 +531,7 @@ mod tests {
     #[test]
     fn should_calculate_valid_sdf_for_object_with_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::single_default();
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_sdf();
     }
 
@@ -539,7 +539,7 @@ mod tests {
     fn should_calculate_valid_sdf_for_object_with_full_chunk() {
         let generator =
             OffsetBoxVoxelGenerator::with_default([ChunkedVoxelObject::chunk_size(); 3]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_sdf();
     }
 
@@ -550,7 +550,7 @@ mod tests {
             ChunkedVoxelObject::chunk_size(),
             ChunkedVoxelObject::chunk_size(),
         ]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_sdf();
     }
 
@@ -558,7 +558,7 @@ mod tests {
     fn should_calculate_valid_sdf_for_object_with_fully_enclosed_chunk() {
         let generator =
             OffsetBoxVoxelGenerator::with_default([3 * ChunkedVoxelObject::chunk_size(); 3]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_sdf();
     }
 }

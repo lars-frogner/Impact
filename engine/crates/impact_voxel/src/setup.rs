@@ -613,15 +613,14 @@ pub fn apply_modifications(
 pub fn setup_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
     generator: &impl VoxelGenerator,
-) -> Result<VoxelObjectID> {
-    let voxel_object = ChunkedVoxelObject::generate(generator)
-        .ok_or_else(|| anyhow!("Tried to generate empty voxel object"))?;
+) -> VoxelObjectID {
+    let voxel_object = ChunkedVoxelObject::generate(generator);
 
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
 
     let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
 
-    Ok(voxel_object_id)
+    voxel_object_id
 }
 
 pub fn setup_dynamic_rigid_body_for_voxel_object(
@@ -715,7 +714,7 @@ pub fn create_model_instance_node_for_voxel_object(
         .expect("Missing storage for VoxelObjectID feature")
         .add_feature(voxel_object_id);
 
-    let bounding_sphere = if uncullable {
+    let bounding_sphere = if uncullable || !voxel_object.has_non_empty_voxels() {
         // The scene graph will not cull models with no bounding sphere
         None
     } else {

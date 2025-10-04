@@ -218,6 +218,9 @@ impl VoxelObjectGPUResources {
         voxel_object_manager: &mut VoxelObjectManager,
     ) {
         for (voxel_object_id, voxel_object) in voxel_object_manager.voxel_objects_mut() {
+            if !voxel_object.object().has_non_empty_voxels() {
+                continue;
+            }
             self.buffers
                 .entry(*voxel_object_id)
                 .and_modify(|buffers| {
@@ -242,8 +245,11 @@ impl VoxelObjectGPUResources {
         }
 
         // TODO: reuse orphaned buffers
-        self.buffers
-            .retain(|id, _| voxel_object_manager.has_voxel_object(*id));
+        self.buffers.retain(|id, _| {
+            voxel_object_manager
+                .get_voxel_object(*id)
+                .is_some_and(|voxel_object| voxel_object.object().has_non_empty_voxels())
+        });
     }
 
     /// Updates the lists of properties for the visible voxel objects based on

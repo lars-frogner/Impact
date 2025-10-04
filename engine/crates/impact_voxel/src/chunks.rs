@@ -190,33 +190,33 @@ impl ChunkedVoxelObject {
 
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
     /// and calls [`Self::update_occupied_voxel_ranges`] and
-    /// [`Self::compute_all_derived_state`] on it. Returns [`None`] if the
-    /// resulting object would not contain any voxels.
-    pub fn generate<G>(generator: &G) -> Option<Self>
+    /// [`Self::compute_all_derived_state`] on it.
+    pub fn generate<G>(generator: &G) -> Self
     where
         G: VoxelGenerator,
     {
-        let mut object = Self::generate_without_derived_state(generator)?;
+        let mut object = Self::generate_without_derived_state(generator);
         object.update_occupied_voxel_ranges();
         object.compute_all_derived_state();
-        Some(object)
+        object
     }
 
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
-    /// Returns [`None`] if the resulting object would not contain any voxels.
-    pub fn generate_without_derived_state<G>(generator: &G) -> Option<Self>
+    pub fn generate_without_derived_state<G>(generator: &G) -> Self
     where
         G: VoxelGenerator,
     {
         let generator_grid_shape = generator.grid_shape();
 
-        if generator_grid_shape.contains(&0) {
-            return None;
-        }
-
         let voxel_extent = generator.voxel_extent();
 
-        let chunk_counts = generator_grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
+        let chunk_counts = generator_grid_shape.map(|size| {
+            if size == 0 {
+                0
+            } else {
+                size.div_ceil(CHUNK_SIZE)
+            }
+        });
         let chunk_idx_strides = [chunk_counts[2] * chunk_counts[1], chunk_counts[2], 1];
 
         let mut chunks = Vec::with_capacity(chunk_counts.iter().product());
@@ -254,11 +254,11 @@ impl ChunkedVoxelObject {
             }
         }
 
-        let occupied_chunk_ranges = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
-
-        if occupied_chunk_ranges.iter().any(Range::is_empty) {
-            return None;
-        }
+        let occupied_chunk_ranges = if uniform_chunk_count + non_uniform_chunk_count > 0 {
+            [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k]
+        } else {
+            [0..0, 0..0, 0..0]
+        };
 
         let occupied_voxel_ranges = occupied_chunk_ranges
             .clone()
@@ -269,7 +269,7 @@ impl ChunkedVoxelObject {
 
         let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
-        Some(Self {
+        Self {
             voxel_extent,
             chunk_counts,
             chunk_idx_strides,
@@ -280,7 +280,7 @@ impl ChunkedVoxelObject {
             voxels,
             split_detector,
             invalidated_mesh_chunk_indices: HashSet::default(),
-        })
+        }
     }
 
     fn _find_voxel_types(chunks: &[VoxelChunk], voxels: &[Voxel]) -> Vec<VoxelType> {
@@ -356,6 +356,11 @@ impl ChunkedVoxelObject {
     /// grid that may contain non-empty voxels.
     pub fn occupied_voxel_ranges(&self) -> &[Range<usize>; 3] {
         &self.occupied_voxel_ranges
+    }
+
+    /// Whether the object has non-empty voxels.
+    pub fn has_non_empty_voxels(&self) -> bool {
+        !self.occupied_voxel_ranges.iter().any(Range::is_empty)
     }
 
     /// Returns the stride in the linear chunk index correponding to
@@ -2518,12 +2523,11 @@ pub mod fuzzing {
     use crate::generation::SDFVoxelGenerator;
 
     pub fn fuzz_test_voxel_object_generation(generator: SDFVoxelGenerator) {
-        if let Some(object) = ChunkedVoxelObject::generate(&generator) {
-            object.validate_occupied_voxel_ranges();
-            object.validate_adjacencies();
-            object.validate_chunk_obscuredness();
-            object.validate_sdf();
-        }
+        let object = ChunkedVoxelObject::generate(&generator);
+        object.validate_occupied_voxel_ranges();
+        object.validate_adjacencies();
+        object.validate_chunk_obscuredness();
+        object.validate_sdf();
     }
 }
 
@@ -2642,35 +2646,35 @@ mod tests {
     }
 
     #[test]
-    fn should_yield_none_when_generating_object_with_empty_grid() {
+    fn should_yield_empty_object_when_generating_object_with_empty_grid() {
         assert!(
-            ChunkedVoxelObject::generate_without_derived_state(
+            !ChunkedVoxelObject::generate_without_derived_state(
                 &OffsetBoxVoxelGenerator::with_default([0; 3])
             )
-            .is_none()
+            .has_non_empty_voxels()
         );
     }
 
     #[test]
-    fn should_yield_none_when_generating_object_of_empty_voxels() {
+    fn should_yield_empty_object_when_generating_object_of_empty_voxels() {
         assert!(
-            ChunkedVoxelObject::generate_without_derived_state(
+            !ChunkedVoxelObject::generate_without_derived_state(
                 &OffsetBoxVoxelGenerator::single_empty()
             )
-            .is_none()
+            .has_non_empty_voxels()
         );
         assert!(
-            ChunkedVoxelObject::generate_without_derived_state(&OffsetBoxVoxelGenerator::empty([
+            !ChunkedVoxelObject::generate_without_derived_state(&OffsetBoxVoxelGenerator::empty([
                 2, 3, 4
             ]))
-            .is_none()
+            .has_non_empty_voxels()
         );
     }
 
     #[test]
     fn should_generate_object_with_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::single_default();
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         assert_eq!(object.voxel_extent(), generator.voxel_extent());
         assert_eq!(object.chunk_counts(), &[1, 1, 1]);
         assert_eq!(object.occupied_voxel_ranges()[0], 0..CHUNK_SIZE);
@@ -2682,7 +2686,7 @@ mod tests {
     #[test]
     fn should_generate_object_with_single_uniform_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         assert_eq!(object.chunk_counts(), &[1, 1, 1]);
         assert_eq!(object.occupied_voxel_ranges()[0], 0..CHUNK_SIZE);
         assert_eq!(object.occupied_voxel_ranges()[1], 0..CHUNK_SIZE);
@@ -2694,7 +2698,7 @@ mod tests {
     fn should_generate_object_with_single_offset_uniform_chunk() {
         let generator =
             OffsetBoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         assert_eq!(object.chunk_counts(), &[2, 2, 2]);
         assert_eq!(
             object.occupied_voxel_ranges()[0],
@@ -2718,7 +2722,7 @@ mod tests {
             [[0, 1, 1], [1, 0, 0], [1, 0, 1]],
             [[1, 1, 0], [1, 1, 1], [0, 0, 0]],
         ]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         for i in 0..3 {
             for j in 0..3 {
                 for k in 0..3 {
@@ -2742,7 +2746,7 @@ mod tests {
             ],
             offset,
         );
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         for i in 0..3 {
             for j in 0..3 {
                 for k in 0..3 {
@@ -2765,7 +2769,7 @@ mod tests {
             [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
         ]);
 
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
 
         assert_eq!(
             object.get_voxel(1, 1, 1).unwrap().flags(),
@@ -2805,7 +2809,7 @@ mod tests {
             [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         ]);
 
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
 
         assert_eq!(
             object.get_voxel(0, 0, 0).unwrap().flags(),
@@ -2839,7 +2843,7 @@ mod tests {
             offset,
         );
 
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
 
         assert_eq!(
             object
@@ -2877,7 +2881,7 @@ mod tests {
     #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_for_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
     }
@@ -2886,7 +2890,7 @@ mod tests {
     #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_for_single_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
     }
@@ -2896,19 +2900,19 @@ mod tests {
     fn should_compute_correct_adjacencies_for_barely_two_chunks() {
         let generator =
             OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE + 1, CHUNK_SIZE, CHUNK_SIZE]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
 
         let generator =
             OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE, CHUNK_SIZE + 1, CHUNK_SIZE]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
 
         let generator =
             OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE + 1]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
     }
@@ -2917,17 +2921,17 @@ mod tests {
     #[cfg(not(miri))]
     fn should_compute_correct_adjacencies_with_column_taking_barely_two_chunks() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE + 1, 1, 1]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
 
         let generator = OffsetBoxVoxelGenerator::with_default([1, CHUNK_SIZE + 1, 1]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
 
         let generator = OffsetBoxVoxelGenerator::with_default([1, 1, CHUNK_SIZE + 1]);
-        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate(&generator);
         object.validate_adjacencies();
         object.validate_chunk_obscuredness();
     }
@@ -3013,7 +3017,7 @@ mod tests {
     #[test]
     fn should_compute_correct_aabb_for_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
         assert_abs_diff_eq!(
@@ -3031,7 +3035,7 @@ mod tests {
     #[test]
     fn should_compute_correct_aabb_for_single_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
         assert_abs_diff_eq!(
@@ -3049,7 +3053,7 @@ mod tests {
     fn should_compute_correct_aabb_for_different_numbers_of_chunks_along_each_axis() {
         let generator =
             OffsetBoxVoxelGenerator::with_default([2 * CHUNK_SIZE, 3 * CHUNK_SIZE, 4 * CHUNK_SIZE]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
         assert_abs_diff_eq!(
@@ -3065,7 +3069,7 @@ mod tests {
     #[test]
     fn should_shrink_occupied_voxel_ranges_correctly_for_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::single_default();
-        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         object.update_occupied_voxel_ranges();
 
         assert_eq!(object.occupied_voxel_ranges, [0..1, 0..1, 0..1]);
@@ -3078,7 +3082,7 @@ mod tests {
             [0, 0, 0],
             Voxel::maximally_inside(VoxelType::default()),
         );
-        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         object.update_occupied_voxel_ranges();
 
         assert_eq!(object.occupied_voxel_ranges, [0..9, 0..9, 0..9]);
@@ -3087,7 +3091,7 @@ mod tests {
     #[test]
     fn should_shrink_occupied_voxel_ranges_correctly_for_offset_chunk() {
         let generator = OffsetBoxVoxelGenerator::offset_with_default([1, 1, 1], [5, 5, 5]);
-        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         object.update_occupied_voxel_ranges();
 
         assert_eq!(object.occupied_voxel_ranges, [5..6, 5..6, 5..6]);
@@ -3104,7 +3108,7 @@ mod tests {
         voxels[17][16][18] = 1; // Additional voxel near maximums
 
         let generator = ManualVoxelGenerator::new(voxels);
-        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         object.update_occupied_voxel_ranges();
 
         assert_eq!(object.occupied_voxel_ranges, [2..19, 2..18, 5..20]);
@@ -3114,7 +3118,7 @@ mod tests {
     fn should_compute_correct_aabb_for_offset_chunk() {
         let generator =
             OffsetBoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(
             aabb.lower_corner(),

@@ -733,7 +733,7 @@ mod tests {
             BoxSDFGenerator::new(extents).into(),
             SameVoxelTypeGenerator::new(VoxelType::from_idx(0)).into(),
         );
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator).unwrap();
+        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
 
         let occupied_voxel_ranges = object.determine_tight_occupied_voxel_ranges();
         let occupied_voxel_extents = occupied_voxel_ranges
