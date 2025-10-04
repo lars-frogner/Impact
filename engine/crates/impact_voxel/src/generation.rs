@@ -54,8 +54,8 @@ pub struct SDFGenerator {
 }
 
 #[derive(Clone, Debug)]
-pub struct SDFGeneratorBuilder {
-    nodes: Vec<SDFGeneratorNode>,
+pub struct SDFGeneratorBuilder<A: Allocator = Global> {
+    nodes: AVec<SDFGeneratorNode, A>,
     root_node_id: SDFNodeID,
 }
 
@@ -307,9 +307,14 @@ impl SDFGenerator {
         }
     }
 
-    fn new<A>(arena: A, nodes: Vec<SDFGeneratorNode>, root_node_id: SDFNodeID) -> Result<Self>
+    pub fn new<A, AN>(
+        arena: A,
+        nodes: AVec<SDFGeneratorNode, AN>,
+        root_node_id: SDFNodeID,
+    ) -> Result<Self>
     where
         A: Allocator + Copy,
+        AN: Allocator,
     {
         let mut ordered_nodes = Vec::with_capacity(nodes.len());
 
@@ -643,26 +648,36 @@ impl Default for SDFGenerator {
 
 impl From<BoxSDFGenerator> for SDFGenerator {
     fn from(generator: BoxSDFGenerator) -> Self {
-        Self::new(Global, vec![SDFGeneratorNode::Box(generator)], 0).unwrap()
+        let mut nodes = AVec::new();
+        nodes.push(SDFGeneratorNode::Box(generator));
+        Self::new(Global, nodes, 0).unwrap()
     }
 }
 
 impl From<SphereSDFGenerator> for SDFGenerator {
     fn from(generator: SphereSDFGenerator) -> Self {
-        Self::new(Global, vec![SDFGeneratorNode::Sphere(generator)], 0).unwrap()
+        let mut nodes = AVec::new();
+        nodes.push(SDFGeneratorNode::Sphere(generator));
+        Self::new(Global, nodes, 0).unwrap()
     }
 }
 
 impl From<GradientNoiseSDFGenerator> for SDFGenerator {
     fn from(generator: GradientNoiseSDFGenerator) -> Self {
-        Self::new(Global, vec![SDFGeneratorNode::GradientNoise(generator)], 0).unwrap()
+        let mut nodes = AVec::new();
+        nodes.push(SDFGeneratorNode::GradientNoise(generator));
+        Self::new(Global, nodes, 0).unwrap()
     }
 }
 
-impl SDFGeneratorBuilder {
-    pub fn new() -> Self {
+impl<A: Allocator> SDFGeneratorBuilder<A> {
+    pub fn new_in(alloc: A) -> Self {
+        Self::with_capacity_in(0, alloc)
+    }
+
+    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
         Self {
-            nodes: Vec::new(),
+            nodes: AVec::<_, A>::with_capacity_in(capacity, alloc),
             root_node_id: 0,
         }
     }
@@ -671,14 +686,15 @@ impl SDFGeneratorBuilder {
         self.build_with_arena(Global)
     }
 
-    pub fn build_with_arena<A>(self, arena: A) -> Result<SDFGenerator>
+    pub fn build_with_arena<AR>(self, arena: AR) -> Result<SDFGenerator>
     where
-        A: Allocator + Copy,
+        AR: Allocator + Copy,
     {
         if self.nodes.is_empty() {
-            bail!("Tried to build SDF generator from empty builder");
+            Ok(SDFGenerator::empty())
+        } else {
+            SDFGenerator::new(arena, self.nodes, self.root_node_id)
         }
-        SDFGenerator::new(arena, self.nodes, self.root_node_id)
     }
 
     pub fn add_box(&mut self, extents: [f32; 3]) -> SDFNodeID {
@@ -812,7 +828,13 @@ impl SDFGeneratorBuilder {
     }
 }
 
-impl Default for SDFGeneratorBuilder {
+impl SDFGeneratorBuilder<Global> {
+    pub fn new() -> Self {
+        Self::new_in(Global)
+    }
+}
+
+impl Default for SDFGeneratorBuilder<Global> {
     fn default() -> Self {
         Self::new()
     }
@@ -1253,7 +1275,9 @@ pub mod fuzzing {
                     SDFGeneratorNode::GradientNoise(generator)
                 }
             };
-            Ok(Self::new(Global, vec![primitive], 0).unwrap())
+            let mut nodes = AVec::new();
+            nodes.push(primitive);
+            Ok(Self::new(Global, nodes, 0).unwrap())
         }
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {
