@@ -394,52 +394,74 @@ impl SceneGraph {
     }
 
     /// Sets the given transform as the parent-to-model transform for the
-    /// group node with the given ID.
+    /// group node with the given ID if it exists.
     pub fn set_group_to_parent_transform(
         &mut self,
         group_node_id: GroupNodeID,
         transform: Isometry3<f32>,
     ) {
-        self.group_nodes
-            .node_mut(group_node_id)
-            .set_group_to_parent_transform(transform);
+        if let Some(node) = self.group_nodes.get_node_mut(group_node_id) {
+            node.set_group_to_parent_transform(transform);
+        }
     }
 
     /// Sets the given transform as the model-to-parent transform for the
-    /// [`ModelInstanceNode`] with the given ID.
+    /// [`ModelInstanceNode`] with the given ID if it exists.
     pub fn set_model_to_parent_transform(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
         transform: Similarity3<f32>,
     ) {
-        self.model_instance_nodes
-            .node_mut(model_instance_node_id)
-            .set_model_to_parent_transform(transform);
+        if let Some(node) = self
+            .model_instance_nodes
+            .get_node_mut(model_instance_node_id)
+        {
+            node.set_model_to_parent_transform(transform);
+        }
     }
 
     /// Sets the given transform and flags as the model-to-parent transform and
-    /// flags for the [`ModelInstanceNode`] with the given ID.
+    /// flags for the [`ModelInstanceNode`] with the given ID if it exists.
     pub fn set_model_to_parent_transform_and_flags(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
         transform: Similarity3<f32>,
         flags: ModelInstanceFlags,
     ) {
-        let node = self.model_instance_nodes.node_mut(model_instance_node_id);
-        node.set_model_to_parent_transform(transform);
-        node.set_flags(flags);
+        if let Some(node) = self
+            .model_instance_nodes
+            .get_node_mut(model_instance_node_id)
+        {
+            node.set_model_to_parent_transform(transform);
+            node.set_flags(flags);
+        }
+    }
+
+    /// Sets the given sphere as the bounding sphere for the
+    /// [`ModelInstanceNode`] with the given ID if it exists.
+    pub fn set_model_instance_bounding_sphere(
+        &mut self,
+        model_instance_node_id: ModelInstanceNodeID,
+        bounding_sphere: Option<Sphere<f32>>,
+    ) {
+        if let Some(node) = self
+            .model_instance_nodes
+            .get_node_mut(model_instance_node_id)
+        {
+            node.set_model_bounding_sphere(bounding_sphere);
+        }
     }
 
     /// Sets the given transform as the camera-to-parent transform for the
-    /// [`CameraNode`] with the given ID.
+    /// [`CameraNode`] with the given ID if it exists.
     pub fn set_camera_to_parent_transform(
         &mut self,
         camera_node_id: CameraNodeID,
         transform: Isometry3<f32>,
     ) {
-        self.camera_nodes
-            .node_mut(camera_node_id)
-            .set_camera_to_parent_transform(transform);
+        if let Some(node) = self.camera_nodes.get_node_mut(camera_node_id) {
+            node.set_camera_to_parent_transform(transform);
+        }
     }
 
     /// Updates the transform from local space to the space of the root node for
@@ -1223,6 +1245,10 @@ impl<N: SceneGraphNode> NodeStorage<N> {
     /// Returns a reference to the node with the given ID.
     pub fn node(&self, node_id: N::ID) -> &N {
         self.nodes.value(node_id.key())
+    }
+
+    fn get_node_mut(&mut self, node_id: N::ID) -> Option<&mut N> {
+        self.nodes.get_value_mut(node_id.key())
     }
 
     fn node_mut(&mut self, node_id: N::ID) -> &mut N {

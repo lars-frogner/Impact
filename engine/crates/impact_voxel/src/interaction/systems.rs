@@ -25,7 +25,10 @@ use impact_physics::{
     fph,
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
-use impact_scene::{SceneEntityFlags, SceneGraphParentNodeHandle, graph::SceneGraph};
+use impact_scene::{
+    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
+    graph::SceneGraph, setup::Uncullable,
+};
 use tinyvec::TinyVec;
 
 /// ECS-based implementation of a voxel object interaction context.
@@ -231,6 +234,43 @@ pub fn sync_voxel_object_model_transforms(
                 model_transform,
             );
         }
+    );
+}
+
+/// Updates the bounding spheres of all voxel object's model instance nodes to match
+/// the current bounding sphere of the object.
+pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
+    ecs_world: &ECSWorld,
+    voxel_object_manager: &VoxelObjectManager,
+    scene_graph: &mut SceneGraph,
+) {
+    query!(
+        ecs_world,
+        |voxel_object_id: &VoxelObjectID,
+         model_instance_node: &SceneGraphModelInstanceNodeHandle| {
+            interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
+                voxel_object_manager,
+                scene_graph,
+                *voxel_object_id,
+                model_instance_node.id,
+                false,
+            );
+        },
+        ![Uncullable]
+    );
+    query!(
+        ecs_world,
+        |voxel_object_id: &VoxelObjectID,
+         model_instance_node: &SceneGraphModelInstanceNodeHandle| {
+            interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
+                voxel_object_manager,
+                scene_graph,
+                *voxel_object_id,
+                model_instance_node.id,
+                true,
+            );
+        },
+        [Uncullable]
     );
 }
 
