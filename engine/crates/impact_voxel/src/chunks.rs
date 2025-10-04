@@ -505,47 +505,43 @@ impl ChunkedVoxelObject {
 
     /// Computes a sphere enclosing all non-empty voxels in the object.
     pub fn compute_bounding_sphere<F: Float>(&self) -> Sphere<F> {
-        let bounding_sphere_for_chunk_centers =
-            Sphere::bounding_sphere_for_points(&self.compute_occupied_chunk_center_positions());
+        let bounding_sphere_for_outer_voxel_centers =
+            Sphere::bounding_sphere_for_points(&self.compute_occupied_voxel_range_corner_centers());
 
-        // If we add the distance from the center to the corner of a chunk, the
+        // If we add the distance from the center to the corner of a voxel, the
         // bounding sphere will encompass all voxels
         let additional_radius =
-            F::ONE_HALF * F::THREE.sqrt() * F::from_f64(self.chunk_extent()).unwrap();
+            F::ONE_HALF * F::THREE.sqrt() * F::from_f64(self.voxel_extent()).unwrap();
 
         Sphere::new(
-            *bounding_sphere_for_chunk_centers.center(),
-            bounding_sphere_for_chunk_centers.radius() + additional_radius,
+            *bounding_sphere_for_outer_voxel_centers.center(),
+            bounding_sphere_for_outer_voxel_centers.radius() + additional_radius,
         )
     }
 
-    fn compute_occupied_chunk_center_positions<F: Float>(&self) -> Vec<Point3<F>> {
-        let max_occupied_chunk_count: usize =
-            self.occupied_chunk_ranges.iter().map(Range::len).product();
-
-        let mut center_positions = Vec::with_capacity(max_occupied_chunk_count);
-
-        let chunk_extent = self.chunk_extent();
-
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
-                for chunk_k in self.occupied_chunk_ranges[2].clone() {
-                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
-                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
-                    if !self.chunks[chunk_idx].is_empty() {
-                        center_positions.push(
-                            point![
-                                (chunk_i as f64 + 0.5) * chunk_extent,
-                                (chunk_j as f64 + 0.5) * chunk_extent,
-                                (chunk_k as f64 + 0.5) * chunk_extent
-                            ]
-                            .cast(),
-                        );
-                    }
-                }
-            }
+    fn compute_occupied_voxel_range_corner_centers<F: Float>(&self) -> [Point3<F>; 8] {
+        if !self.has_non_empty_voxels() {
+            return [Point3::origin(); 8];
         }
-        center_positions
+
+        let rx = &self.occupied_voxel_ranges[0];
+        let ry = &self.occupied_voxel_ranges[1];
+        let rz = &self.occupied_voxel_ranges[2];
+
+        [
+            [rx.start, ry.start, rz.start],
+            [rx.start, ry.start, rz.end - 1],
+            [rx.start, ry.end - 1, rz.start],
+            [rx.start, ry.end - 1, rz.end - 1],
+            [rx.end - 1, ry.start, rz.start],
+            [rx.end - 1, ry.start, rz.end - 1],
+            [rx.end - 1, ry.end - 1, rz.start],
+            [rx.end - 1, ry.end - 1, rz.end - 1],
+        ]
+        .map(|[i, j, k]| {
+            self.voxel_center_position_from_object_voxel_indices(i, j, k)
+                .cast()
+        })
     }
 
     /// Calls the given closure for each voxel in the given non-uniform chunk,
