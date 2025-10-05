@@ -223,7 +223,7 @@ impl VoxelObjectGPUResources {
         voxel_object_manager: &mut VoxelObjectManager,
     ) {
         for (voxel_object_id, voxel_object) in voxel_object_manager.voxel_objects_mut() {
-            if !voxel_object.object().has_non_empty_voxels() {
+            if voxel_object.object().contains_only_empty_voxels() {
                 continue;
             }
             self.buffers
@@ -253,7 +253,7 @@ impl VoxelObjectGPUResources {
         self.buffers.retain(|id, _| {
             voxel_object_manager
                 .get_voxel_object(*id)
-                .is_some_and(|voxel_object| voxel_object.object().has_non_empty_voxels())
+                .is_some_and(|voxel_object| !voxel_object.object().contains_only_empty_voxels())
         });
     }
 

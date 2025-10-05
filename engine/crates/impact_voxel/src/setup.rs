@@ -714,7 +714,7 @@ pub fn create_model_instance_node_for_voxel_object(
         .expect("Missing storage for VoxelObjectID feature")
         .add_feature(voxel_object_id);
 
-    let bounding_sphere = if uncullable || !voxel_object.has_non_empty_voxels() {
+    let bounding_sphere = if uncullable || voxel_object.contains_only_empty_voxels() {
         // The scene graph will not cull models with no bounding sphere
         None
     } else {

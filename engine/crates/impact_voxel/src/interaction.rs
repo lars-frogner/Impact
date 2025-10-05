@@ -133,7 +133,7 @@ pub fn sync_voxel_object_bounding_sphere_in_scene_graph(
         return;
     };
 
-    let bounding_sphere = (!uncullable && voxel_object.object().has_non_empty_voxels())
+    let bounding_sphere = (!uncullable && !voxel_object.object().contains_only_empty_voxels())
         .then(|| voxel_object.object().compute_bounding_sphere());
 
     scene_graph.set_model_instance_bounding_sphere(model_instance_node_id, bounding_sphere);
