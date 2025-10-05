@@ -9,6 +9,7 @@ pub use impact;
 #[cfg(feature = "roc_codegen")]
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
+use allocator_api2::alloc::Allocator;
 use anyhow::Result;
 use editor::{Editor, EditorConfig};
 use impact::{
@@ -16,6 +17,8 @@ use impact::{
     bumpalo::Bump,
     egui,
     engine::{Engine, EngineConfig},
+    impact_ecs::world::EntityID,
+    impact_geometry::{ModelTransform, ReferenceFrame},
     impact_io,
     input::{
         key::KeyboardEvent,
@@ -25,6 +28,11 @@ use impact::{
     window::WindowConfig,
 };
 use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
+use impact_voxel::{
+    chunks::ChunkedVoxelObject,
+    generation::{SDFVoxelGenerator, VoxelGenerator},
+    mesh::MeshedChunkedVoxelObject,
+};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -34,8 +42,10 @@ use std::{
 
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 
+const OBJECT_ENTITY_ID: EntityID = EntityID::hashed_from_str("object");
+
 #[derive(Debug)]
-pub struct VoxelGenerator {
+pub struct VoxelGeneratorApp {
     user_interface: RwLock<UserInterface>,
 }
 
@@ -55,7 +65,7 @@ pub struct UserInterface {
     dev_ui: DevUserInterface,
 }
 
-impl VoxelGenerator {
+impl VoxelGeneratorApp {
     pub fn new(user_interface: UserInterface) -> Self {
         Self {
             user_interface: RwLock::new(user_interface),
@@ -63,7 +73,7 @@ impl VoxelGenerator {
     }
 }
 
-impl Application for VoxelGenerator {
+impl Application for VoxelGeneratorApp {
     fn on_engine_initialized(&self, arena: &Bump, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
@@ -72,7 +82,38 @@ impl Application for VoxelGenerator {
         self.user_interface.read().setup(&engine);
 
         impact_log::debug!("Setting up scene");
+
+        let (voxel_object, model_transform) =
+            generate_voxel_object(arena, &self.user_interface.read().editor);
+
+        let voxel_object_id = engine.add_voxel_object(voxel_object);
+
+        engine.create_entity_with_id(
+            OBJECT_ENTITY_ID,
+            (
+                &voxel_object_id,
+                &model_transform,
+                &ReferenceFrame::unoriented([0.0; 3].into()),
+            ),
+        )?;
+
         scripting::setup_scene()
+    }
+
+    fn on_new_frame(&self, arena: &Bump, engine: &Engine, _frame_number: u64) -> Result<()> {
+        if let Some((voxel_object, new_model_transform)) =
+            generate_voxel_object_if_graph_valid(arena, &self.user_interface.read().editor)
+        {
+            engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
+                *model_transform = new_model_transform;
+                Ok(())
+            })?;
+            engine.with_component(OBJECT_ENTITY_ID, |voxel_object_id| {
+                engine.replace_voxel_object(*voxel_object_id, voxel_object);
+                Ok(())
+            })?;
+        }
+        Ok(())
     }
 
     fn handle_keyboard_event(&self, _arena: &Bump, event: KeyboardEvent) -> Result<()> {
@@ -182,4 +223,33 @@ impl UserInterface {
         self.dev_ui
             .run_with_custom_panels(ctx, input, engine, command_queue, &mut self.editor)
     }
+}
+
+fn generate_voxel_object_if_graph_valid<A>(
+    arena: A,
+    editor: &Editor,
+) -> Option<(MeshedChunkedVoxelObject, ModelTransform)>
+where
+    A: Allocator + Copy,
+{
+    let generator = editor.build_voxel_sdf_generator_if_graph_valid(arena)?;
+    Some((
+        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate(&generator)),
+        compute_model_transform(&generator),
+    ))
+}
+
+fn generate_voxel_object<A>(arena: A, editor: &Editor) -> (MeshedChunkedVoxelObject, ModelTransform)
+where
+    A: Allocator + Copy,
+{
+    let generator = editor.build_voxel_sdf_generator(arena);
+    (
+        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate(&generator)),
+        compute_model_transform(&generator),
+    )
+}
+
+fn compute_model_transform(generator: &SDFVoxelGenerator) -> ModelTransform {
+    ModelTransform::with_offset(generator.voxel_extent() as f32 * generator.grid_center().coords)
 }

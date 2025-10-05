@@ -110,12 +110,14 @@ roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 tracy = ["impact/tracy"]
 
 [dependencies]
+allocator-api2 = "0.2.8"
 anyhow = "1.0"
 env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
 impact = { path = "../../engine", features = ["window", "egui"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_log = { path = "../../engine/crates/impact_log" }
+impact_voxel = { path = "../../engine/crates/impact_voxel" }
 inventory = "0.3"
 libloading = "0.8"
 parking_lot = "0.12"

@@ -21,7 +21,7 @@ const RIGHT_MARGIN: f32 = 8.0;
 const SPACING: f32 = 6.0;
 
 impl LabelAndHoverText {
-    pub fn label_only(label: &'static str) -> Self {
+    pub const fn label_only(label: &'static str) -> Self {
         Self {
             label,
             hover_text: "",

@@ -2,7 +2,7 @@
 
 pub mod ffi;
 
-use crate::{ENGINE, UserInterface, VoxelGenerator, VoxelGeneratorConfig, editor::Editor};
+use crate::{ENGINE, UserInterface, VoxelGeneratorApp, VoxelGeneratorConfig, editor::Editor};
 use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
@@ -31,7 +31,7 @@ pub fn run_with_config(config: VoxelGeneratorConfig) -> Result<()> {
     let dev_ui = DevUserInterface::new(dev_ui_config);
     let user_interface = UserInterface::new(editor, dev_ui);
 
-    let app = Arc::new(VoxelGenerator::new(user_interface));
+    let app = Arc::new(VoxelGeneratorApp::new(user_interface));
 
     window::run(app, window_config, runtime_config, engine_config)
 }
