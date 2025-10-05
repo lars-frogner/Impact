@@ -141,9 +141,12 @@ impl ChunkedVoxelObject {
         sdf: &mut VoxelChunkSignedDistanceField,
         f: &mut impl FnMut(ExposedVoxelChunk, &VoxelChunkSignedDistanceField),
     ) {
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
-                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        // We can't constrain the chunk ranges to `self.occupied_chunk_ranges`
+        // here, since there may be non-uniform chunks with only empty voxels
+        // whose signed distances are required to get the meshes right
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_j in 0..self.chunk_counts[1] {
+                for chunk_k in 0..self.chunk_counts[2] {
                     let chunk_indices = [chunk_i, chunk_j, chunk_k];
                     if let Some(chunk_flags) =
                         self.fill_sdf_for_chunk_if_exposed(sdf, chunk_indices)
