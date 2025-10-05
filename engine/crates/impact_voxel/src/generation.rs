@@ -231,7 +231,7 @@ impl SDFVoxelGenerator {
             return Self {
                 voxel_extent,
                 grid_shape: [0; 3],
-                shifted_grid_center: Point3::origin(),
+                shifted_grid_center: [-0.5; 3].into(),
                 sdf_generator,
                 voxel_type_generator,
             };
@@ -246,17 +246,20 @@ impl SDFVoxelGenerator {
             extent + 2
         });
 
+        let grid_center_relative_to_domain_lower_corner =
+            Point3::from(grid_shape.map(|n| 0.5 * n as f32));
+
+        // Since the domain can be translated relative to the origin of the SDF
+        // reference frame, we subtract the domain center to get the grid center
+        // relative to the origin
+        let grid_center_relative_to_sdf_origin =
+            grid_center_relative_to_domain_lower_corner - sdf_domain.center().coords;
+
         // The center here is offset by half a grid cell relative to the coordinates
         // in the voxel object to account for the fact that we want to evaluate the
         // SDF at the center of each voxel
-        let shifted_grid_center_relative_to_domain_center =
-            Point3::from(grid_shape.map(|n| 0.5 * (n - 1) as f32));
-
-        // Since the domain can be translated relative to the origin of the SDF
-        // reference frame, we subtract the domain center to get the shifted
-        // grid center relative to the origin
         let shifted_grid_center_relative_to_sdf_origin =
-            shifted_grid_center_relative_to_domain_center - sdf_domain.center().coords;
+            grid_center_relative_to_sdf_origin.map(|coord| coord - 0.5);
 
         Self {
             voxel_extent,
@@ -265,6 +268,12 @@ impl SDFVoxelGenerator {
             sdf_generator,
             voxel_type_generator,
         }
+    }
+
+    /// Returns the center of the voxel grid in the SDF reference frame. The
+    /// coordinates are in whole voxels.
+    pub fn grid_center(&self) -> Point3<f32> {
+        self.shifted_grid_center.map(|coord| coord + 0.5) // Unshift
     }
 }
 

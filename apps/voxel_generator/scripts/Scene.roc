@@ -7,24 +7,15 @@ import core.Radians
 import core.UnitQuaternion
 import core.UnitVector3
 import core.Vector3
-import pf.Command
 import pf.Entity
-import pf.Skybox
 import pf.Comp.AmbientEmission
 import pf.Comp.ControlledVelocity
 import pf.Comp.ControlledAngularVelocity
 import pf.Setup.PerspectiveCamera
-import pf.Setup.VoxelBox
-import pf.Setup.SameVoxelType
 import pf.Comp.ReferenceFrame
-import pf.Comp.ModelTransform
 import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.ShadowableUnidirectionalEmission
-import pf.Setup.UniformColor
-import pf.Setup.UniformRoughness
-import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Texture.TextureID
 
 entity_ids = {
     camera: Entity.id("camera"),
@@ -33,7 +24,6 @@ entity_ids = {
 
 setup! = |_|
     Entity.create_with_id!(camera, entity_ids.camera)?
-    Entity.create_with_id!(object, entity_ids.object)?
     _ = Entity.create!(key_light)?
     _ = Entity.create!(fill_light)?
     _ = Entity.create!(rim_light)?
@@ -51,13 +41,6 @@ camera =
     |> Comp.ControlledVelocity.add_new
     |> Comp.ControlledAngularVelocity.add_new
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
-
-object =
-    Entity.new_component_data
-    |> Setup.VoxelBox.add_new(0.25, 62.0, 62.0, 62.0)
-    |> Comp.ModelTransform.add_with_offset((8, 8, 8))
-    |> Setup.SameVoxelType.add_new("Default")
-    |> Comp.ReferenceFrame.add_unoriented((0.0, 0.0, 0.0))
 
 ## Key light (directional) – strong, angled from above-right
 key_light =

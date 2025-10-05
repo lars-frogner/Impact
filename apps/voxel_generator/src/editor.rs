@@ -1,3 +1,6 @@
+mod node_kind;
+
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact::{
     egui::{
         Button, Color32, ComboBox, Context, CursorIcon, DragValue, FontId, Galley, Id, Key,
@@ -5,6 +8,7 @@ use impact::{
         pos2, vec2,
     },
     engine::Engine,
+    impact_containers::HashMap,
 };
 use impact_dev_ui::{
     CustomPanels, UserInterfaceConfig as DevUserInterfaceConfig,
@@ -12,13 +16,22 @@ use impact_dev_ui::{
         LabelAndHoverText, labeled_option, option_drag_value, option_group, option_panel,
     },
 };
+use impact_voxel::{
+    generation::{
+        SDFGenerator, SDFGeneratorBuilder, SDFNodeID, SDFVoxelGenerator, SameVoxelTypeGenerator,
+        VoxelTypeGenerator,
+    },
+    voxel_types::VoxelType,
+};
+use node_kind::NodeKind;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
 
-const CANVAS_DEFAULT_SIZE: Vec2 = vec2(800.0, 600.0);
+const CANVAS_DEFAULT_POS: Pos2 = pos2(0.0, 250.0);
+const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
 
 const NODE_CORNER_RADIUS: f32 = 8.0;
 const NODE_FILL_COLOR: Color32 = Color32::from_gray(42);
@@ -35,9 +48,9 @@ const NODE_PARAM_SPACING: f32 = 4.0;
 const NODE_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
 
 const MIN_NODE_SEPARATION: f32 = 8.0;
-const NEW_NODE_GAP: f32 = 32.0;
+const NEW_NODE_GAP: f32 = 40.0;
 
-const PORT_RADIUS: f32 = 6.0;
+const PORT_RADIUS: f32 = 8.0;
 const PORT_FILL_COLOR: Color32 = Color32::LIGHT_GRAY;
 const HOVERED_PORT_FILL_COLOR: Color32 = Color32::WHITE;
 const DISABLED_PORT_FILL_COLOR: Color32 = Color32::from_gray(80);
@@ -86,27 +99,15 @@ type NodeID = u64;
 #[derive(Clone, Debug)]
 struct Node {
     position: Pos2,
-    kind: NodeKind,
-    params: Vec<NodeParam>,
+    data: NodeData,
     parent: Option<NodeID>,
     children: Vec<Option<NodeID>>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum NodeKind {
-    Output,
-    #[default]
-    Box,
-    Sphere,
-    GradientNoise,
-    Translation,
-    Rotation,
-    Scaling,
-    MultifractalNoise,
-    MultiscaleSphere,
-    Union,
-    Subtraction,
-    Intersection,
+#[derive(Clone, Debug)]
+struct NodeData {
+    kind: NodeKind,
+    params: Vec<NodeParam>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -129,12 +130,12 @@ struct PendingEdge {
 
 #[derive(Clone, Debug)]
 enum NodeParam {
-    Int(IntParam),
+    UInt(UIntParam),
     Float(FloatParam),
 }
 
 #[derive(Clone, Debug)]
-struct IntParam {
+struct UIntParam {
     text: LabelAndHoverText,
     value: u32,
 }
@@ -143,6 +144,9 @@ struct IntParam {
 struct FloatParam {
     text: LabelAndHoverText,
     value: f32,
+    min_value: f32,
+    max_value: f32,
+    speed: f32,
 }
 
 impl Editor {
@@ -153,6 +157,30 @@ impl Editor {
             node_id_counter: 0,
             config,
         }
+    }
+
+    pub fn build_voxel_sdf_generator_if_graph_valid<A>(&self, arena: A) -> Option<SDFVoxelGenerator>
+    where
+        A: Allocator + Copy,
+    {
+        let sdf_generator = build_sdf_generator(arena, &self.canvas.nodes)?;
+        Some(SDFVoxelGenerator::new(
+            0.25,
+            sdf_generator,
+            VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0))),
+        ))
+    }
+
+    pub fn build_voxel_sdf_generator<A>(&self, arena: A) -> SDFVoxelGenerator
+    where
+        A: Allocator + Copy,
+    {
+        let sdf_generator = build_sdf_generator(arena, &self.canvas.nodes).unwrap_or_default();
+        SDFVoxelGenerator::new(
+            0.25,
+            sdf_generator,
+            VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0))),
+        )
     }
 }
 
@@ -169,7 +197,7 @@ impl CustomPanels for Editor {
         let mut pending_new_node = if self.canvas.nodes.is_empty() {
             let output_node_id = self.node_id_counter;
             self.node_id_counter += 1;
-            Some((output_node_id, NodeKind::Output))
+            Some((output_node_id, NodeData::new(NodeKind::Output)))
         } else {
             None
         };
@@ -180,7 +208,8 @@ impl CustomPanels for Editor {
                     .add_enabled(pending_new_node.is_none(), Button::new("Add node"))
                     .clicked()
                 {
-                    pending_new_node = Some((self.node_id_counter, self.kind_to_add));
+                    pending_new_node =
+                        Some((self.node_id_counter, NodeData::new(self.kind_to_add)));
                     self.node_id_counter += 1;
                 }
 
@@ -202,7 +231,7 @@ impl CustomPanels for Editor {
 
                 if let Some(selected_node_id) = self.canvas.selected_node_id {
                     let mut selected_node = self.canvas.nodes.get_mut(&selected_node_id).unwrap();
-                    let mut kind = selected_node.kind;
+                    let mut kind = selected_node.data.kind;
 
                     labeled_option(
                         ui,
@@ -212,7 +241,7 @@ impl CustomPanels for Editor {
                         },
                         |ui| {
                             ComboBox::from_id_salt("selected_kind")
-                                .selected_text(selected_node.kind.label())
+                                .selected_text(selected_node.data.kind.label())
                                 .show_ui(ui, |ui| {
                                     for kind_option in NodeKind::all_non_root() {
                                         ui.selectable_value(
@@ -225,12 +254,12 @@ impl CustomPanels for Editor {
                         },
                     );
 
-                    if kind != selected_node.kind {
+                    if kind != selected_node.data.kind {
                         self.canvas.change_node_kind(selected_node_id, kind);
                         selected_node = self.canvas.node_mut(selected_node_id);
                     }
 
-                    for param in &mut selected_node.params {
+                    for param in &mut selected_node.data.params {
                         param.show_controls(ui);
                     }
 
@@ -321,7 +350,7 @@ impl Canvas {
         let n_child_slots = self
             .nodes
             .get(&node_id)
-            .map_or(0, |node| node.kind.port_config().children);
+            .map_or(0, |node| node.data.kind.port_config().children);
 
         for slot in 0..n_child_slots {
             self.detach_child_slot(node_id, slot);
@@ -375,22 +404,12 @@ impl Canvas {
             return false;
         }
 
-        // Child must have no parent
+        // Slot must exist
         if self
-            .nodes
-            .get(&child_node_id)
-            .and_then(|child_node| child_node.parent)
-            .is_some()
-        {
-            return false;
-        }
-
-        // Slot must exist and be empty
-        if !self
             .nodes
             .get(&parent_node_id)
             .and_then(|p| p.children.get(child_slot))
-            .is_some_and(|slot| slot.is_none())
+            .is_none()
         {
             return false;
         }
@@ -407,12 +426,17 @@ impl Canvas {
         if !self.can_attach(parent_node_id, child_node_id, child_slot) {
             return false;
         }
+
+        self.detach_parent_of(child_node_id);
         if let Some(child_node) = self.nodes.get_mut(&child_node_id) {
             child_node.parent = Some(parent_node_id);
         }
+
+        self.detach_child_slot(parent_node_id, child_slot);
         if let Some(parent_node) = self.nodes.get_mut(&parent_node_id) {
             parent_node.children[child_slot] = Some(child_node_id);
         }
+
         true
     }
 
@@ -452,8 +476,9 @@ impl Canvas {
         }
     }
 
-    fn show(&mut self, ctx: &Context, pending_new_node: Option<(NodeID, NodeKind)>) {
+    fn show(&mut self, ctx: &Context, pending_new_node: Option<(NodeID, NodeData)>) {
         Window::new("Generator graph")
+            .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
             .vscroll(false)
             .hscroll(false)
@@ -487,40 +512,45 @@ impl Canvas {
                 for (&node_id, node) in &self.nodes {
                     world_node_rects.insert(
                         node_id,
-                        Rect::from_min_size(node.position, node.compute_size(ui, self.state.zoom)),
+                        Rect::from_min_size(
+                            node.position,
+                            node.data.compute_size(ui, self.state.zoom),
+                        ),
                     );
                 }
 
                 // Handle pending new node
 
-                if let Some((node_id, kind)) = pending_new_node {
-                    let (mut node, mut world_node_rect) =
-                        if let Some(last_node) = self.nodes.values().last() {
-                            let last_node_rect = world_node_rects.values().last().unwrap();
-                            let position = last_node.position
-                                + vec2(0.0, last_node_rect.height() + NEW_NODE_GAP);
+                if let Some((node_id, data)) = pending_new_node {
+                    let node_size = data.compute_size(ui, self.state.zoom);
 
-                            let node = Node::new(position, kind);
+                    let position = if let Some(selected_node) = self
+                        .selected_node_id
+                        .and_then(|node_id| self.nodes.get(&node_id))
+                    {
+                        let selected_node_rect = world_node_rects.values().last().unwrap();
+                        selected_node.position
+                            + vec2(
+                                0.5 * (selected_node_rect.width() - node_size.x),
+                                selected_node_rect.height() + NEW_NODE_GAP,
+                            )
+                    } else if let Some(last_node) = self.nodes.values().last() {
+                        let last_node_rect = world_node_rects.values().last().unwrap();
+                        last_node.position
+                            + vec2(
+                                0.5 * (last_node_rect.width() - node_size.x),
+                                last_node_rect.height() + NEW_NODE_GAP,
+                            )
+                    } else {
+                        self.state
+                            .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top())
+                            + vec2(-0.5 * node_size.x, 0.0)
+                    };
 
-                            let world_node_rect = Rect::from_min_size(
-                                node.position,
-                                node.compute_size(ui, self.state.zoom),
-                            );
+                    let mut world_node_rect = Rect::from_min_size(position, node_size);
 
-                            (node, world_node_rect)
-                        } else {
-                            let mut node = Node::new(Pos2::ZERO, kind);
-                            let node_size = node.compute_size(ui, self.state.zoom);
-
-                            node.position = self
-                                .state
-                                .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top())
-                                + vec2(-0.5 * node_size.x, 0.0);
-
-                            let world_node_rect = Rect::from_min_size(node.position, node_size);
-
-                            (node, world_node_rect)
-                        };
+                    let kind = data.kind;
+                    let mut node = Node::new(position, data);
 
                     let resolve_delta = compute_delta_to_resolve_overlaps(
                         &world_node_rects,
@@ -533,6 +563,10 @@ impl Canvas {
 
                     self.nodes.insert(node_id, node);
                     world_node_rects.insert(node_id, world_node_rect);
+
+                    if !kind.is_root() {
+                        self.selected_node_id = Some(node_id);
+                    }
                 }
 
                 for ((&node_id, node), &world_node_rect) in
@@ -558,7 +592,7 @@ impl Canvas {
                     // Handle node selection
 
                     if node_response.clicked()
-                        && node.kind.is_selectable()
+                        && !node.data.kind.is_root()
                         && self.pending_edge.is_none()
                     {
                         self.selected_node_id = Some(node_id);
@@ -599,7 +633,8 @@ impl Canvas {
                     painter.rect_stroke(node_rect, corner_radius, stroke, StrokeKind::Inside);
 
                     // Draw node text
-                    node.paint_text(ui, &painter, &node_rect, self.state.zoom);
+                    node.data
+                        .paint_text(ui, &painter, &node_rect, self.state.zoom);
                 }
 
                 // We will only need node rects in screen space from now
@@ -613,7 +648,7 @@ impl Canvas {
                 // Draw ports
 
                 for (&node_id, node_rect) in &node_rects {
-                    for port in self.node(node_id).kind.port_config().ports() {
+                    for port in self.node(node_id).data.kind.port_config().ports() {
                         let mut enabled = true;
                         let mut highlighted = false;
 
@@ -837,13 +872,52 @@ impl Default for CanvasState {
 }
 
 impl Node {
-    fn new(position: Pos2, kind: NodeKind) -> Self {
+    fn new(position: Pos2, data: NodeData) -> Self {
+        let kind = data.kind;
         Self {
             position,
-            kind,
-            params: kind.default_params(),
+            data,
             parent: None,
             children: vec![None; kind.port_config().children],
+        }
+    }
+
+    fn change_kind(&mut self, new_kind: NodeKind) {
+        self.data.change_kind(new_kind);
+        self.children.resize(new_kind.port_config().children, None);
+    }
+
+    fn get_node_attached_to_port(&self, port: Port) -> Option<NodeID> {
+        match port {
+            Port::Parent => self.parent,
+            Port::Child { slot, .. } => self.children.get(slot).copied().flatten(),
+        }
+    }
+
+    fn get_port_node_is_attached_to(
+        &self,
+        other_node_id: NodeID,
+        other_port: Port,
+    ) -> Option<Port> {
+        match other_port {
+            Port::Parent => self
+                .children
+                .iter()
+                .position(|child| *child == Some(other_node_id))
+                .map(|slot| Port::Child {
+                    slot,
+                    of: self.children.len(),
+                }),
+            Port::Child { .. } => (self.parent == Some(other_node_id)).then_some(Port::Parent),
+        }
+    }
+}
+
+impl NodeData {
+    fn new(kind: NodeKind) -> Self {
+        Self {
+            kind,
+            params: kind.default_params(),
         }
     }
 
@@ -933,139 +1007,6 @@ impl Node {
     fn change_kind(&mut self, new_kind: NodeKind) {
         self.kind = new_kind;
         self.params = new_kind.default_params();
-        self.children.resize(new_kind.port_config().children, None);
-    }
-
-    fn get_node_attached_to_port(&self, port: Port) -> Option<NodeID> {
-        match port {
-            Port::Parent => self.parent,
-            Port::Child { slot, .. } => self.children.get(slot).copied().flatten(),
-        }
-    }
-
-    fn get_port_node_is_attached_to(
-        &self,
-        other_node_id: NodeID,
-        other_port: Port,
-    ) -> Option<Port> {
-        match other_port {
-            Port::Parent => self
-                .children
-                .iter()
-                .position(|child| *child == Some(other_node_id))
-                .map(|slot| Port::Child {
-                    slot,
-                    of: self.children.len(),
-                }),
-            Port::Child { .. } => (self.parent == Some(other_node_id)).then_some(Port::Parent),
-        }
-    }
-}
-
-impl NodeKind {
-    const fn all_non_root() -> [Self; 11] {
-        [
-            Self::Box,
-            Self::Sphere,
-            Self::GradientNoise,
-            Self::Translation,
-            Self::Rotation,
-            Self::Scaling,
-            Self::MultifractalNoise,
-            Self::MultiscaleSphere,
-            Self::Union,
-            Self::Subtraction,
-            Self::Intersection,
-        ]
-    }
-
-    const fn label(&self) -> &'static str {
-        match self {
-            Self::Output => "Output",
-            Self::Box => "Box",
-            Self::Sphere => "Sphere",
-            Self::GradientNoise => "Gradient noise",
-            Self::Translation => "Translation",
-            Self::Rotation => "Rotation",
-            Self::Scaling => "Scaling",
-            Self::MultifractalNoise => "Multifractal noise",
-            Self::MultiscaleSphere => "Multiscale sphere",
-            Self::Union => "Union",
-            Self::Subtraction => "Subtraction",
-            Self::Intersection => "Intersection",
-        }
-    }
-
-    const fn port_config(&self) -> PortConfig {
-        match self {
-            Self::Output => PortConfig::root(),
-            Self::Box | Self::Sphere | Self::GradientNoise => PortConfig::leaf(),
-            Self::Translation
-            | Self::Rotation
-            | Self::Scaling
-            | Self::MultifractalNoise
-            | Self::MultiscaleSphere => PortConfig::unary(),
-            Self::Union | Self::Subtraction | Self::Intersection => PortConfig::binary(),
-        }
-    }
-
-    fn is_selectable(&self) -> bool {
-        *self != Self::Output
-    }
-
-    fn default_params(&self) -> Vec<NodeParam> {
-        match self {
-            Self::Output => vec![],
-            Self::Box => vec![
-                FloatParam::new(LabelAndHoverText::label_only("Extent in x"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Extent in y"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Extent in z"), 1.0).into(),
-            ],
-            Self::Sphere => {
-                vec![FloatParam::new(LabelAndHoverText::label_only("Radius"), 1.0).into()]
-            }
-            Self::GradientNoise => vec![
-                FloatParam::new(LabelAndHoverText::label_only("Extent in x"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Extent in y"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Extent in z"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Noise frequency"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Noise threshold"), 1.0).into(),
-                IntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-            ],
-            Self::Translation => vec![
-                FloatParam::new(LabelAndHoverText::label_only("In x"), 0.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("In y"), 0.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("In z"), 0.0).into(),
-            ],
-            Self::Rotation => vec![
-                FloatParam::new(LabelAndHoverText::label_only("Angle"), 0.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Axis (x)"), 0.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Axis (y)"), 0.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Axis (z)"), 1.0).into(),
-            ],
-            Self::Scaling => {
-                vec![FloatParam::new(LabelAndHoverText::label_only("Factor"), 1.0).into()]
-            }
-            Self::MultifractalNoise => vec![
-                IntParam::new(LabelAndHoverText::label_only("Octaves"), 0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Frequency"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Lacunarity"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Amplitude"), 1.0).into(),
-                IntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-            ],
-            Self::MultiscaleSphere => vec![
-                IntParam::new(LabelAndHoverText::label_only("Octaves"), 0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Max scale"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Inflation"), 1.0).into(),
-                FloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0).into(),
-                IntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-            ],
-            Self::Union | Self::Subtraction | Self::Intersection => {
-                vec![FloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0).into()]
-            }
-        }
     }
 }
 
@@ -1176,22 +1117,46 @@ impl Port {
 impl NodeParam {
     fn show_controls(&mut self, ui: &mut Ui) {
         match self {
-            NodeParam::Int(param) => param.show_controls(ui),
-            NodeParam::Float(param) => param.show_controls(ui),
+            Self::UInt(param) => param.show_controls(ui),
+            Self::Float(param) => param.show_controls(ui),
         }
     }
 
     fn text_to_display(&self) -> String {
         match self {
-            NodeParam::Int(param) => param.text_to_display(),
-            NodeParam::Float(param) => param.text_to_display(),
+            Self::UInt(param) => param.text_to_display(),
+            Self::Float(param) => param.text_to_display(),
         }
+    }
+
+    fn as_uint(&self) -> Option<u32> {
+        if let Self::UInt(param) = self {
+            Some(param.value)
+        } else {
+            None
+        }
+    }
+
+    fn uint(&self) -> u32 {
+        self.as_uint().unwrap()
+    }
+
+    fn as_float(&self) -> Option<f32> {
+        if let Self::Float(param) = self {
+            Some(param.value)
+        } else {
+            None
+        }
+    }
+
+    fn float(&self) -> f32 {
+        self.as_float().unwrap()
     }
 }
 
-impl From<IntParam> for NodeParam {
-    fn from(param: IntParam) -> Self {
-        Self::Int(param)
+impl From<UIntParam> for NodeParam {
+    fn from(param: UIntParam) -> Self {
+        Self::UInt(param)
     }
 }
 
@@ -1201,8 +1166,8 @@ impl From<FloatParam> for NodeParam {
     }
 }
 
-impl IntParam {
-    fn new(text: LabelAndHoverText, value: u32) -> Self {
+impl UIntParam {
+    const fn new(text: LabelAndHoverText, value: u32) -> Self {
         Self { text, value }
     }
 
@@ -1220,15 +1185,38 @@ impl IntParam {
 }
 
 impl FloatParam {
-    fn new(text: LabelAndHoverText, value: f32) -> Self {
-        Self { text, value }
+    const fn new(text: LabelAndHoverText, value: f32) -> Self {
+        Self {
+            text,
+            value,
+            min_value: f32::NEG_INFINITY,
+            max_value: f32::INFINITY,
+            speed: 0.05,
+        }
+    }
+
+    const fn with_min_value(mut self, min_value: f32) -> Self {
+        self.min_value = min_value;
+        self
+    }
+
+    const fn with_max_value(mut self, max_value: f32) -> Self {
+        self.max_value = max_value;
+        self
+    }
+
+    const fn with_speed(mut self, speed: f32) -> Self {
+        self.speed = speed;
+        self
     }
 
     fn show_controls(&mut self, ui: &mut Ui) {
         option_drag_value(
             ui,
             self.text.clone(),
-            DragValue::new(&mut self.value).speed(0.01),
+            DragValue::new(&mut self.value)
+                .range(self.min_value..=self.max_value)
+                .speed(self.speed),
         );
     }
 
@@ -1251,8 +1239,8 @@ fn compute_delta_to_resolve_overlaps(
     let mut moved_node_rect = moved_node_rect.expand2(EXPANSION);
     let mut total_delta = Vec2::ZERO;
 
-    // A few iterations in case we push into someone else
-    for _ in 0..6 {
+    // Multiple iterations in case we push into someone else
+    for _ in 0..64 {
         let mut moved = false;
 
         for (&node_id, node_rect) in node_rects {
@@ -1301,4 +1289,58 @@ fn compute_delta_to_resolve_overlaps(
     }
 
     total_delta
+}
+
+enum SDFBuildOperation<'a> {
+    VisitChildren((NodeID, &'a Node)),
+    BuildNode((NodeID, &'a Node)),
+}
+
+fn build_sdf_generator<A>(arena: A, nodes: &BTreeMap<NodeID, Node>) -> Option<SDFGenerator>
+where
+    A: Allocator + Copy,
+{
+    let output_node = nodes.get(&0)?;
+    let root_node_id = output_node.children[0]?;
+    let root_node = &nodes[&root_node_id];
+
+    let mut builder = SDFGeneratorBuilder::with_capacity_in(nodes.len(), arena);
+
+    let mut id_map = HashMap::<NodeID, SDFNodeID>::default();
+
+    let mut operation_stack = AVec::new_in(arena);
+    operation_stack.push(SDFBuildOperation::VisitChildren((root_node_id, root_node)));
+
+    while let Some(operation) = operation_stack.pop() {
+        match operation {
+            SDFBuildOperation::VisitChildren((node_id, node)) => {
+                if id_map.contains_key(&node_id) {
+                    continue;
+                }
+
+                operation_stack.push(SDFBuildOperation::BuildNode((node_id, node)));
+
+                for child_node_id in node.children.iter().rev() {
+                    let child_node_id = (*child_node_id)?;
+                    let child_node = &nodes[&child_node_id];
+                    operation_stack.push(SDFBuildOperation::VisitChildren((
+                        child_node_id,
+                        child_node,
+                    )));
+                }
+            }
+            SDFBuildOperation::BuildNode((node_id, node)) => {
+                let generator_node = node.data.kind.build_sdf_generator_node(
+                    &id_map,
+                    &node.children,
+                    &node.data.params,
+                )?;
+
+                let sdf_node_id = builder.add_node_and_set_to_root(generator_node);
+                id_map.insert(node_id, sdf_node_id);
+            }
+        }
+    }
+
+    Some(builder.build_with_arena(arena).unwrap())
 }
