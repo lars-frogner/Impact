@@ -39,6 +39,9 @@ pub enum NodeKind {
     Intersection,
 }
 
+pub const DEFAULT_VOXEL_EXTENT: f32 = 0.25;
+pub const MIN_VOXEL_EXTENT: f32 = 0.005;
+
 impl SpecificNodeKind for BoxSDFGenerator {
     const LABEL: &'static str = "Box";
     const PORT_CONFIG: PortConfig = PortConfig::leaf();
@@ -463,7 +466,7 @@ impl NodeKind {
 
     pub fn default_params(&self) -> Vec<NodeParam> {
         match self {
-            Self::Output => vec![],
+            Self::Output => output_node_params(),
             Self::Box => BoxSDFGenerator::default_params(),
             Self::Sphere => SphereSDFGenerator::default_params(),
             Self::GradientNoise => GradientNoiseSDFGenerator::default_params(),
@@ -501,6 +504,21 @@ impl NodeKind {
             Self::Intersection => SDFIntersection::build(id_map, children, params),
         }
     }
+}
+
+pub fn get_voxel_extent_from_output_node(output_node_params: &[NodeParam]) -> f32 {
+    output_node_params[0].float()
+}
+
+fn output_node_params() -> Vec<NodeParam> {
+    vec![NodeParam::Float(
+        FloatParam::new(
+            LabelAndHoverText::label_only("Voxel extent"),
+            DEFAULT_VOXEL_EXTENT,
+        )
+        .with_min_value(MIN_VOXEL_EXTENT)
+        .with_speed(0.01),
+    )]
 }
 
 fn unary_child(

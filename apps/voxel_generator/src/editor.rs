@@ -163,9 +163,10 @@ impl Editor {
     where
         A: Allocator + Copy,
     {
-        let sdf_generator = build_sdf_generator(arena, &self.canvas.nodes)?;
+        let (voxel_extent, sdf_generator) = build_sdf_generator(arena, &self.canvas.nodes)?;
+
         Some(SDFVoxelGenerator::new(
-            0.25,
+            f64::from(voxel_extent),
             sdf_generator,
             VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0))),
         ))
@@ -175,9 +176,11 @@ impl Editor {
     where
         A: Allocator + Copy,
     {
-        let sdf_generator = build_sdf_generator(arena, &self.canvas.nodes).unwrap_or_default();
+        let (voxel_extent, sdf_generator) = build_sdf_generator(arena, &self.canvas.nodes)
+            .unwrap_or_else(|| (node_kind::DEFAULT_VOXEL_EXTENT, SDFGenerator::default()));
+
         SDFVoxelGenerator::new(
-            0.25,
+            f64::from(voxel_extent),
             sdf_generator,
             VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0))),
         )
@@ -240,17 +243,19 @@ impl CustomPanels for Editor {
                             hover_text: "",
                         },
                         |ui| {
-                            ComboBox::from_id_salt("selected_kind")
-                                .selected_text(selected_node.data.kind.label())
-                                .show_ui(ui, |ui| {
-                                    for kind_option in NodeKind::all_non_root() {
-                                        ui.selectable_value(
-                                            &mut kind,
-                                            kind_option,
-                                            kind_option.label(),
-                                        );
-                                    }
-                                })
+                            ui.add_enabled_ui(!selected_node.data.kind.is_root(), |ui| {
+                                ComboBox::from_id_salt("selected_kind")
+                                    .selected_text(selected_node.data.kind.label())
+                                    .show_ui(ui, |ui| {
+                                        for kind_option in NodeKind::all_non_root() {
+                                            ui.selectable_value(
+                                                &mut kind,
+                                                kind_option,
+                                                kind_option.label(),
+                                            );
+                                        }
+                                    })
+                            })
                         },
                     );
 
@@ -263,7 +268,13 @@ impl CustomPanels for Editor {
                         param.show_controls(ui);
                     }
 
-                    if ui.button("Delete node").clicked() {
+                    if ui
+                        .add_enabled(
+                            !selected_node.data.kind.is_root(),
+                            Button::new("Delete node"),
+                        )
+                        .clicked()
+                    {
                         id_of_node_to_delete = Some(selected_node_id);
                     }
                     ui.end_row();
@@ -341,6 +352,15 @@ impl Canvas {
     }
 
     fn remove_node(&mut self, node_id: NodeID) {
+        // Never delete root node
+        if self
+            .nodes
+            .get(&node_id)
+            .is_some_and(|node| node.data.kind.is_root())
+        {
+            return;
+        }
+
         if self.selected_node_id == Some(node_id) {
             self.selected_node_id = None;
         }
@@ -549,7 +569,6 @@ impl Canvas {
 
                     let mut world_node_rect = Rect::from_min_size(position, node_size);
 
-                    let kind = data.kind;
                     let mut node = Node::new(position, data);
 
                     let resolve_delta = compute_delta_to_resolve_overlaps(
@@ -564,9 +583,7 @@ impl Canvas {
                     self.nodes.insert(node_id, node);
                     world_node_rects.insert(node_id, world_node_rect);
 
-                    if !kind.is_root() {
-                        self.selected_node_id = Some(node_id);
-                    }
+                    self.selected_node_id = Some(node_id);
                 }
 
                 for ((&node_id, node), &world_node_rect) in
@@ -591,10 +608,7 @@ impl Canvas {
 
                     // Handle node selection
 
-                    if node_response.clicked()
-                        && !node.data.kind.is_root()
-                        && self.pending_edge.is_none()
-                    {
+                    if node_response.clicked() && self.pending_edge.is_none() {
                         self.selected_node_id = Some(node_id);
                     }
 
@@ -1296,11 +1310,14 @@ enum SDFBuildOperation<'a> {
     BuildNode((NodeID, &'a Node)),
 }
 
-fn build_sdf_generator<A>(arena: A, nodes: &BTreeMap<NodeID, Node>) -> Option<SDFGenerator>
+fn build_sdf_generator<A>(arena: A, nodes: &BTreeMap<NodeID, Node>) -> Option<(f32, SDFGenerator)>
 where
     A: Allocator + Copy,
 {
     let output_node = nodes.get(&0)?;
+
+    let voxel_extent = node_kind::get_voxel_extent_from_output_node(&output_node.data.params);
+
     let root_node_id = output_node.children[0]?;
     let root_node = &nodes[&root_node_id];
 
@@ -1342,5 +1359,5 @@ where
         }
     }
 
-    Some(builder.build_with_arena(arena).unwrap())
+    Some((voxel_extent, builder.build_with_arena(arena).unwrap()))
 }
