@@ -628,12 +628,12 @@ impl ChunkedVoxelObject {
     /// Returns the [`VoxelChunk`] at the given indices in the object's chunk
     /// grid. If the indices are out of bounds, an empty chunk is returned.
     pub fn get_chunk<I: PrimInt>(&self, chunk_i: I, chunk_j: I, chunk_k: I) -> VoxelChunk {
-        if chunk_i < I::from(self.occupied_chunk_ranges[0].start).unwrap()
-            || chunk_j < I::from(self.occupied_chunk_ranges[1].start).unwrap()
-            || chunk_k < I::from(self.occupied_chunk_ranges[2].start).unwrap()
-            || chunk_i >= I::from(self.occupied_chunk_ranges[0].end).unwrap()
-            || chunk_j >= I::from(self.occupied_chunk_ranges[1].end).unwrap()
-            || chunk_k >= I::from(self.occupied_chunk_ranges[2].end).unwrap()
+        if chunk_i < I::zero()
+            || chunk_j < I::zero()
+            || chunk_k < I::zero()
+            || chunk_i >= I::from(self.chunk_counts[0]).unwrap()
+            || chunk_j >= I::from(self.chunk_counts[1]).unwrap()
+            || chunk_k >= I::from(self.chunk_counts[2]).unwrap()
         {
             return VoxelChunk::Empty;
         }
@@ -1022,9 +1022,9 @@ impl ChunkedVoxelObject {
         let mut invalid_present_flags = Vec::new();
         let mut invalid_uniform = Vec::new();
 
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
-                for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_j in 0..self.chunk_counts[1] {
+                for chunk_k in 0..self.chunk_counts[2] {
                     let mut assert_has_flag = |chunk: &VoxelChunk, flag| match chunk {
                         VoxelChunk::Empty | VoxelChunk::Uniform(_) => {}
                         VoxelChunk::NonUniform(NonUniformVoxelChunk { flags, .. }) => {
@@ -1108,8 +1108,8 @@ impl ChunkedVoxelObject {
             }
         }
 
-        for chunk_j in self.occupied_chunk_ranges[1].clone() {
-            for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        for chunk_j in 0..self.chunk_counts[1] {
+            for chunk_k in 0..self.chunk_counts[2] {
                 match self.get_chunk(0, chunk_j, chunk_k) {
                     VoxelChunk::Empty => {}
                     VoxelChunk::Uniform(_) => {
@@ -1124,8 +1124,8 @@ impl ChunkedVoxelObject {
                 }
             }
         }
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_k in 0..self.chunk_counts[2] {
                 match self.get_chunk(chunk_i, 0, chunk_k) {
                     VoxelChunk::Empty => {}
                     VoxelChunk::Uniform(_) => {
@@ -1140,8 +1140,8 @@ impl ChunkedVoxelObject {
                 }
             }
         }
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_j in 0..self.chunk_counts[1] {
                 match self.get_chunk(chunk_i, chunk_j, 0) {
                     VoxelChunk::Empty => {}
                     VoxelChunk::Uniform(_) => {
@@ -1179,14 +1179,18 @@ impl ChunkedVoxelObject {
     }
 
     pub fn update_all_chunk_boundary_adjacencies(&mut self) {
+        // We can't constrain the chunk ranges to `self.occupied_chunk_ranges`
+        // here, since there may be non-uniform chunks with only empty voxels
+        // that also need their boundary adjacencies updated
+
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
-            self.occupied_chunk_ranges.clone(),
+            self.chunk_counts.map(|count| 0..count),
         );
 
         // Handle lower faces of the full object, since these are not included
         // in the loop above
-        for chunk_j in self.occupied_chunk_ranges[1].clone() {
-            for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        for chunk_j in 0..self.chunk_counts[1] {
+            for chunk_k in 0..self.chunk_counts[2] {
                 let chunk_idx = self.linear_chunk_idx(&[0, chunk_j, chunk_k]);
                 VoxelChunk::update_mutual_face_adjacencies(
                     &mut self.chunks,
@@ -1198,8 +1202,8 @@ impl ChunkedVoxelObject {
                 );
             }
         }
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_k in self.occupied_chunk_ranges[2].clone() {
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_k in 0..self.chunk_counts[2] {
                 let chunk_idx = self.linear_chunk_idx(&[chunk_i, 0, chunk_k]);
                 VoxelChunk::update_mutual_face_adjacencies(
                     &mut self.chunks,
@@ -1211,8 +1215,8 @@ impl ChunkedVoxelObject {
                 );
             }
         }
-        for chunk_i in self.occupied_chunk_ranges[0].clone() {
-            for chunk_j in self.occupied_chunk_ranges[1].clone() {
+        for chunk_i in 0..self.chunk_counts[0] {
+            for chunk_j in 0..self.chunk_counts[1] {
                 let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, 0]);
                 VoxelChunk::update_mutual_face_adjacencies(
                     &mut self.chunks,
