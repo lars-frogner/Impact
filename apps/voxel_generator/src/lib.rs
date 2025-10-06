@@ -138,14 +138,14 @@ impl Application for VoxelGeneratorApp {
 
     fn run_egui_ui(
         &self,
-        _arena: &Bump,
+        arena: &Bump,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
     ) -> egui::FullOutput {
         self.user_interface
             .write()
-            .run(ctx, input, engine, &api::UI_COMMANDS)
+            .run(arena, ctx, input, engine, &api::UI_COMMANDS)
     }
 }
 
@@ -215,13 +215,20 @@ impl UserInterface {
 
     pub fn run(
         &mut self,
+        arena: &Bump,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
         command_queue: &UICommandQueue,
     ) -> egui::FullOutput {
-        self.dev_ui
-            .run_with_custom_panels(ctx, input, engine, command_queue, &mut self.editor)
+        self.dev_ui.run_with_custom_panels(
+            arena,
+            ctx,
+            input,
+            engine,
+            command_queue,
+            &mut self.editor,
+        )
     }
 }
 

@@ -10,6 +10,7 @@ arbitrary = ["dep:arbitrary"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
+allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 egui_extras = "0.32"
