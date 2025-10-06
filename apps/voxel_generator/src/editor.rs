@@ -1,6 +1,7 @@
+mod build;
 mod node_kind;
 
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use allocator_api2::alloc::Allocator;
 use impact::{
     egui::{
         Button, Color32, ComboBox, Context, CursorIcon, DragValue, FontId, Galley, Id, Key,
@@ -8,7 +9,6 @@ use impact::{
         pos2, vec2,
     },
     engine::Engine,
-    impact_containers::HashMap,
 };
 use impact_dev_ui::{
     CustomPanels, UserInterfaceConfig as DevUserInterfaceConfig,
@@ -16,13 +16,7 @@ use impact_dev_ui::{
         LabelAndHoverText, labeled_option, option_drag_value, option_group, option_panel,
     },
 };
-use impact_voxel::{
-    generation::{
-        SDFGenerator, SDFGeneratorBuilder, SDFNodeID, SDFVoxelGenerator, SameVoxelTypeGenerator,
-        VoxelTypeGenerator,
-    },
-    voxel_types::VoxelType,
-};
+use impact_voxel::generation::SDFVoxelGenerator;
 use node_kind::NodeKind;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -60,6 +54,13 @@ const PENDING_EDGE_WIDTH: f32 = 2.0;
 const EDGE_COLOR: Color32 = Color32::WHITE;
 const PENDING_EDGE_COLOR: Color32 = Color32::LIGHT_GRAY;
 
+const STATUS_DOT_RADIUS: f32 = 6.0;
+const STATUS_DOT_OFFSET: Vec2 = vec2(12.0, 12.0);
+const STATUS_DOT_VALID_COLOR: Color32 = Color32::GREEN;
+const STATUS_DOT_INVALID_COLOR: Color32 = Color32::RED;
+const STATUS_DOT_VALID_HOVER_TEXT: &str = "The graph is complete";
+const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not complete";
+
 const SCROLL_SENSITIVITY: f32 = 4e-3;
 const MIN_ZOOM: f32 = 0.3;
 const MAX_ZOOM: f32 = 3.0;
@@ -68,6 +69,8 @@ const MAX_ZOOM: f32 = 3.0;
 pub struct Editor {
     canvas: Canvas,
     kind_to_add: NodeKind,
+    needs_rebuild: bool,
+    graph_status: GraphStatus,
     node_id_counter: NodeID,
     config: EditorConfig,
 }
@@ -78,6 +81,12 @@ pub struct EditorConfig {
     pub show_editor: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GraphStatus {
+    Complete,
+    Incomplete,
+}
+
 #[derive(Clone, Debug)]
 struct Canvas {
     state: CanvasState,
@@ -86,6 +95,11 @@ struct Canvas {
     pending_edge: Option<PendingEdge>,
     is_panning: bool,
     dragging_node_id: Option<NodeID>,
+}
+
+#[derive(Clone, Debug)]
+struct CanvasShowResult {
+    connectivity_may_have_changed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -154,36 +168,40 @@ impl Editor {
         Self {
             canvas: Canvas::new(),
             kind_to_add: NodeKind::default(),
+            needs_rebuild: true,
+            graph_status: GraphStatus::Incomplete,
             node_id_counter: 0,
             config,
         }
     }
 
-    pub fn build_voxel_sdf_generator_if_graph_valid<A>(&self, arena: A) -> Option<SDFVoxelGenerator>
+    pub fn build_next_voxel_sdf_generator<A>(&mut self, arena: A) -> Option<SDFVoxelGenerator>
     where
         A: Allocator + Copy,
     {
-        let (voxel_extent, sdf_generator) = build_sdf_generator(arena, &self.canvas.nodes)?;
+        if !self.needs_rebuild {
+            return None;
+        }
 
-        Some(SDFVoxelGenerator::new(
-            f64::from(voxel_extent),
-            sdf_generator,
-            VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0))),
-        ))
+        let result = build::build_sdf_voxel_generator(arena, &self.canvas.nodes);
+
+        self.graph_status = if result.is_some() {
+            GraphStatus::Complete
+        } else {
+            GraphStatus::Incomplete
+        };
+
+        self.needs_rebuild = false;
+
+        result
     }
 
-    pub fn build_voxel_sdf_generator<A>(&self, arena: A) -> SDFVoxelGenerator
+    pub fn build_next_voxel_sdf_generator_or_default<A>(&mut self, arena: A) -> SDFVoxelGenerator
     where
         A: Allocator + Copy,
     {
-        let (voxel_extent, sdf_generator) = build_sdf_generator(arena, &self.canvas.nodes)
-            .unwrap_or_else(|| (node_kind::DEFAULT_VOXEL_EXTENT, SDFGenerator::default()));
-
-        SDFVoxelGenerator::new(
-            f64::from(voxel_extent),
-            sdf_generator,
-            VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0))),
-        )
+        self.build_next_voxel_sdf_generator(arena)
+            .unwrap_or_else(build::default_sdf_voxel_generator)
     }
 }
 
@@ -192,10 +210,21 @@ impl CustomPanels for Editor {
         ui.toggle_value(&mut self.config.show_editor, "Voxel editor");
     }
 
-    fn run_panels(&mut self, ctx: &Context, config: &DevUserInterfaceConfig, _engine: &Engine) {
+    fn run_panels<A>(
+        &mut self,
+        _arena: A,
+        ctx: &Context,
+        config: &DevUserInterfaceConfig,
+        _engine: &Engine,
+    ) where
+        A: Allocator + Copy,
+    {
         if !self.config.show_editor {
             return;
         }
+
+        let mut connectivity_may_have_changed = false;
+        let mut params_changed = false;
 
         let mut pending_new_node = if self.canvas.nodes.is_empty() {
             let output_node_id = self.node_id_counter;
@@ -262,10 +291,13 @@ impl CustomPanels for Editor {
                     if kind != selected_node.data.kind {
                         self.canvas.change_node_kind(selected_node_id, kind);
                         selected_node = self.canvas.node_mut(selected_node_id);
+                        connectivity_may_have_changed = true;
                     }
 
                     for param in &mut selected_node.data.params {
-                        param.show_controls(ui);
+                        if param.show_controls(ui).changed() {
+                            params_changed = true;
+                        };
                     }
 
                     if ui
@@ -285,10 +317,17 @@ impl CustomPanels for Editor {
 
                 if let Some(id) = id_of_node_to_delete {
                     self.canvas.remove_node(id);
+                    connectivity_may_have_changed = true;
                 }
             });
 
-            self.canvas.show(ctx, pending_new_node);
+            let canvas_result = self.canvas.show(ctx, self.graph_status, pending_new_node);
+
+            connectivity_may_have_changed =
+                connectivity_may_have_changed || canvas_result.connectivity_may_have_changed;
+
+            self.needs_rebuild =
+                self.needs_rebuild || connectivity_may_have_changed || params_changed;
         });
     }
 }
@@ -496,7 +535,14 @@ impl Canvas {
         }
     }
 
-    fn show(&mut self, ctx: &Context, pending_new_node: Option<(NodeID, NodeData)>) {
+    fn show(
+        &mut self,
+        ctx: &Context,
+        graph_status: GraphStatus,
+        pending_new_node: Option<(NodeID, NodeData)>,
+    ) -> CanvasShowResult {
+        let mut connectivity_may_have_changed = false;
+
         Window::new("Generator graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
@@ -659,6 +705,43 @@ impl Canvas {
                 }
                 let node_rects = world_node_rects;
 
+                // Draw edges
+
+                for (&node_id, node) in &self.nodes {
+                    if let Some(parent_node_id) = node.parent
+                        && let (Some(parent_rect), Some(node_rect)) =
+                            (node_rects.get(&parent_node_id), node_rects.get(&node_id))
+                    {
+                        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
+                            continue;
+                        };
+
+                        let Some(slot) = parent_node
+                            .children
+                            .iter()
+                            .position(|child| *child == Some(node_id))
+                        else {
+                            continue;
+                        };
+
+                        let from = Port::Child {
+                            slot,
+                            of: parent_node.children.len(),
+                        }
+                        .center(parent_rect);
+
+                        let to = Port::Parent.center(node_rect);
+
+                        painter.line_segment(
+                            [from, to],
+                            Stroke {
+                                width: EDGE_WIDTH * self.state.zoom,
+                                color: EDGE_COLOR,
+                            },
+                        );
+                    }
+                }
+
                 // Draw ports
 
                 for (&node_id, node_rect) in &node_rects {
@@ -721,6 +804,9 @@ impl Canvas {
                                     from_node: attached_node_id,
                                     from_port: attached_port,
                                 });
+
+                                connectivity_may_have_changed = true;
+
                                 continue;
                             }
 
@@ -731,6 +817,7 @@ impl Canvas {
                                         let parent_node_id = node_id;
                                         if self.try_attach(parent_node_id, child_node_id, slot) {
                                             self.pending_edge = None;
+                                            connectivity_may_have_changed = true;
                                         }
                                     }
                                     (Port::Child { slot, .. }, Port::Parent) => {
@@ -738,6 +825,7 @@ impl Canvas {
                                         let child_node_id = node_id;
                                         if self.try_attach(parent_node_id, child_node_id, slot) {
                                             self.pending_edge = None;
+                                            connectivity_may_have_changed = true;
                                         }
                                     }
                                     _ => {}
@@ -759,43 +847,7 @@ impl Canvas {
                         self.pending_edge = None;
                     } else if let Some(selected_id) = self.selected_node_id {
                         self.remove_node(selected_id);
-                    }
-                }
-
-                // Draw edges
-
-                for (&node_id, node) in &self.nodes {
-                    if let Some(parent_node_id) = node.parent
-                        && let (Some(parent_rect), Some(node_rect)) =
-                            (node_rects.get(&parent_node_id), node_rects.get(&node_id))
-                    {
-                        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
-                            continue;
-                        };
-
-                        let Some(slot) = parent_node
-                            .children
-                            .iter()
-                            .position(|child| *child == Some(node_id))
-                        else {
-                            continue;
-                        };
-
-                        let from = Port::Child {
-                            slot,
-                            of: parent_node.children.len(),
-                        }
-                        .center(parent_rect);
-
-                        let to = Port::Parent.center(node_rect);
-
-                        painter.line_segment(
-                            [from, to],
-                            Stroke {
-                                width: EDGE_WIDTH * self.state.zoom,
-                                color: EDGE_COLOR,
-                            },
-                        );
+                        connectivity_may_have_changed = true;
                     }
                 }
 
@@ -816,10 +868,38 @@ impl Canvas {
                     );
                 }
 
+                // Draw status dot
+
+                let status_dot_pos = canvas_rect.min + STATUS_DOT_OFFSET;
+
+                let status_dot_rect = Rect::from_center_size(
+                    status_dot_pos,
+                    vec2(2.0 * STATUS_DOT_RADIUS, 2.0 * STATUS_DOT_RADIUS),
+                );
+                let status_dot_response =
+                    ui.interact(status_dot_rect, Id::new("status_dot"), Sense::hover());
+
+                let (status_dot_color, status_dot_text) = match graph_status {
+                    GraphStatus::Complete => (STATUS_DOT_VALID_COLOR, STATUS_DOT_VALID_HOVER_TEXT),
+                    GraphStatus::Incomplete => {
+                        (STATUS_DOT_INVALID_COLOR, STATUS_DOT_INVALID_HOVER_TEXT)
+                    }
+                };
+
+                painter.circle_filled(status_dot_pos, STATUS_DOT_RADIUS, status_dot_color);
+
+                status_dot_response.on_hover_text(status_dot_text);
+
+                // Potentially hide cursor
+
                 if self.cursor_should_be_hidden() {
                     ui.output_mut(|o| o.cursor_icon = CursorIcon::None);
                 }
             });
+
+        CanvasShowResult {
+            connectivity_may_have_changed,
+        }
     }
 }
 
@@ -1129,7 +1209,7 @@ impl Port {
 }
 
 impl NodeParam {
-    fn show_controls(&mut self, ui: &mut Ui) {
+    fn show_controls(&mut self, ui: &mut Ui) -> Response {
         match self {
             Self::UInt(param) => param.show_controls(ui),
             Self::Float(param) => param.show_controls(ui),
@@ -1185,12 +1265,12 @@ impl UIntParam {
         Self { text, value }
     }
 
-    fn show_controls(&mut self, ui: &mut Ui) {
+    fn show_controls(&mut self, ui: &mut Ui) -> Response {
         option_drag_value(
             ui,
             self.text.clone(),
             DragValue::new(&mut self.value).speed(1),
-        );
+        )
     }
 
     fn text_to_display(&self) -> String {
@@ -1224,14 +1304,14 @@ impl FloatParam {
         self
     }
 
-    fn show_controls(&mut self, ui: &mut Ui) {
+    fn show_controls(&mut self, ui: &mut Ui) -> Response {
         option_drag_value(
             ui,
             self.text.clone(),
             DragValue::new(&mut self.value)
                 .range(self.min_value..=self.max_value)
                 .speed(self.speed),
-        );
+        )
     }
 
     fn text_to_display(&self) -> String {
@@ -1303,61 +1383,4 @@ fn compute_delta_to_resolve_overlaps(
     }
 
     total_delta
-}
-
-enum SDFBuildOperation<'a> {
-    VisitChildren((NodeID, &'a Node)),
-    BuildNode((NodeID, &'a Node)),
-}
-
-fn build_sdf_generator<A>(arena: A, nodes: &BTreeMap<NodeID, Node>) -> Option<(f32, SDFGenerator)>
-where
-    A: Allocator + Copy,
-{
-    let output_node = nodes.get(&0)?;
-
-    let voxel_extent = node_kind::get_voxel_extent_from_output_node(&output_node.data.params);
-
-    let root_node_id = output_node.children[0]?;
-    let root_node = &nodes[&root_node_id];
-
-    let mut builder = SDFGeneratorBuilder::with_capacity_in(nodes.len(), arena);
-
-    let mut id_map = HashMap::<NodeID, SDFNodeID>::default();
-
-    let mut operation_stack = AVec::new_in(arena);
-    operation_stack.push(SDFBuildOperation::VisitChildren((root_node_id, root_node)));
-
-    while let Some(operation) = operation_stack.pop() {
-        match operation {
-            SDFBuildOperation::VisitChildren((node_id, node)) => {
-                if id_map.contains_key(&node_id) {
-                    continue;
-                }
-
-                operation_stack.push(SDFBuildOperation::BuildNode((node_id, node)));
-
-                for child_node_id in node.children.iter().rev() {
-                    let child_node_id = (*child_node_id)?;
-                    let child_node = &nodes[&child_node_id];
-                    operation_stack.push(SDFBuildOperation::VisitChildren((
-                        child_node_id,
-                        child_node,
-                    )));
-                }
-            }
-            SDFBuildOperation::BuildNode((node_id, node)) => {
-                let generator_node = node.data.kind.build_sdf_generator_node(
-                    &id_map,
-                    &node.children,
-                    &node.data.params,
-                )?;
-
-                let sdf_node_id = builder.add_node_and_set_to_root(generator_node);
-                id_map.insert(node_id, sdf_node_id);
-            }
-        }
-    }
-
-    Some((voxel_extent, builder.build_with_arena(arena).unwrap()))
 }

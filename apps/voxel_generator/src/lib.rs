@@ -84,7 +84,7 @@ impl Application for VoxelGeneratorApp {
         impact_log::debug!("Setting up scene");
 
         let (voxel_object, model_transform) =
-            generate_voxel_object(arena, &self.user_interface.read().editor);
+            generate_next_voxel_object_or_default(arena, &mut self.user_interface.write().editor);
 
         let voxel_object_id = engine.add_voxel_object(voxel_object);
 
@@ -102,7 +102,7 @@ impl Application for VoxelGeneratorApp {
 
     fn on_new_frame(&self, arena: &Bump, engine: &Engine, _frame_number: u64) -> Result<()> {
         if let Some((voxel_object, new_model_transform)) =
-            generate_voxel_object_if_graph_valid(arena, &self.user_interface.read().editor)
+            generate_next_voxel_object(arena, &mut self.user_interface.write().editor)
         {
             engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
                 *model_transform = new_model_transform;
@@ -232,25 +232,28 @@ impl UserInterface {
     }
 }
 
-fn generate_voxel_object_if_graph_valid<A>(
+fn generate_next_voxel_object<A>(
     arena: A,
-    editor: &Editor,
+    editor: &mut Editor,
 ) -> Option<(MeshedChunkedVoxelObject, ModelTransform)>
 where
     A: Allocator + Copy,
 {
-    let generator = editor.build_voxel_sdf_generator_if_graph_valid(arena)?;
+    let generator = editor.build_next_voxel_sdf_generator(arena)?;
     Some((
         MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate(&generator)),
         compute_model_transform(&generator),
     ))
 }
 
-fn generate_voxel_object<A>(arena: A, editor: &Editor) -> (MeshedChunkedVoxelObject, ModelTransform)
+fn generate_next_voxel_object_or_default<A>(
+    arena: A,
+    editor: &mut Editor,
+) -> (MeshedChunkedVoxelObject, ModelTransform)
 where
     A: Allocator + Copy,
 {
-    let generator = editor.build_voxel_sdf_generator(arena);
+    let generator = editor.build_next_voxel_sdf_generator_or_default(arena);
     (
         MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate(&generator)),
         compute_model_transform(&generator),
