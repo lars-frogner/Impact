@@ -1,6 +1,4 @@
-use crate::editor::UIntParam;
-
-use super::{FloatParam, NodeID, NodeParam, PortConfig};
+use super::{FloatParam, NodeID, NodeParam, PortConfig, UIntParam};
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::{
