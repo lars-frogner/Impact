@@ -4,6 +4,7 @@ use super::Engine;
 use crate::{
     command::{AdminCommand, UserCommand},
     gizmo::{GizmoParameters, GizmoType, GizmoVisibilities, GizmoVisibility},
+    instrumentation::timing::TimedTaskID,
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::SimulatorConfig,
     setup,
@@ -460,19 +461,29 @@ impl Engine {
     }
 
     /// Returns the last task execution times.
-    pub fn task_execution_times(&self) -> crate::instrumentation::timing::TaskExecutionTimes {
-        self.metrics().oread().last_task_execution_times.clone()
+    pub fn collect_task_execution_times(&self, results: &mut impl Extend<(TimedTaskID, Duration)>) {
+        results.extend(
+            self.metrics()
+                .oread()
+                .last_task_execution_times
+                .iter()
+                .copied(),
+        );
     }
 
     /// Returns the last render pass timing results.
-    pub fn render_pass_timing_results(&self) -> Vec<(String, Duration)> {
-        self.renderer()
-            .oread()
-            .timestamp_query_manager()
-            .last_timing_results()
-            .iter()
-            .map(|(tag, duration)| (tag.as_ref().to_string(), *duration))
-            .collect()
+    pub fn collect_render_pass_timing_results(
+        &self,
+        results: &mut impl Extend<(String, Duration)>,
+    ) {
+        results.extend(
+            self.renderer()
+                .oread()
+                .timestamp_query_manager()
+                .last_timing_results()
+                .iter()
+                .map(|(tag, duration)| (tag.as_ref().to_string(), *duration)),
+        );
     }
 
     /// Returns whether task timings are enabled.

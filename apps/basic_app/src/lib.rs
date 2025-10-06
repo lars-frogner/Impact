@@ -96,14 +96,14 @@ impl Application for BasicApp {
 
     fn run_egui_ui(
         &self,
-        _arena: &Bump,
+        arena: &Bump,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
     ) -> egui::FullOutput {
         self.user_interface
             .write()
-            .run(ctx, input, engine, &api::UI_COMMANDS)
+            .run(arena, ctx, input, engine, &api::UI_COMMANDS)
     }
 }
 

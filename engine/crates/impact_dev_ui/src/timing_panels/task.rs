@@ -1,5 +1,6 @@
 use super::timing_panel;
 use crate::UserInterfaceConfig;
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use egui_extras::{Column, TableBuilder};
 use impact::{
     egui::{Context, TextStyle, TextWrapMode},
@@ -13,7 +14,10 @@ const NUM_LABEL_COL_CHARS: usize = 24;
 const NUM_TIMING_COL_CHARS: usize = 8;
 
 impl TaskTimingPanel {
-    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
+    pub fn run<A>(&mut self, arena: A, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine)
+    where
+        A: Allocator,
+    {
         let style = ctx.style();
         let body_font = TextStyle::Body.resolve(&style);
         let mono_font = TextStyle::Monospace.resolve(&style);
@@ -29,7 +33,8 @@ impl TaskTimingPanel {
             "task_timing_panel",
             default_panel_width,
             |ui| {
-                let task_execution_times = engine.task_execution_times();
+                let mut task_execution_times = AVec::new_in(arena);
+                engine.collect_task_execution_times(&mut task_execution_times);
 
                 let header_height = ui.spacing().interact_size.y;
 
