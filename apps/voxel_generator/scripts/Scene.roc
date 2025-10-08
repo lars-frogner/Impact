@@ -72,4 +72,4 @@ rim_light =
 ## Optional ambient to lift shadows
 ambient_light =
     Entity.new_component_data
-    |> Comp.AmbientEmission.add_new(Vector3.same(200)) ## 200 lux, neutral base
+    |> Comp.AmbientEmission.add_new(Vector3.same(10000)) ## 10000 lux, neutral base
