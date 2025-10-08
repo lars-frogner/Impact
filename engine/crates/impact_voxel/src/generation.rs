@@ -287,6 +287,10 @@ impl VoxelGenerator for SDFVoxelGenerator {
     }
 
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
+        if i >= self.grid_shape[0] || j >= self.grid_shape[1] || k >= self.grid_shape[2] {
+            return Voxel::maximally_outside();
+        }
+
         let displacement_from_center =
             point![i as f32, j as f32, k as f32] - self.shifted_grid_center;
 
