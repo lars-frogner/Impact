@@ -453,8 +453,12 @@ impl SDFGenerator {
                                 modifier @ MultiscaleSphereSDFModifier { child_id, .. },
                             ) => {
                                 let child_domain = &domains[*child_id as usize];
-                                domains[node_idx] =
-                                    pad_domain(child_domain.clone(), modifier.max_scale());
+                                domains[node_idx] = pad_domain(
+                                    child_domain.clone(),
+                                    modifier.max_scale()
+                                        + modifier.inflation()
+                                        + domain_padding_for_smoothness(modifier.smoothness()),
+                                );
                             }
                             &SDFGeneratorNode::Union(SDFUnion {
                                 child_1_id,
@@ -1017,6 +1021,14 @@ impl MultiscaleSphereSDFModifier {
 
     fn max_scale(&self) -> f32 {
         0.5 / self.frequency
+    }
+
+    fn inflation(&self) -> f32 {
+        self.inflation
+    }
+
+    fn smoothness(&self) -> f32 {
+        self.smoothness
     }
 
     fn modify_signed_distance(&self, position: &Vector3<f32>, signed_distance: f32) -> f32 {

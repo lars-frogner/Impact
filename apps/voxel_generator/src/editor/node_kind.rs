@@ -47,15 +47,15 @@ impl SpecificNodeKind for BoxSDFGenerator {
     fn default_params() -> Vec<NodeParam> {
         vec![
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Extent x"), 14.0)
+                FloatParam::new(LabelAndHoverText::label_only("Extent x"), 62.0)
                     .with_min_value(0.0),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Extent y"), 14.0)
+                FloatParam::new(LabelAndHoverText::label_only("Extent y"), 62.0)
                     .with_min_value(0.0),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Extent z"), 14.0)
+                FloatParam::new(LabelAndHoverText::label_only("Extent z"), 62.0)
                     .with_min_value(0.0),
             ),
         ]
@@ -78,7 +78,7 @@ impl SpecificNodeKind for SphereSDFGenerator {
 
     fn default_params() -> Vec<NodeParam> {
         vec![NodeParam::Float(
-            FloatParam::new(LabelAndHoverText::label_only("Radius"), 7.0).with_min_value(0.0),
+            FloatParam::new(LabelAndHoverText::label_only("Radius"), 31.0).with_min_value(0.0),
         )]
     }
 
@@ -100,25 +100,29 @@ impl SpecificNodeKind for GradientNoiseSDFGenerator {
     fn default_params() -> Vec<NodeParam> {
         vec![
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Extent x"), 14.0)
+                FloatParam::new(LabelAndHoverText::label_only("Extent x"), 62.0)
                     .with_min_value(0.0),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Extent y"), 14.0)
+                FloatParam::new(LabelAndHoverText::label_only("Extent y"), 62.0)
                     .with_min_value(0.0),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Extent z"), 14.0)
+                FloatParam::new(LabelAndHoverText::label_only("Extent z"), 62.0)
                     .with_min_value(0.0),
             ),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Frequency"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Threshold"),
-                1.0,
-            )),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.05)
+                    .with_min_value(0.0)
+                    .with_max_value(1.0)
+                    .with_speed(0.001),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Threshold"), 0.0)
+                    .with_min_value(-1.0)
+                    .with_max_value(1.0)
+                    .with_speed(0.001),
+            ),
             NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Seed"), 0)),
         ]
     }
@@ -234,22 +238,29 @@ impl SpecificNodeKind for MultifractalNoiseSDFModifier {
     fn default_params() -> Vec<NodeParam> {
         vec![
             NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Octaves"), 0)),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Frequency"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Lacunarity"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Persistence"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Amplitude"),
-                1.0,
-            )),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.02)
+                    .with_min_value(0.0)
+                    .with_max_value(1.0)
+                    .with_speed(0.001),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Lacunarity"), 1.0)
+                    .with_min_value(1.0)
+                    .with_max_value(10.0)
+                    .with_speed(0.001),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 1.0)
+                    .with_min_value(0.0)
+                    .with_max_value(1.0)
+                    .with_speed(0.001),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Amplitude"), 5.0)
+                    .with_min_value(0.0)
+                    .with_speed(0.05),
+            ),
             NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Seed"), 0)),
         ]
     }
@@ -288,22 +299,27 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
     fn default_params() -> Vec<NodeParam> {
         vec![
             NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Octaves"), 0)),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Max scale"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Persistence"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Inflation"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Smoothness"),
-                1.0,
-            )),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Max scale"), 5.0)
+                    .with_min_value(0.0)
+                    .with_speed(0.01),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 1.0)
+                    .with_min_value(0.0)
+                    .with_max_value(1.0)
+                    .with_speed(0.001),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Inflation"), 1.0)
+                    .with_min_value(0.0)
+                    .with_speed(0.005),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
+                    .with_min_value(0.0)
+                    .with_speed(0.001),
+            ),
             NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Seed"), 0)),
         ]
     }
