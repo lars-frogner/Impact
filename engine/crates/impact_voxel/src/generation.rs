@@ -171,8 +171,9 @@ pub struct MultiscaleSphereSDFModifier {
     octaves: u32,
     frequency: f32,
     persistence: f32,
-    inflation: f32,
-    smoothness: f32,
+    scaled_inflation: f32,
+    scaled_intersection_smoothness: f32,
+    union_smoothness: f32,
     seed: u32,
 }
 
@@ -453,12 +454,8 @@ impl SDFGenerator {
                                 modifier @ MultiscaleSphereSDFModifier { child_id, .. },
                             ) => {
                                 let child_domain = &domains[*child_id as usize];
-                                domains[node_idx] = pad_domain(
-                                    child_domain.clone(),
-                                    modifier.max_scale()
-                                        + modifier.inflation()
-                                        + domain_padding_for_smoothness(modifier.smoothness()),
-                                );
+                                domains[node_idx] =
+                                    pad_domain(child_domain.clone(), modifier.domain_padding());
                             }
                             &SDFGeneratorNode::Union(SDFUnion {
                                 child_1_id,
@@ -786,7 +783,8 @@ impl<A: Allocator> SDFGeneratorBuilder<A> {
         max_scale: f32,
         persistence: f32,
         inflation: f32,
-        smoothness: f32,
+        intersection_smoothness: f32,
+        union_smoothness: f32,
         seed: u32,
     ) -> SDFNodeID {
         self.add_node_and_set_to_root(SDFGeneratorNode::MultiscaleSphere(
@@ -796,7 +794,8 @@ impl<A: Allocator> SDFGeneratorBuilder<A> {
                 max_scale,
                 persistence,
                 inflation,
-                smoothness,
+                intersection_smoothness,
+                union_smoothness,
                 seed,
             ),
         ))
@@ -993,42 +992,39 @@ impl MultifractalNoiseSDFModifier {
 }
 
 impl MultiscaleSphereSDFModifier {
+    /// Inflation should probably always be 1.0. Intersection smoothness should
+    /// probably exceed inflation.
     pub fn new(
         child_id: SDFNodeID,
         octaves: u32,
         max_scale: f32,
         persistence: f32,
         inflation: f32,
-        smoothness: f32,
+        intersection_smoothness: f32,
+        union_smoothness: f32,
         seed: u32,
     ) -> Self {
         let frequency = 0.5 / max_scale;
 
-        // Scale inflation and smoothness according to the scale of perturbations
-        let inflation = max_scale * inflation;
-        let smoothness = max_scale * smoothness;
+        // Scale inflation and intersection smoothness according to the scale of
+        // perturbations
+        let scaled_inflation = max_scale * inflation;
+        let scaled_intersection_smoothness = max_scale * intersection_smoothness;
 
         Self {
             child_id,
             octaves,
             frequency,
             persistence,
-            inflation,
-            smoothness,
+            scaled_inflation,
+            scaled_intersection_smoothness,
+            union_smoothness,
             seed,
         }
     }
 
-    fn max_scale(&self) -> f32 {
-        0.5 / self.frequency
-    }
-
-    fn inflation(&self) -> f32 {
-        self.inflation
-    }
-
-    fn smoothness(&self) -> f32 {
-        self.smoothness
+    fn domain_padding(&self) -> f32 {
+        self.scaled_inflation + domain_padding_for_smoothness(self.union_smoothness)
     }
 
     fn modify_signed_distance(&self, position: &Vector3<f32>, signed_distance: f32) -> f32 {
@@ -1047,14 +1043,14 @@ impl MultiscaleSphereSDFModifier {
 
             let intersected_sphere_grid_distance = smooth_sdf_intersection(
                 sphere_grid_distance,
-                parent_distance - self.inflation * scale,
-                self.smoothness * scale,
+                parent_distance - self.scaled_inflation * scale,
+                self.scaled_intersection_smoothness * scale,
             );
 
             parent_distance = smooth_sdf_union(
                 intersected_sphere_grid_distance,
                 parent_distance,
-                self.smoothness * scale,
+                self.union_smoothness * scale,
             );
 
             position = ROTATION * (position / self.persistence);
