@@ -251,7 +251,7 @@ impl SpecificNodeKind for MultifractalNoiseSDFModifier {
                     .with_speed(0.001),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 1.0)
+                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 0.5)
                     .with_min_value(0.0)
                     .with_max_value(1.0)
                     .with_speed(0.001),
@@ -300,12 +300,12 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
         vec![
             NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Octaves"), 0)),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Max scale"), 5.0)
+                FloatParam::new(LabelAndHoverText::label_only("Max scale"), 10.0)
                     .with_min_value(0.0)
                     .with_speed(0.01),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 1.0)
+                FloatParam::new(LabelAndHoverText::label_only("Persistence"), 0.5)
                     .with_min_value(0.0)
                     .with_max_value(1.0)
                     .with_speed(0.001),
@@ -316,7 +316,15 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
                     .with_speed(0.005),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
+                FloatParam::new(
+                    LabelAndHoverText::label_only("Intersection smoothness"),
+                    1.0,
+                )
+                .with_min_value(0.0)
+                .with_speed(0.001),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Union smoothness"), 0.3)
                     .with_min_value(0.0)
                     .with_speed(0.001),
             ),
@@ -329,14 +337,15 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
         children: &[Option<NodeID>],
         params: &[NodeParam],
     ) -> Option<SDFGeneratorNode> {
-        assert_eq!(params.len(), 6);
+        assert_eq!(params.len(), 7);
         let child_id = unary_child(id_map, children)?;
         let octaves = params[0].uint();
         let max_scale = params[1].float();
         let persistence = params[2].float();
         let inflation = params[3].float();
-        let smoothness = params[4].float();
-        let seed = params[5].uint();
+        let intersection_smoothness = params[4].float();
+        let union_smoothness = params[5].float();
+        let seed = params[6].uint();
         Some(SDFGeneratorNode::MultiscaleSphere(
             MultiscaleSphereSDFModifier::new(
                 child_id,
@@ -344,7 +353,8 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
                 max_scale,
                 persistence,
                 inflation,
-                smoothness,
+                intersection_smoothness,
+                union_smoothness,
                 seed,
             ),
         ))

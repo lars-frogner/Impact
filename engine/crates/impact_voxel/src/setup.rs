@@ -87,7 +87,8 @@ define_setup_type! {
         pub max_scale: f32,
         pub persistence: f32,
         pub inflation: f32,
-        pub smoothness: f32,
+        pub intersection_smoothness: f32,
+        pub union_smoothness: f32,
         pub seed: u32,
     }
 }
@@ -306,7 +307,8 @@ impl MultiscaleSphereSDFModification {
         max_scale,
         persistence,
         inflation,
-        smoothness,
+        intersection_smoothness,
+        union_smoothness,
         seed,
     }"#)]
     pub fn new(
@@ -314,7 +316,8 @@ impl MultiscaleSphereSDFModification {
         max_scale: f32,
         persistence: f32,
         inflation: f32,
-        smoothness: f32,
+        intersection_smoothness: f32,
+        union_smoothness: f32,
         seed: u32,
     ) -> Self {
         Self {
@@ -322,7 +325,8 @@ impl MultiscaleSphereSDFModification {
             max_scale,
             persistence,
             inflation,
-            smoothness,
+            intersection_smoothness,
+            union_smoothness,
             seed,
         }
     }
@@ -574,7 +578,8 @@ pub fn apply_modifications(
         max_scale,
         persistence,
         inflation,
-        smoothness,
+        intersection_smoothness,
+        union_smoothness,
         seed,
     }) = multiscale_sphere_modification
     {
@@ -584,7 +589,8 @@ pub fn apply_modifications(
             max_scale,
             persistence,
             inflation,
-            smoothness,
+            intersection_smoothness,
+            union_smoothness,
             seed,
         );
     }
