@@ -79,6 +79,7 @@ pub struct Editor {
 #[serde(default)]
 pub struct EditorConfig {
     pub show_editor: bool,
+    pub auto_attach: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -321,7 +322,12 @@ impl CustomPanels for Editor {
                 }
             });
 
-            let canvas_result = self.canvas.show(ctx, self.graph_status, pending_new_node);
+            let canvas_result = self.canvas.show(
+                ctx,
+                self.graph_status,
+                pending_new_node,
+                self.config.auto_attach,
+            );
 
             connectivity_may_have_changed =
                 connectivity_may_have_changed || canvas_result.connectivity_may_have_changed;
@@ -334,7 +340,10 @@ impl CustomPanels for Editor {
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        Self { show_editor: true }
+        Self {
+            show_editor: true,
+            auto_attach: true,
+        }
     }
 }
 
@@ -540,6 +549,7 @@ impl Canvas {
         ctx: &Context,
         graph_status: GraphStatus,
         pending_new_node: Option<(NodeID, NodeData)>,
+        auto_attach: bool,
     ) -> CanvasShowResult {
         let mut connectivity_may_have_changed = false;
 
@@ -628,6 +638,17 @@ impl Canvas {
 
                     self.nodes.insert(node_id, node);
                     world_node_rects.insert(node_id, world_node_rect);
+
+                    if auto_attach
+                        && let Some(selected_node_id) = self.selected_node_id
+                        && let Some(free_child_slot) = self
+                            .nodes
+                            .get(&selected_node_id)
+                            .and_then(|selected_node| selected_node.first_free_child_slot())
+                        && self.try_attach(selected_node_id, node_id, free_child_slot)
+                    {
+                        connectivity_may_have_changed = true;
+                    }
 
                     self.selected_node_id = Some(node_id);
                 }
@@ -979,6 +1000,10 @@ impl Node {
     fn change_kind(&mut self, new_kind: NodeKind) {
         self.data.change_kind(new_kind);
         self.children.resize(new_kind.port_config().children, None);
+    }
+
+    fn first_free_child_slot(&self) -> Option<usize> {
+        self.children.iter().position(|child| child.is_none())
     }
 
     fn get_node_attached_to_port(&self, port: Port) -> Option<NodeID> {
