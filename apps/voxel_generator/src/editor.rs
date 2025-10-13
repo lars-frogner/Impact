@@ -17,14 +17,14 @@ use impact_dev_ui::{
     },
 };
 use impact_voxel::generation::SDFVoxelGenerator;
-use node_kind::NodeKind;
+use node_kind::{NodeKind, NodeKindGroup};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
 
-const CANVAS_DEFAULT_POS: Pos2 = pos2(0.0, 250.0);
+const CANVAS_DEFAULT_POS: Pos2 = pos2(200.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
 
 const NODE_CORNER_RADIUS: f32 = 8.0;
@@ -68,7 +68,6 @@ const MAX_ZOOM: f32 = 3.0;
 #[derive(Clone, Debug)]
 pub struct Editor {
     canvas: Canvas,
-    kind_to_add: NodeKind,
     needs_rebuild: bool,
     graph_status: GraphStatus,
     node_id_counter: NodeID,
@@ -168,7 +167,6 @@ impl Editor {
     pub fn new(config: EditorConfig) -> Self {
         Self {
             canvas: Canvas::new(),
-            kind_to_add: NodeKind::default(),
             needs_rebuild: true,
             graph_status: GraphStatus::Incomplete,
             node_id_counter: 0,
@@ -237,31 +235,34 @@ impl CustomPanels for Editor {
 
         option_panel(ctx, config, "Editor panel", |ui| {
             option_group(ui, "creation", |ui| {
-                if ui
-                    .add_enabled(pending_new_node.is_none(), Button::new("Add node"))
-                    .clicked()
-                {
-                    pending_new_node =
-                        Some((self.node_id_counter, NodeData::new(self.kind_to_add)));
-                    self.node_id_counter += 1;
-                }
-
-                ComboBox::from_id_salt("kind_to_add")
-                    .selected_text(self.kind_to_add.label())
-                    .show_ui(ui, |ui| {
-                        for kind_option in NodeKind::all_non_root() {
-                            ui.selectable_value(
-                                &mut self.kind_to_add,
-                                kind_option,
-                                kind_option.label(),
-                            );
+                for kind_group in NodeKindGroup::all_non_root() {
+                    for kind_option in NodeKind::all_non_root() {
+                        if kind_option.group() != kind_group {
+                            continue;
                         }
-                    });
+                        labeled_option(
+                            ui,
+                            LabelAndHoverText {
+                                label: kind_option.label(),
+                                hover_text: "",
+                            },
+                            |ui| {
+                                if ui
+                                    .add_enabled(pending_new_node.is_none(), Button::new("Add"))
+                                    .clicked()
+                                {
+                                    pending_new_node =
+                                        Some((self.node_id_counter, NodeData::new(kind_option)));
+                                    self.node_id_counter += 1;
+                                }
+                            },
+                        );
+                    }
+                    ui.end_row();
+                }
             });
 
             option_group(ui, "modification", |ui| {
-                let mut id_of_node_to_delete = None;
-
                 if let Some(selected_node_id) = self.canvas.selected_node_id {
                     let mut selected_node = self.canvas.nodes.get_mut(&selected_node_id).unwrap();
                     let mut kind = selected_node.data.kind;
@@ -300,6 +301,12 @@ impl CustomPanels for Editor {
                             params_changed = true;
                         };
                     }
+                }
+            });
+
+            option_group(ui, "deletion", |ui| {
+                if let Some(selected_node_id) = self.canvas.selected_node_id {
+                    let selected_node = self.canvas.nodes.get(&selected_node_id).unwrap();
 
                     if ui
                         .add_enabled(
@@ -308,17 +315,13 @@ impl CustomPanels for Editor {
                         )
                         .clicked()
                     {
-                        id_of_node_to_delete = Some(selected_node_id);
+                        self.canvas.remove_node(selected_node_id);
+                        connectivity_may_have_changed = true;
                     }
                     ui.end_row();
                 } else {
                     ui.add_enabled(false, Button::new("Delete node"));
                     ui.end_row();
-                }
-
-                if let Some(id) = id_of_node_to_delete {
-                    self.canvas.remove_node(id);
-                    connectivity_may_have_changed = true;
                 }
             });
 
