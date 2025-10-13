@@ -4,7 +4,7 @@ use crate::{Plane, Point};
 use approx::AbsDiffEq;
 use impact_math::Float;
 use na::point;
-use nalgebra::{self as na, Point3, Vector3};
+use nalgebra::{self as na, Matrix4, Point3, Vector3};
 
 use Corner::{Lower, Upper};
 
@@ -127,6 +127,11 @@ impl<F: Float> AxisAlignedBox<F> {
         self.upper_corner() - self.lower_corner()
     }
 
+    /// Returns the half extents of the box along the three axes.
+    pub fn half_extents(&self) -> Vector3<F> {
+        self.extents().scale(F::ONE_HALF)
+    }
+
     /// Returns an array with all the eight corners of the box. The corners are
     /// ordered from smaller to larger coordinates, with the z-component varying
     /// fastest.
@@ -168,6 +173,17 @@ impl<F: Float> AxisAlignedBox<F> {
             && point.y <= self.upper_corner().y
             && point.z >= self.lower_corner().z
             && point.z <= self.upper_corner().z
+    }
+
+    /// Whether all of the given axis-aligned box is inside this box. If a
+    /// corner exactly touches the surface, it is still considered inside.
+    pub fn contains_box(&self, other: &Self) -> bool {
+        other.lower_corner().x >= self.lower_corner().x
+            && other.upper_corner().x <= self.upper_corner().x
+            && other.lower_corner().y >= self.lower_corner().y
+            && other.upper_corner().y <= self.upper_corner().y
+            && other.lower_corner().z >= self.lower_corner().z
+            && other.upper_corner().z <= self.upper_corner().z
     }
 
     /// Whether all of the given axis-aligned box is outside this box. If the
@@ -243,11 +259,15 @@ impl<F: Float> AxisAlignedBox<F> {
     /// box relative to its center with the given uniform scale factor.
     pub fn scaled_about_center(&self, scale: F) -> Self {
         let center = self.center();
-
-        let scaled_half_extents =
-            (self.upper_corner() - self.lower_corner()).scale(F::ONE_HALF * scale.abs());
-
+        let scaled_half_extents = self.extents().scale(F::ONE_HALF * scale.abs());
         Self::new(center - scaled_half_extents, center + scaled_half_extents)
+    }
+
+    /// Computes the axis-aligned box resulting from expanding the extents of
+    /// this box relative to its center by the given margin on each side.
+    pub fn expanded_about_center(&self, margin: F) -> Self {
+        let margin = Vector3::repeat(margin);
+        Self::new(self.lower_corner() - margin, self.upper_corner() + margin)
     }
 
     /// Computes the axis-aligned box resulting from translating this box with
@@ -256,6 +276,22 @@ impl<F: Float> AxisAlignedBox<F> {
         Self::new(
             self.lower_corner() + displacement,
             self.upper_corner() + displacement,
+        )
+    }
+
+    /// Computes the AABB for the transformed version of this AABB.
+    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4<F>) -> Self {
+        let transformed_center = homogeneous_transform.transform_point(&self.center());
+
+        // Performance trick: transform half-extents by the element-wise
+        // absolute value of the linear 3x3 part
+        let rotation_scale = homogeneous_transform.fixed_view::<3, 3>(0, 0);
+        let abs_rotation_scale = rotation_scale.map(|x| x.abs());
+        let transformed_half_extents = abs_rotation_scale * self.half_extents();
+
+        Self::new(
+            transformed_center - transformed_half_extents,
+            transformed_center + transformed_half_extents,
         )
     }
 
