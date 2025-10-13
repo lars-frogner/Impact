@@ -20,10 +20,9 @@ trait SpecificNodeKind {
     ) -> Option<SDFGeneratorNode>;
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeKind {
     Output,
-    #[default]
     Box,
     Sphere,
     GradientNoise,
@@ -35,6 +34,15 @@ pub enum NodeKind {
     Union,
     Subtraction,
     Intersection,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeKindGroup {
+    Root,
+    Primitive,
+    Transform,
+    Modification,
+    Combination,
 }
 
 pub const DEFAULT_VOXEL_EXTENT: f32 = 0.25;
@@ -149,9 +157,15 @@ impl SpecificNodeKind for SDFTranslation {
 
     fn default_params() -> Vec<NodeParam> {
         vec![
-            NodeParam::Float(FloatParam::new(LabelAndHoverText::label_only("In x"), 0.0)),
-            NodeParam::Float(FloatParam::new(LabelAndHoverText::label_only("In y"), 0.0)),
-            NodeParam::Float(FloatParam::new(LabelAndHoverText::label_only("In z"), 0.0)),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("In x"), 0.0).with_speed(0.05),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("In y"), 0.0).with_speed(0.05),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("In z"), 0.0).with_speed(0.05),
+            ),
         ]
     }
 
@@ -210,7 +224,9 @@ impl SpecificNodeKind for SDFScaling {
 
     fn default_params() -> Vec<NodeParam> {
         vec![NodeParam::Float(
-            FloatParam::new(LabelAndHoverText::label_only("Factor"), 1.0).with_min_value(0.0),
+            FloatParam::new(LabelAndHoverText::label_only("Factor"), 1.0)
+                .with_min_value(1e-3)
+                .with_speed(0.005),
         )]
     }
 
@@ -451,6 +467,16 @@ impl NodeKind {
         *self == Self::Output
     }
 
+    pub const fn group(&self) -> NodeKindGroup {
+        match self {
+            Self::Output => NodeKindGroup::Root,
+            Self::Box | Self::Sphere | Self::GradientNoise => NodeKindGroup::Primitive,
+            Self::Translation | Self::Rotation | Self::Scaling => NodeKindGroup::Transform,
+            Self::MultifractalNoise | Self::MultiscaleSphere => NodeKindGroup::Modification,
+            Self::Union | Self::Subtraction | Self::Intersection => NodeKindGroup::Combination,
+        }
+    }
+
     pub const fn label(&self) -> &'static str {
         match self {
             Self::Output => "Output",
@@ -524,6 +550,17 @@ impl NodeKind {
             Self::Subtraction => SDFSubtraction::build(id_map, children, params),
             Self::Intersection => SDFIntersection::build(id_map, children, params),
         }
+    }
+}
+
+impl NodeKindGroup {
+    pub const fn all_non_root() -> [Self; 4] {
+        [
+            Self::Primitive,
+            Self::Transform,
+            Self::Modification,
+            Self::Combination,
+        ]
     }
 }
 
