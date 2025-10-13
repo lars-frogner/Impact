@@ -1,5 +1,7 @@
 //! Numbers and numerics.
 
+#![allow(clippy::excessive_precision)]
+
 use nalgebra as na;
 use num_traits as nt;
 
@@ -20,8 +22,11 @@ pub trait Float:
     const ONE_FOURTH: Self;
     const ONE_FIFTH: Self;
     const ONE_SIXTH: Self;
+    const SQRT_2: Self;
     const FRAC_1_SQRT_2: Self;
     const NEG_FRAC_1_SQRT_2: Self;
+    const SQRT_3: Self;
+    const FRAC_1_SQRT_3: Self;
     const PI: Self;
     const TWO_PI: Self;
     const FRAC_PI_2: Self;
@@ -48,8 +53,11 @@ macro_rules! impl_float {
             const ONE_FOURTH: Self = 0.25;
             const ONE_FIFTH: Self = 0.2;
             const ONE_SIXTH: Self = 1.0 / 6.0;
+            const SQRT_2: Self = std::$f::consts::SQRT_2;
             const FRAC_1_SQRT_2: Self = std::$f::consts::FRAC_1_SQRT_2;
             const NEG_FRAC_1_SQRT_2: Self = -std::$f::consts::FRAC_1_SQRT_2;
+            const SQRT_3: Self = 1.732050807568877293527446341505872367;
+            const FRAC_1_SQRT_3: Self = 0.577350269189625764509148780501957456;
             const PI: Self = std::$f::consts::PI;
             const TWO_PI: Self = 2.0 * std::$f::consts::PI;
             const FRAC_PI_2: Self = std::$f::consts::FRAC_PI_2;

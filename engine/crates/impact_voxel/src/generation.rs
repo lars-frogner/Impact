@@ -1,20 +1,28 @@
 //! Generation of spatial voxel distributions.
 
-use crate::{Voxel, VoxelSignedDistance, voxel_types::VoxelType};
+use crate::{
+    Voxel, VoxelSignedDistance,
+    chunks::{ChunkedVoxelObject, LoopForChunkVoxels},
+    voxel_types::VoxelType,
+};
 use allocator_api2::{
     alloc::{Allocator, Global},
     vec::Vec as AVec,
 };
 use anyhow::{Result, anyhow, bail};
 use impact_geometry::{AxisAlignedBox, OrientedBox};
-use nalgebra::{Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, point, vector};
+use impact_math::Float;
+use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, point, vector};
 use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
 use ordered_float::OrderedFloat;
+use std::f32;
 use twox_hash::XxHash32;
 
 /// Represents a voxel generator that provides a voxel type given the voxel
 /// indices.
 pub trait VoxelGenerator {
+    type ChunkGenerationBuffers;
+
     /// Returns the extent of single voxel.
     fn voxel_extent(&self) -> f64;
 
@@ -26,6 +34,15 @@ pub trait VoxelGenerator {
     /// are outside the bounds of the grid, this should return
     /// [`Voxel::maximally_outside`].
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
+
+    fn create_buffers(&self) -> Self::ChunkGenerationBuffers;
+
+    fn generate_chunk(
+        &self,
+        buffers: &mut Self::ChunkGenerationBuffers,
+        voxels: &mut Vec<Voxel>,
+        chunk_origin: &[usize; 3],
+    );
 }
 
 /// Generator for a voxel object from a signed distance field.
@@ -49,8 +66,14 @@ pub struct SDFVoxelGenerator {
 #[derive(Clone, Debug)]
 pub struct SDFGenerator {
     /// Nodes in reverse depth-first order. The last node is the root.
-    nodes: Vec<SDFGeneratorNode>,
+    nodes: Vec<ProcessedSDFGeneratorNode>,
+    primitive_count: usize,
     domain: AxisAlignedBox<f32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SDFGeneratorChunkBuffers {
+    signed_distance_stack: Vec<[f32; ChunkedVoxelObject::chunk_voxel_count()]>,
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +104,26 @@ pub enum SDFGeneratorNode {
     Union(SDFUnion),
     Subtraction(SDFSubtraction),
     Intersection(SDFIntersection),
+}
+
+#[derive(Clone, Debug)]
+struct ProcessedSDFGeneratorNode {
+    node: SDFGeneratorNode,
+    /// Transforms positions from the root SDF coordinate space to this node's
+    /// local space.
+    transform_to_node_space: Matrix4<f32>,
+    /// The domain is defined in the node's local space.
+    ///
+    /// It is expanded by a small margin on each side relative to the original
+    /// tight domain. This means that the signed distance outside that domain is
+    /// never smaller than the margin. If we determine a margin such that the
+    /// parent nodes will never care about the values outside it, we are free to
+    /// fill in chunks outside the margin with the margin value rather than
+    /// evaluating the SDF there. Note that this does leave an invalid SDF
+    /// though, since the gradient becomes zero. But as long as we don't need
+    /// the gradient, that is OK.
+    expanded_domain: AxisAlignedBox<f32>,
+    domain_margin: f32,
 }
 
 /// Generator for a signed distance field representing a box.
@@ -250,9 +293,9 @@ impl SDFVoxelGenerator {
         let grid_center_relative_to_domain_lower_corner =
             Point3::from(grid_shape.map(|n| 0.5 * n as f32));
 
-        // Since the domain can be translated relative to the origin of the SDF
-        // reference frame, we subtract the domain center to get the grid center
-        // relative to the origin
+        // Since the domain can be translated relative to the origin of the root
+        // SDF coordinate space, we subtract the domain center to get the grid
+        // center relative to the origin
         let grid_center_relative_to_sdf_origin =
             grid_center_relative_to_domain_lower_corner - sdf_domain.center().coords;
 
@@ -271,14 +314,16 @@ impl SDFVoxelGenerator {
         }
     }
 
-    /// Returns the center of the voxel grid in the SDF reference frame. The
-    /// coordinates are in whole voxels.
+    /// Returns the center of the voxel grid in the root SDF coordinate space.
+    /// The coordinates are in whole voxels.
     pub fn grid_center(&self) -> Point3<f32> {
         self.shifted_grid_center.map(|coord| coord + 0.5) // Unshift
     }
 }
 
 impl VoxelGenerator for SDFVoxelGenerator {
+    type ChunkGenerationBuffers = SDFGeneratorChunkBuffers;
+
     fn voxel_extent(&self) -> f64 {
         self.voxel_extent
     }
@@ -292,12 +337,12 @@ impl VoxelGenerator for SDFVoxelGenerator {
             return Voxel::maximally_outside();
         }
 
-        let displacement_from_center =
-            point![i as f32, j as f32, k as f32] - self.shifted_grid_center;
+        let position_relative_to_center =
+            point![i as f32, j as f32, k as f32] - self.shifted_grid_center.coords;
 
         let signed_distance = VoxelSignedDistance::from_f32(
             self.sdf_generator
-                .compute_signed_distance(&displacement_from_center),
+                .compute_signed_distance(&position_relative_to_center),
         );
 
         if signed_distance.is_negative() {
@@ -307,6 +352,71 @@ impl VoxelGenerator for SDFVoxelGenerator {
             Voxel::empty(signed_distance)
         }
     }
+
+    fn create_buffers(&self) -> Self::ChunkGenerationBuffers {
+        self.sdf_generator.create_buffers()
+    }
+
+    fn generate_chunk(
+        &self,
+        buffers: &mut Self::ChunkGenerationBuffers,
+        voxels: &mut Vec<Voxel>,
+        chunk_origin: &[usize; 3],
+    ) {
+        if self.sdf_generator.is_empty()
+            || chunk_origin
+                .iter()
+                .zip(self.grid_shape)
+                .any(|(&origin, size)| origin >= size)
+        {
+            voxels.resize(
+                voxels.len() + ChunkedVoxelObject::chunk_voxel_count(),
+                Voxel::maximally_outside(),
+            );
+            return;
+        }
+
+        let chunk_origin_in_root_space =
+            Point3::from(chunk_origin.map(|idx| idx as f32)) - self.shifted_grid_center.coords;
+
+        let chunk_aabb_in_root_space = AxisAlignedBox::new(
+            chunk_origin_in_root_space,
+            chunk_origin_in_root_space + Vector3::repeat(ChunkedVoxelObject::chunk_size() as f32),
+        );
+
+        self.sdf_generator
+            .compute_signed_distances_for_chunk(buffers, &chunk_aabb_in_root_space);
+
+        let signed_distances = &buffers.signed_distance_stack[0];
+
+        voxels.reserve(ChunkedVoxelObject::chunk_voxel_count());
+
+        LoopForChunkVoxels::over_all().execute_with_linear_idx(
+            &mut |&[i_in_chunk, j_in_chunk, k_in_chunk], idx| {
+                let i = chunk_origin[0] + i_in_chunk;
+                let j = chunk_origin[1] + j_in_chunk;
+                let k = chunk_origin[2] + k_in_chunk;
+
+                let voxel = if i >= self.grid_shape[0]
+                    || j >= self.grid_shape[1]
+                    || k >= self.grid_shape[2]
+                {
+                    Voxel::maximally_outside()
+                } else {
+                    let signed_distance = VoxelSignedDistance::from_f32(signed_distances[idx]);
+
+                    if signed_distance.is_negative() {
+                        let voxel_type = self.voxel_type_generator.voxel_type_at_indices(i, j, k);
+                        Voxel::non_empty(voxel_type, signed_distance)
+                    } else {
+                        Voxel::empty(signed_distance)
+                    }
+                };
+
+                voxels.push(voxel);
+            },
+        );
+    }
 }
 
 impl SDFGenerator {
@@ -315,6 +425,7 @@ impl SDFGenerator {
     pub fn empty() -> Self {
         Self {
             nodes: Vec::new(),
+            primitive_count: 0,
             domain: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
         }
     }
@@ -328,7 +439,7 @@ impl SDFGenerator {
         A: Allocator + Copy,
         AN: Allocator,
     {
-        let mut ordered_nodes = Vec::with_capacity(nodes.len());
+        let mut processed_nodes = Vec::with_capacity(nodes.len());
 
         let mut domains = AVec::new_in(arena);
         domains.resize(nodes.len(), zero_domain());
@@ -339,6 +450,8 @@ impl SDFGenerator {
         let mut operation_stack = AVec::with_capacity_in(3 * nodes.len(), arena);
 
         operation_stack.push(BuildOperation::VisitChildren(root_node_id));
+
+        let mut primitive_count = 0;
 
         while let Some(operation) = operation_stack.pop() {
             match operation {
@@ -408,20 +521,21 @@ impl SDFGenerator {
                     let node = &nodes[node_idx];
                     let state = &mut states[node_idx];
 
-                    ordered_nodes.push(node.clone());
-
                     if *state != NodeBuildState::DomainDetermined {
                         *state = NodeBuildState::DomainDetermined;
 
                         match node {
                             SDFGeneratorNode::Box(box_generator) => {
                                 domains[node_idx] = box_generator.domain_bounds();
+                                primitive_count += 1;
                             }
                             SDFGeneratorNode::Sphere(sphere_generator) => {
                                 domains[node_idx] = sphere_generator.domain_bounds();
+                                primitive_count += 1;
                             }
                             SDFGeneratorNode::GradientNoise(gradient_noise_generator) => {
                                 domains[node_idx] = gradient_noise_generator.domain_bounds();
+                                primitive_count += 1;
                             }
                             &SDFGeneratorNode::Translation(SDFTranslation {
                                 child_id,
@@ -440,7 +554,7 @@ impl SDFGenerator {
                             }
                             &SDFGeneratorNode::Scaling(SDFScaling { child_id, scaling }) => {
                                 let child_domain = &domains[child_id as usize];
-                                domains[node_idx] = child_domain.scaled_about_center(scaling);
+                                domains[node_idx] = child_domain.scaled(scaling);
                             }
                             SDFGeneratorNode::MultifractalNoise(MultifractalNoiseSDFModifier {
                                 child_id,
@@ -448,14 +562,14 @@ impl SDFGenerator {
                                 ..
                             }) => {
                                 let child_domain = &domains[*child_id as usize];
-                                domains[node_idx] = pad_domain(child_domain.clone(), *amplitude);
+                                domains[node_idx] = child_domain.expanded_about_center(*amplitude);
                             }
                             SDFGeneratorNode::MultiscaleSphere(
                                 modifier @ MultiscaleSphereSDFModifier { child_id, .. },
                             ) => {
                                 let child_domain = &domains[*child_id as usize];
                                 domains[node_idx] =
-                                    pad_domain(child_domain.clone(), modifier.domain_padding());
+                                    child_domain.expanded_about_center(modifier.domain_padding());
                             }
                             &SDFGeneratorNode::Union(SDFUnion {
                                 child_1_id,
@@ -466,8 +580,9 @@ impl SDFGenerator {
                                 let child_2_domain = &domains[child_2_id as usize];
                                 let domain =
                                     AxisAlignedBox::aabb_from_pair(child_1_domain, child_2_domain);
-                                domains[node_idx] =
-                                    pad_domain(domain, domain_padding_for_smoothness(smoothness));
+                                domains[node_idx] = domain.expanded_about_center(
+                                    domain_padding_for_smoothness(smoothness),
+                                );
                             }
                             &SDFGeneratorNode::Subtraction(SDFSubtraction {
                                 child_1_id,
@@ -475,8 +590,7 @@ impl SDFGenerator {
                                 smoothness,
                             }) => {
                                 let selected_child_domain = &domains[child_1_id as usize];
-                                domains[node_idx] = pad_domain(
-                                    selected_child_domain.clone(),
+                                domains[node_idx] = selected_child_domain.expanded_about_center(
                                     domain_padding_for_smoothness(smoothness),
                                 );
                             }
@@ -490,113 +604,441 @@ impl SDFGenerator {
                                 domains[node_idx] = if let Some(domain) =
                                     child_1_domain.compute_overlap_with(child_2_domain)
                                 {
-                                    pad_domain(domain, domain_padding_for_smoothness(smoothness))
+                                    domain.expanded_about_center(domain_padding_for_smoothness(
+                                        smoothness,
+                                    ))
                                 } else {
                                     zero_domain()
                                 };
                             }
                         }
                     }
+
+                    // We push a node even when its domain has already been
+                    // determined (meaning we duplicate the node) so that we can
+                    // traverse the graph by iterating linearly through the
+                    // ordered node list rather than jumping around.
+                    processed_nodes.push(ProcessedSDFGeneratorNode {
+                        node: node.clone(),
+                        // We will determine the correct transform in
+                        // `determine_transforms_and_margins`
+                        transform_to_node_space: Matrix4::identity(),
+                        // The domain stays unexpanded until we have determined
+                        // the appropriate margin
+                        expanded_domain: domains[node_idx].clone(),
+                        domain_margin: 0.0,
+                    });
                 }
             }
         }
 
+        Self::determine_transforms_and_margins(arena, &mut processed_nodes);
+
         let domain = domains[root_node_id as usize].clone();
 
         Ok(Self {
-            nodes: ordered_nodes,
+            nodes: processed_nodes,
+            primitive_count,
             domain,
         })
     }
 
+    fn determine_transforms_and_margins<A>(arena: A, nodes: &mut [ProcessedSDFGeneratorNode])
+    where
+        A: Allocator + Copy,
+    {
+        // We determine the transforms to node space by walking the graph from
+        // parent to children, taking the parent transform and either
+        // propagating it unchanged to the child or, if the child is a transform
+        // node, applying the inverse of that transform to move from parent space
+        // into the child’s local space.
+
+        // Similarly, we determine the margins by walking the graph from parent
+        // to children, taking the parent margin and adjusting it based on the
+        // margin the parent will need for its child in order to evaluate the
+        // SDF correctly.
+
+        let mut transform_stack = AVec::new_in(arena);
+        transform_stack.resize(nodes.len(), Matrix4::zeros());
+
+        let mut margin_stack = AVec::new_in(arena);
+        margin_stack.resize(nodes.len(), 0.0);
+
+        let mut stack_top = 0;
+        transform_stack[stack_top] = Matrix4::identity();
+        margin_stack[stack_top] = VoxelSignedDistance::MAX_F32;
+
+        for node in nodes.iter_mut().rev() {
+            let transform = transform_stack[stack_top];
+            let margin = margin_stack[stack_top];
+
+            node.transform_to_node_space = transform;
+            node.domain_margin = margin;
+            node.expanded_domain = node.expanded_domain.expanded_about_center(margin);
+
+            match &node.node {
+                SDFGeneratorNode::Box(_)
+                | SDFGeneratorNode::Sphere(_)
+                | SDFGeneratorNode::GradientNoise(_) => {
+                    stack_top = stack_top.saturating_sub(1);
+                }
+                SDFGeneratorNode::Translation(SDFTranslation { translation, .. }) => {
+                    // Transform: Shift the coordinate system in the opposite
+                    // direction so positions are expressed relative to the
+                    // child’s origin
+                    transform_stack[stack_top].append_translation_mut(&(-translation));
+
+                    // Margin: A translation node should have the same margin as
+                    // its child
+                }
+                SDFGeneratorNode::Rotation(SDFRotation { rotation, .. }) => {
+                    // Transform: Rotate the coordinate system in the opposite
+                    // direction so coordinates align with the child’s local
+                    // axes
+                    transform_stack[stack_top] = rotation.inverse().to_homogeneous() * transform;
+
+                    // Margin: A rotation node should have the same margin as
+                    // its child
+                }
+                &SDFGeneratorNode::Scaling(SDFScaling { scaling, .. }) => {
+                    // Transform: Rescale coordinates so they match the child’s
+                    // scale
+                    transform_stack[stack_top].append_scaling_mut(scaling.recip());
+
+                    // Margin: A scaling node should have the same effective
+                    // margin as its child, but since it scales the signed
+                    // distances of the child by `scaling`, the child margin has
+                    // to be `margin / scaling`
+                    let margin_for_child = margin / scaling;
+                    margin_stack[stack_top] = margin_for_child;
+                }
+                SDFGeneratorNode::MultifractalNoise(modifier) => {
+                    // Transform: The child of this node should have the same
+                    // transform as its parent
+
+                    // Margin: Any point that could fall within this node's
+                    // margin might come from a child point as far as `margin +
+                    // amplitude` from the child surface
+                    let margin_for_child = margin + modifier.amplitude;
+                    margin_stack[stack_top] = margin_for_child;
+                }
+                SDFGeneratorNode::MultiscaleSphere(modifier) => {
+                    // Transform: The child of this node should have the same
+                    // transform as its parent
+
+                    // Margin: Same logic as for `MultifractalNoise`
+                    let margin_for_child = margin + modifier.domain_padding();
+                    margin_stack[stack_top] = margin_for_child;
+                }
+                &SDFGeneratorNode::Union(SDFUnion { smoothness, .. })
+                | &SDFGeneratorNode::Subtraction(SDFSubtraction { smoothness, .. })
+                | &SDFGeneratorNode::Intersection(SDFIntersection { smoothness, .. }) => {
+                    // Transform: Duplicate current transform for the second
+                    // child branch
+                    transform_stack[stack_top + 1] = transform;
+
+                    // Margin: Any point that could fall within this node's
+                    // margin might come from a child point as far as `margin +
+                    // domain_padding_for_smoothness(smoothness)` from the child
+                    // surface, because the smoothing operation can offset the
+                    // distance field by up to that amount
+                    let margin_for_child = margin + smoothness;
+                    margin_stack[stack_top] = margin_for_child;
+                    margin_stack[stack_top + 1] = margin_for_child;
+
+                    stack_top += 1;
+                }
+            }
+        }
+        assert_eq!(stack_top, 0);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
     /// Returns the domain where the signed distance field can be negative, in
-    /// voxel grid coordinates relative to the origin of the SDF reference
-    /// frame. If the domain is not translated, the origin coincides with the
+    /// voxel grid coordinates relative to the origin of the root SDF coordinate
+    /// space. If the domain is not translated, the origin coincides with the
     /// center of the domain.
     pub fn domain(&self) -> &AxisAlignedBox<f32> {
         &self.domain
     }
 
-    // Computes the signed distance at the given displacement in voxel grid
-    // coordinates from the center of the field.
-    #[inline]
-    pub fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
+    pub fn create_buffers(&self) -> SDFGeneratorChunkBuffers {
+        let signed_distance_stack =
+            vec![[0.0; ChunkedVoxelObject::chunk_voxel_count()]; self.primitive_count];
+
+        SDFGeneratorChunkBuffers {
+            signed_distance_stack,
+        }
+    }
+
+    pub fn compute_signed_distances_for_chunk(
+        &self,
+        buffers: &mut SDFGeneratorChunkBuffers,
+        chunk_aabb_in_root_space: &AxisAlignedBox<f32>,
+    ) {
         if self.nodes.is_empty() {
-            return VoxelSignedDistance::MAX_F32;
+            buffers.signed_distance_stack[0].fill(VoxelSignedDistance::MAX_F32);
+            return;
         }
 
-        let mut displacements_for_primitives = [Vector3::zeros(); Self::MAX_PRIMITIVES];
-        let mut branch_idx: usize = 0;
-
-        displacements_for_primitives[branch_idx] = *displacement_from_center;
-
-        for node in self.nodes.iter().rev() {
-            match node {
-                SDFGeneratorNode::Union(_)
-                | SDFGeneratorNode::Subtraction(_)
-                | SDFGeneratorNode::Intersection(_) => {
-                    // Duplicate current displacement for the second child branch
-                    displacements_for_primitives[branch_idx + 1] =
-                        displacements_for_primitives[branch_idx];
-                }
-                SDFGeneratorNode::Translation(SDFTranslation { translation, .. }) => {
-                    displacements_for_primitives[branch_idx] -= translation;
-                }
-                SDFGeneratorNode::Rotation(SDFRotation { rotation, .. }) => {
-                    let displacement = &mut displacements_for_primitives[branch_idx];
-                    *displacement = rotation.inverse_transform_vector(displacement);
-                }
-                SDFGeneratorNode::Scaling(SDFScaling { scaling, .. }) => {
-                    displacements_for_primitives[branch_idx].unscale_mut(*scaling);
-                }
-                SDFGeneratorNode::Box(_)
-                | SDFGeneratorNode::Sphere(_)
-                | SDFGeneratorNode::GradientNoise(_) => {
-                    branch_idx += 1;
-                }
-                SDFGeneratorNode::MultifractalNoise(_) | SDFGeneratorNode::MultiscaleSphere(_) => {}
-            }
-        }
-
-        let mut signed_distance_stack = [0.0_f32; Self::MAX_PRIMITIVES];
-        let mut primitive_index_stack = [0_usize; Self::MAX_PRIMITIVES];
         let mut stack_top: usize = 0;
 
         for node in &self.nodes {
-            match node {
+            match &node.node {
                 SDFGeneratorNode::Box(box_generator) => {
-                    debug_assert!(branch_idx > 0);
-                    branch_idx -= 1;
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
-                    let displacement = &displacements_for_primitives[branch_idx];
-
-                    signed_distance_stack[stack_top] =
-                        box_generator.compute_signed_distance(displacement);
-                    primitive_index_stack[stack_top] = branch_idx;
+                    if node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        // Fully outside: distances are guaranteed >= margin
+                        buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
+                    } else if box_generator
+                        .expanded_domain_bounds(-node.domain_margin)
+                        .contains_box(&chunk_aabb_in_node_space)
+                    {
+                        // Fully inside: distances are guaranteed <= -margin
+                        buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
+                    } else {
+                        update_signed_distances_for_chunk(
+                            &mut buffers.signed_distance_stack[stack_top],
+                            &node.transform_to_node_space,
+                            chunk_aabb_in_root_space.lower_corner(),
+                            &|signed_distance, position_in_node_space| {
+                                *signed_distance =
+                                    box_generator.compute_signed_distance(position_in_node_space);
+                            },
+                        );
+                    }
 
                     stack_top += 1;
                 }
                 SDFGeneratorNode::Sphere(sphere_generator) => {
-                    debug_assert!(branch_idx > 0);
-                    branch_idx -= 1;
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
-                    let displacement = &displacements_for_primitives[branch_idx];
-
-                    signed_distance_stack[stack_top] =
-                        sphere_generator.compute_signed_distance(displacement);
-                    primitive_index_stack[stack_top] = branch_idx;
+                    if node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
+                    } else if sphere_generator
+                        .expanded_interior_domain_bounds(-node.domain_margin)
+                        .contains_box(&chunk_aabb_in_node_space)
+                    {
+                        buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
+                    } else {
+                        update_signed_distances_for_chunk(
+                            &mut buffers.signed_distance_stack[stack_top],
+                            &node.transform_to_node_space,
+                            chunk_aabb_in_root_space.lower_corner(),
+                            &|signed_distance, position_in_node_space| {
+                                *signed_distance = sphere_generator
+                                    .compute_signed_distance(position_in_node_space);
+                            },
+                        );
+                    }
 
                     stack_top += 1;
                 }
                 SDFGeneratorNode::GradientNoise(gradient_noise_generator) => {
-                    debug_assert!(branch_idx > 0);
-                    branch_idx -= 1;
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
-                    let displacement = &displacements_for_primitives[branch_idx];
+                    if node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
+                    } else {
+                        update_signed_distances_for_chunk(
+                            &mut buffers.signed_distance_stack[stack_top],
+                            &node.transform_to_node_space,
+                            chunk_aabb_in_root_space.lower_corner(),
+                            &|signed_distance, position_in_node_space| {
+                                *signed_distance = gradient_noise_generator
+                                    .compute_signed_distance(position_in_node_space);
+                            },
+                        );
+                    }
+
+                    stack_top += 1;
+                }
+                SDFGeneratorNode::Translation(_) | SDFGeneratorNode::Rotation(_) => {}
+                SDFGeneratorNode::Scaling(SDFScaling { scaling, .. }) => {
+                    debug_assert!(stack_top >= 1);
+
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if !node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        for signed_distance in &mut buffers.signed_distance_stack[stack_top - 1] {
+                            *signed_distance *= scaling;
+                        }
+                    }
+                }
+                SDFGeneratorNode::MultifractalNoise(modifier) => {
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if !node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        update_signed_distances_for_chunk(
+                            &mut buffers.signed_distance_stack[stack_top - 1],
+                            &node.transform_to_node_space,
+                            chunk_aabb_in_root_space.lower_corner(),
+                            &|signed_distance, position_in_node_space| {
+                                let perturbation = modifier
+                                    .compute_signed_distance_perturbation(position_in_node_space);
+                                *signed_distance += perturbation;
+                            },
+                        );
+                    }
+                }
+                SDFGeneratorNode::MultiscaleSphere(modifier) => {
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if !node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        update_signed_distances_for_chunk(
+                            &mut buffers.signed_distance_stack[stack_top - 1],
+                            &node.transform_to_node_space,
+                            chunk_aabb_in_root_space.lower_corner(),
+                            &|signed_distance, position_in_node_space| {
+                                *signed_distance = modifier.modify_signed_distance(
+                                    position_in_node_space,
+                                    *signed_distance,
+                                );
+                            },
+                        );
+                    }
+                }
+                &SDFGeneratorNode::Union(SDFUnion { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    stack_top -= 1;
+
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if !node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        let [distances_1, distances_2] = buffers
+                            .signed_distance_stack
+                            .get_disjoint_mut([stack_top - 1, stack_top])
+                            .unwrap();
+
+                        for (distance_1, &distance_2) in
+                            distances_1.iter_mut().zip(distances_2.iter())
+                        {
+                            *distance_1 = sdf_union(*distance_1, distance_2, smoothness);
+                        }
+                    }
+                }
+                &SDFGeneratorNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    stack_top -= 1;
+
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if !node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        let [distances_1, distances_2] = buffers
+                            .signed_distance_stack
+                            .get_disjoint_mut([stack_top - 1, stack_top])
+                            .unwrap();
+
+                        for (distance_1, &distance_2) in
+                            distances_1.iter_mut().zip(distances_2.iter())
+                        {
+                            *distance_1 = sdf_subtraction(*distance_1, distance_2, smoothness);
+                        }
+                    }
+                }
+                &SDFGeneratorNode::Intersection(SDFIntersection { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    stack_top -= 1;
+
+                    let chunk_aabb_in_node_space =
+                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if !node
+                        .expanded_domain
+                        .box_lies_outside(&chunk_aabb_in_node_space)
+                    {
+                        let [distances_1, distances_2] = buffers
+                            .signed_distance_stack
+                            .get_disjoint_mut([stack_top - 1, stack_top])
+                            .unwrap();
+
+                        for (distance_1, &distance_2) in
+                            distances_1.iter_mut().zip(distances_2.iter())
+                        {
+                            *distance_1 = sdf_intersection(*distance_1, distance_2, smoothness);
+                        }
+                    }
+                }
+            }
+        }
+
+        assert_eq!(stack_top, 1);
+    }
+
+    #[inline]
+    pub fn compute_signed_distance(&self, position_in_root_space: &Point3<f32>) -> f32 {
+        if self.nodes.is_empty() {
+            return VoxelSignedDistance::MAX_F32;
+        }
+
+        let mut signed_distance_stack = [0.0_f32; Self::MAX_PRIMITIVES];
+        let mut stack_top: usize = 0;
+
+        for node in &self.nodes {
+            match &node.node {
+                SDFGeneratorNode::Box(box_generator) => {
+                    let position_in_node_space = node
+                        .transform_to_node_space
+                        .transform_point(position_in_root_space);
 
                     signed_distance_stack[stack_top] =
-                        gradient_noise_generator.compute_signed_distance(displacement);
-                    primitive_index_stack[stack_top] = branch_idx;
+                        box_generator.compute_signed_distance(&position_in_node_space);
+
+                    stack_top += 1;
+                }
+                SDFGeneratorNode::Sphere(sphere_generator) => {
+                    let position_in_node_space = node
+                        .transform_to_node_space
+                        .transform_point(position_in_root_space);
+
+                    signed_distance_stack[stack_top] =
+                        sphere_generator.compute_signed_distance(&position_in_node_space);
+
+                    stack_top += 1;
+                }
+                SDFGeneratorNode::GradientNoise(gradient_noise_generator) => {
+                    let position_in_node_space = node
+                        .transform_to_node_space
+                        .transform_point(position_in_root_space);
+
+                    signed_distance_stack[stack_top] =
+                        gradient_noise_generator.compute_signed_distance(&position_in_node_space);
 
                     stack_top += 1;
                 }
@@ -606,17 +1048,20 @@ impl SDFGenerator {
                     signed_distance_stack[stack_top - 1] *= scaling;
                 }
                 SDFGeneratorNode::MultifractalNoise(modifier) => {
-                    let primitive_index = primitive_index_stack[stack_top - 1];
-                    let displacement = &displacements_for_primitives[primitive_index];
-                    let perturbation = modifier.compute_signed_distance_perturbation(displacement);
+                    let position_in_node_space = node
+                        .transform_to_node_space
+                        .transform_point(position_in_root_space);
+                    let perturbation =
+                        modifier.compute_signed_distance_perturbation(&position_in_node_space);
                     signed_distance_stack[stack_top - 1] += perturbation;
                 }
                 SDFGeneratorNode::MultiscaleSphere(modifier) => {
-                    let primitive_index = primitive_index_stack[stack_top - 1];
-                    let displacement = &displacements_for_primitives[primitive_index];
+                    let position_in_node_space = node
+                        .transform_to_node_space
+                        .transform_point(position_in_root_space);
                     let signed_distance = &mut signed_distance_stack[stack_top - 1];
                     *signed_distance =
-                        modifier.modify_signed_distance(displacement, *signed_distance);
+                        modifier.modify_signed_distance(&position_in_node_space, *signed_distance);
                 }
                 &SDFGeneratorNode::Union(SDFUnion { smoothness, .. }) => {
                     debug_assert!(stack_top >= 2);
@@ -625,7 +1070,6 @@ impl SDFGenerator {
                     stack_top -= 1;
                     signed_distance_stack[stack_top - 1] =
                         sdf_union(distance_1, distance_2, smoothness);
-                    // primitive_index_stack[stack_top - 1] already holds a valid displacement index
                 }
                 &SDFGeneratorNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
                     debug_assert!(stack_top >= 2);
@@ -866,8 +1310,17 @@ impl BoxSDFGenerator {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
-        let q = displacement_from_center.abs() - self.half_extents;
+    fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
+        let expanded_half_extents = self.half_extents + Vector3::repeat(margin);
+        AxisAlignedBox::new(
+            (-expanded_half_extents).into(),
+            expanded_half_extents.into(),
+        )
+    }
+
+    #[inline]
+    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+        let q = position_in_node_space.coords.abs() - self.half_extents;
         q.sup(&Vector3::zeros()).magnitude() + f32::min(q.max(), 0.0)
     }
 }
@@ -883,8 +1336,17 @@ impl SphereSDFGenerator {
         AxisAlignedBox::new([-self.radius; 3].into(), [self.radius; 3].into())
     }
 
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
-        displacement_from_center.magnitude() - self.radius
+    fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
+        let expanded_half_extents = Vector3::repeat(self.radius * f32::FRAC_1_SQRT_3 + margin);
+        AxisAlignedBox::new(
+            (-expanded_half_extents).into(),
+            expanded_half_extents.into(),
+        )
+    }
+
+    #[inline]
+    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+        position_in_node_space.coords.magnitude() - self.radius
     }
 }
 
@@ -907,8 +1369,9 @@ impl GradientNoiseSDFGenerator {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
-    fn compute_signed_distance(&self, displacement_from_center: &Vector3<f32>) -> f32 {
-        let noise_point: [f64; 3] = (self.noise_frequency * displacement_from_center)
+    #[inline]
+    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+        let noise_point: [f64; 3] = (self.noise_frequency * position_in_node_space)
             .cast()
             .into();
         let noise_value = self.noise.get(noise_point);
@@ -919,6 +1382,11 @@ impl GradientNoiseSDFGenerator {
 impl SDFRotation {
     pub fn from_axis_angle(child_id: SDFNodeID, axis: Vector3<f32>, angle: f32) -> Self {
         let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::new_normalize(axis), angle);
+        Self { child_id, rotation }
+    }
+
+    pub fn from_euler_angles(child_id: SDFNodeID, roll: f32, pitch: f32, yaw: f32) -> Self {
+        let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
         Self { child_id, rotation }
     }
 }
@@ -985,8 +1453,9 @@ impl MultifractalNoiseSDFModifier {
         }
     }
 
-    fn compute_signed_distance_perturbation(&self, displacement_from_center: &Vector3<f32>) -> f32 {
-        let noise_point: [f64; 3] = displacement_from_center.cast().into();
+    #[inline]
+    fn compute_signed_distance_perturbation(&self, position_in_node_space: &Point3<f32>) -> f32 {
+        let noise_point: [f64; 3] = position_in_node_space.cast().into();
         self.amplitude * self.noise.get(noise_point) as f32
     }
 }
@@ -1027,7 +1496,12 @@ impl MultiscaleSphereSDFModifier {
         self.scaled_inflation + domain_padding_for_smoothness(self.union_smoothness)
     }
 
-    fn modify_signed_distance(&self, position: &Vector3<f32>, signed_distance: f32) -> f32 {
+    #[inline]
+    fn modify_signed_distance(
+        &self,
+        position_in_node_space: &Point3<f32>,
+        signed_distance: f32,
+    ) -> f32 {
         /// Rotates with an angle of `2 * pi / golden_ratio` around the axis
         /// `[1, 1, 1]` (to break up the regular grid pattern).
         const ROTATION: UnitQuaternion<f32> = UnitQuaternion::new_unchecked(Quaternion::new(
@@ -1035,7 +1509,7 @@ impl MultiscaleSphereSDFModifier {
         ));
 
         let mut parent_distance = signed_distance;
-        let mut position = self.frequency * position;
+        let mut position = self.frequency * position_in_node_space;
         let mut scale = 1.0;
 
         for _ in 0..self.octaves {
@@ -1060,7 +1534,7 @@ impl MultiscaleSphereSDFModifier {
         parent_distance
     }
 
-    fn evaluate_sphere_grid_sdf(&self, position: &Vector3<f32>) -> f32 {
+    fn evaluate_sphere_grid_sdf(&self, position: &Point3<f32>) -> f32 {
         const CORNER_OFFSETS: [Vector3<i32>; 8] = [
             vector![0, 0, 0],
             vector![0, 0, 1],
@@ -1071,8 +1545,8 @@ impl MultiscaleSphereSDFModifier {
             vector![1, 1, 0],
             vector![1, 1, 1],
         ];
-        let grid_cell_indices = position.map(|coord| coord.floor() as i32);
-        let offset_in_grid_cell = position - grid_cell_indices.cast();
+        let grid_cell_indices = position.coords.map(|coord| coord.floor() as i32);
+        let offset_in_grid_cell = position.coords - grid_cell_indices.cast();
 
         CORNER_OFFSETS
             .iter()
@@ -1186,19 +1660,33 @@ fn zero_domain() -> AxisAlignedBox<f32> {
     AxisAlignedBox::new(Point3::origin(), Point3::origin())
 }
 
-fn pad_domain(domain: AxisAlignedBox<f32>, padding: f32) -> AxisAlignedBox<f32> {
-    if padding == 0.0 {
-        return domain;
-    }
-    let padding = Vector3::repeat(padding);
-    AxisAlignedBox::new(
-        domain.lower_corner() - padding,
-        domain.upper_corner() + padding,
-    )
-}
-
 fn domain_padding_for_smoothness(smoothness: f32) -> f32 {
     0.25 * smoothness
+}
+
+fn update_signed_distances_for_chunk(
+    signed_distances: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
+    transform_to_node_space: &Matrix4<f32>,
+    chunk_origin_in_root_space: &Point3<f32>,
+    update_signed_distance: &impl Fn(&mut f32, &Point3<f32>),
+) {
+    let origin = transform_to_node_space.transform_point(chunk_origin_in_root_space);
+    let dx = transform_to_node_space.column(0).xyz();
+    let dy = transform_to_node_space.column(1).xyz();
+    let dz = transform_to_node_space.column(2).xyz();
+
+    let mut idx = 0;
+    for i in 0..ChunkedVoxelObject::chunk_size() {
+        let origin_plus_x = origin + (i as f32) * dx;
+        for j in 0..ChunkedVoxelObject::chunk_size() {
+            let mut position = origin_plus_x + (j as f32) * dy;
+            for _ in 0..ChunkedVoxelObject::chunk_size() {
+                update_signed_distance(&mut signed_distances[idx], &position);
+                position += dz;
+                idx += 1;
+            }
+        }
+    }
 }
 
 fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
