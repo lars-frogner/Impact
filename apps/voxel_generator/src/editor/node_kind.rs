@@ -176,19 +176,15 @@ impl SpecificNodeKind for SDFRotation {
 
     fn default_params() -> Vec<NodeParam> {
         vec![
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Axis x"),
-                0.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Axis y"),
-                0.0,
-            )),
-            NodeParam::Float(FloatParam::new(
-                LabelAndHoverText::label_only("Axis z"),
-                1.0,
-            )),
-            NodeParam::Float(FloatParam::new(LabelAndHoverText::label_only("Angle"), 0.0)),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Roll"), 0.0).with_speed(0.002),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Pitch"), 0.0).with_speed(0.002),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Yaw"), 0.0).with_speed(0.002),
+            ),
         ]
     }
 
@@ -197,12 +193,13 @@ impl SpecificNodeKind for SDFRotation {
         children: &[Option<NodeID>],
         params: &[NodeParam],
     ) -> Option<SDFGeneratorNode> {
-        assert_eq!(params.len(), 4);
+        assert_eq!(params.len(), 3);
         let child_id = unary_child(id_map, children)?;
-        let axis = [params[0].float(), params[1].float(), params[2].float()].into();
-        let angle = params[3].float();
-        Some(SDFGeneratorNode::Rotation(SDFRotation::from_axis_angle(
-            child_id, axis, angle,
+        let roll = params[0].float();
+        let pitch = params[1].float();
+        let yaw = params[2].float();
+        Some(SDFGeneratorNode::Rotation(SDFRotation::from_euler_angles(
+            child_id, roll, pitch, yaw,
         )))
     }
 }
