@@ -668,7 +668,7 @@ mod tests {
     use super::*;
     use crate::{
         chunks::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
-        generation::{SDFVoxelGenerator, sdf::BoxSDFGenerator, voxel_type::SameVoxelTypeGenerator},
+        generation::{SDFVoxelGenerator, sdf::BoxSDF, voxel_type::SameVoxelTypeGenerator},
         voxel_types::VoxelType,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -730,7 +730,7 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             voxel_extent,
-            BoxSDFGenerator::new(extents).into(),
+            BoxSDF::new(extents).into(),
             SameVoxelTypeGenerator::new(VoxelType::from_idx(0)).into(),
         );
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);

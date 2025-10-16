@@ -215,9 +215,7 @@ pub mod fuzzing {
     use super::*;
     use crate::{
         generation::{
-            sdf::{
-                BoxSDFGenerator, GradientNoiseSDFGenerator, SDFGeneratorNode, SphereSDFGenerator,
-            },
+            sdf::{BoxSDF, GradientNoiseSDF, SDFNode, SphereSDF},
             voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
         },
         voxel_types::VoxelTypeRegistry,
@@ -231,9 +229,9 @@ pub mod fuzzing {
     #[allow(clippy::large_enum_variant)]
     #[derive(Clone, Debug, Arbitrary)]
     enum ArbitrarySDFGeneratorNode {
-        Box(BoxSDFGenerator),
-        Sphere(SphereSDFGenerator),
-        GradientNoise(GradientNoiseSDFGenerator),
+        Box(BoxSDF),
+        Sphere(SphereSDF),
+        GradientNoise(GradientNoiseSDF),
     }
 
     impl<'a> Arbitrary<'a> for SDFVoxelGenerator {
@@ -262,10 +260,10 @@ pub mod fuzzing {
     impl Arbitrary<'_> for SDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let primitive = match u.arbitrary()? {
-                ArbitrarySDFGeneratorNode::Box(generator) => SDFGeneratorNode::Box(generator),
-                ArbitrarySDFGeneratorNode::Sphere(generator) => SDFGeneratorNode::Sphere(generator),
+                ArbitrarySDFGeneratorNode::Box(generator) => SDFNode::Box(generator),
+                ArbitrarySDFGeneratorNode::Sphere(generator) => SDFNode::Sphere(generator),
                 ArbitrarySDFGeneratorNode::GradientNoise(generator) => {
-                    SDFGeneratorNode::GradientNoise(generator)
+                    SDFNode::GradientNoise(generator)
                 }
             };
             let mut nodes = AVec::new();
@@ -278,7 +276,7 @@ pub mod fuzzing {
         }
     }
 
-    impl Arbitrary<'_> for BoxSDFGenerator {
+    impl Arbitrary<'_> for BoxSDF {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let extent_x =
                 u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
@@ -295,7 +293,7 @@ pub mod fuzzing {
         }
     }
 
-    impl Arbitrary<'_> for SphereSDFGenerator {
+    impl Arbitrary<'_> for SphereSDF {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let radius = u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE / 2 - 1) as f32
                 + arbitrary_norm_f32(u)?;
@@ -308,7 +306,7 @@ pub mod fuzzing {
         }
     }
 
-    impl Arbitrary<'_> for GradientNoiseSDFGenerator {
+    impl Arbitrary<'_> for GradientNoiseSDF {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let extent_x =
                 u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;

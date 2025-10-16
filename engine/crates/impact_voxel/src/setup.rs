@@ -5,7 +5,7 @@ use crate::{
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
         VoxelGenerator,
-        sdf::{SDFGeneratorBuilder, SDFNodeID},
+        sdf::{SDFGeneratorBuilder, SDFNode, SDFNodeID},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     gpu_resource::VOXEL_MODEL_ID,
@@ -405,7 +405,7 @@ impl VoxelBox {
     }
 
     pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        builder.add_box(self.extents_in_voxels())
+        builder.add_node(SDFNode::new_box(self.extents_in_voxels()))
     }
 }
 
@@ -443,7 +443,7 @@ impl VoxelSphere {
     }
 
     pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        builder.add_sphere(self.radius_in_voxels())
+        builder.add_node(SDFNode::new_sphere(self.radius_in_voxels()))
     }
 }
 
@@ -499,10 +499,15 @@ impl VoxelSphereUnion {
     }
 
     pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        let sphere_1_id = builder.add_sphere(self.radius_1_in_voxels());
-        let sphere_2_id = builder.add_sphere(self.radius_2_in_voxels());
-        let sphere_2_id = builder.add_translation(sphere_2_id, self.center_offsets);
-        builder.add_union(sphere_1_id, sphere_2_id, self.smoothness)
+        let sphere_1_id = builder.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
+        let sphere_2_id = builder.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
+        let sphere_2_id =
+            builder.add_node(SDFNode::new_translation(sphere_2_id, self.center_offsets));
+        builder.add_node(SDFNode::new_union(
+            sphere_1_id,
+            sphere_2_id,
+            self.smoothness,
+        ))
     }
 }
 
@@ -559,12 +564,12 @@ impl VoxelGradientNoisePattern {
     }
 
     pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        builder.add_gradient_noise(
+        builder.add_node(SDFNode::new_gradient_noise(
             self.extents_in_voxels(),
             self.noise_frequency,
             self.noise_threshold,
             self.seed,
-        )
+        ))
     }
 }
 
@@ -584,7 +589,7 @@ pub fn apply_modifications(
         seed,
     }) = multiscale_sphere_modification
     {
-        node_id = builder.add_multiscale_sphere(
+        node_id = builder.add_node(SDFNode::new_multiscale_sphere(
             node_id,
             octaves,
             max_scale,
@@ -593,7 +598,7 @@ pub fn apply_modifications(
             intersection_smoothness,
             union_smoothness,
             seed,
-        );
+        ));
     }
 
     if let Some(&MultifractalNoiseSDFModification {
@@ -605,7 +610,7 @@ pub fn apply_modifications(
         seed,
     }) = multifractal_noise_modification
     {
-        builder.add_multifractal_noise(
+        builder.add_node(SDFNode::new_multifractal_noise(
             node_id,
             octaves,
             frequency,
@@ -613,7 +618,7 @@ pub fn apply_modifications(
             persistence,
             amplitude,
             seed,
-        );
+        ));
     }
 }
 

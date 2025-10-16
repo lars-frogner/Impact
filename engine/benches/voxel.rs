@@ -5,7 +5,7 @@ use impact_profiling::{
 };
 use impact_voxel::{
     chunks::{ChunkedVoxelObject, sdf::VoxelChunkSignedDistanceField},
-    generation::{SDFVoxelGenerator, sdf::SphereSDFGenerator, voxel_type::SameVoxelTypeGenerator},
+    generation::{SDFVoxelGenerator, sdf::SphereSDF, voxel_type::SameVoxelTypeGenerator},
     voxel_types::VoxelType,
 };
 use std::hint::black_box;
@@ -13,7 +13,7 @@ use std::hint::black_box;
 pub fn clone_object(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        SphereSDFGenerator::new(100.0).into(),
+        SphereSDF::new(100.0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate(&generator);
@@ -27,7 +27,7 @@ pub fn clone_object(c: &mut Criterion) {
 pub fn get_each_voxel(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        SphereSDFGenerator::new(100.0).into(),
+        SphereSDF::new(100.0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
@@ -48,7 +48,7 @@ pub fn get_each_voxel(c: &mut Criterion) {
 pub fn for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        SphereSDFGenerator::new(100.0).into(),
+        SphereSDF::new(100.0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate(&generator);
