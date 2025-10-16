@@ -8,7 +8,6 @@ use crate::{
     chunks::{ChunkedVoxelObject, LoopForChunkVoxels},
     voxel_types::VoxelType,
 };
-use allocator_api2::vec::Vec as AVec;
 use impact_geometry::AxisAlignedBox;
 use nalgebra::{Point3, Vector3};
 use sdf::{SDFGenerator, SDFGeneratorChunkBuffers};
@@ -223,7 +222,7 @@ pub mod fuzzing {
         },
         voxel_types::VoxelTypeRegistry,
     };
-    use allocator_api2::alloc::Global;
+    use allocator_api2::{alloc::Global, vec::Vec as AVec};
     use arbitrary::{Arbitrary, MaxRecursionReached, Result, Unstructured, size_hint};
     use std::mem;
 
