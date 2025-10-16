@@ -424,7 +424,7 @@ impl Canvas {
             .map_or(0, |node| node.data.kind.port_config().children);
 
         for slot in 0..n_child_slots {
-            self.detach_child_slot(node_id, slot);
+            self.detach_child_of(node_id, slot);
         }
 
         self.nodes.remove(&node_id);
@@ -442,7 +442,7 @@ impl Canvas {
         // Detach dropped children and re-attach if there are available slots
         if n_new_child_slots < n_old_child_slots {
             for slot in n_new_child_slots..n_old_child_slots {
-                if let Some(child_node_id) = self.detach_child_slot(node_id, slot) {
+                if let Some(child_node_id) = self.detach_child_of(node_id, slot) {
                     for slot in 0..n_new_child_slots {
                         if self.node(node_id).children[slot].is_none() {
                             self.try_attach(node_id, child_node_id, slot);
@@ -503,7 +503,7 @@ impl Canvas {
             child_node.parent = Some(parent_node_id);
         }
 
-        self.detach_child_slot(parent_node_id, child_slot);
+        self.detach_child_of(parent_node_id, child_slot);
         if let Some(parent_node) = self.nodes.get_mut(&parent_node_id) {
             parent_node.children[child_slot] = Some(child_node_id);
         }
@@ -532,7 +532,7 @@ impl Canvas {
     }
 
     /// Returns the ID of the detached child node.
-    fn detach_child_slot(&mut self, node_id: NodeID, slot: usize) -> Option<NodeID> {
+    fn detach_child_of(&mut self, node_id: NodeID, slot: usize) -> Option<NodeID> {
         let node = self.nodes.get_mut(&node_id)?;
 
         let child_node_id = node.children.get_mut(slot).and_then(|child| child.take())?;
@@ -811,22 +811,21 @@ impl Canvas {
                         if response.clicked() {
                             // Detach if there is a node attached to the port
                             if self.pending_edge.is_none()
-                                && let Some((attached_node_id, attached_port)) =
-                                    self.get_attached_node_and_port(node_id, port)
+                                && self.get_attached_node_and_port(node_id, port).is_some()
                             {
                                 match port {
                                     Port::Parent => {
                                         self.detach_parent_of(node_id);
                                     }
                                     Port::Child { slot, .. } => {
-                                        self.detach_child_slot(node_id, slot);
+                                        self.detach_child_of(node_id, slot);
                                     }
                                 }
 
                                 // Create a pending edge from the remaining attached port
                                 self.pending_edge = Some(PendingEdge {
-                                    from_node: attached_node_id,
-                                    from_port: attached_port,
+                                    from_node: node_id,
+                                    from_port: port,
                                 });
 
                                 connectivity_may_have_changed = true;
