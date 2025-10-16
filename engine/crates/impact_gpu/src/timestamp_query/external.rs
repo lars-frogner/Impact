@@ -9,7 +9,7 @@ use std::{
 };
 
 /// An external instrumenting GPU profiler that can be hooked into
-/// [`TimestampQueryManager`].
+/// [`TimestampQueryManager`](super::TimestampQueryManager).
 #[derive(Debug)]
 pub enum ExternalGPUProfiler {
     None,
