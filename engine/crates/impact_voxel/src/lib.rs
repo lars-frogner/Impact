@@ -120,14 +120,16 @@ pub struct VoxelObjectPhysicsContext {
     pub rigid_body_id: DynamicRigidBodyID,
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[derive(Clone, Debug)]
-#[serde(default)]
 pub struct VoxelConfig {
     pub texture_resolution: NonZeroU32,
     /// Path to the RON file containing the specification of each voxel type.
     /// If [`None`], a single voxel type called "Default" will be defined.
-    #[cfg_attr(feature = "serde", serde(default))]
     pub voxel_types_path: Option<PathBuf>,
 }
 
