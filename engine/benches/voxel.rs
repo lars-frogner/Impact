@@ -67,11 +67,20 @@ pub fn for_each_exposed_chunk_with_sdf(c: &mut Criterion) {
 }
 
 define_criterion_target!(chunked_voxel_object, generate_box);
+define_criterion_target!(chunked_voxel_object, generate_gradient_noise_pattern);
 define_criterion_target!(chunked_voxel_object, generate_sphere_union);
 define_criterion_target!(chunked_voxel_object, generate_complex_object);
 define_criterion_target!(
     chunked_voxel_object,
     generate_object_with_multifractal_noise
+);
+define_criterion_target!(
+    chunked_voxel_object,
+    generate_object_with_multiscale_spheres
+);
+define_criterion_target!(
+    chunked_voxel_object,
+    generate_box_with_gradient_noise_voxel_types
 );
 define_criterion_target!(
     chunked_voxel_object,
@@ -109,9 +118,12 @@ criterion::criterion_group!(
     config = criterion::config();
     targets =
         generate_box,
+        generate_gradient_noise_pattern,
         generate_sphere_union,
         generate_complex_object,
         generate_object_with_multifractal_noise,
+        generate_object_with_multiscale_spheres,
+        generate_box_with_gradient_noise_voxel_types,
         clone_object,
         update_internal_adjacencies_for_all_chunks,
         update_connected_regions_for_all_chunks,

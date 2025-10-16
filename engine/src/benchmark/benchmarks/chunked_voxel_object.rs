@@ -7,8 +7,8 @@ use impact_voxel::{
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     collidable,
     generation::{
-        BoxSDFGenerator, SDFGeneratorBuilder, SDFVoxelGenerator, SameVoxelTypeGenerator,
-        SphereSDFGenerator,
+        BoxSDFGenerator, GradientNoiseSDFGenerator, GradientNoiseVoxelTypeGenerator,
+        SDFGeneratorBuilder, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
     },
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,
@@ -19,7 +19,16 @@ use std::hint::black_box;
 pub fn generate_box(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
-        BoxSDFGenerator::new([150.0; 3]).into(),
+        BoxSDFGenerator::new([80.0; 3]).into(),
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+    );
+    benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
+}
+
+pub fn generate_gradient_noise_pattern(benchmarker: impl Benchmarker) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        GradientNoiseSDFGenerator::new([80.0; 3], 0.05, 0.0, 0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
@@ -27,8 +36,8 @@ pub fn generate_box(benchmarker: impl Benchmarker) {
 
 pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
     let mut builder = SDFGeneratorBuilder::new();
-    let sphere_1_id = builder.add_sphere(40.0);
-    let sphere_2_id = builder.add_sphere(40.0);
+    let sphere_1_id = builder.add_sphere(60.0);
+    let sphere_2_id = builder.add_sphere(60.0);
     let sphere_2_id = builder.add_translation(sphere_2_id, vector![50.0, 0.0, 0.0]);
     builder.add_union(sphere_1_id, sphere_2_id, 1.0);
     let sdf_generator = builder.build().unwrap();
@@ -43,9 +52,9 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
 
 pub fn generate_complex_object(benchmarker: impl Benchmarker) {
     let mut builder = SDFGeneratorBuilder::new();
-    let sphere_id = builder.add_sphere(40.0);
+    let sphere_id = builder.add_sphere(60.0);
     let sphere_id = builder.add_translation(sphere_id, vector![50.0, 0.0, 0.0]);
-    let box_id = builder.add_box([30.0, 50.0, 60.0]);
+    let box_id = builder.add_box([50.0, 60.0, 70.0]);
     let box_id = builder.add_scaling(box_id, 0.9);
     let box_id = builder.add_rotation(
         box_id,
@@ -64,7 +73,7 @@ pub fn generate_complex_object(benchmarker: impl Benchmarker) {
 
 pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
     let mut builder = SDFGeneratorBuilder::new();
-    let sphere_id = builder.add_sphere(40.0);
+    let sphere_id = builder.add_sphere(80.0);
     builder.add_multifractal_noise(sphere_id, 8, 0.02, 2.0, 0.6, 4.0, 0);
     let sdf_generator = builder.build().unwrap();
 
@@ -72,6 +81,40 @@ pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
         1.0,
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+    );
+    benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
+}
+
+pub fn generate_object_with_multiscale_spheres(benchmarker: impl Benchmarker) {
+    let mut builder = SDFGeneratorBuilder::new();
+    let sphere_id = builder.add_sphere(40.0);
+    builder.add_multiscale_sphere(sphere_id, 4, 10.0, 0.5, 1.0, 1.0, 0.3, 0);
+    let sdf_generator = builder.build().unwrap();
+
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        sdf_generator,
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+    );
+    benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
+}
+
+pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarker) {
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        BoxSDFGenerator::new([80.0; 3]).into(),
+        GradientNoiseVoxelTypeGenerator::new(
+            vec![
+                VoxelType::from_idx(0),
+                VoxelType::from_idx(1),
+                VoxelType::from_idx(2),
+                VoxelType::from_idx(3),
+            ],
+            0.02,
+            1.0,
+            0,
+        )
+        .into(),
     );
     benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
 }
