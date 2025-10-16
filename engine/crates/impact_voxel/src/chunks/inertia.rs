@@ -668,7 +668,7 @@ mod tests {
     use super::*;
     use crate::{
         chunks::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
-        generation::{BoxSDFGenerator, SDFVoxelGenerator, SameVoxelTypeGenerator},
+        generation::{SDFVoxelGenerator, sdf::BoxSDFGenerator, voxel_type::SameVoxelTypeGenerator},
         voxel_types::VoxelType,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};

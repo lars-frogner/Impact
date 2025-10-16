@@ -2793,8 +2793,9 @@ mod tests {
     use super::*;
     use crate::{
         generation::{
-            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFGeneratorBuilder, SDFVoxelGenerator,
-            SameVoxelTypeGenerator,
+            SDFVoxelGenerator,
+            sdf::{BoxSDFGenerator, GradientNoiseSDFGenerator, SDFGeneratorBuilder},
+            voxel_type::SameVoxelTypeGenerator,
         },
         voxel_types::VoxelType,
     };

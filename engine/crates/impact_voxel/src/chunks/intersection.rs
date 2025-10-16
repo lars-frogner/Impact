@@ -1049,7 +1049,9 @@ pub mod fuzzing {
 mod tests {
     use super::*;
     use crate::{
-        generation::{SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
+        generation::{
+            SDFVoxelGenerator, sdf::SphereSDFGenerator, voxel_type::SameVoxelTypeGenerator,
+        },
         voxel_types::VoxelType,
     };
     use nalgebra::{UnitVector3, vector};

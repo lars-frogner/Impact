@@ -4,8 +4,9 @@ use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
-        GradientNoiseVoxelTypeGenerator, SDFGeneratorBuilder, SDFNodeID, SameVoxelTypeGenerator,
         VoxelGenerator,
+        sdf::{SDFGeneratorBuilder, SDFNodeID},
+        voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     gpu_resource::VOXEL_MODEL_ID,
     mesh::MeshedChunkedVoxelObject,
