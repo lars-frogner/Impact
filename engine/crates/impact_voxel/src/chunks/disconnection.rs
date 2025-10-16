@@ -2794,7 +2794,7 @@ mod tests {
     use crate::{
         generation::{
             SDFVoxelGenerator,
-            sdf::{BoxSDFGenerator, GradientNoiseSDFGenerator, SDFGeneratorBuilder},
+            sdf::{BoxSDF, GradientNoiseSDF, SDFGeneratorBuilder, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
         voxel_types::VoxelType,
@@ -2804,7 +2804,7 @@ mod tests {
     fn connected_region_count_is_correct_for_single_voxel() {
         let generator = SDFVoxelGenerator::new(
             1.0,
-            BoxSDFGenerator::new([1.0; 3]).into(),
+            BoxSDF::new([1.0; 3]).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator);
@@ -2815,7 +2815,7 @@ mod tests {
     fn connected_region_count_is_correct_for_gradient_noise_sdf() {
         let generator = SDFVoxelGenerator::new(
             1.0,
-            GradientNoiseSDFGenerator::new(
+            GradientNoiseSDF::new(
                 [3.263961, 1.263729, 15.064503],
                 0.224581,
                 0.250592,
@@ -2831,10 +2831,13 @@ mod tests {
     #[test]
     fn should_split_off_disconnected_sphere() {
         let mut builder = SDFGeneratorBuilder::new();
-        let sphere_1_id = builder.add_sphere(25.0);
-        let sphere_2_id = builder.add_sphere(25.0);
-        let sphere_2_id = builder.add_translation(sphere_2_id, vector![60.0, 0.0, 0.0]);
-        builder.add_union(sphere_1_id, sphere_2_id, 1.0);
+        let sphere_1_id = builder.add_node(SDFNode::new_sphere(25.0));
+        let sphere_2_id = builder.add_node(SDFNode::new_sphere(25.0));
+        let sphere_2_id = builder.add_node(SDFNode::new_translation(
+            sphere_2_id,
+            vector![60.0, 0.0, 0.0],
+        ));
+        builder.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
         let sdf_generator = builder.build().unwrap();
 
         let generator = SDFVoxelGenerator::new(

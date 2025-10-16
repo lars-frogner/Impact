@@ -1049,9 +1049,7 @@ pub mod fuzzing {
 mod tests {
     use super::*;
     use crate::{
-        generation::{
-            SDFVoxelGenerator, sdf::SphereSDFGenerator, voxel_type::SameVoxelTypeGenerator,
-        },
+        generation::{SDFVoxelGenerator, sdf::SphereSDF, voxel_type::SameVoxelTypeGenerator},
         voxel_types::VoxelType,
     };
     use nalgebra::{UnitVector3, vector};
@@ -1063,7 +1061,7 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius as f32).into(),
+            SphereSDF::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator);
@@ -1110,7 +1108,7 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius as f32).into(),
+            SphereSDF::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator);
@@ -1149,7 +1147,7 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius as f32).into(),
+            SphereSDF::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator);
@@ -1190,7 +1188,7 @@ mod tests {
 
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDFGenerator::new(object_radius as f32).into(),
+            SphereSDF::new(object_radius as f32).into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator);

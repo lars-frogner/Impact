@@ -101,7 +101,7 @@ where
                     &node.data.params,
                 )?;
 
-                let sdf_node_id = builder.add_node_and_set_to_root(generator_node);
+                let sdf_node_id = builder.add_node(generator_node);
                 id_map.insert(node_id, sdf_node_id);
             }
         }
