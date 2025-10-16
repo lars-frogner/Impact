@@ -7,8 +7,11 @@ use impact_voxel::{
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     collidable,
     generation::{
-        BoxSDFGenerator, GradientNoiseSDFGenerator, GradientNoiseVoxelTypeGenerator,
-        SDFGeneratorBuilder, SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator,
+        SDFVoxelGenerator,
+        sdf::{
+            BoxSDFGenerator, GradientNoiseSDFGenerator, SDFGeneratorBuilder, SphereSDFGenerator,
+        },
+        voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,

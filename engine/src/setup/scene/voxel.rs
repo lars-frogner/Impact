@@ -16,7 +16,7 @@ use impact_scene::{
 };
 use impact_voxel::{
     VoxelObjectID,
-    generation::{SDFGeneratorBuilder, SDFVoxelGenerator},
+    generation::{SDFVoxelGenerator, sdf::SDFGeneratorBuilder},
     setup::{
         self, DynamicVoxels, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
         MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelGradientNoisePattern,

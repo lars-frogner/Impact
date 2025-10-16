@@ -1,7 +1,7 @@
 use super::{FloatParam, NodeID, NodeParam, PortConfig, UIntParam};
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
-use impact_voxel::generation::{
+use impact_voxel::generation::sdf::{
     BoxSDFGenerator, GradientNoiseSDFGenerator, MultifractalNoiseSDFModifier,
     MultiscaleSphereSDFModifier, SDFGeneratorNode, SDFIntersection, SDFNodeID, SDFRotation,
     SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion, SphereSDFGenerator,

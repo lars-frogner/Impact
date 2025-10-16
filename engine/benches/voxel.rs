@@ -5,7 +5,7 @@ use impact_profiling::{
 };
 use impact_voxel::{
     chunks::{ChunkedVoxelObject, sdf::VoxelChunkSignedDistanceField},
-    generation::{SDFVoxelGenerator, SameVoxelTypeGenerator, SphereSDFGenerator},
+    generation::{SDFVoxelGenerator, sdf::SphereSDFGenerator, voxel_type::SameVoxelTypeGenerator},
     voxel_types::VoxelType,
 };
 use std::hint::black_box;

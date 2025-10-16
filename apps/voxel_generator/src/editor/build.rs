@@ -6,8 +6,9 @@ use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact::impact_containers::HashMap;
 use impact_voxel::{
     generation::{
-        SDFGenerator, SDFGeneratorBuilder, SDFNodeID, SDFVoxelGenerator, SameVoxelTypeGenerator,
-        VoxelTypeGenerator,
+        SDFVoxelGenerator,
+        sdf::{SDFGenerator, SDFGeneratorBuilder, SDFNodeID},
+        voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
     },
     voxel_types::VoxelType,
 };
