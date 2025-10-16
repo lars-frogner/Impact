@@ -10,16 +10,17 @@ use allocator_api2::{
     vec::Vec as AVec,
 };
 use anyhow::{Result, anyhow, bail};
+use approx::abs_diff_ne;
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::Float;
-use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, point, vector};
-use noise::{HybridMulti, MultiFractal, NoiseFn, Simplex};
+use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, vector};
 use ordered_float::OrderedFloat;
+use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::f32;
 use twox_hash::XxHash32;
 
-/// Represents a voxel generator that provides a voxel type given the voxel
-/// indices.
+/// Represents a voxel generator that provides voxels for a chunked voxel
+/// object.
 pub trait VoxelGenerator {
     type ChunkGenerationBuffers;
 
@@ -30,13 +31,13 @@ pub trait VoxelGenerator {
     /// respectively.
     fn grid_shape(&self) -> [usize; 3];
 
-    /// Returns the voxel at the given indices in a voxel grid. If the indices
-    /// are outside the bounds of the grid, this should return
-    /// [`Voxel::maximally_outside`].
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel;
-
+    /// Creates temporary buffers used when generating chunks of voxels. They
+    /// are meant to be reused across generation calls.
     fn create_buffers(&self) -> Self::ChunkGenerationBuffers;
 
+    /// Generates voxels for a single chunks with the given chunk origin (global
+    /// voxel object indices of the lower chunk corner). The voxels are appended
+    /// to the given vector.
     fn generate_chunk(
         &self,
         buffers: &mut Self::ChunkGenerationBuffers,
@@ -53,6 +54,12 @@ pub struct SDFVoxelGenerator {
     shifted_grid_center: Point3<f32>,
     sdf_generator: SDFGenerator,
     voxel_type_generator: VoxelTypeGenerator,
+}
+
+#[derive(Clone, Debug)]
+pub struct SDFVoxelGeneratorChunkBuffers {
+    sdf: SDFGeneratorChunkBuffers,
+    voxel_type: VoxelTypeGeneratorChunkBuffers,
 }
 
 /// A signed distance field generator.
@@ -73,6 +80,8 @@ pub struct SDFGenerator {
 
 #[derive(Clone, Debug)]
 pub struct SDFGeneratorChunkBuffers {
+    /// Contains `primitive_count + 1` arrays, where the last one is scratch
+    /// space.
     signed_distance_stack: Vec<[f32; ChunkedVoxelObject::chunk_voxel_count()]>,
 }
 
@@ -145,7 +154,7 @@ pub struct GradientNoiseSDFGenerator {
     half_extents: Vector3<f32>,
     noise_frequency: f32,
     noise_threshold: f32,
-    noise: Simplex,
+    seed: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -195,8 +204,13 @@ pub struct SDFIntersection {
 #[derive(Clone, Debug)]
 pub struct MultifractalNoiseSDFModifier {
     child_id: SDFNodeID,
-    noise: HybridMulti<Simplex>,
+    octaves: u32,
+    frequency: f32,
+    lacunarity: f32,
+    persistence: f32,
     amplitude: f32,
+    noise_scale: f32,
+    seed: u32,
 }
 
 /// Modifier for a signed distance field that performs a stochastic multiscale
@@ -233,12 +247,16 @@ enum NodeBuildState {
     DomainDetermined,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum VoxelTypeGenerator {
     Same(SameVoxelTypeGenerator),
     GradientNoise(GradientNoiseVoxelTypeGenerator),
+}
+
+#[derive(Clone, Debug)]
+pub struct VoxelTypeGeneratorChunkBuffers {
+    gradient_noise: Vec<f32>,
 }
 
 /// Voxel type generator that always returns the same voxel type.
@@ -253,9 +271,9 @@ pub struct SameVoxelTypeGenerator {
 #[derive(Clone, Debug)]
 pub struct GradientNoiseVoxelTypeGenerator {
     voxel_types: Vec<VoxelType>,
-    noise_frequency: f64,
-    noise_scale_for_voxel_type_dim: f64,
-    noise: Simplex,
+    noise_frequency: f32,
+    voxel_type_frequency: f32,
+    seed: u32,
 }
 
 impl SDFVoxelGenerator {
@@ -322,7 +340,7 @@ impl SDFVoxelGenerator {
 }
 
 impl VoxelGenerator for SDFVoxelGenerator {
-    type ChunkGenerationBuffers = SDFGeneratorChunkBuffers;
+    type ChunkGenerationBuffers = SDFVoxelGeneratorChunkBuffers;
 
     fn voxel_extent(&self) -> f64 {
         self.voxel_extent
@@ -332,29 +350,11 @@ impl VoxelGenerator for SDFVoxelGenerator {
         self.grid_shape
     }
 
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-        if i >= self.grid_shape[0] || j >= self.grid_shape[1] || k >= self.grid_shape[2] {
-            return Voxel::maximally_outside();
-        }
-
-        let position_relative_to_center =
-            point![i as f32, j as f32, k as f32] - self.shifted_grid_center.coords;
-
-        let signed_distance = VoxelSignedDistance::from_f32(
-            self.sdf_generator
-                .compute_signed_distance(&position_relative_to_center),
-        );
-
-        if signed_distance.is_negative() {
-            let voxel_type = self.voxel_type_generator.voxel_type_at_indices(i, j, k);
-            Voxel::non_empty(voxel_type, signed_distance)
-        } else {
-            Voxel::empty(signed_distance)
-        }
-    }
-
     fn create_buffers(&self) -> Self::ChunkGenerationBuffers {
-        self.sdf_generator.create_buffers()
+        SDFVoxelGeneratorChunkBuffers {
+            sdf: self.sdf_generator.create_buffers(),
+            voxel_type: self.voxel_type_generator.create_buffers(),
+        }
     }
 
     fn generate_chunk(
@@ -385,11 +385,14 @@ impl VoxelGenerator for SDFVoxelGenerator {
         );
 
         self.sdf_generator
-            .compute_signed_distances_for_chunk(buffers, &chunk_aabb_in_root_space);
+            .compute_signed_distances_for_chunk(&mut buffers.sdf, &chunk_aabb_in_root_space);
 
-        let signed_distances = &buffers.signed_distance_stack[0];
+        let signed_distances = &buffers.sdf.signed_distance_stack[0];
 
+        let start_voxel_idx = voxels.len();
         voxels.reserve(ChunkedVoxelObject::chunk_voxel_count());
+
+        let mut chunk_is_empty = true;
 
         LoopForChunkVoxels::over_all().execute_with_linear_idx(
             &mut |&[i_in_chunk, j_in_chunk, k_in_chunk], idx| {
@@ -406,8 +409,8 @@ impl VoxelGenerator for SDFVoxelGenerator {
                     let signed_distance = VoxelSignedDistance::from_f32(signed_distances[idx]);
 
                     if signed_distance.is_negative() {
-                        let voxel_type = self.voxel_type_generator.voxel_type_at_indices(i, j, k);
-                        Voxel::non_empty(voxel_type, signed_distance)
+                        chunk_is_empty = false;
+                        Voxel::non_empty(VoxelType::dummy(), signed_distance)
                     } else {
                         Voxel::empty(signed_distance)
                     }
@@ -416,6 +419,14 @@ impl VoxelGenerator for SDFVoxelGenerator {
                 voxels.push(voxel);
             },
         );
+
+        if !chunk_is_empty {
+            self.voxel_type_generator.set_voxel_types_for_chunk(
+                &mut voxels[start_voxel_idx..],
+                &mut buffers.voxel_type,
+                &chunk_origin_in_root_space,
+            );
+        }
     }
 }
 
@@ -765,15 +776,6 @@ impl SDFGenerator {
         &self.domain
     }
 
-    pub fn create_buffers(&self) -> SDFGeneratorChunkBuffers {
-        let signed_distance_stack =
-            vec![[0.0; ChunkedVoxelObject::chunk_voxel_count()]; self.primitive_count];
-
-        SDFGeneratorChunkBuffers {
-            signed_distance_stack,
-        }
-    }
-
     pub fn compute_signed_distances_for_chunk(
         &self,
         buffers: &mut SDFGeneratorChunkBuffers,
@@ -856,14 +858,10 @@ impl SDFGenerator {
                     {
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
                     } else {
-                        update_signed_distances_for_chunk(
+                        gradient_noise_generator.compute_signed_distances_for_chunk(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
                             chunk_aabb_in_root_space.lower_corner(),
-                            &|signed_distance, position_in_node_space| {
-                                *signed_distance = gradient_noise_generator
-                                    .compute_signed_distance(position_in_node_space);
-                            },
                         );
                     }
 
@@ -893,15 +891,17 @@ impl SDFGenerator {
                         .expanded_domain
                         .box_lies_outside(&chunk_aabb_in_node_space)
                     {
-                        update_signed_distances_for_chunk(
-                            &mut buffers.signed_distance_stack[stack_top - 1],
+                        let scratch_idx = buffers.signed_distance_stack.len() - 1;
+                        let [distances, scratch] = buffers
+                            .signed_distance_stack
+                            .get_disjoint_mut([stack_top - 1, scratch_idx])
+                            .unwrap();
+
+                        modifier.modify_signed_distances_for_chunk(
+                            distances,
+                            scratch,
                             &node.transform_to_node_space,
                             chunk_aabb_in_root_space.lower_corner(),
-                            &|signed_distance, position_in_node_space| {
-                                let perturbation = modifier
-                                    .compute_signed_distance_perturbation(position_in_node_space);
-                                *signed_distance += perturbation;
-                            },
                         );
                     }
                 }
@@ -1033,12 +1033,11 @@ impl SDFGenerator {
                     stack_top += 1;
                 }
                 SDFGeneratorNode::GradientNoise(gradient_noise_generator) => {
-                    let position_in_node_space = node
-                        .transform_to_node_space
-                        .transform_point(position_in_root_space);
-
-                    signed_distance_stack[stack_top] =
-                        gradient_noise_generator.compute_signed_distance(&position_in_node_space);
+                    signed_distance_stack[stack_top] = gradient_noise_generator
+                        .compute_signed_distance(
+                            &node.transform_to_node_space,
+                            position_in_root_space,
+                        );
 
                     stack_top += 1;
                 }
@@ -1048,11 +1047,10 @@ impl SDFGenerator {
                     signed_distance_stack[stack_top - 1] *= scaling;
                 }
                 SDFGeneratorNode::MultifractalNoise(modifier) => {
-                    let position_in_node_space = node
-                        .transform_to_node_space
-                        .transform_point(position_in_root_space);
-                    let perturbation =
-                        modifier.compute_signed_distance_perturbation(&position_in_node_space);
+                    let perturbation = modifier.compute_signed_distance_perturbation(
+                        &node.transform_to_node_space,
+                        position_in_root_space,
+                    );
                     signed_distance_stack[stack_top - 1] += perturbation;
                 }
                 SDFGeneratorNode::MultiscaleSphere(modifier) => {
@@ -1093,6 +1091,18 @@ impl SDFGenerator {
         assert_eq!(stack_top, 1);
 
         signed_distance_stack[0]
+    }
+
+    fn create_buffers(&self) -> SDFGeneratorChunkBuffers {
+        // We only strictly need `self.primitive_count` signed distance arrays,
+        // but we include one additional array for scratch space at the end of
+        // the allocation
+        let signed_distance_stack =
+            vec![[0.0; ChunkedVoxelObject::chunk_voxel_count()]; self.primitive_count + 1];
+
+        SDFGeneratorChunkBuffers {
+            signed_distance_stack,
+        }
     }
 }
 
@@ -1356,12 +1366,11 @@ impl GradientNoiseSDFGenerator {
     pub fn new(extents: [f32; 3], noise_frequency: f32, noise_threshold: f32, seed: u32) -> Self {
         assert!(extents.iter().copied().all(f32::is_sign_positive));
         let half_extents = 0.5 * Vector3::from(extents);
-        let noise = Simplex::new(seed);
         Self {
             half_extents,
             noise_frequency,
             noise_threshold,
-            noise,
+            seed,
         }
     }
 
@@ -1369,13 +1378,117 @@ impl GradientNoiseSDFGenerator {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
+    /// Note: This will happily generate values outside of `domain_bounds`.
     #[inline]
-    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
-        let noise_point: [f64; 3] = (self.noise_frequency * position_in_node_space)
-            .cast()
-            .into();
-        let noise_value = self.noise.get(noise_point);
-        self.noise_threshold - noise_value as f32
+    fn compute_signed_distance(
+        &self,
+        transform_to_node_space: &Matrix4<f32>,
+        position_in_root_space: &Point3<f32>,
+    ) -> f32 {
+        let position_in_node_space =
+            transform_to_node_space.transform_point(position_in_root_space);
+
+        let dx = transform_to_node_space.column(0).xyz();
+        let inverse_scale = dx.norm();
+        let scale = inverse_scale.recip();
+
+        // We incorporate the scaling into the noise by dividing the original
+        // frequency with the scale and adjusting the origin to compensate
+        let unscaled_frequency = self.noise_frequency * inverse_scale;
+        let origin_for_noise = Point3::from(position_in_node_space.coords.scale(scale));
+
+        let mut noise = [0.0];
+
+        NoiseBuilder::gradient_3d_offset(
+            // Warning: We reverse the order of dimensions here to match the
+            // chunk-wise evaluation
+            origin_for_noise.z,
+            1,
+            origin_for_noise.y,
+            1,
+            origin_for_noise.x,
+            1,
+        )
+        .with_freq(unscaled_frequency)
+        .with_seed(self.seed as i32)
+        .generate(&mut noise);
+
+        self.noise_threshold - noise[0]
+    }
+
+    /// Note: This will happily generate values outside of `domain_bounds`.
+    fn compute_signed_distances_for_chunk(
+        &self,
+        signed_distances: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
+        transform_to_node_space: &Matrix4<f32>,
+        chunk_origin_in_root_space: &Point3<f32>,
+    ) {
+        let origin_in_node_space =
+            transform_to_node_space.transform_point(chunk_origin_in_root_space);
+
+        let dx = transform_to_node_space.column(0).xyz();
+        let dy = transform_to_node_space.column(1).xyz();
+        let dz = transform_to_node_space.column(2).xyz();
+
+        let inverse_scale = dx.norm();
+        let scale = inverse_scale.recip();
+
+        // We incorporate the scaling into the noise by dividing the original
+        // frequency with the scale and adjusting the origin to compensate
+        let unscaled_frequency = self.noise_frequency * inverse_scale;
+        let origin_for_noise = Point3::from(origin_in_node_space.coords.scale(scale));
+
+        // Fall back to per-voxel evaluation if there is any rotation
+        if abs_diff_ne!(dx.x * inverse_scale, 1.0, epsilon = 1e-6)
+            || abs_diff_ne!(dy.y * inverse_scale, 1.0, epsilon = 1e-6)
+        {
+            let dx_for_noise = dx.scale(scale);
+            let dy_for_noise = dy.scale(scale);
+            let dz_for_noise = dz.scale(scale);
+            let mut noise = [0.0];
+
+            let mut idx = 0;
+            for i in 0..ChunkedVoxelObject::chunk_size() {
+                let origin_plus_x = origin_for_noise + (i as f32) * dx_for_noise;
+                for j in 0..ChunkedVoxelObject::chunk_size() {
+                    let mut pos = origin_plus_x + (j as f32) * dy_for_noise;
+                    for _ in 0..ChunkedVoxelObject::chunk_size() {
+                        NoiseBuilder::gradient_3d_offset(
+                            // Warning: We reverse the order of dimensions here to match the
+                            // chunk-wise evaluation below
+                            pos.z, 1, pos.y, 1, pos.x, 1,
+                        )
+                        .with_freq(unscaled_frequency)
+                        .with_seed(self.seed as i32)
+                        .generate(&mut noise);
+
+                        signed_distances[idx] = self.noise_threshold - noise[0];
+
+                        pos += dz_for_noise;
+                        idx += 1;
+                    }
+                }
+            }
+            return;
+        }
+
+        NoiseBuilder::gradient_3d_offset(
+            // Warning: We reverse the order of dimensions here because the
+            // generated noise is laid out in row-major order
+            origin_for_noise.z,
+            ChunkedVoxelObject::chunk_size(),
+            origin_for_noise.y,
+            ChunkedVoxelObject::chunk_size(),
+            origin_for_noise.x,
+            ChunkedVoxelObject::chunk_size(),
+        )
+        .with_freq(unscaled_frequency)
+        .with_seed(self.seed as i32)
+        .generate(signed_distances);
+
+        for signed_distance in signed_distances {
+            *signed_distance = self.noise_threshold - *signed_distance;
+        }
     }
 }
 
@@ -1441,22 +1554,143 @@ impl MultifractalNoiseSDFModifier {
         amplitude: f32,
         seed: u32,
     ) -> Self {
-        let noise = HybridMulti::new(seed)
-            .set_octaves(octaves as usize)
-            .set_frequency(frequency.into())
-            .set_lacunarity(lacunarity.into())
-            .set_persistence(persistence.into());
+        let inherent_amplitude = theoretical_max_amplitude_of_fbm_noise(octaves, persistence);
+        let noise_scale = if abs_diff_ne!(inherent_amplitude, 0.0) {
+            amplitude / inherent_amplitude
+        } else {
+            0.0
+        };
         Self {
             child_id,
-            noise,
+            octaves,
+            frequency,
+            lacunarity,
+            persistence,
             amplitude,
+            noise_scale,
+            seed,
         }
     }
 
     #[inline]
-    fn compute_signed_distance_perturbation(&self, position_in_node_space: &Point3<f32>) -> f32 {
-        let noise_point: [f64; 3] = position_in_node_space.cast().into();
-        self.amplitude * self.noise.get(noise_point) as f32
+    fn compute_signed_distance_perturbation(
+        &self,
+        transform_to_node_space: &Matrix4<f32>,
+        position_in_root_space: &Point3<f32>,
+    ) -> f32 {
+        let position_in_node_space =
+            transform_to_node_space.transform_point(position_in_root_space);
+
+        let dx = transform_to_node_space.column(0).xyz();
+        let inverse_scale = dx.norm();
+        let scale = inverse_scale.recip();
+
+        // We incorporate the scaling into the noise by dividing the original
+        // frequency with the scale and adjusting the origin to compensate
+        let unscaled_frequency = self.frequency * inverse_scale;
+        let origin_for_noise = Point3::from(position_in_node_space.coords.scale(scale));
+
+        let mut noise = [0.0];
+
+        NoiseBuilder::fbm_3d_offset(
+            // Warning: We reverse the order of dimensions here to match the
+            // chunk-wise evaluation
+            origin_for_noise.z,
+            1,
+            origin_for_noise.y,
+            1,
+            origin_for_noise.x,
+            1,
+        )
+        .with_octaves(self.octaves as u8)
+        .with_freq(unscaled_frequency)
+        .with_lacunarity(self.lacunarity)
+        .with_gain(self.persistence)
+        .with_seed(self.seed as i32)
+        .generate(&mut noise);
+
+        self.noise_scale * noise[0]
+    }
+
+    fn modify_signed_distances_for_chunk(
+        &self,
+        signed_distances: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
+        scratch: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
+        transform_to_node_space: &Matrix4<f32>,
+        chunk_origin_in_root_space: &Point3<f32>,
+    ) {
+        let origin_in_node_space =
+            transform_to_node_space.transform_point(chunk_origin_in_root_space);
+
+        let dx = transform_to_node_space.column(0).xyz();
+        let dy = transform_to_node_space.column(1).xyz();
+        let dz = transform_to_node_space.column(2).xyz();
+
+        let inverse_scale = dx.norm();
+        let scale = inverse_scale.recip();
+
+        // We incorporate the scaling into the noise by dividing the original
+        // frequency with the scale and adjusting the origin to compensate
+        let unscaled_frequency = self.frequency * inverse_scale;
+        let origin_for_noise = Point3::from(origin_in_node_space.coords.scale(scale));
+
+        // Fall back to per-voxel evaluation if there is any rotation
+        if abs_diff_ne!(dx.x * inverse_scale, 1.0, epsilon = 1e-6)
+            || abs_diff_ne!(dy.y * inverse_scale, 1.0, epsilon = 1e-6)
+        {
+            let dx_for_noise = dx.scale(scale);
+            let dy_for_noise = dy.scale(scale);
+            let dz_for_noise = dz.scale(scale);
+            let mut noise = [0.0];
+
+            let mut idx = 0;
+            for i in 0..ChunkedVoxelObject::chunk_size() {
+                let origin_plus_x = origin_for_noise + (i as f32) * dx_for_noise;
+                for j in 0..ChunkedVoxelObject::chunk_size() {
+                    let mut pos = origin_plus_x + (j as f32) * dy_for_noise;
+                    for _ in 0..ChunkedVoxelObject::chunk_size() {
+                        NoiseBuilder::fbm_3d_offset(
+                            // Warning: We reverse the order of dimensions here to match the
+                            // chunk-wise evaluation below
+                            pos.z, 1, pos.y, 1, pos.x, 1,
+                        )
+                        .with_octaves(self.octaves as u8)
+                        .with_freq(unscaled_frequency)
+                        .with_lacunarity(self.lacunarity)
+                        .with_gain(self.persistence)
+                        .with_seed(self.seed as i32)
+                        .generate(&mut noise);
+
+                        signed_distances[idx] += noise[0] * self.noise_scale;
+
+                        pos += dz_for_noise;
+                        idx += 1;
+                    }
+                }
+            }
+            return;
+        }
+
+        NoiseBuilder::fbm_3d_offset(
+            // Warning: We reverse the order of dimensions here because the
+            // generated noise is laid out in row-major order
+            origin_for_noise.z,
+            ChunkedVoxelObject::chunk_size(),
+            origin_for_noise.y,
+            ChunkedVoxelObject::chunk_size(),
+            origin_for_noise.x,
+            ChunkedVoxelObject::chunk_size(),
+        )
+        .with_octaves(self.octaves as u8)
+        .with_freq(unscaled_frequency)
+        .with_lacunarity(self.lacunarity)
+        .with_gain(self.persistence)
+        .with_seed(self.seed as i32)
+        .generate(scratch);
+
+        for (signed_distance, noise) in signed_distances.iter_mut().zip(scratch.iter()) {
+            *signed_distance += *noise * self.noise_scale;
+        }
     }
 }
 
@@ -1590,10 +1824,27 @@ impl MultiscaleSphereSDFModifier {
 }
 
 impl VoxelTypeGenerator {
-    fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+    fn create_buffers(&self) -> VoxelTypeGeneratorChunkBuffers {
+        let gradient_noise = match self {
+            Self::Same(_) => Vec::new(),
+            Self::GradientNoise(generator) => generator.create_noise_buffer(),
+        };
+        VoxelTypeGeneratorChunkBuffers { gradient_noise }
+    }
+
+    fn set_voxel_types_for_chunk(
+        &self,
+        voxels: &mut [Voxel],
+        buffers: &mut VoxelTypeGeneratorChunkBuffers,
+        chunk_origin: &Point3<f32>,
+    ) {
         match self {
-            Self::Same(SameVoxelTypeGenerator { voxel_type }) => *voxel_type,
-            Self::GradientNoise(generator) => generator.voxel_type_at_indices(i, j, k),
+            Self::Same(generator) => {
+                generator.set_voxel_types_for_chunk(voxels);
+            }
+            Self::GradientNoise(generator) => {
+                generator.set_voxel_types_for_chunk(voxels, buffers, chunk_origin);
+            }
         }
     }
 }
@@ -1614,45 +1865,79 @@ impl SameVoxelTypeGenerator {
     pub fn new(voxel_type: VoxelType) -> Self {
         Self { voxel_type }
     }
+
+    fn set_voxel_types_for_chunk(&self, voxels: &mut [Voxel]) {
+        assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
+
+        for voxel in voxels {
+            voxel.set_voxel_type(self.voxel_type);
+        }
+    }
 }
 
 impl GradientNoiseVoxelTypeGenerator {
     pub fn new(
         voxel_types: Vec<VoxelType>,
-        noise_frequency: f64,
-        voxel_type_frequency: f64,
+        noise_frequency: f32,
+        voxel_type_frequency: f32,
         seed: u32,
     ) -> Self {
         assert!(!voxel_types.is_empty());
-
-        let noise_scale_for_voxel_type_dim = voxel_type_frequency / voxel_types.len() as f64;
-
-        let noise = Simplex::new(seed);
-
         Self {
             voxel_types,
             noise_frequency,
-            noise_scale_for_voxel_type_dim,
-            noise,
+            voxel_type_frequency,
+            seed,
         }
     }
 
-    fn voxel_type_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
-        let x = i as f64 * self.noise_frequency;
-        let y = j as f64 * self.noise_frequency;
-        let z = k as f64 * self.noise_frequency;
+    fn create_noise_buffer(&self) -> Vec<f32> {
+        vec![0.0; ChunkedVoxelObject::chunk_voxel_count() * self.voxel_types.len()]
+    }
 
-        self.voxel_types
-            .iter()
-            .enumerate()
-            .map(|(voxel_type_idx, voxel_type)| {
-                let voxel_type_coord = voxel_type_idx as f64 * self.noise_scale_for_voxel_type_dim;
-                let noise_value = self.noise.get([x, y, z, voxel_type_coord]);
-                (noise_value, *voxel_type)
-            })
-            .max_by_key(|(noise_value, _)| OrderedFloat(*noise_value))
-            .unwrap()
-            .1
+    fn set_voxel_types_for_chunk(
+        &self,
+        voxels: &mut [Voxel],
+        buffers: &mut VoxelTypeGeneratorChunkBuffers,
+        chunk_origin: &Point3<f32>,
+    ) {
+        assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
+
+        NoiseBuilder::gradient_4d_offset(
+            // Warning: We reverse the order of dimensions here because the
+            // generated noise is laid out in row-major order
+            0.0,
+            self.voxel_types.len(),
+            chunk_origin.z,
+            ChunkedVoxelObject::chunk_size(),
+            chunk_origin.y,
+            ChunkedVoxelObject::chunk_size(),
+            chunk_origin.x,
+            ChunkedVoxelObject::chunk_size(),
+        )
+        .with_freq_4d(
+            self.voxel_type_frequency,
+            self.noise_frequency,
+            self.noise_frequency,
+            self.noise_frequency,
+        )
+        .with_seed(self.seed as i32)
+        .generate(&mut buffers.gradient_noise);
+
+        for (voxel, noise_values_for_voxel) in voxels
+            .iter_mut()
+            .zip(buffers.gradient_noise.chunks(self.voxel_types.len()))
+        {
+            let mut max_noise = noise_values_for_voxel[0];
+            let mut max_idx = 0;
+            for (idx, noise) in noise_values_for_voxel.iter().copied().enumerate().skip(1) {
+                if noise > max_noise {
+                    max_noise = noise;
+                    max_idx = idx;
+                }
+            }
+            voxel.set_voxel_type(VoxelType::from_idx(max_idx));
+        }
     }
 }
 
@@ -1730,6 +2015,15 @@ fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) ->
 
 fn mix(a: f32, b: f32, factor: f32) -> f32 {
     (1.0 - factor) * a + factor * b
+}
+
+/// Assumes underlying gradient noise in range [-1.0, 1.0].
+fn theoretical_max_amplitude_of_fbm_noise(octaves: u32, persistence: f32) -> f32 {
+    if abs_diff_ne!(persistence, 1.0, epsilon = 1e-6) {
+        (1.0 - persistence.powi(octaves as i32)) / (1.0 - persistence)
+    } else {
+        octaves as f32
+    }
 }
 
 #[cfg(feature = "fuzzing")]
@@ -1867,8 +2161,8 @@ pub mod fuzzing {
             for _ in 0..u.int_in_range(0..=voxel_types.len() - 1)? {
                 voxel_types.swap_remove(u.int_in_range(0..=voxel_types.len() - 1)?);
             }
-            let noise_frequency = 0.15 * arbitrary_norm_f64(u)?;
-            let voxel_type_frequency = 0.15 * arbitrary_norm_f64(u)?;
+            let noise_frequency = 0.15 * arbitrary_norm_f32(u)?;
+            let voxel_type_frequency = 0.15 * arbitrary_norm_f32(u)?;
             let seed = u.arbitrary()?;
             Ok(Self::new(
                 voxel_types,

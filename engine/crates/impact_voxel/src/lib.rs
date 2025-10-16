@@ -317,6 +317,11 @@ impl Voxel {
         self.voxel_type
     }
 
+    /// Sets the type of the voxel.
+    pub fn set_voxel_type(&mut self, voxel_type: VoxelType) {
+        self.voxel_type = voxel_type;
+    }
+
     /// Returns the flags encoding the state of the voxel.
     pub fn flags(&self) -> VoxelFlags {
         self.flags

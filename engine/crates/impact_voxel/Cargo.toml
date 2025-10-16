@@ -54,13 +54,13 @@ impact_scene = { path = "../impact_scene" }
 impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
-noise = "0.9"
 num-traits = { workspace = true }
 ordered-float = "5.0"
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
+simdnoise = { git = "https://github.com/lars-frogner/rust-simd-noise" }
 tinyvec = { workspace = true }
 twox-hash = { version = "2.1", default-features = false, features = [
     "xxhash32",

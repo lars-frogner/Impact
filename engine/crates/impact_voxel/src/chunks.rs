@@ -232,10 +232,13 @@ impl ChunkedVoxelObject {
         let mut uniform_chunk_count = 0;
         let mut non_uniform_chunk_count = 0;
 
+        let mut generation_buffers = generator.create_buffers();
+
         for chunk_i in 0..chunk_counts[0] {
             for chunk_j in 0..chunk_counts[1] {
                 for chunk_k in 0..chunk_counts[2] {
                     let chunk = VoxelChunk::generate(
+                        &mut generation_buffers,
                         &mut voxels,
                         &mut uniform_chunk_count,
                         &mut non_uniform_chunk_count,
@@ -1286,6 +1289,7 @@ impl ChunkedVoxelObject {
 
 impl VoxelChunk {
     fn generate<G>(
+        generation_buffers: &mut G::ChunkGenerationBuffers,
         voxels: &mut Vec<Voxel>,
         uniform_chunk_count: &mut usize,
         non_uniform_chunk_count: &mut usize,
@@ -1301,55 +1305,45 @@ impl VoxelChunk {
             chunk_indices[2] * CHUNK_SIZE,
         ];
 
-        let mut first_voxel = generator.voxel_at_indices(origin[0], origin[1], origin[2]);
+        let start_voxel_idx = voxels.len();
+
+        generator.generate_chunk(generation_buffers, voxels, &origin);
+
+        let mut first_voxel = voxels[start_voxel_idx];
         let mut is_uniform = true;
         let mut has_non_empty_voxels = false;
 
-        let start_voxel_idx = voxels.len();
-        voxels.reserve(CHUNK_VOXEL_COUNT);
-
         let mut face_empty_counts = FaceEmptyCounts::zero();
 
-        let range_i = origin[0]..origin[0] + CHUNK_SIZE;
-        let range_j = origin[1]..origin[1] + CHUNK_SIZE;
-        let range_k = origin[2]..origin[2] + CHUNK_SIZE;
-
-        for i in range_i.clone() {
-            for j in range_j.clone() {
-                for k in range_k.clone() {
-                    let voxel = generator.voxel_at_indices(i, j, k);
-
-                    if is_uniform
-                        && (!voxel.matches_type_and_flags(first_voxel)
-                            || !voxel.signed_distance().is_maximally_inside_or_outside())
-                    {
-                        is_uniform = false;
-                    }
-
-                    if voxel.is_empty() {
-                        if i == range_i.start {
-                            face_empty_counts.increment_x_dn();
-                        } else if i == range_i.end - 1 {
-                            face_empty_counts.increment_x_up();
-                        }
-                        if j == range_j.start {
-                            face_empty_counts.increment_y_dn();
-                        } else if j == range_j.end - 1 {
-                            face_empty_counts.increment_y_up();
-                        }
-                        if k == range_k.start {
-                            face_empty_counts.increment_z_dn();
-                        } else if k == range_k.end - 1 {
-                            face_empty_counts.increment_z_up();
-                        }
-                    } else {
-                        has_non_empty_voxels = true;
-                    }
-
-                    voxels.push(voxel);
+        LoopOverChunkVoxelData::new(&LoopForChunkVoxels::over_all(), &voxels[start_voxel_idx..])
+            .execute(&mut |&[i_in_chunk, j_in_chunk, k_in_chunk], voxel| {
+                if is_uniform
+                    && (!voxel.matches_type_and_flags(first_voxel)
+                        || !voxel.signed_distance().is_maximally_inside_or_outside())
+                {
+                    is_uniform = false;
                 }
-            }
-        }
+
+                if voxel.is_empty() {
+                    if i_in_chunk == 0 {
+                        face_empty_counts.increment_x_dn();
+                    } else if i_in_chunk == CHUNK_SIZE - 1 {
+                        face_empty_counts.increment_x_up();
+                    }
+                    if j_in_chunk == 0 {
+                        face_empty_counts.increment_y_dn();
+                    } else if j_in_chunk == CHUNK_SIZE - 1 {
+                        face_empty_counts.increment_y_up();
+                    }
+                    if k_in_chunk == 0 {
+                        face_empty_counts.increment_z_dn();
+                    } else if k_in_chunk == CHUNK_SIZE - 1 {
+                        face_empty_counts.increment_z_up();
+                    }
+                } else {
+                    has_non_empty_voxels = true;
+                }
+            });
 
         if is_uniform {
             voxels.truncate(start_voxel_idx);
@@ -2607,6 +2601,8 @@ mod tests {
     }
 
     impl VoxelGenerator for OffsetBoxVoxelGenerator {
+        type ChunkGenerationBuffers = ();
+
         fn voxel_extent(&self) -> f64 {
             0.25
         }
@@ -2619,22 +2615,38 @@ mod tests {
             ]
         }
 
-        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-            if i >= self.offset[0]
-                && i < self.offset[0] + self.shape[0]
-                && j >= self.offset[1]
-                && j < self.offset[1] + self.shape[1]
-                && k >= self.offset[2]
-                && k < self.offset[2] + self.shape[2]
-            {
-                self.voxel
-            } else {
-                Voxel::maximally_outside()
+        fn create_buffers(&self) -> Self::ChunkGenerationBuffers {}
+
+        fn generate_chunk(
+            &self,
+            _buffers: &mut Self::ChunkGenerationBuffers,
+            voxels: &mut Vec<Voxel>,
+            chunk_origin: &[usize; 3],
+        ) {
+            for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
+                for j in chunk_origin[1]..chunk_origin[1] + CHUNK_SIZE {
+                    for k in chunk_origin[2]..chunk_origin[2] + CHUNK_SIZE {
+                        let voxel = if i >= self.offset[0]
+                            && i < self.offset[0] + self.shape[0]
+                            && j >= self.offset[1]
+                            && j < self.offset[1] + self.shape[1]
+                            && k >= self.offset[2]
+                            && k < self.offset[2] + self.shape[2]
+                        {
+                            self.voxel
+                        } else {
+                            Voxel::maximally_outside()
+                        };
+                        voxels.push(voxel);
+                    }
+                }
             }
         }
     }
 
     impl<const N: usize> VoxelGenerator for ManualVoxelGenerator<N> {
+        type ChunkGenerationBuffers = ();
+
         fn voxel_extent(&self) -> f64 {
             0.25
         }
@@ -2643,18 +2655,34 @@ mod tests {
             [self.offset[0] + N, self.offset[1] + N, self.offset[2] + N]
         }
 
-        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Voxel {
-            if i >= self.offset[0]
-                && i < self.offset[0] + N
-                && j >= self.offset[1]
-                && j < self.offset[1] + N
-                && k >= self.offset[2]
-                && k < self.offset[2] + N
-                && self.voxels[i - self.offset[0]][j - self.offset[1]][k - self.offset[2]] != 0
-            {
-                Voxel::maximally_inside(VoxelType::default())
-            } else {
-                Voxel::maximally_outside()
+        fn create_buffers(&self) -> Self::ChunkGenerationBuffers {}
+
+        fn generate_chunk(
+            &self,
+            _buffers: &mut Self::ChunkGenerationBuffers,
+            voxels: &mut Vec<Voxel>,
+            chunk_origin: &[usize; 3],
+        ) {
+            for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
+                for j in chunk_origin[1]..chunk_origin[1] + CHUNK_SIZE {
+                    for k in chunk_origin[2]..chunk_origin[2] + CHUNK_SIZE {
+                        let voxel = if i >= self.offset[0]
+                            && i < self.offset[0] + N
+                            && j >= self.offset[1]
+                            && j < self.offset[1] + N
+                            && k >= self.offset[2]
+                            && k < self.offset[2] + N
+                            && self.voxels[i - self.offset[0]][j - self.offset[1]]
+                                [k - self.offset[2]]
+                                != 0
+                        {
+                            Voxel::maximally_inside(VoxelType::default())
+                        } else {
+                            Voxel::maximally_outside()
+                        };
+                        voxels.push(voxel);
+                    }
+                }
             }
         }
     }
