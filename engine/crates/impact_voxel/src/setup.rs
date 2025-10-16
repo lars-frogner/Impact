@@ -292,8 +292,8 @@ impl GradientNoiseVoxelTypes {
     ) -> Result<GradientNoiseVoxelTypeGenerator> {
         Ok(GradientNoiseVoxelTypeGenerator::new(
             self.voxel_types(voxel_type_registry)?,
-            f64::from(self.noise_frequency),
-            f64::from(self.voxel_type_frequency),
+            self.noise_frequency,
+            self.voxel_type_frequency,
             self.seed,
         ))
     }
