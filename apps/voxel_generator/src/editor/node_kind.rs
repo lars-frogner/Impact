@@ -123,7 +123,7 @@ impl SpecificNodeKind for GradientNoiseSDFGenerator {
                 FloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.05)
                     .with_min_value(0.0)
                     .with_max_value(1.0)
-                    .with_speed(0.001),
+                    .with_speed(0.0002),
             ),
             NodeParam::Float(
                 FloatParam::new(LabelAndHoverText::label_only("Threshold"), 0.0)
@@ -250,15 +250,15 @@ impl SpecificNodeKind for MultifractalNoiseSDFModifier {
 
     fn default_params() -> Vec<NodeParam> {
         vec![
-            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Octaves"), 0)),
+            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Octaves"), 1)),
             NodeParam::Float(
                 FloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.02)
                     .with_min_value(0.0)
                     .with_max_value(1.0)
-                    .with_speed(0.001),
+                    .with_speed(0.0002),
             ),
             NodeParam::Float(
-                FloatParam::new(LabelAndHoverText::label_only("Lacunarity"), 1.0)
+                FloatParam::new(LabelAndHoverText::label_only("Lacunarity"), 2.0)
                     .with_min_value(1.0)
                     .with_max_value(10.0)
                     .with_speed(0.001),
