@@ -58,6 +58,8 @@ num-traits = { workspace = true }
 ordered-float = "5.0"
 parking_lot = { workspace = true }
 pastey = { workspace = true }
+rand = { workspace = true }
+rand_pcg = "0.9"
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 simdnoise = { git = "https://github.com/lars-frogner/rust-simd-noise" }
