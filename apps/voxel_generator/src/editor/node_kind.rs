@@ -1,10 +1,12 @@
 use super::{FloatParam, NodeID, NodeParam, PortConfig, UIntParam};
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
-use impact_voxel::generation::sdf::{
-    BoxSDF, GradientNoiseSDF, MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier,
-    SDFIntersection, SDFNode, SDFNodeID, SDFRotation, SDFScaling, SDFSubtraction, SDFTranslation,
-    SDFUnion, SphereSDF,
+use impact_voxel::generation::sdf::meta::{
+    MetaBoxSDF, MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier,
+    MetaMultiscaleSphereSDFModifier, MetaRotationToGradient, MetaSDFGroupUnion,
+    MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling,
+    MetaSDFScattering, MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF,
+    MetaStochasticSelection, MetaStratifiedPlacement, MetaTranslationToSurface,
 };
 
 trait SpecificNodeKind {
@@ -14,10 +16,10 @@ trait SpecificNodeKind {
     fn default_params() -> Vec<NodeParam>;
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode>;
+    ) -> Option<MetaSDFNode>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +36,12 @@ pub enum NodeKind {
     Union,
     Subtraction,
     Intersection,
+    GroupUnion,
+    StratifiedPlacement,
+    TranslationToSurface,
+    RotationToGradient,
+    Scattering,
+    StochasticSelection,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,12 +51,14 @@ pub enum NodeKindGroup {
     Transform,
     Modification,
     Combination,
+    Placement,
+    Masking,
 }
 
 pub const DEFAULT_VOXEL_EXTENT: f32 = 0.25;
 pub const MIN_VOXEL_EXTENT: f32 = 0.005;
 
-impl SpecificNodeKind for BoxSDF {
+impl SpecificNodeKind for MetaBoxSDF {
     const LABEL: &'static str = "Box";
     const PORT_CONFIG: PortConfig = PortConfig::leaf();
 
@@ -70,17 +80,17 @@ impl SpecificNodeKind for BoxSDF {
     }
 
     fn build(
-        _id_map: &HashMap<NodeID, SDFNodeID>,
+        _id_map: &HashMap<NodeID, MetaSDFNodeID>,
         _children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 3);
         let extents = [params[0].float(), params[1].float(), params[2].float()];
-        Some(SDFNode::new_box(extents))
+        Some(MetaSDFNode::new_box(extents.map(Into::into), 0))
     }
 }
 
-impl SpecificNodeKind for SphereSDF {
+impl SpecificNodeKind for MetaSphereSDF {
     const LABEL: &'static str = "Sphere";
     const PORT_CONFIG: PortConfig = PortConfig::leaf();
 
@@ -91,17 +101,17 @@ impl SpecificNodeKind for SphereSDF {
     }
 
     fn build(
-        _id_map: &HashMap<NodeID, SDFNodeID>,
+        _id_map: &HashMap<NodeID, MetaSDFNodeID>,
         _children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
         let radius = params[0].float();
-        Some(SDFNode::new_sphere(radius))
+        Some(MetaSDFNode::new_sphere(radius.into(), 0))
     }
 }
 
-impl SpecificNodeKind for GradientNoiseSDF {
+impl SpecificNodeKind for MetaGradientNoiseSDF {
     const LABEL: &'static str = "Gradient noise";
     const PORT_CONFIG: PortConfig = PortConfig::leaf();
 
@@ -136,25 +146,25 @@ impl SpecificNodeKind for GradientNoiseSDF {
     }
 
     fn build(
-        _id_map: &HashMap<NodeID, SDFNodeID>,
+        _id_map: &HashMap<NodeID, MetaSDFNodeID>,
         _children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 6);
         let extents = [params[0].float(), params[1].float(), params[2].float()];
         let noise_frequency = params[3].float();
         let noise_threshold = params[4].float();
         let seed = params[5].uint();
-        Some(SDFNode::new_gradient_noise(
-            extents,
-            noise_frequency,
-            noise_threshold,
+        Some(MetaSDFNode::new_gradient_noise(
+            extents.map(Into::into),
+            noise_frequency.into(),
+            noise_threshold.into(),
             seed,
         ))
     }
 }
 
-impl SpecificNodeKind for SDFTranslation {
+impl SpecificNodeKind for MetaSDFTranslation {
     const LABEL: &'static str = "Translation";
     const PORT_CONFIG: PortConfig = PortConfig::unary();
 
@@ -173,18 +183,22 @@ impl SpecificNodeKind for SDFTranslation {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 3);
         let child_id = unary_child(id_map, children)?;
-        let translation = [params[0].float(), params[1].float(), params[2].float()].into();
-        Some(SDFNode::new_translation(child_id, translation))
+        let translation = [params[0].float(), params[1].float(), params[2].float()];
+        Some(MetaSDFNode::new_translation(
+            child_id,
+            translation.map(Into::into),
+            0,
+        ))
     }
 }
 
-impl SpecificNodeKind for SDFRotation {
+impl SpecificNodeKind for MetaSDFRotation {
     const LABEL: &'static str = "Rotation";
     const PORT_CONFIG: PortConfig = PortConfig::unary();
 
@@ -203,22 +217,26 @@ impl SpecificNodeKind for SDFRotation {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 3);
         let child_id = unary_child(id_map, children)?;
         let roll = params[0].float();
         let pitch = params[1].float();
         let yaw = params[2].float();
-        Some(SDFNode::Rotation(SDFRotation::from_euler_angles(
-            child_id, roll, pitch, yaw,
-        )))
+        Some(MetaSDFNode::new_rotation(
+            child_id,
+            roll.into(),
+            pitch.into(),
+            yaw.into(),
+            0,
+        ))
     }
 }
 
-impl SpecificNodeKind for SDFScaling {
+impl SpecificNodeKind for MetaSDFScaling {
     const LABEL: &'static str = "Scaling";
     const PORT_CONFIG: PortConfig = PortConfig::unary();
 
@@ -231,18 +249,18 @@ impl SpecificNodeKind for SDFScaling {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
         let child_id = unary_child(id_map, children)?;
         let scaling = params[0].float();
-        Some(SDFNode::new_scaling(child_id, scaling))
+        Some(MetaSDFNode::new_scaling(child_id, scaling.into(), 0))
     }
 }
 
-impl SpecificNodeKind for MultifractalNoiseSDFModifier {
+impl SpecificNodeKind for MetaMultifractalNoiseSDFModifier {
     const LABEL: &'static str = "Multifractal noise";
     const PORT_CONFIG: PortConfig = PortConfig::unary();
 
@@ -277,10 +295,10 @@ impl SpecificNodeKind for MultifractalNoiseSDFModifier {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 6);
         let child_id = unary_child(id_map, children)?;
         let octaves = params[0].uint();
@@ -289,19 +307,19 @@ impl SpecificNodeKind for MultifractalNoiseSDFModifier {
         let persistence = params[3].float();
         let amplitude = params[4].float();
         let seed = params[5].uint();
-        Some(SDFNode::new_multifractal_noise(
+        Some(MetaSDFNode::new_multifractal_noise(
             child_id,
-            octaves,
-            frequency,
-            lacunarity,
-            persistence,
-            amplitude,
+            octaves.into(),
+            frequency.into(),
+            lacunarity.into(),
+            persistence.into(),
+            amplitude.into(),
             seed,
         ))
     }
 }
 
-impl SpecificNodeKind for MultiscaleSphereSDFModifier {
+impl SpecificNodeKind for MetaMultiscaleSphereSDFModifier {
     const LABEL: &'static str = "Multiscale sphere";
     const PORT_CONFIG: PortConfig = PortConfig::unary();
 
@@ -342,10 +360,10 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 7);
         let child_id = unary_child(id_map, children)?;
         let octaves = params[0].uint();
@@ -355,20 +373,20 @@ impl SpecificNodeKind for MultiscaleSphereSDFModifier {
         let intersection_smoothness = params[4].float();
         let union_smoothness = params[5].float();
         let seed = params[6].uint();
-        Some(SDFNode::new_multiscale_sphere(
+        Some(MetaSDFNode::new_multiscale_sphere(
             child_id,
-            octaves,
-            max_scale,
-            persistence,
-            inflation,
-            intersection_smoothness,
-            union_smoothness,
+            octaves.into(),
+            max_scale.into(),
+            persistence.into(),
+            inflation.into(),
+            intersection_smoothness.into(),
+            union_smoothness.into(),
             seed,
         ))
     }
 }
 
-impl SpecificNodeKind for SDFUnion {
+impl SpecificNodeKind for MetaSDFUnion {
     const LABEL: &'static str = "Union";
     const PORT_CONFIG: PortConfig = PortConfig::binary();
 
@@ -379,18 +397,18 @@ impl SpecificNodeKind for SDFUnion {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
         let (child_1_id, child_2_id) = binary_children(id_map, children)?;
         let smoothness = params[0].float();
-        Some(SDFNode::new_union(child_1_id, child_2_id, smoothness))
+        Some(MetaSDFNode::new_union(child_1_id, child_2_id, smoothness))
     }
 }
 
-impl SpecificNodeKind for SDFSubtraction {
+impl SpecificNodeKind for MetaSDFSubtraction {
     const LABEL: &'static str = "Subtraction";
     const PORT_CONFIG: PortConfig = PortConfig::binary();
 
@@ -401,18 +419,20 @@ impl SpecificNodeKind for SDFSubtraction {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
         let (child_1_id, child_2_id) = binary_children(id_map, children)?;
         let smoothness = params[0].float();
-        Some(SDFNode::new_subtraction(child_1_id, child_2_id, smoothness))
+        Some(MetaSDFNode::new_subtraction(
+            child_1_id, child_2_id, smoothness,
+        ))
     }
 }
 
-impl SpecificNodeKind for SDFIntersection {
+impl SpecificNodeKind for MetaSDFIntersection {
     const LABEL: &'static str = "Intersection";
     const PORT_CONFIG: PortConfig = PortConfig::binary();
 
@@ -423,21 +443,193 @@ impl SpecificNodeKind for SDFIntersection {
     }
 
     fn build(
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
         let (child_1_id, child_2_id) = binary_children(id_map, children)?;
         let smoothness = params[0].float();
-        Some(SDFNode::new_intersection(
+        Some(MetaSDFNode::new_intersection(
             child_1_id, child_2_id, smoothness,
         ))
     }
 }
 
+impl SpecificNodeKind for MetaSDFGroupUnion {
+    const LABEL: &'static str = "Group union";
+    const PORT_CONFIG: PortConfig = PortConfig::unary();
+
+    fn default_params() -> Vec<NodeParam> {
+        vec![NodeParam::Float(
+            FloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0).with_min_value(0.0),
+        )]
+    }
+
+    fn build(
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
+        children: &[Option<NodeID>],
+        params: &[NodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 1);
+        let child_id = unary_child(id_map, children)?;
+        let smoothness = params[0].float();
+        Some(MetaSDFNode::new_group_union(child_id, smoothness))
+    }
+}
+
+impl SpecificNodeKind for MetaStratifiedPlacement {
+    const LABEL: &'static str = "Stratified placement";
+    const PORT_CONFIG: PortConfig = PortConfig::leaf();
+
+    fn default_params() -> Vec<NodeParam> {
+        vec![
+            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Size x"), 1)),
+            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Size y"), 1)),
+            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Size z"), 1)),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Cell extent x"), 1.0)
+                    .with_min_value(0.0),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Cell extent y"), 1.0)
+                    .with_min_value(0.0),
+            ),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Cell extent z"), 1.0)
+                    .with_min_value(0.0),
+            ),
+            NodeParam::UInt(UIntParam::new(
+                LabelAndHoverText::label_only("Points per cell"),
+                1,
+            )),
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Jitter fraction"), 0.0)
+                    .with_min_value(0.0)
+                    .with_max_value(1.0),
+            ),
+            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Seed"), 0)),
+        ]
+    }
+
+    fn build(
+        _id_map: &HashMap<NodeID, MetaSDFNodeID>,
+        _children: &[Option<NodeID>],
+        params: &[NodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 9);
+        let shape = [params[0].uint(), params[1].uint(), params[2].uint()];
+        let cell_extents = [params[3].float(), params[4].float(), params[5].float()];
+        let points_per_grid_cell = params[6].uint();
+        let jitter_fraction = params[7].float();
+        let seed = params[8].uint();
+        Some(MetaSDFNode::new_stratified_placement(
+            shape.map(Into::into),
+            cell_extents.map(Into::into),
+            points_per_grid_cell.into(),
+            jitter_fraction.into(),
+            seed,
+        ))
+    }
+}
+
+impl SpecificNodeKind for MetaTranslationToSurface {
+    const LABEL: &'static str = "Translation to surface";
+    const PORT_CONFIG: PortConfig = PortConfig::binary();
+
+    fn default_params() -> Vec<NodeParam> {
+        vec![]
+    }
+
+    fn build(
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
+        children: &[Option<NodeID>],
+        params: &[NodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::new_translation_to_surface(
+            surface_sdf_id,
+            subject_id,
+        ))
+    }
+}
+
+impl SpecificNodeKind for MetaRotationToGradient {
+    const LABEL: &'static str = "Rotation to gradient";
+    const PORT_CONFIG: PortConfig = PortConfig::binary();
+
+    fn default_params() -> Vec<NodeParam> {
+        vec![]
+    }
+
+    fn build(
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
+        children: &[Option<NodeID>],
+        params: &[NodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (gradient_sdf_id, subject_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::new_rotation_to_gradient(
+            gradient_sdf_id,
+            subject_id,
+        ))
+    }
+}
+
+impl SpecificNodeKind for MetaSDFScattering {
+    const LABEL: &'static str = "Scattering";
+    const PORT_CONFIG: PortConfig = PortConfig::binary();
+
+    fn default_params() -> Vec<NodeParam> {
+        vec![]
+    }
+
+    fn build(
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
+        children: &[Option<NodeID>],
+        params: &[NodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (sdf_id, placement_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::new_scattering(sdf_id, placement_id))
+    }
+}
+
+impl SpecificNodeKind for MetaStochasticSelection {
+    const LABEL: &'static str = "Stochastic selection";
+    const PORT_CONFIG: PortConfig = PortConfig::unary();
+
+    fn default_params() -> Vec<NodeParam> {
+        vec![
+            NodeParam::Float(
+                FloatParam::new(LabelAndHoverText::label_only("Probability"), 1.0)
+                    .with_min_value(0.0)
+                    .with_max_value(1.0),
+            ),
+            NodeParam::UInt(UIntParam::new(LabelAndHoverText::label_only("Seed"), 0)),
+        ]
+    }
+
+    fn build(
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
+        children: &[Option<NodeID>],
+        params: &[NodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 2);
+        let child_id = unary_child(id_map, children)?;
+        let probability = params[0].float();
+        let seed = params[1].uint();
+        Some(MetaSDFNode::new_stochastic_selection(
+            child_id,
+            probability,
+            seed,
+        ))
+    }
+}
+
 impl NodeKind {
-    pub const fn all_non_root() -> [Self; 11] {
+    pub const fn all_non_root() -> [Self; 17] {
         [
             Self::Box,
             Self::Sphere,
@@ -450,6 +642,12 @@ impl NodeKind {
             Self::Union,
             Self::Subtraction,
             Self::Intersection,
+            Self::GroupUnion,
+            Self::StratifiedPlacement,
+            Self::TranslationToSurface,
+            Self::RotationToGradient,
+            Self::Scattering,
+            Self::StochasticSelection,
         ]
     }
 
@@ -463,93 +661,128 @@ impl NodeKind {
             Self::Box | Self::Sphere | Self::GradientNoise => NodeKindGroup::Primitive,
             Self::Translation | Self::Rotation | Self::Scaling => NodeKindGroup::Transform,
             Self::MultifractalNoise | Self::MultiscaleSphere => NodeKindGroup::Modification,
-            Self::Union | Self::Subtraction | Self::Intersection => NodeKindGroup::Combination,
+            Self::Union | Self::Subtraction | Self::Intersection | Self::GroupUnion => {
+                NodeKindGroup::Combination
+            }
+            Self::StratifiedPlacement
+            | Self::TranslationToSurface
+            | Self::RotationToGradient
+            | Self::Scattering => NodeKindGroup::Placement,
+            Self::StochasticSelection => NodeKindGroup::Masking,
         }
     }
 
     pub const fn label(&self) -> &'static str {
         match self {
             Self::Output => "Output",
-            Self::Box => BoxSDF::LABEL,
-            Self::Sphere => SphereSDF::LABEL,
-            Self::GradientNoise => GradientNoiseSDF::LABEL,
-            Self::Translation => SDFTranslation::LABEL,
-            Self::Rotation => SDFRotation::LABEL,
-            Self::Scaling => SDFScaling::LABEL,
-            Self::MultifractalNoise => MultifractalNoiseSDFModifier::LABEL,
-            Self::MultiscaleSphere => MultiscaleSphereSDFModifier::LABEL,
-            Self::Union => SDFUnion::LABEL,
-            Self::Subtraction => SDFSubtraction::LABEL,
-            Self::Intersection => SDFIntersection::LABEL,
+            Self::Box => MetaBoxSDF::LABEL,
+            Self::Sphere => MetaSphereSDF::LABEL,
+            Self::GradientNoise => MetaGradientNoiseSDF::LABEL,
+            Self::Translation => MetaSDFTranslation::LABEL,
+            Self::Rotation => MetaSDFRotation::LABEL,
+            Self::Scaling => MetaSDFScaling::LABEL,
+            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::LABEL,
+            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::LABEL,
+            Self::Union => MetaSDFUnion::LABEL,
+            Self::Subtraction => MetaSDFSubtraction::LABEL,
+            Self::Intersection => MetaSDFIntersection::LABEL,
+            Self::GroupUnion => MetaSDFGroupUnion::LABEL,
+            Self::StratifiedPlacement => MetaStratifiedPlacement::LABEL,
+            Self::TranslationToSurface => MetaTranslationToSurface::LABEL,
+            Self::RotationToGradient => MetaRotationToGradient::LABEL,
+            Self::Scattering => MetaSDFScattering::LABEL,
+            Self::StochasticSelection => MetaStochasticSelection::LABEL,
         }
     }
 
     pub const fn port_config(&self) -> PortConfig {
         match self {
             Self::Output => PortConfig::root(),
-            Self::Box => BoxSDF::PORT_CONFIG,
-            Self::Sphere => SphereSDF::PORT_CONFIG,
-            Self::GradientNoise => GradientNoiseSDF::PORT_CONFIG,
-            Self::Translation => SDFTranslation::PORT_CONFIG,
-            Self::Rotation => SDFRotation::PORT_CONFIG,
-            Self::Scaling => SDFScaling::PORT_CONFIG,
-            Self::MultifractalNoise => MultifractalNoiseSDFModifier::PORT_CONFIG,
-            Self::MultiscaleSphere => MultiscaleSphereSDFModifier::PORT_CONFIG,
-            Self::Union => SDFUnion::PORT_CONFIG,
-            Self::Subtraction => SDFSubtraction::PORT_CONFIG,
-            Self::Intersection => SDFIntersection::PORT_CONFIG,
+            Self::Box => MetaBoxSDF::PORT_CONFIG,
+            Self::Sphere => MetaSphereSDF::PORT_CONFIG,
+            Self::GradientNoise => MetaGradientNoiseSDF::PORT_CONFIG,
+            Self::Translation => MetaSDFTranslation::PORT_CONFIG,
+            Self::Rotation => MetaSDFRotation::PORT_CONFIG,
+            Self::Scaling => MetaSDFScaling::PORT_CONFIG,
+            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::PORT_CONFIG,
+            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::PORT_CONFIG,
+            Self::Union => MetaSDFUnion::PORT_CONFIG,
+            Self::Subtraction => MetaSDFSubtraction::PORT_CONFIG,
+            Self::Intersection => MetaSDFIntersection::PORT_CONFIG,
+            Self::GroupUnion => MetaSDFGroupUnion::PORT_CONFIG,
+            Self::StratifiedPlacement => MetaStratifiedPlacement::PORT_CONFIG,
+            Self::TranslationToSurface => MetaTranslationToSurface::PORT_CONFIG,
+            Self::RotationToGradient => MetaRotationToGradient::PORT_CONFIG,
+            Self::Scattering => MetaSDFScattering::PORT_CONFIG,
+            Self::StochasticSelection => MetaStochasticSelection::PORT_CONFIG,
         }
     }
 
     pub fn default_params(&self) -> Vec<NodeParam> {
         match self {
             Self::Output => output_node_params(),
-            Self::Box => BoxSDF::default_params(),
-            Self::Sphere => SphereSDF::default_params(),
-            Self::GradientNoise => GradientNoiseSDF::default_params(),
-            Self::Translation => SDFTranslation::default_params(),
-            Self::Rotation => SDFRotation::default_params(),
-            Self::Scaling => SDFScaling::default_params(),
-            Self::MultifractalNoise => MultifractalNoiseSDFModifier::default_params(),
-            Self::MultiscaleSphere => MultiscaleSphereSDFModifier::default_params(),
-            Self::Union => SDFUnion::default_params(),
-            Self::Subtraction => SDFSubtraction::default_params(),
-            Self::Intersection => SDFIntersection::default_params(),
+            Self::Box => MetaBoxSDF::default_params(),
+            Self::Sphere => MetaSphereSDF::default_params(),
+            Self::GradientNoise => MetaGradientNoiseSDF::default_params(),
+            Self::Translation => MetaSDFTranslation::default_params(),
+            Self::Rotation => MetaSDFRotation::default_params(),
+            Self::Scaling => MetaSDFScaling::default_params(),
+            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::default_params(),
+            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::default_params(),
+            Self::Union => MetaSDFUnion::default_params(),
+            Self::Subtraction => MetaSDFSubtraction::default_params(),
+            Self::Intersection => MetaSDFIntersection::default_params(),
+            Self::GroupUnion => MetaSDFGroupUnion::default_params(),
+            Self::StratifiedPlacement => MetaStratifiedPlacement::default_params(),
+            Self::TranslationToSurface => MetaTranslationToSurface::default_params(),
+            Self::RotationToGradient => MetaRotationToGradient::default_params(),
+            Self::Scattering => MetaSDFScattering::default_params(),
+            Self::StochasticSelection => MetaStochasticSelection::default_params(),
         }
     }
 
     pub fn build_sdf_generator_node(
         &self,
-        id_map: &HashMap<NodeID, SDFNodeID>,
+        id_map: &HashMap<NodeID, MetaSDFNodeID>,
         children: &[Option<NodeID>],
         params: &[NodeParam],
-    ) -> Option<SDFNode> {
+    ) -> Option<MetaSDFNode> {
         match self {
             Self::Output => None,
-            Self::Box => BoxSDF::build(id_map, children, params),
-            Self::Sphere => SphereSDF::build(id_map, children, params),
-            Self::GradientNoise => GradientNoiseSDF::build(id_map, children, params),
-            Self::Translation => SDFTranslation::build(id_map, children, params),
-            Self::Rotation => SDFRotation::build(id_map, children, params),
-            Self::Scaling => SDFScaling::build(id_map, children, params),
+            Self::Box => MetaBoxSDF::build(id_map, children, params),
+            Self::Sphere => MetaSphereSDF::build(id_map, children, params),
+            Self::GradientNoise => MetaGradientNoiseSDF::build(id_map, children, params),
+            Self::Translation => MetaSDFTranslation::build(id_map, children, params),
+            Self::Rotation => MetaSDFRotation::build(id_map, children, params),
+            Self::Scaling => MetaSDFScaling::build(id_map, children, params),
             Self::MultifractalNoise => {
-                MultifractalNoiseSDFModifier::build(id_map, children, params)
+                MetaMultifractalNoiseSDFModifier::build(id_map, children, params)
             }
-            Self::MultiscaleSphere => MultiscaleSphereSDFModifier::build(id_map, children, params),
-            Self::Union => SDFUnion::build(id_map, children, params),
-            Self::Subtraction => SDFSubtraction::build(id_map, children, params),
-            Self::Intersection => SDFIntersection::build(id_map, children, params),
+            Self::MultiscaleSphere => {
+                MetaMultiscaleSphereSDFModifier::build(id_map, children, params)
+            }
+            Self::Union => MetaSDFUnion::build(id_map, children, params),
+            Self::Subtraction => MetaSDFSubtraction::build(id_map, children, params),
+            Self::Intersection => MetaSDFIntersection::build(id_map, children, params),
+            Self::GroupUnion => MetaSDFGroupUnion::build(id_map, children, params),
+            Self::StratifiedPlacement => MetaStratifiedPlacement::build(id_map, children, params),
+            Self::TranslationToSurface => MetaTranslationToSurface::build(id_map, children, params),
+            Self::RotationToGradient => MetaRotationToGradient::build(id_map, children, params),
+            Self::Scattering => MetaSDFScattering::build(id_map, children, params),
+            Self::StochasticSelection => MetaStochasticSelection::build(id_map, children, params),
         }
     }
 }
 
 impl NodeKindGroup {
-    pub const fn all_non_root() -> [Self; 4] {
+    pub const fn all_non_root() -> [Self; 6] {
         [
             Self::Primitive,
             Self::Transform,
             Self::Modification,
             Self::Combination,
+            Self::Placement,
+            Self::Masking,
         ]
     }
 }
@@ -570,17 +803,17 @@ fn output_node_params() -> Vec<NodeParam> {
 }
 
 fn unary_child(
-    id_map: &HashMap<NodeID, SDFNodeID>,
+    id_map: &HashMap<NodeID, MetaSDFNodeID>,
     children: &[Option<NodeID>],
-) -> Option<SDFNodeID> {
+) -> Option<MetaSDFNodeID> {
     assert_eq!(children.len(), 1);
     children.first()?.map(|id| id_map[&id])
 }
 
 fn binary_children(
-    id_map: &HashMap<NodeID, SDFNodeID>,
+    id_map: &HashMap<NodeID, MetaSDFNodeID>,
     children: &[Option<NodeID>],
-) -> Option<(SDFNodeID, SDFNodeID)> {
+) -> Option<(MetaSDFNodeID, MetaSDFNodeID)> {
     assert_eq!(children.len(), 2);
     let child_0 = children.first()?.map(|id| id_map[&id])?;
     let child_1 = children.get(1)?.map(|id| id_map[&id])?;

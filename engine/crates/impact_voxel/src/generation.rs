@@ -132,7 +132,7 @@ impl VoxelGenerator for SDFVoxelGenerator {
 
     fn create_buffers(&self) -> Self::ChunkGenerationBuffers {
         SDFVoxelGeneratorChunkBuffers {
-            sdf: self.sdf_generator.create_buffers(),
+            sdf: self.sdf_generator.create_buffers_for_chunk(),
             voxel_type: self.voxel_type_generator.create_buffers(),
         }
     }
@@ -268,7 +268,7 @@ pub mod fuzzing {
             };
             let mut nodes = AVec::new();
             nodes.push(primitive);
-            Ok(Self::new(Global, nodes, 0).unwrap())
+            Ok(Self::new(Global, &nodes, 0).unwrap())
         }
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {

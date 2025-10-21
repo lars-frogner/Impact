@@ -10,7 +10,10 @@ use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_ne;
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::Float;
-use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{
+    Matrix4, Point3, Quaternion, Similarity3, Translation, UnitQuaternion, UnitVector3, Vector3,
+    vector,
+};
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::f32;
@@ -25,19 +28,24 @@ use twox_hash::XxHash32;
 /// has correct distances only close to the surface, as this is what we
 /// typically care about.
 #[derive(Clone, Debug)]
-pub struct SDFGenerator {
+pub struct SDFGenerator<A: Allocator = Global> {
     /// Nodes in reverse depth-first order. The last node is the root.
-    nodes: Vec<ProcessedSDFNode>,
+    nodes: AVec<ProcessedSDFNode, A>,
     primitive_count: usize,
     domain: AxisAlignedBox<f32>,
 }
 
 #[derive(Clone, Debug)]
-pub struct SDFGeneratorChunkBuffers {
+pub struct SDFGeneratorBlockBuffers<const COUNT: usize, A: Allocator> {
     /// Contains `primitive_count + 1` arrays, where the last one is scratch
     /// space.
-    signed_distance_stack: Vec<[f32; ChunkedVoxelObject::chunk_voxel_count()]>,
+    signed_distance_stack: AVec<[f32; COUNT], A>,
 }
+
+const CHUNK_SIZE: usize = ChunkedVoxelObject::chunk_size();
+const CHUNK_VOXEL_COUNT: usize = ChunkedVoxelObject::chunk_voxel_count();
+
+pub type SDFGeneratorChunkBuffers = SDFGeneratorBlockBuffers<CHUNK_VOXEL_COUNT, Global>;
 
 #[derive(Clone, Debug)]
 pub struct SDFGeneratorBuilder<A: Allocator = Global> {
@@ -63,7 +71,7 @@ pub enum SDFNode {
     MultifractalNoise(MultifractalNoiseSDFModifier),
     MultiscaleSphere(MultiscaleSphereSDFModifier),
 
-    // Binary operations
+    // Combination
     Union(SDFUnion),
     Subtraction(SDFSubtraction),
     Intersection(SDFIntersection),
@@ -81,7 +89,7 @@ struct ProcessedSDFNode {
     /// tight domain. This means that the signed distance outside that domain is
     /// never smaller than the margin. If we determine a margin such that the
     /// parent nodes will never care about the values outside it, we are free to
-    /// fill in chunks outside the margin with the margin value rather than
+    /// fill in blocks outside the margin with the margin value rather than
     /// evaluating the SDF there. Note that this does leave an invalid SDF
     /// though, since the gradient becomes zero. But as long as we don't need
     /// the gradient, that is OK.
@@ -201,23 +209,53 @@ enum NodeBuildState {
     DomainDetermined,
 }
 
-impl SDFGenerator {
-    const MAX_PRIMITIVES: usize = 16;
-
+impl SDFGenerator<Global> {
     pub fn empty() -> Self {
+        Self::empty_in(Global)
+    }
+
+    pub fn new<AR>(arena: AR, nodes: &[SDFNode], root_node_id: SDFNodeID) -> Result<Self>
+    where
+        AR: Allocator + Copy,
+    {
+        Self::new_in(Global, arena, nodes, root_node_id)
+    }
+
+    pub fn create_buffers_for_chunk(&self) -> SDFGeneratorChunkBuffers {
+        self.create_buffers_for_block(Global)
+    }
+
+    pub fn compute_signed_distances_for_chunk(
+        &self,
+        buffers: &mut SDFGeneratorChunkBuffers,
+        chunk_aabb_in_root_space: &AxisAlignedBox<f32>,
+    ) {
+        self.compute_signed_distances_for_block::<CHUNK_SIZE, CHUNK_VOXEL_COUNT>(
+            buffers,
+            chunk_aabb_in_root_space,
+        );
+    }
+}
+
+impl<A: Allocator> SDFGenerator<A> {
+    pub fn empty_in(alloc: A) -> Self {
         Self {
-            nodes: Vec::new(),
+            nodes: AVec::new_in(alloc),
             primitive_count: 0,
             domain: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
         }
     }
 
-    pub fn new<A, AN>(arena: A, nodes: AVec<SDFNode, AN>, root_node_id: SDFNodeID) -> Result<Self>
+    pub fn new_in<AR>(
+        alloc: A,
+        arena: AR,
+        nodes: &[SDFNode],
+        root_node_id: SDFNodeID,
+    ) -> Result<Self>
     where
-        A: Allocator + Copy,
-        AN: Allocator,
+        AR: Allocator + Copy,
     {
-        let mut processed_nodes = Vec::with_capacity(nodes.len());
+        let mut processed_nodes = AVec::with_capacity_in(nodes.len(), alloc);
 
         let mut domains = AVec::new_in(arena);
         domains.resize(nodes.len(), zero_domain());
@@ -421,9 +459,9 @@ impl SDFGenerator {
         })
     }
 
-    fn determine_transforms_and_margins<A>(arena: A, nodes: &mut [ProcessedSDFNode])
+    fn determine_transforms_and_margins<AR>(arena: AR, nodes: &mut [ProcessedSDFNode])
     where
-        A: Allocator + Copy,
+        AR: Allocator + Copy,
     {
         // We determine the transforms to node space by walking the graph from
         // parent to children, taking the parent transform and either
@@ -541,114 +579,29 @@ impl SDFGenerator {
         &self.domain
     }
 
-    pub fn create_buffers(&self) -> SDFGeneratorChunkBuffers {
+    pub fn create_buffers_for_block<const COUNT: usize>(
+        &self,
+        alloc: A,
+    ) -> SDFGeneratorBlockBuffers<COUNT, A> {
         // We only strictly need `self.primitive_count` signed distance arrays,
         // but we include one additional array for scratch space at the end of
         // the allocation
-        let signed_distance_stack =
-            vec![[0.0; ChunkedVoxelObject::chunk_voxel_count()]; self.primitive_count + 1];
+        let mut signed_distance_stack = AVec::new_in(alloc);
+        signed_distance_stack.resize(self.primitive_count + 1, [0.0; COUNT]);
 
-        SDFGeneratorChunkBuffers {
+        SDFGeneratorBlockBuffers {
             signed_distance_stack,
         }
     }
 
-    #[inline]
-    pub fn compute_signed_distance(&self, position_in_root_space: &Point3<f32>) -> f32 {
-        if self.nodes.is_empty() {
-            return VoxelSignedDistance::MAX_F32;
-        }
-
-        let mut signed_distance_stack = [0.0_f32; Self::MAX_PRIMITIVES];
-        let mut stack_top: usize = 0;
-
-        for node in &self.nodes {
-            match &node.node {
-                SDFNode::Box(box_generator) => {
-                    let position_in_node_space = node
-                        .transform_to_node_space
-                        .transform_point(position_in_root_space);
-
-                    signed_distance_stack[stack_top] =
-                        box_generator.compute_signed_distance(&position_in_node_space);
-
-                    stack_top += 1;
-                }
-                SDFNode::Sphere(sphere_generator) => {
-                    let position_in_node_space = node
-                        .transform_to_node_space
-                        .transform_point(position_in_root_space);
-
-                    signed_distance_stack[stack_top] =
-                        sphere_generator.compute_signed_distance(&position_in_node_space);
-
-                    stack_top += 1;
-                }
-                SDFNode::GradientNoise(gradient_noise_generator) => {
-                    signed_distance_stack[stack_top] = gradient_noise_generator
-                        .compute_signed_distance(
-                            &node.transform_to_node_space,
-                            position_in_root_space,
-                        );
-
-                    stack_top += 1;
-                }
-                SDFNode::Translation(_) | SDFNode::Rotation(_) => {}
-                SDFNode::Scaling(SDFScaling { scaling, .. }) => {
-                    debug_assert!(stack_top >= 1);
-                    signed_distance_stack[stack_top - 1] *= scaling;
-                }
-                SDFNode::MultifractalNoise(modifier) => {
-                    let perturbation = modifier.compute_signed_distance_perturbation(
-                        &node.transform_to_node_space,
-                        position_in_root_space,
-                    );
-                    signed_distance_stack[stack_top - 1] += perturbation;
-                }
-                SDFNode::MultiscaleSphere(modifier) => {
-                    let position_in_node_space = node
-                        .transform_to_node_space
-                        .transform_point(position_in_root_space);
-                    let signed_distance = &mut signed_distance_stack[stack_top - 1];
-                    *signed_distance =
-                        modifier.modify_signed_distance(&position_in_node_space, *signed_distance);
-                }
-                &SDFNode::Union(SDFUnion { smoothness, .. }) => {
-                    debug_assert!(stack_top >= 2);
-                    let distance_1 = signed_distance_stack[stack_top - 2];
-                    let distance_2 = signed_distance_stack[stack_top - 1];
-                    stack_top -= 1;
-                    signed_distance_stack[stack_top - 1] =
-                        sdf_union(distance_1, distance_2, smoothness);
-                }
-                &SDFNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
-                    debug_assert!(stack_top >= 2);
-                    let distance_1 = signed_distance_stack[stack_top - 2];
-                    let distance_2 = signed_distance_stack[stack_top - 1];
-                    stack_top -= 1;
-                    signed_distance_stack[stack_top - 1] =
-                        sdf_subtraction(distance_1, distance_2, smoothness);
-                }
-                &SDFNode::Intersection(SDFIntersection { smoothness, .. }) => {
-                    debug_assert!(stack_top >= 2);
-                    let distance_1 = signed_distance_stack[stack_top - 2];
-                    let distance_2 = signed_distance_stack[stack_top - 1];
-                    stack_top -= 1;
-                    signed_distance_stack[stack_top - 1] =
-                        sdf_intersection(distance_1, distance_2, smoothness);
-                }
-            }
-        }
-
-        assert_eq!(stack_top, 1);
-
-        signed_distance_stack[0]
-    }
-
-    pub fn compute_signed_distances_for_chunk(
+    /// For performance, this method may clamp signed distances sufficiently far
+    /// from node domain boundaries rather than evaluating them. If you need
+    /// correct gradients, use
+    /// [`Self::compute_signed_distances_for_block_preserving_gradients`].
+    pub fn compute_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
         &self,
-        buffers: &mut SDFGeneratorChunkBuffers,
-        chunk_aabb_in_root_space: &AxisAlignedBox<f32>,
+        buffers: &mut SDFGeneratorBlockBuffers<COUNT, A>,
+        block_aabb_in_root_space: &AxisAlignedBox<f32>,
     ) {
         if self.nodes.is_empty() {
             buffers.signed_distance_stack[0].fill(VoxelSignedDistance::MAX_F32);
@@ -660,26 +613,26 @@ impl SDFGenerator {
         for node in &self.nodes {
             match &node.node {
                 SDFNode::Box(box_generator) => {
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         // Fully outside: distances are guaranteed >= margin
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
                     } else if box_generator
                         .expanded_domain_bounds(-node.domain_margin)
-                        .contains_box(&chunk_aabb_in_node_space)
+                        .contains_box(&block_aabb_in_node_space)
                     {
                         // Fully inside: distances are guaranteed <= -margin
                         buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
-                        update_signed_distances_for_chunk(
+                        update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
-                            chunk_aabb_in_root_space.lower_corner(),
+                            block_aabb_in_root_space.lower_corner(),
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance =
                                     box_generator.compute_signed_distance(position_in_node_space);
@@ -690,24 +643,24 @@ impl SDFGenerator {
                     stack_top += 1;
                 }
                 SDFNode::Sphere(sphere_generator) => {
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
                     } else if sphere_generator
                         .expanded_interior_domain_bounds(-node.domain_margin)
-                        .contains_box(&chunk_aabb_in_node_space)
+                        .contains_box(&block_aabb_in_node_space)
                     {
                         buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
-                        update_signed_distances_for_chunk(
+                        update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
-                            chunk_aabb_in_root_space.lower_corner(),
+                            block_aabb_in_root_space.lower_corner(),
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = sphere_generator
                                     .compute_signed_distance(position_in_node_space);
@@ -718,19 +671,19 @@ impl SDFGenerator {
                     stack_top += 1;
                 }
                 SDFNode::GradientNoise(gradient_noise_generator) => {
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
                     } else {
-                        gradient_noise_generator.compute_signed_distances_for_chunk(
+                        gradient_noise_generator.compute_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
-                            chunk_aabb_in_root_space.lower_corner(),
+                            block_aabb_in_root_space.lower_corner(),
                         );
                     }
 
@@ -740,12 +693,12 @@ impl SDFGenerator {
                 SDFNode::Scaling(SDFScaling { scaling, .. }) => {
                     debug_assert!(stack_top >= 1);
 
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         for signed_distance in &mut buffers.signed_distance_stack[stack_top - 1] {
                             *signed_distance *= scaling;
@@ -753,12 +706,12 @@ impl SDFGenerator {
                     }
                 }
                 SDFNode::MultifractalNoise(modifier) => {
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let scratch_idx = buffers.signed_distance_stack.len() - 1;
                         let [distances, scratch] = buffers
@@ -766,26 +719,26 @@ impl SDFGenerator {
                             .get_disjoint_mut([stack_top - 1, scratch_idx])
                             .unwrap();
 
-                        modifier.modify_signed_distances_for_chunk(
+                        modifier.modify_signed_distances_for_block::<SIZE, COUNT>(
                             distances,
                             scratch,
                             &node.transform_to_node_space,
-                            chunk_aabb_in_root_space.lower_corner(),
+                            block_aabb_in_root_space.lower_corner(),
                         );
                     }
                 }
                 SDFNode::MultiscaleSphere(modifier) => {
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
-                        update_signed_distances_for_chunk(
+                        update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top - 1],
                             &node.transform_to_node_space,
-                            chunk_aabb_in_root_space.lower_corner(),
+                            block_aabb_in_root_space.lower_corner(),
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = modifier.modify_signed_distance(
                                     position_in_node_space,
@@ -799,12 +752,12 @@ impl SDFGenerator {
                     debug_assert!(stack_top >= 2);
                     stack_top -= 1;
 
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let [distances_1, distances_2] = buffers
                             .signed_distance_stack
@@ -822,12 +775,12 @@ impl SDFGenerator {
                     debug_assert!(stack_top >= 2);
                     stack_top -= 1;
 
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let [distances_1, distances_2] = buffers
                             .signed_distance_stack
@@ -845,12 +798,12 @@ impl SDFGenerator {
                     debug_assert!(stack_top >= 2);
                     stack_top -= 1;
 
-                    let chunk_aabb_in_node_space =
-                        chunk_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
                         .expanded_domain
-                        .box_lies_outside(&chunk_aabb_in_node_space)
+                        .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let [distances_1, distances_2] = buffers
                             .signed_distance_stack
@@ -862,6 +815,139 @@ impl SDFGenerator {
                         {
                             *distance_1 = sdf_intersection(*distance_1, distance_2, smoothness);
                         }
+                    }
+                }
+            }
+        }
+
+        assert_eq!(stack_top, 1);
+    }
+
+    pub fn compute_signed_distances_for_block_preserving_gradients<
+        const SIZE: usize,
+        const COUNT: usize,
+    >(
+        &self,
+        buffers: &mut SDFGeneratorBlockBuffers<COUNT, A>,
+        block_origin_in_root_space: &Point3<f32>,
+    ) {
+        if self.nodes.is_empty() {
+            buffers.signed_distance_stack[0].fill(VoxelSignedDistance::MAX_F32);
+            return;
+        }
+
+        let mut stack_top: usize = 0;
+
+        for node in &self.nodes {
+            match &node.node {
+                SDFNode::Box(box_generator) => {
+                    update_signed_distances_for_block::<SIZE, COUNT>(
+                        &mut buffers.signed_distance_stack[stack_top],
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                        &|signed_distance, position_in_node_space| {
+                            *signed_distance =
+                                box_generator.compute_signed_distance(position_in_node_space);
+                        },
+                    );
+
+                    stack_top += 1;
+                }
+                SDFNode::Sphere(sphere_generator) => {
+                    update_signed_distances_for_block::<SIZE, COUNT>(
+                        &mut buffers.signed_distance_stack[stack_top],
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                        &|signed_distance, position_in_node_space| {
+                            *signed_distance =
+                                sphere_generator.compute_signed_distance(position_in_node_space);
+                        },
+                    );
+
+                    stack_top += 1;
+                }
+                SDFNode::GradientNoise(gradient_noise_generator) => {
+                    gradient_noise_generator.compute_signed_distances_for_block::<SIZE, COUNT>(
+                        &mut buffers.signed_distance_stack[stack_top],
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                    );
+
+                    stack_top += 1;
+                }
+                SDFNode::Translation(_) | SDFNode::Rotation(_) => {}
+                SDFNode::Scaling(SDFScaling { scaling, .. }) => {
+                    debug_assert!(stack_top >= 1);
+
+                    for signed_distance in &mut buffers.signed_distance_stack[stack_top - 1] {
+                        *signed_distance *= scaling;
+                    }
+                }
+                SDFNode::MultifractalNoise(modifier) => {
+                    let scratch_idx = buffers.signed_distance_stack.len() - 1;
+                    let [distances, scratch] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, scratch_idx])
+                        .unwrap();
+
+                    modifier.modify_signed_distances_for_block::<SIZE, COUNT>(
+                        distances,
+                        scratch,
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                    );
+                }
+                SDFNode::MultiscaleSphere(modifier) => {
+                    update_signed_distances_for_block::<SIZE, COUNT>(
+                        &mut buffers.signed_distance_stack[stack_top - 1],
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                        &|signed_distance, position_in_node_space| {
+                            *signed_distance = modifier
+                                .modify_signed_distance(position_in_node_space, *signed_distance);
+                        },
+                    );
+                }
+                &SDFNode::Union(SDFUnion { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    stack_top -= 1;
+
+                    let [distances_1, distances_2] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, stack_top])
+                        .unwrap();
+
+                    for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter())
+                    {
+                        *distance_1 = sdf_union(*distance_1, distance_2, smoothness);
+                    }
+                }
+                &SDFNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    stack_top -= 1;
+
+                    let [distances_1, distances_2] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, stack_top])
+                        .unwrap();
+
+                    for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter())
+                    {
+                        *distance_1 = sdf_subtraction(*distance_1, distance_2, smoothness);
+                    }
+                }
+                &SDFNode::Intersection(SDFIntersection { smoothness, .. }) => {
+                    debug_assert!(stack_top >= 2);
+                    stack_top -= 1;
+
+                    let [distances_1, distances_2] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, stack_top])
+                        .unwrap();
+
+                    for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter())
+                    {
+                        *distance_1 = sdf_intersection(*distance_1, distance_2, smoothness);
                     }
                 }
             }
@@ -881,7 +967,7 @@ impl From<BoxSDF> for SDFGenerator {
     fn from(generator: BoxSDF) -> Self {
         let mut nodes = AVec::new();
         nodes.push(SDFNode::Box(generator));
-        Self::new(Global, nodes, 0).unwrap()
+        Self::new(Global, &nodes, 0).unwrap()
     }
 }
 
@@ -889,7 +975,7 @@ impl From<SphereSDF> for SDFGenerator {
     fn from(generator: SphereSDF) -> Self {
         let mut nodes = AVec::new();
         nodes.push(SDFNode::Sphere(generator));
-        Self::new(Global, nodes, 0).unwrap()
+        Self::new(Global, &nodes, 0).unwrap()
     }
 }
 
@@ -897,12 +983,12 @@ impl From<GradientNoiseSDF> for SDFGenerator {
     fn from(generator: GradientNoiseSDF) -> Self {
         let mut nodes = AVec::new();
         nodes.push(SDFNode::GradientNoise(generator));
-        Self::new(Global, nodes, 0).unwrap()
+        Self::new(Global, &nodes, 0).unwrap()
     }
 }
 
-impl SDFGeneratorChunkBuffers {
-    pub fn final_signed_distances(&self) -> &[f32; ChunkedVoxelObject::chunk_voxel_count()] {
+impl<const COUNT: usize, A: Allocator> SDFGeneratorBlockBuffers<COUNT, A> {
+    pub fn final_signed_distances(&self) -> &[f32; COUNT] {
         &self.signed_distance_stack[0]
     }
 }
@@ -923,19 +1009,37 @@ impl<A: Allocator> SDFGeneratorBuilder<A> {
         self.build_with_arena(Global)
     }
 
-    pub fn build_with_arena<AR>(self, arena: AR) -> Result<SDFGenerator>
+    // Uses the arena only for temporary allocations during the build.
+    pub fn build_with_arena<AR>(&self, arena: AR) -> Result<SDFGenerator>
     where
         AR: Allocator + Copy,
     {
         if self.nodes.is_empty() {
             Ok(SDFGenerator::empty())
         } else {
-            SDFGenerator::new(arena, self.nodes, self.root_node_id)
+            SDFGenerator::new(arena, &self.nodes, self.root_node_id)
+        }
+    }
+
+    // Uses the arena both for temporary allocations during the build and for
+    // the final memory of the `SDFGenerator`.
+    pub fn build_temporary<AR>(self, arena: AR) -> Result<SDFGenerator<AR>>
+    where
+        AR: Allocator + Copy,
+    {
+        if self.nodes.is_empty() {
+            Ok(SDFGenerator::empty_in(arena))
+        } else {
+            SDFGenerator::new_in(arena, arena, &self.nodes, self.root_node_id)
         }
     }
 
     pub fn root_node_id(&self) -> SDFNodeID {
         self.root_node_id
+    }
+
+    pub fn nodes(&self) -> &[SDFNode] {
+        &self.nodes
     }
 
     pub fn add_node(&mut self, node: SDFNode) -> SDFNodeID {
@@ -1049,6 +1153,26 @@ impl SDFNode {
     pub fn new_intersection(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         Self::Intersection(SDFIntersection::new(child_1_id, child_2_id, smoothness))
     }
+
+    pub fn node_to_parent_translation(&self) -> Vector3<f32> {
+        match self {
+            Self::Translation(SDFTranslation { translation, .. }) => *translation,
+            _ => Vector3::zeros(),
+        }
+    }
+
+    pub fn node_to_parent_transform(&self) -> Similarity3<f32> {
+        match self {
+            Self::Translation(SDFTranslation { translation, .. }) => {
+                Similarity3::from_parts((*translation).into(), UnitQuaternion::identity(), 1.0)
+            }
+            Self::Rotation(SDFRotation { rotation, .. }) => {
+                Similarity3::from_parts(Translation::identity(), *rotation, 1.0)
+            }
+            Self::Scaling(SDFScaling { scaling, .. }) => Similarity3::from_scaling(*scaling),
+            _ => Similarity3::identity(),
+        }
+    }
 }
 
 impl BoxSDF {
@@ -1122,52 +1246,14 @@ impl GradientNoiseSDF {
     }
 
     /// Note: This will happily generate values outside of `domain_bounds`.
-    #[inline]
-    fn compute_signed_distance(
+    fn compute_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
         &self,
+        signed_distances: &mut [f32; COUNT],
         transform_to_node_space: &Matrix4<f32>,
-        position_in_root_space: &Point3<f32>,
-    ) -> f32 {
-        let position_in_node_space =
-            transform_to_node_space.transform_point(position_in_root_space);
-
-        let dx = transform_to_node_space.column(0).xyz();
-        let inverse_scale = dx.norm();
-        let scale = inverse_scale.recip();
-
-        // We incorporate the scaling into the noise by dividing the original
-        // frequency with the scale and adjusting the origin to compensate
-        let unscaled_frequency = self.noise_frequency * inverse_scale;
-        let origin_for_noise = Point3::from(position_in_node_space.coords.scale(scale));
-
-        let mut noise = [0.0];
-
-        NoiseBuilder::gradient_3d_offset(
-            // Warning: We reverse the order of dimensions here to match the
-            // chunk-wise evaluation
-            origin_for_noise.z,
-            1,
-            origin_for_noise.y,
-            1,
-            origin_for_noise.x,
-            1,
-        )
-        .with_freq(unscaled_frequency)
-        .with_seed(self.seed as i32)
-        .generate(&mut noise);
-
-        self.noise_threshold - noise[0]
-    }
-
-    /// Note: This will happily generate values outside of `domain_bounds`.
-    fn compute_signed_distances_for_chunk(
-        &self,
-        signed_distances: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
-        transform_to_node_space: &Matrix4<f32>,
-        chunk_origin_in_root_space: &Point3<f32>,
+        block_origin_in_root_space: &Point3<f32>,
     ) {
         let origin_in_node_space =
-            transform_to_node_space.transform_point(chunk_origin_in_root_space);
+            transform_to_node_space.transform_point(block_origin_in_root_space);
 
         let dx = transform_to_node_space.column(0).xyz();
         let dy = transform_to_node_space.column(1).xyz();
@@ -1191,14 +1277,14 @@ impl GradientNoiseSDF {
             let mut noise = [0.0];
 
             let mut idx = 0;
-            for i in 0..ChunkedVoxelObject::chunk_size() {
+            for i in 0..SIZE {
                 let origin_plus_x = origin_for_noise + (i as f32) * dx_for_noise;
-                for j in 0..ChunkedVoxelObject::chunk_size() {
+                for j in 0..SIZE {
                     let mut pos = origin_plus_x + (j as f32) * dy_for_noise;
-                    for _ in 0..ChunkedVoxelObject::chunk_size() {
+                    for _ in 0..SIZE {
                         NoiseBuilder::gradient_3d_offset(
                             // Warning: We reverse the order of dimensions here to match the
-                            // chunk-wise evaluation below
+                            // block-wise evaluation below
                             pos.z, 1, pos.y, 1, pos.x, 1,
                         )
                         .with_freq(unscaled_frequency)
@@ -1219,11 +1305,11 @@ impl GradientNoiseSDF {
             // Warning: We reverse the order of dimensions here because the
             // generated noise is laid out in row-major order
             origin_for_noise.z,
-            ChunkedVoxelObject::chunk_size(),
+            SIZE,
             origin_for_noise.y,
-            ChunkedVoxelObject::chunk_size(),
+            SIZE,
             origin_for_noise.x,
-            ChunkedVoxelObject::chunk_size(),
+            SIZE,
         )
         .with_freq(unscaled_frequency)
         .with_seed(self.seed as i32)
@@ -1316,54 +1402,15 @@ impl MultifractalNoiseSDFModifier {
     }
 
     #[inline]
-    fn compute_signed_distance_perturbation(
+    fn modify_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
         &self,
+        signed_distances: &mut [f32; COUNT],
+        scratch: &mut [f32],
         transform_to_node_space: &Matrix4<f32>,
-        position_in_root_space: &Point3<f32>,
-    ) -> f32 {
-        let position_in_node_space =
-            transform_to_node_space.transform_point(position_in_root_space);
-
-        let dx = transform_to_node_space.column(0).xyz();
-        let inverse_scale = dx.norm();
-        let scale = inverse_scale.recip();
-
-        // We incorporate the scaling into the noise by dividing the original
-        // frequency with the scale and adjusting the origin to compensate
-        let unscaled_frequency = self.frequency * inverse_scale;
-        let origin_for_noise = Point3::from(position_in_node_space.coords.scale(scale));
-
-        let mut noise = [0.0];
-
-        NoiseBuilder::fbm_3d_offset(
-            // Warning: We reverse the order of dimensions here to match the
-            // chunk-wise evaluation
-            origin_for_noise.z,
-            1,
-            origin_for_noise.y,
-            1,
-            origin_for_noise.x,
-            1,
-        )
-        .with_octaves(self.octaves as u8)
-        .with_freq(unscaled_frequency)
-        .with_lacunarity(self.lacunarity)
-        .with_gain(self.persistence)
-        .with_seed(self.seed as i32)
-        .generate(&mut noise);
-
-        self.noise_scale * noise[0]
-    }
-
-    fn modify_signed_distances_for_chunk(
-        &self,
-        signed_distances: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
-        scratch: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
-        transform_to_node_space: &Matrix4<f32>,
-        chunk_origin_in_root_space: &Point3<f32>,
+        block_origin_in_root_space: &Point3<f32>,
     ) {
         let origin_in_node_space =
-            transform_to_node_space.transform_point(chunk_origin_in_root_space);
+            transform_to_node_space.transform_point(block_origin_in_root_space);
 
         let dx = transform_to_node_space.column(0).xyz();
         let dy = transform_to_node_space.column(1).xyz();
@@ -1387,14 +1434,14 @@ impl MultifractalNoiseSDFModifier {
             let mut noise = [0.0];
 
             let mut idx = 0;
-            for i in 0..ChunkedVoxelObject::chunk_size() {
+            for i in 0..SIZE {
                 let origin_plus_x = origin_for_noise + (i as f32) * dx_for_noise;
-                for j in 0..ChunkedVoxelObject::chunk_size() {
+                for j in 0..SIZE {
                     let mut pos = origin_plus_x + (j as f32) * dy_for_noise;
-                    for _ in 0..ChunkedVoxelObject::chunk_size() {
+                    for _ in 0..SIZE {
                         NoiseBuilder::fbm_3d_offset(
                             // Warning: We reverse the order of dimensions here to match the
-                            // chunk-wise evaluation below
+                            // block-wise evaluation below
                             pos.z, 1, pos.y, 1, pos.x, 1,
                         )
                         .with_octaves(self.octaves as u8)
@@ -1418,11 +1465,11 @@ impl MultifractalNoiseSDFModifier {
             // Warning: We reverse the order of dimensions here because the
             // generated noise is laid out in row-major order
             origin_for_noise.z,
-            ChunkedVoxelObject::chunk_size(),
+            SIZE,
             origin_for_noise.y,
-            ChunkedVoxelObject::chunk_size(),
+            SIZE,
             origin_for_noise.x,
-            ChunkedVoxelObject::chunk_size(),
+            SIZE,
         )
         .with_octaves(self.octaves as u8)
         .with_freq(unscaled_frequency)
@@ -1574,23 +1621,24 @@ fn domain_padding_for_smoothness(smoothness: f32) -> f32 {
     0.25 * smoothness
 }
 
-fn update_signed_distances_for_chunk(
-    signed_distances: &mut [f32; ChunkedVoxelObject::chunk_voxel_count()],
+#[inline]
+fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
+    signed_distances: &mut [f32; COUNT],
     transform_to_node_space: &Matrix4<f32>,
-    chunk_origin_in_root_space: &Point3<f32>,
+    block_origin_in_root_space: &Point3<f32>,
     update_signed_distance: &impl Fn(&mut f32, &Point3<f32>),
 ) {
-    let origin = transform_to_node_space.transform_point(chunk_origin_in_root_space);
+    let origin = transform_to_node_space.transform_point(block_origin_in_root_space);
     let dx = transform_to_node_space.column(0).xyz();
     let dy = transform_to_node_space.column(1).xyz();
     let dz = transform_to_node_space.column(2).xyz();
 
     let mut idx = 0;
-    for i in 0..ChunkedVoxelObject::chunk_size() {
+    for i in 0..SIZE {
         let origin_plus_x = origin + (i as f32) * dx;
-        for j in 0..ChunkedVoxelObject::chunk_size() {
+        for j in 0..SIZE {
             let mut position = origin_plus_x + (j as f32) * dy;
-            for _ in 0..ChunkedVoxelObject::chunk_size() {
+            for _ in 0..SIZE {
                 update_signed_distance(&mut signed_distances[idx], &position);
                 position += dz;
                 idx += 1;
