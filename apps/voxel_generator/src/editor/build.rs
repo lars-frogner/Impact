@@ -7,7 +7,10 @@ use impact::impact_containers::HashMap;
 use impact_voxel::{
     generation::{
         SDFVoxelGenerator,
-        sdf::{SDFGenerator, SDFGeneratorBuilder, SDFNodeID},
+        sdf::{
+            SDFGenerator,
+            meta::{MetaSDFGraph, MetaSDFNodeID},
+        },
         voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
     },
     voxel_types::VoxelType,
@@ -69,9 +72,9 @@ where
     let root_node_id = output_node.children[0]?;
     let root_node = &nodes[&root_node_id];
 
-    let mut builder = SDFGeneratorBuilder::with_capacity_in(nodes.len(), arena);
+    let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena);
 
-    let mut id_map = HashMap::<NodeID, SDFNodeID>::default();
+    let mut id_map = HashMap::<NodeID, MetaSDFNodeID>::default();
 
     let mut operation_stack = AVec::new_in(arena);
     operation_stack.push(SDFBuildOperation::VisitChildren((root_node_id, root_node)));
@@ -101,14 +104,21 @@ where
                     &node.data.params,
                 )?;
 
-                let sdf_node_id = builder.add_node(generator_node);
+                let sdf_node_id = meta_graph.add_node(generator_node);
                 id_map.insert(node_id, sdf_node_id);
             }
         }
     }
 
+    let sdf_generator = meta_graph
+        .build(arena)
+        .inspect_err(|err| {
+            impact_log::error!("Invalid meta graph: {err}");
+        })
+        .ok()?;
+
     Some(BuiltSDFGenerator {
         voxel_extent,
-        sdf_generator: builder.build_with_arena(arena).unwrap(),
+        sdf_generator,
     })
 }

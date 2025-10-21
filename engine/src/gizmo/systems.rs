@@ -17,7 +17,7 @@ use crate::gizmo::{
 };
 use approx::abs_diff_ne;
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_geometry::ReferenceFrame;
+use impact_geometry::{ReferenceFrame, rotation_between_axes};
 use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
@@ -895,26 +895,6 @@ fn buffer_transforms_for_collider_gizmos(
                 &transforms,
             );
         }
-    }
-}
-
-fn rotation_between_axes(a: &UnitVector3<f64>, b: &UnitVector3<f64>) -> UnitQuaternion<f64> {
-    if let Some(rotation) = UnitQuaternion::rotation_between_axis(a, b) {
-        rotation
-    } else {
-        // If the axes are antiparallel, we pick a suitable axis about which to
-        // flip `a`
-        let axis_most_orthogonal_to_a = if a.x.abs() < a.y.abs() && a.x.abs() < a.z.abs() {
-            Vector3::x()
-        } else if a.y.abs() < a.z.abs() {
-            Vector3::y()
-        } else {
-            Vector3::z()
-        };
-        let axis_perpendicular_to_a =
-            UnitVector3::new_normalize(a.cross(&axis_most_orthogonal_to_a));
-
-        UnitQuaternion::from_axis_angle(&axis_perpendicular_to_a, std::f64::consts::PI)
     }
 }
 

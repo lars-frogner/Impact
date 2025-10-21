@@ -2,12 +2,14 @@
 
 mod aligned_byte_vec;
 mod bit_vector;
+mod fixed_queue;
 mod key_index_mapper;
 mod slot_map;
 mod tracking;
 
 pub use aligned_byte_vec::{AlignedByteVec, Alignment};
 pub use bit_vector::BitVector;
+pub use fixed_queue::FixedQueue;
 pub use key_index_mapper::KeyIndexMapper;
 pub use slot_map::{SlotKey, SlotMap};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
