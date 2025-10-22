@@ -8,7 +8,7 @@ use impact_voxel::{
     collidable,
     generation::{
         SDFVoxelGenerator,
-        sdf::{BoxSDF, GradientNoiseSDF, SDFGeneratorBuilder, SDFNode, SphereSDF},
+        sdf::{BoxSDF, GradientNoiseSDF, SDFGraph, SDFNode, SphereSDF},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     mesh::ChunkedVoxelObjectMesh,
@@ -36,15 +36,15 @@ pub fn generate_gradient_noise_pattern(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
-    let mut builder = SDFGeneratorBuilder::new();
-    let sphere_1_id = builder.add_node(SDFNode::new_sphere(60.0));
-    let sphere_2_id = builder.add_node(SDFNode::new_sphere(60.0));
-    let sphere_2_id = builder.add_node(SDFNode::new_translation(
+    let mut graph = SDFGraph::new();
+    let sphere_1_id = graph.add_node(SDFNode::new_sphere(60.0));
+    let sphere_2_id = graph.add_node(SDFNode::new_sphere(60.0));
+    let sphere_2_id = graph.add_node(SDFNode::new_translation(
         sphere_2_id,
         vector![50.0, 0.0, 0.0],
     ));
-    builder.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-    let sdf_generator = builder.build().unwrap();
+    graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
+    let sdf_generator = graph.build().unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -55,17 +55,17 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_complex_object(benchmarker: impl Benchmarker) {
-    let mut builder = SDFGeneratorBuilder::new();
-    let sphere_id = builder.add_node(SDFNode::new_sphere(60.0));
-    let sphere_id = builder.add_node(SDFNode::new_translation(sphere_id, vector![50.0, 0.0, 0.0]));
-    let box_id = builder.add_node(SDFNode::new_box([50.0, 60.0, 70.0]));
-    let box_id = builder.add_node(SDFNode::new_scaling(box_id, 0.9));
-    let box_id = builder.add_node(SDFNode::new_rotation(
+    let mut graph = SDFGraph::new();
+    let sphere_id = graph.add_node(SDFNode::new_sphere(60.0));
+    let sphere_id = graph.add_node(SDFNode::new_translation(sphere_id, vector![50.0, 0.0, 0.0]));
+    let box_id = graph.add_node(SDFNode::new_box([50.0, 60.0, 70.0]));
+    let box_id = graph.add_node(SDFNode::new_scaling(box_id, 0.9));
+    let box_id = graph.add_node(SDFNode::new_rotation(
         box_id,
         UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 10.0),
     ));
-    builder.add_node(SDFNode::new_union(sphere_id, box_id, 1.0));
-    let sdf_generator = builder.build().unwrap();
+    graph.add_node(SDFNode::new_union(sphere_id, box_id, 1.0));
+    let sdf_generator = graph.build().unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -76,12 +76,12 @@ pub fn generate_complex_object(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
-    let mut builder = SDFGeneratorBuilder::new();
-    let sphere_id = builder.add_node(SDFNode::new_sphere(80.0));
-    builder.add_node(SDFNode::new_multifractal_noise(
+    let mut graph = SDFGraph::new();
+    let sphere_id = graph.add_node(SDFNode::new_sphere(80.0));
+    graph.add_node(SDFNode::new_multifractal_noise(
         sphere_id, 8, 0.02, 2.0, 0.6, 4.0, 0,
     ));
-    let sdf_generator = builder.build().unwrap();
+    let sdf_generator = graph.build().unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -92,12 +92,12 @@ pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_object_with_multiscale_spheres(benchmarker: impl Benchmarker) {
-    let mut builder = SDFGeneratorBuilder::new();
-    let sphere_id = builder.add_node(SDFNode::new_sphere(40.0));
-    builder.add_node(SDFNode::new_multiscale_sphere(
+    let mut graph = SDFGraph::new();
+    let sphere_id = graph.add_node(SDFNode::new_sphere(40.0));
+    graph.add_node(SDFNode::new_multiscale_sphere(
         sphere_id, 4, 10.0, 0.5, 1.0, 1.0, 0.3, 0,
     ));
-    let sdf_generator = builder.build().unwrap();
+    let sdf_generator = graph.build().unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -303,15 +303,15 @@ pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
 }
 
 pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
-    let mut builder = SDFGeneratorBuilder::new();
-    let sphere_1_id = builder.add_node(SDFNode::new_sphere(50.0));
-    let sphere_2_id = builder.add_node(SDFNode::new_sphere(50.0));
-    let sphere_2_id = builder.add_node(SDFNode::new_translation(
+    let mut graph = SDFGraph::new();
+    let sphere_1_id = graph.add_node(SDFNode::new_sphere(50.0));
+    let sphere_2_id = graph.add_node(SDFNode::new_sphere(50.0));
+    let sphere_2_id = graph.add_node(SDFNode::new_translation(
         sphere_2_id,
         vector![120.0, 0.0, 0.0],
     ));
-    builder.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-    let sdf_generator = builder.build().unwrap();
+    graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
+    let sdf_generator = graph.build().unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -325,15 +325,15 @@ pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
 pub fn split_off_disconnected_region_with_inertial_property_transfer(
     benchmarker: impl Benchmarker,
 ) {
-    let mut builder = SDFGeneratorBuilder::new();
-    let sphere_1_id = builder.add_node(SDFNode::new_sphere(50.0));
-    let sphere_2_id = builder.add_node(SDFNode::new_sphere(50.0));
-    let sphere_2_id = builder.add_node(SDFNode::new_translation(
+    let mut graph = SDFGraph::new();
+    let sphere_1_id = graph.add_node(SDFNode::new_sphere(50.0));
+    let sphere_2_id = graph.add_node(SDFNode::new_sphere(50.0));
+    let sphere_2_id = graph.add_node(SDFNode::new_translation(
         sphere_2_id,
         vector![120.0, 0.0, 0.0],
     ));
-    builder.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-    let sdf_generator = builder.build().unwrap();
+    graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
+    let sdf_generator = graph.build().unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,

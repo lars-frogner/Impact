@@ -5,7 +5,7 @@ use crate::{
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
         VoxelGenerator,
-        sdf::{SDFGeneratorBuilder, SDFNode, SDFNodeID},
+        sdf::{SDFGraph, SDFNode, SDFNodeID},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     gpu_resource::VOXEL_MODEL_ID,
@@ -404,8 +404,8 @@ impl VoxelBox {
         [self.extent_x, self.extent_y, self.extent_z]
     }
 
-    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        builder.add_node(SDFNode::new_box(self.extents_in_voxels()))
+    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+        graph.add_node(SDFNode::new_box(self.extents_in_voxels()))
     }
 }
 
@@ -442,8 +442,8 @@ impl VoxelSphere {
         self.radius
     }
 
-    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        builder.add_node(SDFNode::new_sphere(self.radius_in_voxels()))
+    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+        graph.add_node(SDFNode::new_sphere(self.radius_in_voxels()))
     }
 }
 
@@ -498,12 +498,12 @@ impl VoxelSphereUnion {
         self.radius_2
     }
 
-    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        let sphere_1_id = builder.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
-        let sphere_2_id = builder.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
+    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+        let sphere_1_id = graph.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
+        let sphere_2_id = graph.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
         let sphere_2_id =
-            builder.add_node(SDFNode::new_translation(sphere_2_id, self.center_offsets));
-        builder.add_node(SDFNode::new_union(
+            graph.add_node(SDFNode::new_translation(sphere_2_id, self.center_offsets));
+        graph.add_node(SDFNode::new_union(
             sphere_1_id,
             sphere_2_id,
             self.smoothness,
@@ -563,8 +563,8 @@ impl VoxelGradientNoisePattern {
         [self.extent_x, self.extent_y, self.extent_z]
     }
 
-    pub fn add(&self, builder: &mut SDFGeneratorBuilder) -> SDFNodeID {
-        builder.add_node(SDFNode::new_gradient_noise(
+    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+        graph.add_node(SDFNode::new_gradient_noise(
             self.extents_in_voxels(),
             self.noise_frequency,
             self.noise_threshold,
@@ -574,7 +574,7 @@ impl VoxelGradientNoisePattern {
 }
 
 pub fn apply_modifications(
-    builder: &mut SDFGeneratorBuilder,
+    graph: &mut SDFGraph,
     mut node_id: SDFNodeID,
     multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
     multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
@@ -589,7 +589,7 @@ pub fn apply_modifications(
         seed,
     }) = multiscale_sphere_modification
     {
-        node_id = builder.add_node(SDFNode::new_multiscale_sphere(
+        node_id = graph.add_node(SDFNode::new_multiscale_sphere(
             node_id,
             octaves,
             max_scale,
@@ -610,7 +610,7 @@ pub fn apply_modifications(
         seed,
     }) = multifractal_noise_modification
     {
-        builder.add_node(SDFNode::new_multifractal_noise(
+        graph.add_node(SDFNode::new_multifractal_noise(
             node_id,
             octaves,
             frequency,

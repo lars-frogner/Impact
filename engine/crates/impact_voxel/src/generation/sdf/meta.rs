@@ -3,7 +3,7 @@
 //! simpler atomic nodes.
 
 use crate::generation::sdf::{
-    SDFGenerator, SDFGeneratorBlockBuffers, SDFGeneratorBuilder, SDFNode, SDFNodeID,
+    SDFGenerator, SDFGeneratorBlockBuffers, SDFGraph, SDFNode, SDFNodeID,
 };
 use allocator_api2::{
     alloc::{Allocator, Global},
@@ -282,15 +282,15 @@ impl<A: Allocator> MetaSDFGraph<A> {
         id
     }
 
-    pub fn build<AR>(&self, arena: AR) -> Result<SDFGenerator>
+    pub fn build<AR>(&self, arena: AR) -> Result<SDFGraph<AR>>
     where
         AR: Allocator + Copy,
     {
-        if self.nodes.is_empty() {
-            return Ok(SDFGenerator::empty());
-        }
+        let mut graph = SDFGraph::new_in(arena);
 
-        let mut builder = SDFGeneratorBuilder::new_in(arena);
+        if self.nodes.is_empty() {
+            return Ok(graph);
+        }
 
         let mut outputs = AVec::new_in(arena);
         outputs.resize(self.nodes.len(), MetaSDFNodeOutput::<AR>::SingleSDF(None));
@@ -392,7 +392,7 @@ impl<A: Allocator> MetaSDFGraph<A> {
                     if *state != MetaNodeBuildState::Resolved {
                         *state = MetaNodeBuildState::Resolved;
 
-                        outputs[node_idx] = node.resolve(arena, &mut builder, &outputs)?;
+                        outputs[node_idx] = node.resolve(arena, &mut graph, &outputs)?;
                     }
                 }
             }
@@ -400,13 +400,13 @@ impl<A: Allocator> MetaSDFGraph<A> {
 
         if let MetaSDFNodeOutput::SingleSDF(atomic_node_id) = &outputs[root_node_id as usize] {
             if let Some(id) = atomic_node_id {
-                assert_eq!(*id, builder.root_node_id());
+                assert_eq!(*id, graph.root_node_id());
             }
         } else {
             bail!("Root meta node must have single SDF output");
         }
 
-        builder.build_with_arena(arena)
+        Ok(graph)
     }
 }
 
@@ -672,60 +672,60 @@ impl MetaSDFNode {
     fn resolve<A>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
         A: Allocator + Copy,
     {
         match self {
-            Self::Box(node) => Ok(node.resolve(builder)),
-            Self::Sphere(node) => Ok(node.resolve(builder)),
-            Self::GradientNoise(node) => Ok(node.resolve(builder)),
-            Self::Translation(node) => node.resolve(arena, builder, outputs),
-            Self::Rotation(node) => node.resolve(arena, builder, outputs),
-            Self::Scaling(node) => node.resolve(arena, builder, outputs),
-            Self::MultifractalNoise(node) => node.resolve(arena, builder, outputs),
-            Self::MultiscaleSphere(node) => node.resolve(arena, builder, outputs),
-            Self::Union(node) => node.resolve(builder, outputs),
-            Self::Subtraction(node) => node.resolve(builder, outputs),
-            Self::Intersection(node) => node.resolve(builder, outputs),
-            Self::GroupUnion(node) => node.resolve(arena, builder, outputs),
+            Self::Box(node) => Ok(node.resolve(graph)),
+            Self::Sphere(node) => Ok(node.resolve(graph)),
+            Self::GradientNoise(node) => Ok(node.resolve(graph)),
+            Self::Translation(node) => node.resolve(arena, graph, outputs),
+            Self::Rotation(node) => node.resolve(arena, graph, outputs),
+            Self::Scaling(node) => node.resolve(arena, graph, outputs),
+            Self::MultifractalNoise(node) => node.resolve(arena, graph, outputs),
+            Self::MultiscaleSphere(node) => node.resolve(arena, graph, outputs),
+            Self::Union(node) => node.resolve(graph, outputs),
+            Self::Subtraction(node) => node.resolve(graph, outputs),
+            Self::Intersection(node) => node.resolve(graph, outputs),
+            Self::GroupUnion(node) => node.resolve(arena, graph, outputs),
             Self::StratifiedPlacement(node) => Ok(node.resolve(arena)),
-            Self::TranslationToSurface(node) => node.resolve(arena, builder, outputs),
-            Self::RotationToGradient(node) => node.resolve(arena, builder, outputs),
-            Self::Scattering(node) => node.resolve(arena, builder, outputs),
+            Self::TranslationToSurface(node) => node.resolve(arena, graph, outputs),
+            Self::RotationToGradient(node) => node.resolve(arena, graph, outputs),
+            Self::Scattering(node) => node.resolve(arena, graph, outputs),
             Self::StochasticSelection(node) => Ok(node.resolve(arena, outputs)),
         }
     }
 }
 
 impl MetaBoxSDF {
-    fn resolve<A: Allocator>(&self, builder: &mut SDFGeneratorBuilder<A>) -> MetaSDFNodeOutput<A> {
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> MetaSDFNodeOutput<A> {
         let mut rng = create_rng(self.seed);
         let extents = self.extents.map(|range| range.pick_value(&mut rng));
-        let node_id = builder.add_node(SDFNode::new_box(extents));
+        let node_id = graph.add_node(SDFNode::new_box(extents));
         MetaSDFNodeOutput::SingleSDF(Some(node_id))
     }
 }
 
 impl MetaSphereSDF {
-    fn resolve<A: Allocator>(&self, builder: &mut SDFGeneratorBuilder<A>) -> MetaSDFNodeOutput<A> {
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> MetaSDFNodeOutput<A> {
         let mut rng = create_rng(self.seed);
         let radius = self.radius.pick_value(&mut rng);
-        let node_id = builder.add_node(SDFNode::new_sphere(radius));
+        let node_id = graph.add_node(SDFNode::new_sphere(radius));
         MetaSDFNodeOutput::SingleSDF(Some(node_id))
     }
 }
 
 impl MetaGradientNoiseSDF {
-    fn resolve<A: Allocator>(&self, builder: &mut SDFGeneratorBuilder<A>) -> MetaSDFNodeOutput<A> {
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> MetaSDFNodeOutput<A> {
         let mut rng = create_rng(self.seed);
         let extents = self.extents.map(|range| range.pick_value(&mut rng));
         let noise_frequency = self.noise_frequency.pick_value(&mut rng);
         let noise_threshold = self.noise_threshold.pick_value(&mut rng);
         let seed = rng.random();
-        let node_id = builder.add_node(SDFNode::new_gradient_noise(
+        let node_id = graph.add_node(SDFNode::new_gradient_noise(
             extents,
             noise_frequency,
             noise_threshold,
@@ -739,12 +739,12 @@ impl MetaSDFTranslation {
     fn resolve<A: Allocator>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
-            builder,
+            graph,
             "Translation",
             self.seed,
             &outputs[self.child_id as usize],
@@ -760,12 +760,12 @@ impl MetaSDFRotation {
     fn resolve<A: Allocator>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
-            builder,
+            graph,
             "Rotation",
             self.seed,
             &outputs[self.child_id as usize],
@@ -786,12 +786,12 @@ impl MetaSDFScaling {
     fn resolve<A: Allocator>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
-            builder,
+            graph,
             "Scaling",
             self.seed,
             &outputs[self.child_id as usize],
@@ -807,12 +807,12 @@ impl MetaMultifractalNoiseSDFModifier {
     fn resolve<A: Allocator>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
-            builder,
+            graph,
             "MultifractalNoise",
             self.seed,
             &outputs[self.child_id as usize],
@@ -841,12 +841,12 @@ impl MetaMultiscaleSphereSDFModifier {
     fn resolve<A: Allocator>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
-            builder,
+            graph,
             "MultiscaleSphere",
             self.seed,
             &outputs[self.child_id as usize],
@@ -876,7 +876,7 @@ impl MetaMultiscaleSphereSDFModifier {
 impl MetaSDFUnion {
     fn resolve<A>(
         &self,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -904,7 +904,7 @@ impl MetaSDFUnion {
                 Ok(MetaSDFNodeOutput::SingleSDF(input_node_id))
             }
             (Some(input_node_1_id), Some(input_node_2_id)) => {
-                let output_node_id = builder.add_node(SDFNode::new_union(
+                let output_node_id = graph.add_node(SDFNode::new_union(
                     input_node_1_id,
                     input_node_2_id,
                     self.smoothness,
@@ -918,7 +918,7 @@ impl MetaSDFUnion {
 impl MetaSDFSubtraction {
     fn resolve<A>(
         &self,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -945,7 +945,7 @@ impl MetaSDFSubtraction {
             (None, _) => Ok(MetaSDFNodeOutput::SingleSDF(None)),
             (Some(input_node_id), None) => Ok(MetaSDFNodeOutput::SingleSDF(Some(input_node_id))),
             (Some(input_node_1_id), Some(input_node_2_id)) => {
-                let output_node_id = builder.add_node(SDFNode::new_subtraction(
+                let output_node_id = graph.add_node(SDFNode::new_subtraction(
                     input_node_1_id,
                     input_node_2_id,
                     self.smoothness,
@@ -959,7 +959,7 @@ impl MetaSDFSubtraction {
 impl MetaSDFIntersection {
     fn resolve<A>(
         &self,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -985,7 +985,7 @@ impl MetaSDFIntersection {
         match (input_node_1_id, input_node_2_id) {
             (None, _) | (_, None) => Ok(MetaSDFNodeOutput::SingleSDF(None)),
             (Some(input_node_1_id), Some(input_node_2_id)) => {
-                let output_node_id = builder.add_node(SDFNode::new_intersection(
+                let output_node_id = graph.add_node(SDFNode::new_intersection(
                     input_node_1_id,
                     input_node_2_id,
                     self.smoothness,
@@ -1000,7 +1000,7 @@ impl MetaSDFGroupUnion {
     fn resolve<A>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -1015,7 +1015,7 @@ impl MetaSDFGroupUnion {
                     arena,
                     input_node_ids,
                     |child_node_1, child_node_2| {
-                        builder.add_node(SDFNode::new_union(
+                        graph.add_node(SDFNode::new_union(
                             child_node_1,
                             child_node_2,
                             self.smoothness,
@@ -1090,7 +1090,7 @@ impl MetaTranslationToSurface {
     fn resolve<A>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -1117,11 +1117,11 @@ impl MetaTranslationToSurface {
             return Ok(subject_node_output.clone());
         };
 
-        let generator = SDFGenerator::new_in(arena, arena, builder.nodes(), sdf_node_id)?;
+        let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
         let mut buffers = generator.create_buffers_for_block(arena);
 
         let surface_sdf_node_to_parent_transform =
-            builder.nodes()[sdf_node_id as usize].node_to_parent_transform();
+            graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_translation_to_surface =
             |subject_node_to_parent_transform: &Similarity3<f32>| {
@@ -1139,7 +1139,7 @@ impl MetaTranslationToSurface {
             MetaSDFNodeOutput::SingleSDF(subject_node_id) => {
                 let subject_node_id = subject_node_id.unwrap();
                 let subject_node_to_parent_transform =
-                    builder.nodes()[subject_node_id as usize].node_to_parent_transform();
+                    graph.nodes()[subject_node_id as usize].node_to_parent_transform();
 
                 let Some(translation_to_surface_in_parent_space) =
                     compute_translation_to_surface(&subject_node_to_parent_transform)
@@ -1147,7 +1147,7 @@ impl MetaTranslationToSurface {
                     return Ok(MetaSDFNodeOutput::SingleSDF(None));
                 };
 
-                let translated_subject_node_id = builder.add_node(SDFNode::new_translation(
+                let translated_subject_node_id = graph.add_node(SDFNode::new_translation(
                     subject_node_id,
                     translation_to_surface_in_parent_space,
                 ));
@@ -1162,7 +1162,7 @@ impl MetaTranslationToSurface {
 
                 for &subject_node_id in subject_node_ids {
                     let subject_node_to_parent_transform =
-                        builder.nodes()[subject_node_id as usize].node_to_parent_transform();
+                        graph.nodes()[subject_node_id as usize].node_to_parent_transform();
 
                     let Some(translation_to_surface_in_parent_space) =
                         compute_translation_to_surface(&subject_node_to_parent_transform)
@@ -1170,7 +1170,7 @@ impl MetaTranslationToSurface {
                         continue;
                     };
 
-                    let translated_subject_node_id = builder.add_node(SDFNode::new_translation(
+                    let translated_subject_node_id = graph.add_node(SDFNode::new_translation(
                         subject_node_id,
                         translation_to_surface_in_parent_space,
                     ));
@@ -1226,7 +1226,7 @@ impl MetaRotationToGradient {
     fn resolve<A>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -1253,11 +1253,11 @@ impl MetaRotationToGradient {
             return Ok(subject_node_output.clone());
         };
 
-        let generator = SDFGenerator::new_in(arena, arena, builder.nodes(), sdf_node_id)?;
+        let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
         let mut buffers = generator.create_buffers_for_block(arena);
 
         let gradient_sdf_node_to_parent_transform =
-            builder.nodes()[sdf_node_id as usize].node_to_parent_transform();
+            graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_rotation_to_gradient =
             |subject_node_to_parent_transform: &Similarity3<f32>| {
@@ -1273,7 +1273,7 @@ impl MetaRotationToGradient {
             MetaSDFNodeOutput::SingleSDF(subject_node_id) => {
                 let subject_node_id = subject_node_id.unwrap();
                 let subject_node_to_parent_transform =
-                    builder.nodes()[subject_node_id as usize].node_to_parent_transform();
+                    graph.nodes()[subject_node_id as usize].node_to_parent_transform();
 
                 let Some(rotation_to_gradient_in_parent_space) =
                     compute_rotation_to_gradient(&subject_node_to_parent_transform)
@@ -1281,7 +1281,7 @@ impl MetaRotationToGradient {
                     return Ok(MetaSDFNodeOutput::SingleSDF(None));
                 };
 
-                let rotated_subject_node_id = builder.add_node(SDFNode::new_rotation(
+                let rotated_subject_node_id = graph.add_node(SDFNode::new_rotation(
                     subject_node_id,
                     rotation_to_gradient_in_parent_space,
                 ));
@@ -1294,7 +1294,7 @@ impl MetaRotationToGradient {
 
                 for &subject_node_id in subject_node_ids {
                     let subject_node_to_parent_transform =
-                        builder.nodes()[subject_node_id as usize].node_to_parent_transform();
+                        graph.nodes()[subject_node_id as usize].node_to_parent_transform();
 
                     let Some(rotation_to_gradient_in_parent_space) =
                         compute_rotation_to_gradient(&subject_node_to_parent_transform)
@@ -1302,7 +1302,7 @@ impl MetaRotationToGradient {
                         continue;
                     };
 
-                    let rotated_subject_node_id = builder.add_node(SDFNode::new_rotation(
+                    let rotated_subject_node_id = graph.add_node(SDFNode::new_rotation(
                         subject_node_id,
                         rotation_to_gradient_in_parent_space,
                     ));
@@ -1356,7 +1356,7 @@ impl MetaSDFScattering {
     fn resolve<A>(
         &self,
         arena: A,
-        builder: &mut SDFGeneratorBuilder<A>,
+        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
     ) -> Result<MetaSDFNodeOutput<A>>
     where
@@ -1406,14 +1406,14 @@ impl MetaSDFScattering {
             let mut output_node_id = sdf_node_id;
 
             if abs_diff_ne!(scaling, 1.0) {
-                output_node_id = builder.add_node(SDFNode::new_scaling(output_node_id, scaling));
+                output_node_id = graph.add_node(SDFNode::new_scaling(output_node_id, scaling));
             }
             if abs_diff_ne!(&rotation, &UnitQuaternion::identity()) {
-                output_node_id = builder.add_node(SDFNode::new_rotation(output_node_id, rotation));
+                output_node_id = graph.add_node(SDFNode::new_rotation(output_node_id, rotation));
             }
             if abs_diff_ne!(&translation, &Vector3::zeros()) {
                 output_node_id =
-                    builder.add_node(SDFNode::new_translation(output_node_id, translation));
+                    graph.add_node(SDFNode::new_translation(output_node_id, translation));
             }
 
             output_node_id
@@ -1481,7 +1481,7 @@ fn create_rng(seed: u32) -> NodeRng {
 
 fn resolve_unary_sdf_op<A: Allocator>(
     arena: A,
-    builder: &mut SDFGeneratorBuilder<A>,
+    graph: &mut SDFGraph<A>,
     name: &str,
     seed: u32,
     child_output: &MetaSDFNodeOutput<A>,
@@ -1491,17 +1491,14 @@ fn resolve_unary_sdf_op<A: Allocator>(
         MetaSDFNodeOutput::SingleSDF(None) => Ok(MetaSDFNodeOutput::SingleSDF(None)),
         MetaSDFNodeOutput::SingleSDF(Some(input_node_id)) => {
             let mut rng = create_rng(seed);
-            let output_node_id = builder.add_node(create_atomic_node(&mut rng, *input_node_id));
+            let output_node_id = graph.add_node(create_atomic_node(&mut rng, *input_node_id));
             Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
         }
         MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
-            let output_node_ids = unary_sdf_group_op(
-                arena,
-                builder,
-                seed,
-                input_node_ids,
-                |rng, input_node_id| create_atomic_node(rng, input_node_id),
-            );
+            let output_node_ids =
+                unary_sdf_group_op(arena, graph, seed, input_node_ids, |rng, input_node_id| {
+                    create_atomic_node(rng, input_node_id)
+                });
             Ok(MetaSDFNodeOutput::SDFGroup(output_node_ids))
         }
         child_output => {
@@ -1515,7 +1512,7 @@ fn resolve_unary_sdf_op<A: Allocator>(
 
 fn unary_sdf_group_op<A: Allocator>(
     arena: A,
-    builder: &mut SDFGeneratorBuilder<A>,
+    graph: &mut SDFGraph<A>,
     seed: u32,
     input_node_ids: &[SDFNodeID],
     create_output_node: impl Fn(&mut NodeRng, SDFNodeID) -> SDFNode,
@@ -1523,7 +1520,7 @@ fn unary_sdf_group_op<A: Allocator>(
     let mut rng = create_rng(seed);
     let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
     for input_node_id in input_node_ids {
-        output_node_ids.push(builder.add_node(create_output_node(&mut rng, *input_node_id)));
+        output_node_ids.push(graph.add_node(create_output_node(&mut rng, *input_node_id)));
     }
     output_node_ids
 }

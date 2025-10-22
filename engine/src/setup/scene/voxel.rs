@@ -16,7 +16,7 @@ use impact_scene::{
 };
 use impact_voxel::{
     VoxelObjectID,
-    generation::{SDFVoxelGenerator, sdf::SDFGeneratorBuilder},
+    generation::{SDFVoxelGenerator, sdf::SDFGraph},
     setup::{
         self, DynamicVoxels, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
         MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelGradientNoisePattern,
@@ -69,15 +69,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_box.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_box.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -109,15 +109,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_sphere.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_sphere.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -149,15 +149,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_sphere_union.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_sphere_union.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -189,15 +189,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_noise_pattern.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_noise_pattern.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -229,15 +229,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_box.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_box.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?
@@ -269,15 +269,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_sphere.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_sphere.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?
@@ -309,15 +309,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_sphere_union.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_sphere_union.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?
@@ -349,15 +349,15 @@ pub fn setup_voxel_objects_for_new_entities(
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
-            let mut builder = SDFGeneratorBuilder::new();
-            let node_id = voxel_noise_pattern.add(&mut builder);
+            let mut graph = SDFGraph::new();
+            let node_id = voxel_noise_pattern.add(&mut graph);
             setup::apply_modifications(
-                &mut builder,
+                &mut graph,
                 node_id,
                 multiscale_sphere_modification,
                 multifractal_noise_modification,
             );
-            let sdf_generator = builder.build()?;
+            let sdf_generator = graph.build()?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?

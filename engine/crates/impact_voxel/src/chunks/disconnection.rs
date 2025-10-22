@@ -2794,7 +2794,7 @@ mod tests {
     use crate::{
         generation::{
             SDFVoxelGenerator,
-            sdf::{BoxSDF, GradientNoiseSDF, SDFGeneratorBuilder, SDFNode},
+            sdf::{BoxSDF, GradientNoiseSDF, SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
         voxel_types::VoxelType,
@@ -2830,15 +2830,15 @@ mod tests {
 
     #[test]
     fn should_split_off_disconnected_sphere() {
-        let mut builder = SDFGeneratorBuilder::new();
-        let sphere_1_id = builder.add_node(SDFNode::new_sphere(25.0));
-        let sphere_2_id = builder.add_node(SDFNode::new_sphere(25.0));
-        let sphere_2_id = builder.add_node(SDFNode::new_translation(
+        let mut graph = SDFGraph::new();
+        let sphere_1_id = graph.add_node(SDFNode::new_sphere(25.0));
+        let sphere_2_id = graph.add_node(SDFNode::new_sphere(25.0));
+        let sphere_2_id = graph.add_node(SDFNode::new_translation(
             sphere_2_id,
             vector![60.0, 0.0, 0.0],
         ));
-        builder.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-        let sdf_generator = builder.build().unwrap();
+        graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
+        let sdf_generator = graph.build().unwrap();
 
         let generator = SDFVoxelGenerator::new(
             1.0,
