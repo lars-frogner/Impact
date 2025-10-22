@@ -1,4 +1,6 @@
-use super::{MetaFloatParam, MetaNodeID, MetaNodeParam, MetaPortConfig, MetaUIntParam};
+use super::{
+    MetaFloatParam, MetaNodeID, MetaNodeParam, MetaNodeParams, MetaPortConfig, MetaUIntParam,
+};
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
@@ -13,7 +15,7 @@ trait SpecificMetaNodeKind {
     const LABEL: &'static str;
     const PORT_CONFIG: MetaPortConfig;
 
-    fn params() -> Vec<MetaNodeParam>;
+    fn params() -> MetaNodeParams;
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
@@ -62,18 +64,24 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
     const LABEL: &'static str = "Box";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Extent x"), 62.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Extent y"), 62.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Extent z"), 62.0)
                 .with_min_value(0.0)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -91,12 +99,14 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
     const LABEL: &'static str = "Sphere";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Radius"), 31.0)
                 .with_min_value(0.0)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -114,29 +124,39 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
     const LABEL: &'static str = "Gradient noise";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Extent x"), 62.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Extent y"), 62.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Extent z"), 62.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.05)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .with_speed(0.0002)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Threshold"), 0.0)
                 .with_min_value(-1.0)
                 .with_max_value(1.0)
                 .with_speed(0.001)
                 .into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-        ]
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
     }
 
     fn build(
@@ -162,18 +182,24 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
     const LABEL: &'static str = "Translation";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("In x"), 0.0)
                 .with_speed(0.05)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("In y"), 0.0)
                 .with_speed(0.05)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("In z"), 0.0)
                 .with_speed(0.05)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -196,18 +222,24 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
     const LABEL: &'static str = "Rotation";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Roll"), 0.0)
                 .with_speed(0.002)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Pitch"), 0.0)
                 .with_speed(0.002)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Yaw"), 0.0)
                 .with_speed(0.002)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -234,13 +266,15 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
     const LABEL: &'static str = "Scaling";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Factor"), 1.0)
                 .with_min_value(1e-3)
                 .with_speed(0.005)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -259,30 +293,38 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
     const LABEL: &'static str = "Multifractal noise";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
-            MetaUIntParam::new(LabelAndHoverText::label_only("Octaves"), 1).into(),
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Octaves"), 1).into());
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.02)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .with_speed(0.0002)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Lacunarity"), 2.0)
                 .with_min_value(1.0)
                 .with_max_value(10.0)
                 .with_speed(0.001)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Persistence"), 0.5)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .with_speed(0.001)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Amplitude"), 5.0)
                 .with_min_value(0.0)
                 .with_speed(0.05)
                 .into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-        ]
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
     }
 
     fn build(
@@ -314,22 +356,29 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
     const LABEL: &'static str = "Multiscale sphere";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
-            MetaUIntParam::new(LabelAndHoverText::label_only("Octaves"), 0).into(),
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Octaves"), 0).into());
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Max scale"), 10.0)
                 .with_min_value(0.0)
                 .with_speed(0.01)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Persistence"), 0.5)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .with_speed(0.001)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Inflation"), 1.0)
                 .with_min_value(0.0)
                 .with_speed(0.005)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(
                 LabelAndHoverText::label_only("Intersection smoothness"),
                 1.0,
@@ -337,12 +386,15 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
             .with_min_value(0.0)
             .with_speed(0.001)
             .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Union smoothness"), 0.3)
                 .with_min_value(0.0)
                 .with_speed(0.001)
                 .into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-        ]
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
     }
 
     fn build(
@@ -376,12 +428,14 @@ impl SpecificMetaNodeKind for MetaSDFUnion {
     const LABEL: &'static str = "Union";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
                 .with_min_value(0.0)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -400,12 +454,14 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
     const LABEL: &'static str = "Subtraction";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
                 .with_min_value(0.0)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -426,12 +482,14 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
     const LABEL: &'static str = "Intersection";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
                 .with_min_value(0.0)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -452,12 +510,14 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
     const LABEL: &'static str = "Group union";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
                 .with_min_value(0.0)
                 .into(),
-        ]
+        );
+        params
     }
 
     fn build(
@@ -476,27 +536,35 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
     const LABEL: &'static str = "Stratified placement";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
-            MetaUIntParam::new(LabelAndHoverText::label_only("Size x"), 1).into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Size y"), 1).into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Size z"), 1).into(),
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size x"), 1).into());
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size y"), 1).into());
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size z"), 1).into());
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent x"), 1.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent y"), 1.0)
                 .with_min_value(0.0)
                 .into(),
+        );
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent z"), 1.0)
                 .with_min_value(0.0)
                 .into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Points per cell"), 1).into(),
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Points per cell"), 1).into());
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Jitter fraction"), 0.0)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-        ]
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
     }
 
     fn build(
@@ -524,8 +592,8 @@ impl SpecificMetaNodeKind for MetaTranslationToSurface {
     const LABEL: &'static str = "Translation to surface";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![]
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
     }
 
     fn build(
@@ -546,8 +614,8 @@ impl SpecificMetaNodeKind for MetaRotationToGradient {
     const LABEL: &'static str = "Rotation to gradient";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![]
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
     }
 
     fn build(
@@ -568,8 +636,8 @@ impl SpecificMetaNodeKind for MetaSDFScattering {
     const LABEL: &'static str = "Scattering";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![]
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
     }
 
     fn build(
@@ -587,14 +655,16 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
     const LABEL: &'static str = "Stochastic selection";
     const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
 
-    fn params() -> Vec<MetaNodeParam> {
-        vec![
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Probability"), 1.0)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .into(),
-            MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into(),
-        ]
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
     }
 
     fn build(
@@ -704,7 +774,7 @@ impl MetaNodeKind {
         }
     }
 
-    pub fn params(&self) -> Vec<MetaNodeParam> {
+    pub fn params(&self) -> MetaNodeParams {
         match self {
             Self::Output => output_node_params(),
             Self::Box => MetaBoxSDF::params(),
@@ -777,8 +847,9 @@ pub fn get_voxel_extent_from_output_node(output_node_params: &[MetaNodeParam]) -
     output_node_params[0].float()
 }
 
-fn output_node_params() -> Vec<MetaNodeParam> {
-    vec![
+fn output_node_params() -> MetaNodeParams {
+    let mut params = MetaNodeParams::new();
+    params.push(
         MetaFloatParam::new(
             LabelAndHoverText::label_only("Voxel extent"),
             DEFAULT_VOXEL_EXTENT,
@@ -786,7 +857,8 @@ fn output_node_params() -> Vec<MetaNodeParam> {
         .with_min_value(MIN_VOXEL_EXTENT)
         .with_speed(0.01)
         .into(),
-    ]
+    );
+    params
 }
 
 fn unary_child(
