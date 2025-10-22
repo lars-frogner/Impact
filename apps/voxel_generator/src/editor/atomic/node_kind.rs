@@ -1,4 +1,4 @@
-use super::{AtomicFloatParam, AtomicNode, AtomicPortConfig, AtomicUIntParam};
+use super::{AtomicFloatParam, AtomicNode, AtomicNodeParams, AtomicPortConfig, AtomicUIntParam};
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::{
     BoxSDF, GradientNoiseSDF, MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier,
@@ -24,122 +24,166 @@ pub enum AtomicNodeKind {
 impl AtomicNode {
     pub fn for_box(node: &BoxSDF) -> Self {
         let extents = node.extents();
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Extent x"), extents[0]).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Extent y"), extents[1]).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Extent z"), extents[2]).into(),
-        ];
+        );
         Self::new_leaf(AtomicNodeKind::Box, params)
     }
 
     pub fn for_sphere(node: &SphereSDF) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Radius"), node.radius()).into(),
-        ];
+        );
         Self::new_leaf(AtomicNodeKind::Sphere, params)
     }
 
     pub fn for_gradient_noise(node: &GradientNoiseSDF) -> Self {
         let extents = node.extents();
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Extent x"), extents[0]).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Extent y"), extents[1]).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Extent z"), extents[2]).into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Noise frequency"),
                 node.noise_frequency(),
             )
             .into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Noise threshold"),
                 node.noise_threshold(),
             )
             .into(),
-            AtomicUIntParam::new(LabelAndHoverText::label_only("Seed"), node.seed()).into(),
-        ];
+        );
+        params
+            .push(AtomicUIntParam::new(LabelAndHoverText::label_only("Seed"), node.seed()).into());
         Self::new_leaf(AtomicNodeKind::GradientNoise, params)
     }
 
     pub fn for_translation(node: &SDFTranslation) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("X"), node.translation.x).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Y"), node.translation.y).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Z"), node.translation.z).into(),
-        ];
+        );
         Self::new_unary(AtomicNodeKind::Translation, params, node.child_id)
     }
 
     pub fn for_rotation(node: &SDFRotation) -> Self {
         let (roll, pitch, yaw) = node.rotation.euler_angles();
-        let params = vec![
-            AtomicFloatParam::new(LabelAndHoverText::label_only("Roll"), roll).into(),
-            AtomicFloatParam::new(LabelAndHoverText::label_only("Pitch"), pitch).into(),
-            AtomicFloatParam::new(LabelAndHoverText::label_only("Yaw"), yaw).into(),
-        ];
+        let mut params = AtomicNodeParams::new();
+        params.push(AtomicFloatParam::new(LabelAndHoverText::label_only("Roll"), roll).into());
+        params.push(AtomicFloatParam::new(LabelAndHoverText::label_only("Pitch"), pitch).into());
+        params.push(AtomicFloatParam::new(LabelAndHoverText::label_only("Yaw"), yaw).into());
         Self::new_unary(AtomicNodeKind::Rotation, params, node.child_id)
     }
 
     pub fn for_scaling(node: &SDFScaling) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Scaling"), node.scaling).into(),
-        ];
+        );
         Self::new_unary(AtomicNodeKind::Scaling, params, node.child_id)
     }
 
     pub fn for_multifractal_noise(node: &MultifractalNoiseSDFModifier) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicUIntParam::new(LabelAndHoverText::label_only("Octaves"), node.octaves()).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Frequency"), node.frequency())
                 .into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Lacunarity"),
                 node.lacunarity(),
             )
             .into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Persistence"),
                 node.persistence(),
             )
             .into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Amplitude"), node.amplitude())
                 .into(),
-            AtomicUIntParam::new(LabelAndHoverText::label_only("Seed"), node.seed()).into(),
-        ];
+        );
+        params
+            .push(AtomicUIntParam::new(LabelAndHoverText::label_only("Seed"), node.seed()).into());
         Self::new_unary(AtomicNodeKind::MultifractalNoise, params, node.child_id)
     }
 
     pub fn for_multiscale_sphere(node: &MultiscaleSphereSDFModifier) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicUIntParam::new(LabelAndHoverText::label_only("Octaves"), node.octaves()).into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Max scale"), node.max_scale())
                 .into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Persistence"),
                 node.persistence(),
             )
             .into(),
+        );
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Inflation"), node.inflation())
                 .into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Intersection smoothness"),
                 node.intersection_smoothness(),
             )
             .into(),
+        );
+        params.push(
             AtomicFloatParam::new(
                 LabelAndHoverText::label_only("Union smoothness"),
                 node.union_smoothness(),
             )
             .into(),
-            AtomicUIntParam::new(LabelAndHoverText::label_only("Seed"), node.seed()).into(),
-        ];
+        );
+        params
+            .push(AtomicUIntParam::new(LabelAndHoverText::label_only("Seed"), node.seed()).into());
         Self::new_unary(AtomicNodeKind::MultiscaleSphere, params, node.child_id)
     }
 
     pub fn for_union(node: &SDFUnion) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Smoothness"), node.smoothness)
                 .into(),
-        ];
+        );
         Self::new_binary(
             AtomicNodeKind::Union,
             params,
@@ -149,10 +193,11 @@ impl AtomicNode {
     }
 
     pub fn for_subtraction(node: &SDFSubtraction) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Smoothness"), node.smoothness)
                 .into(),
-        ];
+        );
         Self::new_binary(
             AtomicNodeKind::Subtraction,
             params,
@@ -162,10 +207,11 @@ impl AtomicNode {
     }
 
     pub fn for_intersection(node: &SDFIntersection) -> Self {
-        let params = vec![
+        let mut params = AtomicNodeParams::new();
+        params.push(
             AtomicFloatParam::new(LabelAndHoverText::label_only("Smoothness"), node.smoothness)
                 .into(),
-        ];
+        );
         Self::new_binary(
             AtomicNodeKind::Intersection,
             params,

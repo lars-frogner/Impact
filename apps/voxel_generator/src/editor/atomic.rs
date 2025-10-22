@@ -9,6 +9,7 @@ use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::SDFNodeID;
 use node_kind::AtomicNodeKind;
 use std::sync::Arc;
+use tinyvec::TinyVec;
 
 const NODE_CORNER_RADIUS: f32 = 8.0;
 const NODE_FILL_COLOR: Color32 = Color32::from_gray(42);
@@ -30,14 +31,18 @@ pub struct AtomicNode {
     pub position: Pos2,
     pub data: AtomicNodeData,
     pub parent: Option<SDFNodeID>,
-    pub children: Vec<SDFNodeID>,
+    pub children: AtomicNodeChildren,
 }
+
+type AtomicNodeChildren = TinyVec<[SDFNodeID; 2]>;
 
 #[derive(Clone, Debug)]
 pub struct AtomicNodeData {
     pub kind: AtomicNodeKind,
-    pub params: Vec<AtomicNodeParam>,
+    pub params: AtomicNodeParams,
 }
+
+type AtomicNodeParams = TinyVec<[AtomicNodeParam; 12]>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AtomicPortConfig {
@@ -71,30 +76,34 @@ pub struct AtomicFloatParam {
 
 impl AtomicNode {
     fn new_output(child_id: SDFNodeID) -> Self {
+        let mut children = AtomicNodeChildren::new();
+        children.push(child_id);
         Self {
             data: AtomicNodeData {
                 kind: AtomicNodeKind::Output,
-                params: Vec::new(),
+                params: AtomicNodeParams::new(),
             },
-            children: vec![child_id],
+            children,
             parent: None,
             position: Pos2::ZERO,
         }
     }
 
-    fn new_leaf(kind: AtomicNodeKind, params: Vec<AtomicNodeParam>) -> Self {
+    fn new_leaf(kind: AtomicNodeKind, params: AtomicNodeParams) -> Self {
         Self {
             data: AtomicNodeData { kind, params },
-            children: Vec::new(),
+            children: AtomicNodeChildren::new(),
             parent: None,
             position: Pos2::ZERO,
         }
     }
 
-    fn new_unary(kind: AtomicNodeKind, params: Vec<AtomicNodeParam>, child_id: SDFNodeID) -> Self {
+    fn new_unary(kind: AtomicNodeKind, params: AtomicNodeParams, child_id: SDFNodeID) -> Self {
+        let mut children = AtomicNodeChildren::new();
+        children.push(child_id);
         Self {
             data: AtomicNodeData { kind, params },
-            children: vec![child_id],
+            children,
             parent: None,
             position: Pos2::ZERO,
         }
@@ -102,13 +111,16 @@ impl AtomicNode {
 
     fn new_binary(
         kind: AtomicNodeKind,
-        params: Vec<AtomicNodeParam>,
+        params: AtomicNodeParams,
         child_1_id: SDFNodeID,
         child_2_id: SDFNodeID,
     ) -> Self {
+        let mut children = AtomicNodeChildren::new();
+        children.push(child_1_id);
+        children.push(child_2_id);
         Self {
             data: AtomicNodeData { kind, params },
-            children: vec![child_1_id, child_2_id],
+            children,
             parent: None,
             position: Pos2::ZERO,
         }
@@ -294,6 +306,15 @@ impl From<AtomicUIntParam> for AtomicNodeParam {
 impl From<AtomicFloatParam> for AtomicNodeParam {
     fn from(param: AtomicFloatParam) -> Self {
         Self::Float(param)
+    }
+}
+
+impl Default for AtomicNodeParam {
+    fn default() -> Self {
+        Self::UInt(AtomicUIntParam {
+            text: LabelAndHoverText::label_only(""),
+            value: 0,
+        })
     }
 }
 

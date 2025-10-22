@@ -124,6 +124,7 @@ parking_lot = "0.12"
 pastey = "0.1"
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }
+tinyvec = { version = "1.9", features = ["alloc"] }
 
 [lints]
 workspace = true

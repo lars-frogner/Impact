@@ -9,6 +9,7 @@ use impact::egui::{
 use impact_dev_ui::option_panels::{LabelAndHoverText, option_drag_value};
 use node_kind::MetaNodeKind;
 use std::sync::Arc;
+use tinyvec::TinyVec;
 
 const NODE_CORNER_RADIUS: f32 = 8.0;
 const NODE_FILL_COLOR: Color32 = Color32::from_gray(42);
@@ -36,14 +37,18 @@ pub struct MetaNode {
     pub position: Pos2,
     pub data: MetaNodeData,
     pub parent: Option<MetaNodeID>,
-    pub children: Vec<Option<MetaNodeID>>,
+    pub children: MetaNodeChildren,
 }
+
+type MetaNodeChildren = TinyVec<[Option<MetaNodeID>; 2]>;
 
 #[derive(Clone, Debug)]
 pub struct MetaNodeData {
     pub kind: MetaNodeKind,
-    pub params: Vec<MetaNodeParam>,
+    pub params: MetaNodeParams,
 }
+
+type MetaNodeParams = TinyVec<[MetaNodeParam; 12]>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct MetaPortConfig {
@@ -81,11 +86,15 @@ pub struct MetaFloatParam {
 impl MetaNode {
     fn new(position: Pos2, data: MetaNodeData) -> Self {
         let kind = data.kind;
+
+        let mut children = MetaNodeChildren::new();
+        children.resize(kind.port_config().children, None);
+
         Self {
             position,
             data,
             parent: None,
-            children: vec![None; kind.port_config().children],
+            children,
         }
     }
 
@@ -396,6 +405,15 @@ impl From<MetaUIntParam> for MetaNodeParam {
 impl From<MetaFloatParam> for MetaNodeParam {
     fn from(param: MetaFloatParam) -> Self {
         Self::Float(param)
+    }
+}
+
+impl Default for MetaNodeParam {
+    fn default() -> Self {
+        Self::UInt(MetaUIntParam {
+            text: LabelAndHoverText::label_only(""),
+            value: 0,
+        })
     }
 }
 
