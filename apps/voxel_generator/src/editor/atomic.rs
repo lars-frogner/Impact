@@ -1,0 +1,322 @@
+pub mod build;
+pub mod canvas;
+pub mod node_kind;
+
+use impact::egui::{
+    Color32, FontId, Galley, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
+};
+use impact_dev_ui::option_panels::LabelAndHoverText;
+use impact_voxel::generation::sdf::SDFNodeID;
+use node_kind::AtomicNodeKind;
+use std::sync::Arc;
+
+const NODE_CORNER_RADIUS: f32 = 8.0;
+const NODE_FILL_COLOR: Color32 = Color32::from_gray(42);
+const NODE_BOUNDARY_WIDTH: f32 = 1.0;
+const NODE_BOUNDARY_COLOR: Color32 = Color32::WHITE;
+
+const NODE_TEXT_COLOR: Color32 = Color32::WHITE;
+const NODE_HEADER_FONT_SIZE: f32 = 14.0;
+const NODE_PARAMS_FONT_SIZE: f32 = 12.0;
+const NODE_HEADER_SPACING: f32 = 8.0;
+const NODE_PARAM_SPACING: f32 = 4.0;
+const NODE_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
+
+const PORT_RADIUS: f32 = 8.0;
+const PORT_FILL_COLOR: Color32 = Color32::LIGHT_GRAY;
+
+#[derive(Clone, Debug)]
+pub struct AtomicNode {
+    pub position: Pos2,
+    pub data: AtomicNodeData,
+    pub parent: Option<SDFNodeID>,
+    pub children: Vec<SDFNodeID>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AtomicNodeData {
+    pub kind: AtomicNodeKind,
+    pub params: Vec<AtomicNodeParam>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AtomicPortConfig {
+    pub has_parent: bool,
+    pub children: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AtomicPort {
+    Parent,
+    Child { slot: usize, of: usize },
+}
+
+#[derive(Clone, Debug)]
+pub enum AtomicNodeParam {
+    UInt(AtomicUIntParam),
+    Float(AtomicFloatParam),
+}
+
+#[derive(Clone, Debug)]
+pub struct AtomicUIntParam {
+    pub text: LabelAndHoverText,
+    pub value: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct AtomicFloatParam {
+    pub text: LabelAndHoverText,
+    pub value: f32,
+}
+
+impl AtomicNode {
+    fn new_output(child_id: SDFNodeID) -> Self {
+        Self {
+            data: AtomicNodeData {
+                kind: AtomicNodeKind::Output,
+                params: Vec::new(),
+            },
+            children: vec![child_id],
+            parent: None,
+            position: Pos2::ZERO,
+        }
+    }
+
+    fn new_leaf(kind: AtomicNodeKind, params: Vec<AtomicNodeParam>) -> Self {
+        Self {
+            data: AtomicNodeData { kind, params },
+            children: Vec::new(),
+            parent: None,
+            position: Pos2::ZERO,
+        }
+    }
+
+    fn new_unary(kind: AtomicNodeKind, params: Vec<AtomicNodeParam>, child_id: SDFNodeID) -> Self {
+        Self {
+            data: AtomicNodeData { kind, params },
+            children: vec![child_id],
+            parent: None,
+            position: Pos2::ZERO,
+        }
+    }
+
+    fn new_binary(
+        kind: AtomicNodeKind,
+        params: Vec<AtomicNodeParam>,
+        child_1_id: SDFNodeID,
+        child_2_id: SDFNodeID,
+    ) -> Self {
+        Self {
+            data: AtomicNodeData { kind, params },
+            children: vec![child_1_id, child_2_id],
+            parent: None,
+            position: Pos2::ZERO,
+        }
+    }
+}
+
+impl AtomicNodeData {
+    fn header_font(zoom: f32) -> FontId {
+        FontId::proportional(NODE_HEADER_FONT_SIZE * zoom)
+    }
+
+    fn params_font(zoom: f32) -> FontId {
+        FontId::proportional(NODE_PARAMS_FONT_SIZE * zoom)
+    }
+
+    fn text_padding(zoom: f32) -> Vec2 {
+        NODE_TEXT_PADDING * zoom
+    }
+
+    fn header_spacing(zoom: f32) -> f32 {
+        NODE_HEADER_SPACING * zoom
+    }
+
+    fn param_spacing(zoom: f32) -> f32 {
+        NODE_PARAM_SPACING * zoom
+    }
+
+    fn prepare_header_text(&self, ui: &Ui, zoom: f32) -> Arc<Galley> {
+        prepare_text(
+            ui,
+            self.kind.label().to_string(),
+            Self::header_font(zoom),
+            NODE_TEXT_COLOR,
+        )
+    }
+
+    fn prepare_param_texts(&self, ui: &Ui, zoom: f32) -> impl Iterator<Item = Arc<Galley>> {
+        self.params.iter().map(move |param| {
+            prepare_text(
+                ui,
+                param.text_to_display(),
+                Self::params_font(zoom),
+                NODE_TEXT_COLOR,
+            )
+        })
+    }
+
+    fn compute_size(&self, ui: &Ui, zoom: f32) -> Vec2 {
+        let header_text = self.prepare_header_text(ui, zoom);
+
+        let mut max_text_width = header_text.size().x;
+        let mut total_text_height = header_text.size().y;
+
+        for param_text in self.prepare_param_texts(ui, zoom) {
+            max_text_width = max_text_width.max(param_text.size().x);
+            total_text_height += param_text.size().y;
+        }
+
+        if !self.params.is_empty() {
+            total_text_height += Self::header_spacing(zoom)
+                + Self::param_spacing(zoom) * ((self.params.len() - 1) as f32);
+        }
+
+        let screen_node_size =
+            vec2(max_text_width, total_text_height) + 2.0 * Self::text_padding(zoom);
+
+        screen_node_size / zoom
+    }
+
+    fn paint(&self, ui: &Ui, painter: &Painter, node_rect: Rect, zoom: f32) {
+        // Draw node background and outline
+
+        let stroke = Stroke {
+            width: NODE_BOUNDARY_WIDTH * zoom,
+            color: NODE_BOUNDARY_COLOR,
+        };
+        let corner_radius = NODE_CORNER_RADIUS * zoom;
+        painter.rect_filled(node_rect, corner_radius, NODE_FILL_COLOR);
+        painter.rect_stroke(node_rect, corner_radius, stroke, StrokeKind::Inside);
+
+        // Draw node text
+        self.paint_text(ui, painter, &node_rect, zoom);
+    }
+
+    fn paint_text(&self, ui: &Ui, painter: &Painter, node_rect: &Rect, zoom: f32) {
+        let padding = Self::text_padding(zoom);
+
+        let header_text = self.prepare_header_text(ui, zoom);
+        let header_pos = pos2(
+            node_rect.center().x - 0.5 * header_text.size().x,
+            node_rect.top() + padding.y,
+        );
+        painter.galley(header_pos, header_text.clone(), NODE_TEXT_COLOR);
+
+        let mut cursor = pos2(
+            node_rect.left() + padding.x,
+            header_pos.y + header_text.size().y + Self::header_spacing(zoom),
+        );
+
+        for param_text in self.prepare_param_texts(ui, zoom) {
+            painter.galley(cursor, param_text.clone(), NODE_TEXT_COLOR);
+            cursor.y += param_text.size().y + Self::param_spacing(zoom);
+        }
+    }
+}
+
+impl AtomicPortConfig {
+    const fn root() -> Self {
+        Self {
+            has_parent: false,
+            children: 1,
+        }
+    }
+
+    const fn leaf() -> Self {
+        Self {
+            has_parent: true,
+            children: 0,
+        }
+    }
+
+    const fn unary() -> Self {
+        Self {
+            has_parent: true,
+            children: 1,
+        }
+    }
+
+    const fn binary() -> Self {
+        Self {
+            has_parent: true,
+            children: 2,
+        }
+    }
+
+    fn ports(&self) -> impl Iterator<Item = AtomicPort> {
+        self.has_parent
+            .then_some(AtomicPort::Parent)
+            .into_iter()
+            .chain((0..self.children).map(|slot| AtomicPort::Child {
+                slot,
+                of: self.children,
+            }))
+    }
+}
+
+impl AtomicPort {
+    fn center(&self, node_rect: &Rect) -> Pos2 {
+        match self {
+            Self::Parent => node_rect.center_top(),
+            &Self::Child { slot, of } => {
+                node_rect.left_bottom()
+                    + vec2(
+                        (1.0 + slot as f32) * node_rect.width() / (of as f32 + 1.0),
+                        0.0,
+                    )
+            }
+        }
+    }
+
+    fn paint(&self, painter: &Painter, node_rect: &Rect, zoom: f32) {
+        let center = self.center(node_rect);
+        let port_radius = PORT_RADIUS * zoom;
+        painter.circle_filled(center, port_radius, PORT_FILL_COLOR);
+    }
+}
+
+impl AtomicNodeParam {
+    fn text_to_display(&self) -> String {
+        match self {
+            Self::UInt(param) => param.text_to_display(),
+            Self::Float(param) => param.text_to_display(),
+        }
+    }
+}
+
+impl From<AtomicUIntParam> for AtomicNodeParam {
+    fn from(param: AtomicUIntParam) -> Self {
+        Self::UInt(param)
+    }
+}
+
+impl From<AtomicFloatParam> for AtomicNodeParam {
+    fn from(param: AtomicFloatParam) -> Self {
+        Self::Float(param)
+    }
+}
+
+impl AtomicUIntParam {
+    const fn new(text: LabelAndHoverText, value: u32) -> Self {
+        Self { text, value }
+    }
+
+    fn text_to_display(&self) -> String {
+        format!("{} = {}", self.text.label, self.value)
+    }
+}
+
+impl AtomicFloatParam {
+    const fn new(text: LabelAndHoverText, value: f32) -> Self {
+        Self { text, value }
+    }
+
+    fn text_to_display(&self) -> String {
+        format!("{} = {}", self.text.label, self.value)
+    }
+}
+
+fn prepare_text(ui: &Ui, text: String, font_id: FontId, color: Color32) -> Arc<Galley> {
+    ui.fonts(|f| f.layout_no_wrap(text, font_id, color))
+}

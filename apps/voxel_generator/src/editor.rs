@@ -3,13 +3,16 @@ mod layout;
 mod meta;
 
 use allocator_api2::alloc::Allocator;
+use atomic::canvas::AtomicGraphCanvas;
 use impact::{
     egui::{Button, ComboBox, Context, PointerButton, Pos2, Rect, Response, Ui, Vec2},
     engine::Engine,
 };
 use impact_dev_ui::{
     CustomPanels, UserInterfaceConfig as DevUserInterfaceConfig,
-    option_panels::{LabelAndHoverText, labeled_option, option_group, option_panel},
+    option_panels::{
+        LabelAndHoverText, labeled_option, option_checkbox, option_group, option_panel,
+    },
 };
 use impact_voxel::generation::SDFVoxelGenerator;
 use meta::{
@@ -26,6 +29,7 @@ const MAX_ZOOM: f32 = 3.0;
 #[derive(Clone, Debug)]
 pub struct Editor {
     meta_graph_canvas: MetaGraphCanvas,
+    atomic_graph_canvas: AtomicGraphCanvas,
     needs_rebuild: bool,
     graph_status: MetaGraphStatus,
     config: EditorConfig,
@@ -35,6 +39,7 @@ pub struct Editor {
 #[serde(default)]
 pub struct EditorConfig {
     pub show_editor: bool,
+    pub show_atomic_graph: bool,
     pub auto_attach: bool,
 }
 
@@ -54,6 +59,7 @@ impl Editor {
     pub fn new(config: EditorConfig) -> Self {
         Self {
             meta_graph_canvas: MetaGraphCanvas::new(),
+            atomic_graph_canvas: AtomicGraphCanvas::new(),
             needs_rebuild: true,
             graph_status: MetaGraphStatus::Incomplete,
             config,
@@ -74,6 +80,8 @@ impl Editor {
             self.graph_status = MetaGraphStatus::Incomplete;
             return None;
         };
+
+        self.atomic_graph_canvas.update_nodes(&compiled_graph.graph);
 
         let generator = build::build_sdf_voxel_generator(arena, compiled_graph);
 
@@ -98,7 +106,7 @@ impl CustomPanels for Editor {
 
     fn run_panels<A>(
         &mut self,
-        _arena: A,
+        arena: A,
         ctx: &Context,
         config: &DevUserInterfaceConfig,
         _engine: &Engine,
@@ -122,6 +130,17 @@ impl CustomPanels for Editor {
         };
 
         option_panel(ctx, config, "Editor panel", |ui| {
+            option_group(ui, "main", |ui| {
+                option_checkbox(
+                    ui,
+                    &mut self.config.show_atomic_graph,
+                    LabelAndHoverText {
+                        label: "Show compiled graph",
+                        hover_text: "",
+                    },
+                );
+            });
+
             option_group(ui, "creation", |ui| {
                 for kind_group in MetaNodeKindGroup::all_non_root() {
                     for kind_option in MetaNodeKind::all_non_root() {
@@ -227,6 +246,10 @@ impl CustomPanels for Editor {
                 self.config.auto_attach,
             );
 
+            if self.config.show_atomic_graph {
+                self.atomic_graph_canvas.show(arena, ctx);
+            }
+
             connectivity_may_have_changed =
                 connectivity_may_have_changed || canvas_result.connectivity_may_have_changed;
 
@@ -240,6 +263,7 @@ impl Default for EditorConfig {
     fn default() -> Self {
         Self {
             show_editor: true,
+            show_atomic_graph: false,
             auto_attach: true,
         }
     }
