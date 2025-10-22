@@ -1,0 +1,182 @@
+use crate::editor::{
+    PanZoomState,
+    atomic::{AtomicNode, AtomicPort, build::update_viewer_nodes},
+    layout::compute_delta_to_resolve_overlaps,
+};
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use impact::egui::{
+    Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Stroke, Vec2, Window, pos2,
+    vec2,
+};
+use impact_voxel::generation::sdf::{SDFGraph, SDFNodeID};
+
+const CANVAS_DEFAULT_POS: Pos2 = pos2(640.0, 22.0);
+const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
+
+const EDGE_WIDTH: f32 = 2.0;
+const EDGE_COLOR: Color32 = Color32::WHITE;
+
+/// Canvas for viewing atomic graphs (read-only).
+#[derive(Clone, Debug)]
+pub struct AtomicGraphCanvas {
+    pan_zoom_state: PanZoomState,
+    nodes: Vec<AtomicNode>,
+    is_panning: bool,
+    dragging_node_id: Option<SDFNodeID>,
+}
+
+impl AtomicGraphCanvas {
+    pub fn new() -> Self {
+        Self {
+            pan_zoom_state: PanZoomState::new(),
+            nodes: Vec::new(),
+            is_panning: false,
+            dragging_node_id: None,
+        }
+    }
+
+    pub fn update_nodes<A: Allocator>(&mut self, graph: &SDFGraph<A>) {
+        update_viewer_nodes(graph, &mut self.nodes);
+    }
+
+    fn cursor_should_be_hidden(&self) -> bool {
+        self.is_panning || self.dragging_node_id.is_some()
+    }
+
+    pub fn show<A: Allocator>(&mut self, arena: A, ctx: &Context) {
+        Window::new("Compiled SDF graph")
+            .default_pos(CANVAS_DEFAULT_POS)
+            .default_size(CANVAS_DEFAULT_SIZE)
+            .vscroll(false)
+            .hscroll(false)
+            .show(ctx, |ui| {
+                let (canvas_rect, canvas_response) =
+                    ui.allocate_exact_size(ui.available_size(), Sense::drag());
+
+                let canvas_origin = canvas_rect.min;
+
+                let painter = ui.painter_at(canvas_rect);
+
+                if canvas_response.drag_started_by(PointerButton::Secondary) {
+                    self.is_panning = true;
+                }
+                if canvas_response.drag_stopped_by(PointerButton::Secondary) {
+                    self.is_panning = false;
+                }
+                self.pan_zoom_state.handle_drag(&canvas_response);
+
+                self.pan_zoom_state.handle_scroll(ui, canvas_rect);
+
+                let mut world_node_rects = AVec::with_capacity_in(self.nodes.len(), arena);
+                for node in &self.nodes {
+                    world_node_rects.push(Rect::from_min_size(
+                        node.position,
+                        node.data.compute_size(ui, self.pan_zoom_state.zoom),
+                    ));
+                }
+
+                for (node_idx, (node, &world_node_rect)) in
+                    self.nodes.iter_mut().zip(&world_node_rects).enumerate()
+                {
+                    let node_id = node_idx as SDFNodeID;
+
+                    let node_rect = self
+                        .pan_zoom_state
+                        .world_rect_to_screen_space(canvas_origin, world_node_rect);
+
+                    let node_response =
+                        ui.interact(node_rect, Id::new(("atomic_node", node_id)), Sense::drag());
+
+                    if node_response.drag_started() {
+                        self.dragging_node_id = Some(node_id);
+                    }
+                    if node_response.drag_stopped() && self.dragging_node_id == Some(node_id) {
+                        self.dragging_node_id = None;
+                    }
+
+                    // Handle node dragging
+
+                    if node_response.dragged() {
+                        let delta = self
+                            .pan_zoom_state
+                            .screen_vec_to_world_space(node_response.drag_delta());
+
+                        let moved_node_rect = world_node_rect.translate(delta);
+                        let resolve_delta = compute_delta_to_resolve_overlaps(
+                            || {
+                                world_node_rects
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, rect)| (idx as SDFNodeID, *rect))
+                            },
+                            node_id,
+                            moved_node_rect,
+                        );
+
+                        node.position += delta + resolve_delta;
+                    }
+
+                    node.data
+                        .paint(ui, &painter, node_rect, self.pan_zoom_state.zoom);
+                }
+
+                // We will only need node rects in screen space from now
+                for node_rect in &mut world_node_rects {
+                    *node_rect = self
+                        .pan_zoom_state
+                        .world_rect_to_screen_space(canvas_origin, *node_rect);
+                }
+                let node_rects = world_node_rects;
+
+                // Draw edges
+
+                for (node_idx, node) in self.nodes.iter().enumerate() {
+                    let node_id = node_idx as SDFNodeID;
+
+                    if let Some(parent_node_id) = node.parent {
+                        let parent_rect = &node_rects[parent_node_id as usize];
+                        let parent_node = &self.nodes[parent_node_id as usize];
+                        let node_rect = &node_rects[node_idx];
+
+                        let Some(slot) = parent_node
+                            .children
+                            .iter()
+                            .position(|child| *child == node_id)
+                        else {
+                            continue;
+                        };
+
+                        let from = AtomicPort::Child {
+                            slot,
+                            of: parent_node.children.len(),
+                        }
+                        .center(parent_rect);
+
+                        let to = AtomicPort::Parent.center(node_rect);
+
+                        painter.line_segment(
+                            [from, to],
+                            Stroke {
+                                width: EDGE_WIDTH * self.pan_zoom_state.zoom,
+                                color: EDGE_COLOR,
+                            },
+                        );
+                    }
+                }
+
+                // Draw ports
+
+                for (node_idx, node_rect) in node_rects.iter().enumerate() {
+                    for port in self.nodes[node_idx].data.kind.port_config().ports() {
+                        port.paint(&painter, node_rect, self.pan_zoom_state.zoom);
+                    }
+                }
+
+                // Potentially hide cursor
+
+                if self.cursor_should_be_hidden() {
+                    ui.output_mut(|o| o.cursor_icon = CursorIcon::None);
+                }
+            });
+    }
+}

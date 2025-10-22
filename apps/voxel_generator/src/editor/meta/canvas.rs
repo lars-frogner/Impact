@@ -267,7 +267,7 @@ impl MetaGraphCanvas {
     ) -> CanvasShowResult {
         let mut connectivity_may_have_changed = false;
 
-        Window::new("Meta graph")
+        Window::new("SDF graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
             .vscroll(false)
@@ -376,7 +376,7 @@ impl MetaGraphCanvas {
 
                     let node_response = ui.interact(
                         node_rect,
-                        Id::new(("node", node_id)),
+                        Id::new(("meta_node", node_id)),
                         Sense::click_and_drag(),
                     );
 
