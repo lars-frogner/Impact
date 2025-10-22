@@ -48,7 +48,7 @@ const CHUNK_VOXEL_COUNT: usize = ChunkedVoxelObject::chunk_voxel_count();
 pub type SDFGeneratorChunkBuffers = SDFGeneratorBlockBuffers<CHUNK_VOXEL_COUNT, Global>;
 
 #[derive(Clone, Debug)]
-pub struct SDFGeneratorBuilder<A: Allocator = Global> {
+pub struct SDFGraph<A: Allocator = Global> {
     nodes: AVec<SDFNode, A>,
     root_node_id: SDFNodeID,
 }
@@ -165,7 +165,7 @@ pub struct SDFIntersection {
 /// so this is best used only for minor perturbations.
 #[derive(Clone, Debug)]
 pub struct MultifractalNoiseSDFModifier {
-    child_id: SDFNodeID,
+    pub child_id: SDFNodeID,
     octaves: u32,
     frequency: f32,
     lacunarity: f32,
@@ -186,7 +186,7 @@ pub struct MultifractalNoiseSDFModifier {
 /// The output will be a valid signed distance field.
 #[derive(Clone, Debug)]
 pub struct MultiscaleSphereSDFModifier {
-    child_id: SDFNodeID,
+    pub child_id: SDFNodeID,
     octaves: u32,
     frequency: f32,
     persistence: f32,
@@ -993,7 +993,7 @@ impl<const COUNT: usize, A: Allocator> SDFGeneratorBlockBuffers<COUNT, A> {
     }
 }
 
-impl<A: Allocator> SDFGeneratorBuilder<A> {
+impl<A: Allocator> SDFGraph<A> {
     pub fn new_in(alloc: A) -> Self {
         Self::with_capacity_in(0, alloc)
     }
@@ -1050,13 +1050,13 @@ impl<A: Allocator> SDFGeneratorBuilder<A> {
     }
 }
 
-impl SDFGeneratorBuilder<Global> {
+impl SDFGraph<Global> {
     pub fn new() -> Self {
         Self::new_in(Global)
     }
 }
 
-impl Default for SDFGeneratorBuilder<Global> {
+impl Default for SDFGraph<Global> {
     fn default() -> Self {
         Self::new()
     }
@@ -1183,6 +1183,14 @@ impl BoxSDF {
         Self { half_extents }
     }
 
+    pub fn extents(&self) -> [f32; 3] {
+        [
+            2.0 * self.half_extents.x,
+            2.0 * self.half_extents.y,
+            2.0 * self.half_extents.z,
+        ]
+    }
+
     fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
@@ -1207,6 +1215,10 @@ impl SphereSDF {
     pub fn new(radius: f32) -> Self {
         assert!(radius >= 0.0);
         Self { radius }
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius
     }
 
     fn domain_bounds(&self) -> AxisAlignedBox<f32> {
@@ -1239,6 +1251,26 @@ impl GradientNoiseSDF {
             noise_threshold,
             seed,
         }
+    }
+
+    pub fn extents(&self) -> [f32; 3] {
+        [
+            2.0 * self.half_extents.x,
+            2.0 * self.half_extents.y,
+            2.0 * self.half_extents.z,
+        ]
+    }
+
+    pub fn noise_frequency(&self) -> f32 {
+        self.noise_frequency
+    }
+
+    pub fn noise_threshold(&self) -> f32 {
+        self.noise_threshold
+    }
+
+    pub fn seed(&self) -> u32 {
+        self.seed
     }
 
     fn domain_bounds(&self) -> AxisAlignedBox<f32> {
@@ -1331,6 +1363,11 @@ impl SDFRotation {
         let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
         Self { child_id, rotation }
     }
+
+    /// Returns the Euler angles as `(roll, pitch, yaw)`.
+    pub fn euler_angles(&self) -> (f32, f32, f32) {
+        self.rotation.euler_angles()
+    }
 }
 
 impl SDFScaling {
@@ -1399,6 +1436,30 @@ impl MultifractalNoiseSDFModifier {
             noise_scale,
             seed,
         }
+    }
+
+    pub fn octaves(&self) -> u32 {
+        self.octaves
+    }
+
+    pub fn frequency(&self) -> f32 {
+        self.frequency
+    }
+
+    pub fn lacunarity(&self) -> f32 {
+        self.lacunarity
+    }
+
+    pub fn persistence(&self) -> f32 {
+        self.persistence
+    }
+
+    pub fn amplitude(&self) -> f32 {
+        self.amplitude
+    }
+
+    pub fn seed(&self) -> u32 {
+        self.seed
     }
 
     #[inline]
@@ -1514,6 +1575,34 @@ impl MultiscaleSphereSDFModifier {
             union_smoothness,
             seed,
         }
+    }
+
+    pub fn octaves(&self) -> u32 {
+        self.octaves
+    }
+
+    pub fn max_scale(&self) -> f32 {
+        0.5 / self.frequency
+    }
+
+    pub fn persistence(&self) -> f32 {
+        self.persistence
+    }
+
+    pub fn inflation(&self) -> f32 {
+        self.scaled_inflation / self.max_scale()
+    }
+
+    pub fn intersection_smoothness(&self) -> f32 {
+        self.scaled_intersection_smoothness / self.max_scale()
+    }
+
+    pub fn union_smoothness(&self) -> f32 {
+        self.union_smoothness
+    }
+
+    pub fn seed(&self) -> u32 {
+        self.seed
     }
 
     fn domain_padding(&self) -> f32 {
