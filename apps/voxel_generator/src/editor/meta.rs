@@ -25,7 +25,9 @@ const NODE_HEADER_SPACING: f32 = 8.0;
 const NODE_PARAM_SPACING: f32 = 4.0;
 const NODE_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
 
-const PORT_RADIUS: f32 = 8.0;
+const PORT_RADIUS: f32 = 6.0;
+const PORT_HOVER_RADIUS: f32 = 7.0;
+const PORT_HIT_RADIUS: f32 = 14.0;
 const PORT_FILL_COLOR: Color32 = Color32::LIGHT_GRAY;
 const HOVERED_PORT_FILL_COLOR: Color32 = Color32::WHITE;
 const DISABLED_PORT_FILL_COLOR: Color32 = Color32::from_gray(80);
@@ -374,8 +376,8 @@ impl MetaPort {
     ) -> Response {
         let center = self.center(node_rect);
 
-        let port_radius = PORT_RADIUS * zoom;
-        let hit_rect = Rect::from_center_size(center, vec2(2.0 * port_radius, 2.0 * port_radius));
+        let port_hit_diameter = 2.0 * PORT_HIT_RADIUS * zoom;
+        let hit_rect = Rect::from_center_size(center, vec2(port_hit_diameter, port_hit_diameter));
 
         let sense = if enabled {
             Sense::click()
@@ -396,6 +398,12 @@ impl MetaPort {
             }
         } else {
             DISABLED_PORT_FILL_COLOR
+        };
+
+        let port_radius = if enabled && response.hovered() {
+            PORT_HOVER_RADIUS * zoom
+        } else {
+            PORT_RADIUS * zoom
         };
 
         painter.circle_filled(center, port_radius, color);
