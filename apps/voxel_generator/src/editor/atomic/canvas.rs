@@ -190,7 +190,7 @@ impl AtomicGraphCanvas {
                 for (node_idx, node) in self.nodes.iter().enumerate() {
                     let node_id = node_idx as SDFNodeID;
 
-                    if let Some(parent_node_id) = node.parent {
+                    for &parent_node_id in &node.parents {
                         let parent_rect = &node_rects[parent_node_id as usize];
                         let parent_node = &self.nodes[parent_node_id as usize];
                         let node_rect = &node_rects[node_idx];

@@ -30,10 +30,11 @@ const PORT_FILL_COLOR: Color32 = Color32::from_gray(80);
 pub struct AtomicNode {
     pub position: Pos2,
     pub data: AtomicNodeData,
-    pub parent: Option<SDFNodeID>,
+    pub parents: AtomicNodeParents,
     pub children: AtomicNodeChildren,
 }
 
+type AtomicNodeParents = TinyVec<[SDFNodeID; 8]>;
 type AtomicNodeChildren = TinyVec<[SDFNodeID; 2]>;
 
 #[derive(Clone, Debug)]
@@ -84,7 +85,7 @@ impl AtomicNode {
         Self {
             data: AtomicNodeData::new(AtomicNodeKind::Output, AtomicNodeParams::new()),
             children,
-            parent: None,
+            parents: AtomicNodeParents::new(),
             position: Pos2::ZERO,
         }
     }
@@ -93,7 +94,8 @@ impl AtomicNode {
         Self {
             data: AtomicNodeData::new(kind, params),
             children: AtomicNodeChildren::new(),
-            parent: None,
+            // Parents and position are assigned later
+            parents: AtomicNodeParents::new(),
             position: Pos2::ZERO,
         }
     }
@@ -104,7 +106,8 @@ impl AtomicNode {
         Self {
             data: AtomicNodeData::new(kind, params),
             children,
-            parent: None,
+            // Parents and position are assigned later
+            parents: AtomicNodeParents::new(),
             position: Pos2::ZERO,
         }
     }
@@ -121,7 +124,8 @@ impl AtomicNode {
         Self {
             data: AtomicNodeData::new(kind, params),
             children,
-            parent: None,
+            // Parents and position are assigned later
+            parents: AtomicNodeParents::new(),
             position: Pos2::ZERO,
         }
     }
