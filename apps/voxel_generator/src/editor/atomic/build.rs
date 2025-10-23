@@ -30,7 +30,7 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
             | SDFNode::MultifractalNoise(MultifractalNoiseSDFModifier { child_id, .. })
             | SDFNode::MultiscaleSphere(MultiscaleSphereSDFModifier { child_id, .. }) => {
                 let child_idx = *child_id as usize;
-                viewer_nodes[child_idx].parent = Some(idx as SDFNodeID);
+                viewer_nodes[child_idx].parents.push(idx as SDFNodeID);
             }
 
             SDFNode::Union(SDFUnion {
@@ -50,13 +50,15 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
             }) => {
                 let child_1_idx = *child_1_id as usize;
                 let child_2_idx = *child_2_id as usize;
-                viewer_nodes[child_1_idx].parent = Some(idx as SDFNodeID);
-                viewer_nodes[child_2_idx].parent = Some(idx as SDFNodeID);
+                viewer_nodes[child_1_idx].parents.push(idx as SDFNodeID);
+                viewer_nodes[child_2_idx].parents.push(idx as SDFNodeID);
             }
         }
     }
 
     let output_id = viewer_nodes.len() as SDFNodeID;
     viewer_nodes.push(AtomicNode::new_output(graph.root_node_id()));
-    viewer_nodes[graph.root_node_id() as usize].parent = Some(output_id);
+    viewer_nodes[graph.root_node_id() as usize]
+        .parents
+        .push(output_id);
 }
