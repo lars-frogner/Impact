@@ -51,7 +51,7 @@ impl<A: Allocator> BitVector<A> {
     /// bits unset.
     pub fn zeroed_in(len: usize, alloc: A) -> Self {
         let mut words = AVec::new_in(alloc);
-        words.resize(len, 0);
+        words.resize(len.div_ceil(64), 0);
         Self { words, len }
     }
 
@@ -106,6 +106,13 @@ impl<A: Allocator> BitVector<A> {
         let was_set = (*word & mask) != 0;
         *word &= !mask;
         was_set
+    }
+
+    /// Resizes the vector to the specified length, with all bits unset.
+    pub fn resize_and_unset_all(&mut self, len: usize) {
+        self.words.clear();
+        self.words.resize(len.div_ceil(64), 0);
+        self.len = len;
     }
 
     fn bounds_check(&self, bit_idx: usize) {
@@ -293,5 +300,45 @@ mod tests {
     fn unset_with_out_of_bounds_index_panics() {
         let mut bit_vec = BitVector::zeroed(3);
         bit_vec.unset_bit(3);
+    }
+
+    #[test]
+    fn resize_and_unset_all_to_larger_size_works() {
+        let mut bit_vec = BitVector::zeroed(50);
+
+        // Set some bits
+        bit_vec.set_bit(10);
+        bit_vec.set_bit(25);
+        bit_vec.set_bit(40);
+
+        // Resize to larger size
+        bit_vec.resize_and_unset_all(100);
+
+        assert_eq!(bit_vec.len(), 100);
+
+        // All bits should be unset, including previously set ones
+        for i in 0..100 {
+            assert!(!bit_vec.bit_is_set(i));
+        }
+    }
+
+    #[test]
+    fn resize_and_unset_all_to_smaller_size_works() {
+        let mut bit_vec = BitVector::zeroed(100);
+
+        // Set some bits across the range
+        bit_vec.set_bit(10);
+        bit_vec.set_bit(50);
+        bit_vec.set_bit(90);
+
+        // Resize to smaller size
+        bit_vec.resize_and_unset_all(20);
+
+        assert_eq!(bit_vec.len(), 20);
+
+        // All bits in the new range should be unset
+        for i in 0..20 {
+            assert!(!bit_vec.bit_is_set(i));
+        }
     }
 }

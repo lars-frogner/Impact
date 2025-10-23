@@ -1,15 +1,25 @@
 use super::{MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaPort};
-use crate::editor::{MetaGraphStatus, PanZoomState, layout::compute_delta_to_resolve_overlaps};
-use impact::egui::{
-    Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Stroke, Vec2, Window,
-    pos2, vec2,
+use crate::editor::{
+    MetaGraphStatus, PanZoomState,
+    layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
+};
+use impact::{
+    egui::{
+        Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Stroke, Vec2,
+        Window, pos2, vec2,
+    },
+    impact_containers::KeyIndexMapper,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(200.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
 
+const MIN_NODE_SEPARATION: f32 = 8.0;
 const NEW_NODE_GAP: f32 = 40.0;
+
+const AUTO_LAYOUT_HORIZONTAL_GAP: f32 = 16.0;
+const AUTO_LAYOUT_VERTICAL_GAP: f32 = 40.0;
 
 const EDGE_WIDTH: f32 = 2.0;
 const PENDING_EDGE_WIDTH: f32 = 2.0;
@@ -35,6 +45,13 @@ pub struct MetaGraphCanvas {
 }
 
 #[derive(Clone, Debug)]
+pub struct MetaCanvasScratch {
+    node_rects: BTreeMap<MetaNodeID, Rect>,
+    index_map: KeyIndexMapper<MetaNodeID>,
+    layout: LayoutScratch,
+}
+
+#[derive(Clone, Debug)]
 pub struct CanvasShowResult {
     pub connectivity_may_have_changed: bool,
 }
@@ -43,6 +60,12 @@ pub struct CanvasShowResult {
 pub struct PendingEdge {
     pub from_node: MetaNodeID,
     pub from_port: MetaPort,
+}
+
+struct LayoutableMetaGraph<'a> {
+    index_map: &'a KeyIndexMapper<MetaNodeID>,
+    nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
+    rects: &'a mut BTreeMap<MetaNodeID, Rect>,
 }
 
 impl MetaGraphCanvas {
@@ -260,9 +283,11 @@ impl MetaGraphCanvas {
 
     pub fn show(
         &mut self,
+        scratch: &mut MetaCanvasScratch,
         ctx: &Context,
         graph_status: MetaGraphStatus,
         pending_new_node: Option<(MetaNodeID, MetaNodeData)>,
+        perform_layout: bool,
         auto_attach: bool,
     ) -> CanvasShowResult {
         let mut connectivity_may_have_changed = false;
@@ -298,21 +323,23 @@ impl MetaGraphCanvas {
                     }
                 }
 
-                let mut world_node_rects = BTreeMap::<MetaNodeID, Rect>::new();
-                for (&node_id, node) in &self.nodes {
+                scratch.node_rects.clear();
+                let world_node_rects = &mut scratch.node_rects;
+
+                for (&node_id, node) in &mut self.nodes {
+                    node.data.prepare_text(ui, self.pan_zoom_state.zoom);
+
                     world_node_rects.insert(
                         node_id,
-                        Rect::from_min_size(
-                            node.position,
-                            node.data.compute_size(ui, self.pan_zoom_state.zoom),
-                        ),
+                        Rect::from_min_size(node.position, node.data.compute_size()),
                     );
                 }
 
                 // Handle pending new node
 
-                if let Some((node_id, data)) = pending_new_node {
-                    let node_size = data.compute_size(ui, self.pan_zoom_state.zoom);
+                if let Some((node_id, mut data)) = pending_new_node {
+                    data.prepare_text(ui, self.pan_zoom_state.zoom);
+                    let node_size = data.compute_size();
 
                     let position = if let Some(selected_node) = self
                         .selected_node_id
@@ -345,6 +372,7 @@ impl MetaGraphCanvas {
                         || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
                         node_id,
                         world_node_rect,
+                        MIN_NODE_SEPARATION,
                     );
 
                     world_node_rect = world_node_rect.translate(resolve_delta);
@@ -365,6 +393,30 @@ impl MetaGraphCanvas {
                     }
 
                     self.selected_node_id = Some(node_id);
+                }
+
+                if perform_layout {
+                    let origin = self
+                        .pan_zoom_state
+                        .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top());
+
+                    let mut layoutable_graph = LayoutableMetaGraph::new(
+                        &mut scratch.index_map,
+                        &self.nodes,
+                        world_node_rects,
+                    );
+                    layout_vertical(
+                        &mut scratch.layout,
+                        &mut layoutable_graph,
+                        origin,
+                        AUTO_LAYOUT_HORIZONTAL_GAP,
+                        AUTO_LAYOUT_VERTICAL_GAP,
+                    );
+
+                    for (node, node_rect) in self.nodes.values_mut().zip(world_node_rects.values())
+                    {
+                        node.position = node_rect.min;
+                    }
                 }
 
                 for ((&node_id, node), &world_node_rect) in
@@ -407,18 +459,14 @@ impl MetaGraphCanvas {
                             || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
                             node_id,
                             moved_node_rect,
+                            MIN_NODE_SEPARATION,
                         );
 
                         node.position += delta + resolve_delta;
                     }
 
-                    node.data.paint(
-                        ui,
-                        &painter,
-                        node_rect,
-                        self.pan_zoom_state.zoom,
-                        is_selected,
-                    );
+                    node.data
+                        .paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
                 }
 
                 // We will only need node rects in screen space from now
@@ -427,7 +475,7 @@ impl MetaGraphCanvas {
                         .pan_zoom_state
                         .world_rect_to_screen_space(canvas_origin, *node_rect);
                 }
-                let node_rects = world_node_rects;
+                let node_rects = &scratch.node_rects;
 
                 // Draw edges
 
@@ -468,7 +516,7 @@ impl MetaGraphCanvas {
 
                 // Draw ports
 
-                for (&node_id, node_rect) in &node_rects {
+                for (&node_id, node_rect) in node_rects {
                     for port in self.node(node_id).data.kind.port_config().ports() {
                         let mut enabled = true;
                         let mut highlighted = false;
@@ -625,5 +673,53 @@ impl MetaGraphCanvas {
         CanvasShowResult {
             connectivity_may_have_changed,
         }
+    }
+}
+
+impl MetaCanvasScratch {
+    pub fn new() -> Self {
+        Self {
+            node_rects: BTreeMap::new(),
+            index_map: KeyIndexMapper::new(),
+            layout: LayoutScratch::new(),
+        }
+    }
+}
+
+impl<'a> LayoutableMetaGraph<'a> {
+    fn new(
+        index_map: &'a mut KeyIndexMapper<MetaNodeID>,
+        nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
+        rects: &'a mut BTreeMap<MetaNodeID, Rect>,
+    ) -> Self {
+        index_map.clear();
+        index_map.reserve(nodes.len());
+        for node_id in nodes.keys() {
+            index_map.push_key(*node_id);
+        }
+        Self {
+            index_map: &*index_map,
+            nodes,
+            rects,
+        }
+    }
+}
+
+impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
+    fn n_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+
+    fn child_indices(&self, node_idx: usize) -> impl Iterator<Item = usize> {
+        let node_id = self.index_map.key_at_idx(node_idx);
+        self.nodes[&node_id]
+            .children
+            .iter()
+            .filter_map(|child_id| child_id.map(|id| self.index_map.idx(id)))
+    }
+
+    fn node_rect_mut(&mut self, node_idx: usize) -> &mut Rect {
+        let node_id = self.index_map.key_at_idx(node_idx);
+        self.rects.get_mut(&node_id).unwrap()
     }
 }

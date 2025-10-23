@@ -85,6 +85,13 @@ where
         mapper
     }
 
+    /// Reserves capacity for at least `additional` more elements to be
+    /// inserted.
+    pub fn reserve(&mut self, additional: usize) {
+        self.indices_for_keys.reserve(additional);
+        self.keys_at_indices.reserve(additional);
+    }
+
     /// Returns a reference to the [`HashMap`] of keys to indices.
     pub fn as_map(&self) -> &HashMap<K, usize, S> {
         &self.indices_for_keys

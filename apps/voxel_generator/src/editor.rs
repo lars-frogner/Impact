@@ -17,7 +17,7 @@ use impact_dev_ui::{
 use impact_voxel::generation::SDFVoxelGenerator;
 use meta::{
     MetaNodeData, build,
-    canvas::MetaGraphCanvas,
+    canvas::{MetaCanvasScratch, MetaGraphCanvas},
     node_kind::{MetaNodeKind, MetaNodeKindGroup},
 };
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,7 @@ const MAX_ZOOM: f32 = 3.0;
 #[derive(Clone, Debug)]
 pub struct Editor {
     meta_graph_canvas: MetaGraphCanvas,
+    meta_canvas_scratch: MetaCanvasScratch,
     atomic_graph_canvas: AtomicGraphCanvas,
     needs_rebuild: bool,
     graph_status: MetaGraphStatus,
@@ -41,6 +42,7 @@ pub struct EditorConfig {
     pub show_editor: bool,
     pub show_atomic_graph: bool,
     pub auto_attach: bool,
+    pub auto_layout: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +61,7 @@ impl Editor {
     pub fn new(config: EditorConfig) -> Self {
         Self {
             meta_graph_canvas: MetaGraphCanvas::new(),
+            meta_canvas_scratch: MetaCanvasScratch::new(),
             atomic_graph_canvas: AtomicGraphCanvas::new(),
             needs_rebuild: true,
             graph_status: MetaGraphStatus::Incomplete,
@@ -130,6 +133,8 @@ impl CustomPanels for Editor {
         };
 
         option_panel(ctx, config, "Editor panel", |ui| {
+            let mut perform_layout = false;
+
             option_group(ui, "main", |ui| {
                 option_checkbox(
                     ui,
@@ -139,6 +144,25 @@ impl CustomPanels for Editor {
                         hover_text: "",
                     },
                 );
+                option_checkbox(
+                    ui,
+                    &mut self.config.auto_attach,
+                    LabelAndHoverText {
+                        label: "Auto attach",
+                        hover_text: "",
+                    },
+                );
+                option_checkbox(
+                    ui,
+                    &mut self.config.auto_layout,
+                    LabelAndHoverText {
+                        label: "Auto layout",
+                        hover_text: "",
+                    },
+                );
+                if ui.button("Layout").clicked() {
+                    perform_layout = true;
+                }
             });
 
             option_group(ui, "creation", |ui| {
@@ -209,10 +233,8 @@ impl CustomPanels for Editor {
                         connectivity_may_have_changed = true;
                     }
 
-                    for param in &mut selected_node.data.params {
-                        if param.show_controls(ui).changed() {
-                            params_changed = true;
-                        };
+                    if selected_node.data.run_controls(ui) {
+                        params_changed = true;
                     }
                 }
             });
@@ -239,10 +261,15 @@ impl CustomPanels for Editor {
                 }
             });
 
+            perform_layout =
+                perform_layout || (pending_new_node.is_some() && self.config.auto_layout);
+
             let canvas_result = self.meta_graph_canvas.show(
+                &mut self.meta_canvas_scratch,
                 ctx,
                 self.graph_status,
                 pending_new_node,
+                perform_layout,
                 self.config.auto_attach,
             );
 
@@ -265,6 +292,7 @@ impl Default for EditorConfig {
             show_editor: true,
             show_atomic_graph: false,
             auto_attach: true,
+            auto_layout: false,
         }
     }
 }

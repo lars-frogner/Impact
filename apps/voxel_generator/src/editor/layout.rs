@@ -1,19 +1,241 @@
-use impact::egui::{Rect, Vec2, vec2};
+use impact::{
+    egui::{Pos2, Rect, Vec2, pos2, vec2},
+    impact_containers::{BitVector, FixedQueue},
+};
 
-const MIN_NODE_SEPARATION: f32 = 8.0;
+pub trait LayoutableGraph {
+    fn n_nodes(&self) -> usize;
+
+    fn child_indices(&self, node_idx: usize) -> impl Iterator<Item = usize>;
+
+    fn node_rect_mut(&mut self, node_idx: usize) -> &mut Rect;
+}
+
+#[derive(Clone, Debug)]
+pub struct LayoutScratch {
+    node_is_child: BitVector,
+    node_layers: Vec<usize>,
+    node_indices_in_visit_order: Vec<usize>,
+    next_node_idx_in_layer: Vec<usize>,
+    layer_heads: Vec<usize>,
+    layer_tails: Vec<usize>,
+    layer_max_heights: Vec<f32>,
+    layer_top_y_coords: Vec<f32>,
+    queue: FixedQueue<usize>,
+}
+
+impl LayoutScratch {
+    pub fn new() -> Self {
+        Self {
+            node_is_child: BitVector::new(),
+            node_layers: Vec::new(),
+            node_indices_in_visit_order: Vec::new(),
+            next_node_idx_in_layer: Vec::new(),
+            layer_heads: Vec::new(),
+            layer_tails: Vec::new(),
+            layer_max_heights: Vec::new(),
+            layer_top_y_coords: Vec::new(),
+            queue: FixedQueue::with_capacity(0),
+        }
+    }
+
+    fn ensure_node_capacity(&mut self, n_nodes: usize) {
+        self.node_is_child.resize_and_unset_all(n_nodes);
+
+        self.node_layers.clear();
+        self.node_layers.resize(n_nodes, usize::MAX);
+
+        self.node_indices_in_visit_order.clear();
+        self.node_indices_in_visit_order.reserve(n_nodes);
+
+        self.next_node_idx_in_layer.clear();
+        self.next_node_idx_in_layer.resize(n_nodes, usize::MAX);
+
+        self.queue.clear_and_set_capacity(n_nodes);
+    }
+
+    fn ensure_layer_capacity(&mut self, n_layers: usize) {
+        self.layer_heads.clear();
+        self.layer_heads.resize(n_layers, usize::MAX);
+
+        self.layer_tails.clear();
+        self.layer_tails.resize(n_layers, usize::MAX);
+
+        self.layer_max_heights.clear();
+        self.layer_max_heights.resize(n_layers, 0.0);
+
+        self.layer_top_y_coords.clear();
+        self.layer_top_y_coords.resize(n_layers, 0.0);
+    }
+}
+
+/// The top center of the root node will be placed at the provided origin.
+pub fn layout_vertical(
+    scratch: &mut LayoutScratch,
+    graph: &mut impl LayoutableGraph,
+    origin: Pos2,
+    horizontal_gap: f32,
+    vertical_gap: f32,
+) {
+    let n_nodes = graph.n_nodes();
+    if n_nodes == 0 {
+        return;
+    }
+
+    scratch.ensure_node_capacity(n_nodes);
+
+    // Mark all child nodes (for finding roots)
+    for node_idx in 0..n_nodes {
+        for child_idx in graph.child_indices(node_idx) {
+            scratch.node_is_child.set_bit(child_idx);
+        }
+    }
+
+    // Queue root nodes
+    for node_idx in 0..n_nodes {
+        if !scratch.node_is_child.bit_is_set(node_idx) {
+            scratch.queue.push_back(node_idx);
+        }
+    }
+    assert!(
+        !scratch.queue.is_empty(),
+        "Graph must have at least one root"
+    );
+
+    // Traverse breadth-first to determine the layer (depth) of each node as
+    // well as the visit order
+    while let Some(node_idx) = scratch.queue.pop_front() {
+        let layer = &mut scratch.node_layers[node_idx];
+        let unvisited = *layer == usize::MAX;
+        if unvisited {
+            *layer = 0;
+        }
+        let next_layer = *layer + 1;
+
+        scratch.node_indices_in_visit_order.push(node_idx);
+
+        for child_idx in graph.child_indices(node_idx) {
+            let child_layer = &mut scratch.node_layers[child_idx];
+            let child_unvisited = *child_layer == usize::MAX;
+
+            if child_unvisited || next_layer < *child_layer {
+                if child_unvisited {
+                    scratch.queue.push_back(child_idx);
+                }
+                *child_layer = next_layer;
+            }
+        }
+    }
+
+    assert_eq!(scratch.node_indices_in_visit_order.len(), n_nodes);
+
+    // Create a linked list of nodes in visit order for each layer
+
+    let max_layer = scratch.node_layers.iter().copied().max().unwrap();
+    let n_layers = max_layer + 1;
+    scratch.ensure_layer_capacity(n_layers);
+
+    for &node_idx in &scratch.node_indices_in_visit_order {
+        let layer = scratch.node_layers[node_idx];
+        let tail_node_idx = scratch.layer_tails[layer];
+        let layer_empty = tail_node_idx == usize::MAX;
+        if layer_empty {
+            // If this is the first node in the layer, initialize the layer's
+            // linked list by assigning the node as the head and tail
+            scratch.layer_heads[layer] = node_idx;
+            scratch.layer_tails[layer] = node_idx;
+        } else {
+            // If there are already nodes in the layer, add a link from the old
+            // tail to the current node and set the current node as the new tail
+            scratch.next_node_idx_in_layer[tail_node_idx] = node_idx;
+            scratch.layer_tails[layer] = node_idx;
+        }
+    }
+
+    // Determine the maximum height of the nodes in each layer
+    for layer in 0..n_layers {
+        let mut max_height = 0.0_f32;
+        for_node_in_layer(
+            scratch.layer_heads[layer],
+            &scratch.next_node_idx_in_layer,
+            |node_idx| {
+                max_height = max_height.max(graph.node_rect_mut(node_idx).height());
+            },
+        );
+        scratch.layer_max_heights[layer] = max_height;
+    }
+
+    // Determine the y-coordinate of the top of each layer, with the top of the
+    // first layer begin at the origin
+    let mut y = origin.y;
+    for layer in 0..n_layers {
+        scratch.layer_top_y_coords[layer] = y;
+        y += scratch.layer_max_heights[layer] + vertical_gap;
+    }
+
+    // Lay out the nodes in each layer from left to right
+    for layer in 0..n_layers {
+        let mut sum_of_widths = 0.0;
+        let mut node_count = 0_usize;
+        for_node_in_layer(
+            scratch.layer_heads[layer],
+            &scratch.next_node_idx_in_layer,
+            |node_idx| {
+                sum_of_widths += graph.node_rect_mut(node_idx).width();
+                node_count += 1;
+            },
+        );
+
+        let total_gap_width = horizontal_gap * node_count.saturating_sub(1) as f32;
+        let total_width = sum_of_widths + total_gap_width;
+
+        let top_y = scratch.layer_top_y_coords[layer];
+        let max_height = scratch.layer_max_heights[layer];
+
+        // Center the row of nodes on the origin
+        let mut x = origin.x - 0.5 * total_width;
+
+        for_node_in_layer(
+            scratch.layer_heads[layer],
+            &scratch.next_node_idx_in_layer,
+            |node_idx| {
+                let node_rect = graph.node_rect_mut(node_idx);
+                let size = node_rect.size();
+                // Center the node vertically on the row center
+                let y = top_y + 0.5 * (max_height - size.y);
+                *node_rect = Rect::from_min_size(pos2(x, y), size);
+                x += size.x + horizontal_gap;
+            },
+        );
+    }
+}
+
+#[inline]
+fn for_node_in_layer(
+    head_node_idx: usize,
+    next_node_idx_in_layer: &[usize],
+    mut f: impl FnMut(usize),
+) {
+    let mut node_idx = head_node_idx;
+    while node_idx != usize::MAX {
+        f(node_idx);
+        node_idx = next_node_idx_in_layer[node_idx];
+    }
+}
 
 pub fn compute_delta_to_resolve_overlaps<ID, I>(
     get_node_rects: impl Fn() -> I,
     moved_node_id: ID,
     moved_node_rect: Rect,
+    min_separation: f32,
 ) -> Vec2
 where
     ID: PartialEq,
     I: IntoIterator<Item = (ID, Rect)>,
 {
-    const EXPANSION: Vec2 = vec2(MIN_NODE_SEPARATION * 0.5, MIN_NODE_SEPARATION * 0.5);
+    let expansion = vec2(0.5 * min_separation, 0.5 * min_separation);
 
-    let mut moved_node_rect = moved_node_rect.expand2(EXPANSION);
+    let mut moved_node_rect = moved_node_rect.expand2(expansion);
     let mut total_delta = Vec2::ZERO;
 
     // Multiple iterations in case we push into someone else
@@ -24,7 +246,7 @@ where
             if node_id == moved_node_id {
                 continue;
             }
-            let node_rect = node_rect.expand2(EXPANSION);
+            let node_rect = node_rect.expand2(expansion);
 
             if moved_node_rect.intersects(node_rect) {
                 // Compute minimal push on x or y to separate
