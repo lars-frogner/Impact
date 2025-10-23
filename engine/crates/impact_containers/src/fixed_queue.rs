@@ -24,6 +24,13 @@ pub struct FixedQueue<T, A: Allocator = Global> {
     len: usize,
 }
 
+impl<T: Copy + Default> FixedQueue<T> {
+    /// Creates a new empty queue with the specified capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_in(capacity, Global)
+    }
+}
+
 impl<T: Copy> FixedQueue<T> {
     /// Creates a new queue, initialized with the given values.
     ///
@@ -31,6 +38,29 @@ impl<T: Copy> FixedQueue<T> {
     /// provided. The queue will be full after creation.
     pub fn new_full(values: &[T]) -> Self {
         Self::new_full_in(Global, values)
+    }
+}
+
+impl<T: Copy + Default, A: Allocator> FixedQueue<T, A> {
+    /// Creates a new empty queue with the specified capacity and allocator.
+    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+        let mut queue = AVec::new_in(alloc);
+        queue.resize(capacity, T::default());
+        Self {
+            queue,
+            first: 0,
+            last: 0_usize.wrapping_sub(1),
+            len: 0,
+        }
+    }
+
+    /// Empties the queue and gives it a new capacity.
+    pub fn clear_and_set_capacity(&mut self, capacity: usize) {
+        self.queue.clear();
+        self.queue.resize(capacity, T::default());
+        self.first = 0;
+        self.last = 0_usize.wrapping_sub(1);
+        self.len = 0;
     }
 }
 
@@ -45,7 +75,7 @@ impl<T: Copy, A: Allocator> FixedQueue<T, A> {
         queue.extend_from_slice(values);
         let len = queue.len();
         let first = 0;
-        let last = len.saturating_sub(1);
+        let last = len.wrapping_sub(1);
         Self {
             queue,
             first,
@@ -96,7 +126,7 @@ impl<T: Copy, A: Allocator> FixedQueue<T, A> {
     pub fn push_back(&mut self, value: T) {
         assert!(self.len() < self.capacity());
 
-        self.last += 1;
+        self.last = self.last.wrapping_add(1);
         if self.last == self.capacity() {
             self.last = 0;
         }
@@ -287,5 +317,36 @@ mod tests {
 
         queue.push_back(99);
         assert!(!queue.is_empty());
+    }
+
+    #[test]
+    fn with_capacity_creates_empty_queue() {
+        let mut queue: FixedQueue<i32> = FixedQueue::with_capacity(3);
+
+        assert_eq!(queue.capacity(), 3);
+        assert_eq!(queue.len(), 0);
+        assert!(queue.is_empty());
+
+        queue.push_back(10);
+        queue.push_back(20);
+
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue.pop_front(), Some(10));
+    }
+
+    #[test]
+    fn clear_and_set_capacity_resets_queue() {
+        let mut queue = create_queue(&[1, 2, 3]);
+        queue.pop_front();
+        queue.push_back(4);
+
+        queue.clear_and_set_capacity(2);
+
+        assert_eq!(queue.capacity(), 2);
+        assert_eq!(queue.len(), 0);
+        assert!(queue.is_empty());
+
+        queue.push_back(100);
+        assert_eq!(queue.pop_front(), Some(100));
     }
 }

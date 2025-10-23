@@ -46,6 +46,9 @@ type MetaNodeChildren = TinyVec<[Option<MetaNodeID>; 2]>;
 pub struct MetaNodeData {
     pub kind: MetaNodeKind,
     pub params: MetaNodeParams,
+    prepared_text_zoom: Option<f32>,
+    header_galley: Option<Arc<Galley>>,
+    param_galleys: TinyVec<[Option<Arc<Galley>>; 12]>,
 }
 
 type MetaNodeParams = TinyVec<[MetaNodeParam; 12]>;
@@ -140,6 +143,9 @@ impl MetaNodeData {
         Self {
             kind,
             params: kind.params(),
+            prepared_text_zoom: None,
+            header_galley: None,
+            param_galleys: TinyVec::new(),
         }
     }
 
@@ -163,49 +169,90 @@ impl MetaNodeData {
         NODE_PARAM_SPACING * zoom
     }
 
-    fn prepare_header_text(&self, ui: &Ui, zoom: f32) -> Arc<Galley> {
-        prepare_text(
+    /// Returns `true` if any of the parameters changed.
+    pub fn run_controls(&mut self, ui: &mut Ui) -> bool {
+        let mut any_param_changed = false;
+        for (idx, param) in self.params.iter_mut().enumerate() {
+            if param.show_controls(ui).changed() {
+                any_param_changed = true;
+
+                if let (Some(zoom), Some(gally)) =
+                    (self.prepared_text_zoom, self.param_galleys.get_mut(idx))
+                {
+                    gally.replace(prepare_text(
+                        ui,
+                        param.text_to_display(),
+                        Self::params_font(zoom),
+                        NODE_TEXT_COLOR,
+                    ));
+                }
+            };
+        }
+        any_param_changed
+    }
+
+    fn prepare_text(&mut self, ui: &Ui, zoom: f32) {
+        if self
+            .prepared_text_zoom
+            .is_some_and(|prepared_text_zoom| prepared_text_zoom == zoom)
+        {
+            return;
+        }
+        self.prepared_text_zoom = Some(zoom);
+
+        self.header_galley = Some(prepare_text(
             ui,
             self.kind.label().to_string(),
             Self::header_font(zoom),
             NODE_TEXT_COLOR,
-        )
+        ));
+
+        self.param_galleys.clear();
+        self.param_galleys
+            .extend(self.params.iter().map(move |param| {
+                Some(prepare_text(
+                    ui,
+                    param.text_to_display(),
+                    Self::params_font(zoom),
+                    NODE_TEXT_COLOR,
+                ))
+            }));
     }
 
-    fn prepare_param_texts(&self, ui: &Ui, zoom: f32) -> impl Iterator<Item = Arc<Galley>> {
-        self.params.iter().map(move |param| {
-            prepare_text(
-                ui,
-                param.text_to_display(),
-                Self::params_font(zoom),
-                NODE_TEXT_COLOR,
-            )
-        })
+    fn prepared_header_text(&self) -> &Arc<Galley> {
+        self.header_galley.as_ref().unwrap()
     }
 
-    fn compute_size(&self, ui: &Ui, zoom: f32) -> Vec2 {
-        let header_text = self.prepare_header_text(ui, zoom);
+    fn prepared_param_texts(&self) -> impl Iterator<Item = &Arc<Galley>> {
+        self.param_galleys.iter().map(|g| g.as_ref().unwrap())
+    }
 
-        let mut max_text_width = header_text.size().x;
-        let mut total_text_height = header_text.size().y;
+    fn compute_size(&self) -> Vec2 {
+        let unzooming_factor = self.prepared_text_zoom.unwrap().recip();
 
-        for param_text in self.prepare_param_texts(ui, zoom) {
-            max_text_width = max_text_width.max(param_text.size().x);
-            total_text_height += param_text.size().y;
+        let header_text_size = self.prepared_header_text().size() * unzooming_factor;
+
+        let mut max_text_width = header_text_size.x;
+        let mut total_text_height = header_text_size.y;
+
+        for param_text in self.prepared_param_texts() {
+            let param_text_size = param_text.size() * unzooming_factor;
+            max_text_width = max_text_width.max(param_text_size.x);
+            total_text_height += param_text_size.y;
         }
 
         if !self.params.is_empty() {
-            total_text_height += Self::header_spacing(zoom)
-                + Self::param_spacing(zoom) * ((self.params.len() - 1) as f32);
+            total_text_height += Self::header_spacing(1.0)
+                + Self::param_spacing(1.0) * ((self.params.len() - 1) as f32);
         }
 
         let screen_node_size =
-            vec2(max_text_width, total_text_height) + 2.0 * Self::text_padding(zoom);
+            vec2(max_text_width, total_text_height) + 2.0 * Self::text_padding(1.0);
 
-        screen_node_size / zoom
+        screen_node_size
     }
 
-    fn paint(&self, ui: &Ui, painter: &Painter, node_rect: Rect, zoom: f32, is_selected: bool) {
+    fn paint(&self, painter: &Painter, node_rect: Rect, zoom: f32, is_selected: bool) {
         // Draw node background and outline
 
         let (stroke_width, stroke_color) = if is_selected {
@@ -222,13 +269,13 @@ impl MetaNodeData {
         painter.rect_stroke(node_rect, corner_radius, stroke, StrokeKind::Inside);
 
         // Draw node text
-        self.paint_text(ui, painter, &node_rect, zoom);
+        self.paint_text(painter, &node_rect, zoom);
     }
 
-    fn paint_text(&self, ui: &Ui, painter: &Painter, node_rect: &Rect, zoom: f32) {
+    fn paint_text(&self, painter: &Painter, node_rect: &Rect, zoom: f32) {
         let padding = Self::text_padding(zoom);
 
-        let header_text = self.prepare_header_text(ui, zoom);
+        let header_text = self.prepared_header_text();
         let header_pos = pos2(
             node_rect.center().x - 0.5 * header_text.size().x,
             node_rect.top() + padding.y,
@@ -240,7 +287,7 @@ impl MetaNodeData {
             header_pos.y + header_text.size().y + Self::header_spacing(zoom),
         );
 
-        for param_text in self.prepare_param_texts(ui, zoom) {
+        for param_text in self.prepared_param_texts() {
             painter.galley(cursor, param_text.clone(), NODE_TEXT_COLOR);
             cursor.y += param_text.size().y + Self::param_spacing(zoom);
         }
@@ -249,6 +296,7 @@ impl MetaNodeData {
     fn change_kind(&mut self, new_kind: MetaNodeKind) {
         self.kind = new_kind;
         self.params = new_kind.params();
+        self.prepared_text_zoom = None;
     }
 }
 

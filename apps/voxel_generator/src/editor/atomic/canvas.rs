@@ -1,7 +1,7 @@
 use crate::editor::{
     PanZoomState,
     atomic::{AtomicNode, AtomicPort, build::update_viewer_nodes},
-    layout::compute_delta_to_resolve_overlaps,
+    layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
 };
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact::egui::{
@@ -13,6 +13,11 @@ use impact_voxel::generation::sdf::{SDFGraph, SDFNodeID};
 const CANVAS_DEFAULT_POS: Pos2 = pos2(640.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
 
+const MIN_NODE_SEPARATION: f32 = 8.0;
+
+const AUTO_LAYOUT_HORIZONTAL_GAP: f32 = 16.0;
+const AUTO_LAYOUT_VERTICAL_GAP: f32 = 40.0;
+
 const EDGE_WIDTH: f32 = 2.0;
 const EDGE_COLOR: Color32 = Color32::WHITE;
 
@@ -23,6 +28,30 @@ pub struct AtomicGraphCanvas {
     nodes: Vec<AtomicNode>,
     is_panning: bool,
     dragging_node_id: Option<SDFNodeID>,
+    should_perform_layout: bool,
+    layout_scratch: LayoutScratch,
+}
+
+struct LayoutableAtomicGraph<'a> {
+    nodes: &'a [AtomicNode],
+    rects: &'a mut [Rect],
+}
+
+impl<'a> LayoutableGraph for LayoutableAtomicGraph<'a> {
+    fn n_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+
+    fn child_indices(&self, node_idx: usize) -> impl Iterator<Item = usize> {
+        self.nodes[node_idx]
+            .children
+            .iter()
+            .map(|child_id| *child_id as usize)
+    }
+
+    fn node_rect_mut(&mut self, node_idx: usize) -> &mut Rect {
+        &mut self.rects[node_idx]
+    }
 }
 
 impl AtomicGraphCanvas {
@@ -32,11 +61,14 @@ impl AtomicGraphCanvas {
             nodes: Vec::new(),
             is_panning: false,
             dragging_node_id: None,
+            should_perform_layout: false,
+            layout_scratch: LayoutScratch::new(),
         }
     }
 
     pub fn update_nodes<A: Allocator>(&mut self, graph: &SDFGraph<A>) {
         update_viewer_nodes(graph, &mut self.nodes);
+        self.should_perform_layout = true;
     }
 
     fn cursor_should_be_hidden(&self) -> bool {
@@ -68,11 +100,34 @@ impl AtomicGraphCanvas {
                 self.pan_zoom_state.handle_scroll(ui, canvas_rect);
 
                 let mut world_node_rects = AVec::with_capacity_in(self.nodes.len(), arena);
-                for node in &self.nodes {
-                    world_node_rects.push(Rect::from_min_size(
-                        node.position,
-                        node.data.compute_size(ui, self.pan_zoom_state.zoom),
-                    ));
+                for node in &mut self.nodes {
+                    node.data.prepare_text(ui, self.pan_zoom_state.zoom);
+
+                    world_node_rects
+                        .push(Rect::from_min_size(node.position, node.data.compute_size()));
+                }
+
+                if self.should_perform_layout {
+                    let origin = self
+                        .pan_zoom_state
+                        .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top());
+
+                    layout_vertical(
+                        &mut self.layout_scratch,
+                        &mut LayoutableAtomicGraph {
+                            nodes: &self.nodes,
+                            rects: &mut world_node_rects,
+                        },
+                        origin,
+                        AUTO_LAYOUT_HORIZONTAL_GAP,
+                        AUTO_LAYOUT_VERTICAL_GAP,
+                    );
+
+                    for (node, node_rect) in self.nodes.iter_mut().zip(&world_node_rects) {
+                        node.position = node_rect.min;
+                    }
+
+                    self.should_perform_layout = false;
                 }
 
                 for (node_idx, (node, &world_node_rect)) in
@@ -111,13 +166,14 @@ impl AtomicGraphCanvas {
                             },
                             node_id,
                             moved_node_rect,
+                            MIN_NODE_SEPARATION,
                         );
 
                         node.position += delta + resolve_delta;
                     }
 
                     node.data
-                        .paint(ui, &painter, node_rect, self.pan_zoom_state.zoom);
+                        .paint(&painter, node_rect, self.pan_zoom_state.zoom);
                 }
 
                 // We will only need node rects in screen space from now
