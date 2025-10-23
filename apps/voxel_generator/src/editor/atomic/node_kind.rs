@@ -59,14 +59,14 @@ impl AtomicNode {
         );
         params.push(
             AtomicFloatParam::new(
-                LabelAndHoverText::label_only("Noise frequency"),
+                LabelAndHoverText::label_only("Frequency"),
                 node.noise_frequency(),
             )
             .into(),
         );
         params.push(
             AtomicFloatParam::new(
-                LabelAndHoverText::label_only("Noise threshold"),
+                LabelAndHoverText::label_only("Threshold"),
                 node.noise_threshold(),
             )
             .into(),
