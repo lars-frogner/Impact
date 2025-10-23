@@ -76,7 +76,7 @@ impl AtomicGraphCanvas {
         self.is_panning || self.dragging_node_id.is_some()
     }
 
-    pub fn show<A: Allocator>(&mut self, arena: A, ctx: &Context) {
+    pub fn show<A: Allocator>(&mut self, arena: A, ctx: &Context, layout_requested: bool) {
         Window::new("Compiled SDF graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
@@ -108,7 +108,7 @@ impl AtomicGraphCanvas {
                         .push(Rect::from_min_size(node.position, node.data.compute_size()));
                 }
 
-                if self.should_perform_layout {
+                if self.should_perform_layout || layout_requested {
                     let origin = self
                         .pan_zoom_state
                         .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top());
