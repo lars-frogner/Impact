@@ -2,11 +2,12 @@ use super::{MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaPort};
 use crate::editor::{
     MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
+    util::create_bezier_edge,
 };
 use impact::{
     egui::{
-        Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Stroke, Vec2,
-        Window, pos2, vec2,
+        Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Vec2, Window,
+        epaint::PathStroke, pos2, vec2,
     },
     impact_containers::KeyIndexMapper,
 };
@@ -496,21 +497,21 @@ impl MetaGraphCanvas {
                             continue;
                         };
 
-                        let from = MetaPort::Child {
+                        let child_pos = MetaPort::Child {
                             slot,
                             of: parent_node.children.len(),
                         }
                         .center(parent_rect);
 
-                        let to = MetaPort::Parent.center(node_rect);
+                        let parent_pos = MetaPort::Parent.center(node_rect);
 
-                        painter.line_segment(
-                            [from, to],
-                            Stroke {
-                                width: EDGE_WIDTH * self.pan_zoom_state.zoom,
-                                color: EDGE_COLOR,
-                            },
+                        let edge_shape = create_bezier_edge(
+                            child_pos,
+                            parent_pos,
+                            PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
+                            self.pan_zoom_state.zoom,
                         );
+                        painter.add(edge_shape);
                     }
                 }
 
@@ -630,13 +631,23 @@ impl MetaGraphCanvas {
                         ui.input(|i| i.pointer.hover_pos()),
                     )
                 {
-                    painter.line_segment(
-                        [pending_edge.from_port.center(node_rect), mouse_pos],
-                        Stroke {
-                            width: PENDING_EDGE_WIDTH * self.pan_zoom_state.zoom,
-                            color: PENDING_EDGE_COLOR,
-                        },
+                    let from = pending_edge.from_port.center(node_rect);
+                    let to = mouse_pos;
+                    let (child_pos, parent_pos) = if pending_edge.from_port == MetaPort::Parent {
+                        (to, from)
+                    } else {
+                        (from, to)
+                    };
+                    let edge_shape = create_bezier_edge(
+                        child_pos,
+                        parent_pos,
+                        PathStroke::new(
+                            PENDING_EDGE_WIDTH * self.pan_zoom_state.zoom,
+                            PENDING_EDGE_COLOR,
+                        ),
+                        self.pan_zoom_state.zoom,
                     );
+                    painter.add(edge_shape);
                 }
 
                 // Draw status dot

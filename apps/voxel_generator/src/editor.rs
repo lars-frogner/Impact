@@ -1,6 +1,7 @@
 mod atomic;
 mod layout;
 mod meta;
+mod util;
 
 use allocator_api2::alloc::Allocator;
 use atomic::canvas::AtomicGraphCanvas;
