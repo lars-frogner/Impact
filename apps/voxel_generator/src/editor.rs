@@ -134,7 +134,7 @@ impl CustomPanels for Editor {
         };
 
         option_panel(ctx, config, "Editor panel", |ui| {
-            let mut perform_layout = false;
+            let mut layout_requested = false;
 
             option_group(ui, "main", |ui| {
                 option_checkbox(
@@ -161,8 +161,8 @@ impl CustomPanels for Editor {
                         hover_text: "",
                     },
                 );
-                if ui.button("Layout").clicked() {
-                    perform_layout = true;
+                if ui.button("Layout now").clicked() {
+                    layout_requested = true;
                 }
             });
 
@@ -262,8 +262,8 @@ impl CustomPanels for Editor {
                 }
             });
 
-            perform_layout =
-                perform_layout || (pending_new_node.is_some() && self.config.auto_layout);
+            let perform_layout =
+                layout_requested || (pending_new_node.is_some() && self.config.auto_layout);
 
             let canvas_result = self.meta_graph_canvas.show(
                 &mut self.meta_canvas_scratch,
@@ -275,7 +275,7 @@ impl CustomPanels for Editor {
             );
 
             if self.config.show_atomic_graph {
-                self.atomic_graph_canvas.show(arena, ctx);
+                self.atomic_graph_canvas.show(arena, ctx, layout_requested);
             }
 
             connectivity_may_have_changed =
