@@ -509,7 +509,6 @@ impl MetaGraphCanvas {
                             child_pos,
                             parent_pos,
                             PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
-                            self.pan_zoom_state.zoom,
                         );
                         painter.add(edge_shape);
                     }
@@ -645,7 +644,6 @@ impl MetaGraphCanvas {
                             PENDING_EDGE_WIDTH * self.pan_zoom_state.zoom,
                             PENDING_EDGE_COLOR,
                         ),
-                        self.pan_zoom_state.zoom,
                     );
                     painter.add(edge_shape);
                 }

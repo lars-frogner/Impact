@@ -10,12 +10,11 @@ pub fn create_bezier_edge(
     child_pos: Pos2,
     parent_pos: Pos2,
     stroke: PathStroke,
-    zoom: f32,
 ) -> CubicBezierShape {
     // Vertical distance guides curvature
     let dy = (parent_pos.y - child_pos.y).abs();
 
-    let ctrl = (dy * CURVATURE_FACTOR).max(MIN_CURVATURE) * zoom;
+    let ctrl = (dy * CURVATURE_FACTOR).max(MIN_CURVATURE);
 
     let p0 = child_pos;
     let p3 = parent_pos;
