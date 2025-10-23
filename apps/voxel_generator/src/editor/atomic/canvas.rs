@@ -215,7 +215,6 @@ impl AtomicGraphCanvas {
                             child_pos,
                             parent_pos,
                             PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
-                            self.pan_zoom_state.zoom,
                         );
                         painter.add(edge_shape);
                     }
