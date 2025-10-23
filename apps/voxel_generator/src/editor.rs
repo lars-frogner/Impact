@@ -6,7 +6,7 @@ mod util;
 use allocator_api2::alloc::Allocator;
 use atomic::canvas::AtomicGraphCanvas;
 use impact::{
-    egui::{Button, ComboBox, Context, PointerButton, Pos2, Rect, Response, Ui, Vec2},
+    egui::{Button, ComboBox, Context, PointerButton, Pos2, Rect, Ui, Vec2},
     engine::Engine,
 };
 use impact_dev_ui::{
@@ -329,9 +329,28 @@ impl PanZoomState {
         )
     }
 
-    pub fn handle_drag(&mut self, response: &Response) {
-        if response.dragged_by(PointerButton::Secondary) {
-            self.pan += response.drag_delta();
+    pub fn handle_drag(&mut self, ui: &Ui, canvas_rect: Rect, is_panning: &mut bool) {
+        // Begin pan if secondary was pressed inside canvas
+        if ui.input(|i| {
+            i.pointer.button_pressed(PointerButton::Secondary)
+                && i.pointer
+                    .interact_pos()
+                    .is_some_and(|p| canvas_rect.contains(p))
+        }) {
+            *is_panning = true;
+        }
+
+        // End pan on release (or if no longer down)
+        if ui.input(|i| {
+            i.pointer.button_released(PointerButton::Secondary)
+                || !i.pointer.button_down(PointerButton::Secondary)
+        }) {
+            *is_panning = false;
+        }
+
+        if *is_panning {
+            let screen_delta = ui.input(|i| i.pointer.delta());
+            self.pan += screen_delta;
         }
     }
 

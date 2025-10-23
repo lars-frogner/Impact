@@ -306,13 +306,8 @@ impl MetaGraphCanvas {
 
                 let painter = ui.painter_at(canvas_rect);
 
-                if canvas_response.drag_started_by(PointerButton::Secondary) {
-                    self.is_panning = true;
-                }
-                if canvas_response.drag_stopped_by(PointerButton::Secondary) {
-                    self.is_panning = false;
-                }
-                self.pan_zoom_state.handle_drag(&canvas_response);
+                self.pan_zoom_state
+                    .handle_drag(ui, canvas_rect, &mut self.is_panning);
 
                 self.pan_zoom_state.handle_scroll(ui, canvas_rect);
 
@@ -427,44 +422,50 @@ impl MetaGraphCanvas {
                         .pan_zoom_state
                         .world_rect_to_screen_space(canvas_origin, world_node_rect);
 
-                    let node_response = ui.interact(
-                        node_rect,
-                        Id::new(("meta_node", node_id)),
-                        Sense::click_and_drag(),
-                    );
-
-                    if node_response.drag_started() {
-                        self.dragging_node_id = Some(node_id);
-                    }
-                    if node_response.drag_stopped() && self.dragging_node_id == Some(node_id) {
+                    if self.is_panning {
                         self.dragging_node_id = None;
-                    }
+                    } else {
+                        let node_response = ui.interact(
+                            node_rect,
+                            Id::new(("meta_node", node_id)),
+                            Sense::click_and_drag(),
+                        );
 
-                    // Handle node selection
+                        // Handle node selection
 
-                    if node_response.clicked() && self.pending_edge.is_none() {
-                        self.selected_node_id = Some(node_id);
+                        if node_response.clicked() && self.pending_edge.is_none() {
+                            self.selected_node_id = Some(node_id);
+                        }
+
+                        // Handle node dragging
+
+                        if node_response.drag_started_by(PointerButton::Primary) {
+                            self.dragging_node_id = Some(node_id);
+                        }
+                        if node_response.drag_stopped_by(PointerButton::Primary)
+                            && self.dragging_node_id == Some(node_id)
+                        {
+                            self.dragging_node_id = None;
+                        }
+
+                        if node_response.dragged_by(PointerButton::Primary) {
+                            let delta = self
+                                .pan_zoom_state
+                                .screen_vec_to_world_space(node_response.drag_delta());
+
+                            let moved_node_rect = world_node_rect.translate(delta);
+                            let resolve_delta = compute_delta_to_resolve_overlaps(
+                                || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
+                                node_id,
+                                moved_node_rect,
+                                MIN_NODE_SEPARATION,
+                            );
+
+                            node.position += delta + resolve_delta;
+                        }
                     }
 
                     let is_selected = self.selected_node_id == Some(node_id);
-
-                    // Handle node dragging
-
-                    if node_response.dragged() {
-                        let delta = self
-                            .pan_zoom_state
-                            .screen_vec_to_world_space(node_response.drag_delta());
-
-                        let moved_node_rect = world_node_rect.translate(delta);
-                        let resolve_delta = compute_delta_to_resolve_overlaps(
-                            || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
-                            node_id,
-                            moved_node_rect,
-                            MIN_NODE_SEPARATION,
-                        );
-
-                        node.position += delta + resolve_delta;
-                    }
 
                     node.data
                         .paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
