@@ -23,8 +23,8 @@ const NODE_HEADER_SPACING: f32 = 8.0;
 const NODE_PARAM_SPACING: f32 = 4.0;
 const NODE_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
 
-const PORT_RADIUS: f32 = 8.0;
-const PORT_FILL_COLOR: Color32 = Color32::LIGHT_GRAY;
+const PORT_RADIUS: f32 = 0.0; // Hide ports
+const PORT_FILL_COLOR: Color32 = Color32::from_gray(80);
 
 #[derive(Clone, Debug)]
 pub struct AtomicNode {
