@@ -2,11 +2,12 @@ use crate::editor::{
     PanZoomState,
     atomic::{AtomicNode, AtomicPort, build::update_viewer_nodes},
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
+    util::create_bezier_edge,
 };
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact::egui::{
-    Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Stroke, Vec2, Window, pos2,
-    vec2,
+    Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Vec2, Window,
+    epaint::PathStroke, pos2, vec2,
 };
 use impact_voxel::generation::sdf::{SDFGraph, SDFNodeID};
 
@@ -202,21 +203,21 @@ impl AtomicGraphCanvas {
                             continue;
                         };
 
-                        let from = AtomicPort::Child {
+                        let child_pos = AtomicPort::Child {
                             slot,
                             of: parent_node.children.len(),
                         }
                         .center(parent_rect);
 
-                        let to = AtomicPort::Parent.center(node_rect);
+                        let parent_pos = AtomicPort::Parent.center(node_rect);
 
-                        painter.line_segment(
-                            [from, to],
-                            Stroke {
-                                width: EDGE_WIDTH * self.pan_zoom_state.zoom,
-                                color: EDGE_COLOR,
-                            },
+                        let edge_shape = create_bezier_edge(
+                            child_pos,
+                            parent_pos,
+                            PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
+                            self.pan_zoom_state.zoom,
                         );
+                        painter.add(edge_shape);
                     }
                 }
 
