@@ -31,13 +31,13 @@ use twox_hash::XxHash32;
 pub struct SDFGenerator<A: Allocator = Global> {
     /// Nodes in reverse depth-first order. The last node is the root.
     nodes: AVec<ProcessedSDFNode, A>,
-    primitive_count: usize,
+    required_forward_stack_size: usize,
     domain: AxisAlignedBox<f32>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SDFGeneratorBlockBuffers<const COUNT: usize, A: Allocator> {
-    /// Contains `primitive_count + 1` arrays, where the last one is scratch
+    /// Contains `required_forward_stack_size + 1` arrays, where the last one is scratch
     /// space.
     signed_distance_stack: AVec<[f32; COUNT], A>,
 }
@@ -241,7 +241,7 @@ impl<A: Allocator> SDFGenerator<A> {
     pub fn empty_in(alloc: A) -> Self {
         Self {
             nodes: AVec::new_in(alloc),
-            primitive_count: 0,
+            required_forward_stack_size: 0,
             domain: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
         }
     }
@@ -267,7 +267,8 @@ impl<A: Allocator> SDFGenerator<A> {
 
         operation_stack.push(BuildOperation::VisitChildren(root_node_id));
 
-        let mut primitive_count = 0;
+        let mut stack_top = 0;
+        let mut max_stack_top = 0;
 
         while let Some(operation) = operation_stack.pop() {
             match operation {
@@ -343,15 +344,12 @@ impl<A: Allocator> SDFGenerator<A> {
                         match node {
                             SDFNode::Box(box_generator) => {
                                 domains[node_idx] = box_generator.domain_bounds();
-                                primitive_count += 1;
                             }
                             SDFNode::Sphere(sphere_generator) => {
                                 domains[node_idx] = sphere_generator.domain_bounds();
-                                primitive_count += 1;
                             }
                             SDFNode::GradientNoise(gradient_noise_generator) => {
                                 domains[node_idx] = gradient_noise_generator.domain_bounds();
-                                primitive_count += 1;
                             }
                             &SDFNode::Translation(SDFTranslation {
                                 child_id,
@@ -444,9 +442,31 @@ impl<A: Allocator> SDFGenerator<A> {
                         expanded_domain: domains[node_idx].clone(),
                         domain_margin: 0.0,
                     });
+
+                    // Keep track of where the top of an operation stack would
+                    // be during a traversal from children to parents
+                    match node {
+                        SDFNode::Box(_) | SDFNode::Sphere(_) | SDFNode::GradientNoise(_) => {
+                            stack_top += 1;
+                            if stack_top > max_stack_top {
+                                max_stack_top = stack_top;
+                            }
+                        }
+                        SDFNode::Union(_) | SDFNode::Subtraction(_) | SDFNode::Intersection(_) => {
+                            debug_assert!(stack_top >= 2);
+                            stack_top -= 1;
+                        }
+                        SDFNode::Translation(_)
+                        | SDFNode::Rotation(_)
+                        | SDFNode::Scaling(_)
+                        | SDFNode::MultifractalNoise(_)
+                        | SDFNode::MultiscaleSphere(_) => {}
+                    }
                 }
             }
         }
+
+        debug_assert_eq!(stack_top, 1);
 
         Self::determine_transforms_and_margins(arena, &mut processed_nodes);
 
@@ -454,7 +474,7 @@ impl<A: Allocator> SDFGenerator<A> {
 
         Ok(Self {
             nodes: processed_nodes,
-            primitive_count,
+            required_forward_stack_size: max_stack_top,
             domain,
         })
     }
@@ -583,11 +603,11 @@ impl<A: Allocator> SDFGenerator<A> {
         &self,
         alloc: A,
     ) -> SDFGeneratorBlockBuffers<COUNT, A> {
-        // We only strictly need `self.primitive_count` signed distance arrays,
-        // but we include one additional array for scratch space at the end of
-        // the allocation
+        // We only strictly need `self.required_forward_stack_size` signed
+        // distance arrays, but we include one additional array for scratch
+        // space at the end of the allocation
         let mut signed_distance_stack = AVec::new_in(alloc);
-        signed_distance_stack.resize(self.primitive_count + 1, [0.0; COUNT]);
+        signed_distance_stack.resize(self.required_forward_stack_size + 1, [0.0; COUNT]);
 
         SDFGeneratorBlockBuffers {
             signed_distance_stack,
