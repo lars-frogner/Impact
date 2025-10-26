@@ -38,11 +38,18 @@ pub type MetaNodeID = u64;
 pub struct MetaNode {
     pub position: Pos2,
     pub data: MetaNodeData,
-    pub parent: Option<MetaNodeID>,
-    pub children: MetaNodeChildren,
+    pub links_to_parents: MetaNodeParentLinks,
+    pub links_to_children: MetaNodeChildLinks,
 }
 
-type MetaNodeChildren = TinyVec<[Option<MetaNodeID>; 2]>;
+type MetaNodeParentLinks = TinyVec<[Option<MetaNodeLink>; 2]>;
+type MetaNodeChildLinks = TinyVec<[Option<MetaNodeLink>; 2]>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MetaNodeLink {
+    pub to_node: MetaNodeID,
+    pub to_slot: usize,
+}
 
 #[derive(Clone, Debug)]
 pub struct MetaNodeData {
@@ -57,13 +64,12 @@ type MetaNodeParams = TinyVec<[MetaNodeParam; 12]>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct MetaPortConfig {
-    pub has_parent: bool,
     pub children: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MetaPort {
-    Parent,
+    Parent { slot: usize, of: usize },
     Child { slot: usize, of: usize },
 }
 
@@ -92,51 +98,32 @@ impl MetaNode {
     fn new(position: Pos2, data: MetaNodeData) -> Self {
         let kind = data.kind;
 
-        let mut children = MetaNodeChildren::new();
-        children.resize(kind.port_config().children, None);
+        let mut parent_links = MetaNodeParentLinks::new();
+        if !kind.is_root() {
+            parent_links.resize(1, None);
+        }
+
+        let mut child_links = MetaNodeChildLinks::new();
+        child_links.resize(kind.port_config().children, None);
 
         Self {
             position,
             data,
-            parent: None,
-            children,
+            links_to_parents: parent_links,
+            links_to_children: child_links,
         }
     }
 
     fn change_kind(&mut self, new_kind: MetaNodeKind) {
         self.data.change_kind(new_kind);
-        self.children.resize(new_kind.port_config().children, None);
+        self.links_to_children
+            .resize(new_kind.port_config().children, None);
     }
 
     fn first_free_child_slot(&self) -> Option<usize> {
-        self.children.iter().position(|child| child.is_none())
-    }
-
-    fn get_node_attached_to_port(&self, port: MetaPort) -> Option<MetaNodeID> {
-        match port {
-            MetaPort::Parent => self.parent,
-            MetaPort::Child { slot, .. } => self.children.get(slot).copied().flatten(),
-        }
-    }
-
-    fn get_port_node_is_attached_to(
-        &self,
-        other_node_id: MetaNodeID,
-        other_port: MetaPort,
-    ) -> Option<MetaPort> {
-        match other_port {
-            MetaPort::Parent => self
-                .children
-                .iter()
-                .position(|child| *child == Some(other_node_id))
-                .map(|slot| MetaPort::Child {
-                    slot,
-                    of: self.children.len(),
-                }),
-            MetaPort::Child { .. } => {
-                (self.parent == Some(other_node_id)).then_some(MetaPort::Parent)
-            }
-        }
+        self.links_to_children
+            .iter()
+            .position(|link| link.is_none())
     }
 }
 
@@ -304,37 +291,24 @@ impl MetaNodeData {
 
 impl MetaPortConfig {
     const fn root() -> Self {
-        Self {
-            has_parent: false,
-            children: 1,
-        }
+        Self { children: 1 }
     }
 
     const fn leaf() -> Self {
-        Self {
-            has_parent: true,
-            children: 0,
-        }
+        Self { children: 0 }
     }
 
     const fn unary() -> Self {
-        Self {
-            has_parent: true,
-            children: 1,
-        }
+        Self { children: 1 }
     }
 
     const fn binary() -> Self {
-        Self {
-            has_parent: true,
-            children: 2,
-        }
+        Self { children: 2 }
     }
 
-    fn ports(&self) -> impl Iterator<Item = MetaPort> {
-        self.has_parent
-            .then_some(MetaPort::Parent)
-            .into_iter()
+    fn ports(&self, parents: usize) -> impl Iterator<Item = MetaPort> {
+        (0..parents)
+            .map(move |slot| MetaPort::Parent { slot, of: parents })
             .chain((0..self.children).map(|slot| MetaPort::Child {
                 slot,
                 of: self.children,
@@ -344,9 +318,15 @@ impl MetaPortConfig {
 
 impl MetaPort {
     fn center(&self, node_rect: &Rect) -> Pos2 {
-        match self {
-            Self::Parent => node_rect.center_top(),
-            &Self::Child { slot, of } => {
+        match *self {
+            Self::Parent { slot, of } => {
+                node_rect.left_top()
+                    + vec2(
+                        (1.0 + slot as f32) * node_rect.width() / (of as f32 + 1.0),
+                        0.0,
+                    )
+            }
+            Self::Child { slot, of } => {
                 node_rect.left_bottom()
                     + vec2(
                         (1.0 + slot as f32) * node_rect.width() / (of as f32 + 1.0),
@@ -357,9 +337,9 @@ impl MetaPort {
     }
 
     fn id(&self, node_id: MetaNodeID) -> Id {
-        match self {
-            Self::Parent => Id::new(("parent_port", node_id)),
-            &Self::Child { slot, .. } => Id::new(("child_port", slot, node_id)),
+        match *self {
+            Self::Parent { slot, .. } => Id::new(("parent_port", slot, node_id)),
+            Self::Child { slot, .. } => Id::new(("child_port", slot, node_id)),
         }
     }
 

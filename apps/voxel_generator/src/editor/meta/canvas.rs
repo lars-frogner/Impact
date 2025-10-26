@@ -2,6 +2,7 @@ use super::{MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaPort};
 use crate::editor::{
     MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
+    meta::MetaNodeLink,
     util::create_bezier_edge,
 };
 use impact::{
@@ -9,9 +10,9 @@ use impact::{
         Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Vec2, Window,
         epaint::PathStroke, pos2, vec2,
     },
-    impact_containers::KeyIndexMapper,
+    impact_containers::{BitVector, KeyIndexMapper},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(200.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
@@ -49,7 +50,14 @@ pub struct MetaGraphCanvas {
 pub struct MetaCanvasScratch {
     node_rects: BTreeMap<MetaNodeID, Rect>,
     index_map: KeyIndexMapper<MetaNodeID>,
+    search: SearchScratch,
     layout: LayoutScratch,
+}
+
+#[derive(Clone, Debug)]
+struct SearchScratch {
+    stack: Vec<MetaNodeID>,
+    seen: BitVector,
 }
 
 #[derive(Clone, Debug)]
@@ -94,31 +102,43 @@ impl MetaGraphCanvas {
         self.nodes.get_mut(&node_id).unwrap()
     }
 
-    fn get_attached_node_and_port(
-        &self,
-        node_id: MetaNodeID,
-        port: MetaPort,
-    ) -> Option<(MetaNodeID, MetaPort)> {
-        let node = self.nodes.get(&node_id)?;
-        let attached_node_id = node.get_node_attached_to_port(port)?;
-        let attached_node = self.nodes.get(&attached_node_id)?;
-        let attached_port = attached_node.get_port_node_is_attached_to(node_id, port)?;
-        Some((attached_node_id, attached_port))
+    fn node_has_link_at_port(&self, node_id: MetaNodeID, port: MetaPort) -> bool {
+        let Some(node) = self.nodes.get(&node_id) else {
+            return false;
+        };
+        match port {
+            MetaPort::Parent { slot, .. } => node.links_to_parents.get(slot).is_some(),
+            MetaPort::Child { slot, .. } => node.links_to_children.get(slot).is_some(),
+        }
     }
 
-    fn node_can_reach_other(&self, node_id: MetaNodeID, other_node_id: MetaNodeID) -> bool {
-        let mut stack = vec![node_id];
-        let mut seen = BTreeSet::new();
+    fn node_can_reach_other(
+        &self,
+        scratch: &mut SearchScratch,
+        node_id: MetaNodeID,
+        other_node_id: MetaNodeID,
+    ) -> bool {
+        let stack = &mut scratch.stack;
+        let seen = &mut scratch.seen;
+
+        stack.clear();
+        stack.push(node_id);
+
+        seen.resize_and_unset_all(self.node_id_counter as usize);
 
         while let Some(node_id) = stack.pop() {
-            if !seen.insert(node_id) {
+            if seen.set_bit(node_id as usize) {
                 continue;
             }
             if node_id == other_node_id {
                 return true;
             }
             if let Some(node) = self.nodes.get(&node_id) {
-                for child_node_id in node.children.iter().filter_map(|id| *id) {
+                for child_node_id in node
+                    .links_to_children
+                    .iter()
+                    .filter_map(|link| link.map(|link| link.to_node))
+                {
                     stack.push(child_node_id);
                 }
             }
@@ -146,12 +166,13 @@ impl MetaGraphCanvas {
             self.selected_node_id = None;
         }
 
-        self.detach_parent_of(node_id);
+        let (n_parent_slots, n_child_slots) = self.nodes.get(&node_id).map_or((0, 0), |node| {
+            (node.links_to_parents.len(), node.links_to_children.len())
+        });
 
-        let n_child_slots = self
-            .nodes
-            .get(&node_id)
-            .map_or(0, |node| node.data.kind.port_config().children);
+        for slot in 0..n_parent_slots {
+            self.detach_parent_of(node_id, slot);
+        }
 
         for slot in 0..n_child_slots {
             self.detach_child_of(node_id, slot);
@@ -162,27 +183,83 @@ impl MetaGraphCanvas {
         self.clear_pending_edge_if_from(node_id);
     }
 
-    pub fn change_node_kind(&mut self, node_id: MetaNodeID, new_kind: MetaNodeKind) {
+    pub fn change_node_kind(
+        &mut self,
+        scratch: &mut MetaCanvasScratch,
+        node_id: MetaNodeID,
+        new_kind: MetaNodeKind,
+    ) {
         let Some(node) = self.nodes.get_mut(&node_id) else {
             return;
         };
-        let n_old_child_slots = node.children.len();
+
+        let n_old_child_slots = node.links_to_children.len();
         let n_new_child_slots = new_kind.port_config().children;
 
         // Detach dropped children and re-attach if there are available slots
         if n_new_child_slots < n_old_child_slots {
             for slot in n_new_child_slots..n_old_child_slots {
-                if let Some(child_node_id) = self.detach_child_of(node_id, slot) {
+                if let Some(MetaNodeLink {
+                    to_node: child_node_id,
+                    to_slot: parent_slot_on_child,
+                }) = self.detach_child_of(node_id, slot)
+                {
                     for slot in 0..n_new_child_slots {
-                        if self.node(node_id).children[slot].is_none() {
-                            self.try_attach(node_id, child_node_id, slot);
+                        if self.node(node_id).links_to_children[slot].is_none() {
+                            self.try_attach(
+                                &mut scratch.search,
+                                node_id,
+                                slot,
+                                child_node_id,
+                                parent_slot_on_child,
+                            );
                         }
                     }
                 };
             }
         }
 
+        // Parents stay the same
+
         self.node_mut(node_id).change_kind(new_kind);
+    }
+
+    pub fn change_parent_port_count(
+        &mut self,
+        scratch: &mut MetaCanvasScratch,
+        node_id: MetaNodeID,
+        new_count: usize,
+    ) {
+        let Some(node) = self.nodes.get_mut(&node_id) else {
+            return;
+        };
+
+        let old_count = node.links_to_parents.len();
+
+        if new_count > old_count {
+            node.links_to_parents.resize(new_count, None);
+        } else if new_count < old_count {
+            for slot in new_count..old_count {
+                if let Some(MetaNodeLink {
+                    to_node: parent_node_id,
+                    to_slot: child_slot_on_parent,
+                }) = self.detach_parent_of(node_id, slot)
+                {
+                    for slot in 0..new_count {
+                        if self.node(node_id).links_to_parents[slot].is_none() {
+                            self.try_attach(
+                                &mut scratch.search,
+                                parent_node_id,
+                                child_slot_on_parent,
+                                node_id,
+                                slot,
+                            );
+                        }
+                    }
+                };
+            }
+            self.node_mut(node_id).links_to_parents.truncate(new_count);
+        }
     }
 
     fn clear_pending_edge_if_from(&mut self, node_id: MetaNodeID) {
@@ -197,25 +274,33 @@ impl MetaGraphCanvas {
 
     fn can_attach(
         &self,
+        search_scratch: &mut SearchScratch,
         parent_node_id: MetaNodeID,
+        child_slot_on_parent: usize,
         child_node_id: MetaNodeID,
-        child_slot: usize,
+        parent_slot_on_child: usize,
     ) -> bool {
         if parent_node_id == child_node_id {
             return false;
         }
 
         // If they are already connected, attaching would create a cycle
-        if self.node_can_reach_other(child_node_id, parent_node_id) {
+        if self.node_can_reach_other(search_scratch, child_node_id, parent_node_id) {
             return false;
         }
 
-        // Slot must exist
+        // Slots must exist
         if self
             .nodes
             .get(&parent_node_id)
-            .and_then(|p| p.children.get(child_slot))
-            .is_none()
+            .is_none_or(|node| child_slot_on_parent >= node.links_to_children.len())
+        {
+            return false;
+        }
+        if self
+            .nodes
+            .get(&child_node_id)
+            .is_none_or(|node| parent_slot_on_child >= node.links_to_parents.len())
         {
             return false;
         }
@@ -225,61 +310,97 @@ impl MetaGraphCanvas {
 
     fn try_attach(
         &mut self,
+        search_scratch: &mut SearchScratch,
         parent_node_id: MetaNodeID,
+        child_slot_on_parent: usize,
         child_node_id: MetaNodeID,
-        child_slot: usize,
+        parent_slot_on_child: usize,
     ) -> bool {
-        if !self.can_attach(parent_node_id, child_node_id, child_slot) {
+        if !self.can_attach(
+            search_scratch,
+            parent_node_id,
+            child_slot_on_parent,
+            child_node_id,
+            parent_slot_on_child,
+        ) {
             return false;
         }
 
-        self.detach_parent_of(child_node_id);
+        self.detach_parent_of(child_node_id, parent_slot_on_child);
         if let Some(child_node) = self.nodes.get_mut(&child_node_id) {
-            child_node.parent = Some(parent_node_id);
+            child_node.links_to_parents[parent_slot_on_child] = Some(MetaNodeLink {
+                to_node: parent_node_id,
+                to_slot: child_slot_on_parent,
+            });
         }
 
-        self.detach_child_of(parent_node_id, child_slot);
+        self.detach_child_of(parent_node_id, child_slot_on_parent);
         if let Some(parent_node) = self.nodes.get_mut(&parent_node_id) {
-            parent_node.children[child_slot] = Some(child_node_id);
+            parent_node.links_to_children[child_slot_on_parent] = Some(MetaNodeLink {
+                to_node: child_node_id,
+                to_slot: parent_slot_on_child,
+            });
         }
 
         true
     }
 
-    /// Returns the ID of the detached parent node.
-    fn detach_parent_of(&mut self, node_id: MetaNodeID) -> Option<MetaNodeID> {
-        let node = self.nodes.get_mut(&node_id)?;
-
-        let parent_node_id = node.parent.take()?;
-
-        let parent_node = self.nodes.get_mut(&parent_node_id)?;
-
-        if let Some(slot) = parent_node
-            .children
-            .iter_mut()
-            .find(|child| **child == Some(node_id))
-        {
-            *slot = None;
-            Some(parent_node_id)
-        } else {
-            None
-        }
-    }
-
-    /// Returns the ID of the detached child node.
-    fn detach_child_of(&mut self, node_id: MetaNodeID, slot: usize) -> Option<MetaNodeID> {
-        let node = self.nodes.get_mut(&node_id)?;
-
-        let child_node_id = node.children.get_mut(slot).and_then(|child| child.take())?;
-
+    /// Returns the ID of the detached parent node and the slot on the parent
+    /// node the child was attached to.
+    fn detach_parent_of(
+        &mut self,
+        child_node_id: MetaNodeID,
+        parent_slot_on_child: usize,
+    ) -> Option<MetaNodeLink> {
         let child_node = self.nodes.get_mut(&child_node_id)?;
 
-        if child_node.parent == Some(node_id) {
-            child_node.parent = None;
-            Some(child_node_id)
-        } else {
-            None
+        let child_link_to_parent = child_node
+            .links_to_parents
+            .get_mut(parent_slot_on_child)
+            .and_then(|link| link.take())?;
+
+        if let Some(parent_link_to_child) = self
+            .nodes
+            .get_mut(&child_link_to_parent.to_node)
+            .and_then(|parent_node| {
+                parent_node
+                    .links_to_children
+                    .get_mut(child_link_to_parent.to_slot)
+            })
+        {
+            *parent_link_to_child = None;
         }
+
+        Some(child_link_to_parent)
+    }
+
+    /// Returns the ID of the detached child node and the slot on the child node
+    /// the parent was attached to.
+    fn detach_child_of(
+        &mut self,
+        parent_node_id: MetaNodeID,
+        child_slot_on_parent: usize,
+    ) -> Option<MetaNodeLink> {
+        let parent_node = self.nodes.get_mut(&parent_node_id)?;
+
+        let parent_link_to_child = parent_node
+            .links_to_children
+            .get_mut(child_slot_on_parent)
+            .and_then(|link| link.take())?;
+
+        if let Some(child_link_to_parent) = self
+            .nodes
+            .get_mut(&parent_link_to_child.to_node)
+            .and_then(|child_node| {
+                child_node
+                    .links_to_parents
+                    .get_mut(parent_link_to_child.to_slot)
+            })
+        {
+            *child_link_to_parent = None;
+        }
+
+        Some(parent_link_to_child)
     }
 
     pub fn show(
@@ -383,7 +504,13 @@ impl MetaGraphCanvas {
                             .nodes
                             .get(&selected_node_id)
                             .and_then(|selected_node| selected_node.first_free_child_slot())
-                        && self.try_attach(selected_node_id, node_id, free_child_slot)
+                        && self.try_attach(
+                            &mut scratch.search,
+                            selected_node_id,
+                            free_child_slot,
+                            node_id,
+                            0,
+                        )
                     {
                         connectivity_may_have_changed = true;
                     }
@@ -481,30 +608,35 @@ impl MetaGraphCanvas {
 
                 // Draw edges
 
-                for (&node_id, node) in &self.nodes {
-                    if let Some(parent_node_id) = node.parent
-                        && let (Some(parent_rect), Some(node_rect)) =
-                            (node_rects.get(&parent_node_id), node_rects.get(&node_id))
-                    {
-                        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
-                            continue;
-                        };
+                for (&child_node_id, child_node) in &self.nodes {
+                    let child_node_rect = &node_rects[&child_node_id];
 
-                        let Some(slot) = parent_node
-                            .children
-                            .iter()
-                            .position(|child| *child == Some(node_id))
+                    for (parent_slot_on_child, child_link_to_parent) in
+                        child_node.links_to_parents.iter().enumerate()
+                    {
+                        let &Some(MetaNodeLink {
+                            to_node: parent_node_id,
+                            to_slot: child_slot_on_parent,
+                        }) = child_link_to_parent
                         else {
                             continue;
                         };
+                        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
+                            continue;
+                        };
+                        let parent_rect = &node_rects[&parent_node_id];
 
                         let child_pos = MetaPort::Child {
-                            slot,
-                            of: parent_node.children.len(),
+                            slot: child_slot_on_parent,
+                            of: parent_node.links_to_children.len(),
                         }
                         .center(parent_rect);
 
-                        let parent_pos = MetaPort::Parent.center(node_rect);
+                        let parent_pos = MetaPort::Parent {
+                            slot: parent_slot_on_child,
+                            of: child_node.links_to_parents.len(),
+                        }
+                        .center(child_node_rect);
 
                         let edge_shape = create_bezier_edge(
                             child_pos,
@@ -518,7 +650,13 @@ impl MetaGraphCanvas {
                 // Draw ports
 
                 for (&node_id, node_rect) in node_rects {
-                    for port in self.node(node_id).data.kind.port_config().ports() {
+                    let node = self.node(node_id);
+                    for port in node
+                        .data
+                        .kind
+                        .port_config()
+                        .ports(node.links_to_parents.len())
+                    {
                         let mut enabled = true;
                         let mut highlighted = false;
 
@@ -526,16 +664,46 @@ impl MetaGraphCanvas {
                             // Ports we can attach the pending edge to are
                             // enabled and highlighted
                             match (pending_edge.from_port, port) {
-                                (MetaPort::Parent, MetaPort::Child { slot, .. }) => {
+                                (
+                                    MetaPort::Parent {
+                                        slot: parent_slot_on_child,
+                                        ..
+                                    },
+                                    MetaPort::Child {
+                                        slot: child_slot_on_parent,
+                                        ..
+                                    },
+                                ) => {
                                     let child_node_id = pending_edge.from_node;
                                     let parent_node_id = node_id;
-                                    enabled = self.can_attach(parent_node_id, child_node_id, slot);
+                                    enabled = self.can_attach(
+                                        &mut scratch.search,
+                                        parent_node_id,
+                                        child_slot_on_parent,
+                                        child_node_id,
+                                        parent_slot_on_child,
+                                    );
                                     highlighted = enabled;
                                 }
-                                (MetaPort::Child { slot, .. }, MetaPort::Parent) => {
+                                (
+                                    MetaPort::Child {
+                                        slot: child_slot_on_parent,
+                                        ..
+                                    },
+                                    MetaPort::Parent {
+                                        slot: parent_slot_on_child,
+                                        ..
+                                    },
+                                ) => {
                                     let parent_node_id = pending_edge.from_node;
                                     let child_node_id = node_id;
-                                    enabled = self.can_attach(parent_node_id, child_node_id, slot);
+                                    enabled = self.can_attach(
+                                        &mut scratch.search,
+                                        parent_node_id,
+                                        child_slot_on_parent,
+                                        child_node_id,
+                                        parent_slot_on_child,
+                                    );
                                     highlighted = enabled;
                                 }
                                 _ => {
@@ -560,18 +728,18 @@ impl MetaGraphCanvas {
                         if response.clicked() {
                             // Detach if there is a node attached to the port
                             if self.pending_edge.is_none()
-                                && self.get_attached_node_and_port(node_id, port).is_some()
+                                && self.node_has_link_at_port(node_id, port)
                             {
                                 match port {
-                                    MetaPort::Parent => {
-                                        self.detach_parent_of(node_id);
+                                    MetaPort::Parent { slot, .. } => {
+                                        self.detach_parent_of(node_id, slot);
                                     }
                                     MetaPort::Child { slot, .. } => {
                                         self.detach_child_of(node_id, slot);
                                     }
                                 }
 
-                                // Create a pending edge from the remaining attached port
+                                // Create a pending edge from the clicked port
                                 self.pending_edge = Some(PendingEdge {
                                     from_node: node_id,
                                     from_port: port,
@@ -584,18 +752,48 @@ impl MetaGraphCanvas {
 
                             if let Some(pending_edge) = &self.pending_edge {
                                 match (pending_edge.from_port, port) {
-                                    (MetaPort::Parent, MetaPort::Child { slot, .. }) => {
+                                    (
+                                        MetaPort::Parent {
+                                            slot: parent_slot_on_child,
+                                            ..
+                                        },
+                                        MetaPort::Child {
+                                            slot: child_slot_on_parent,
+                                            ..
+                                        },
+                                    ) => {
                                         let child_node_id = pending_edge.from_node;
                                         let parent_node_id = node_id;
-                                        if self.try_attach(parent_node_id, child_node_id, slot) {
+                                        if self.try_attach(
+                                            &mut scratch.search,
+                                            parent_node_id,
+                                            child_slot_on_parent,
+                                            child_node_id,
+                                            parent_slot_on_child,
+                                        ) {
                                             self.pending_edge = None;
                                             connectivity_may_have_changed = true;
                                         }
                                     }
-                                    (MetaPort::Child { slot, .. }, MetaPort::Parent) => {
+                                    (
+                                        MetaPort::Child {
+                                            slot: child_slot_on_parent,
+                                            ..
+                                        },
+                                        MetaPort::Parent {
+                                            slot: parent_slot_on_child,
+                                            ..
+                                        },
+                                    ) => {
                                         let parent_node_id = pending_edge.from_node;
                                         let child_node_id = node_id;
-                                        if self.try_attach(parent_node_id, child_node_id, slot) {
+                                        if self.try_attach(
+                                            &mut scratch.search,
+                                            parent_node_id,
+                                            child_slot_on_parent,
+                                            child_node_id,
+                                            parent_slot_on_child,
+                                        ) {
                                             self.pending_edge = None;
                                             connectivity_may_have_changed = true;
                                         }
@@ -633,11 +831,12 @@ impl MetaGraphCanvas {
                 {
                     let from = pending_edge.from_port.center(node_rect);
                     let to = mouse_pos;
-                    let (child_pos, parent_pos) = if pending_edge.from_port == MetaPort::Parent {
-                        (to, from)
-                    } else {
-                        (from, to)
-                    };
+                    let (child_pos, parent_pos) =
+                        if let MetaPort::Parent { .. } = pending_edge.from_port {
+                            (to, from)
+                        } else {
+                            (from, to)
+                        };
                     let edge_shape = create_bezier_edge(
                         child_pos,
                         parent_pos,
@@ -691,7 +890,17 @@ impl MetaCanvasScratch {
         Self {
             node_rects: BTreeMap::new(),
             index_map: KeyIndexMapper::new(),
+            search: SearchScratch::new(),
             layout: LayoutScratch::new(),
+        }
+    }
+}
+
+impl SearchScratch {
+    fn new() -> Self {
+        Self {
+            stack: Vec::new(),
+            seen: BitVector::new(),
         }
     }
 }
@@ -723,9 +932,9 @@ impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
     fn child_indices(&self, node_idx: usize) -> impl Iterator<Item = usize> {
         let node_id = self.index_map.key_at_idx(node_idx);
         self.nodes[&node_id]
-            .children
+            .links_to_children
             .iter()
-            .filter_map(|child_id| child_id.map(|id| self.index_map.idx(id)))
+            .filter_map(|link| link.map(|link| self.index_map.idx(link.to_node)))
     }
 
     fn node_rect_mut(&mut self, node_idx: usize) -> &mut Rect {

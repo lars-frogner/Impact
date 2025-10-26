@@ -27,6 +27,17 @@ const SCROLL_SENSITIVITY: f32 = 4e-3;
 const MIN_ZOOM: f32 = 0.3;
 const MAX_ZOOM: f32 = 3.0;
 
+const PARENT_PORT_COUNT_OPTIONS: [(usize, &str); 8] = [
+    (1, "1"),
+    (2, "2"),
+    (3, "3"),
+    (4, "4"),
+    (5, "5"),
+    (6, "6"),
+    (7, "7"),
+    (8, "8"),
+];
+
 #[derive(Clone, Debug)]
 pub struct Editor {
     meta_graph_canvas: MetaGraphCanvas,
@@ -228,10 +239,51 @@ impl CustomPanels for Editor {
                     );
 
                     if kind != selected_node.data.kind {
-                        self.meta_graph_canvas
-                            .change_node_kind(selected_node_id, kind);
+                        self.meta_graph_canvas.change_node_kind(
+                            &mut self.meta_canvas_scratch,
+                            selected_node_id,
+                            kind,
+                        );
                         selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
                         connectivity_may_have_changed = true;
+                    }
+
+                    if !selected_node.data.kind.is_root() {
+                        let mut parent_port_count = selected_node.links_to_parents.len();
+                        labeled_option(
+                            ui,
+                            LabelAndHoverText {
+                                label: "Parent ports",
+                                hover_text: "",
+                            },
+                            |ui| {
+                                ui.add_enabled_ui(!selected_node.data.kind.is_root(), |ui| {
+                                    ComboBox::from_id_salt("parent_port_count")
+                                        .selected_text(
+                                            PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
+                                        )
+                                        .show_ui(ui, |ui| {
+                                            for (option, label) in PARENT_PORT_COUNT_OPTIONS {
+                                                ui.selectable_value(
+                                                    &mut parent_port_count,
+                                                    option,
+                                                    label,
+                                                );
+                                            }
+                                        })
+                                })
+                            },
+                        );
+
+                        if parent_port_count != selected_node.links_to_parents.len() {
+                            self.meta_graph_canvas.change_parent_port_count(
+                                &mut self.meta_canvas_scratch,
+                                selected_node_id,
+                                parent_port_count,
+                            );
+                            selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
+                            connectivity_may_have_changed = true;
+                        }
                     }
 
                     if selected_node.data.run_controls(ui) {

@@ -1,3 +1,5 @@
+use crate::editor::meta::MetaNodeLink;
+
 use super::{
     MetaFloatParam, MetaNodeID, MetaNodeParam, MetaNodeParams, MetaPortConfig, MetaUIntParam,
 };
@@ -19,7 +21,7 @@ trait SpecificMetaNodeKind {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode>;
 }
@@ -86,7 +88,7 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
 
     fn build(
         _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        _children: &[Option<MetaNodeID>],
+        _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 3);
@@ -111,7 +113,7 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
 
     fn build(
         _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        _children: &[Option<MetaNodeID>],
+        _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
@@ -161,7 +163,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
 
     fn build(
         _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        _children: &[Option<MetaNodeID>],
+        _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 6);
@@ -204,7 +206,7 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 3);
@@ -244,7 +246,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 3);
@@ -279,7 +281,7 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
@@ -329,7 +331,7 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 6);
@@ -399,7 +401,7 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 7);
@@ -440,7 +442,7 @@ impl SpecificMetaNodeKind for MetaSDFUnion {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
@@ -466,7 +468,7 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
@@ -494,7 +496,7 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
@@ -522,7 +524,7 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 1);
@@ -569,7 +571,7 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
 
     fn build(
         _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        _children: &[Option<MetaNodeID>],
+        _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 9);
@@ -598,7 +600,7 @@ impl SpecificMetaNodeKind for MetaTranslationToSurface {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 0);
@@ -620,7 +622,7 @@ impl SpecificMetaNodeKind for MetaRotationToGradient {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 0);
@@ -642,7 +644,7 @@ impl SpecificMetaNodeKind for MetaSDFScattering {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 0);
@@ -669,7 +671,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 
     fn build(
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 2);
@@ -800,7 +802,7 @@ impl MetaNodeKind {
     pub fn build_sdf_generator_node(
         &self,
         id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeID>],
+        children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         match self {
@@ -863,18 +865,24 @@ fn output_node_params() -> MetaNodeParams {
 
 fn unary_child(
     id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-    children: &[Option<MetaNodeID>],
+    children: &[Option<MetaNodeLink>],
 ) -> Option<MetaSDFNodeID> {
     assert_eq!(children.len(), 1);
-    children.first()?.map(|id| id_map[&id])
+    children
+        .first()?
+        .map(|attachment| id_map[&attachment.to_node])
 }
 
 fn binary_children(
     id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-    children: &[Option<MetaNodeID>],
+    children: &[Option<MetaNodeLink>],
 ) -> Option<(MetaSDFNodeID, MetaSDFNodeID)> {
     assert_eq!(children.len(), 2);
-    let child_0 = children.first()?.map(|id| id_map[&id])?;
-    let child_1 = children.get(1)?.map(|id| id_map[&id])?;
+    let child_0 = children
+        .first()?
+        .map(|attachment| id_map[&attachment.to_node])?;
+    let child_1 = children
+        .get(1)?
+        .map(|attachment| id_map[&attachment.to_node])?;
     Some((child_0, child_1))
 }

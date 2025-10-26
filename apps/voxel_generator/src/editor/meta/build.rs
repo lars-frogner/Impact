@@ -69,7 +69,7 @@ where
 
     let voxel_extent = node_kind::get_voxel_extent_from_output_node(&output_node.data.params);
 
-    let root_node_id = output_node.children[0]?;
+    let root_node_id = output_node.links_to_children[0]?.to_node;
     let root_node = &nodes[&root_node_id];
 
     let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena);
@@ -88,8 +88,8 @@ where
 
                 operation_stack.push(SDFBuildOperation::BuildNode((node_id, node)));
 
-                for child_node_id in node.children.iter().rev() {
-                    let child_node_id = (*child_node_id)?;
+                for link_to_child in node.links_to_children.iter().rev() {
+                    let child_node_id = (*link_to_child)?.to_node;
                     let child_node = &nodes[&child_node_id];
                     operation_stack.push(SDFBuildOperation::VisitChildren((
                         child_node_id,
@@ -100,7 +100,7 @@ where
             SDFBuildOperation::BuildNode((node_id, node)) => {
                 let generator_node = node.data.kind.build_sdf_generator_node(
                     &id_map,
-                    &node.children,
+                    &node.links_to_children,
                     &node.data.params,
                 )?;
 
