@@ -1,6 +1,6 @@
 use impact::{
     egui::{Pos2, Rect, Vec2, pos2, vec2},
-    impact_containers::{BitVector, FixedQueue},
+    impact_containers::FixedQueue,
 };
 
 pub trait LayoutableGraph {
@@ -13,7 +13,7 @@ pub trait LayoutableGraph {
 
 #[derive(Clone, Debug)]
 pub struct LayoutScratch {
-    node_is_child: BitVector,
+    incoming_edge_counts: Vec<usize>,
     node_layers: Vec<usize>,
     node_indices_in_visit_order: Vec<usize>,
     next_node_idx_in_layer: Vec<usize>,
@@ -27,7 +27,7 @@ pub struct LayoutScratch {
 impl LayoutScratch {
     pub fn new() -> Self {
         Self {
-            node_is_child: BitVector::new(),
+            incoming_edge_counts: Vec::new(),
             node_layers: Vec::new(),
             node_indices_in_visit_order: Vec::new(),
             next_node_idx_in_layer: Vec::new(),
@@ -40,10 +40,11 @@ impl LayoutScratch {
     }
 
     fn ensure_node_capacity(&mut self, n_nodes: usize) {
-        self.node_is_child.resize_and_unset_all(n_nodes);
+        self.incoming_edge_counts.clear();
+        self.incoming_edge_counts.resize(n_nodes, 0);
 
         self.node_layers.clear();
-        self.node_layers.resize(n_nodes, usize::MAX);
+        self.node_layers.resize(n_nodes, 0);
 
         self.node_indices_in_visit_order.clear();
         self.node_indices_in_visit_order.reserve(n_nodes);
@@ -84,16 +85,16 @@ pub fn layout_vertical(
 
     scratch.ensure_node_capacity(n_nodes);
 
-    // Mark all child nodes (for finding roots)
+    // Count incoming edges for each node
     for node_idx in 0..n_nodes {
         for child_idx in graph.child_indices(node_idx) {
-            scratch.node_is_child.set_bit(child_idx);
+            scratch.incoming_edge_counts[child_idx] += 1;
         }
     }
 
     // Queue root nodes
     for node_idx in 0..n_nodes {
-        if !scratch.node_is_child.bit_is_set(node_idx) {
+        if scratch.incoming_edge_counts[node_idx] == 0 {
             scratch.queue.push_back(node_idx);
         }
     }
@@ -102,32 +103,29 @@ pub fn layout_vertical(
         "Graph must have at least one root"
     );
 
-    // Traverse breadth-first to determine the layer (depth) of each node as
-    // well as the visit order
+    // Traverse in topological order to determine visit order and the layer
+    // (depth) for each node
     while let Some(node_idx) = scratch.queue.pop_front() {
-        let layer = &mut scratch.node_layers[node_idx];
-        let unvisited = *layer == usize::MAX;
-        if unvisited {
-            *layer = 0;
-        }
-        let next_layer = *layer + 1;
-
         scratch.node_indices_in_visit_order.push(node_idx);
+        let next_layer = scratch.node_layers[node_idx] + 1;
 
         for child_idx in graph.child_indices(node_idx) {
-            let child_layer = &mut scratch.node_layers[child_idx];
-            let child_unvisited = *child_layer == usize::MAX;
+            // Keep the deepest layer seen from any parent
+            scratch.node_layers[child_idx] = scratch.node_layers[child_idx].max(next_layer);
 
-            if child_unvisited || next_layer < *child_layer {
-                if child_unvisited {
-                    scratch.queue.push_back(child_idx);
-                }
-                *child_layer = next_layer;
+            // Decrement remaining incoming edges and enqueue when ready
+            scratch.incoming_edge_counts[child_idx] -= 1;
+            if scratch.incoming_edge_counts[child_idx] == 0 {
+                scratch.queue.push_back(child_idx);
             }
         }
     }
 
-    assert_eq!(scratch.node_indices_in_visit_order.len(), n_nodes);
+    assert_eq!(
+        scratch.node_indices_in_visit_order.len(),
+        n_nodes,
+        "Graph contains a cycle"
+    );
 
     // Create a linked list of nodes in visit order for each layer
 
