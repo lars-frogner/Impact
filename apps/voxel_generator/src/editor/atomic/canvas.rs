@@ -198,28 +198,27 @@ impl AtomicGraphCanvas {
                         let parent_node = &self.nodes[parent_node_id as usize];
                         let node_rect = &node_rects[node_idx];
 
-                        let Some(slot) = parent_node
+                        for slot in parent_node
                             .children
                             .iter()
-                            .position(|child| *child == node_id)
-                        else {
-                            continue;
-                        };
+                            .enumerate()
+                            .filter_map(|(slot, child)| (*child == node_id).then_some(slot))
+                        {
+                            let child_pos = AtomicPort::Child {
+                                slot,
+                                of: parent_node.children.len(),
+                            }
+                            .center(parent_rect);
 
-                        let child_pos = AtomicPort::Child {
-                            slot,
-                            of: parent_node.children.len(),
+                            let parent_pos = AtomicPort::Parent.center(node_rect);
+
+                            let edge_shape = create_bezier_edge(
+                                child_pos,
+                                parent_pos,
+                                PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
+                            );
+                            painter.add(edge_shape);
                         }
-                        .center(parent_rect);
-
-                        let parent_pos = AtomicPort::Parent.center(node_rect);
-
-                        let edge_shape = create_bezier_edge(
-                            child_pos,
-                            parent_pos,
-                            PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
-                        );
-                        painter.add(edge_shape);
                     }
                 }
 
