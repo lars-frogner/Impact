@@ -8,7 +8,6 @@ import core.NumUtil
 import core.Vector3
 import core.Point3
 import core.UnitQuaternion
-import pf.Stdout
 import pf.Comp.ReferenceFrame
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import pf.Input.MouseDragEvent exposing [MouseDragEvent]
@@ -40,11 +39,16 @@ rotate_object! = |ang_delta_x, ang_delta_y, ang_x, ang_y|
     camera_frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.camera)?
     object_frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.object)?
 
-    prev_ang_x = ang_x - ang_delta_x * trackball_sensitivity
-    prev_ang_y = ang_y - ang_delta_y * trackball_sensitivity
+    (object_ang_x, object_ang_y) = angular_position_of_object_center(camera_frame, object_frame)
 
-    dir = direction_from_cursor_angles(ang_x, ang_y)
-    prev_dir = direction_from_cursor_angles(prev_ang_x, prev_ang_y)
+    rel_ang_x = ang_x - object_ang_x
+    rel_ang_y = ang_y - object_ang_y
+
+    prev_rel_ang_x = rel_ang_x - ang_delta_x * trackball_sensitivity
+    prev_rel_ang_y = rel_ang_y - ang_delta_y * trackball_sensitivity
+
+    dir = direction_from_cursor_angles(rel_ang_x, rel_ang_y)
+    prev_dir = direction_from_cursor_angles(prev_rel_ang_x, prev_rel_ang_y)
 
     camera_space_rotation_axis = Vector3.cross(prev_dir, dir) |> Vector3.normalize
     rotation_angle = Num.acos(NumUtil.clamp(Vector3.dot(prev_dir, dir), -1.0, 1.0))
@@ -55,6 +59,22 @@ rotate_object! = |ang_delta_x, ang_delta_y, ang_x, ang_y|
     orientation = UnitQuaternion.mul(rotation, object_frame.orientation)
 
     Comp.ReferenceFrame.set_for_entity!({ object_frame & orientation }, entity_ids.object)
+
+angular_position_of_object_center = |camera_frame, object_frame|
+    # Vector from camera to object, in world space
+    object_offset_world_space = Vector3.sub(object_frame.position, camera_frame.position)
+
+    # Convert to camera space by rotating with the inverse camera orientation
+    inverse_camera_orientation = UnitQuaternion.invert(camera_frame.orientation)
+    object_offset_camera_space = UnitQuaternion.rotate_vector(inverse_camera_orientation, object_offset_world_space)
+
+    (x, y, z) = object_offset_camera_space
+    z_eps = if Num.abs(z) < 1e-6 then 1e-6 else z
+
+    # Project to angular position on screen
+    object_ang_x = -Num.atan(x / z_eps)
+    object_ang_y = -Num.atan(y / z_eps)
+    (object_ang_x, object_ang_y)
 
 direction_from_cursor_angles = |ang_x, ang_y|
     Vector3.normalize((Num.tan(ang_x), Num.tan(ang_y), 1.0))

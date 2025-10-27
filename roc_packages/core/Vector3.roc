@@ -11,6 +11,7 @@ module [
     sub,
     scale,
     unscale,
+    flip,
     dot,
     norm_squared,
     norm,
@@ -53,6 +54,8 @@ sub = |a, b| map2(a, b, Num.sub)
 
 scale = |vec, s| map(vec, |elem| Num.mul(elem, s))
 unscale = |vec, s| scale(vec, 1.0 / s)
+
+flip = |vec| (-vec.0, -vec.1, -vec.2)
 
 dot = |a, b| map2(a, b, Num.mul) |> reduce(Num.add)
 
