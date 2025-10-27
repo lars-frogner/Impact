@@ -43,7 +43,8 @@ pub struct Editor {
     meta_graph_canvas: MetaGraphCanvas,
     meta_canvas_scratch: MetaCanvasScratch,
     atomic_graph_canvas: AtomicGraphCanvas,
-    needs_rebuild: bool,
+    graph_dirty: bool,
+    rebuild_generator: bool,
     graph_status: MetaGraphStatus,
     config: EditorConfig,
 }
@@ -52,15 +53,17 @@ pub struct Editor {
 #[serde(default)]
 pub struct EditorConfig {
     pub show_editor: bool,
-    pub show_atomic_graph: bool,
+    pub auto_generate: bool,
     pub auto_attach: bool,
     pub auto_layout: bool,
+    pub show_atomic_graph: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum MetaGraphStatus {
-    Complete,
-    Incomplete,
+    InSync,
+    Dirty,
+    Invalid,
 }
 
 #[derive(Clone, Debug)]
@@ -75,8 +78,9 @@ impl Editor {
             meta_graph_canvas: MetaGraphCanvas::new(),
             meta_canvas_scratch: MetaCanvasScratch::new(),
             atomic_graph_canvas: AtomicGraphCanvas::new(),
-            needs_rebuild: true,
-            graph_status: MetaGraphStatus::Incomplete,
+            graph_dirty: false,
+            rebuild_generator: false,
+            graph_status: MetaGraphStatus::Invalid,
             config,
         }
     }
@@ -85,22 +89,31 @@ impl Editor {
     where
         A: Allocator + Copy,
     {
-        if !self.needs_rebuild {
+        if !(self.graph_dirty || self.rebuild_generator) {
             return None;
         }
-        self.needs_rebuild = false;
 
         let Some(compiled_graph) = build::build_sdf_graph(arena, &self.meta_graph_canvas.nodes)
         else {
-            self.graph_status = MetaGraphStatus::Incomplete;
+            self.graph_dirty = false;
+            self.rebuild_generator = false;
+            self.graph_status = MetaGraphStatus::Invalid;
             return None;
         };
 
         self.atomic_graph_canvas.update_nodes(&compiled_graph.graph);
 
+        if !self.rebuild_generator {
+            self.graph_status = MetaGraphStatus::Dirty;
+            return None;
+        }
+
+        self.graph_dirty = false;
+        self.rebuild_generator = false;
+
         let generator = build::build_sdf_voxel_generator(arena, compiled_graph);
 
-        self.graph_status = MetaGraphStatus::Complete;
+        self.graph_status = MetaGraphStatus::InSync;
 
         Some(generator)
     }
@@ -150,31 +163,32 @@ impl CustomPanels for Editor {
             option_group(ui, "main", |ui| {
                 option_checkbox(
                     ui,
-                    &mut self.config.show_atomic_graph,
-                    LabelAndHoverText {
-                        label: "Show compiled graph",
-                        hover_text: "",
-                    },
+                    &mut self.config.auto_generate,
+                    LabelAndHoverText::label_only("Auto generate"),
                 );
+                if ui.button("Generate now").clicked() {
+                    self.rebuild_generator = true;
+                }
+                ui.end_row();
                 option_checkbox(
                     ui,
                     &mut self.config.auto_attach,
-                    LabelAndHoverText {
-                        label: "Auto attach",
-                        hover_text: "",
-                    },
+                    LabelAndHoverText::label_only("Auto attach"),
                 );
                 option_checkbox(
                     ui,
                     &mut self.config.auto_layout,
-                    LabelAndHoverText {
-                        label: "Auto layout",
-                        hover_text: "",
-                    },
+                    LabelAndHoverText::label_only("Auto layout"),
                 );
                 if ui.button("Layout now").clicked() {
                     layout_requested = true;
                 }
+                ui.end_row();
+                option_checkbox(
+                    ui,
+                    &mut self.config.show_atomic_graph,
+                    LabelAndHoverText::label_only("Show compiled graph"),
+                );
             });
 
             option_group(ui, "creation", |ui| {
@@ -314,8 +328,11 @@ impl CustomPanels for Editor {
                 }
             });
 
-            let perform_layout =
-                layout_requested || (pending_new_node.is_some() && self.config.auto_layout);
+            let perform_layout = layout_requested
+                || (self.config.auto_layout
+                    && (pending_new_node.is_some()
+                        || params_changed
+                        || connectivity_may_have_changed));
 
             let canvas_result = self.meta_graph_canvas.show(
                 &mut self.meta_canvas_scratch,
@@ -333,8 +350,11 @@ impl CustomPanels for Editor {
             connectivity_may_have_changed =
                 connectivity_may_have_changed || canvas_result.connectivity_may_have_changed;
 
-            self.needs_rebuild =
-                self.needs_rebuild || connectivity_may_have_changed || params_changed;
+            self.graph_dirty = self.graph_dirty || connectivity_may_have_changed || params_changed;
+
+            if self.config.auto_generate && self.graph_dirty {
+                self.rebuild_generator = true;
+            }
         });
     }
 }
@@ -344,8 +364,9 @@ impl Default for EditorConfig {
         Self {
             show_editor: true,
             show_atomic_graph: false,
+            auto_generate: true,
             auto_attach: true,
-            auto_layout: false,
+            auto_layout: true,
         }
     }
 }

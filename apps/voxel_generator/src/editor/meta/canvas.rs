@@ -30,10 +30,12 @@ const PENDING_EDGE_COLOR: Color32 = Color32::LIGHT_GRAY;
 
 const STATUS_DOT_RADIUS: f32 = 6.0;
 const STATUS_DOT_OFFSET: Vec2 = vec2(12.0, 12.0);
-const STATUS_DOT_VALID_COLOR: Color32 = Color32::GREEN;
+const STATUS_DOT_IN_SYNC_COLOR: Color32 = Color32::GREEN;
+const STATUS_DOT_DIRTY_COLOR: Color32 = Color32::YELLOW;
 const STATUS_DOT_INVALID_COLOR: Color32 = Color32::RED;
-const STATUS_DOT_VALID_HOVER_TEXT: &str = "The graph is complete";
-const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not complete";
+const STATUS_DOT_IN_SYNC_HOVER_TEXT: &str = "The graph is in sync";
+const STATUS_DOT_DIRTY_HOVER_TEXT: &str = "The graph is out of sync";
+const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not valid";
 
 #[derive(Clone, Debug)]
 pub struct MetaGraphCanvas {
@@ -860,10 +862,11 @@ impl MetaGraphCanvas {
                     ui.interact(status_dot_rect, Id::new("status_dot"), Sense::hover());
 
                 let (status_dot_color, status_dot_text) = match graph_status {
-                    MetaGraphStatus::Complete => {
-                        (STATUS_DOT_VALID_COLOR, STATUS_DOT_VALID_HOVER_TEXT)
+                    MetaGraphStatus::InSync => {
+                        (STATUS_DOT_IN_SYNC_COLOR, STATUS_DOT_IN_SYNC_HOVER_TEXT)
                     }
-                    MetaGraphStatus::Incomplete => {
+                    MetaGraphStatus::Dirty => (STATUS_DOT_DIRTY_COLOR, STATUS_DOT_DIRTY_HOVER_TEXT),
+                    MetaGraphStatus::Invalid => {
                         (STATUS_DOT_INVALID_COLOR, STATUS_DOT_INVALID_HOVER_TEXT)
                     }
                 };
