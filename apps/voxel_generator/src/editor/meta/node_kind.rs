@@ -1,8 +1,8 @@
-use crate::editor::meta::MetaNodeLink;
-
 use super::{
     MetaFloatParam, MetaNodeID, MetaNodeParam, MetaNodeParams, MetaPortConfig, MetaUIntParam,
+    MetaUIntRangeParam,
 };
+use crate::editor::meta::{MetaFloatRangeParam, MetaNodeLink};
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
@@ -69,20 +69,21 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Extent x"), 62.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent x"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Extent y"), 62.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent y"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Extent z"), 62.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent z"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
         params
     }
 
@@ -91,9 +92,14 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
-        let extents = [params[0].float(), params[1].float(), params[2].float()];
-        Some(MetaSDFNode::new_box(extents.map(Into::into), 0))
+        assert_eq!(params.len(), 4);
+        let extents = [
+            params[0].float_range(),
+            params[1].float_range(),
+            params[2].float_range(),
+        ];
+        let seed = params[3].uint();
+        Some(MetaSDFNode::new_box(extents, seed))
     }
 }
 
@@ -104,10 +110,11 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Radius"), 31.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Radius"), 31.0)
                 .with_min_value(0.0)
                 .into(),
         );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
         params
     }
 
@@ -116,9 +123,10 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 1);
-        let radius = params[0].float();
-        Some(MetaSDFNode::new_sphere(radius.into(), 0))
+        assert_eq!(params.len(), 2);
+        let radius = params[0].float_range();
+        let seed = params[1].uint();
+        Some(MetaSDFNode::new_sphere(radius, seed))
     }
 }
 
@@ -129,29 +137,29 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Extent x"), 62.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent x"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Extent y"), 62.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent y"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Extent z"), 62.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent z"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.05)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Frequency"), 0.05)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .with_speed(0.0002)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Threshold"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Threshold"), 0.0)
                 .with_min_value(-1.0)
                 .with_max_value(1.0)
                 .with_speed(0.001)
@@ -167,14 +175,18 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 6);
-        let extents = [params[0].float(), params[1].float(), params[2].float()];
-        let noise_frequency = params[3].float();
-        let noise_threshold = params[4].float();
+        let extents = [
+            params[0].float_range(),
+            params[1].float_range(),
+            params[2].float_range(),
+        ];
+        let noise_frequency = params[3].float_range();
+        let noise_threshold = params[4].float_range();
         let seed = params[5].uint();
         Some(MetaSDFNode::new_gradient_noise(
-            extents.map(Into::into),
-            noise_frequency.into(),
-            noise_threshold.into(),
+            extents,
+            noise_frequency,
+            noise_threshold,
             seed,
         ))
     }
@@ -187,20 +199,21 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("In x"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In x"), 0.0)
                 .with_speed(0.05)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("In y"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In y"), 0.0)
                 .with_speed(0.05)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("In z"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In z"), 0.0)
                 .with_speed(0.05)
                 .into(),
         );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
         params
     }
 
@@ -209,14 +222,15 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
+        assert_eq!(params.len(), 4);
         let child_id = unary_child(id_map, children)?;
-        let translation = [params[0].float(), params[1].float(), params[2].float()];
-        Some(MetaSDFNode::new_translation(
-            child_id,
-            translation.map(Into::into),
-            0,
-        ))
+        let translation = [
+            params[0].float_range(),
+            params[1].float_range(),
+            params[2].float_range(),
+        ];
+        let seed = params[3].uint();
+        Some(MetaSDFNode::new_translation(child_id, translation, seed))
     }
 }
 
@@ -227,20 +241,21 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Roll"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Roll"), 0.0)
                 .with_speed(0.002)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Pitch"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Pitch"), 0.0)
                 .with_speed(0.002)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Yaw"), 0.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Yaw"), 0.0)
                 .with_speed(0.002)
                 .into(),
         );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
         params
     }
 
@@ -249,18 +264,13 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
+        assert_eq!(params.len(), 4);
         let child_id = unary_child(id_map, children)?;
-        let roll = params[0].float();
-        let pitch = params[1].float();
-        let yaw = params[2].float();
-        Some(MetaSDFNode::new_rotation(
-            child_id,
-            roll.into(),
-            pitch.into(),
-            yaw.into(),
-            0,
-        ))
+        let roll = params[0].float_range();
+        let pitch = params[1].float_range();
+        let yaw = params[2].float_range();
+        let seed = params[3].uint();
+        Some(MetaSDFNode::new_rotation(child_id, roll, pitch, yaw, seed))
     }
 }
 
@@ -271,11 +281,12 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Factor"), 1.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Factor"), 1.0)
                 .with_min_value(1e-3)
                 .with_speed(0.005)
                 .into(),
         );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
         params
     }
 
@@ -284,10 +295,11 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 1);
+        assert_eq!(params.len(), 2);
         let child_id = unary_child(id_map, children)?;
-        let scaling = params[0].float();
-        Some(MetaSDFNode::new_scaling(child_id, scaling.into(), 0))
+        let scaling = params[0].float_range();
+        let seed = params[1].uint();
+        Some(MetaSDFNode::new_scaling(child_id, scaling, seed))
     }
 }
 
@@ -297,30 +309,36 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Octaves"), 1).into());
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Frequency"), 0.02)
+            MetaUIntRangeParam::new_single_value(LabelAndHoverText::label_only("Octaves"), 1)
+                .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Frequency"), 0.02)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
                 .with_speed(0.0002)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Lacunarity"), 2.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Lacunarity"), 2.0)
                 .with_min_value(1.0)
                 .with_max_value(10.0)
                 .with_speed(0.001)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Persistence"), 0.5)
-                .with_min_value(0.0)
-                .with_max_value(1.0)
-                .with_speed(0.001)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText::label_only("Persistence"),
+                0.5,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+            .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Amplitude"), 5.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Amplitude"), 5.0)
                 .with_min_value(0.0)
                 .with_speed(0.05)
                 .into(),
@@ -336,19 +354,19 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 6);
         let child_id = unary_child(id_map, children)?;
-        let octaves = params[0].uint();
-        let frequency = params[1].float();
-        let lacunarity = params[2].float();
-        let persistence = params[3].float();
-        let amplitude = params[4].float();
+        let octaves = params[0].uint_range();
+        let frequency = params[1].float_range();
+        let lacunarity = params[2].float_range();
+        let persistence = params[3].float_range();
+        let amplitude = params[4].float_range();
         let seed = params[5].uint();
         Some(MetaSDFNode::new_multifractal_noise(
             child_id,
-            octaves.into(),
-            frequency.into(),
-            lacunarity.into(),
-            persistence.into(),
-            amplitude.into(),
+            octaves,
+            frequency,
+            lacunarity,
+            persistence,
+            amplitude,
             seed,
         ))
     }
@@ -360,28 +378,34 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Octaves"), 0).into());
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Max scale"), 10.0)
+            MetaUIntRangeParam::new_single_value(LabelAndHoverText::label_only("Octaves"), 0)
+                .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Max scale"), 10.0)
                 .with_min_value(0.0)
                 .with_speed(0.01)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Persistence"), 0.5)
-                .with_min_value(0.0)
-                .with_max_value(1.0)
-                .with_speed(0.001)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText::label_only("Persistence"),
+                0.5,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+            .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Inflation"), 1.0)
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Inflation"), 1.0)
                 .with_min_value(0.0)
                 .with_speed(0.005)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(
+            MetaFloatRangeParam::new_single_value(
                 LabelAndHoverText::label_only("Intersection smoothness"),
                 1.0,
             )
@@ -390,10 +414,13 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
             .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Union smoothness"), 0.3)
-                .with_min_value(0.0)
-                .with_speed(0.001)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText::label_only("Union smoothness"),
+                0.3,
+            )
+            .with_min_value(0.0)
+            .with_speed(0.001)
+            .into(),
         );
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
         params
@@ -406,21 +433,21 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 7);
         let child_id = unary_child(id_map, children)?;
-        let octaves = params[0].uint();
-        let max_scale = params[1].float();
-        let persistence = params[2].float();
-        let inflation = params[3].float();
-        let intersection_smoothness = params[4].float();
-        let union_smoothness = params[5].float();
+        let octaves = params[0].uint_range();
+        let max_scale = params[1].float_range();
+        let persistence = params[2].float_range();
+        let inflation = params[3].float_range();
+        let intersection_smoothness = params[4].float_range();
+        let union_smoothness = params[5].float_range();
         let seed = params[6].uint();
         Some(MetaSDFNode::new_multiscale_sphere(
             child_id,
-            octaves.into(),
-            max_scale.into(),
-            persistence.into(),
-            inflation.into(),
-            intersection_smoothness.into(),
-            union_smoothness.into(),
+            octaves,
+            max_scale,
+            persistence,
+            inflation,
+            intersection_smoothness,
+            union_smoothness,
             seed,
         ))
     }
