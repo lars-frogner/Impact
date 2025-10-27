@@ -4,9 +4,10 @@ pub mod node_kind;
 
 use impact::egui::{
     Color32, CursorIcon, DragValue, FontId, Galley, Id, Painter, Pos2, Rect, Response, Sense,
-    Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
+    Stroke, StrokeKind, Ui, Vec2, emath::Numeric, pos2, vec2,
 };
-use impact_dev_ui::option_panels::{LabelAndHoverText, option_drag_value};
+use impact_dev_ui::option_panels::{LabelAndHoverText, labeled_option, option_drag_value};
+use impact_voxel::generation::sdf::meta::{ContParamRange, DiscreteParamRange};
 use node_kind::MetaNodeKind;
 use std::sync::Arc;
 use tinyvec::TinyVec;
@@ -77,18 +78,39 @@ pub enum MetaPort {
 pub enum MetaNodeParam {
     UInt(MetaUIntParam),
     Float(MetaFloatParam),
+    UIntRange(MetaUIntRangeParam),
+    FloatRange(MetaFloatRangeParam),
 }
 
 #[derive(Clone, Debug)]
 pub struct MetaUIntParam {
     pub text: LabelAndHoverText,
     pub value: u32,
+    pub speed: f32,
 }
 
 #[derive(Clone, Debug)]
 pub struct MetaFloatParam {
     pub text: LabelAndHoverText,
     pub value: f32,
+    pub min_value: f32,
+    pub max_value: f32,
+    pub speed: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct MetaUIntRangeParam {
+    pub text: LabelAndHoverText,
+    pub low_value: u32,
+    pub high_value: u32,
+    pub speed: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct MetaFloatRangeParam {
+    pub text: LabelAndHoverText,
+    pub low_value: f32,
+    pub high_value: f32,
     pub min_value: f32,
     pub max_value: f32,
     pub speed: f32,
@@ -397,6 +419,8 @@ impl MetaNodeParam {
         match self {
             Self::UInt(param) => param.show_controls(ui),
             Self::Float(param) => param.show_controls(ui),
+            Self::UIntRange(param) => param.show_controls(ui),
+            Self::FloatRange(param) => param.show_controls(ui),
         }
     }
 
@@ -404,6 +428,8 @@ impl MetaNodeParam {
         match self {
             Self::UInt(param) => param.text_to_display(),
             Self::Float(param) => param.text_to_display(),
+            Self::UIntRange(param) => param.text_to_display(),
+            Self::FloatRange(param) => param.text_to_display(),
         }
     }
 
@@ -430,6 +456,30 @@ impl MetaNodeParam {
     fn float(&self) -> f32 {
         self.as_float().unwrap()
     }
+
+    fn as_uint_range(&self) -> Option<DiscreteParamRange> {
+        if let Self::UIntRange(param) = self {
+            Some(DiscreteParamRange::new(param.low_value, param.high_value))
+        } else {
+            None
+        }
+    }
+
+    fn uint_range(&self) -> DiscreteParamRange {
+        self.as_uint_range().unwrap()
+    }
+
+    fn as_float_range(&self) -> Option<ContParamRange> {
+        if let Self::FloatRange(param) = self {
+            Some(ContParamRange::new(param.low_value, param.high_value))
+        } else {
+            None
+        }
+    }
+
+    fn float_range(&self) -> ContParamRange {
+        self.as_float_range().unwrap()
+    }
 }
 
 impl From<MetaUIntParam> for MetaNodeParam {
@@ -444,25 +494,44 @@ impl From<MetaFloatParam> for MetaNodeParam {
     }
 }
 
+impl From<MetaUIntRangeParam> for MetaNodeParam {
+    fn from(param: MetaUIntRangeParam) -> Self {
+        Self::UIntRange(param)
+    }
+}
+
+impl From<MetaFloatRangeParam> for MetaNodeParam {
+    fn from(param: MetaFloatRangeParam) -> Self {
+        Self::FloatRange(param)
+    }
+}
+
 impl Default for MetaNodeParam {
     fn default() -> Self {
         Self::UInt(MetaUIntParam {
             text: LabelAndHoverText::label_only(""),
             value: 0,
+            speed: 0.0,
         })
     }
 }
 
 impl MetaUIntParam {
     const fn new(text: LabelAndHoverText, value: u32) -> Self {
-        Self { text, value }
+        Self {
+            text,
+            value,
+            speed: 0.05,
+        }
     }
 
     fn show_controls(&mut self, ui: &mut Ui) -> Response {
         option_drag_value(
             ui,
             self.text.clone(),
-            DragValue::new(&mut self.value).speed(1),
+            DragValue::new(&mut self.value)
+                .fixed_decimals(0)
+                .speed(self.speed),
         )
     }
 
@@ -510,6 +579,139 @@ impl MetaFloatParam {
     fn text_to_display(&self) -> String {
         format!("{} = {}", self.text.label, self.value)
     }
+}
+
+impl MetaUIntRangeParam {
+    const fn new(text: LabelAndHoverText, low_value: u32, high_value: u32) -> Self {
+        Self {
+            text,
+            low_value,
+            high_value,
+            speed: 0.05,
+        }
+    }
+
+    const fn new_single_value(text: LabelAndHoverText, value: u32) -> Self {
+        Self::new(text, value, value)
+    }
+
+    fn show_controls(&mut self, ui: &mut Ui) -> Response {
+        labeled_option(ui, self.text.clone(), |ui| {
+            run_drag_values_for_range(
+                ui,
+                &mut self.low_value,
+                &mut self.high_value,
+                0,
+                u32::MAX,
+                self.speed,
+            )
+        })
+    }
+
+    fn text_to_display(&self) -> String {
+        if self.low_value == self.high_value {
+            format!("{} = {}", self.text.label, self.low_value)
+        } else {
+            format!(
+                "{} from {} to {}",
+                self.text.label, self.low_value, self.high_value
+            )
+        }
+    }
+}
+
+impl MetaFloatRangeParam {
+    const fn new(text: LabelAndHoverText, low_value: f32, high_value: f32) -> Self {
+        Self {
+            text,
+            low_value,
+            high_value,
+            min_value: f32::NEG_INFINITY,
+            max_value: f32::INFINITY,
+            speed: 0.05,
+        }
+    }
+
+    const fn new_single_value(text: LabelAndHoverText, value: f32) -> Self {
+        Self::new(text, value, value)
+    }
+
+    const fn with_min_value(mut self, min_value: f32) -> Self {
+        self.min_value = min_value;
+        self
+    }
+
+    const fn with_max_value(mut self, max_value: f32) -> Self {
+        self.max_value = max_value;
+        self
+    }
+
+    const fn with_speed(mut self, speed: f32) -> Self {
+        self.speed = speed;
+        self
+    }
+
+    fn show_controls(&mut self, ui: &mut Ui) -> Response {
+        labeled_option(ui, self.text.clone(), |ui| {
+            run_drag_values_for_range(
+                ui,
+                &mut self.low_value,
+                &mut self.high_value,
+                self.min_value,
+                self.max_value,
+                self.speed,
+            )
+        })
+    }
+
+    fn text_to_display(&self) -> String {
+        if self.low_value == self.high_value {
+            format!("{} = {}", self.text.label, self.low_value)
+        } else {
+            format!(
+                "{} from {} to {}",
+                self.text.label, self.low_value, self.high_value
+            )
+        }
+    }
+}
+
+fn run_drag_values_for_range<Num: Numeric>(
+    ui: &mut Ui,
+    low_value: &mut Num,
+    high_value: &mut Num,
+    min_value: Num,
+    max_value: Num,
+    speed: impl Into<f64> + Copy,
+) -> Response {
+    let mut low_drag_value = DragValue::new(low_value)
+        .range(min_value..=max_value)
+        .speed(speed);
+    if Num::INTEGRAL {
+        low_drag_value = low_drag_value.fixed_decimals(0);
+    }
+    let low_response = ui.add(low_drag_value);
+
+    let to_label_response = ui.label("to");
+
+    let mut high_drag_value = DragValue::new(high_value)
+        .range(min_value..=max_value)
+        .speed(speed);
+    if Num::INTEGRAL {
+        high_drag_value = high_drag_value.fixed_decimals(0);
+    }
+    let high_response = ui.add(high_drag_value);
+
+    // If user moved low past high, push high up
+    if low_response.changed() && *low_value > *high_value {
+        *high_value = *low_value;
+    }
+    // If user moved high below low, push low down
+    if high_response.changed() && *high_value < *low_value {
+        *low_value = *high_value;
+    }
+
+    low_response.union(to_label_response).union(high_response)
 }
 
 fn prepare_text(ui: &Ui, text: String, font_id: FontId, color: Color32) -> Arc<Galley> {
