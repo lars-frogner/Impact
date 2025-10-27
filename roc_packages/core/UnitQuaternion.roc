@@ -10,6 +10,7 @@ module [
     norm_squared,
     norm,
     normalize,
+    invert,
     rotate_vector,
     to_rotation_matrix,
     write_bytes_32,
@@ -73,6 +74,11 @@ normalize = |quat|
     inv_norm = 1.0 / norm(quat)
     (imag, real) = parts(quat)
     from_parts(Vector3.scale(imag, inv_norm), real * inv_norm)
+
+invert : UnitQuaternion a -> UnitQuaternion a
+invert = |quat|
+    (imag, real) = parts(quat)
+    from_parts(Vector3.flip(imag), real)
 
 rotate_vector : UnitQuaternion a, Vector3 a -> Vector3 a
 rotate_vector = |quat, vec|
