@@ -1,6 +1,6 @@
+use super::{AtomicNode, AtomicPort, build::update_viewer_nodes};
 use crate::editor::{
     PanZoomState,
-    atomic::{AtomicNode, AtomicPort, build::update_viewer_nodes},
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     util::create_bezier_edge,
 };
