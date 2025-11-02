@@ -90,6 +90,7 @@ pub fn layout_vertical(
     scratch.ensure_node_capacity(n_nodes);
 
     // Count parents for each node
+    let mut no_nodes_have_children = true;
     for node_idx in 0..n_nodes {
         let mut has_child = false;
         for child_idx in graph.child_indices(node_idx) {
@@ -101,17 +102,33 @@ pub fn layout_vertical(
             // leaf nodes that have parents to be non-isolated in a separate
             // pass.
             scratch.is_isolated.set_bit(node_idx);
+        } else {
+            no_nodes_have_children = false;
         }
     }
 
-    // Correct any leaf nodes that have parents to be non-isolated
+    // Correct any leaf nodes that have parents (are not roots) to be
+    // non-isolated. Also make sure the primary (first) root is never marked as
+    // isolated and that all other roots will be put on a separate layer.
+    let mut primary_root_idx = None;
     for node_idx in 0..n_nodes {
-        if scratch.is_isolated.bit_is_set(node_idx) && scratch.parent_counts[node_idx] > 0 {
+        let is_root = scratch.parent_counts[node_idx] == 0;
+        let is_first_root = is_root && primary_root_idx.is_none();
+
+        if scratch.is_isolated.bit_is_set(node_idx) && (is_first_root || !is_root) {
             scratch.is_isolated.unset_bit(node_idx);
         }
+
+        if is_root {
+            primary_root_idx = Some(node_idx);
+        }
+
+        if is_root && !is_first_root {
+            scratch.node_layers[node_idx] = 1;
+        }
     }
 
-    // Queue all root nodes that have children
+    // Queue all unisolated root nodes
     let mut has_root = false;
     for node_idx in 0..n_nodes {
         if scratch.parent_counts[node_idx] == 0 {
@@ -143,18 +160,24 @@ pub fn layout_vertical(
 
     let mut max_layer = scratch.node_layers.iter().copied().max().unwrap();
 
+    let isolated_layer = if no_nodes_have_children {
+        1
+    } else {
+        max_layer + 1
+    };
+
     // Put all isolated nodes in a separate layer at the bottom
     let mut has_isolated = false;
     for node_idx in 0..n_nodes {
         if scratch.is_isolated.bit_is_set(node_idx) {
             has_isolated = true;
-            scratch.node_layers[node_idx] = max_layer + 1;
+            scratch.node_layers[node_idx] = isolated_layer;
             scratch.node_indices_in_visit_order.push(node_idx);
         }
     }
 
     if has_isolated {
-        max_layer += 1;
+        max_layer = isolated_layer;
     }
 
     assert_eq!(
