@@ -18,7 +18,7 @@ use impact_voxel::{
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
-pub struct CompiledSDFGraph<A: Allocator> {
+pub struct SDFGraphBuildResult<A: Allocator> {
     pub voxel_extent: f32,
     pub graph: SDFGraph<A>,
 }
@@ -44,7 +44,7 @@ impl BuildScratch {
 
 pub fn build_sdf_voxel_generator<A>(
     arena: A,
-    compiled_graph: CompiledSDFGraph<A>,
+    compiled_graph: SDFGraphBuildResult<A>,
 ) -> SDFVoxelGenerator
 where
     A: Allocator + Copy,
@@ -75,7 +75,7 @@ pub fn build_sdf_graph<A>(
     arena: A,
     scratch: &mut BuildScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
-) -> Option<CompiledSDFGraph<A>>
+) -> Option<SDFGraphBuildResult<A>>
 where
     A: Allocator + Copy,
 {
@@ -131,7 +131,7 @@ where
         })
         .ok()?;
 
-    Some(CompiledSDFGraph {
+    Some(SDFGraphBuildResult {
         voxel_extent,
         graph,
     })

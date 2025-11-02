@@ -1,6 +1,7 @@
 pub mod build;
 pub mod canvas;
 pub mod data_type;
+pub mod io;
 pub mod node_kind;
 
 use data_type::{EdgeDataType, input_and_output_types_for_new_node};
@@ -12,6 +13,7 @@ use impact_dev_ui::option_panels::{LabelAndHoverText, labeled_option, option_dra
 use impact_voxel::generation::sdf::meta::{ContParamRange, DiscreteParamRange};
 use node_kind::MetaNodeKind;
 use node_kind::{MetaChildPortKind, MetaParentPortKind};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tinyvec::TinyVec;
 
@@ -49,7 +51,7 @@ type MetaNodeParentLinks = TinyVec<[Option<MetaNodeLink>; 2]>;
 type MetaNodeChildLinks = TinyVec<[Option<MetaNodeLink>; 2]>;
 type MetaNodeInputDataTypes = TinyVec<[EdgeDataType; 2]>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetaNodeLink {
     pub to_node: MetaNodeID,
     pub to_slot: usize,
@@ -146,21 +148,32 @@ impl MetaNode {
     fn new(position: Pos2, data: MetaNodeData) -> Self {
         let kind = data.kind;
 
-        let mut parent_links = MetaNodeParentLinks::new();
-        if !kind.is_root() {
-            parent_links.resize(1, None);
+        let mut links_to_parents = MetaNodeParentLinks::new();
+        if !kind.is_output() {
+            links_to_parents.resize(1, None);
         }
 
-        let mut child_links = MetaNodeChildLinks::new();
-        child_links.resize(kind.n_child_slots(), None);
+        let mut links_to_children = MetaNodeChildLinks::new();
+        links_to_children.resize(kind.n_child_slots(), None);
+
+        Self::new_with_links(position, data, links_to_parents, links_to_children)
+    }
+
+    fn new_with_links(
+        position: Pos2,
+        data: MetaNodeData,
+        links_to_parents: MetaNodeParentLinks,
+        links_to_children: MetaNodeChildLinks,
+    ) -> Self {
+        let kind = data.kind;
 
         let (input_data_types, output_data_type) = input_and_output_types_for_new_node(kind);
 
         Self {
             position,
             data,
-            links_to_parents: parent_links,
-            links_to_children: child_links,
+            links_to_parents,
+            links_to_children,
             input_data_types,
             output_data_type,
         }
@@ -215,9 +228,13 @@ impl MetaNode {
 
 impl MetaNodeData {
     pub fn new(kind: MetaNodeKind) -> Self {
+        Self::new_with_params(kind, kind.params())
+    }
+
+    pub fn new_with_params(kind: MetaNodeKind, params: MetaNodeParams) -> Self {
         Self {
             kind,
-            params: kind.params(),
+            params,
             prepared_text_zoom: None,
             header_galley: None,
             param_galleys: TinyVec::new(),

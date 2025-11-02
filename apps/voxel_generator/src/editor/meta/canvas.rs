@@ -6,9 +6,15 @@ use super::{
 use crate::editor::{
     MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
-    meta::{MetaPaletteColor, ResolvedMetaPort, data_type::EdgeDataType},
+    meta::{
+        MetaPaletteColor, ResolvedMetaPort,
+        data_type::EdgeDataType,
+        io::{IOMetaNodeGraph, IOMetaNodeGraphRef},
+    },
     util::create_bezier_edge,
 };
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use anyhow::{Context as _, Result};
 use impact::{
     egui::{
         Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Vec2, Window,
@@ -16,7 +22,7 @@ use impact::{
     },
     impact_containers::{BitVector, KeyIndexMapper},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(200.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
@@ -163,7 +169,7 @@ impl MetaGraphCanvas {
         if self
             .nodes
             .get(&node_id)
-            .is_some_and(|node| node.data.kind.is_root())
+            .is_some_and(|node| node.data.kind.is_output())
         {
             return;
         }
@@ -981,6 +987,47 @@ impl MetaGraphCanvas {
 
     pub fn update_edge_data_types(&mut self, scratch: &mut MetaCanvasScratch) {
         update_edge_data_types(&mut scratch.data_type, &mut self.nodes);
+    }
+
+    pub fn save_graph<A: Allocator>(&self, arena: A, output_path: &Path) -> Result<()> {
+        let mut nodes = AVec::with_capacity_in(self.nodes.len(), arena);
+        nodes.extend(self.nodes.iter().map(Into::into));
+
+        let graph = IOMetaNodeGraphRef {
+            nodes: nodes.as_slice(),
+        };
+
+        impact_io::write_ron_file(&graph, output_path)
+    }
+
+    pub fn load_graph(&mut self, scratch: &mut MetaCanvasScratch, path: &Path) -> Result<()> {
+        let graph: IOMetaNodeGraph =
+            impact_io::parse_ron_file(path).context("Failed to parse graph file")?;
+
+        let mut nodes = BTreeMap::new();
+        let mut node_id_counter = 0;
+
+        for io_node in graph.nodes {
+            let id = io_node.id;
+            let node = io_node
+                .try_into()
+                .with_context(|| format!("Invalid node in graph file (node ID {id})"))?;
+            nodes.insert(id, node);
+            node_id_counter = node_id_counter.max(id + 1);
+        }
+
+        self.nodes = nodes;
+        self.node_id_counter = node_id_counter;
+
+        self.pan_zoom_state = PanZoomState::new();
+        self.selected_node_id = None;
+        self.pending_edge = None;
+        self.is_panning = false;
+        self.dragging_node_id = None;
+
+        self.update_edge_data_types(scratch);
+
+        Ok(())
     }
 }
 
