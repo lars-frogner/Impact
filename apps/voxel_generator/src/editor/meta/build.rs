@@ -23,10 +23,23 @@ pub struct CompiledSDFGraph<A: Allocator> {
     pub graph: SDFGraph<A>,
 }
 
+#[derive(Clone, Debug)]
+pub struct BuildScratch {
+    id_map: HashMap<MetaNodeID, MetaSDFNodeID>,
+}
+
 #[derive(Debug)]
 enum SDFBuildOperation<'a> {
     VisitChildren((MetaNodeID, &'a MetaNode)),
     BuildNode((MetaNodeID, &'a MetaNode)),
+}
+
+impl BuildScratch {
+    pub fn new() -> Self {
+        Self {
+            id_map: HashMap::default(),
+        }
+    }
 }
 
 pub fn build_sdf_voxel_generator<A>(
@@ -60,6 +73,7 @@ pub fn default_sdf_voxel_generator() -> SDFVoxelGenerator {
 
 pub fn build_sdf_graph<A>(
     arena: A,
+    scratch: &mut BuildScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
 ) -> Option<CompiledSDFGraph<A>>
 where
@@ -74,7 +88,7 @@ where
 
     let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena);
 
-    let mut id_map = HashMap::<MetaNodeID, MetaSDFNodeID>::default();
+    scratch.id_map.clear();
 
     let mut operation_stack = AVec::new_in(arena);
     operation_stack.push(SDFBuildOperation::VisitChildren((root_node_id, root_node)));
@@ -82,7 +96,7 @@ where
     while let Some(operation) = operation_stack.pop() {
         match operation {
             SDFBuildOperation::VisitChildren((node_id, node)) => {
-                if id_map.contains_key(&node_id) {
+                if scratch.id_map.contains_key(&node_id) {
                     continue;
                 }
 
@@ -99,13 +113,13 @@ where
             }
             SDFBuildOperation::BuildNode((node_id, node)) => {
                 let generator_node = node.data.kind.build_sdf_generator_node(
-                    &id_map,
+                    &scratch.id_map,
                     &node.links_to_children,
                     &node.data.params,
                 )?;
 
                 let sdf_node_id = meta_graph.add_node(generator_node);
-                id_map.insert(node_id, sdf_node_id);
+                scratch.id_map.insert(node_id, sdf_node_id);
             }
         }
     }

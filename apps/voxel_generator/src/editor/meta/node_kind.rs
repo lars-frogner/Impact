@@ -1,8 +1,7 @@
 use super::{
-    MetaFloatParam, MetaNodeID, MetaNodeParam, MetaNodeParams, MetaPortConfig, MetaUIntParam,
-    MetaUIntRangeParam,
+    MetaFloatParam, MetaFloatRangeParam, MetaNodeID, MetaNodeLink, MetaNodeParam, MetaNodeParams,
+    MetaUIntParam, MetaUIntRangeParam,
 };
-use crate::editor::meta::{MetaFloatRangeParam, MetaNodeLink};
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
@@ -15,7 +14,8 @@ use impact_voxel::generation::sdf::meta::{
 
 trait SpecificMetaNodeKind {
     const LABEL: &'static str;
-    const PORT_CONFIG: MetaPortConfig;
+    const PARENT_PORT_KIND: MetaParentPortKind;
+    const CHILD_PORT_KINDS: MetaChildPortKinds;
 
     fn params() -> MetaNodeParams;
 
@@ -59,12 +59,37 @@ pub enum MetaNodeKindGroup {
     Masking,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MetaChildPortKind {
+    SingleSDF,
+    SDFGroup,
+    SinglePlacement,
+    PlacementGroup,
+    Any,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MetaParentPortKind {
+    SingleSDF,
+    SDFGroup,
+    SinglePlacement,
+    PlacementGroup,
+    SameAsInput { slot: usize },
+}
+
+const MAX_CHILD_PORTS: usize = 2;
+
+type MetaChildPortKinds = [Option<MetaChildPortKind>; MAX_CHILD_PORTS];
+
 pub const DEFAULT_VOXEL_EXTENT: f32 = 0.25;
 pub const MIN_VOXEL_EXTENT: f32 = 0.005;
 
 impl SpecificMetaNodeKind for MetaBoxSDF {
     const LABEL: &'static str = "Box";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -105,7 +130,8 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
 
 impl SpecificMetaNodeKind for MetaSphereSDF {
     const LABEL: &'static str = "Sphere";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -132,7 +158,8 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
 
 impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
     const LABEL: &'static str = "Gradient noise";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -194,7 +221,9 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
 
 impl SpecificMetaNodeKind for MetaSDFTranslation {
     const LABEL: &'static str = "Translation";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::SDFGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -236,7 +265,9 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
 
 impl SpecificMetaNodeKind for MetaSDFRotation {
     const LABEL: &'static str = "Rotation";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::SDFGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -276,7 +307,9 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
 
 impl SpecificMetaNodeKind for MetaSDFScaling {
     const LABEL: &'static str = "Scaling";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::SDFGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -305,7 +338,9 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
 
 impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
     const LABEL: &'static str = "Multifractal noise";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::SDFGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -374,7 +409,9 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
 
 impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
     const LABEL: &'static str = "Multiscale sphere";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::SDFGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -455,7 +492,9 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
 
 impl SpecificMetaNodeKind for MetaSDFUnion {
     const LABEL: &'static str = "Union";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::SingleSDF);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -481,7 +520,9 @@ impl SpecificMetaNodeKind for MetaSDFUnion {
 
 impl SpecificMetaNodeKind for MetaSDFSubtraction {
     const LABEL: &'static str = "Subtraction";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::SingleSDF);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -509,7 +550,9 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
 
 impl SpecificMetaNodeKind for MetaSDFIntersection {
     const LABEL: &'static str = "Intersection";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::SingleSDF);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -537,7 +580,9 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
 
 impl SpecificMetaNodeKind for MetaSDFGroupUnion {
     const LABEL: &'static str = "Group union";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::SDFGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -563,7 +608,8 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
 
 impl SpecificMetaNodeKind for MetaStratifiedPlacement {
     const LABEL: &'static str = "Stratified placement";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::leaf();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::PlacementGroup;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -619,7 +665,9 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
 
 impl SpecificMetaNodeKind for MetaTranslationToSurface {
     const LABEL: &'static str = "Translation to surface";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Any);
 
     fn params() -> MetaNodeParams {
         MetaNodeParams::new()
@@ -641,7 +689,9 @@ impl SpecificMetaNodeKind for MetaTranslationToSurface {
 
 impl SpecificMetaNodeKind for MetaRotationToGradient {
     const LABEL: &'static str = "Rotation to gradient";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Any);
 
     fn params() -> MetaNodeParams {
         MetaNodeParams::new()
@@ -663,7 +713,11 @@ impl SpecificMetaNodeKind for MetaRotationToGradient {
 
 impl SpecificMetaNodeKind for MetaSDFScattering {
     const LABEL: &'static str = "Scattering";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::binary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SDFGroup;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = two_child_port_kinds(
+        MetaChildPortKind::SDFGroup,
+        MetaChildPortKind::PlacementGroup,
+    );
 
     fn params() -> MetaNodeParams {
         MetaNodeParams::new()
@@ -682,7 +736,8 @@ impl SpecificMetaNodeKind for MetaSDFScattering {
 
 impl SpecificMetaNodeKind for MetaStochasticSelection {
     const LABEL: &'static str = "Stochastic selection";
-    const PORT_CONFIG: MetaPortConfig = MetaPortConfig::unary();
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds = single_child_port_kind(MetaChildPortKind::Any);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -780,26 +835,57 @@ impl MetaNodeKind {
         }
     }
 
-    pub const fn port_config(&self) -> MetaPortConfig {
+    pub const fn parent_port_kind(&self) -> MetaParentPortKind {
         match self {
-            Self::Output => MetaPortConfig::root(),
-            Self::Box => MetaBoxSDF::PORT_CONFIG,
-            Self::Sphere => MetaSphereSDF::PORT_CONFIG,
-            Self::GradientNoise => MetaGradientNoiseSDF::PORT_CONFIG,
-            Self::Translation => MetaSDFTranslation::PORT_CONFIG,
-            Self::Rotation => MetaSDFRotation::PORT_CONFIG,
-            Self::Scaling => MetaSDFScaling::PORT_CONFIG,
-            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::PORT_CONFIG,
-            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::PORT_CONFIG,
-            Self::Union => MetaSDFUnion::PORT_CONFIG,
-            Self::Subtraction => MetaSDFSubtraction::PORT_CONFIG,
-            Self::Intersection => MetaSDFIntersection::PORT_CONFIG,
-            Self::GroupUnion => MetaSDFGroupUnion::PORT_CONFIG,
-            Self::StratifiedPlacement => MetaStratifiedPlacement::PORT_CONFIG,
-            Self::TranslationToSurface => MetaTranslationToSurface::PORT_CONFIG,
-            Self::RotationToGradient => MetaRotationToGradient::PORT_CONFIG,
-            Self::Scattering => MetaSDFScattering::PORT_CONFIG,
-            Self::StochasticSelection => MetaStochasticSelection::PORT_CONFIG,
+            Self::Output => MetaParentPortKind::SingleSDF,
+            Self::Box => MetaBoxSDF::PARENT_PORT_KIND,
+            Self::Sphere => MetaSphereSDF::PARENT_PORT_KIND,
+            Self::GradientNoise => MetaGradientNoiseSDF::PARENT_PORT_KIND,
+            Self::Translation => MetaSDFTranslation::PARENT_PORT_KIND,
+            Self::Rotation => MetaSDFRotation::PARENT_PORT_KIND,
+            Self::Scaling => MetaSDFScaling::PARENT_PORT_KIND,
+            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::PARENT_PORT_KIND,
+            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::PARENT_PORT_KIND,
+            Self::Union => MetaSDFUnion::PARENT_PORT_KIND,
+            Self::Subtraction => MetaSDFSubtraction::PARENT_PORT_KIND,
+            Self::Intersection => MetaSDFIntersection::PARENT_PORT_KIND,
+            Self::GroupUnion => MetaSDFGroupUnion::PARENT_PORT_KIND,
+            Self::StratifiedPlacement => MetaStratifiedPlacement::PARENT_PORT_KIND,
+            Self::TranslationToSurface => MetaTranslationToSurface::PARENT_PORT_KIND,
+            Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
+            Self::Scattering => MetaSDFScattering::PARENT_PORT_KIND,
+            Self::StochasticSelection => MetaStochasticSelection::PARENT_PORT_KIND,
+        }
+    }
+
+    pub const fn child_port_kinds(&self) -> MetaChildPortKinds {
+        match self {
+            Self::Output => single_child_port_kind(MetaChildPortKind::SingleSDF),
+            Self::Box => MetaBoxSDF::CHILD_PORT_KINDS,
+            Self::Sphere => MetaSphereSDF::CHILD_PORT_KINDS,
+            Self::GradientNoise => MetaGradientNoiseSDF::CHILD_PORT_KINDS,
+            Self::Translation => MetaSDFTranslation::CHILD_PORT_KINDS,
+            Self::Rotation => MetaSDFRotation::CHILD_PORT_KINDS,
+            Self::Scaling => MetaSDFScaling::CHILD_PORT_KINDS,
+            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::CHILD_PORT_KINDS,
+            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::CHILD_PORT_KINDS,
+            Self::Union => MetaSDFUnion::CHILD_PORT_KINDS,
+            Self::Subtraction => MetaSDFSubtraction::CHILD_PORT_KINDS,
+            Self::Intersection => MetaSDFIntersection::CHILD_PORT_KINDS,
+            Self::GroupUnion => MetaSDFGroupUnion::CHILD_PORT_KINDS,
+            Self::StratifiedPlacement => MetaStratifiedPlacement::CHILD_PORT_KINDS,
+            Self::TranslationToSurface => MetaTranslationToSurface::CHILD_PORT_KINDS,
+            Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
+            Self::Scattering => MetaSDFScattering::CHILD_PORT_KINDS,
+            Self::StochasticSelection => MetaStochasticSelection::CHILD_PORT_KINDS,
+        }
+    }
+
+    pub const fn n_child_slots(&self) -> usize {
+        match self.child_port_kinds() {
+            [None, None] => 0,
+            [Some(_), None] | [None, Some(_)] => 1,
+            [Some(_), Some(_)] => 2,
         }
     }
 
@@ -870,6 +956,21 @@ impl MetaNodeKindGroup {
             Self::Masking,
         ]
     }
+}
+
+const fn leaf_child_port_kind() -> MetaChildPortKinds {
+    [None; MAX_CHILD_PORTS]
+}
+
+const fn single_child_port_kind(kind: MetaChildPortKind) -> MetaChildPortKinds {
+    [Some(kind), None]
+}
+
+const fn two_child_port_kinds(
+    kind_1: MetaChildPortKind,
+    kind_2: MetaChildPortKind,
+) -> MetaChildPortKinds {
+    [Some(kind_1), Some(kind_2)]
 }
 
 pub fn get_voxel_extent_from_output_node(output_node_params: &[MetaNodeParam]) -> f32 {

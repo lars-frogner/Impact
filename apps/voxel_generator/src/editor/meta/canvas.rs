@@ -1,8 +1,12 @@
-use super::{MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaPort};
+use super::{
+    MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaNodeLink, MetaPort,
+    build::BuildScratch,
+    data_type::{DataTypeScratch, update_edge_data_types},
+};
 use crate::editor::{
     MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
-    meta::MetaNodeLink,
+    meta::{MetaPaletteColor, ResolvedMetaPort, data_type::EdgeDataType},
     util::create_bezier_edge,
 };
 use impact::{
@@ -25,8 +29,6 @@ const AUTO_LAYOUT_VERTICAL_GAP: f32 = 40.0;
 
 const EDGE_WIDTH: f32 = 2.0;
 const PENDING_EDGE_WIDTH: f32 = 2.0;
-const EDGE_COLOR: Color32 = Color32::WHITE;
-const PENDING_EDGE_COLOR: Color32 = Color32::LIGHT_GRAY;
 
 const STATUS_DOT_RADIUS: f32 = 6.0;
 const STATUS_DOT_OFFSET: Vec2 = vec2(12.0, 12.0);
@@ -53,7 +55,9 @@ pub struct MetaCanvasScratch {
     node_rects: BTreeMap<MetaNodeID, Rect>,
     index_map: KeyIndexMapper<MetaNodeID>,
     search: SearchScratch,
+    data_type: DataTypeScratch,
     layout: LayoutScratch,
+    pub build: BuildScratch,
 }
 
 #[derive(Clone, Debug)]
@@ -191,39 +195,39 @@ impl MetaGraphCanvas {
         node_id: MetaNodeID,
         new_kind: MetaNodeKind,
     ) {
-        let Some(node) = self.nodes.get_mut(&node_id) else {
+        let Some(node) = self.nodes.get(&node_id) else {
             return;
         };
 
+        let n_parent_slots = node.links_to_parents.len();
         let n_old_child_slots = node.links_to_children.len();
-        let n_new_child_slots = new_kind.port_config().children;
+        let n_new_child_slots = new_kind.n_child_slots();
 
-        // Detach dropped children and re-attach if there are available slots
         if n_new_child_slots < n_old_child_slots {
             for slot in n_new_child_slots..n_old_child_slots {
-                if let Some(MetaNodeLink {
-                    to_node: child_node_id,
-                    to_slot: parent_slot_on_child,
-                }) = self.detach_child_of(node_id, slot)
-                {
-                    for slot in 0..n_new_child_slots {
-                        if self.node(node_id).links_to_children[slot].is_none() {
-                            self.try_attach(
-                                &mut scratch.search,
-                                node_id,
-                                slot,
-                                child_node_id,
-                                parent_slot_on_child,
-                            );
-                        }
-                    }
-                };
+                self.detach_child_of(node_id, slot);
             }
         }
 
-        // Parents stay the same
-
         self.node_mut(node_id).change_kind(new_kind);
+
+        // Since we have changed the kind, some existing links may no longer be
+        // valid. But we need to update the data types based on the new node
+        // kind before we can check for and remove invalid links.
+        self.update_edge_data_types(scratch);
+
+        // Detach all children and parents with which the ports have become
+        // incompatible
+        for slot in 0..n_new_child_slots {
+            if self.link_to_child_exists_with_invalid_data_type(node_id, slot) {
+                self.detach_child_of(node_id, slot);
+            }
+        }
+        for slot in 0..n_parent_slots {
+            if self.link_to_parent_exists_with_invalid_data_type(node_id, slot) {
+                self.detach_parent_of(node_id, slot);
+            }
+        }
     }
 
     pub fn change_parent_port_count(
@@ -291,23 +295,27 @@ impl MetaGraphCanvas {
             return false;
         }
 
+        // Nodes must exist
+        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
+            return false;
+        };
+        let Some(child_node) = self.nodes.get(&child_node_id) else {
+            return false;
+        };
+
         // Slots must exist
-        if self
-            .nodes
-            .get(&parent_node_id)
-            .is_none_or(|node| child_slot_on_parent >= node.links_to_children.len())
-        {
+        if child_slot_on_parent >= parent_node.links_to_children.len() {
             return false;
         }
-        if self
-            .nodes
-            .get(&child_node_id)
-            .is_none_or(|node| parent_slot_on_child >= node.links_to_parents.len())
-        {
+        if parent_slot_on_child >= child_node.links_to_parents.len() {
             return false;
         }
 
-        true
+        // Output and input data types must be compatible
+        EdgeDataType::connection_allowed(
+            parent_node.input_data_types[child_slot_on_parent],
+            child_node.output_data_type,
+        )
     }
 
     fn try_attach(
@@ -405,14 +413,69 @@ impl MetaGraphCanvas {
         Some(parent_link_to_child)
     }
 
+    fn link_to_parent_exists_with_invalid_data_type(
+        &mut self,
+        child_node_id: MetaNodeID,
+        parent_slot_on_child: usize,
+    ) -> bool {
+        let Some(child_node) = self.nodes.get(&child_node_id) else {
+            return false;
+        };
+
+        let Some(child_link_to_parent) = child_node
+            .links_to_parents
+            .get(parent_slot_on_child)
+            .and_then(|link| link.as_ref())
+        else {
+            return false;
+        };
+
+        let Some(parent_node) = self.nodes.get(&child_link_to_parent.to_node) else {
+            return false;
+        };
+
+        !EdgeDataType::connection_allowed(
+            parent_node.input_data_types[child_link_to_parent.to_slot],
+            child_node.output_data_type,
+        )
+    }
+
+    fn link_to_child_exists_with_invalid_data_type(
+        &mut self,
+        parent_node_id: MetaNodeID,
+        child_slot_on_parent: usize,
+    ) -> bool {
+        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
+            return false;
+        };
+
+        let Some(parent_link_to_child) = parent_node
+            .links_to_children
+            .get(child_slot_on_parent)
+            .and_then(|link| link.as_ref())
+        else {
+            return false;
+        };
+
+        let Some(child_node) = self.nodes.get(&parent_link_to_child.to_node) else {
+            return false;
+        };
+
+        !EdgeDataType::connection_allowed(
+            parent_node.input_data_types[child_slot_on_parent],
+            child_node.output_data_type,
+        )
+    }
+
     pub fn show(
         &mut self,
         scratch: &mut MetaCanvasScratch,
         ctx: &Context,
         graph_status: MetaGraphStatus,
         pending_new_node: Option<(MetaNodeID, MetaNodeData)>,
-        perform_layout: bool,
+        mut perform_layout: bool,
         auto_attach: bool,
+        auto_layout: bool,
     ) -> CanvasShowResult {
         let mut connectivity_may_have_changed = false;
 
@@ -439,6 +502,20 @@ impl MetaGraphCanvas {
                         self.pending_edge = None;
                     } else if self.selected_node_id.is_some() {
                         self.selected_node_id = None;
+                    }
+                }
+
+                // Handle cancellation of pending edge or node deletion with keyboard
+
+                if ui.input(|i| i.key_pressed(Key::Delete)) {
+                    if self.pending_edge.is_some() {
+                        self.pending_edge = None;
+                    } else if let Some(selected_id) = self.selected_node_id {
+                        self.remove_node(selected_id);
+                        if auto_layout {
+                            perform_layout = true;
+                        }
+                        connectivity_may_have_changed = true;
                     }
                 }
 
@@ -626,24 +703,36 @@ impl MetaGraphCanvas {
                         let Some(parent_node) = self.nodes.get(&parent_node_id) else {
                             continue;
                         };
+
+                        let input_data_type = parent_node.input_data_types[child_slot_on_parent];
+                        let output_data_type = child_node.output_data_type;
+                        let edge_color = if EdgeDataType::connection_allowed(
+                            input_data_type,
+                            output_data_type,
+                        ) {
+                            input_data_type.color().standard
+                        } else {
+                            MetaPaletteColor::red().standard
+                        };
+
                         let parent_rect = &node_rects[&parent_node_id];
 
-                        let child_pos = MetaPort::Child {
-                            slot: child_slot_on_parent,
-                            of: parent_node.links_to_children.len(),
-                        }
-                        .center(parent_rect);
+                        let child_pos = MetaPort::child_center(
+                            parent_rect,
+                            child_slot_on_parent,
+                            parent_node.links_to_children.len(),
+                        );
 
-                        let parent_pos = MetaPort::Parent {
-                            slot: parent_slot_on_child,
-                            of: child_node.links_to_parents.len(),
-                        }
-                        .center(child_node_rect);
+                        let parent_pos = MetaPort::parent_center(
+                            child_node_rect,
+                            parent_slot_on_child,
+                            child_node.links_to_parents.len(),
+                        );
 
                         let edge_shape = create_bezier_edge(
                             child_pos,
                             parent_pos,
-                            PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, EDGE_COLOR),
+                            PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, edge_color),
                         );
                         painter.add(edge_shape);
                     }
@@ -651,16 +740,12 @@ impl MetaGraphCanvas {
 
                 // Draw ports
 
+                let mut pending_edge_port_color = Color32::BLACK;
+
                 for (&node_id, node_rect) in node_rects {
                     let node = self.node(node_id);
-                    for port in node
-                        .data
-                        .kind
-                        .port_config()
-                        .ports(node.links_to_parents.len())
-                    {
+                    for ResolvedMetaPort { port, data_type } in node.resolved_ports() {
                         let mut enabled = true;
-                        let mut highlighted = false;
 
                         if let Some(pending_edge) = &self.pending_edge {
                             // Ports we can attach the pending edge to are
@@ -685,7 +770,6 @@ impl MetaGraphCanvas {
                                         child_node_id,
                                         parent_slot_on_child,
                                     );
-                                    highlighted = enabled;
                                 }
                                 (
                                     MetaPort::Child {
@@ -706,14 +790,31 @@ impl MetaGraphCanvas {
                                         child_node_id,
                                         parent_slot_on_child,
                                     );
-                                    highlighted = enabled;
                                 }
                                 _ => {
                                     // Mismatched ports are disabled
                                     enabled = false;
-                                    highlighted = false;
                                 }
                             }
+                        }
+
+                        let pending_edge_is_from_this_port =
+                            self.pending_edge.as_ref().is_some_and(|edge| {
+                                edge.from_node == node_id && edge.from_port == port
+                            });
+
+                        let port_shape = data_type.port_shape();
+
+                        let port_color = if enabled || pending_edge_is_from_this_port {
+                            data_type.color().standard
+                        } else {
+                            data_type.color().darker
+                        };
+
+                        let port_label = data_type.port_label();
+
+                        if pending_edge_is_from_this_port {
+                            pending_edge_port_color = port_color;
                         }
 
                         let response = port.show(
@@ -722,9 +823,11 @@ impl MetaGraphCanvas {
                             node_id,
                             node_rect,
                             enabled,
-                            highlighted,
                             self.pan_zoom_state.zoom,
                             self.cursor_should_be_hidden(),
+                            port_shape,
+                            port_color,
+                            port_label,
                         );
 
                         if response.clicked() {
@@ -812,17 +915,6 @@ impl MetaGraphCanvas {
                     }
                 }
 
-                // Handle cancellation of pending edge or node deletion with keyboard
-
-                if ui.input(|i| i.key_pressed(Key::Delete)) {
-                    if self.pending_edge.is_some() {
-                        self.pending_edge = None;
-                    } else if let Some(selected_id) = self.selected_node_id {
-                        self.remove_node(selected_id);
-                        connectivity_may_have_changed = true;
-                    }
-                }
-
                 // Draw pending edge
 
                 if let Some(pending_edge) = &self.pending_edge
@@ -844,7 +936,7 @@ impl MetaGraphCanvas {
                         parent_pos,
                         PathStroke::new(
                             PENDING_EDGE_WIDTH * self.pan_zoom_state.zoom,
-                            PENDING_EDGE_COLOR,
+                            pending_edge_port_color,
                         ),
                     );
                     painter.add(edge_shape);
@@ -886,6 +978,10 @@ impl MetaGraphCanvas {
             connectivity_may_have_changed,
         }
     }
+
+    pub fn update_edge_data_types(&mut self, scratch: &mut MetaCanvasScratch) {
+        update_edge_data_types(&mut scratch.data_type, &mut self.nodes);
+    }
 }
 
 impl MetaCanvasScratch {
@@ -894,7 +990,9 @@ impl MetaCanvasScratch {
             node_rects: BTreeMap::new(),
             index_map: KeyIndexMapper::new(),
             search: SearchScratch::new(),
+            data_type: DataTypeScratch::new(),
             layout: LayoutScratch::new(),
+            build: BuildScratch::new(),
         }
     }
 }

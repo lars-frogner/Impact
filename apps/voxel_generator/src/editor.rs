@@ -93,8 +93,11 @@ impl Editor {
             return None;
         }
 
-        let Some(compiled_graph) = build::build_sdf_graph(arena, &self.meta_graph_canvas.nodes)
-        else {
+        let Some(compiled_graph) = build::build_sdf_graph(
+            arena,
+            &mut self.meta_canvas_scratch.build,
+            &self.meta_graph_canvas.nodes,
+        ) else {
             self.graph_dirty = false;
             self.rebuild_generator = false;
             self.graph_status = MetaGraphStatus::Invalid;
@@ -147,6 +150,8 @@ impl CustomPanels for Editor {
 
         let mut connectivity_may_have_changed = false;
         let mut params_changed = false;
+        let mut kind_changed = false;
+        let mut node_removed = false;
 
         let mut pending_new_node = if self.meta_graph_canvas.nodes.is_empty() {
             Some((
@@ -259,6 +264,7 @@ impl CustomPanels for Editor {
                             kind,
                         );
                         selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
+                        kind_changed = true;
                         connectivity_may_have_changed = true;
                     }
 
@@ -319,6 +325,7 @@ impl CustomPanels for Editor {
                         .clicked()
                     {
                         self.meta_graph_canvas.remove_node(selected_node_id);
+                        node_removed = true;
                         connectivity_may_have_changed = true;
                     }
                     ui.end_row();
@@ -328,9 +335,12 @@ impl CustomPanels for Editor {
                 }
             });
 
+            let node_added = pending_new_node.is_some();
+
             let perform_layout = layout_requested
                 || (self.config.auto_layout
-                    && (pending_new_node.is_some()
+                    && (node_added
+                        || node_removed
                         || params_changed
                         || connectivity_may_have_changed));
 
@@ -341,6 +351,7 @@ impl CustomPanels for Editor {
                 pending_new_node,
                 perform_layout,
                 self.config.auto_attach,
+                self.config.auto_layout,
             );
 
             if self.config.show_atomic_graph {
@@ -349,6 +360,11 @@ impl CustomPanels for Editor {
 
             connectivity_may_have_changed =
                 connectivity_may_have_changed || canvas_result.connectivity_may_have_changed;
+
+            if node_added || node_removed || (connectivity_may_have_changed && !kind_changed) {
+                self.meta_graph_canvas
+                    .update_edge_data_types(&mut self.meta_canvas_scratch);
+            }
 
             self.graph_dirty = self.graph_dirty || connectivity_may_have_changed || params_changed;
 

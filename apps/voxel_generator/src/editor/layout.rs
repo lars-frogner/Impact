@@ -1,6 +1,6 @@
 use impact::{
     egui::{Pos2, Rect, Vec2, pos2, vec2},
-    impact_containers::FixedQueue,
+    impact_containers::{BitVector, FixedQueue},
 };
 
 pub trait LayoutableGraph {
@@ -13,7 +13,8 @@ pub trait LayoutableGraph {
 
 #[derive(Clone, Debug)]
 pub struct LayoutScratch {
-    incoming_edge_counts: Vec<usize>,
+    parent_counts: Vec<usize>,
+    is_isolated: BitVector,
     node_layers: Vec<usize>,
     node_indices_in_visit_order: Vec<usize>,
     next_node_idx_in_layer: Vec<usize>,
@@ -27,7 +28,8 @@ pub struct LayoutScratch {
 impl LayoutScratch {
     pub fn new() -> Self {
         Self {
-            incoming_edge_counts: Vec::new(),
+            parent_counts: Vec::new(),
+            is_isolated: BitVector::new(),
             node_layers: Vec::new(),
             node_indices_in_visit_order: Vec::new(),
             next_node_idx_in_layer: Vec::new(),
@@ -40,8 +42,10 @@ impl LayoutScratch {
     }
 
     fn ensure_node_capacity(&mut self, n_nodes: usize) {
-        self.incoming_edge_counts.clear();
-        self.incoming_edge_counts.resize(n_nodes, 0);
+        self.parent_counts.clear();
+        self.parent_counts.resize(n_nodes, 0);
+
+        self.is_isolated.resize_and_unset_all(n_nodes);
 
         self.node_layers.clear();
         self.node_layers.resize(n_nodes, 0);
@@ -85,23 +89,39 @@ pub fn layout_vertical(
 
     scratch.ensure_node_capacity(n_nodes);
 
-    // Count incoming edges for each node
+    // Count parents for each node
     for node_idx in 0..n_nodes {
+        let mut has_child = false;
         for child_idx in graph.child_indices(node_idx) {
-            scratch.incoming_edge_counts[child_idx] += 1;
+            scratch.parent_counts[child_idx] += 1;
+            has_child = true;
+        }
+        if !has_child {
+            // We tentatively mark leaf nodes as isolated. We will correct any
+            // leaf nodes that have parents to be non-isolated in a separate
+            // pass.
+            scratch.is_isolated.set_bit(node_idx);
         }
     }
 
-    // Queue root nodes
+    // Correct any leaf nodes that have parents to be non-isolated
     for node_idx in 0..n_nodes {
-        if scratch.incoming_edge_counts[node_idx] == 0 {
-            scratch.queue.push_back(node_idx);
+        if scratch.is_isolated.bit_is_set(node_idx) && scratch.parent_counts[node_idx] > 0 {
+            scratch.is_isolated.unset_bit(node_idx);
         }
     }
-    assert!(
-        !scratch.queue.is_empty(),
-        "Graph must have at least one root"
-    );
+
+    // Queue all root nodes that have children
+    let mut has_root = false;
+    for node_idx in 0..n_nodes {
+        if scratch.parent_counts[node_idx] == 0 {
+            has_root = true;
+            if !scratch.is_isolated.bit_is_set(node_idx) {
+                scratch.queue.push_back(node_idx);
+            }
+        }
+    }
+    assert!(has_root, "Graph must have at least one root");
 
     // Traverse in topological order to determine visit order and the layer
     // (depth) for each node
@@ -113,12 +133,28 @@ pub fn layout_vertical(
             // Keep the deepest layer seen from any parent
             scratch.node_layers[child_idx] = scratch.node_layers[child_idx].max(next_layer);
 
-            // Decrement remaining incoming edges and enqueue when ready
-            scratch.incoming_edge_counts[child_idx] -= 1;
-            if scratch.incoming_edge_counts[child_idx] == 0 {
+            // Decrement remaining parent count and enqueue when ready
+            scratch.parent_counts[child_idx] -= 1;
+            if scratch.parent_counts[child_idx] == 0 {
                 scratch.queue.push_back(child_idx);
             }
         }
+    }
+
+    let mut max_layer = scratch.node_layers.iter().copied().max().unwrap();
+
+    // Put all isolated nodes in a separate layer at the bottom
+    let mut has_isolated = false;
+    for node_idx in 0..n_nodes {
+        if scratch.is_isolated.bit_is_set(node_idx) {
+            has_isolated = true;
+            scratch.node_layers[node_idx] = max_layer + 1;
+            scratch.node_indices_in_visit_order.push(node_idx);
+        }
+    }
+
+    if has_isolated {
+        max_layer += 1;
     }
 
     assert_eq!(
@@ -129,7 +165,6 @@ pub fn layout_vertical(
 
     // Create a linked list of nodes in visit order for each layer
 
-    let max_layer = scratch.node_layers.iter().copied().max().unwrap();
     let n_layers = max_layer + 1;
     scratch.ensure_layer_capacity(n_layers);
 
