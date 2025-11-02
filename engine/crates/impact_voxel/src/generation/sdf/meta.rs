@@ -28,6 +28,7 @@ pub struct MetaSDFGraph<A: Allocator = Global> {
     nodes: AVec<MetaSDFNode, A>,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub enum MetaSDFNode {
     // Primitives
@@ -86,12 +87,14 @@ enum MetaSDFNodeOutput<A: Allocator> {
     PlacementGroup(AVec<Similarity3<f32>, A>),
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
 pub struct DiscreteParamRange {
     min: u32,
     max: u32,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
 pub struct ContParamRange {
     min: f32,
@@ -99,6 +102,7 @@ pub struct ContParamRange {
 }
 
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaBoxSDF {
     extents: [ContParamRange; 3],
@@ -106,6 +110,7 @@ pub struct MetaBoxSDF {
 }
 
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSphereSDF {
     radius: ContParamRange,
@@ -113,6 +118,7 @@ pub struct MetaSphereSDF {
 }
 
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaGradientNoiseSDF {
     extents: [ContParamRange; 3],
@@ -123,6 +129,7 @@ pub struct MetaGradientNoiseSDF {
 
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFTranslation {
     child_id: MetaSDFNodeID,
@@ -132,6 +139,7 @@ pub struct MetaSDFTranslation {
 
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFRotation {
     child_id: MetaSDFNodeID,
@@ -143,6 +151,7 @@ pub struct MetaSDFRotation {
 
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFScaling {
     child_id: MetaSDFNodeID,
@@ -152,6 +161,7 @@ pub struct MetaSDFScaling {
 
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaMultifractalNoiseSDFModifier {
     child_id: MetaSDFNodeID,
@@ -165,6 +175,7 @@ pub struct MetaMultifractalNoiseSDFModifier {
 
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaMultiscaleSphereSDFModifier {
     child_id: MetaSDFNodeID,
@@ -180,6 +191,7 @@ pub struct MetaMultiscaleSphereSDFModifier {
 /// Input 1: `SingleSDF`
 /// Input 2: `SingleSDF`
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFUnion {
     child_1_id: MetaSDFNodeID,
@@ -190,6 +202,7 @@ pub struct MetaSDFUnion {
 /// Input 1: `SingleSDF`
 /// Input 2: `SingleSDF`
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFSubtraction {
     child_1_id: MetaSDFNodeID,
@@ -200,6 +213,7 @@ pub struct MetaSDFSubtraction {
 /// Input 1: `SingleSDF`
 /// Input 2: `SingleSDF`
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFIntersection {
     child_1_id: MetaSDFNodeID,
@@ -209,6 +223,7 @@ pub struct MetaSDFIntersection {
 
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFGroupUnion {
     child_id: MetaSDFNodeID,
@@ -216,6 +231,7 @@ pub struct MetaSDFGroupUnion {
 }
 
 /// Output: `PlacementGroup`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaStratifiedPlacement {
     shape: [DiscreteParamRange; 3],
@@ -228,6 +244,7 @@ pub struct MetaStratifiedPlacement {
 /// Input 1: `SingleSDF`
 /// Input 2: Any
 /// Output: Same as input 2
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaTranslationToSurface {
     surface_sdf_id: MetaSDFNodeID,
@@ -237,6 +254,7 @@ pub struct MetaTranslationToSurface {
 /// Input 1: `SingleSDF`
 /// Input 2: Any
 /// Output: Same as input 2
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaRotationToGradient {
     gradient_sdf_id: MetaSDFNodeID,
@@ -246,6 +264,7 @@ pub struct MetaRotationToGradient {
 /// Input 1: `SDFGroup` or `SingleSDF`
 /// Input 2: `PlacementGroup` or `SinglePlacement`
 /// Output: `SDFGroup`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFScattering {
     sdf_id: MetaSDFNodeID,
@@ -254,6 +273,7 @@ pub struct MetaSDFScattering {
 
 /// Input: Any
 /// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaStochasticSelection {
     child_id: MetaSDFNodeID,

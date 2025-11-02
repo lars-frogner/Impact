@@ -11,6 +11,7 @@ use impact_voxel::generation::sdf::meta::{
     MetaSDFScattering, MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF,
     MetaStochasticSelection, MetaStratifiedPlacement, MetaTranslationToSurface,
 };
+use serde::{Deserialize, Serialize};
 
 trait SpecificMetaNodeKind {
     const LABEL: &'static str;
@@ -26,7 +27,7 @@ trait SpecificMetaNodeKind {
     ) -> Option<MetaSDFNode>;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MetaNodeKind {
     Output,
     Box,
@@ -791,7 +792,7 @@ impl MetaNodeKind {
         ]
     }
 
-    pub fn is_root(&self) -> bool {
+    pub fn is_output(&self) -> bool {
         *self == Self::Output
     }
 

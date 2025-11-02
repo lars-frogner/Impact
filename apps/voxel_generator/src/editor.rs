@@ -6,7 +6,7 @@ mod util;
 use allocator_api2::alloc::Allocator;
 use atomic::canvas::AtomicGraphCanvas;
 use impact::{
-    egui::{Button, ComboBox, Context, PointerButton, Pos2, Rect, Ui, Vec2},
+    egui::{Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, Ui, Vec2},
     engine::Engine,
 };
 use impact_dev_ui::{
@@ -21,7 +21,9 @@ use meta::{
     canvas::{MetaCanvasScratch, MetaGraphCanvas},
     node_kind::{MetaNodeKind, MetaNodeKindGroup},
 };
+use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 const SCROLL_SENSITIVITY: f32 = 4e-3;
 const MIN_ZOOM: f32 = 0.3;
@@ -46,6 +48,7 @@ pub struct Editor {
     graph_dirty: bool,
     rebuild_generator: bool,
     graph_status: MetaGraphStatus,
+    last_graph_path: Option<GraphPath>,
     config: EditorConfig,
 }
 
@@ -72,6 +75,13 @@ pub struct PanZoomState {
     zoom: f32,
 }
 
+#[derive(Clone, Debug)]
+struct GraphPath {
+    path: PathBuf,
+    path_string: String,
+    file_name_string: String,
+}
+
 impl Editor {
     pub fn new(config: EditorConfig) -> Self {
         Self {
@@ -81,6 +91,7 @@ impl Editor {
             graph_dirty: false,
             rebuild_generator: false,
             graph_status: MetaGraphStatus::Invalid,
+            last_graph_path: None,
             config,
         }
     }
@@ -128,6 +139,51 @@ impl Editor {
         self.build_next_voxel_sdf_generator(arena)
             .unwrap_or_else(build::default_sdf_voxel_generator)
     }
+
+    fn load_graph_from_file(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .add_filter("Graph (*.ron)", &["ron"])
+            .set_title("Load graph")
+            .pick_file()
+        {
+            if let Err(err) = self
+                .meta_graph_canvas
+                .load_graph(&mut self.meta_canvas_scratch, &path)
+            {
+                eprintln!("Failed to load graph: {err}");
+            } else {
+                self.graph_dirty = true;
+                self.rebuild_generator = true;
+                impact_log::info!("Loaded graph from {}", path.display());
+                self.last_graph_path = Some(GraphPath::new(path));
+            }
+        }
+    }
+
+    fn save_graph_to_file<A: Allocator>(&mut self, arena: A) {
+        if let Some(path) = FileDialog::new()
+            .add_filter("Graph (*.ron)", &["ron"])
+            .set_title("Save graph as")
+            .save_file()
+        {
+            if let Err(err) = self.meta_graph_canvas.save_graph(arena, &path) {
+                impact_log::error!("Failed to save graph to {}: {err:#}", path.display());
+            } else {
+                impact_log::info!("Saved graph to {}", path.display());
+                self.last_graph_path = Some(GraphPath::new(path));
+            }
+        }
+    }
+
+    fn save_graph_to_last_path<A: Allocator>(&mut self, arena: A) {
+        if let Some(path) = &self.last_graph_path {
+            if let Err(err) = self.meta_graph_canvas.save_graph(arena, &path.path) {
+                impact_log::error!("Failed to save graph to {}: {err:#}", path.path_string);
+            } else {
+                impact_log::info!("Saved graph to {}", path.path_string);
+            }
+        }
+    }
 }
 
 impl CustomPanels for Editor {
@@ -149,6 +205,7 @@ impl CustomPanels for Editor {
         }
 
         let mut connectivity_may_have_changed = false;
+        let mut layout_requested = false;
         let mut params_changed = false;
         let mut kind_changed = false;
         let mut node_removed = false;
@@ -163,7 +220,29 @@ impl CustomPanels for Editor {
         };
 
         option_panel(ctx, config, "Editor panel", |ui| {
-            let mut layout_requested = false;
+            if let Some(path) = &self.last_graph_path {
+                option_group(ui, "file", |ui| {
+                    ui.label(&path.file_name_string)
+                        .on_hover_cursor(CursorIcon::Help)
+                        .on_hover_text(&path.path_string);
+                });
+            }
+            option_group(ui, "file_io", |ui| {
+                if ui.button("Load…").clicked() {
+                    self.load_graph_from_file();
+                }
+
+                if ui.button("Save As…").clicked() {
+                    self.save_graph_to_file(arena);
+                }
+
+                if ui
+                    .add_enabled(self.last_graph_path.is_some(), Button::new("Save"))
+                    .clicked()
+                {
+                    self.save_graph_to_last_path(arena);
+                };
+            });
 
             option_group(ui, "main", |ui| {
                 option_checkbox(
@@ -225,8 +304,8 @@ impl CustomPanels for Editor {
                 }
             });
 
-            option_group(ui, "modification", |ui| {
-                if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
+            if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
+                option_group(ui, "modification", |ui| {
                     let mut selected_node = self
                         .meta_graph_canvas
                         .nodes
@@ -234,14 +313,14 @@ impl CustomPanels for Editor {
                         .unwrap();
                     let mut kind = selected_node.data.kind;
 
-                    labeled_option(
-                        ui,
-                        LabelAndHoverText {
-                            label: "Kind",
-                            hover_text: "",
-                        },
-                        |ui| {
-                            ui.add_enabled_ui(!selected_node.data.kind.is_root(), |ui| {
+                    if !selected_node.data.kind.is_output() {
+                        labeled_option(
+                            ui,
+                            LabelAndHoverText {
+                                label: "Kind",
+                                hover_text: "",
+                            },
+                            |ui| {
                                 ComboBox::from_id_salt("selected_kind")
                                     .selected_text(selected_node.data.kind.label())
                                     .show_ui(ui, |ui| {
@@ -253,9 +332,9 @@ impl CustomPanels for Editor {
                                             );
                                         }
                                     })
-                            })
-                        },
-                    );
+                            },
+                        );
+                    }
 
                     if kind != selected_node.data.kind {
                         self.meta_graph_canvas.change_node_kind(
@@ -268,7 +347,7 @@ impl CustomPanels for Editor {
                         connectivity_may_have_changed = true;
                     }
 
-                    if !selected_node.data.kind.is_root() {
+                    if !selected_node.data.kind.is_output() {
                         let mut parent_port_count = selected_node.links_to_parents.len();
                         labeled_option(
                             ui,
@@ -277,21 +356,19 @@ impl CustomPanels for Editor {
                                 hover_text: "",
                             },
                             |ui| {
-                                ui.add_enabled_ui(!selected_node.data.kind.is_root(), |ui| {
-                                    ComboBox::from_id_salt("parent_port_count")
-                                        .selected_text(
-                                            PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
-                                        )
-                                        .show_ui(ui, |ui| {
-                                            for (option, label) in PARENT_PORT_COUNT_OPTIONS {
-                                                ui.selectable_value(
-                                                    &mut parent_port_count,
-                                                    option,
-                                                    label,
-                                                );
-                                            }
-                                        })
-                                })
+                                ComboBox::from_id_salt("parent_port_count")
+                                    .selected_text(
+                                        PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
+                                    )
+                                    .show_ui(ui, |ui| {
+                                        for (option, label) in PARENT_PORT_COUNT_OPTIONS {
+                                            ui.selectable_value(
+                                                &mut parent_port_count,
+                                                option,
+                                                label,
+                                            );
+                                        }
+                                    })
                             },
                         );
 
@@ -309,31 +386,22 @@ impl CustomPanels for Editor {
                     if selected_node.data.run_controls(ui) {
                         params_changed = true;
                     }
-                }
-            });
+                });
+            }
 
-            option_group(ui, "deletion", |ui| {
-                if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
-                    let selected_node =
-                        self.meta_graph_canvas.nodes.get(&selected_node_id).unwrap();
-
-                    if ui
-                        .add_enabled(
-                            !selected_node.data.kind.is_root(),
-                            Button::new("Delete node"),
-                        )
-                        .clicked()
-                    {
-                        self.meta_graph_canvas.remove_node(selected_node_id);
-                        node_removed = true;
-                        connectivity_may_have_changed = true;
-                    }
-                    ui.end_row();
-                } else {
-                    ui.add_enabled(false, Button::new("Delete node"));
-                    ui.end_row();
+            if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
+                let selected_node = self.meta_graph_canvas.nodes.get(&selected_node_id).unwrap();
+                if !selected_node.data.kind.is_output() {
+                    option_group(ui, "deletion", |ui| {
+                        if ui.button("Delete node").clicked() {
+                            self.meta_graph_canvas.remove_node(selected_node_id);
+                            node_removed = true;
+                            connectivity_may_have_changed = true;
+                        }
+                        ui.end_row();
+                    });
                 }
-            });
+            }
 
             let node_added = pending_new_node.is_some();
 
@@ -465,5 +533,17 @@ impl PanZoomState {
 impl Default for PanZoomState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl GraphPath {
+    fn new(path: PathBuf) -> Self {
+        let path_string = path.display().to_string();
+        let file_name_string = path.file_name().unwrap().display().to_string();
+        Self {
+            path,
+            path_string,
+            file_name_string,
+        }
     }
 }
