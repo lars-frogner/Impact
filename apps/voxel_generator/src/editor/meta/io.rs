@@ -10,11 +10,15 @@ use tinyvec::TinyVec;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IOMetaNodeGraph {
+    pub pan: [f32; 2],
+    pub zoom: f32,
     pub nodes: Vec<IOMetaNode>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct IOMetaNodeGraphRef<'a> {
+    pub pan: [f32; 2],
+    pub zoom: f32,
     pub nodes: &'a [IOMetaNode],
 }
 
