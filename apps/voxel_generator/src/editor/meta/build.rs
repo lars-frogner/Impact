@@ -81,12 +81,13 @@ where
 {
     let output_node = nodes.get(&0)?;
 
-    let voxel_extent = node_kind::get_voxel_extent_from_output_node(&output_node.data.params);
+    let (voxel_extent, seed) =
+        node_kind::get_voxel_extent_and_seed_from_output_node(&output_node.data.params);
 
     let root_node_id = output_node.links_to_children[0]?.to_node;
     let root_node = &nodes[&root_node_id];
 
-    let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena);
+    let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena, seed);
 
     scratch.id_map.clear();
 
