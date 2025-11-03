@@ -976,8 +976,10 @@ const fn two_child_port_kinds(
     [Some(kind_1), Some(kind_2)]
 }
 
-pub fn get_voxel_extent_from_output_node(output_node_params: &[MetaNodeParam]) -> f32 {
-    output_node_params[0].float()
+pub fn get_voxel_extent_and_seed_from_output_node(
+    output_node_params: &[MetaNodeParam],
+) -> (f32, u32) {
+    (output_node_params[0].float(), output_node_params[1].uint())
 }
 
 fn output_node_params() -> MetaNodeParams {
@@ -991,6 +993,7 @@ fn output_node_params() -> MetaNodeParams {
         .with_speed(0.01)
         .into(),
     );
+    params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
     params
 }
 
