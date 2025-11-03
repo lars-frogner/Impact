@@ -4,7 +4,7 @@ use super::{
     data_type::{DataTypeScratch, update_edge_data_types},
 };
 use crate::editor::{
-    MetaGraphStatus, PanZoomState,
+    MAX_ZOOM, MIN_ZOOM, MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     meta::{
         MetaPaletteColor, ResolvedMetaPort,
@@ -92,7 +92,7 @@ struct LayoutableMetaGraph<'a> {
 impl MetaGraphCanvas {
     pub fn new() -> Self {
         Self {
-            pan_zoom_state: PanZoomState::new(),
+            pan_zoom_state: PanZoomState::default(),
             nodes: BTreeMap::new(),
             selected_node_id: None,
             pending_edge: None,
@@ -580,15 +580,18 @@ impl MetaGraphCanvas {
                     world_node_rect = world_node_rect.translate(resolve_delta);
                     node.position += resolve_delta;
 
+                    let output_data_type = node.output_data_type;
+                    let is_leaf = node.data.kind.n_child_slots() == 0;
+
                     self.nodes.insert(node_id, node);
                     world_node_rects.insert(node_id, world_node_rect);
 
                     if auto_attach
                         && let Some(selected_node_id) = self.selected_node_id
-                        && let Some(free_child_slot) = self
-                            .nodes
-                            .get(&selected_node_id)
-                            .and_then(|selected_node| selected_node.first_free_child_slot())
+                        && let Some(free_child_slot) =
+                            self.nodes.get(&selected_node_id).and_then(|selected_node| {
+                                selected_node.first_free_child_slot_accepting_type(output_data_type)
+                            })
                         && self.try_attach(
                             &mut scratch.search,
                             selected_node_id,
@@ -600,13 +603,15 @@ impl MetaGraphCanvas {
                         connectivity_may_have_changed = true;
                     }
 
-                    self.selected_node_id = Some(node_id);
+                    if !is_leaf || self.selected_node_id.is_none() {
+                        self.selected_node_id = Some(node_id);
+                    }
                 }
 
                 if perform_layout {
-                    let origin = self
-                        .pan_zoom_state
-                        .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top());
+                    let origin = world_node_rects
+                        .get(&0)
+                        .map_or_else(Pos2::default, Rect::center_top);
 
                     let mut layoutable_graph = LayoutableMetaGraph::new(
                         &mut scratch.index_map,
@@ -994,6 +999,8 @@ impl MetaGraphCanvas {
         nodes.extend(self.nodes.iter().map(Into::into));
 
         let graph = IOMetaNodeGraphRef {
+            pan: self.pan_zoom_state.pan.into(),
+            zoom: self.pan_zoom_state.zoom,
             nodes: nodes.as_slice(),
         };
 
@@ -1019,7 +1026,9 @@ impl MetaGraphCanvas {
         self.nodes = nodes;
         self.node_id_counter = node_id_counter;
 
-        self.pan_zoom_state = PanZoomState::new();
+        self.pan_zoom_state =
+            PanZoomState::new(graph.pan.into(), graph.zoom.clamp(MIN_ZOOM, MAX_ZOOM));
+
         self.selected_node_id = None;
         self.pending_edge = None;
         self.is_panning = false;

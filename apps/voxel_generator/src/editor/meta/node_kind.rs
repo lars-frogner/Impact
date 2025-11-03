@@ -618,17 +618,17 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size y"), 1).into());
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size z"), 1).into());
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent x"), 1.0)
+            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent x"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent y"), 1.0)
+            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent y"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent z"), 1.0)
+            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent z"), 62.0)
                 .with_min_value(0.0)
                 .into(),
         );
@@ -637,6 +637,7 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
             MetaFloatParam::new(LabelAndHoverText::label_only("Jitter fraction"), 0.0)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
+                .with_speed(0.0005)
                 .into(),
         );
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
@@ -746,6 +747,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
             MetaFloatParam::new(LabelAndHoverText::label_only("Probability"), 1.0)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
+                .with_speed(0.0005)
                 .into(),
         );
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());

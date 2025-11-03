@@ -58,7 +58,7 @@ impl<'a> LayoutableGraph for LayoutableAtomicGraph<'a> {
 impl AtomicGraphCanvas {
     pub fn new() -> Self {
         Self {
-            pan_zoom_state: PanZoomState::new(),
+            pan_zoom_state: PanZoomState::default(),
             nodes: Vec::new(),
             is_panning: false,
             dragging_node_id: None,

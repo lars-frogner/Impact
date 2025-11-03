@@ -79,7 +79,7 @@ pub struct PanZoomState {
 struct GraphPath {
     path: PathBuf,
     path_string: String,
-    file_name_string: String,
+    file_stem_string: String,
 }
 
 impl Editor {
@@ -222,7 +222,7 @@ impl CustomPanels for Editor {
         option_panel(ctx, config, "Editor panel", |ui| {
             if let Some(path) = &self.last_graph_path {
                 option_group(ui, "file", |ui| {
-                    ui.label(&path.file_name_string)
+                    ui.label(&path.file_stem_string)
                         .on_hover_cursor(CursorIcon::Help)
                         .on_hover_text(&path.path_string);
                 });
@@ -456,11 +456,8 @@ impl Default for EditorConfig {
 }
 
 impl PanZoomState {
-    pub fn new() -> Self {
-        Self {
-            pan: Vec2::ZERO,
-            zoom: 1.0,
-        }
+    pub fn new(pan: Vec2, zoom: f32) -> Self {
+        Self { pan, zoom }
     }
 
     fn world_pos_to_screen_space(&self, canvas_origin: Pos2, world_pos: Pos2) -> Pos2 {
@@ -532,18 +529,21 @@ impl PanZoomState {
 
 impl Default for PanZoomState {
     fn default() -> Self {
-        Self::new()
+        Self {
+            pan: Vec2::ZERO,
+            zoom: 1.0,
+        }
     }
 }
 
 impl GraphPath {
     fn new(path: PathBuf) -> Self {
         let path_string = path.display().to_string();
-        let file_name_string = path.file_name().unwrap().display().to_string();
+        let file_stem_string = path.file_stem().unwrap().display().to_string();
         Self {
             path,
             path_string,
-            file_name_string,
+            file_stem_string,
         }
     }
 }

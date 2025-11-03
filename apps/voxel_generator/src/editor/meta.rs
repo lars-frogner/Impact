@@ -185,10 +185,17 @@ impl MetaNode {
             .resize(new_kind.n_child_slots(), None);
     }
 
-    fn first_free_child_slot(&self) -> Option<usize> {
+    fn first_free_child_slot_accepting_type(
+        &self,
+        output_data_type: EdgeDataType,
+    ) -> Option<usize> {
         self.links_to_children
             .iter()
-            .position(|link| link.is_none())
+            .zip(&self.input_data_types)
+            .position(|(link, input_data_type)| {
+                link.is_none()
+                    && EdgeDataType::connection_allowed(*input_data_type, output_data_type)
+            })
     }
 
     fn resolved_ports(&self) -> impl Iterator<Item = ResolvedMetaPort> + use<> {
