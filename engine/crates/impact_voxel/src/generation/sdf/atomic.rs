@@ -1068,6 +1068,11 @@ impl<A: Allocator> SDFGraph<A> {
         self.root_node_id = node_id;
         node_id
     }
+
+    pub fn set_root_node(&mut self, node_id: SDFNodeID) {
+        assert!((node_id as usize) < self.nodes.len());
+        self.root_node_id = node_id;
+    }
 }
 
 impl SDFGraph<Global> {

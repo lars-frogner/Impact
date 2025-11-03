@@ -715,7 +715,7 @@ impl MetaSDFNode {
             Self::TranslationToSurface(node) => node.resolve(arena, graph, outputs),
             Self::RotationToGradient(node) => node.resolve(arena, graph, outputs),
             Self::Scattering(node) => node.resolve(arena, graph, outputs),
-            Self::StochasticSelection(node) => Ok(node.resolve(arena, outputs)),
+            Self::StochasticSelection(node) => Ok(node.resolve(arena, graph, outputs)),
         }
     }
 }
@@ -1455,7 +1455,12 @@ impl MetaSDFScattering {
 }
 
 impl MetaStochasticSelection {
-    fn resolve<A>(&self, arena: A, outputs: &[MetaSDFNodeOutput<A>]) -> MetaSDFNodeOutput<A>
+    fn resolve<A>(
+        &self,
+        arena: A,
+        graph: &mut SDFGraph<A>,
+        outputs: &[MetaSDFNodeOutput<A>],
+    ) -> MetaSDFNodeOutput<A>
     where
         A: Allocator + Copy,
     {
@@ -1475,9 +1480,14 @@ impl MetaStochasticSelection {
             }
             MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
                 let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
-                for input_node_id in input_node_ids {
+                for &input_node_id in input_node_ids {
                     if is_selected() {
-                        output_node_ids.push(*input_node_id);
+                        output_node_ids.push(input_node_id);
+                        // The current root node will be the last of the input
+                        // node IDs. That might not be included in the
+                        // selection, so we set the last of the actually
+                        // selected nodes as root instead.
+                        graph.set_root_node(input_node_id);
                     }
                 }
                 MetaSDFNodeOutput::SDFGroup(output_node_ids)
