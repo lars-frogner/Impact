@@ -59,6 +59,7 @@ pub struct MetaGraphCanvas {
 #[derive(Clone, Debug)]
 pub struct MetaCanvasScratch {
     node_rects: BTreeMap<MetaNodeID, Rect>,
+    subtree_node_ids: Vec<MetaNodeID>,
     index_map: KeyIndexMapper<MetaNodeID>,
     search: SearchScratch,
     data_type: DataTypeScratch,
@@ -156,6 +157,39 @@ impl MetaGraphCanvas {
             }
         }
         false
+    }
+
+    fn obtain_subtree(
+        &self,
+        scratch: &mut SearchScratch,
+        subtree_node_ids: &mut Vec<MetaNodeID>,
+        node_id: MetaNodeID,
+    ) {
+        let stack = &mut scratch.stack;
+        let seen = &mut scratch.seen;
+
+        subtree_node_ids.clear();
+
+        stack.clear();
+        stack.push(node_id);
+
+        seen.resize_and_unset_all(self.node_id_counter as usize);
+
+        while let Some(node_id) = stack.pop() {
+            if seen.set_bit(node_id as usize) {
+                continue;
+            }
+            subtree_node_ids.push(node_id);
+            if let Some(node) = self.nodes.get(&node_id) {
+                for child_node_id in node
+                    .links_to_children
+                    .iter()
+                    .filter_map(|link| link.map(|link| link.to_node))
+                {
+                    stack.push(child_node_id);
+                }
+            }
+        }
     }
 
     pub fn next_node_id(&mut self) -> MetaNodeID {
@@ -632,6 +666,8 @@ impl MetaGraphCanvas {
                     }
                 }
 
+                let mut drag_delta = None;
+
                 for ((&node_id, node), &world_node_rect) in
                     self.nodes.iter_mut().zip(world_node_rects.values())
                 {
@@ -666,19 +702,10 @@ impl MetaGraphCanvas {
                         }
 
                         if node_response.dragged_by(PointerButton::Primary) {
-                            let delta = self
-                                .pan_zoom_state
-                                .screen_vec_to_world_space(node_response.drag_delta());
-
-                            let moved_node_rect = world_node_rect.translate(delta);
-                            let resolve_delta = compute_delta_to_resolve_overlaps(
-                                || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
-                                node_id,
-                                moved_node_rect,
-                                MIN_NODE_SEPARATION,
+                            drag_delta = Some(
+                                self.pan_zoom_state
+                                    .screen_vec_to_world_space(node_response.drag_delta()),
                             );
-
-                            node.position += delta + resolve_delta;
                         }
                     }
 
@@ -686,6 +713,23 @@ impl MetaGraphCanvas {
 
                     node.data
                         .paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
+                }
+
+                if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
+                    let drag_subtree = ui.input(|i| i.modifiers.shift);
+
+                    if drag_subtree {
+                        self.obtain_subtree(
+                            &mut scratch.search,
+                            &mut scratch.subtree_node_ids,
+                            node_id,
+                        );
+                        for &node_id in &scratch.subtree_node_ids {
+                            translate_node(&mut self.nodes, world_node_rects, node_id, delta);
+                        }
+                    } else {
+                        translate_node(&mut self.nodes, world_node_rects, node_id, delta);
+                    }
                 }
 
                 // We will only need node rects in screen space from now
@@ -1044,6 +1088,7 @@ impl MetaCanvasScratch {
     pub fn new() -> Self {
         Self {
             node_rects: BTreeMap::new(),
+            subtree_node_ids: Vec::new(),
             index_map: KeyIndexMapper::new(),
             search: SearchScratch::new(),
             data_type: DataTypeScratch::new(),
@@ -1098,4 +1143,25 @@ impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
         let node_id = self.index_map.key_at_idx(node_idx);
         self.rects.get_mut(&node_id).unwrap()
     }
+}
+
+fn translate_node(
+    nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
+    node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    node_id: MetaNodeID,
+    delta: Vec2,
+) {
+    let (Some(node), Some(node_rect)) = (nodes.get_mut(&node_id), node_rects.get(&node_id)) else {
+        return;
+    };
+    let moved_node_rect = node_rect.translate(delta);
+    let resolve_delta = compute_delta_to_resolve_overlaps(
+        || node_rects.iter().map(|(id, rect)| (*id, *rect)),
+        node_id,
+        moved_node_rect,
+        MIN_NODE_SEPARATION,
+    );
+    let final_delta = delta + resolve_delta;
+    node.position += final_delta;
+    *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(final_delta);
 }
